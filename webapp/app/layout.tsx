@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
+import DevBar from "@/components/dev/DevBar";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://nmnh.io"),
@@ -55,6 +56,7 @@ export default function RootLayout({
         {children}
         <ServiceWorkerRegister />
         <InstallPrompt />
+        <DevBar />
       </body>
     </html>
   );

@@ -172,3 +172,14 @@ class AnalyticsMe(BaseModel):
     sent: int
     skipped: int
     failed: int
+
+
+class DevTokens(BaseModel):
+    access_token: str
+    refresh_token: Optional[str] = None
+
+
+class DevLoginOut(BaseModel):
+    mentor: DevTokens
+    student: DevTokens
+    student_username: str

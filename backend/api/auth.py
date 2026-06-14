@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import secrets
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -16,7 +17,9 @@ from core import repo
 from backend.config import BackendConfig
 from backend.deps import get_config, get_session, get_weex, get_notifier
 from backend.security import create_access_token, create_refresh_token, decode_token, TokenError
-from backend.schemas import RequestCodeIn, RequestCodeOut, VerifyIn, TokenPair, RefreshIn
+from backend.schemas import (
+    RequestCodeIn, RequestCodeOut, VerifyIn, TokenPair, RefreshIn, DevLoginOut, DevTokens,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -114,6 +117,48 @@ def refresh(body: RefreshIn, config: BackendConfig = Depends(get_config)):
     return TokenPair(
         access_token=create_access_token(sub, "student", config.jwt_secret, config.access_ttl_seconds),
         refresh_token=create_refresh_token(sub, config.jwt_secret, config.refresh_ttl_seconds),
+    )
+
+
+@router.post("/dev-login", response_model=DevLoginOut)
+def dev_login(config: BackendConfig = Depends(get_config), session=Depends(get_session)):
+    """Dev-вход без кода/пароля: выдаёт токены ментора и демо-ученика (только не в проде).
+
+    Создаёт демо-ученика и демо-сигнал, чтобы кабинет был наполнен для просмотра.
+    """
+    if not config.dev_login:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Dev-вход отключён (прод-режим)")
+
+    student = repo.get_student_by_weex_uid(session, "999999")
+    if student is None:
+        student = repo.get_or_create_student(session, tg_id=999999, username="dev_student")
+        student.weex_uid = "999999"
+        student.is_approved = True
+        student.is_active = True
+        student.mode = "moderate"
+        student.balance_usdt = Decimal("1000")
+        session.commit()
+
+    # Демо-сигнал, если их ещё нет — чтобы кабинет был не пустым.
+    from sqlalchemy import select, func
+    from core.models import Signal
+    if session.execute(select(func.count()).select_from(Signal)).scalar_one() == 0:
+        repo.create_signal(
+            session, symbol="BTCUSDT", direction="LONG", leverage=20,
+            entry_price=Decimal("64000"), entry_type="market", margin_type="cross",
+            stop_loss=Decimal("63040"), tp1=Decimal("64960"), tp2=Decimal("65920"),
+            tp3=Decimal("66880"), target_audience="all", status="active",
+        )
+
+    return DevLoginOut(
+        mentor=DevTokens(
+            access_token=create_access_token("mentor", "mentor", config.jwt_secret, config.access_ttl_seconds),
+        ),
+        student=DevTokens(
+            access_token=create_access_token(student.id, "student", config.jwt_secret, config.access_ttl_seconds),
+            refresh_token=create_refresh_token(student.id, config.jwt_secret, config.refresh_ttl_seconds),
+        ),
+        student_username=student.username or "dev_student",
     )
 
 

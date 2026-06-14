@@ -156,6 +156,12 @@ export const api = {
       `/api/auth/mentor-login?password=${encodeURIComponent(password)}`,
       { method: "POST" }
     ),
+  devLogin: () =>
+    req<{
+      mentor: { access_token: string };
+      student: { access_token: string; refresh_token: string };
+      student_username: string;
+    }>("/api/auth/dev-login", { method: "POST" }),
 
   // ── Авторизованные (ученик) ──
   profile: (token: string) => authReq<Profile>("/api/profile", token),
