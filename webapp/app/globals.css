@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #0a0a1a;
+  color: #ffffff;
+}
+
+/* Неоновая рамка/свечение акцента */
+.glow-cyan {
+  box-shadow: 0 0 0 1px rgba(10, 255, 224, 0.4), 0 0 24px rgba(10, 255, 224, 0.12);
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-accent-cyan text-bg-deep font-semibold rounded-lg px-5 py-2.5 transition
+           hover:brightness-110 active:scale-[0.98] disabled:opacity-50;
+  }
+  .btn-outline {
+    @apply border border-accent-cyan text-accent-cyan rounded-lg px-5 py-2.5 transition
+           hover:bg-accent-cyan/10 active:scale-[0.98] disabled:opacity-50;
+  }
+  .card {
+    @apply bg-bg-card border border-border rounded-xl p-5;
+  }
+  .input {
+    @apply bg-bg-card border border-border rounded-lg px-3 py-2 text-text-primary
+           outline-none focus:border-accent-cyan focus:ring-2 focus:ring-accent-cyan/20;
+  }
+}
