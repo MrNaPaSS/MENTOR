@@ -1,4 +1,5 @@
 import Header from "@/components/landing/Header";
+import ScrollSceneMount from "@/components/landing/ScrollSceneMount";
 import Hero from "@/components/landing/Hero";
 import HowItWorks from "@/components/landing/HowItWorks";
 import PublicSignals from "@/components/landing/PublicSignals";
@@ -15,6 +16,7 @@ import Leaderboard from "@/components/Leaderboard";
 export default function Home() {
   return (
     <>
+      <ScrollSceneMount />
       <Header />
       <main>
         <Hero />
