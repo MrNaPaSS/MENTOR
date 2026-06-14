@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
+import Ambient from "@/components/ui/Ambient";
 import { api } from "@/lib/api";
 import { getMentorToken, setMentorToken, logoutMentor } from "@/lib/auth";
 
@@ -44,6 +45,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   return (
     <TokenCtx.Provider value={token}>
       <div className="flex min-h-screen">
+        <Ambient />
         {/* Сайдбар */}
         <aside className="glass fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-white/10 p-4 lg:flex">
           <div className="flex items-center gap-2">

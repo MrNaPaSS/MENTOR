@@ -6,12 +6,14 @@ import { Wallet, Radio, CheckCircle2, TrendingUp, ArrowRight } from "lucide-reac
 import { api, Profile, AnalyticsMe, SignalOut } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { fmtUsd, modeLabel, isLong } from "@/lib/format";
+import StatCard from "@/components/ui/StatCard";
+import PageHeader from "@/components/ui/PageHeader";
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsMe | null>(null);
   const [signals, setSignals] = useState<SignalOut[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -23,82 +25,67 @@ export default function Dashboard() {
         setSignals(s);
       })
       .catch(() => {})
-      .finally(() => setLoaded(true));
+      .finally(() => setLoading(false));
   }, []);
-
-  const kpis = [
-    { icon: Wallet, label: "Баланс USDT", value: fmtUsd(profile?.balance_usdt) },
-    { icon: Radio, label: "Сигналов получено", value: analytics ? String(analytics.signals_received) : "—" },
-    { icon: CheckCircle2, label: "Доставлено", value: analytics ? String(analytics.sent) : "—" },
-    { icon: TrendingUp, label: "Активных сейчас", value: String(signals.length) },
-  ];
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-h2 text-white">
-          Привет{profile?.username ? `, ${profile.username}` : ""}! 👋
-        </h1>
-        <p className="mt-1 text-text-secondary">
-          Режим: <span className="text-accent-cyan">{modeLabel(profile?.mode || "moderate")}</span>
-        </p>
-      </div>
+      <PageHeader
+        eyebrow={modeLabel(profile?.mode || "moderate")}
+        title={`Привет${profile?.username ? `, ${profile.username}` : ""}! 👋`}
+        subtitle="Твой обзор: баланс, активные позиции и статистика."
+      />
 
-      {/* KPI */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {kpis.map((k) => {
-          const Icon = k.icon;
-          return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-text-muted">{k.label}</span>
-                <Icon className="h-4 w-4 text-accent-cyan" />
-              </div>
-              <div className="mt-3 font-mono text-2xl font-bold text-white tabular">
-                {loaded ? k.value : <span className="skeleton inline-block h-7 w-20 align-middle" />}
-              </div>
-            </div>
-          );
-        })}
+        <StatCard icon={Wallet} label="Баланс USDT" accent="cyan" loading={loading}
+          value={fmtUsd(profile?.balance_usdt)} hint={profile ? `источник: ${profile.balance_source === "affiliate_api" ? "WEEX" : "вручную"}` : undefined} />
+        <StatCard icon={Radio} label="Получено" accent="gold" loading={loading}
+          value={analytics?.signals_received ?? 0} />
+        <StatCard icon={CheckCircle2} label="Доставлено" accent="success" loading={loading}
+          value={analytics?.sent ?? 0} />
+        <StatCard icon={TrendingUp} label="Активных" accent="cyan" loading={loading}
+          value={signals.length} />
       </div>
 
-      {/* Активные сигналы */}
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-white">Активные позиции</h2>
-          <Link href="/app/signals" className="flex items-center gap-1 text-sm text-accent-cyan">
+          <Link href="/app/signals" className="flex items-center gap-1 text-sm text-accent-cyan transition hover:gap-2">
             Все сигналы <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
 
-        {!loaded ? (
-          <div className="space-y-2">
+        {loading ? (
+          <div className="space-y-3">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="card"><div className="skeleton h-6 w-full" /></div>
+              <div key={i} className="card"><div className="skeleton h-12 w-full" /></div>
             ))}
           </div>
         ) : signals.length === 0 ? (
-          <div className="card text-center text-text-muted">Активных сигналов нет.</div>
+          <div className="card grid place-items-center py-12 text-center text-text-muted">
+            <Radio className="mb-2 h-8 w-8 opacity-40" />
+            Активных сигналов нет — как появятся, увидишь здесь.
+          </div>
         ) : (
-          <div className="space-y-2">
+          <div className="grid gap-3 md:grid-cols-2">
             {signals.map((s) => (
               <Link
                 key={s.id}
                 href={`/app/signals/${s.id}`}
-                className="card flex items-center justify-between transition hover:border-accent-cyan/40"
+                className="group relative overflow-hidden rounded-2xl border border-border bg-bg-card/80 p-4 shadow-card backdrop-blur-sm transition hover:border-accent-cyan/40"
               >
-                <div className="flex items-center gap-3">
-                  <span className={`badge-${isLong(s.direction) ? "success" : "danger"}`}>
-                    {s.direction}
-                  </span>
-                  <div>
-                    <div className="font-semibold text-white">{s.symbol}</div>
-                    <div className="text-xs text-text-muted">x{s.leverage} · {s.margin_type}</div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className={`badge-${isLong(s.direction) ? "success" : "danger"}`}>{s.direction}</span>
+                    <span className="text-lg font-bold text-white">{s.symbol}</span>
+                    <span className="text-sm text-text-muted">x{s.leverage}</span>
                   </div>
+                  <ArrowRight className="h-4 w-4 text-text-muted transition group-hover:translate-x-0.5 group-hover:text-accent-cyan" />
                 </div>
-                <div className="text-right font-mono text-sm">
-                  <div className="text-white">{fmtUsd(s.entry_price, 4)}$</div>
-                  <div className="text-text-muted">стоп {fmtUsd(s.stop_loss, 4)}$</div>
+                <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-xs text-text-secondary">
+                  <span>вход {fmtUsd(s.entry_price, 4)}</span>
+                  <span className="text-danger">стоп {fmtUsd(s.stop_loss, 4)}</span>
+                  <span className="text-success">TP1 {fmtUsd(s.tp1, 4)}</span>
                 </div>
               </Link>
             ))}

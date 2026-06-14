@@ -28,6 +28,48 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _seed_demo(session, demo_student) -> None:
+    """Наполнить демо-данными: ученики, сигналы, доставки (для dev-просмотра)."""
+    extra = [
+        ("alex", "moderate", "1240", True),
+        ("sasha", "moderate", "342", True),
+        ("max", "turbo", "1800", True),
+        ("newbie", "moderate", "0", False),  # ожидает подтверждения
+    ]
+    for i, (uname, mode, bal, approved) in enumerate(extra, start=1):
+        st = repo.get_or_create_student(session, tg_id=900000 + i, username=uname)
+        st.weex_uid = f"90000{i}"
+        st.mode = mode
+        st.is_approved = approved
+        st.is_active = approved
+        st.balance_usdt = Decimal(bal)
+        session.commit()
+
+    sigs = [
+        ("BTCUSDT", "LONG", 20, "64000", "63040", "64960", "65920", "66880", "active"),
+        ("ETHUSDT", "SHORT", 25, "3200", "3248", "3152", "3104", "3056", "active"),
+        ("SOLUSDT", "LONG", 50, "145", "143.5", "147", "149", "151", "closed"),
+        ("XRPUSDT", "LONG", 20, "0.52", "0.512", "0.528", "0.536", "0.544", "active"),
+    ]
+    created = []
+    for sym, d, lev, e, sl, t1, t2, t3, status in sigs:
+        sig = repo.create_signal(
+            session, symbol=sym, direction=d, leverage=lev, entry_price=Decimal(e),
+            entry_type="market", margin_type="cross", stop_loss=Decimal(sl),
+            tp1=Decimal(t1), tp2=Decimal(t2), tp3=Decimal(t3),
+            target_audience="all", status=status,
+        )
+        created.append(sig)
+
+    # Доставки демо-ученику — чтобы аналитика/дашборд показывали цифры.
+    for sig in created[:3]:
+        repo.record_delivery(
+            session, sig.id, demo_student.id, balance_at_signal=Decimal("1000"),
+            margin_usd=Decimal("80"), position_size=Decimal("1600"), risk_usd=Decimal("12"),
+            status="sent", delivered_at=_now(),
+        )
+
+
 @router.post("/request-code", response_model=RequestCodeOut)
 async def request_code(
     body: RequestCodeIn,
@@ -130,7 +172,8 @@ def dev_login(config: BackendConfig = Depends(get_config), session=Depends(get_s
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Dev-вход отключён (прод-режим)")
 
     student = repo.get_student_by_weex_uid(session, "999999")
-    if student is None:
+    first_run = student is None
+    if first_run:
         student = repo.get_or_create_student(session, tg_id=999999, username="dev_student")
         student.weex_uid = "999999"
         student.is_approved = True
@@ -139,16 +182,9 @@ def dev_login(config: BackendConfig = Depends(get_config), session=Depends(get_s
         student.balance_usdt = Decimal("1000")
         session.commit()
 
-    # Демо-сигнал, если их ещё нет — чтобы кабинет был не пустым.
-    from sqlalchemy import select, func
-    from core.models import Signal
-    if session.execute(select(func.count()).select_from(Signal)).scalar_one() == 0:
-        repo.create_signal(
-            session, symbol="BTCUSDT", direction="LONG", leverage=20,
-            entry_price=Decimal("64000"), entry_type="market", margin_type="cross",
-            stop_loss=Decimal("63040"), tp1=Decimal("64960"), tp2=Decimal("65920"),
-            tp3=Decimal("66880"), target_audience="all", status="active",
-        )
+    # Богатый демо-сид (только при первом dev-входе) — чтобы кабинет/админка были «живыми».
+    if first_run:
+        _seed_demo(session, student)
 
     return DevLoginOut(
         mentor=DevTokens(
