@@ -106,4 +106,17 @@ class SettingRow(Base):
     value: Mapped[str] = mapped_column(Text)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "utcnow"]
+class AuthCode(Base):
+    """Одноразовый код входа в веб-платформу (UID → код, ТЗ §4.1, контракт A-10)."""
+
+    __tablename__ = "auth_codes"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    weex_uid: Mapped[str] = mapped_column(String(64), index=True)
+    code: Mapped[str] = mapped_column(String(8))
+    attempts: Mapped[int] = mapped_column(default=0)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "utcnow"]

@@ -1,6 +1,8 @@
-# NMNH Signal Bot — runtime dependencies
+# NMNH — runtime dependencies (бот + бэкенд)
 aiogram>=3.4
 SQLAlchemy>=2.0
 APScheduler>=3.10
 python-dotenv>=1.0
 aiohttp>=3.9
+fastapi>=0.110
+uvicorn>=0.29

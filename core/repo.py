@@ -11,7 +11,7 @@ from typing import Optional
 from sqlalchemy import select
 
 from core.db import SessionLocal
-from core.models import Student, Signal, SignalDelivery, SettingRow, utcnow
+from core.models import Student, Signal, SignalDelivery, SettingRow, AuthCode, utcnow
 from core.settings import Settings, DEFAULT_SETTINGS
 
 
@@ -113,6 +113,39 @@ def set_balance(session, student: Student, balance: Optional[Decimal], source: s
     student.balance_usdt = balance
     student.balance_source = source
     student.balance_updated_at = utcnow()
+    session.commit()
+
+
+def get_student_by_weex_uid(session, weex_uid: str) -> Optional[Student]:
+    return session.execute(
+        select(Student).where(Student.weex_uid == weex_uid)
+    ).scalar_one_or_none()
+
+
+# ── Коды авторизации (web auth-flow, A-10) ──
+
+def create_auth_code(session, weex_uid: str, code: str, ttl_seconds: int):
+    """Создать код входа, удалив прежние для этого UID."""
+    from datetime import timedelta
+
+    session.query(AuthCode).filter(AuthCode.weex_uid == weex_uid).delete()
+    row = AuthCode(
+        weex_uid=weex_uid, code=code,
+        expires_at=utcnow() + timedelta(seconds=ttl_seconds),
+    )
+    session.add(row)
+    session.commit()
+    return row
+
+
+def get_active_auth_code(session, weex_uid: str):
+    return session.execute(
+        select(AuthCode).where(AuthCode.weex_uid == weex_uid)
+    ).scalar_one_or_none()
+
+
+def delete_auth_code(session, weex_uid: str) -> None:
+    session.query(AuthCode).filter(AuthCode.weex_uid == weex_uid).delete()
     session.commit()
 
 

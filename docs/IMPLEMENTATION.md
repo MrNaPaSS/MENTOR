@@ -1,16 +1,16 @@
 # NMNH — Отчёт о реализации (Фаза 1: Signal Bot)
 
 > Что реализовано в коде, как устроено, как запускать и какие тесты покрывают логику.
-> Документ отражает состояние на момент разработки Фазы 1 (Telegram-бот поверх единого ядра,
-> WEEX на моках). Связанные документы: [решения](DECISIONS.md), [архитектура](architecture/unified-core.md),
-> [ТЗ бота](tz/signal-bot-tz.md).
+> Документ отражает состояние разработки: Фаза 1 (Telegram-бот) + начало Фазы 2 (бэкенд FastAPI),
+> поверх единого ядра, WEEX на моках. Связанные документы: [решения](DECISIONS.md),
+> [архитектура](architecture/unified-core.md), [ТЗ бота](tz/signal-bot-tz.md), [ТЗ веба](tz/webapp-tz.md).
 
 ## Кратко
 
-Реализован рабочий **Telegram Signal Bot** на `aiogram 3` поверх **единого ядра `core`**
-(калькулятор, парсер, WEEX-клиент, модель данных, шаблоны). Бизнес-логика покрыта тестами:
-**61 тест, все зелёные**. WEEX работает на моках (`WEEX_USE_MOCK=true`) — реальные вызовы
-подключаются позже без изменения логики. Объём кода: ~2150 строк Python (`core/` + `bot/`).
+Реализованы: **Telegram Signal Bot** (`aiogram 3`) и **бэкенд-API** (`FastAPI`) — оба поверх
+**единого ядра `core`** (калькулятор, парсер, WEEX-клиент, модель данных, шаблоны). Бизнес-логика и
+API покрыты тестами: **72 теста, все зелёные**. WEEX работает на моках (`WEEX_USE_MOCK=true`) —
+реальные вызовы подключаются позже без изменения логики.
 
 ## Структура проекта
 
@@ -36,7 +36,15 @@ bot/                        # Telegram-бот (aiogram 3)
 ├── scheduler/balance_sync.py    # APScheduler: синхронизация балансов
 └── main.py                 # точка входа (polling)
 
-tests/                      # pytest — 61 тест
+backend/                    # бэкенд-API (FastAPI) — начало Фазы 2
+├── config.py               # конфиг (JWT, TTL, auth)
+├── security.py             # JWT HS256 на стандартной библиотеке
+├── schemas.py              # Pydantic-схемы запросов/ответов
+├── deps.py                 # зависимости: сессия, weex, текущий пользователь/ментор
+├── api/                    # auth, market, signals, stats, students
+└── main.py                 # фабрика приложения (create_app) + точка входа
+
+tests/                      # pytest — 72 теста
 ```
 
 ## Что реализовано
@@ -76,6 +84,22 @@ tests/                      # pytest — 61 тест
 - **Планировщик** (`bot/scheduler`): периодическая синхронизация балансов; при недоступности —
   fallback на последнее значение с пометкой `manual` (A-01).
 
+### Бэкенд `backend` (начало Фазы 2)
+
+REST-API на FastAPI поверх того же ядра — основа для веб-платформы (ТЗ §15):
+
+- **Рынок/калькулятор:** `GET /api/market/price/{symbol}`, `POST /api/market/calculate`
+  (тот же калькулятор, что в боте).
+- **Сигналы:** `GET /api/signals`, `/api/signals/active`, `/api/signals/{id}`.
+- **Статистика:** `GET /api/stats/public`, `/api/stats/leaderboard`.
+- **Авторизация (контракт A-10):** `POST /api/auth/request-code` (UID → код, проверка через WEEX),
+  `/api/auth/verify` (код → JWT), `/api/auth/refresh`, `/api/auth/mentor-login`. JWT — HS256 на
+  стандартной библиотеке (access 15 мин / refresh 30 дней, ТЗ §4.2).
+- **Ученики (только ментор):** `GET/PATCH /api/students`, `/approve`, `DELETE` — за JWT с ролью `mentor`.
+- `GET /api/health` — проверка живости.
+
+Запуск: `uvicorn backend.main:app` (или `python -m backend.main`). Документация Swagger — `/docs`.
+
 ## Как запустить
 
 ```bash
@@ -87,10 +111,18 @@ python -m bot.main                       # старт бота (mock WEEX)
 По умолчанию БД — локальный SQLite (`DATABASE_URL=sqlite:///nmnh_dev.sqlite3`), WEEX — мок.
 Для прод-режима: `DATABASE_URL=postgresql+psycopg://...`, `WEEX_USE_MOCK=false` + ключи WEEX.
 
+## Как запустить бэкенд
+
+```bash
+pip install -r requirements-dev.txt
+cp .env.example .env          # задать JWT_SECRET (и MENTOR_PASSWORD для веб-панели)
+uvicorn backend.main:app --reload    # API на http://localhost:8000, Swagger на /docs
+```
+
 ## Тесты
 
 ```bash
-python -m pytest -q          # 61 тест
+python -m pytest -q          # 72 теста
 ```
 
 ### Покрытие по файлам
@@ -99,12 +131,13 @@ python -m pytest -q          # 61 тест
 |---|---:|---|
 | `test_calculator.py` | 20 | формулы маржи, адаптивный стоп, LONG/SHORT, риск/RR, guardrail, предупреждения |
 | `test_parser.py` | 13 | минимальный/полный формат, формы плеча, вход/стоп/тейки, RU/EN, ошибки |
+| `test_api.py` | 11 | health, price, calculate, stats, сигналы, auth-flow, refresh, доступ ментора |
 | `test_weex_mock.py` | 7 | цены, свечи, баланс реферала (стабильность/не найден), мин. ордер |
 | `test_repo.py` | 5 | настройки (seed/load/update), жизненный цикл ученика, аудитория, идемпотентность |
-| `test_delivery.py` | 4 | полный поток рассылки, фильтр аудитории, skip при малом балансе, идемпотентность |
-| `test_scheduler.py` | 2 | обновление балансов и fallback `manual` |
 | `test_templates.py` | 5 | форматтеры, URL WEEX, рендер RU/EN |
+| `test_delivery.py` | 4 | полный поток рассылки, фильтр аудитории, skip при малом балансе, идемпотентность |
 | `test_bot_imports.py` | 4 | сборка роутеров, фильтр админа, импорт `bot.main` |
+| `test_scheduler.py` | 2 | обновление балансов и fallback `manual` |
 
 ### Полный список тестов
 
