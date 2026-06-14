@@ -9,6 +9,7 @@
 
 Вся документация — в каталоге [`docs/`](docs/README.md):
 
+- [Отчёт о реализации (IMPLEMENTATION)](docs/IMPLEMENTATION.md)
 - [Реестр решений (DECISIONS)](docs/DECISIONS.md)
 - [Аудит исходных ТЗ](docs/audit/AUDIT.md)
 - [Единая архитектура](docs/architecture/unified-core.md)

@@ -7,6 +7,7 @@
 
 | Документ | Описание |
 |---|---|
+| [IMPLEMENTATION.md](IMPLEMENTATION.md) | **Отчёт о реализации** — что написано в коде, структура, запуск, все тесты |
 | [DECISIONS.md](DECISIONS.md) | **Реестр решений** — все принятые решения в одной таблице с обоснованием |
 | [audit/AUDIT.md](audit/AUDIT.md) | Аудит исходных ТЗ: находки, severity, рекомендации, статусы правок |
 | [architecture/unified-core.md](architecture/unified-core.md) | Единая архитектура: общее ядро, модель данных, контракты, roadmap |
