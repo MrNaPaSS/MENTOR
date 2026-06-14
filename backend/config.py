@@ -23,9 +23,13 @@ class BackendConfig:
     max_code_attempts: int
     expose_codes: bool  # dev: возвращать код в ответе request-code
     bot_token: str = ""  # для доставки кода в Telegram
+    rate_limit_max: int = 10            # попыток на /api/auth/* за окно
+    rate_limit_window: int = 900        # окно, сек (15 мин)
+    allowed_origins: tuple = ("*",)     # CORS: домены фронта
 
     @classmethod
     def from_env(cls) -> "BackendConfig":
+        origins = os.getenv("ALLOWED_ORIGINS", "*")
         return cls(
             jwt_secret=os.getenv("JWT_SECRET", "dev-insecure-secret-change-me"),
             access_ttl_seconds=int(os.getenv("ACCESS_TTL", str(15 * 60))),
@@ -35,4 +39,7 @@ class BackendConfig:
             max_code_attempts=int(os.getenv("AUTH_MAX_ATTEMPTS", "5")),
             expose_codes=os.getenv("AUTH_EXPOSE_CODES", "false").lower() == "true",
             bot_token=os.getenv("BOT_TOKEN", ""),
+            rate_limit_max=int(os.getenv("RATE_LIMIT_MAX", "10")),
+            rate_limit_window=int(os.getenv("RATE_LIMIT_WINDOW", "900")),
+            allowed_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
         )

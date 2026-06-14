@@ -19,6 +19,7 @@ from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
 from backend.notify import get_notifier
+from backend.ratelimit import RateLimiter, AuthRateLimitMiddleware
 
 
 def create_app(
@@ -53,11 +54,17 @@ def create_app(
     app.state.ws_manager = manager
     app.state.price_collector = collector
 
+    # Rate limiting на /api/auth/* (ТЗ §4.3, A-08).
+    limiter = RateLimiter(config.rate_limit_max, config.rate_limit_window)
+    app.state.rate_limiter = limiter
+    app.add_middleware(AuthRateLimitMiddleware, limiter=limiter)
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # для прода — ограничить доменом фронта
+        allow_origins=list(config.allowed_origins),  # из ALLOWED_ORIGINS (прод — домен фронта)
         allow_methods=["*"],
         allow_headers=["*"],
+        allow_credentials=True,
     )
 
     app.include_router(auth.router)
