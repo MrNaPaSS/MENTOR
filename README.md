@@ -9,6 +9,7 @@
 
 Вся документация — в каталоге [`docs/`](docs/README.md):
 
+- [Реестр решений (DECISIONS)](docs/DECISIONS.md)
 - [Аудит исходных ТЗ](docs/audit/AUDIT.md)
 - [Единая архитектура](docs/architecture/unified-core.md)
 - [ТЗ Signal Bot](docs/tz/signal-bot-tz.md)
