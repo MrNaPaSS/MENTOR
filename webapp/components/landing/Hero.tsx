@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Send } from "lucide-react";
 import Counter from "@/components/ui/Counter";
+import HeroChart from "./HeroChart";
 import { api, PublicStats } from "@/lib/api";
 import { SOCIAL_LINKS } from "@/lib/content";
 
@@ -35,7 +36,7 @@ export default function Hero() {
       <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
       <div className="pointer-events-none absolute inset-0 bg-grid-faint [background-size:48px_48px] opacity-30 [mask-image:radial-gradient(70%_60%_at_50%_30%,black,transparent)]" />
 
-      <div className="relative mx-auto grid max-w-6xl gap-10 px-4 md:px-6">
+      <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="max-w-3xl">
           <span className="badge-cyan animate-pulse-glow mb-6">
             <span className="h-1.5 w-1.5 rounded-full bg-success" /> Работаем с 2023 · No Money No Honey
@@ -94,6 +95,11 @@ export default function Hero() {
                 </div>
               ))}
           </div>
+        </div>
+
+        {/* Живой свечной график */}
+        <div className="relative">
+          <HeroChart />
         </div>
       </div>
     </section>
