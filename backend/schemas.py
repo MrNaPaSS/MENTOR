@@ -123,3 +123,52 @@ class StudentOut(BaseModel):
     balance_usdt: Optional[Decimal]
     is_active: bool
     is_approved: bool
+
+
+# ── Создание/закрытие сигнала (ментор) ──
+
+class SignalCreate(BaseModel):
+    text: str = Field(examples=["XLM LONG\nПлечо 20х"])
+    audience: str = Field(default="all", examples=["all", "moderate", "turbo"])
+
+
+class DeliveryPreview(BaseModel):
+    username: Optional[str]
+    mode: str
+    balance: Optional[Decimal]
+    margin_usd: Optional[Decimal]
+    risk_usd: Optional[Decimal]
+    status: str
+
+
+class SignalCreateResult(BaseModel):
+    signal: SignalOut
+    deliveries: list[DeliveryPreview]
+
+
+# ── Профиль ученика ──
+
+class ProfileOut(BaseModel):
+    id: int
+    username: Optional[str]
+    weex_uid: Optional[str]
+    mode: str
+    language: str
+    risk_percent: Optional[Decimal]
+    turbo_leverage: Optional[int]
+    balance_usdt: Optional[Decimal]
+    balance_source: str
+
+
+class ProfilePatch(BaseModel):
+    mode: Optional[str] = None
+    language: Optional[str] = None
+    risk_percent: Optional[Decimal] = None
+    turbo_leverage: Optional[int] = None
+
+
+class AnalyticsMe(BaseModel):
+    signals_received: int
+    sent: int
+    skipped: int
+    failed: int

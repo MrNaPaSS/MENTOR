@@ -1,13 +1,18 @@
-"""Сигналы — чтение (ТЗ §15.2)."""
+"""Сигналы — чтение и создание/закрытие ментором (ТЗ §15.2)."""
 
 from __future__ import annotations
+
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
+from core import repo
 from core.models import Signal
-from backend.deps import get_session
-from backend.schemas import SignalOut
+from core.parser import parse_signal
+from bot.services import signal_service
+from backend.deps import get_session, get_weex, get_settings, get_current_mentor, get_ws_manager
+from backend.schemas import SignalOut, SignalCreate, SignalCreateResult, DeliveryPreview
 
 router = APIRouter(prefix="/api/signals", tags=["signals"])
 
@@ -43,4 +48,75 @@ def get_signal(signal_id: int, session=Depends(get_session)):
     s = session.get(Signal, signal_id)
     if s is None:
         raise HTTPException(404, "Сигнал не найден")
+    return _to_out(s)
+
+
+@router.post("", response_model=SignalCreateResult, dependencies=[Depends(get_current_mentor)])
+async def create_signal(
+    body: SignalCreate,
+    session=Depends(get_session),
+    weex=Depends(get_weex),
+    settings=Depends(get_settings),
+    ws=Depends(get_ws_manager),
+):
+    """Создать сигнал из текста, рассчитать под аудиторию и сохранить доставки.
+
+    Telegram-рассылку выполняет бот (общая БД); здесь сигнал создаётся, доставки считаются и
+    рассылается WS-событие ``new_signal`` веб-клиентам.
+    """
+    parsed = parse_signal(body.text)
+    if not parsed.is_valid:
+        raise HTTPException(422, "; ".join(parsed.errors))
+
+    resolved = await signal_service.resolve_signal(parsed, weex, settings)
+    resolved.target_audience = body.audience
+    ref = signal_service.reference_calc(
+        resolved, settings, "turbo" if body.audience == "turbo" else "moderate"
+    )
+    tps = ref.take_profits
+    signal = repo.create_signal(
+        session,
+        symbol=resolved.symbol, direction=resolved.direction,
+        leverage=resolved.leverage or ref.leverage, entry_price=resolved.entry_price,
+        entry_type=resolved.entry_type, margin_type=resolved.margin_type,
+        stop_loss=ref.sl_price,
+        tp1=tps[0].price if len(tps) > 0 else None,
+        tp2=tps[1].price if len(tps) > 1 else None,
+        tp3=tps[2].price if len(tps) > 2 else None,
+        target_audience=body.audience, status="active",
+    )
+
+    previews: list[DeliveryPreview] = []
+    for student in repo.audience_students(session, body.audience):
+        calc = await signal_service.compute_for_student(resolved, student, weex, settings)
+        status = "skipped" if calc.status == "skipped" else "pending"
+        repo.record_delivery(
+            session, signal.id, student.id,
+            balance_at_signal=student.balance_usdt,
+            margin_usd=None if calc.status == "skipped" else calc.margin_usd,
+            position_size=None if calc.status == "skipped" else calc.position_size,
+            risk_usd=None if calc.status == "skipped" else calc.risk_usd,
+            status=status,
+        )
+        previews.append(DeliveryPreview(
+            username=student.username, mode=student.mode, balance=student.balance_usdt,
+            margin_usd=None if calc.status == "skipped" else calc.margin_usd,
+            risk_usd=None if calc.status == "skipped" else calc.risk_usd,
+            status=status,
+        ))
+
+    await ws.broadcast("new_signal", {"signal_id": signal.id, "symbol": signal.symbol,
+                                      "direction": signal.direction, "leverage": signal.leverage})
+    return SignalCreateResult(signal=_to_out(signal), deliveries=previews)
+
+
+@router.patch("/{signal_id}/close", response_model=SignalOut, dependencies=[Depends(get_current_mentor)])
+async def close_signal(signal_id: int, session=Depends(get_session), ws=Depends(get_ws_manager)):
+    s = session.get(Signal, signal_id)
+    if s is None:
+        raise HTTPException(404, "Сигнал не найден")
+    s.status = "closed"
+    s.closed_at = datetime.now(timezone.utc)
+    session.commit()
+    await ws.broadcast("signal_closed", {"signal_id": s.id})
     return _to_out(s)

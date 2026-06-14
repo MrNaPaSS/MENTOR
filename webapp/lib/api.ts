@@ -15,6 +15,13 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+function authReq<T>(path: string, token: string, init?: RequestInit): Promise<T> {
+  return req<T>(path, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) },
+  });
+}
+
 export interface PublicStats {
   total_signals: number;
   active_signals: number;
@@ -63,6 +70,61 @@ export interface CalcRequest {
   leverage?: number | null;
 }
 
+export interface SignalOut {
+  id: number;
+  symbol: string;
+  direction: string;
+  leverage: number;
+  entry_price: string;
+  entry_type: string;
+  stop_loss: string | null;
+  tp1: string | null;
+  tp2: string | null;
+  tp3: string | null;
+  margin_type: string;
+  target_audience: string;
+  status: string;
+}
+
+export interface Profile {
+  id: number;
+  username: string | null;
+  weex_uid: string | null;
+  mode: string;
+  language: string;
+  risk_percent: string | null;
+  turbo_leverage: number | null;
+  balance_usdt: string | null;
+  balance_source: string;
+}
+
+export interface AnalyticsMe {
+  signals_received: number;
+  sent: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface StudentOut {
+  id: number;
+  username: string | null;
+  weex_uid: string | null;
+  mode: string;
+  language: string;
+  balance_usdt: string | null;
+  is_active: boolean;
+  is_approved: boolean;
+}
+
+export interface DeliveryPreview {
+  username: string | null;
+  mode: string;
+  balance: string | null;
+  margin_usd: string | null;
+  risk_usd: string | null;
+  status: string;
+}
+
 export const api = {
   health: () => req<{ status: string }>("/api/health"),
   publicStats: () => req<PublicStats>("/api/stats/public"),
@@ -74,6 +136,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  signals: () => req<SignalOut[]>("/api/signals"),
+  activeSignals: () => req<SignalOut[]>("/api/signals/active"),
+
+  // ── Auth ──
   requestCode: (weex_uid: string) =>
     req<{ ok: boolean; detail: string; code: string | null }>(
       "/api/auth/request-code",
@@ -84,4 +150,26 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ weex_uid, code }),
     }),
+  mentorLogin: (password: string) =>
+    req<{ access_token: string; refresh_token: string }>(
+      `/api/auth/mentor-login?password=${encodeURIComponent(password)}`,
+      { method: "POST" }
+    ),
+
+  // ── Авторизованные (ученик) ──
+  profile: (token: string) => authReq<Profile>("/api/profile", token),
+  patchProfile: (token: string, body: Partial<Profile>) =>
+    authReq<Profile>("/api/profile", token, { method: "PATCH", body: JSON.stringify(body) }),
+  refreshBalance: (token: string) => authReq<Profile>("/api/profile/balance", token),
+  analyticsMe: (token: string) => authReq<AnalyticsMe>("/api/analytics/me", token),
+
+  // ── Авторизованные (ментор) ──
+  students: (token: string) => authReq<StudentOut[]>("/api/students", token),
+  createSignal: (token: string, text: string, audience: string) =>
+    authReq<{ signal: SignalOut; deliveries: DeliveryPreview[] }>("/api/signals", token, {
+      method: "POST",
+      body: JSON.stringify({ text, audience }),
+    }),
+  closeSignal: (token: string, id: number) =>
+    authReq<SignalOut>(`/api/signals/${id}/close`, token, { method: "PATCH" }),
 };

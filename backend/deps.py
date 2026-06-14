@@ -21,6 +21,10 @@ def get_weex(request: Request):
     return request.app.state.weex
 
 
+def get_ws_manager(request: Request):
+    return request.app.state.ws_manager
+
+
 def get_session():
     session = SessionLocal()
     try:

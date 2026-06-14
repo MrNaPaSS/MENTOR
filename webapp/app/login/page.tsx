@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { setStudentTokens } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,8 +35,7 @@ export default function LoginPage() {
     setError(null);
     try {
       const tokens = await api.verify(uid.trim(), code.trim());
-      localStorage.setItem("nmnh_access", tokens.access_token);
-      localStorage.setItem("nmnh_refresh", tokens.refresh_token);
+      setStudentTokens(tokens.access_token, tokens.refresh_token);
       router.push("/app/dashboard");
     } catch (e: any) {
       setError(e.message);

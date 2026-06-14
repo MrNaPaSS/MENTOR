@@ -56,4 +56,38 @@ describe("api client", () => {
     expect(res.code).toBe("123456");
     expect(mock.mock.calls[0][0]).toContain("/api/auth/request-code");
   });
+
+  it("profile sends Authorization header", async () => {
+    const mock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 1, mode: "moderate", language: "ru" }),
+    });
+    vi.stubGlobal("fetch", mock);
+    await api.profile("tok123");
+    expect(mock.mock.calls[0][1].headers.Authorization).toBe("Bearer tok123");
+  });
+
+  it("createSignal posts text+audience with auth", async () => {
+    const mock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ signal: { id: 1 }, deliveries: [] }),
+    });
+    vi.stubGlobal("fetch", mock);
+    await api.createSignal("mtok", "XLM LONG", "all");
+    const [url, init] = mock.mock.calls[0];
+    expect(url).toContain("/api/signals");
+    expect(init.method).toBe("POST");
+    expect(init.headers.Authorization).toBe("Bearer mtok");
+    expect(JSON.parse(init.body).audience).toBe("all");
+  });
+
+  it("mentorLogin passes password in query", async () => {
+    const mock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ access_token: "a", refresh_token: "r" }),
+    });
+    vi.stubGlobal("fetch", mock);
+    await api.mentorLogin("p@ss word");
+    expect(mock.mock.calls[0][0]).toContain("password=p%40ss%20word");
+  });
 });
