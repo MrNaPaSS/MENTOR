@@ -2,175 +2,72 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, StudentOut, DeliveryPreview } from "@/lib/api";
-import { getMentorToken, setMentorToken, logoutMentor } from "@/lib/auth";
+import { Users, Radio, Activity, PlusCircle } from "lucide-react";
+import { api, PublicStats, StudentOut } from "@/lib/api";
+import { useMentorToken } from "@/components/admin/AdminShell";
 
-export default function AdminPage() {
-  const [token, setToken] = useState<string | null>(null);
+export default function AdminDashboard() {
+  const token = useMentorToken();
+  const [stats, setStats] = useState<PublicStats | null>(null);
+  const [students, setStudents] = useState<StudentOut[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    setToken(getMentorToken());
-  }, []);
+    Promise.all([api.publicStats(), api.students(token)])
+      .then(([s, st]) => {
+        setStats(s);
+        setStudents(st);
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, [token]);
 
-  if (!token) return <MentorLogin onLogin={setToken} />;
-  return <MentorPanel token={token} onLogout={() => setToken(null)} />;
-}
+  const active = students.filter((s) => s.is_active && s.is_approved).length;
+  const pending = students.filter((s) => !s.is_approved).length;
 
-function MentorLogin({ onLogin }: { onLogin: (t: string) => void }) {
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  async function login() {
-    setError(null);
-    try {
-      const res = await api.mentorLogin(password);
-      setMentorToken(res.access_token);
-      onLogin(res.access_token);
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
+  const kpis = [
+    { icon: Users, label: "Активных учеников", value: active },
+    { icon: Users, label: "Ожидают подтверждения", value: pending },
+    { icon: Radio, label: "Сигналов всего", value: stats?.total_signals ?? 0 },
+    { icon: Activity, label: "Активных сигналов", value: stats?.active_signals ?? 0 },
+  ];
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
-      <div className="card glow-cyan">
-        <h1 className="text-2xl font-bold">
-          NMNH <span className="text-accent-gold">ADMIN</span>
-        </h1>
-        <input
-          type="password"
-          className="input mt-4 w-full"
-          placeholder="Пароль ментора"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button className="btn-primary mt-3 w-full" onClick={login} disabled={!password}>
-          Войти
-        </button>
-        {error && <p className="mt-3 text-danger">⚠️ {error}</p>}
-      </div>
-    </main>
-  );
-}
-
-function MentorPanel({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [students, setStudents] = useState<StudentOut[]>([]);
-  const [text, setText] = useState("XLM LONG\nПлечо 20х");
-  const [audience, setAudience] = useState("all");
-  const [deliveries, setDeliveries] = useState<DeliveryPreview[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  function loadStudents() {
-    api.students(token).then(setStudents).catch((e) => setError(e.message));
-  }
-  useEffect(loadStudents, [token]);
-
-  async function send() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.createSignal(token, text, audience);
-      setDeliveries(res.deliveries);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <main className="mx-auto max-w-5xl px-4 py-10">
-      <header className="flex items-center justify-between">
-        <Link href="/" className="text-2xl font-extrabold">
-          ⚡ <span className="text-accent-cyan">NMNH</span>{" "}
-          <span className="text-accent-gold">ADMIN</span>
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-h2 text-white">Дашборд</h1>
+        <Link href="/admin/signal/new" className="btn-primary">
+          <PlusCircle className="h-4 w-4" /> Новый сигнал
         </Link>
-        <button
-          className="btn-outline"
-          onClick={() => {
-            logoutMentor();
-            onLogout();
-          }}
-        >
-          Выйти
-        </button>
-      </header>
+      </div>
 
-      {error && <p className="mt-4 text-danger">⚠️ {error}</p>}
-
-      <section className="mt-8 grid gap-6 md:grid-cols-2">
-        <div className="card">
-          <h2 className="mb-3 text-xl font-semibold">Новый сигнал</h2>
-          <textarea
-            className="input h-32 w-full font-mono"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <div className="mt-3 flex items-center gap-2">
-            <select className="input" value={audience} onChange={(e) => setAudience(e.target.value)}>
-              <option value="all">Всем</option>
-              <option value="moderate">Умеренным</option>
-              <option value="turbo">Турбо</option>
-            </select>
-            <button className="btn-primary" onClick={send} disabled={loading}>
-              {loading ? "Отправляем…" : "✅ Отправить"}
-            </button>
-          </div>
-
-          {deliveries && (
-            <div className="mt-4 text-sm">
-              <p className="mb-2 text-text-secondary">Расчёт под аудиторию:</p>
-              <ul className="space-y-1">
-                {deliveries.map((d, i) => (
-                  <li key={i} className="font-mono">
-                    @{d.username || "—"} [{d.mode}] —{" "}
-                    {d.status === "skipped" ? (
-                      <span className="text-text-muted">пропуск</span>
-                    ) : (
-                      <span className="text-success">
-                        маржа {d.margin_usd}$ / риск {d.risk_usd}$
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {kpis.map((k, i) => {
+          const Icon = k.icon;
+          return (
+            <div key={i} className="card">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-text-muted">{k.label}</span>
+                <Icon className="h-4 w-4 text-accent-cyan" />
+              </div>
+              <div className="mt-3 font-mono text-3xl font-bold text-white tabular">
+                {loaded ? k.value : <span className="skeleton inline-block h-8 w-12 align-middle" />}
+              </div>
             </div>
-          )}
-        </div>
+          );
+        })}
+      </div>
 
-        <div className="card">
-          <h2 className="mb-3 text-xl font-semibold">Ученики ({students.length})</h2>
-          {students.length === 0 ? (
-            <p className="text-text-muted">Пока нет.</p>
-          ) : (
-            <table className="w-full text-left text-sm">
-              <thead className="text-text-muted">
-                <tr>
-                  <th className="py-1">Ник</th>
-                  <th>Режим</th>
-                  <th className="text-right">Баланс</th>
-                  <th className="text-right">Статус</th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((s) => (
-                  <tr key={s.id} className="border-t border-border">
-                    <td className="py-1">@{s.username || s.id}</td>
-                    <td>{s.mode}</td>
-                    <td className="text-right font-mono">
-                      {s.balance_usdt ? Number(s.balance_usdt).toLocaleString("en-US") : "—"}$
-                    </td>
-                    <td className="text-right">
-                      {s.is_approved && s.is_active ? "✅" : "⏸"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
-    </main>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Link href="/admin/students" className="card transition hover:border-accent-cyan/40">
+          <h3 className="font-semibold text-white">Ученики</h3>
+          <p className="mt-1 text-sm text-text-muted">Управление, подтверждение заявок, режимы и баланс.</p>
+        </Link>
+        <Link href="/admin/signals" className="card transition hover:border-accent-cyan/40">
+          <h3 className="font-semibold text-white">Сигналы</h3>
+          <p className="mt-1 text-sm text-text-muted">История сигналов и закрытие активных.</p>
+        </Link>
+      </div>
+    </div>
   );
 }

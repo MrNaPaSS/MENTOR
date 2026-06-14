@@ -166,6 +166,12 @@ export const api = {
 
   // ── Авторизованные (ментор) ──
   students: (token: string) => authReq<StudentOut[]>("/api/students", token),
+  studentPatch: (token: string, id: number, body: Partial<StudentOut>) =>
+    authReq<StudentOut>(`/api/students/${id}`, token, { method: "PATCH", body: JSON.stringify(body) }),
+  studentApprove: (token: string, id: number) =>
+    authReq<StudentOut>(`/api/students/${id}/approve`, token, { method: "POST" }),
+  studentDelete: (token: string, id: number) =>
+    authReq<{ ok: boolean }>(`/api/students/${id}`, token, { method: "DELETE" }),
   createSignal: (token: string, text: string, audience: string) =>
     authReq<{ signal: SignalOut; deliveries: DeliveryPreview[] }>("/api/signals", token, {
       method: "POST",
