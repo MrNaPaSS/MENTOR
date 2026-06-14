@@ -7,8 +7,10 @@ from fastapi.testclient import TestClient
 
 from backend.config import BackendConfig
 from backend.main import create_app
+import asyncio
+
 from backend.ws import ConnectionManager
-from backend.price_collector import collect_once
+from backend.price_collector import collect_once, PriceCollector
 from backend.security import create_access_token
 from core.weex import get_weex_client
 from core.db import SessionLocal
@@ -79,7 +81,38 @@ async def test_collect_once_broadcasts_active_symbols(app_with_db):
     assert ws.messages[0]["payload"]["symbol"] == "XLMUSDT"
 
 
+async def test_collect_once_no_active_signals(app_with_db):
+    mgr = ConnectionManager()
+    weex = get_weex_client(use_mock=True)
+    assert await collect_once(weex, mgr) == 0
+
+
+async def test_price_collector_lifecycle(app_with_db):
+    with SessionLocal() as s:
+        repo.create_signal(
+            s, symbol="ETHUSDT", direction="LONG", leverage=10,
+            entry_price=Decimal("3000"), entry_type="market", margin_type="cross",
+            target_audience="all", status="active",
+        )
+    mgr = ConnectionManager()
+    ws = FakeWS()
+    await mgr.connect(ws)
+    collector = PriceCollector(get_weex_client(use_mock=True), mgr, interval=0.01)
+    collector.start()
+    collector.start()  # повторный старт безопасен
+    await asyncio.sleep(0.05)
+    await collector.stop()
+    assert any(m["event"] == "price_update" for m in ws.messages)
+
+
 # ── WebSocket-эндпоинты ──
+
+def test_lifespan_starts_and_stops_collector(app_with_db):
+    app, _ = app_with_db
+    # Контекстный менеджер TestClient запускает lifespan (старт/стоп сборщика).
+    with TestClient(app) as client:
+        assert client.get("/api/health").status_code == 200
+
 
 def test_ws_prices_sends_hello(app_with_db):
     app, _ = app_with_db
