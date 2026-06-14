@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Send } from "lucide-react";
 import Counter from "@/components/ui/Counter";
-import ChartBackdrop from "./ChartBackdrop";
 import { api, PublicStats } from "@/lib/api";
 import { SOCIAL_LINKS } from "@/lib/content";
 
@@ -32,12 +31,9 @@ export default function Hero() {
       id="about"
       className="relative overflow-hidden pt-28 pb-16 md:pt-36 md:pb-24"
     >
-      {/* Фоновые слои */}
-      <div className="pointer-events-none absolute inset-0 bg-radial-cyan" />
-      <div className="pointer-events-none absolute inset-0 bg-grid-faint [background-size:48px_48px] opacity-[0.5] [mask-image:radial-gradient(70%_60%_at_50%_30%,black,transparent)]" />
-      <div className="pointer-events-none absolute right-[-10%] top-10 hidden h-[480px] w-[60%] opacity-70 md:block">
-        <ChartBackdrop className="h-full w-full animate-float" />
-      </div>
+      {/* Лёгкие фоновые слои поверх объёмной WebGL-сцены (она рендерится за контентом) */}
+      <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
+      <div className="pointer-events-none absolute inset-0 bg-grid-faint [background-size:48px_48px] opacity-30 [mask-image:radial-gradient(70%_60%_at_50%_30%,black,transparent)]" />
 
       <div className="relative mx-auto grid max-w-6xl gap-10 px-4 md:px-6">
         <div className="max-w-3xl">
