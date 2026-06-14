@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from core import repo
 from backend.config import BackendConfig
-from backend.deps import get_config, get_session, get_weex
+from backend.deps import get_config, get_session, get_weex, get_notifier
 from backend.security import create_access_token, create_refresh_token, decode_token, TokenError
 from backend.schemas import RequestCodeIn, RequestCodeOut, VerifyIn, TokenPair, RefreshIn
 
@@ -31,6 +31,7 @@ async def request_code(
     config: BackendConfig = Depends(get_config),
     weex=Depends(get_weex),
     session=Depends(get_session),
+    notifier=Depends(get_notifier),
 ):
     uid = body.weex_uid.strip()
     # UID должен существовать в WEEX и принадлежать одобренному ученику.
@@ -43,10 +44,21 @@ async def request_code(
 
     code = f"{secrets.randbelow(10**6):06d}"
     repo.create_auth_code(session, uid, code, config.code_ttl_seconds)
-    # TODO: доставка кода в Telegram через бота (контракт A-10).
+
+    # Доставка кода в Telegram через бота (контракт A-10).
+    delivered = False
+    if student.tg_id:
+        delivered = await notifier.send_message(
+            int(student.tg_id), f"🔑 Код входа в NMNH Platform: {code}"
+        )
+    detail = (
+        "Код отправлен в Telegram бот"
+        if delivered
+        else "Откройте @nmnh_bot и нажмите /start, затем запросите код снова"
+    )
     return RequestCodeOut(
         ok=True,
-        detail="Код отправлен в Telegram бот",
+        detail=detail,
         code=code if config.expose_codes else None,
     )
 

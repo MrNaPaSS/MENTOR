@@ -22,6 +22,7 @@ class BackendConfig:
     code_ttl_seconds: int
     max_code_attempts: int
     expose_codes: bool  # dev: возвращать код в ответе request-code
+    bot_token: str = ""  # для доставки кода в Telegram
 
     @classmethod
     def from_env(cls) -> "BackendConfig":
@@ -33,4 +34,5 @@ class BackendConfig:
             code_ttl_seconds=int(os.getenv("AUTH_CODE_TTL", "300")),
             max_code_attempts=int(os.getenv("AUTH_MAX_ATTEMPTS", "5")),
             expose_codes=os.getenv("AUTH_EXPOSE_CODES", "false").lower() == "true",
+            bot_token=os.getenv("BOT_TOKEN", ""),
         )

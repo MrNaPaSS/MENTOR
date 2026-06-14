@@ -1,8 +1,8 @@
-"""Реальный WEEX-клиент (HMAC SHA256 + Base64).
+"""Реальный WEEX-клиент (HMAC SHA256 + Base64, HTTP через aiohttp).
 
-Заготовка под подключение реальных ключей (ТЗ §5). Подпись и эндпоинты описаны; сетевые вызовы
-реализуются при появлении ключей и точной схемы закрытого аффилиат-эндпоинта баланса (A-01).
-Пока работаем на ``MockWeexClient`` (WEEX_USE_MOCK=true).
+Публичные рыночные эндпоинты (цена, свечи, время) — без подписи; аффилиат/аккаунт — с подписью
+(ТЗ §5.2). Точная схема ответов WEEX может отличаться, поэтому парсинг — защитный (ищем поле по
+списку кандидатов). Для тестов можно передать свою ``session`` с интерфейсом aiohttp.
 """
 
 from __future__ import annotations
@@ -10,14 +10,23 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import logging
+import os
 import time
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from core.weex.base import WeexClient
 
+logger = logging.getLogger("nmnh.weex")
+
 FUTURES_BASE = "https://api-contract.weex.com"
 AFFILIATE_BASE = "https://api-spot.weex.com"
+
+_PRICE_FIELDS = ("price", "last", "close", "markPrice", "lastPr")
+_BALANCE_FIELDS = (
+    "futuresBalance", "availableBalance", "balance", "totalAsset", "asset", "equity",
+)
 
 
 def sign(secret: str, timestamp: str, method: str, path: str, body: str = "") -> str:
@@ -27,37 +36,134 @@ def sign(secret: str, timestamp: str, method: str, path: str, body: str = "") ->
     return base64.b64encode(digest).decode()
 
 
-class RealWeexClient(WeexClient):
-    """Реальный клиент. Требует ключи и реализацию HTTP-вызовов."""
+def _to_decimal(value) -> Optional[Decimal]:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
 
-    def __init__(self, api_key: str, secret: str, passphrase: str, **affiliate_creds):
+
+def _search_field(payload, fields) -> Optional[Decimal]:
+    """Рекурсивно найти первое числовое поле из ``fields`` в dict/list."""
+    if isinstance(payload, dict):
+        for key in fields:
+            if key in payload:
+                val = _to_decimal(payload[key])
+                if val is not None:
+                    return val
+        for value in payload.values():
+            found = _search_field(value, fields)
+            if found is not None:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _search_field(item, fields)
+            if found is not None:
+                return found
+    return None
+
+
+class RealWeexClient(WeexClient):
+    """Реальный клиент WEEX. Требует ключи; работает поверх aiohttp."""
+
+    def __init__(self, api_key: str, secret: str, passphrase: str, session=None, **affiliate_creds):
         self.api_key = api_key
         self.secret = secret
         self.passphrase = passphrase
         self.affiliate = affiliate_creds
+        self._session = session
+        self._owns_session = session is None
 
-    def _headers(self, method: str, path: str, body: str = "") -> dict:
+    async def _get_session(self):
+        if self._session is None:
+            import aiohttp
+
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    def _signed_headers(self, method: str, path_with_query: str, *, affiliate: bool) -> dict:
         ts = str(int(time.time() * 1000))
+        if affiliate:
+            key = self.affiliate.get("affiliate_key", "")
+            secret = self.affiliate.get("affiliate_secret", "")
+            passphrase = self.affiliate.get("affiliate_passphrase", "")
+        else:
+            key, secret, passphrase = self.api_key, self.secret, self.passphrase
         return {
-            "ACCESS-KEY": self.api_key,
-            "ACCESS-SIGN": sign(self.secret, ts, method, path, body),
-            "ACCESS-PASSPHRASE": self.passphrase,
+            "ACCESS-KEY": key,
+            "ACCESS-SIGN": sign(secret, ts, method, path_with_query),
+            "ACCESS-PASSPHRASE": passphrase,
             "ACCESS-TIMESTAMP": ts,
             "Content-Type": "application/json",
         }
 
-    async def get_price(self, symbol: str) -> Decimal:  # pragma: no cover - сеть
-        raise NotImplementedError("Подключается при наличии WEEX-ключей (WEEX_USE_MOCK=false).")
+    # Совместимость с прежним API (используется в тестах).
+    def _headers(self, method: str, path: str, body: str = "") -> dict:
+        return self._signed_headers(method, path, affiliate=False)
 
-    async def get_klines(self, symbol: str, interval: str = "15m", limit: int = 50) -> list:  # pragma: no cover
-        raise NotImplementedError("Подключается при наличии WEEX-ключей.")
+    async def _get(self, base: str, path: str, params: dict | None = None,
+                   *, signed: bool = False, affiliate: bool = False) -> Optional[dict]:
+        session = await self._get_session()
+        headers = {}
+        if signed:
+            query = "&".join(f"{k}={v}" for k, v in (params or {}).items())
+            path_q = f"{path}?{query}" if query else path
+            headers = self._signed_headers("GET", path_q, affiliate=affiliate)
+        try:
+            async with session.get(base + path, params=params, headers=headers) as resp:
+                if resp.status != 200:
+                    logger.warning("WEEX %s%s -> HTTP %s", base, path, resp.status)
+                    return None
+                return await resp.json()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("WEEX запрос %s%s упал: %s", base, path, exc)
+            return None
 
-    async def get_min_order_usd(self, symbol: str) -> Decimal:  # pragma: no cover
-        raise NotImplementedError("Подключается при наличии WEEX-ключей.")
+    async def get_price(self, symbol: str) -> Decimal:
+        data = await self._get(FUTURES_BASE, "/capi/v3/market/symbolPrice", {"symbol": symbol})
+        price = _search_field(data, _PRICE_FIELDS) if data else None
+        if price is None:
+            raise RuntimeError(f"Не удалось получить цену {symbol} с WEEX")
+        return price
 
-    async def get_affiliate_balance(self, weex_uid: str) -> Optional[Decimal]:  # pragma: no cover
-        # Закрытый аффилиат-эндпоинт баланса реферала (A-01) — точная схема фиксируется при подключении.
-        raise NotImplementedError("Подключается при наличии аффилиат-доступа WEEX.")
+    async def get_klines(self, symbol: str, interval: str = "15m", limit: int = 50) -> list:
+        data = await self._get(
+            FUTURES_BASE, "/capi/v3/market/klines",
+            {"symbol": symbol, "interval": interval, "limit": limit},
+        )
+        if not data:
+            return []
+        return data.get("data", data) if isinstance(data, dict) else data
 
-    async def get_server_time(self) -> int:  # pragma: no cover
-        raise NotImplementedError("Подключается при наличии WEEX-ключей.")
+    async def get_min_order_usd(self, symbol: str) -> Decimal:
+        # Публичного эндпоинта мин. ордера в ТЗ нет — берём настраиваемый дефолт.
+        return _to_decimal(os.getenv("WEEX_MIN_ORDER_USD", "5")) or Decimal("5")
+
+    async def get_affiliate_balance(self, weex_uid: str) -> Optional[Decimal]:
+        # Закрытый аффилиат-эндпоинт баланса реферала (A-01). Путь/поле — настраиваемые,
+        # т.к. точная схема предоставляется партнёрским менеджером WEEX.
+        path = os.getenv(
+            "WEEX_AFFILIATE_BALANCE_PATH",
+            "/api/v2/rebate/affiliate/getChannelUserTradeAndAsset",
+        )
+        param_key = os.getenv("WEEX_AFFILIATE_UID_PARAM", "uid")
+        data = await self._get(
+            AFFILIATE_BASE, path, {param_key: weex_uid}, signed=True, affiliate=True
+        )
+        if not data:
+            return None
+        return _search_field(data, _BALANCE_FIELDS)
+
+    async def get_server_time(self) -> int:
+        data = await self._get(FUTURES_BASE, "/capi/v3/market/time")
+        if isinstance(data, dict):
+            for key in ("serverTime", "time", "data"):
+                if key in data:
+                    val = data[key]
+                    if isinstance(val, (int, str)):
+                        return int(val)
+        return int(time.time() * 1000)
+
+    async def close(self) -> None:
+        if self._session is not None and self._owns_session:
+            await self._session.close()

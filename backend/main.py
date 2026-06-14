@@ -18,11 +18,15 @@ from backend.api import auth, market, signals, stats, students, profile
 from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
+from backend.notify import get_notifier
 
 
-def create_app(config: BackendConfig | None = None, weex=None, price_interval: float = 5.0) -> FastAPI:
+def create_app(
+    config: BackendConfig | None = None, weex=None, notifier=None, price_interval: float = 5.0
+) -> FastAPI:
     config = config or BackendConfig.from_env()
     weex = weex or get_weex_client(config.weex_use_mock)
+    notifier = notifier or get_notifier(config.bot_token)
 
     init_engine()
     create_all()
@@ -40,10 +44,12 @@ def create_app(config: BackendConfig | None = None, weex=None, price_interval: f
         finally:
             await collector.stop()
             await weex.close()
+            await notifier.close()
 
     app = FastAPI(title="NMNH Platform API", version="0.1.0", lifespan=lifespan)
     app.state.config = config
     app.state.weex = weex
+    app.state.notifier = notifier
     app.state.ws_manager = manager
     app.state.price_collector = collector
 

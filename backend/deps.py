@@ -25,6 +25,10 @@ def get_ws_manager(request: Request):
     return request.app.state.ws_manager
 
 
+def get_notifier(request: Request):
+    return request.app.state.notifier
+
+
 def get_session():
     session = SessionLocal()
     try:
