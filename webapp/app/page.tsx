@@ -1,62 +1,57 @@
-import Link from "next/link";
-import LiveStats from "@/components/LiveStats";
+import Header from "@/components/landing/Header";
+import Hero from "@/components/landing/Hero";
+import HowItWorks from "@/components/landing/HowItWorks";
+import PublicSignals from "@/components/landing/PublicSignals";
+import PlatformStats from "@/components/landing/PlatformStats";
+import Testimonials from "@/components/landing/Testimonials";
+import Faq from "@/components/landing/Faq";
+import Socials from "@/components/landing/Socials";
+import Footer from "@/components/landing/Footer";
+import SectionHeading from "@/components/ui/SectionHeading";
+import Reveal from "@/components/ui/Reveal";
 import Calculator from "@/components/Calculator";
 import Leaderboard from "@/components/Leaderboard";
 
 export default function Home() {
   return (
-    <main className="mx-auto max-w-5xl px-4 py-10">
-      {/* Header */}
-      <header className="flex items-center justify-between">
-        <div className="text-2xl font-extrabold tracking-tight">
-          ⚡ <span className="text-accent-cyan">NMNH</span>
-        </div>
-        <Link href="/login" className="btn-outline">
-          Войти
-        </Link>
-      </header>
+    <>
+      <Header />
+      <main>
+        <Hero />
+        <HowItWorks />
+        <PublicSignals />
 
-      {/* Hero */}
-      <section className="py-16 text-center">
-        <h1 className="text-4xl font-extrabold leading-tight md:text-6xl">
-          Торгуй как профи.
-          <br />
-          <span className="text-accent-cyan">Учись у лучших.</span>
-        </h1>
-        <p className="mx-auto mt-4 max-w-xl text-text-secondary">
-          Персональные сигналы под твой депозит. Реальный расчёт. Реальный результат.
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link href="/login" className="btn-primary">
-            ⚡ Начать обучение
-          </Link>
-          <a href="https://www.weex.com" className="btn-outline">
-            📊 Открыть счёт на WEEX
-          </a>
-        </div>
-      </section>
+        {/* Калькулятор */}
+        <section id="calculator" className="mx-auto max-w-5xl px-4 py-20 md:px-6 md:py-28">
+          <SectionHeading
+            eyebrow="Калькулятор"
+            title="Посчитай позицию до входа"
+            subtitle="Маржа, объём, риск и профит по каждому тейк-профиту — мгновенно."
+          />
+          <Reveal className="mt-12">
+            <Calculator />
+          </Reveal>
+        </section>
 
-      {/* Live stats */}
-      <section className="py-6">
-        <LiveStats />
-      </section>
+        <PlatformStats />
 
-      {/* Calculator */}
-      <section className="py-8">
-        <Calculator />
-      </section>
+        {/* Лидерборд */}
+        <section id="leaderboard" className="mx-auto max-w-5xl px-4 py-20 md:px-6 md:py-28">
+          <SectionHeading
+            eyebrow="Лидерборд"
+            title="Лучшие трейдеры платформы"
+            subtitle="Реальные результаты учеников, торгующих по сигналам."
+          />
+          <Reveal className="mt-12">
+            <Leaderboard limit={10} showHeading={false} />
+          </Reveal>
+        </section>
 
-      {/* Leaderboard */}
-      <section className="py-8">
-        <Leaderboard />
-      </section>
-
-      <footer className="border-t border-border py-8 text-center text-sm text-text-muted">
-        <p>© 2025 NMNH. Все права защищены.</p>
-        <p className="mt-1">
-          Торговля криптовалютами связана с риском. Это не финансовый совет.
-        </p>
-      </footer>
-    </main>
+        <Testimonials />
+        <Faq />
+        <Socials />
+      </main>
+      <Footer />
+    </>
   );
 }

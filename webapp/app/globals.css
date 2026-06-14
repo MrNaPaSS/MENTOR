@@ -1,35 +1,211 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: dark;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --bg-deep: #0a0a1a;
+  --bg-card: #1a1a2e;
+  --bg-panel: #0f0f23;
+  --accent-cyan: #0affe0;
+  --accent-gold: #ffd700;
+  --success: #00d4a0;
+  --danger: #ff4757;
+  --border: #2a2a3e;
 }
 
-body {
-  background-color: #0a0a1a;
-  color: #ffffff;
-}
-
-/* Неоновая рамка/свечение акцента */
-.glow-cyan {
-  box-shadow: 0 0 0 1px rgba(10, 255, 224, 0.4), 0 0 24px rgba(10, 255, 224, 0.12);
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background-color: var(--bg-deep);
+    color: #ffffff;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: rgba(10, 255, 224, 0.25);
+    color: #fff;
+  }
+  /* Тонкий скроллбар в тёмной теме */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-deep);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #23233a;
+    border-radius: 8px;
+    border: 2px solid var(--bg-deep);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2f2f4d;
+  }
+  /* Числа моноширинным шрифтом по умолчанию для прайс-блоков */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @layer components {
+  /* ── Кнопки (ТЗ §10.3) ── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold
+           transition-all duration-200 select-none disabled:cursor-not-allowed disabled:opacity-50;
+  }
   .btn-primary {
-    @apply bg-accent-cyan text-bg-deep font-semibold rounded-lg px-5 py-2.5 transition
-           hover:brightness-110 active:scale-[0.98] disabled:opacity-50;
+    @apply btn bg-accent-cyan text-bg-deep shadow-[0_0_24px_rgba(10,255,224,0.25)]
+           hover:brightness-110 hover:scale-[1.02] active:scale-[0.98];
   }
   .btn-outline {
-    @apply border border-accent-cyan text-accent-cyan rounded-lg px-5 py-2.5 transition
-           hover:bg-accent-cyan/10 active:scale-[0.98] disabled:opacity-50;
+    @apply btn border border-accent-cyan/60 text-accent-cyan bg-accent-cyan/[0.04]
+           hover:bg-accent-cyan/10 hover:border-accent-cyan hover:scale-[1.02] active:scale-[0.98];
   }
+  .btn-gold {
+    @apply btn bg-accent-gold text-bg-deep shadow-[0_0_24px_rgba(255,215,0,0.22)]
+           hover:brightness-110 hover:scale-[1.02] active:scale-[0.98];
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:brightness-110 active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply btn text-text-secondary hover:text-white hover:bg-white/5;
+  }
+
+  /* ── Поверхности ── */
   .card {
-    @apply bg-bg-card border border-border rounded-xl p-5;
+    @apply rounded-2xl border border-border bg-bg-card p-5 shadow-card;
   }
+  .panel {
+    @apply rounded-2xl border border-border bg-bg-panel p-5;
+  }
+
+  /* ── Поля ввода (ТЗ §10.4) ── */
   .input {
-    @apply bg-bg-card border border-border rounded-lg px-3 py-2 text-text-primary
-           outline-none focus:border-accent-cyan focus:ring-2 focus:ring-accent-cyan/20;
+    @apply w-full rounded-xl border border-border bg-bg-panel px-3.5 py-2.5 text-text-primary
+           placeholder:text-text-muted outline-none transition
+           focus:border-accent-cyan focus:ring-2 focus:ring-accent-cyan/25;
+  }
+
+  /* ── Бейджи ── */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+  .badge-cyan {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-accent-cyan/[0.12] text-accent-cyan ring-1 ring-inset ring-accent-cyan/30;
+  }
+  .badge-gold {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-accent-gold/[0.12] text-accent-gold ring-1 ring-inset ring-accent-gold/30;
+  }
+  .badge-success {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-success/[0.12] text-success ring-1 ring-inset ring-success/30;
+  }
+  .badge-danger {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-danger/[0.12] text-danger ring-1 ring-inset ring-danger/30;
+  }
+  .badge-muted {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-white/5 text-text-muted ring-1 ring-inset ring-white/10;
+  }
+
+  /* Заголовок-эйбров секции */
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent-cyan;
+  }
+}
+
+/* ── Свечения и эффекты ── */
+.glow-cyan {
+  box-shadow: 0 0 0 1px rgba(10, 255, 224, 0.4), 0 0 28px rgba(10, 255, 224, 0.14);
+}
+.glow-gold {
+  box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.4), 0 0 28px rgba(255, 215, 0, 0.14);
+}
+.text-glow-cyan {
+  text-shadow: 0 0 18px rgba(10, 255, 224, 0.55);
+}
+
+/* Скелетон-шиммер (ТЗ §10.5) */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.10) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+  border-radius: 8px;
+}
+
+/* Глитч-эффект заголовка (чистый CSS) */
+.glitch {
+  position: relative;
+  display: inline-block;
+}
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.glitch::before {
+  color: var(--accent-cyan);
+  animation: glitch-x 3.4s infinite steps(2, end);
+  clip-path: inset(0 0 60% 0);
+}
+.glitch::after {
+  color: var(--danger);
+  animation: glitch-y 2.8s infinite steps(2, end);
+  clip-path: inset(60% 0 0 0);
+}
+@keyframes glitch-x {
+  0%, 86%, 100% { transform: translate(0); opacity: 0; }
+  88% { transform: translate(-3px, -1px); opacity: 0.9; }
+  92% { transform: translate(3px, 1px); opacity: 0.9; }
+  96% { transform: translate(-2px, 1px); opacity: 0.6; }
+}
+@keyframes glitch-y {
+  0%, 86%, 100% { transform: translate(0); opacity: 0; }
+  89% { transform: translate(3px, 1px); opacity: 0.9; }
+  93% { transform: translate(-3px, -1px); opacity: 0.9; }
+  97% { transform: translate(2px, -1px); opacity: 0.6; }
+}
+
+/* Появление по скроллу */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .glitch::before,
+  .glitch::after,
+  .skeleton,
+  .animate-marquee,
+  .animate-float,
+  .animate-pulse-glow {
+    animation: none !important;
   }
 }
