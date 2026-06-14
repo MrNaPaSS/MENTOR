@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -13,9 +15,12 @@ from core import repo
 from core.weex import get_weex_client
 from backend.config import BackendConfig
 from backend.api import auth, market, signals, stats, students
+from backend.ws import ConnectionManager
+from backend.ws import routes as ws_routes
+from backend.price_collector import PriceCollector
 
 
-def create_app(config: BackendConfig | None = None, weex=None) -> FastAPI:
+def create_app(config: BackendConfig | None = None, weex=None, price_interval: float = 5.0) -> FastAPI:
     config = config or BackendConfig.from_env()
     weex = weex or get_weex_client(config.weex_use_mock)
 
@@ -24,9 +29,23 @@ def create_app(config: BackendConfig | None = None, weex=None) -> FastAPI:
     with SessionLocal() as session:
         repo.seed_settings(session)
 
-    app = FastAPI(title="NMNH Platform API", version="0.1.0")
+    manager = ConnectionManager()
+    collector = PriceCollector(weex, manager, interval=price_interval)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        collector.start()
+        try:
+            yield
+        finally:
+            await collector.stop()
+            await weex.close()
+
+    app = FastAPI(title="NMNH Platform API", version="0.1.0", lifespan=lifespan)
     app.state.config = config
     app.state.weex = weex
+    app.state.ws_manager = manager
+    app.state.price_collector = collector
 
     app.add_middleware(
         CORSMiddleware,
@@ -40,10 +59,11 @@ def create_app(config: BackendConfig | None = None, weex=None) -> FastAPI:
     app.include_router(signals.router)
     app.include_router(stats.router)
     app.include_router(students.router)
+    app.include_router(ws_routes.router)
 
     @app.get("/api/health", tags=["health"])
     async def health():
-        return {"status": "ok", "weex_mock": config.weex_use_mock}
+        return {"status": "ok", "weex_mock": config.weex_use_mock, "ws_clients": manager.count}
 
     return app
 
