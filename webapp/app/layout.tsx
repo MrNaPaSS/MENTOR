@@ -1,5 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
+import InstallPrompt from "@/components/pwa/InstallPrompt";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://nmnh.io"),
@@ -10,7 +12,19 @@ export const metadata: Metadata = {
   description:
     "Получай торговые сигналы под свой депозит. Реальный расчёт позиции, риск под контролем, закрытое сообщество учеников.",
   applicationName: "NMNH Platform",
-  themeColor: "#0A0A1A",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "NMNH",
+  },
   openGraph: {
     title: "NMNH — Персональные торговые сигналы",
     description:
@@ -18,8 +32,16 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ru_RU",
     siteName: "NMNH Platform",
+    images: [{ url: "/og.png", width: 1200, height: 630 }],
   },
-  twitter: { card: "summary_large_image" },
+  twitter: { card: "summary_large_image", images: ["/og.png"] },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0A0A1A",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -31,6 +53,8 @@ export default function RootLayout({
     <html lang="ru">
       <body className="min-h-screen bg-bg-deep font-sans text-text-primary antialiased">
         {children}
+        <ServiceWorkerRegister />
+        <InstallPrompt />
       </body>
     </html>
   );
