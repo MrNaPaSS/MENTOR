@@ -138,6 +138,7 @@ export const api = {
     }),
   signals: () => req<SignalOut[]>("/api/signals"),
   activeSignals: () => req<SignalOut[]>("/api/signals/active"),
+  signal: (id: number | string) => req<SignalOut>(`/api/signals/${id}`),
 
   // ── Auth ──
   requestCode: (weex_uid: string) =>
