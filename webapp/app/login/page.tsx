@@ -57,7 +57,7 @@ export default function LoginPage() {
       const tokens = await api.verify(uid.trim(), fullCode);
       setStudentTokens(tokens.access_token, tokens.refresh_token);
       setSuccess(true);
-      setTimeout(() => router.push("/app/dashboard"), 700);
+      setTimeout(() => window.location.href = "/app/dashboard", 700);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Неверный код");
       setLoading(false);
@@ -130,6 +130,33 @@ export default function LoginPage() {
                 disabled={loading || !uid}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Получить код <ArrowRight className="h-4 w-4" /></>}
+              </button>
+
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-white/10"></div>
+                <span className="flex-shrink mx-4 text-text-muted text-xs">или</span>
+                <div className="flex-grow border-t border-white/10"></div>
+              </div>
+
+              <button
+                className="btn-outline w-full py-2.5 text-xs font-semibold text-accent-cyan border-accent-cyan/30 hover:bg-accent-cyan/10"
+                onClick={async () => {
+                  setLoading(true);
+                  setError(null);
+                  try {
+                    const res = await api.devLogin();
+                    setStudentTokens(res.student.access_token, res.student.refresh_token);
+                    setSuccess(true);
+                    setTimeout(() => window.location.href = "/app/dashboard", 700);
+                  } catch (e: any) {
+                    setError(e.message || "Ошибка Dev входа");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+              >
+                Быстрый демо-вход
               </button>
             </div>
           ) : (

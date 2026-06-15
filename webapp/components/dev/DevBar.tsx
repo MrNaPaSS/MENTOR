@@ -36,10 +36,10 @@ export default function DevBar() {
       const res = await api.devLogin();
       if (as === "mentor") {
         setMentorToken(res.mentor.access_token);
-        router.push("/admin");
+        window.location.href = "/admin";
       } else {
         setStudentTokens(res.student.access_token, res.student.refresh_token);
-        router.push("/app/dashboard");
+        window.location.href = "/app/dashboard";
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Dev-вход недоступен");

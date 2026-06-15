@@ -1,13 +1,38 @@
 // Клиент API NMNH Backend. Базовый URL — из NEXT_PUBLIC_API_URL.
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { logout, logoutMentor, getMentorToken, getAccessToken } from "./auth";
+
+let baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+if (typeof window !== "undefined") {
+  if (baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1")) {
+    const currentHostname = window.location.hostname;
+    if (currentHostname !== "localhost" && currentHostname !== "127.0.0.1") {
+      baseUrl = `http://${currentHostname}:8000`;
+    }
+  }
+}
+
+export const API_URL = baseUrl;
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
     ...init,
   });
+  if (res.status === 401 && typeof window !== "undefined") {
+    const authHeader = init?.headers && (init.headers as any)["Authorization"];
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      if (token === getMentorToken()) {
+        logoutMentor();
+        window.location.href = "/admin";
+      } else if (token === getAccessToken()) {
+        logout();
+        window.location.href = "/";
+      }
+    }
+  }
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
     throw new Error((detail as any).detail || `HTTP ${res.status}`);
