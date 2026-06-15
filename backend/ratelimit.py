@@ -41,6 +41,10 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         if request.method != "OPTIONS" and request.url.path.startswith(self.prefix):
+            # Разрешаем дев-вход без лимитов (для удобства разработки и тестирования)
+            if request.url.path == f"{self.prefix}/dev-login":
+                return await call_next(request)
+            
             ip = request.client.host if request.client else "unknown"
             if not self.limiter.allow(f"{ip}:{request.url.path}"):
                 return JSONResponse(

@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/admin/affiliate", tags=["admin-affiliate"],
 
 _DAY_MS = 86_400_000
 _cache: dict[str, tuple[float, object]] = {}
-_TTL = 120  # сек
+_TTL = 10  # сек — короткий TTL для быстрого обновления при смене периода
 
 
 def _d(v) -> Decimal:
@@ -51,66 +51,166 @@ class AffiliateOverview(BaseModel):
     total_spot_volume: Decimal
     total_futures_volume: Decimal
     total_commission: Decimal
+    total_withdrawal: Decimal
+    with_deposit: int       # сколько рефералов имеют депозит > 0
+    active_traders: int     # сколько рефералов торговали (futures > 0)
     period_days: int
 
+
+import asyncio
 
 class ReferralRow(BaseModel):
     uid: str
     register_time: int | None = None
     kyc: bool | None = None
     deposit: Decimal
+    balance: Decimal
     spot_volume: Decimal
     futures_volume: Decimal
     commission: Decimal
+    withdrawal: Decimal
+    has_traded: bool        # торговал ли вообще
+    has_deposit: bool       # было ли пополнение
+
 
 
 @router.get("/overview", response_model=AffiliateOverview)
 async def overview(days: int = 30, weex=Depends(get_weex)):
     days = max(1, min(days, 90))
     start, end = _period(days)
+    # getAffiliateUIDs максимум поддерживает 90 дней, берем 85 с запасом
+    uid_start = end - 85 * _DAY_MS
 
     async def build():
-        return await weex.get_channel_trade_asset(start, end)
+        all_uids = await weex.get_affiliate_uids(uid_start, end)
+        trade = await weex.get_channel_trade_asset(start, end)
+        return all_uids, trade
 
-    records = await _cached(f"trade:{days}", build)
+    all_uids, records = await _cached(f"overview:{days}", build)
 
+    # Рефералов показываем по торговым записям (реальный размер сети)
     return AffiliateOverview(
         referrals=len(records),
         total_deposit=sum((_d(r.get("depositAmount")) for r in records), Decimal(0)),
         total_spot_volume=sum((_d(r.get("spotTradingAmount")) for r in records), Decimal(0)),
         total_futures_volume=sum((_d(r.get("futuresTradingAmount")) for r in records), Decimal(0)),
         total_commission=sum((_d(r.get("commission")) for r in records), Decimal(0)),
+        total_withdrawal=sum((_d(r.get("withdrawalAmount")) for r in records), Decimal(0)),
+        with_deposit=sum(1 for r in records if _d(r.get("depositAmount")) > 0),
+        active_traders=sum(1 for r in records if _d(r.get("futuresTradingAmount")) > 0 or _d(r.get("spotTradingAmount")) > 0),
         period_days=days,
     )
+
+
+async def _get_user_balance(weex, uid: str) -> Decimal:
+    key = f"user_balance:{uid}"
+    now = time.time()
+    hit = _cache.get(key)
+    if hit and now - hit[0] < 60:  # кэш баланса 60 секунд
+        return hit[1]
+    try:
+        a = await weex.get_agency_assert(uid)
+        avail = _d(a.get("availableBalance"))
+        contract = _d(a.get("contractTotalUsdt"))
+        spot = _d(a.get("spotProTotalUsdt"))
+        unimargin = _d(a.get("unimarginTotalUsdt"))
+        funding = _d(a.get("fundingTotalUsdt"))
+        calculated_total = contract + spot + unimargin + funding
+        balance = max(avail, calculated_total)
+    except Exception:
+        balance = Decimal(0)
+    _cache[key] = (now, balance)
+    return balance
 
 
 @router.get("/referrals", response_model=list[ReferralRow])
 async def referrals(days: int = 30, weex=Depends(get_weex)):
     days = max(1, min(days, 90))
     start, end = _period(days)
+    # getAffiliateUIDs максимум поддерживает 90 дней, берем 85 с запасом
+    uid_start = end - 85 * _DAY_MS
 
     async def build():
-        uids = await weex.get_affiliate_uids(start, end)
+        # Метаданные всех рефералов (KYC, дата) — за последние 90 дней
+        all_uids = await weex.get_affiliate_uids(uid_start, end)
+        # Торговый объём — только за выбранный период
         trade = await weex.get_channel_trade_asset(start, end)
-        return uids, trade
+        return all_uids, trade
 
-    uids, trade = await _cached(f"refs:{days}", build)
-    uid_meta = {u["uid"]: u for u in uids}
+    all_uids, trade = await _cached(f"refs:{days}", build)
+    uid_meta = {u["uid"]: u for u in all_uids}
+
+    # Получаем балансы всех рефералов параллельно (ограничиваем семафором на 10)
+    sem = asyncio.Semaphore(10)
+    async def get_bal(uid):
+        async with sem:
+            return uid, await _get_user_balance(weex, uid)
+
+    bal_results = await asyncio.gather(*(get_bal(r["uid"]) for r in trade))
+    balances = dict(bal_results)
 
     rows = []
     for r in trade:
         meta = uid_meta.get(r["uid"], {})
+        dep = _d(r.get("depositAmount"))
+        fut = _d(r.get("futuresTradingAmount"))
+        spt = _d(r.get("spotTradingAmount"))
         rows.append(ReferralRow(
             uid=r["uid"],
             register_time=meta.get("registerTime"),
             kyc=meta.get("kycResult"),
-            deposit=_d(r.get("depositAmount")),
-            spot_volume=_d(r.get("spotTradingAmount")),
-            futures_volume=_d(r.get("futuresTradingAmount")),
+            deposit=dep,
+            balance=balances.get(r["uid"], Decimal(0)),
+            spot_volume=spt,
+            futures_volume=fut,
             commission=_d(r.get("commission")),
+            withdrawal=_d(r.get("withdrawalAmount")),
+            has_traded=(fut > 0 or spt > 0),
+            has_deposit=(dep > 0),
         ))
     rows.sort(key=lambda x: x.futures_volume + x.spot_volume, reverse=True)
     return rows
+
+
+class MentorBalance(BaseModel):
+    available_balance: Decimal
+    contract_total: Decimal
+    spot_total: Decimal
+    total_usdt: Decimal
+
+
+@router.get("/mentor-balance", response_model=MentorBalance)
+async def mentor_balance(weex=Depends(get_weex)):
+    """Баланс самого ментора на WEEX (agency assert)."""
+    async def build():
+        return await weex.get_own_balance()
+
+    a = await _cached("mentor_balance", build)
+    if not a:
+        return MentorBalance(
+            available_balance=Decimal(0),
+            contract_total=Decimal(0),
+            spot_total=Decimal(0),
+            total_usdt=Decimal(0),
+        )
+    avail = _d(a.get("availableBalance"))
+    contract = _d(a.get("contractTotalUsdt"))
+    spot = _d(a.get("spotProTotalUsdt"))
+    unimargin = _d(a.get("unimarginTotalUsdt"))
+    funding = _d(a.get("fundingTotalUsdt"))
+    
+    # Считаем сумму спотового, контрактного, маржинального и баланса финансирования.
+    # available_balance является доступной частью этих балансов, поэтому не суммируется с ними.
+    calculated_total = contract + spot + unimargin + funding
+    # На случай расхождений берем максимум между вычисленным total и доступным
+    total_usdt = max(avail, calculated_total)
+    
+    return MentorBalance(
+        available_balance=avail,
+        contract_total=contract,
+        spot_total=spot,
+        total_usdt=total_usdt,
+    )
 
 
 class UidBalance(BaseModel):

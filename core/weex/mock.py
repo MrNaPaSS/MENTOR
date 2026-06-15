@@ -162,3 +162,7 @@ class MockWeexClient(WeexClient):
 
     async def check_uid_existence(self, uid: str, contact_type: str = "email", contact_value: str = "") -> bool:
         return bool(str(uid).strip()) and str(uid).strip() not in {"0", "404", "notfound"}
+
+    async def get_own_balance(self) -> dict:
+        return await self.get_agency_assert("6613031308")
+

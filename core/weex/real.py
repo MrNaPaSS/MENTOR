@@ -226,6 +226,11 @@ class RealWeexClient(WeexClient):
         data = self._data(payload) if payload else {}
         return bool(data.get("verified"))
 
+    async def get_own_balance(self) -> dict:
+        mentor_uid = os.getenv("WEEX_MENTOR_UID", "6613031308")
+        return await self.get_agency_assert(mentor_uid)
+
+
     async def get_server_time(self) -> int:
         data = await self._get(FUTURES_BASE, "/capi/v3/market/time")
         if isinstance(data, dict):

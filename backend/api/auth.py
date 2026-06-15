@@ -182,8 +182,13 @@ def dev_login(config: BackendConfig = Depends(get_config), session=Depends(get_s
         student.balance_usdt = Decimal("1000")
         session.commit()
 
-    # Богатый демо-сид (только при первом dev-входе) — чтобы кабинет/админка были «живыми».
-    if first_run:
+    # Богатый демо-сид — чтобы кабинет/админка были «живыми».
+    from sqlalchemy import select, func
+    from core.models import SignalDelivery
+    has_deliveries = session.execute(
+        select(func.count()).select_from(SignalDelivery).where(SignalDelivery.student_id == student.id)
+    ).scalar_one() > 0
+    if not has_deliveries:
         _seed_demo(session, student)
 
     return DevLoginOut(

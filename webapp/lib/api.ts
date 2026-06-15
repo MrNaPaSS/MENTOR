@@ -216,8 +216,8 @@ export const api = {
     authReq<AffiliateOverview>(`/api/admin/affiliate/overview?days=${days}`, token),
   affiliateReferrals: (token: string, days = 30) =>
     authReq<ReferralRow[]>(`/api/admin/affiliate/referrals?days=${days}`, token),
-  affiliateCommissionSeries: (token: string, days = 14) =>
-    authReq<CommissionPoint[]>(`/api/admin/affiliate/commission-series?days=${days}`, token),
+  affiliateMentorBalance: (token: string) =>
+    authReq<MentorBalance>(`/api/admin/affiliate/mentor-balance`, token),
 };
 
 export interface AffiliateOverview {
@@ -226,6 +226,9 @@ export interface AffiliateOverview {
   total_spot_volume: string;
   total_futures_volume: string;
   total_commission: string;
+  total_withdrawal: string;
+  with_deposit: number;
+  active_traders: number;
   period_days: number;
 }
 
@@ -234,14 +237,18 @@ export interface ReferralRow {
   register_time: number | null;
   kyc: boolean | null;
   deposit: string;
+  balance: string;
   spot_volume: string;
   futures_volume: string;
   commission: string;
+  withdrawal: string;
+  has_traded: boolean;
+  has_deposit: boolean;
 }
 
-export interface CommissionPoint {
-  date: string;
-  commission: string;
-  spot: string;
-  futures: string;
+export interface MentorBalance {
+  available_balance: string;
+  contract_total: string;
+  spot_total: string;
+  total_usdt: string;
 }

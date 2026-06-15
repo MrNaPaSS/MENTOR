@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()
+    # Явный путь к .env относительно этого файла — работает при любом CWD
+    _env_path = Path(__file__).parent.parent / ".env"
+    load_dotenv(dotenv_path=_env_path, override=True)
 except Exception:  # pragma: no cover
     pass
 

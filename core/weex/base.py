@@ -62,9 +62,14 @@ class WeexClient(ABC):
         contractTotalUsdt, depositTotalAmount, fundingTotalUsdt, spotProTotalUsdt, unimarginTotalUsdt."""
 
     @abstractmethod
+    async def get_own_balance(self) -> dict:
+        """Собственный баланс аккаунта ментора (Spot + Contract)."""
+
+    @abstractmethod
     async def check_uid_existence(self, uid: str, contact_type: str = "email", contact_value: str = "") -> bool:
         """Верификация существования UID (checkUidExistence)."""
 
     async def close(self) -> None:
         """Освободить ресурсы (HTTP-сессию и т.п.). По умолчанию ничего."""
         return None
+
