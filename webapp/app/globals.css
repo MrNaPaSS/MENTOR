@@ -9,14 +9,14 @@
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
-  --bg-deep: #0a0a1a;
-  --bg-card: #1a1a2e;
-  --bg-panel: #0f0f23;
+  --bg-deep: #0b0e11;
+  --bg-card: #181a20;
+  --bg-panel: #1e2329;
   --accent-cyan: #0affe0;
-  --accent-gold: #ffd700;
-  --success: #00d4a0;
-  --danger: #ff4757;
-  --border: #2a2a3e;
+  --accent-gold: #f0b90b;
+  --success: #0ecb81;
+  --danger: #f6465d;
+  --border: #2b3139;
 }
 
 @layer base {
@@ -25,12 +25,12 @@
   }
   body {
     background-color: var(--bg-deep);
-    color: #ffffff;
+    color: #eaecef;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
   ::selection {
-    background: rgba(10, 255, 224, 0.25);
+    background: rgba(10, 255, 224, 0.22);
     color: #fff;
   }
   /* Тонкий скроллбар в тёмной теме */
@@ -56,62 +56,48 @@
 }
 
 @layer components {
-  /* ── Кнопки: полуматовое стекло (iOS Liquid Glass), ТЗ §10.3 ── */
+  /* ── Кнопки: чистый биржевой стиль (Binance/Bybit Pro) ── */
   .btn {
-    @apply relative inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold
-           border border-white/10 backdrop-blur-xl backdrop-saturate-150
-           shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_6px_20px_rgba(0,0,0,0.30)]
-           transition-all duration-200 ease-out select-none
-           active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
+           transition-all duration-150 ease-out select-none
+           active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn text-[#eafffb] border-accent-cyan/40
-           bg-gradient-to-b from-accent-cyan/25 to-accent-cyan/[0.10]
-           shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_0_22px_rgba(10,255,224,0.10),0_8px_26px_rgba(10,255,224,0.20)]
-           hover:from-accent-cyan/[0.34] hover:to-accent-cyan/[0.16] hover:border-accent-cyan/70
-           hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.30),inset_0_0_26px_rgba(10,255,224,0.16),0_10px_32px_rgba(10,255,224,0.32)];
-    text-shadow: 0 0 14px rgba(10, 255, 224, 0.45);
-  }
-  .btn-outline {
-    @apply btn text-white bg-white/[0.06]
-           hover:bg-white/[0.10] hover:border-accent-cyan/50 hover:text-[#eafffb];
+    @apply btn bg-accent-cyan text-bg-deep hover:brightness-[0.92];
   }
   .btn-gold {
-    @apply btn text-[#fff7da] border-accent-gold/40
-           bg-gradient-to-b from-accent-gold/25 to-accent-gold/[0.10]
-           shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_8px_26px_rgba(255,215,0,0.18)]
-           hover:from-accent-gold/[0.34] hover:to-accent-gold/[0.16] hover:border-accent-gold/70;
+    @apply btn bg-accent-gold text-bg-deep hover:brightness-[0.95];
+  }
+  .btn-outline {
+    @apply btn border border-border bg-transparent text-text-primary
+           hover:border-text-muted hover:bg-white/[0.04];
   }
   .btn-danger {
-    @apply btn text-white border-danger/40
-           bg-gradient-to-b from-danger/[0.28] to-danger/[0.12]
-           shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_8px_26px_rgba(255,71,87,0.18)]
-           hover:from-danger/[0.38] hover:to-danger/[0.18] hover:border-danger/70;
+    @apply btn bg-danger text-white hover:brightness-95;
   }
   .btn-ghost {
-    @apply btn border-transparent bg-transparent text-text-secondary shadow-none backdrop-blur-none
-           hover:bg-white/[0.06] hover:text-white hover:border-white/10 hover:backdrop-blur-xl;
+    @apply btn text-text-secondary hover:bg-white/[0.05] hover:text-white;
   }
 
-  /* Универсальная стеклянная поверхность для переиспользования */
+  /* Универсальная стеклянная поверхность (для редких акцентов) */
   .glass {
-    @apply border border-white/10 bg-white/[0.05] backdrop-blur-xl backdrop-saturate-150
-           shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_rgba(0,0,0,0.30)];
+    @apply border border-white/10 bg-white/[0.04] backdrop-blur-xl backdrop-saturate-150
+           shadow-[0_8px_24px_rgba(0,0,0,0.35)];
   }
 
   /* ── Поверхности ── */
   .card {
-    @apply rounded-2xl border border-border bg-bg-card p-5 shadow-card;
+    @apply rounded-xl border border-border bg-bg-card p-5;
   }
   .panel {
-    @apply rounded-2xl border border-border bg-bg-panel p-5;
+    @apply rounded-xl border border-border bg-bg-panel p-5;
   }
 
-  /* ── Поля ввода (ТЗ §10.4) ── */
+  /* ── Поля ввода ── */
   .input {
-    @apply w-full rounded-xl border border-border bg-bg-panel px-3.5 py-2.5 text-text-primary
+    @apply w-full rounded-lg border border-border bg-bg-panel px-3 py-2.5 text-text-primary
            placeholder:text-text-muted outline-none transition
-           focus:border-accent-cyan focus:ring-2 focus:ring-accent-cyan/25;
+           focus:border-accent-cyan/70 focus:ring-1 focus:ring-accent-cyan/30;
   }
 
   /* ── Бейджи ── */

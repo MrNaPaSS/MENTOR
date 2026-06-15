@@ -6,13 +6,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: { deep: "#0A0A1A", card: "#1A1A2E", panel: "#0F0F23" },
-        accent: { cyan: "#0AFFE0", gold: "#FFD700" },
-        text: { primary: "#FFFFFF", secondary: "#CCCCCC", muted: "#666666" },
-        success: "#00D4A0",
-        danger: "#FF4757",
-        warning: "#FFD700",
-        border: { DEFAULT: "#2A2A3E", accent: "#0AFFE0" },
+        // Биржевые нейтрали уровня Binance/Bybit Pro
+        bg: { deep: "#0B0E11", card: "#181A20", panel: "#1E2329" },
+        accent: { cyan: "#0AFFE0", gold: "#F0B90B" },
+        text: { primary: "#EAECEF", secondary: "#B7BDC6", muted: "#7A8290" },
+        success: "#0ECB81",
+        danger: "#F6465D",
+        warning: "#F0B90B",
+        border: { DEFAULT: "#2B3139", accent: "#0AFFE0" },
       },
       fontFamily: {
         sans: ["var(--font-sans)", "Inter", "system-ui", "sans-serif"],
