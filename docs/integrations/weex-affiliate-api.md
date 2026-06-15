@@ -1,92 +1,97 @@
-# WEEX Affiliate (Partner) API — изучение для админ-дашборда
+# WEEX API — полная карта разделов + аффилиат для админ-дашборда
 
-> Источник: официальная дока WEEX (`weex.com/api-doc/...`). Прямой доступ ботам закрыт (403 + SPA),
-> поэтому ниже — то, что подтверждено через поиск по доке. Точные имена полей в `data[]` помечены
-> «🟡 уточнить» — подтверждаются по живому ключу или копией страницы.
->
-> Связано с: [решение A-01](../audit/AUDIT.md), [`core/weex/real.py`](../../core/weex/real.py).
+> Изучение всех разделов и подразделов `weex.com/api-doc/*`. Прямой доступ ботам закрыт (403 + SPA),
+> поэтому карта собрана через поиск по доке. Точные имена полей в ответах помечены «🟡 уточнить»
+> (подтверждаются по живому ключу или копией страницы). Связано с [A-01](../audit/AUDIT.md),
+> [`core/weex/real.py`](../../core/weex/real.py).
 
-## 1. Базовые домены
-| Назначение | Базовый URL |
-|---|---|
-| Affiliate / Rebate / Spot | `https://api-spot.weex.com` |
-| Futures (контракты) | `https://api-contract.weex.com` |
+## 0. Общее (подтверждено)
+- **Домены:** `api-spot.weex.com` (spot + affiliate/rebate), `api-contract.weex.com` /
+  `contract-openapi.weex.com` (фьючерсы), broker — отдельный.
+- **Типы API:** Public (без ключа, маркет/конфиг) и Private (ключ + подпись: ордера, аккаунт).
+- **Подпись:** `ACCESS-SIGN = base64(HMAC_SHA256(secret, timestamp+METHOD+requestPath+"?"+queryString+body))`.
+  Заголовки: `ACCESS-KEY/SIGN/TIMESTAMP/PASSPHRASE`. Время — **мс**, расхождение >30 c → отказ. ✅ совпадает с `real.py`.
+- **Лимиты:** public ≈ 20 запросов / 2 c; private — по API-ключу; превышение → `429`.
+- **Права ключа:** Read и/или Trade. Создание ключа: `weex.com/account/newapi`.
 
-## 2. Авторизация и подпись (подтверждено)
-Заголовки на каждый приватный запрос:
-- `ACCESS-KEY` — API-ключ.
-- `ACCESS-SIGN` — `base64( HMAC_SHA256( secret, prehash ) )`.
-- `ACCESS-TIMESTAMP` — Unix-время в **миллисекундах**. Запрос отклоняется при расхождении >30 c с сервером.
-- `ACCESS-PASSPHRASE` — пользовательская фраза.
+## 1. Карта разделов (все семейства)
 
-**Prehash-строка:**
-```
-timestamp + METHOD.toUpperCase() + requestPath + ("?" + queryString если есть) + body
-```
-- GET: body пустой; queryString — параметры после `?`.
-- ✅ Совпадает с нашей реализацией `core/weex/real.py::sign()` (для аффилиат-вызовов подписываем `path + "?" + query`).
+### 1.1 SPOT (`/api-doc/spot/*`)
+- **QuickStart:** IntegrationPreparation · InterfaceType · StandardSpecifications · Signature ·
+  PublicAPIParameters · LIMITS · AccessRestrictions
+- **Introduction:** APIBriefIntroduction · CommonProblem (FAQ)
+- **ConfigAPI:** GetProductInfo (биржевая инфо) · CurrencyInfo (валюты)
+- **MarketDataAPI:** GetTickerInfo (тикер) · GetTradeData (сделки) · (глубина, свечи/klines, все тикеры)
+- **orderApi (Trade):** PlaceOrder · HistoryOrders · (отмена, открытые ордера, инфо по ордеру)
+- **Account API:** assets (активы) · bills (история) · transferRecords (переводы)
+- **rebate-endpoints (Affiliate)** — см. §2
+- **Websocket:** websocket-intro · public (тикеры/глубина/сделки/свечи) · private (Account-Channel,
+  Fill-Channel, Orders-Channel)
 
-**Конверт ответа (WEEX/Bitget-стиль):** `{ "code": "...", "msg": "...", "requestTime": <ms>, "data": ... }`.
-Ключи API создаются в `weex.com/account/newapi`; аккаунт должен быть в **Affiliate-программе**.
+### 1.2 CONTRACT / FUTURES (`/api-doc/contract/*`)
+- **intro · APIPublicParameters**
+- **Market_API:** GetContractInfo (инфо по контрактам) · GetTradeData · (глубина, свечи, тикер, funding)
+- **Account_API:** AllContractAccountsInfo (список счетов) · bills · GetSingleContractUserConfig ·
+  смена плеча · корректировка маржи · авто-пополнение маржи · позиции (все/одна)
+- **Trade (order) API:** размещение/отмена ордеров, ордера, филлы
+- **Websocket:** public (Tickers-Channel и т.д.) · private (аккаунт/ордера/позиции)
 
-## 3. Эндпоинты партнёра (подтверждено)
+### 1.3 BROKER (`/api-doc/broker/*`) — отдельный продукт
+Для брокеров: автоматическая торговля, **управление пользователями, расчёт комиссий, суб-аккаунты**.
+Бро­кер получает `brokerId` формата `WEEX+6 цифр`; `newClientOrderId` начинается с `b-{brokerId}`.
+Разделы: intro · ContactUs · (создание суб-аккаунтов, привязка юзеров, отчёты по комиссии).
+> Нам **не нужен** для аффилиат-модели; релевантен, только если станем брокером.
 
-| # | Метод | Путь | Назначение | Лимит |
-|---|---|---|---|---|
-| 1 | GET | `/api/v3/rebate/affiliate/getChannelUserTradeAndAsset` | Данные рефералов: торговля и активы | вес 20 (IP/UID) |
-| 2 | GET | `/api/v2/rebate/affiliate/getAffiliateCommission` | Комиссия аффилиата | вес 20 (IP/UID) |
-| 3 | POST | `/api/.../rebate/.../internalWithdrawal` | Внутренний перевод комиссии | — |
+### 1.4 PARTNER (`/api-doc/partner/intro`)
+Вводная партнёрской программы → ведёт к affiliate/rebate эндпоинтам (§2).
 
-### 3.1 getChannelUserTradeAndAsset — рефералы: торговля и активы
-Главный эндпоинт для нас: список приглашённых пользователей с их UID, объёмом торгов и активами.
-- **Параметры (🟡 уточнить точные имена):** период (`startTime`/`endTime`, ms), пагинация
-  (`pageNo`/`pageSize` или `pageNum`/`limit`), возможно фильтр по `uid`.
-- **Ответ `data` (🟡 уточнить):** массив пользователей; ожидаемые поля по смыслу:
-  `uid`, время регистрации, объём торгов (спот/фьючерс), депозиты, **баланс/активы счёта**.
-- 👉 Отсюда берём `students.balance_usdt` по UID (решение A-01) и объём торгов для аналитики.
+### 1.5 AI (`/api-doc/ai/*`)
+API для AI-трейдинга: accountAPI · QuickStart/RequestInteraction (demo) и др. Для нас не нужен.
 
-### 3.2 getAffiliateCommission — комиссия
-- **Параметры (🟡):** период `startTime`/`endTime`, пагинация.
-- **Ответ (🟡):** суммы комиссии по периодам/рефералам.
-- 👉 KPI «доход партнёра» и разбивка по ученикам в панели ментора.
+## 2. Affiliate / Rebate — ядро для нас (`/api-doc/spot/rebate-endpoints/*`)
 
-### 3.3 internalWithdrawal — перевод комиссии
-Перевод накопленной комиссии между счетами. Для дашборда не критичен (операционный).
+| Метод | Путь | Назначение | Версии |
+|---|---|---|---|
+| GET | `/api/v3/rebate/affiliate/getChannelUserTradeAndAsset` | Рефералы: торговля + активы | V1/V3, spot |
+| GET | `/api/v2/rebate/affiliate/getAffiliateCommission` | Комиссия аффилиата | V1/V2, spot + `contract-openapi v1` |
+| POST | `/api/v2/rebate/affiliate/internalWithdrawal` | Внутренний перевод комиссии | V2 |
 
-## 4. Применение в админ-дашборде (план)
+### 2.1 getChannelUserTradeAndAsset (главный для нас)
+- **Параметры (🟡):** период `startTime`/`endTime` (ms), пагинация (`pageNo`/`pageSize`), возможно `uid`.
+- **Ответ `data[]` (🟡):** `uid`, дата регистрации, объём торгов (спот/фьючерс), депозиты,
+  **баланс/активы счёта**. → источник `students.balance_usdt` (A-01) и объёма торгов для аналитики.
 
-### KPI-блок (из аффилиат-API)
-| KPI | Источник |
-|---|---|
-| Всего рефералов (учеников) | кол-во записей `getChannelUserTradeAndAsset` |
-| Суммарный объём торгов | сумма объёма по рефералам |
-| Суммарные активы учеников | сумма баланса/активов по рефералам |
-| Доход партнёра (комиссия) | `getAffiliateCommission` за период |
+### 2.2 getAffiliateCommission
+- **Параметры (🟡):** период, пагинация. **Ответ (🟡):** суммы комиссии по периодам/рефералам.
 
-### Таблица учеников (обогащение существующей `/admin/students`)
-К нашим полям (ник, режим) добавить из WEEX по UID: **баланс/активы**, **объём торгов**,
-**дата регистрации на WEEX**, **депозит**, **комиссия** ученика. Фильтры периода `[Сегодня/Неделя/Месяц/Всё]`.
+### 2.3 internalWithdrawal
+Перевод накопленной комиссии. Операционный, для дашборда не критичен.
 
-### Как заводим в нашем коде
-1. `core/weex/real.py`: методы `get_affiliate_referrals(period, page)` и `get_affiliate_commission(period)`
-   поверх `_get(..., signed=True, affiliate=True)`; защитный парсинг полей (имена настраиваемые,
-   как уже сделано для баланса — `WEEX_AFFILIATE_BALANCE_PATH`).
-2. Бэкенд: эндпоинты `GET /api/admin/affiliate/overview` и `/api/admin/affiliate/referrals`
-   (только ментор) → агрегируют данные WEEX, кэшируют (TTL), отдают фронту.
-3. Фронт `/admin`: KPI + таблица из этих эндпоинтов; на моках — синтетика, на ключах — реальные.
-4. Синхронизация баланса учеников (`bot/scheduler/balance_sync`) переключается на реальный
-   `getChannelUserTradeAndAsset` (сейчас мок).
+## 3. Что из этого нужно нашему продукту
+| Нужно | Раздел WEEX | Статус у нас |
+|---|---|---|
+| Цена пары (калькулятор, графики) | spot MarketDataAPI / contract Market_API | `real.get_price` (мок) |
+| Свечи | Market_API klines | `real.get_klines` (мок) |
+| Баланс/активы ученика по UID | **rebate getChannelUserTradeAndAsset** | заглушка → подключить |
+| Объём торгов ученика | rebate getChannelUserTradeAndAsset | план |
+| Комиссия партнёра | rebate getAffiliateCommission | план |
+| Реалтайм-цены | Websocket public | свой сборщик (A-12) |
 
-## 5. Что нужно, чтобы финализировать точные поля
-- **Вариант А (быстро):** скопировать текст двух страниц
-  ([referral data](https://www.weex.com/api-doc/spot/rebate-endpoints/GetChannelUserTradeAndAsset),
-  [commission](https://www.weex.com/api-doc/spot/rebate-endpoints/GetAffiliateCommission)) — впишу
-  точные имена параметров/полей.
-- **Вариант Б:** дать реальный аффилиат-ключ (на тест) — снимем фактический ответ и зафиксируем схему.
+## 4. Применение в админ-дашборде
+- **KPI:** всего рефералов · суммарный объём торгов · суммарные активы учеников · доход партнёра.
+- **Таблица учеников:** + баланс, объём торгов, дата регистрации WEEX, депозит, комиссия; фильтр периода.
+- **Код:** `core/weex/real.py` → `get_affiliate_referrals()` / `get_affiliate_commission()`
+  (защитный парсинг, поля настраиваемые) → бэкенд `/api/admin/affiliate/*` (ментор) → UI `/admin`.
+
+## 5. Покрытие и что осталось
+- ✅ Просмотрены все семейства: **spot, contract, broker, partner, ai** + их подразделы (QuickStart,
+  Market, Account, Trade, Websocket, rebate).
+- 🟡 **Не удалось вытащить дословно**: точные имена параметров и полей внутри страниц эндпоинтов —
+  сайт отдаёт боту 403 (SPA). Подтверждаем по **копии страницы** или **тест-ключу**.
 
 ## Источники
-- [Get Affiliate Referral Data (getChannelUserTradeAndAsset)](https://www.weex.com/api-doc/spot/rebate-endpoints/GetChannelUserTradeAndAsset)
-- [Get Affiliate Commission (getAffiliateCommission)](https://www.weex.com/api-doc/spot/rebate-endpoints/GetAffiliateCommission)
-- [Signature](https://www.weex.com/api-doc/spot/QuickStart/Signature)
-- [API Public Parameters](https://www.weex.com/api-doc/spot/QuickStart/PublicAPIParameters)
-- [Internal Withdrawal](https://www.weex.com/api-doc/spot/rebate-endpoints/InternalWithdrawal)
+- [Partner intro](https://www.weex.com/api-doc/partner/intro) · [Broker intro](https://www.weex.com/api-doc/broker/intro)
+- [Signature](https://www.weex.com/api-doc/spot/QuickStart/Signature) · [Public API Parameters](https://www.weex.com/api-doc/spot/QuickStart/PublicAPIParameters) · [LIMITS](https://www.weex.com/api-doc/spot/QuickStart/LIMITS) · [Interface Type](https://www.weex.com/api-doc/spot/QuickStart/InterfaceType)
+- [getChannelUserTradeAndAsset](https://www.weex.com/api-doc/spot/rebate-endpoints/GetChannelUserTradeAndAsset) · [getAffiliateCommission](https://www.weex.com/api-doc/spot/rebate-endpoints/GetAffiliateCommission) · [Internal Withdrawal](https://www.weex.com/api-doc/spot/rebate-endpoints/InternalWithdrawal)
+- [Spot Place Order](https://www.weex.com/api-doc/spot/orderApi/PlaceOrder) · [Spot Ticker](https://www.weex.com/api-doc/spot/MarketDataAPI/GetTickerInfo) · [Spot WS intro](https://www.weex.com/api-doc/spot/Websocket/websocket-intro)
+- [Contract intro](https://www.weex.com/api-doc/contract/intro) · [Contract Info](https://www.weex.com/api-doc/contract/Market_API/GetContractInfo) · [Contract Accounts](https://www.weex.com/api-doc/contract/Account_API/AllContractAccountsInfo)
