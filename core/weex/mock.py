@@ -83,3 +83,82 @@ class MockWeexClient(WeexClient):
 
     async def get_server_time(self) -> int:
         return int(time.time() * 1000)
+
+    # ── Аффилиат-статистика (синтетика под реальные схемы WEEX) ──
+
+    def _mock_uids(self, n: int = 12) -> list[str]:
+        return [str(3066862000 + i * 137) for i in range(n)]
+
+    async def get_affiliate_uids(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+        now = int(time.time() * 1000)
+        day = 86_400_000
+        out = []
+        for i, uid in enumerate(self._mock_uids()):
+            h = _hash_float(uid)
+            out.append({
+                "uid": uid,
+                "registerTime": now - int(h * 300 * day),
+                "kycResult": h > 0.4,
+                "inviteCode": uid[-4:],
+                "firstTrade": now - int(h * 120 * day),
+                "lastTrade": now - int(h * 5 * day),
+                "firstDeposit": now - int(h * 200 * day),
+                "lastDeposit": now - int(h * 3 * day),
+            })
+        return out
+
+    async def get_channel_trade_asset(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+        out = []
+        for uid in self._mock_uids():
+            h = _hash_float(uid)
+            dep = round(200 + h * 9800, 2)
+            spot = round(h * 50000, 2)
+            fut = round(h * 250000, 2)
+            out.append({
+                "uid": uid,
+                "depositAmount": f"{dep:.2f}",
+                "withdrawalAmount": f"{round(dep * 0.2, 2):.2f}",
+                "spotTradingAmount": f"{spot:.2f}",
+                "futuresTradingAmount": f"{fut:.2f}",
+                "commission": f"{round((spot + fut) * 0.0004, 2):.2f}",
+            })
+        return out
+
+    async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+        now = int(time.time() * 1000)
+        day = 86_400_000
+        out = []
+        for d in range(14):  # 14 дней истории
+            for uid in self._mock_uids()[:4]:
+                h = _hash_float(f"{uid}{d}")
+                taker = round(h * 5000, 3)
+                out.append({
+                    "uid": uid,
+                    "date": now - d * day,
+                    "coin": "USDT",
+                    "fee": f"{round(taker * 0.0006, 6)}",
+                    "commission": f"{round(taker * 0.00006, 6)}",
+                    "rate": "0.1",
+                    "productType": "FUTURES" if h > 0.5 else "SPOT",
+                    "symbol": "cmt_btcusdt",
+                    "sourceType": 1,
+                    "takerAmount": f"{taker}",
+                    "makerAmount": "0",
+                })
+        return out
+
+    async def get_agency_assert(self, user_id: str, start_ms: int = 0, end_ms: int = 0) -> dict:
+        h = _hash_float(str(user_id))
+        contract = round(100 + h * 4900, 2)
+        spot = round(h * 1500, 2)
+        return {
+            "availableBalance": f"{round(contract * 0.8, 2):.2f}",
+            "contractTotalUsdt": f"{contract:.2f}",
+            "depositTotalAmount": f"{round(200 + h * 3000, 2):.2f}",
+            "fundingTotalUsdt": f"{round(h * 50, 2):.2f}",
+            "spotProTotalUsdt": f"{spot:.2f}",
+            "unimarginTotalUsdt": f"{round(h * 80, 2):.2f}",
+        }
+
+    async def check_uid_existence(self, uid: str, contact_type: str = "email", contact_value: str = "") -> bool:
+        return bool(str(uid).strip()) and str(uid).strip() not in {"0", "404", "notfound"}

@@ -95,3 +95,52 @@ API для AI-трейдинга: accountAPI · QuickStart/RequestInteraction (d
 - [getChannelUserTradeAndAsset](https://www.weex.com/api-doc/spot/rebate-endpoints/GetChannelUserTradeAndAsset) · [getAffiliateCommission](https://www.weex.com/api-doc/spot/rebate-endpoints/GetAffiliateCommission) · [Internal Withdrawal](https://www.weex.com/api-doc/spot/rebate-endpoints/InternalWithdrawal)
 - [Spot Place Order](https://www.weex.com/api-doc/spot/orderApi/PlaceOrder) · [Spot Ticker](https://www.weex.com/api-doc/spot/MarketDataAPI/GetTickerInfo) · [Spot WS intro](https://www.weex.com/api-doc/spot/Websocket/websocket-intro)
 - [Contract intro](https://www.weex.com/api-doc/contract/intro) · [Contract Info](https://www.weex.com/api-doc/contract/Market_API/GetContractInfo) · [Contract Accounts](https://www.weex.com/api-doc/contract/Account_API/AllContractAccountsInfo)
+
+---
+
+## 6. ✅ ПОДТВЕРЖДЁННЫЕ СХЕМЫ (из живого браузера заказчика)
+
+> Дословные эндпоинты и поля — авторитетный источник для реализации.
+
+### Partner / Affiliate (`api-spot.weex.com`)
+
+**A. `GET /api/v3/rebate/affiliate/getAffiliateUIDs`** — список UID рефералов
+- Параметры: `startTime`, `endTime` (ms; период ≤365 дней назад, окно ≤90 дней).
+- Ответ: `{ pages, pageSize, total, channelUserInfoItemList: [ { uid, registerTime, kycResult,
+  inviteCode, firstTrade, lastTrade, firstDeposit, lastDeposit } ] }`
+
+**B. `GET /api/v3/rebate/affiliate/getChannelUserTradeAndAsset`** — торговля и активы
+- Параметры: `startTime`/`endTime` (окно ≤90 дней).
+- Ответ: `{ pages, pageSize, total, records: [ { uid, depositAmount, withdrawalAmount,
+  spotTradingAmount, futuresTradingAmount, commission } ] }`
+
+**C. `GET /api/v3/rebate/affiliate/getAffiliateCommission`** — история комиссий
+- Ответ: `{ pages, pageSize, total, channelCommissionInfoItems: [ { uid, date, coin, fee,
+  commission, rate, productType, symbol, sourceType, takerAmount, makerAmount } ] }`
+
+**D. `GET /api/v3/agency/getAssert`** — снимок активов реферала (имя метода с опечаткой `getAssert`)
+- Параметры: `userId`, `startTime`, `endTime`.
+- Ответ: `{ availableBalance, contractTotalUsdt, depositTotalAmount, fundingTotalUsdt,
+  spotProTotalUsdt, unimarginTotalUsdt }`
+- 👉 **Это и есть реальный баланс ученика по UID (A-01).**
+
+**E. `POST /api/v3/rebate/affiliate/checkUidExistence`** — верификация UID
+- Тело: `{ uid, contactType: "email", contactValue }` → `{ verified: bool }`
+- 👉 Валидация UID при привязке в боте/на сайте.
+
+### Broker (`/api/v3/broker/*`) — если NMNH станет брокером
+- `newClientOrderId` начинается с `b-{brokerId}` (≤64 симв.) → трекинг сделок + rebate брокеру.
+- `GET /api/v3/broker/checkUserEligibility` · `getBrokerCommissionRecords` · `getBrokerRebateRatio`.
+
+### Futures (`/api/v3/contract/*`)
+- `POST /order/placeOrder` (symbol `cmt_btcusdt`, marginMode crossed/fixed, side open_long/…,
+  orderType limit/market, price, volume, clientOid `b-{brokerId}`) → `{ orderId, clientOid }`.
+- `GET /position/pendingPositions` (цена входа, плечо, uPnL) · `GET /order/openOrders`.
+
+### Spot (`/api/v3/spot/*`)
+- `POST /order/placeOrder` (symbol BTCUSDT, side buy/sell, type, quantity, price, newClientOrderId).
+- `GET /market/ticker` · `/market/depth` · `/market/candles`.
+
+### Лимиты и интеграция
+- Rate limit: ~500 веса / 10 c → **кэшировать** балансы/историю/объёмы (TTL 1–2 ч).
+- Ключи — только на бэкенде (шифр), фронт ходит через наш API (прокси). UID валидировать через `checkUidExistence`.

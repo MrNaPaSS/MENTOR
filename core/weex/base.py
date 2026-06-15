@@ -39,6 +39,32 @@ class WeexClient(ABC):
     async def get_server_time(self) -> int:
         """Время сервера WEEX (Unix ms, UTC+8 на стороне биржи; в проекте всё → UTC)."""
 
+    # ── Партнёрская/аффилиат-статистика (для админ-дашборда) ──
+
+    @abstractmethod
+    async def get_affiliate_uids(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+        """Список UID рефералов (getAffiliateUIDs): uid, registerTime, kycResult,
+        inviteCode, firstTrade, lastTrade, firstDeposit, lastDeposit."""
+
+    @abstractmethod
+    async def get_channel_trade_asset(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+        """Торговля и активы рефералов (getChannelUserTradeAndAsset): uid, depositAmount,
+        withdrawalAmount, spotTradingAmount, futuresTradingAmount, commission."""
+
+    @abstractmethod
+    async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+        """История комиссий (getAffiliateCommission): uid, date, coin, fee, commission, rate,
+        productType, symbol, sourceType, takerAmount, makerAmount."""
+
+    @abstractmethod
+    async def get_agency_assert(self, user_id: str, start_ms: int = 0, end_ms: int = 0) -> dict:
+        """Снимок активов реферала по UID (agency/getAssert): availableBalance,
+        contractTotalUsdt, depositTotalAmount, fundingTotalUsdt, spotProTotalUsdt, unimarginTotalUsdt."""
+
+    @abstractmethod
+    async def check_uid_existence(self, uid: str, contact_type: str = "email", contact_value: str = "") -> bool:
+        """Верификация существования UID (checkUidExistence)."""
+
     async def close(self) -> None:
         """Освободить ресурсы (HTTP-сессию и т.п.). По умолчанию ничего."""
         return None

@@ -185,4 +185,29 @@ export const api = {
     }),
   closeSignal: (token: string, id: number) =>
     authReq<SignalOut>(`/api/signals/${id}/close`, token, { method: "PATCH" }),
+
+  // ── Партнёрская статистика WEEX (ментор) ──
+  affiliateOverview: (token: string, days = 30) =>
+    authReq<AffiliateOverview>(`/api/admin/affiliate/overview?days=${days}`, token),
+  affiliateReferrals: (token: string, days = 30) =>
+    authReq<ReferralRow[]>(`/api/admin/affiliate/referrals?days=${days}`, token),
 };
+
+export interface AffiliateOverview {
+  referrals: number;
+  total_deposit: string;
+  total_spot_volume: string;
+  total_futures_volume: string;
+  total_commission: string;
+  period_days: number;
+}
+
+export interface ReferralRow {
+  uid: string;
+  register_time: number | null;
+  kyc: boolean | null;
+  deposit: string;
+  spot_volume: string;
+  futures_volume: string;
+  commission: string;
+}

@@ -14,7 +14,7 @@ from core.db import init_engine, create_all, SessionLocal
 from core import repo
 from core.weex import get_weex_client
 from backend.config import BackendConfig
-from backend.api import auth, market, signals, stats, students, profile
+from backend.api import auth, market, signals, stats, students, profile, admin_affiliate
 from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
@@ -73,6 +73,7 @@ def create_app(
     app.include_router(stats.router)
     app.include_router(students.router)
     app.include_router(profile.router)
+    app.include_router(admin_affiliate.router)
     app.include_router(ws_routes.router)
 
     @app.get("/api/health", tags=["health"])

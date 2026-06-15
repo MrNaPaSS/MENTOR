@@ -140,19 +140,91 @@ class RealWeexClient(WeexClient):
         return _to_decimal(os.getenv("WEEX_MIN_ORDER_USD", "5")) or Decimal("5")
 
     async def get_affiliate_balance(self, weex_uid: str) -> Optional[Decimal]:
-        # Закрытый аффилиат-эндпоинт баланса реферала (A-01). Путь/поле — настраиваемые,
-        # т.к. точная схема предоставляется партнёрским менеджером WEEX.
-        path = os.getenv(
-            "WEEX_AFFILIATE_BALANCE_PATH",
-            "/api/v2/rebate/affiliate/getChannelUserTradeAndAsset",
-        )
-        param_key = os.getenv("WEEX_AFFILIATE_UID_PARAM", "uid")
-        data = await self._get(
-            AFFILIATE_BASE, path, {param_key: weex_uid}, signed=True, affiliate=True
-        )
-        if not data:
+        # Реальный баланс реферала по UID через agency/getAssert (A-01, подтверждённая схема).
+        assets = await self.get_agency_assert(weex_uid)
+        if not assets:
             return None
-        return _search_field(data, _BALANCE_FIELDS)
+        # По умолчанию берём availableBalance; настраивается через WEEX_AFFILIATE_BALANCE_FIELD.
+        field = os.getenv("WEEX_AFFILIATE_BALANCE_FIELD", "availableBalance")
+        return _to_decimal(assets.get(field)) or _search_field(assets, _BALANCE_FIELDS)
+
+    async def _post(self, base: str, path: str, body: dict, *, affiliate: bool = False) -> Optional[dict]:
+        import json as _json
+
+        session = await self._get_session()
+        raw = _json.dumps(body)
+        headers = self._signed_headers("POST", path, affiliate=affiliate)
+        try:
+            async with session.post(base + path, data=raw, headers=headers) as resp:
+                if resp.status != 200:
+                    return None
+                return await resp.json()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("WEEX POST %s%s упал: %s", base, path, exc)
+            return None
+
+    @staticmethod
+    def _data(payload) -> dict:
+        if isinstance(payload, dict):
+            d = payload.get("data", payload)
+            return d if isinstance(d, dict) else {"_list": d}
+        return {}
+
+    @staticmethod
+    def _extract_list(data: dict, keys) -> list:
+        for k in keys:
+            v = data.get(k)
+            if isinstance(v, list):
+                return v
+        # запасной вариант — первый список среди значений
+        for v in data.values():
+            if isinstance(v, list):
+                return v
+        return []
+
+    async def get_affiliate_uids(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+        payload = await self._get(
+            AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateUIDs",
+            {"startTime": start_ms, "endTime": end_ms, "pageNo": page},
+            signed=True, affiliate=True,
+        )
+        return self._extract_list(self._data(payload), ("channelUserInfoItemList", "_list"))
+
+    async def get_channel_trade_asset(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+        payload = await self._get(
+            AFFILIATE_BASE, "/api/v3/rebate/affiliate/getChannelUserTradeAndAsset",
+            {"startTime": start_ms, "endTime": end_ms, "pageNo": page},
+            signed=True, affiliate=True,
+        )
+        return self._extract_list(self._data(payload), ("records", "_list"))
+
+    async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+        payload = await self._get(
+            AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateCommission",
+            {"startTime": start_ms, "endTime": end_ms, "pageNo": page},
+            signed=True, affiliate=True,
+        )
+        return self._extract_list(self._data(payload), ("channelCommissionInfoItems", "_list"))
+
+    async def get_agency_assert(self, user_id: str, start_ms: int = 0, end_ms: int = 0) -> dict:
+        params = {"userId": user_id}
+        if start_ms:
+            params["startTime"] = start_ms
+        if end_ms:
+            params["endTime"] = end_ms
+        payload = await self._get(
+            AFFILIATE_BASE, "/api/v3/agency/getAssert", params, signed=True, affiliate=True
+        )
+        return self._data(payload) if payload else {}
+
+    async def check_uid_existence(self, uid: str, contact_type: str = "email", contact_value: str = "") -> bool:
+        payload = await self._post(
+            AFFILIATE_BASE, "/api/v3/rebate/affiliate/checkUidExistence",
+            {"uid": uid, "contactType": contact_type, "contactValue": contact_value},
+            affiliate=True,
+        )
+        data = self._data(payload) if payload else {}
+        return bool(data.get("verified"))
 
     async def get_server_time(self) -> int:
         data = await self._get(FUTURES_BASE, "/capi/v3/market/time")
