@@ -54,3 +54,15 @@ def test_uid_balance(client):
     r = client.get("/api/admin/affiliate/uid/3066862172/balance", headers=_mentor(client))
     assert r.status_code == 200
     assert float(r.json()["available_balance"]) >= 0
+
+
+def test_commission_series(client):
+    r = client.get("/api/admin/affiliate/commission-series", headers=_mentor(client), params={"days": 14})
+    assert r.status_code == 200
+    points = r.json()
+    assert len(points) >= 1
+    p = points[0]
+    assert "date" in p and "commission" in p and "spot" in p and "futures" in p
+    # отсортировано по дате по возрастанию
+    dates = [x["date"] for x in points]
+    assert dates == sorted(dates)

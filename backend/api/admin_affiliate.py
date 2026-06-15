@@ -129,3 +129,39 @@ async def uid_balance(uid: str, weex=Depends(get_weex)):
         contract_total=_d(a.get("contractTotalUsdt")),
         spot_total=_d(a.get("spotProTotalUsdt")),
     )
+
+
+class CommissionPoint(BaseModel):
+    date: str            # YYYY-MM-DD
+    commission: Decimal
+    spot: Decimal
+    futures: Decimal
+
+
+@router.get("/commission-series", response_model=list[CommissionPoint])
+async def commission_series(days: int = 14, weex=Depends(get_weex)):
+    days = max(1, min(days, 90))
+    start, end = _period(days)
+
+    async def build():
+        return await weex.get_affiliate_commission(start, end)
+
+    items = await _cached(f"comm:{days}", build)
+
+    from datetime import datetime, timezone
+    buckets: dict[str, dict] = {}
+    for it in items:
+        ts = int(it.get("date", 0)) / 1000
+        day = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        b = buckets.setdefault(day, {"commission": Decimal(0), "spot": Decimal(0), "futures": Decimal(0)})
+        c = _d(it.get("commission"))
+        b["commission"] += c
+        if str(it.get("productType", "")).upper() == "FUTURES":
+            b["futures"] += c
+        else:
+            b["spot"] += c
+
+    return [
+        CommissionPoint(date=d, commission=v["commission"], spot=v["spot"], futures=v["futures"])
+        for d, v in sorted(buckets.items())
+    ]

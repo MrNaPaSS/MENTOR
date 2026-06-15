@@ -191,6 +191,8 @@ export const api = {
     authReq<AffiliateOverview>(`/api/admin/affiliate/overview?days=${days}`, token),
   affiliateReferrals: (token: string, days = 30) =>
     authReq<ReferralRow[]>(`/api/admin/affiliate/referrals?days=${days}`, token),
+  affiliateCommissionSeries: (token: string, days = 14) =>
+    authReq<CommissionPoint[]>(`/api/admin/affiliate/commission-series?days=${days}`, token),
 };
 
 export interface AffiliateOverview {
@@ -210,4 +212,11 @@ export interface ReferralRow {
   spot_volume: string;
   futures_volume: string;
   commission: string;
+}
+
+export interface CommissionPoint {
+  date: string;
+  commission: string;
+  spot: string;
+  futures: string;
 }

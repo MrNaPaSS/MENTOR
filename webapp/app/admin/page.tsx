@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Users, UserCheck, Radio, Activity, PlusCircle, Wallet, BarChart3, Coins } from "lucide-react";
-import { api, PublicStats, StudentOut, AffiliateOverview, ReferralRow } from "@/lib/api";
+import { api, PublicStats, StudentOut, AffiliateOverview, ReferralRow, CommissionPoint } from "@/lib/api";
 import { useMentorToken } from "@/components/admin/AdminShell";
 import StatCard from "@/components/ui/StatCard";
 import PageHeader from "@/components/ui/PageHeader";
+import { CommissionChart, VolumeDonut } from "@/components/admin/AffiliateCharts";
 import { fmtUsd } from "@/lib/format";
 
 const PERIODS = [7, 30, 90] as const;
@@ -17,6 +18,7 @@ export default function AdminDashboard() {
   const [students, setStudents] = useState<StudentOut[]>([]);
   const [aff, setAff] = useState<AffiliateOverview | null>(null);
   const [refs, setRefs] = useState<ReferralRow[]>([]);
+  const [series, setSeries] = useState<CommissionPoint[]>([]);
   const [days, setDays] = useState<(typeof PERIODS)[number]>(30);
   const [loaded, setLoaded] = useState(false);
 
@@ -31,14 +33,20 @@ export default function AdminDashboard() {
   }, [token]);
 
   useEffect(() => {
-    Promise.all([api.affiliateOverview(token, days), api.affiliateReferrals(token, days)])
-      .then(([o, r]) => {
+    Promise.all([
+      api.affiliateOverview(token, days),
+      api.affiliateReferrals(token, days),
+      api.affiliateCommissionSeries(token, Math.min(days, 30)),
+    ])
+      .then(([o, r, s]) => {
         setAff(o);
         setRefs(r);
+        setSeries(s);
       })
       .catch(() => {
         setAff(null);
         setRefs([]);
+        setSeries([]);
       });
   }, [token, days]);
 
@@ -91,6 +99,33 @@ export default function AdminDashboard() {
           <StatCard icon={Wallet} label="Депозиты" accent="success" loading={!aff} value={`${fmtUsd(aff?.total_deposit)}$`} />
           <StatCard icon={BarChart3} label="Объём торгов" accent="gold" loading={!aff} value={`${fmtUsd(totalVolume)}$`} />
           <StatCard icon={Coins} label="Комиссия" accent="gold" loading={!aff} value={`${fmtUsd(aff?.total_commission)}$`} />
+        </div>
+
+        {/* Графики */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="card lg:col-span-2">
+            <h3 className="mb-3 font-semibold text-white">Комиссия по дням</h3>
+            {series.length === 0 ? (
+              <div className="grid h-64 place-items-center text-sm text-text-muted">Нет данных</div>
+            ) : (
+              <CommissionChart data={series} />
+            )}
+          </div>
+          <div className="card">
+            <h3 className="mb-3 font-semibold text-white">Объём: спот / фьючерсы</h3>
+            <VolumeDonut
+              spot={aff ? Number(aff.total_spot_volume) : 0}
+              futures={aff ? Number(aff.total_futures_volume) : 0}
+            />
+            <div className="mt-2 flex justify-center gap-4 text-xs">
+              <span className="flex items-center gap-1.5 text-text-secondary">
+                <span className="h-2 w-2 rounded-full bg-accent-cyan" /> Фьючерсы
+              </span>
+              <span className="flex items-center gap-1.5 text-text-secondary">
+                <span className="h-2 w-2 rounded-full bg-accent-gold" /> Спот
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Топ рефералов */}
