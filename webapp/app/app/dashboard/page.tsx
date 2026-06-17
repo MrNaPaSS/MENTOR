@@ -10,6 +10,7 @@ const TradingChart = dynamic(() => import("@/components/market/TradingChart"), {
 const OrderBook    = dynamic(() => import("@/components/market/OrderBook"),    { ssr: false });
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT"];
+const SKIP_NGROK = { headers: { "ngrok-skip-browser-warning": "1" } };
 const COIN_COLOR: Record<string, string> = {
   BTC: "#F7931A", ETH: "#627EEA", SOL: "#9945FF", XRP: "#346AA9", BNB: "#F3BA2F",
 };
@@ -74,7 +75,7 @@ function TickerBar({ symbol, onSymChange }: { symbol: string; onSymChange: (s: s
 
   useEffect(() => {
     const load = () =>
-      fetch(`${API_URL}/api/market/ticker/${symbol}`)
+      fetch(`${API_URL}/api/market/ticker/${symbol}`, SKIP_NGROK)
         .then(r => r.ok ? r.json() : null)
         .then((d: TickerData | null) => { if (d) setData(d); })
         .catch(() => {});
@@ -163,7 +164,7 @@ function ClusterWidget({ symbol }: { symbol: string }) {
 
   useEffect(() => {
     const load = () =>
-      fetch(`${API_URL}/api/market/orderbook/${symbol}?limit=40`)
+      fetch(`${API_URL}/api/market/orderbook/${symbol}?limit=40`, SKIP_NGROK)
         .then(r => r.ok ? r.json() : null)
         .then((d: { bids: unknown[]; asks: unknown[] } | null) => { if (d) setData(d); })
         .catch(() => {});
@@ -307,7 +308,7 @@ function LiquidationWidget({ symbol }: { symbol: string }) {
 
   useEffect(() => {
     const load = () =>
-      fetch(`${API_URL}/api/market/ticker/${symbol}`)
+      fetch(`${API_URL}/api/market/ticker/${symbol}`, SKIP_NGROK)
         .then(r => r.ok ? r.json() : null)
         .then((d: TickerData | null) => { if (d?.lastPrice) setPrice(parseFloat(d.lastPrice)); })
         .catch(() => {});
@@ -432,7 +433,7 @@ function FearGreedWidget() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/market/fear-greed`);
+        const res = await fetch(`${API_URL}/api/market/fear-greed`, SKIP_NGROK);
         if (!res.ok) return;
         const d = await res.json();
         setCurrent(d.current);
@@ -540,7 +541,7 @@ function FundingWidget({ symbol }: { symbol: string }) {
   }, []);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/market/funding-rates`)
+    fetch(`${API_URL}/api/market/funding-rates`, SKIP_NGROK)
       .then(r => r.ok ? r.json() : null)
       .then((d: { rates?: FundingEntry[] } | null) => {
         setRates(d?.rates?.length ? d.rates.slice(0, 5) : FUNDING_FALLBACK);

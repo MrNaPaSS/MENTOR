@@ -13,7 +13,7 @@ export default function PnlPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
-    const r = await fetch(`${API_URL}/api/pnl`);
+    const r = await fetch(`${API_URL}/api/pnl`, { headers: { "ngrok-skip-browser-warning": "1" } });
     const d = await r.json();
     setImages(d.images ?? []);
   }
@@ -30,7 +30,7 @@ export default function PnlPage() {
         form.append("file", file);
         const r = await fetch(`${API_URL}/api/pnl/upload`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "1" },
           body: form,
         });
         if (!r.ok) {
@@ -52,7 +52,7 @@ export default function PnlPage() {
     if (!filename) return;
     await fetch(`${API_URL}/api/pnl/${filename}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "1" },
     });
     await load();
   }

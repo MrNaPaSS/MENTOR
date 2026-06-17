@@ -104,7 +104,7 @@ function Arrow({n}: {n: number}) {
 
 async function fetchJson<T>(url: string, opts?: RequestInit): Promise<T | null> {
   try {
-    const r = await fetch(url, opts);
+    const r = await fetch(url, { ...opts, headers: { "ngrok-skip-browser-warning": "1", ...(opts?.headers || {}) } });
     if (!r.ok) return null;
     return r.json() as Promise<T>;
   } catch {
@@ -548,7 +548,7 @@ function AiSection() {
       ]);
       const res = await fetch(`${API_URL}/api/institutional/analyze`, {
         method: "POST",
-        headers: {"content-type": "application/json"},
+        headers: {"content-type": "application/json", "ngrok-skip-browser-warning": "1"},
         body: JSON.stringify({cot_btc: cotBtc, cot_eth: cotEth, macro}),
       });
       if (!res.ok) {

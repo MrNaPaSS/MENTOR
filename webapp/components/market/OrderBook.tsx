@@ -82,7 +82,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
 
   async function loadBook() {
     try {
-      const res = await fetch(`${API_URL}/api/market/orderbook/${symbol}?limit=${displayRows}`);
+      const res = await fetch(`${API_URL}/api/market/orderbook/${symbol}?limit=${displayRows}`, { headers: { "ngrok-skip-browser-warning": "1" } });
       if (!res.ok) return;
       const json = (await res.json()) as { bids: unknown[]; asks: unknown[] };
 
@@ -103,7 +103,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
 
   async function loadTrades() {
     try {
-      const res = await fetch(`${API_URL}/api/market/trades/${symbol}?limit=30`);
+      const res = await fetch(`${API_URL}/api/market/trades/${symbol}?limit=30`, { headers: { "ngrok-skip-browser-warning": "1" } });
       if (!res.ok) return;
       const json = (await res.json()) as { trades: Trade[] };
       setTrades(json.trades || []);

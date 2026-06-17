@@ -93,7 +93,7 @@ export default function PublicSignals() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/broadcast/preview`)
+    fetch(`${API_URL}/api/broadcast/preview`, { headers: { "ngrok-skip-browser-warning": "1" } })
       .then((r) => r.ok ? r.json() : [])
       .then(setItems)
       .catch(() => setItems([]))

@@ -23,7 +23,7 @@ export default function Testimonials() {
   const [images, setImages] = useState<string[]>([]);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/pnl`)
+    fetch(`${API_URL}/api/pnl`, { headers: { "ngrok-skip-browser-warning": "1" } })
       .then((r) => r.ok ? r.json() : { images: [] })
       .then((d) => setImages(d.images ?? []))
       .catch(() => {});

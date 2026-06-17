@@ -40,7 +40,7 @@ export default function FearGreed({ compact = false }: Props) {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`${API_URL}/api/market/fear-greed`);
+        const res = await fetch(`${API_URL}/api/market/fear-greed`, { headers: { "ngrok-skip-browser-warning": "1" } });
         if (!res.ok) return;
         const data = await res.json();
         setCurrent(data.current);
