@@ -1,3 +1,7 @@
+# ngrok tunnel config (содержит токен)
+tunnel.config
+ngrok.exe
+
 # Python
 __pycache__/
 *.py[cod]
