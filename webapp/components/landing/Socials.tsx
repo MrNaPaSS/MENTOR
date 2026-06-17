@@ -1,16 +1,11 @@
-import {
-  SiTelegram,
-  SiTiktok,
-  SiThreads,
-} from "@icons-pack/react-simple-icons";
+import { SiTelegram } from "@icons-pack/react-simple-icons";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
 import { SOCIAL_LINKS } from "@/lib/content";
 
 const SOCIALS = [
-  { name: "Telegram", handle: "@nmnh", href: SOCIAL_LINKS.telegram, color: "#229ED9", Icon: SiTelegram },
-  { name: "Threads", handle: "@nmnh", href: SOCIAL_LINKS.threads, color: "#FFFFFF", Icon: SiThreads },
-  { name: "TikTok", handle: "@nmnh", href: SOCIAL_LINKS.tiktok, color: "#25F4EE", Icon: SiTiktok },
+  { name: "Telegram канал", handle: "@nmnh", href: SOCIAL_LINKS.telegram, color: "#229ED9", Icon: SiTelegram },
+  { name: "Академия", handle: "@moneyhoney7_bot", href: "https://t.me/moneyhoney7_bot", color: "#229ED9", Icon: SiTelegram },
 ];
 
 export default function Socials() {
@@ -18,7 +13,7 @@ export default function Socials() {
     <section className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
       <SectionHeading eyebrow="Соцсети" title="Будь в курсе сделок" />
 
-      <div className="mt-12 grid grid-cols-2 gap-4 md:grid-cols-3">
+      <div className="mt-12 grid grid-cols-2 gap-4 md:max-w-lg">
         {SOCIALS.map((s, i) => {
           const { Icon } = s;
           return (

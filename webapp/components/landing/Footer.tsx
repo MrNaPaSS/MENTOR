@@ -59,7 +59,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-12 border-t border-border pt-6 text-sm text-text-muted">
-          <p>© 2025 NMNH. Все права защищены.</p>
+          <p>© 2020 NMNH. Все права защищены.</p>
           <p className="mt-1 max-w-3xl">
             Торговля криптовалютами связана с высоким риском, особенно с использованием большого плеча
             (до x400 в турбо-режиме). Возможна полная потеря депозита. Это не финансовый совет.
