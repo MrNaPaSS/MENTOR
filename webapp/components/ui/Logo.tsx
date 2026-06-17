@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Zap } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 
 interface LogoProps {
   href?: string;
@@ -15,7 +15,7 @@ export default function Logo({ href = "/", adminBadge, className = "" }: LogoPro
       className={`group inline-flex items-center gap-2 text-xl font-extrabold tracking-tight ${className}`}
     >
       <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/30 transition group-hover:shadow-glow-cyan">
-        <Zap className="h-5 w-5" fill="currentColor" />
+        <TrendingUp className="h-5 w-5" strokeWidth={2.5} />
       </span>
       <span className="glitch text-white group-hover:text-glow-cyan" data-text="NMNH">
         NMNH

@@ -11,9 +11,9 @@ export const SOCIAL_LINKS = {
 
 export const NAV_LINKS = [
   { label: "О проекте", href: "#about" },
+  { label: "Как работает", href: "#how" },
   { label: "Сигналы", href: "#signals" },
-  { label: "Калькулятор", href: "#calculator" },
-  { label: "Лидерборд", href: "#leaderboard" },
+  { label: "Результаты", href: "#results" },
   { label: "FAQ", href: "#faq" },
 ];
 

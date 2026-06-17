@@ -34,7 +34,7 @@ export default function Testimonials() {
   const loop = [...images, ...images];
 
   return (
-    <section className="py-20 md:py-28">
+    <section id="results" className="py-20 md:py-28">
       <div className="mx-auto max-w-6xl px-4 md:px-6">
         <SectionHeading
           eyebrow="Результаты учеников"

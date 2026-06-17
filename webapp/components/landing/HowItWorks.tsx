@@ -25,7 +25,7 @@ const ICON_COLORS = [
 
 export default function HowItWorks() {
   return (
-    <section className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
+    <section id="how" className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
       <SectionHeading
         eyebrow="Как это работает"
         title="От регистрации до первой сделки"
