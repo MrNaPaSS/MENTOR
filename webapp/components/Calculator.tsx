@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
-import { TrendingUp, TrendingDown, RefreshCw, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, RefreshCw, AlertTriangle, ChevronRight } from "lucide-react";
 import { api, CalcResponse } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { fmtUsd, fmtPct } from "@/lib/format";
+import { fmtUsd } from "@/lib/format";
 
 const MAX_LEV = { moderate: 25, turbo: 400 } as const;
 
@@ -13,6 +13,16 @@ export default function Calculator() {
   const [balance, setBalance] = useState("1000");
   const [balanceFromProfile, setBalanceFromProfile] = useState(false);
   const [entry, setEntry] = useState("100");
+  const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
+  const [leverage, setLeverage] = useState(10);
+  const [pair, setPair] = useState("BTCUSDT");
+  const [result, setResult] = useState<CalcResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [priceLoading, setPriceLoading] = useState(false);
+
+  const maxLev = MAX_LEV[mode];
+  const leveragePct = (leverage / maxLev) * 100;
 
   useEffect(() => {
     const token = getAccessToken();
@@ -24,19 +34,10 @@ export default function Calculator() {
       }
     }).catch(() => {});
   }, []);
-  const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
-  const [leverage, setLeverage] = useState(10);
-  const [pair, setPair] = useState("BTCUSDT");
-  const [result, setResult] = useState<CalcResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [priceLoading, setPriceLoading] = useState(false);
-
-  const maxLev = MAX_LEV[mode];
 
   function changeMode(m: "moderate" | "turbo") {
     setMode(m);
-    setLeverage((lev) => Math.min(lev, MAX_LEV[m]));
+    setLeverage(lev => Math.min(lev, MAX_LEV[m]));
   }
 
   async function fetchPrice() {
@@ -44,24 +45,15 @@ export default function Calculator() {
     try {
       const res = await api.price(pair.trim().toUpperCase());
       setEntry(res.price);
-    } catch {
-      /* без цены - оставляем введённое */
-    } finally {
-      setPriceLoading(false);
-    }
+    } catch { /* keep typed value */ }
+    finally { setPriceLoading(false); }
   }
 
   async function compute() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.calculate({
-        mode,
-        balance,
-        entry_price: entry,
-        direction,
-        leverage,
-      });
+      const res = await api.calculate({ mode, balance, entry_price: entry, direction, leverage });
       setResult(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Ошибка расчёта");
@@ -71,96 +63,103 @@ export default function Calculator() {
   }
 
   const riskPct = result ? Number(result.risk_percent_of_balance) : 0;
-  const riskHigh = riskPct > 5;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-bg-card">
-      <div className="border-b border-border px-6 py-4">
-        <h3 className="text-xl font-semibold text-white">Калькулятор позиции</h3>
-        <p className="mt-0.5 text-sm text-text-muted">
-          Рассчитай маржу, риск и профит под свой депозит - бесплатно.
-        </p>
-      </div>
+    <div
+      className="overflow-hidden rounded-3xl"
+      style={{
+        background: "linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
+      }}
+    >
+      <div className="grid md:grid-cols-2">
 
-      <div className="grid gap-px bg-border md:grid-cols-2">
-        {/* ── Ввод ── */}
-        <div className="space-y-5 bg-bg-card p-6">
-          {/* Режим */}
-          <div>
-            <label className="mb-2 block text-sm text-text-secondary">Режим</label>
-            <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-bg-panel p-1">
-              <button
-                onClick={() => changeMode("moderate")}
-                className={`rounded-lg py-2 text-sm font-semibold transition ${
-                  mode === "moderate" ? "bg-accent-cyan text-bg-deep" : "text-text-secondary hover:text-white"
-                }`}
-              >
-                📊 Умеренный
-              </button>
-              <button
-                onClick={() => changeMode("turbo")}
-                className={`rounded-lg py-2 text-sm font-semibold transition ${
-                  mode === "turbo" ? "bg-danger text-white" : "text-text-secondary hover:text-white"
-                }`}
-              >
-                ⚡ Турбо
-              </button>
-            </div>
+        {/* ─── LEFT: INPUT PANEL ─── */}
+        <div className="space-y-6 p-7">
+
+          {/* Mode */}
+          <div
+            className="flex rounded-2xl p-1"
+            style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            {(["moderate", "turbo"] as const).map((m) => {
+              const active = mode === m;
+              return (
+                <button
+                  key={m}
+                  onClick={() => changeMode(m)}
+                  className="relative flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all duration-200"
+                  style={{
+                    color: active ? (m === "turbo" ? "#FF4757" : "#0AFFE0") : "rgba(255,255,255,0.35)",
+                    background: active ? "rgba(255,255,255,0.07)" : "transparent",
+                  }}
+                >
+                  {m === "moderate" ? "Умеренный" : "Турбо"}
+                  {active && (
+                    <span
+                      className="absolute inset-x-4 bottom-0 h-[2px] rounded-full"
+                      style={{ background: m === "turbo" ? "#FF4757" : "#0AFFE0" }}
+                    />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Направление */}
-          <div>
-            <label className="mb-2 block text-sm text-text-secondary">Направление</label>
-            <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-bg-panel p-1">
-              <button
-                onClick={() => setDirection("LONG")}
-                className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition ${
-                  direction === "LONG" ? "bg-success/20 text-success ring-1 ring-success/40" : "text-text-secondary hover:text-white"
-                }`}
-              >
-                <TrendingUp className="h-4 w-4" /> LONG
-              </button>
-              <button
-                onClick={() => setDirection("SHORT")}
-                className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition ${
-                  direction === "SHORT" ? "bg-danger/20 text-danger ring-1 ring-danger/40" : "text-text-secondary hover:text-white"
-                }`}
-              >
-                <TrendingDown className="h-4 w-4" /> SHORT
-              </button>
-            </div>
-          </div>
-
-          {/* Депозит / Пара */}
+          {/* Direction */}
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-sm text-text-secondary">
-              <span className="flex items-center justify-between">
-                Депозит ($)
-                {balanceFromProfile && (
-                  <span className="text-[10px] font-semibold text-accent-cyan">● с WEEX</span>
-                )}
-              </span>
+            {(["LONG", "SHORT"] as const).map((d) => {
+              const active = direction === d;
+              const isLong = d === "LONG";
+              const color = isLong ? "#00D4A0" : "#FF4757";
+              return (
+                <button
+                  key={d}
+                  onClick={() => setDirection(d)}
+                  className="flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold transition-all duration-200"
+                  style={{
+                    background: active ? `${color}18` : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${active ? color + "50" : "rgba(255,255,255,0.07)"}`,
+                    color: active ? color : "rgba(255,255,255,0.4)",
+                    boxShadow: active ? `0 0 20px ${color}15` : "none",
+                  }}
+                >
+                  {isLong
+                    ? <TrendingUp className="h-4 w-4" />
+                    : <TrendingDown className="h-4 w-4" />
+                  }
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Balance + Pair */}
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              label={balanceFromProfile ? "Депозит (WEEX)" : "Депозит ($)"}
+              accent={balanceFromProfile}
+            >
               <input
-                className="input mt-1.5 font-mono"
+                className="input font-mono"
                 inputMode="decimal"
                 value={balance}
                 onChange={(e) => { setBalance(e.target.value); setBalanceFromProfile(false); }}
               />
-            </label>
-            <label className="block text-sm text-text-secondary">
-              Пара
+            </Field>
+            <Field label="Торговая пара">
               <input
-                className="input mt-1.5 font-mono uppercase"
+                className="input font-mono uppercase"
                 value={pair}
                 onChange={(e) => setPair(e.target.value)}
               />
-            </label>
+            </Field>
           </div>
 
-          {/* Цена входа */}
-          <label className="block text-sm text-text-secondary">
-            Цена входа ($)
-            <div className="mt-1.5 flex gap-2">
+          {/* Entry price */}
+          <Field label="Цена входа ($)">
+            <div className="flex gap-2">
               <input
                 className="input font-mono"
                 inputMode="decimal"
@@ -169,95 +168,145 @@ export default function Calculator() {
               />
               <button
                 onClick={fetchPrice}
-                className="btn-outline shrink-0 px-3"
-                aria-label="Обновить цену"
                 disabled={priceLoading}
+                className="flex h-[42px] w-11 shrink-0 items-center justify-center rounded-lg transition-all"
+                style={{ background: "rgba(10,255,224,0.08)", border: "1px solid rgba(10,255,224,0.2)", color: "#0AFFE0" }}
+                aria-label="Получить текущую цену"
               >
                 <RefreshCw className={`h-4 w-4 ${priceLoading ? "animate-spin" : ""}`} />
               </button>
             </div>
-          </label>
+          </Field>
 
-          {/* Плечо (слайдер) */}
+          {/* Leverage slider */}
           <div>
-            <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="text-text-secondary">Плечо</span>
-              <span className="font-mono font-semibold text-accent-cyan">x{leverage}</span>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-text-secondary">Плечо</span>
+              <span
+                className="rounded-lg px-2.5 py-1 font-mono text-sm font-bold"
+                style={{ background: "rgba(10,255,224,0.1)", color: "#0AFFE0", border: "1px solid rgba(10,255,224,0.2)" }}
+              >
+                ×{leverage}
+              </span>
             </div>
-            <input
-              type="range"
-              min={1}
-              max={maxLev}
-              value={leverage}
-              onChange={(e) => setLeverage(Number(e.target.value))}
-              className="w-full accent-[#0AFFE0]"
-            />
-            <div className="mt-1 flex justify-between text-[11px] text-text-muted">
-              <span>1x</span>
-              <span>до {maxLev}x ({mode === "turbo" ? "турбо" : "умеренный"})</span>
+
+            <div className="relative h-1.5 w-full rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <div
+                className="absolute left-0 top-0 h-full rounded-full transition-all"
+                style={{ width: `${leveragePct}%`, background: "linear-gradient(90deg, #0AFFE0, #06B6D4)" }}
+              />
+              <input
+                type="range"
+                min={1}
+                max={maxLev}
+                value={leverage}
+                onChange={(e) => setLeverage(Number(e.target.value))}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              />
+            </div>
+
+            <div className="mt-2 flex justify-between text-[11px] text-text-muted">
+              <span>×1</span>
+              <span>до ×{maxLev}</span>
             </div>
           </div>
 
-          <button className="btn-primary w-full" onClick={compute} disabled={loading}>
-            {loading ? "Считаем…" : "Рассчитать"}
+          {/* CTA */}
+          <button
+            onClick={compute}
+            disabled={loading}
+            className="group relative w-full overflow-hidden rounded-2xl py-3.5 text-[15px] font-bold text-bg-deep transition-all duration-200 disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg, #0AFFE0 0%, #06B6D4 100%)" }}
+          >
+            <span className="flex items-center justify-center gap-2">
+              {loading ? "Считаем…" : <>Рассчитать <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></>}
+            </span>
           </button>
         </div>
 
-        {/* ── Вывод (чек) ── */}
-        <div className="bg-bg-panel p-6">
+        {/* ─── RIGHT: RESULT PANEL ─── */}
+        <div
+          className="p-7"
+          style={{ borderLeft: "1px solid rgba(255,255,255,0.06)" }}
+        >
           {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-              <AlertTriangle className="h-4 w-4" /> {error}
+            <div className="mb-5 flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
+              style={{ background: "rgba(255,71,87,0.1)", border: "1px solid rgba(255,71,87,0.3)", color: "#FF4757" }}>
+              <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
             </div>
           )}
 
           {!result ? (
-            <div className="flex h-full min-h-[260px] flex-col items-center justify-center text-center text-text-muted">
-              <p>Заполни параметры и нажми «Рассчитать»</p>
-              <p className="mt-1 text-xs">Маржа · объём · риск · профиты появятся здесь</p>
+            <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
+              <div
+                className="mb-4 grid h-16 w-16 place-items-center rounded-2xl"
+                style={{ background: "rgba(10,255,224,0.06)", border: "1px solid rgba(10,255,224,0.12)" }}
+              >
+                <TrendingUp className="h-7 w-7" style={{ color: "#0AFFE0", opacity: 0.5 }} />
+              </div>
+              <p className="font-semibold text-white opacity-40">Заполни параметры</p>
+              <p className="mt-1 text-xs text-text-muted opacity-60">Маржа · объём · риск · тейки появятся здесь</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
+
+              {/* Top metrics */}
               <div className="grid grid-cols-2 gap-3">
-                <Metric label="Маржа" value={`${fmtUsd(result.margin_usd)}$`} />
-                <Metric label="Объём позиции" value={`${fmtUsd(result.position_size)}$`} />
-                <Metric
-                  label={`Риск (стоп ${fmtPct(result.sl_percent, 2)}%)`}
-                  value={`${fmtUsd(result.risk_usd)}$`}
-                  tone={riskHigh ? "danger" : undefined}
-                />
-                <Metric label="Стоп" value={`${result.sl_price}$`} />
+                <ResultCard label="Маржа" value={`$${fmtUsd(result.margin_usd)}`} accent="cyan" />
+                <ResultCard label="Объём позиции" value={`$${fmtUsd(result.position_size)}`} accent="cyan" />
               </div>
 
-              <div className="space-y-2">
-                {result.take_profits.map((tp) => (
+              {/* Risk + SL row */}
+              <div className="grid grid-cols-2 gap-3">
+                <ResultCard
+                  label={`Риск (стоп ${Number(result.sl_percent).toFixed(1)}%)`}
+                  value={`$${fmtUsd(result.risk_usd)}`}
+                  accent={riskPct > 5 ? "danger" : "neutral"}
+                />
+                <ResultCard label="Цена стопа" value={`$${result.sl_price}`} accent="neutral" />
+              </div>
+
+              {/* TP rows */}
+              <div
+                className="rounded-2xl p-1"
+                style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.06)" }}
+              >
+                {result.take_profits.map((tp, i) => (
                   <div
                     key={tp.index}
-                    className="flex items-center justify-between rounded-xl border border-border bg-bg-card px-3.5 py-2.5"
+                    className="flex items-center justify-between rounded-xl px-4 py-3"
+                    style={{ background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}
                   >
-                    <span className="text-sm text-text-secondary">
-                      {`TP${tp.index} (RR 1:${Number(tp.rr).toFixed(1)})`}
-                    </span>
-                    <span className="font-mono font-semibold text-success">
-                      +{fmtUsd(tp.profit_usd)}$
+                    <div>
+                      <span className="text-xs font-semibold text-text-muted">
+                        TP{tp.index} · RR 1:{Number(tp.rr).toFixed(1)}
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold" style={{ color: "#00D4A0" }}>
+                      +${fmtUsd(tp.profit_usd)}
                     </span>
                   </div>
                 ))}
               </div>
 
+              {/* RR summary */}
               {result.take_profits[0] && (
-                <div className="flex items-center justify-between rounded-xl border border-accent-gold/30 bg-accent-gold/[0.06] px-3.5 py-2.5">
-                  <span className="text-sm text-text-secondary">Риск / Прибыль (TP1)</span>
-                  <span className="badge-gold font-mono">
-                    1:{Number(result.take_profits[0].rr).toFixed(1)}
+                <div
+                  className="flex items-center justify-between rounded-2xl px-4 py-3"
+                  style={{ background: "rgba(255,196,0,0.06)", border: "1px solid rgba(255,196,0,0.2)" }}
+                >
+                  <span className="text-sm text-text-secondary">Risk / Reward (TP1)</span>
+                  <span className="font-mono font-bold" style={{ color: "#FFC400" }}>
+                    1 : {Number(result.take_profits[0].rr).toFixed(1)}
                   </span>
                 </div>
               )}
 
+              {/* Warnings */}
               {result.warnings.length > 0 && (
-                <ul className="space-y-1 pt-1 text-sm text-accent-gold">
+                <ul className="space-y-1.5">
                   {result.warnings.map((w, i) => (
-                    <li key={i} className="flex gap-2">
+                    <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#F59E0B" }}>
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {w}
                     </li>
                   ))}
@@ -271,21 +320,26 @@ export default function Calculator() {
   );
 }
 
-function Metric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "danger" | "success";
-}) {
-  const color =
-    tone === "danger" ? "text-danger" : tone === "success" ? "text-success" : "text-white";
+function Field({ label, accent, children }: { label: string; accent?: boolean; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-bg-card p-3">
-      <div className={`font-mono text-lg font-semibold ${color}`}>{value}</div>
-      <div className="mt-0.5 text-xs text-text-muted">{label}</div>
+    <div>
+      <div className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-text-secondary">
+        {label}
+        {accent && <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#0AFFE0" }} />}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ResultCard({ label, value, accent }: { label: string; value: string; accent: "cyan" | "danger" | "neutral" }) {
+  const color = accent === "cyan" ? "#0AFFE0" : accent === "danger" ? "#FF4757" : "white";
+  const bg = accent === "cyan" ? "rgba(10,255,224,0.05)" : accent === "danger" ? "rgba(255,71,87,0.08)" : "rgba(255,255,255,0.03)";
+  const border = accent === "cyan" ? "rgba(10,255,224,0.12)" : accent === "danger" ? "rgba(255,71,87,0.2)" : "rgba(255,255,255,0.06)";
+  return (
+    <div className="rounded-2xl p-4" style={{ background: bg, border: `1px solid ${border}` }}>
+      <div className="font-mono text-xl font-black tabular-nums" style={{ color }}>{value}</div>
+      <div className="mt-1 text-xs text-text-muted">{label}</div>
     </div>
   );
 }
