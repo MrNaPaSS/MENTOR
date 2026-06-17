@@ -1,37 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Send } from "lucide-react";
-import Counter from "@/components/ui/Counter";
-import { api, PublicStats } from "@/lib/api";
+import { ArrowRight, ExternalLink, Send } from "lucide-react";
 import { SOCIAL_LINKS } from "@/lib/content";
 
 export default function Hero() {
-  const [stats, setStats] = useState<PublicStats | null>(null);
-
-  useEffect(() => {
-    api.publicStats().then(setStats).catch(() => setStats(null));
-  }, []);
-
-  const counters = [
-    { value: stats?.total_signals ?? 0, label: "Сигналов отправлено", suffix: "" },
-    { value: stats?.active_students ?? 0, label: "Активных учеников", suffix: "" },
-    {
-      value: stats?.winrate != null ? Number(stats.winrate) : 0,
-      label: "Винрейт",
-      suffix: "%",
-      decimals: 1,
-      hidden: stats?.winrate == null,
-    },
-  ];
-
   return (
     <section
       id="about"
       className="relative overflow-hidden pt-28 pb-16 md:pt-36 md:pb-24"
     >
-      {/* Лёгкие фоновые слои поверх объёмной WebGL-сцены (она рендерится за контентом) */}
       <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
       <div className="pointer-events-none absolute inset-0 bg-grid-faint [background-size:48px_48px] opacity-30 [mask-image:radial-gradient(70%_60%_at_50%_30%,black,transparent)]" />
 
@@ -42,10 +20,7 @@ export default function Hero() {
           </span>
 
           <h1 className="text-h1 text-white">
-            <span
-              className="glitch"
-              data-text="Торгуй как профи."
-            >
+            <span className="glitch" data-text="Торгуй как профи.">
               Торгуй как профи.
             </span>
             <br />
@@ -56,43 +31,34 @@ export default function Hero() {
             Персональные сигналы под твой депозит. Реальный расчёт. Реальный результат.
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link href="/login" className="btn-primary text-base">
-              ⚡ Начать обучение <ArrowRight className="h-4 w-4" />
+          <div className="mt-10 flex flex-wrap items-center gap-3">
+            {/* Primary CTA */}
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2.5 rounded-xl bg-accent-cyan px-8 py-3.5 text-base font-bold text-bg-deep shadow-[0_0_28px_rgba(10,255,224,0.28)] transition-all duration-200 hover:brightness-[0.93] hover:shadow-[0_0_40px_rgba(10,255,224,0.42)] active:scale-[0.97]"
+            >
+              Начать обучение <ArrowRight className="h-4 w-4" />
             </Link>
+
+            {/* WEEX */}
             <a
               href={SOCIAL_LINKS.weexAffiliate}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-outline text-base"
+              className="inline-flex items-center gap-2.5 rounded-xl border border-white/[0.14] bg-white/[0.05] px-7 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:border-white/[0.26] hover:bg-white/[0.09] active:scale-[0.97]"
             >
-              📊 Открыть счёт на WEEX
+              Открыть счёт WEEX <ExternalLink className="h-[15px] w-[15px] text-text-muted" />
             </a>
+
+            {/* Telegram */}
             <a
               href={SOCIAL_LINKS.telegram}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-ghost text-base"
+              className="inline-flex items-center gap-2 rounded-xl px-5 py-3.5 text-base font-semibold text-text-secondary transition-all duration-200 hover:bg-white/[0.06] hover:text-white active:scale-[0.97]"
             >
               <Send className="h-4 w-4" /> Telegram
             </a>
-          </div>
-
-          {/* Лайв-счётчики */}
-          <div className="mt-12 flex flex-wrap gap-3">
-            {counters
-              .filter((c) => !c.hidden)
-              .map((c) => (
-                <div
-                  key={c.label}
-                  className="rounded-2xl border border-border bg-bg-card/60 px-5 py-4 backdrop-blur-sm"
-                >
-                  <div className="font-mono text-3xl font-bold text-accent-cyan tabular">
-                    <Counter value={c.value} suffix={c.suffix} decimals={c.decimals ?? 0} />
-                  </div>
-                  <div className="mt-1 text-xs text-text-muted">{c.label}</div>
-                </div>
-              ))}
           </div>
         </div>
       </div>
