@@ -1,24 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { api, SignalOut } from "@/lib/api";
 import { fmtUsd, isLong, modeLabel } from "@/lib/format";
 
-export default function SignalDetail() {
-  const params = useParams<{ id: string }>();
+function SignalDetailContent() {
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id");
   const router = useRouter();
   const [signal, setSignal] = useState<SignalOut | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!params?.id) return;
-    api.signal(params.id).then(setSignal).catch((e) => setError(e.message)).finally(() => setLoaded(true));
-  }, [params?.id]);
+    if (!id) return;
+    api.signal(id).then(setSignal).catch((e: Error) => setError(e.message)).finally(() => setLoaded(true));
+  }, [id]);
 
-  if (loaded && (error || !signal)) {
+  if (!id || (loaded && (error || !signal))) {
     return (
       <div className="space-y-4">
         <button onClick={() => router.back()} className="btn-ghost text-sm">
@@ -83,7 +84,7 @@ export default function SignalDetail() {
             rel="noopener noreferrer"
             className="btn-primary w-full"
           >
-            🚀 Войти в сделку <ExternalLink className="h-4 w-4" />
+            Войти в сделку <ExternalLink className="h-4 w-4" />
           </a>
 
           <p className="text-xs text-text-muted">
@@ -92,5 +93,13 @@ export default function SignalDetail() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SignalDetailPage() {
+  return (
+    <Suspense fallback={<div className="card"><div className="skeleton h-40 w-full" /></div>}>
+      <SignalDetailContent />
+    </Suspense>
   );
 }

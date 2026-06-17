@@ -296,7 +296,7 @@ export default function SignalCard({
         <div className="flex items-center gap-2 pt-0.5">
           {linkToDetail && (
             <Link
-              href={`/app/signals/${s.id}`}
+              href={`/app/signals/detail?id=${s.id}`}
               className="flex items-center justify-center gap-1.5 flex-1 rounded-xl border border-accent-cyan/20 bg-accent-cyan/[0.06] py-2 text-[11px] font-bold tracking-wide text-accent-cyan transition-all duration-200 hover:border-accent-cyan/40 hover:bg-accent-cyan/[0.12] hover:shadow-[0_0_12px_rgba(10,255,224,0.12)]"
             >
               <ExternalLink className="h-3.5 w-3.5" />
