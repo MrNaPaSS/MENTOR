@@ -1,8 +1,10 @@
 ﻿import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import DevBar from "@/components/dev/DevBar";
+import TelegramInit from "@/components/telegram/TelegramInit";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://nmnh.io"),
@@ -53,6 +55,11 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body className="min-h-screen bg-bg-deep font-sans text-text-primary antialiased">
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
+        />
+        <TelegramInit />
         {children}
         <ServiceWorkerRegister />
         <InstallPrompt />
