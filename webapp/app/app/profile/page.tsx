@@ -1,11 +1,14 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw, LogOut } from "lucide-react";
+import { RefreshCw, LogOut, ShieldCheck } from "lucide-react";
 import { api, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { fmtUsd, maskUid } from "@/lib/format";
+
+const ADMIN_WEEX_UID = "6613031308";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -128,6 +131,12 @@ export default function ProfilePage() {
           </Row>
         )}
       </div>
+
+      {p.weex_uid === ADMIN_WEEX_UID && (
+        <Link href="/admin" className="btn-primary flex w-full items-center justify-center gap-2">
+          <ShieldCheck className="h-4 w-4" /> Админ панель
+        </Link>
+      )}
 
       <button
         onClick={() => {
