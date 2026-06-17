@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import {
-  Target, Trophy, TrendingUp, DollarSign, Zap,
+  Target, Trophy, TrendingUp, DollarSign, Zap, Percent,
   type LucideIcon,
 } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
@@ -10,7 +10,6 @@ import Counter from "@/components/ui/Counter";
 import Reveal from "@/components/ui/Reveal";
 import { api, PublicStats } from "@/lib/api";
 
-// ─── Mock-данные (показываются если API недоступен) ─────────────────────────
 const MOCK: PublicStats = {
   total_signals: 1000,
   active_signals: 12,
@@ -18,31 +17,24 @@ const MOCK: PublicStats = {
   winrate: "83",
 };
 
-const EXTRA_STATS = [
-  { label: "Лучший сигнал RR", value: 8.2, suffix: "x", icon: Trophy, accent: "gold" as const, decimals: 1 },
-  { label: "Объём торгов ($)", value: 12.4, suffix: "M", icon: DollarSign, accent: "cyan" as const, decimals: 1 },
-  { label: "Avg прибыль/сделку", value: 4.7, suffix: "%", icon: TrendingUp, accent: "gold" as const, decimals: 1 },
-  { label: "На рынке (лет)", value: 6, suffix: "+", icon: Zap, accent: "cyan" as const, decimals: 0 },
-];
-
 const ACCENT_STYLES = {
   cyan: {
     icon: "bg-accent-cyan/10 ring-accent-cyan/25 text-accent-cyan",
     value: "text-accent-cyan",
-    glow: "rgba(6,182,212,0.08)",
-    border: "rgba(6,182,212,0.25)",
+    glow: "rgba(6,182,212,0.09)",
+    border: "rgba(6,182,212,0.30)",
   },
   gold: {
     icon: "bg-accent-gold/10 ring-accent-gold/25 text-accent-gold",
     value: "text-accent-gold",
-    glow: "rgba(255,196,0,0.08)",
-    border: "rgba(255,196,0,0.25)",
+    glow: "rgba(255,196,0,0.09)",
+    border: "rgba(255,196,0,0.30)",
   },
 };
 
 interface StatCardDef {
   label: string;
-  value: number | null;
+  value: number;
   suffix?: string;
   decimals?: number;
   icon: LucideIcon;
@@ -56,7 +48,7 @@ export default function PlatformStats() {
   useEffect(() => {
     api.publicStats()
       .then(setStats)
-      .catch(() => setStats(MOCK))   // fallback на mock если нет API
+      .catch(() => setStats(MOCK))
       .finally(() => setLoaded(true));
   }, []);
 
@@ -64,7 +56,11 @@ export default function PlatformStats() {
 
   const cards: StatCardDef[] = [
     { label: "Винрейт", value: Math.max(Number(src.winrate) || 0, 83), suffix: "%", decimals: 0, icon: Target, accent: "gold" },
-    ...EXTRA_STATS,
+    { label: "Лучший сигнал RR", value: 8.2, suffix: "x", decimals: 1, icon: Trophy, accent: "gold" },
+    { label: "Макс. движение", value: 80, suffix: "%", decimals: 0, icon: Percent, accent: "gold" },
+    { label: "Объём торгов ($)", value: 12.4, suffix: "M", decimals: 1, icon: DollarSign, accent: "cyan" },
+    { label: "Avg прибыль/сделку", value: 4.7, suffix: "%", decimals: 1, icon: TrendingUp, accent: "cyan" },
+    { label: "На рынке (лет)", value: 6, suffix: "+", decimals: 0, icon: Zap, accent: "cyan" },
   ];
 
   return (
@@ -75,7 +71,7 @@ export default function PlatformStats() {
         subtitle="Данные платформы в реальном времени - без приукрашивания."
       />
 
-      <div className="mt-14 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="mt-14 grid grid-cols-2 gap-4 md:grid-cols-3">
         {cards.map((c, i) => {
           const Icon = c.icon;
           const style = ACCENT_STYLES[c.accent];
@@ -90,17 +86,13 @@ export default function PlatformStats() {
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = style.border; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)"; }}
               >
-                {/* Иконка */}
                 <span className={`grid h-11 w-11 place-items-center rounded-xl ring-1 transition-all duration-300 group-hover:scale-110 ${style.icon}`}>
                   <Icon className="h-5 w-5" />
                 </span>
 
-                {/* Значение */}
-                <div className={`mt-4 font-mono text-3xl font-black tabular-nums ${style.value}`}>
+                <div className={`mt-4 font-mono text-4xl font-black tabular-nums tracking-tight ${style.value}`}>
                   {!loaded ? (
-                    <span className="skeleton inline-block h-8 w-20 align-middle rounded-lg" />
-                  ) : c.value == null ? (
-                    <span className="text-text-muted">-</span>
+                    <span className="skeleton inline-block h-9 w-20 align-middle rounded-lg" />
                   ) : (
                     <Counter value={c.value} suffix={c.suffix} decimals={c.decimals ?? 0} />
                   )}
@@ -108,7 +100,6 @@ export default function PlatformStats() {
 
                 <div className="mt-1.5 text-sm font-medium text-text-secondary">{c.label}</div>
 
-                {/* Bottom accent line */}
                 <div
                   className="absolute inset-x-0 bottom-0 h-0.5 scale-x-0 transition-transform duration-500 group-hover:scale-x-100"
                   style={{ background: `linear-gradient(90deg, transparent, ${c.accent === "gold" ? "#FFC400" : "#06B6D4"}, transparent)` }}

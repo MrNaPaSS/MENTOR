@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SiTelegram, SiYoutube, SiTiktok } from "@icons-pack/react-simple-icons";
+import { SiTelegram } from "@icons-pack/react-simple-icons";
 import Logo from "@/components/ui/Logo";
 import { NAV_LINKS, SOCIAL_LINKS } from "@/lib/content";
 
@@ -17,12 +17,6 @@ export default function Footer() {
             <div className="mt-5 flex gap-3">
               <a href={SOCIAL_LINKS.telegram} target="_blank" rel="noopener noreferrer" className="grid h-9 w-9 place-items-center rounded-lg text-text-secondary ring-1 ring-border transition hover:text-accent-cyan hover:ring-accent-cyan/40">
                 <SiTelegram className="h-4 w-4" />
-              </a>
-              <a href={SOCIAL_LINKS.youtube} target="_blank" rel="noopener noreferrer" className="grid h-9 w-9 place-items-center rounded-lg text-text-secondary ring-1 ring-border transition hover:text-accent-cyan hover:ring-accent-cyan/40">
-                <SiYoutube className="h-4 w-4" />
-              </a>
-              <a href={SOCIAL_LINKS.tiktok} target="_blank" rel="noopener noreferrer" className="grid h-9 w-9 place-items-center rounded-lg text-text-secondary ring-1 ring-border transition hover:text-accent-cyan hover:ring-accent-cyan/40">
-                <SiTiktok className="h-4 w-4" />
               </a>
             </div>
           </div>
