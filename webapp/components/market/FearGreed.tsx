@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
-import { API_URL } from "@/lib/api";
 
 interface FngPoint {
   value: string;
@@ -40,16 +39,17 @@ export default function FearGreed({ compact = false }: Props) {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`${API_URL}/api/market/fear-greed`, { headers: { "ngrok-skip-browser-warning": "1" } });
+        const res = await fetch("https://api.alternative.me/fng/?limit=14&format=json");
         if (!res.ok) return;
         const data = await res.json();
-        setCurrent(data.current);
-        setHistory(data.history || []);
+        const items: FngPoint[] = data.data || [];
+        setCurrent(items[0] ?? null);
+        setHistory(items);
       } catch { /* silent */ }
       finally { setLoading(false); }
     }
     load();
-    const id = setInterval(load, 60_000);
+    const id = setInterval(load, 300_000); // обновляем каждые 5 мин
     return () => clearInterval(id);
   }, []);
 
