@@ -10,26 +10,11 @@ export default function TelegramInit() {
     tg.ready();
     tg.expand();
 
-    // Full screen mode (Bot API 8.0+)
-    if (typeof tg.requestFullscreen === "function") {
-      tg.requestFullscreen();
-    }
-
-    // Prevent accidental swipe-down close
-    if (typeof tg.disableVerticalSwipes === "function") {
-      tg.disableVerticalSwipes();
-    }
-
-    // Match app background
-    if (typeof tg.setHeaderColor === "function") {
-      tg.setHeaderColor("#0A0A1A");
-    }
-    if (typeof tg.setBackgroundColor === "function") {
-      tg.setBackgroundColor("#0A0A1A");
-    }
-    if (typeof tg.setBottomBarColor === "function") {
-      tg.setBottomBarColor("#0A0A1A");
-    }
+    try { tg.requestFullscreen?.(); } catch { /* unsupported in old TG versions */ }
+    try { tg.disableVerticalSwipes?.(); } catch { /* unsupported */ }
+    try { tg.setHeaderColor?.("#0A0A1A"); } catch { /* unsupported */ }
+    try { tg.setBackgroundColor?.("#0A0A1A"); } catch { /* unsupported */ }
+    try { tg.setBottomBarColor?.("#0A0A1A"); } catch { /* unsupported */ }
   }, []);
 
   return null;
