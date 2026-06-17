@@ -18,7 +18,7 @@ export const API_URL = baseUrl;
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+    headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1", ...(init?.headers || {}) },
   });
   if (res.status === 401 && typeof window !== "undefined") {
     const authHeader = init?.headers && (init.headers as any)["Authorization"];
