@@ -2,7 +2,7 @@
 
 export const SOCIAL_LINKS = {
   weexAffiliate: "https://www.weex.com",
-  telegram: "https://t.me/nmnh",
+  telegram: "https://t.me/+81HEkQveJic2YmEy",
   telegramBot: "https://t.me/nmnh_bot",
   youtube: "https://youtube.com/@nmnh",
   tiktok: "https://tiktok.com/@nmnh",
