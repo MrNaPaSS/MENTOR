@@ -35,9 +35,9 @@ export default function Hero() {
             {/* Primary CTA */}
             <Link
               href="/login"
-              className="inline-flex items-center gap-2.5 rounded-xl bg-accent-cyan px-8 py-3.5 text-base font-bold text-bg-deep shadow-[0_0_28px_rgba(10,255,224,0.28)] transition-all duration-200 hover:brightness-[0.93] hover:shadow-[0_0_40px_rgba(10,255,224,0.42)] active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full bg-accent-cyan px-7 py-3 text-[15px] font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-cyan/90 active:scale-[0.97]"
             >
-              Начать обучение <ArrowRight className="h-4 w-4" />
+              Начать обучение <ArrowRight className="h-[15px] w-[15px]" />
             </Link>
 
             {/* WEEX */}
@@ -45,9 +45,9 @@ export default function Hero() {
               href={SOCIAL_LINKS.weexAffiliate}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2.5 rounded-xl border border-white/[0.14] bg-white/[0.05] px-7 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:border-white/[0.26] hover:bg-white/[0.09] active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full border border-white/20 px-7 py-3 text-[15px] font-semibold text-white transition-all duration-200 hover:border-white/35 hover:bg-white/[0.06] active:scale-[0.97]"
             >
-              Открыть счёт WEEX <ExternalLink className="h-[15px] w-[15px] text-text-muted" />
+              Открыть счёт WEEX <ExternalLink className="h-[14px] w-[14px] opacity-50" />
             </a>
 
             {/* Telegram */}
@@ -55,7 +55,7 @@ export default function Hero() {
               href={SOCIAL_LINKS.telegram}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl px-5 py-3.5 text-base font-semibold text-text-secondary transition-all duration-200 hover:bg-white/[0.06] hover:text-white active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] px-6 py-3 text-[15px] font-semibold text-text-secondary transition-all duration-200 hover:border-white/20 hover:bg-white/[0.05] hover:text-white active:scale-[0.97]"
             >
               <Send className="h-4 w-4" /> Telegram
             </a>

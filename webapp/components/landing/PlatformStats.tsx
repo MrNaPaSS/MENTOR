@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  Radio, Activity, Users, Target, Trophy, TrendingUp, DollarSign, Zap,
+  Target, Trophy, TrendingUp, DollarSign, Zap,
   type LucideIcon,
 } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
@@ -63,9 +63,6 @@ export default function PlatformStats() {
   const src = stats || MOCK;
 
   const cards: StatCardDef[] = [
-    { label: "Всего сигналов", value: Math.max(src.total_signals, 1000), suffix: "+", icon: Radio, accent: "cyan" },
-    { label: "Активных сигналов", value: src.active_signals, icon: Activity, accent: "cyan" },
-    { label: "Активных учеников", value: Math.max(src.active_students, 5), suffix: "+", icon: Users, accent: "cyan" },
     { label: "Винрейт", value: Math.max(Number(src.winrate) || 0, 83), suffix: "%", decimals: 0, icon: Target, accent: "gold" },
     ...EXTRA_STATS,
   ];
