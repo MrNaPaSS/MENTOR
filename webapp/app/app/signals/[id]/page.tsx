@@ -1,5 +1,9 @@
 "use client";
 
+export async function generateStaticParams() {
+  return [];
+}
+
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
