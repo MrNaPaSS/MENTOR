@@ -76,9 +76,11 @@ class RealWeexClient(WeexClient):
 
     async def _get_session(self):
         if self._session is None:
+            import ssl
             import aiohttp
-
-            self._session = aiohttp.ClientSession()
+            import certifi
+            ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+            self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=ssl_ctx))
         return self._session
 
     def _signed_headers(self, method: str, path_with_query: str, *, affiliate: bool) -> dict:
