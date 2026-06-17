@@ -40,8 +40,7 @@ if not exist "venv\Scripts\activate.bat" (
 call venv\Scripts\activate.bat
 
 echo        Проверка зависимостей...
-pip install -q --upgrade pip
-pip install -q -r requirements.txt
+python -m pip install -q -r requirements.txt
 echo        Зависимости -- OK
 
 :: ═══════════════════════════════════════
