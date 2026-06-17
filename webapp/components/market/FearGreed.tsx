@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
@@ -120,7 +120,7 @@ export default function FearGreed({ compact = false }: Props) {
               const v = parseInt(h.value);
               const hpct = (v / 100);
               return (
-                <div key={i} title={`${v} — ${getLabel(h.value_classification)}`}
+                <div key={i} title={`${v} - ${getLabel(h.value_classification)}`}
                   className="flex-1 rounded-sm transition-all"
                   style={{ height: `${Math.max(hpct * 32, 4)}px`, backgroundColor: getColor(v), opacity: 0.7 + 0.3 * hpct }} />
               );

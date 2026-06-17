@@ -10,6 +10,9 @@ import {
   Users,
   LogOut,
   ShieldCheck,
+  Radio,
+  Images,
+  BarChart2,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
@@ -18,6 +21,9 @@ import { getMentorToken, setMentorToken, logoutMentor } from "@/lib/auth";
 
 const NAV = [
   { href: "/admin", label: "Дашборд", icon: LayoutDashboard },
+  { href: "/admin/broadcast", label: "Отправить анализ", icon: Radio },
+  { href: "/admin/analyses", label: "Анализы на сайте", icon: BarChart2 },
+  { href: "/admin/pnl", label: "PnL скриншоты", icon: Images },
   { href: "/admin/signal/new", label: "Новый сигнал", icon: PlusCircle },
   { href: "/admin/signals", label: "Сигналы", icon: ListOrdered },
   { href: "/admin/students", label: "Ученики", icon: Users },

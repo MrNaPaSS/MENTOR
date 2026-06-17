@@ -50,8 +50,18 @@ class TelegramNotifier(Notifier):
         try:
             async with session.post(url, json={"chat_id": chat_id, "text": text}) as resp:
                 return resp.status == 200
-        except Exception as exc:  # noqa: BLE001 — нет диалога с ботом / сеть
-            logger.warning("Не удалось отправить код в Telegram %s: %s", chat_id, exc)
+        except Exception as exc:
+            logger.warning("Не удалось отправить сообщение %s: %s", chat_id, exc)
+            return False
+
+    async def send_photo(self, chat_id: int, photo_url: str, caption: str = "") -> bool:
+        session = await self._get_session()
+        url = f"https://api.telegram.org/bot{self.token}/sendPhoto"
+        try:
+            async with session.post(url, json={"chat_id": chat_id, "photo": photo_url, "caption": caption}) as resp:
+                return resp.status == 200
+        except Exception as exc:
+            logger.warning("Не удалось отправить фото %s: %s", chat_id, exc)
             return False
 
     async def close(self) -> None:

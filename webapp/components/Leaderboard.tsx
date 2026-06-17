@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { Crown, TrendingUp, Medal } from "lucide-react";
@@ -108,7 +108,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
                   className={`mx-auto mt-2 rounded-2xl object-cover ring-2 ring-white/20 ${isFirst ? "h-16 w-16" : "h-12 w-12"}`}
                   loading="lazy"
                 />
-                <div className="mt-2 font-bold text-white">@{r.username ?? "—"}</div>
+                <div className="mt-2 font-bold text-white">@{r.username ?? "-"}</div>
                 <div className="text-[10px] text-text-muted">{modeLabel(r.mode)}</div>
                 <div
                   className="mt-3 font-mono text-lg font-extrabold"
@@ -130,7 +130,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
         </div>
       )}
 
-      {/* Места 4–10 */}
+      {/* Места 4-10 */}
       {loaded && rest.length > 0 && (
         <div className="divide-y divide-white/5 px-4 pb-4">
           {rest.map((r) => {

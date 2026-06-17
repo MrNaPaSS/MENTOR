@@ -2,46 +2,80 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import { Globe, Building2 } from "lucide-react";
 import FearGreed from "@/components/market/FearGreed";
 
 const TradingChart = dynamic(() => import("@/components/market/TradingChart"), { ssr: false });
-const OrderBook = dynamic(() => import("@/components/market/OrderBook"), { ssr: false });
+const OrderBook    = dynamic(() => import("@/components/market/OrderBook"), { ssr: false });
+const SmartMoney   = dynamic(() => import("@/app/app/smartmoney/page"), {
+  ssr: false,
+  loading: () => (
+    <div className="space-y-4">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="animate-pulse rounded-xl border border-border/50 bg-bg-panel p-4">
+          <div className="mb-3 h-4 w-40 rounded bg-white/[0.06]" />
+          <div className="space-y-2">
+            <div className="h-3 rounded bg-white/[0.04]" style={{ width: "80%" }} />
+            <div className="h-3 rounded bg-white/[0.04]" style={{ width: "60%" }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  ),
+});
 
 const PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"];
 const TF = [
-  { key: "1", label: "1м" },
-  { key: "5", label: "5м" },
-  { key: "15", label: "15м" },
-  { key: "60", label: "1ч" },
-  { key: "240", label: "4ч" },
-  { key: "D", label: "1Д" },
+  { key: "1",   label: "1м"  },
+  { key: "5",   label: "5м"  },
+  { key: "15",  label: "15м" },
+  { key: "60",  label: "1ч"  },
+  { key: "240", label: "4ч"  },
+  { key: "D",   label: "1Д"  },
 ];
 
+type Section = "single" | "multi" | "smart";
+
 export default function MarketPage() {
-  const [sym, setSym] = useState("BTCUSDT");
-  const [tf, setTf] = useState("15");
-  const [view, setView] = useState<"single" | "multi">("single");
+  const [sym, setSym]       = useState("BTCUSDT");
+  const [tf, setTf]         = useState("15");
+  const [section, setSection] = useState<Section>("smart");
 
   return (
     <div className="space-y-5">
+      {/* Заголовок + главные вкладки */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-white">Рыночный анализ</h1>
-          <p className="text-sm text-text-muted">Графики, стакан, F&G и ставки финансирования</p>
+          <h1 className="text-2xl font-extrabold text-white">Рынок</h1>
+          <p className="text-sm text-text-muted">Графики · Стакан · F&G · Smart Money</p>
         </div>
+
         <div className="flex gap-1 rounded-xl border border-border bg-bg-panel p-1">
-          <button onClick={() => setView("single")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${view === "single" ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"}`}>
-            Одиночный
+          <button
+            onClick={() => setSection("single")}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${section === "single" ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"}`}
+          >
+            <Globe className="h-3.5 w-3.5" /> Одиночный
           </button>
-          <button onClick={() => setView("multi")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${view === "multi" ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"}`}>
+          <button
+            onClick={() => setSection("multi")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${section === "multi" ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"}`}
+          >
             2×2
+          </button>
+          <button
+            onClick={() => setSection("smart")}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${section === "smart" ? "bg-accent-gold/15 text-accent-gold" : "text-text-muted hover:text-white"}`}
+          >
+            <Building2 className="h-3.5 w-3.5" /> Smart Money
           </button>
         </div>
       </div>
 
-      {view === "single" ? (
+      {/* Smart Money */}
+      {section === "smart" && <SmartMoney />}
+
+      {section !== "smart" && section === "single" ? (
         <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
           {/* Главный блок */}
           <div className="space-y-3">
@@ -91,7 +125,7 @@ export default function MarketPage() {
             <FearGreed />
           </div>
         </div>
-      ) : (
+      ) : section === "multi" ? (
         /* 2×2 Мультичарт */
         <div className="grid gap-3 md:grid-cols-2">
           {PAIRS.slice(0, 4).map((p) => (
@@ -104,7 +138,7 @@ export default function MarketPage() {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

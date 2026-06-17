@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { Send, Crown, Pin } from "lucide-react";
@@ -14,10 +14,10 @@ interface Msg {
 }
 
 const SEED: Msg[] = [
-  { id: 1, author: "Ментор", text: "Сегодня работаем аккуратно — рынок волатильный. Стопы по сигналам выставлены.", time: "09:12", mentor: true },
+  { id: 1, author: "Ментор", text: "Сегодня работаем аккуратно - рынок волатильный. Стопы по сигналам выставлены.", time: "09:12", mentor: true },
   { id: 2, author: "alex", text: "Взял BTC лонг по сигналу, спасибо 🙌", time: "09:20" },
   { id: 3, author: "sasha", text: "Какой риск на сделку в умеренном?", time: "09:24" },
-  { id: 4, author: "Ментор", text: "1–5% от депозита, настраивается в профиле.", time: "09:26", mentor: true },
+  { id: 4, author: "Ментор", text: "1-5% от депозита, настраивается в профиле.", time: "09:26", mentor: true },
 ];
 
 export default function ChatPage() {

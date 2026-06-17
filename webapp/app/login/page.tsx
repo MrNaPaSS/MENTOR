@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -39,12 +39,22 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
+      // Сначала пробуем прямой вход - если UID уже зарегистрирован, токены приходят сразу.
+      const tokens = await api.loginByUid(uid.trim());
+      setStudentTokens(tokens.access_token, tokens.refresh_token);
+      setSuccess(true);
+      setTimeout(() => window.location.href = "/app/dashboard", 700);
+      return;
+    } catch {
+      // UID не зарегистрирован или другая ошибка - пробуем OTP-путь.
+    }
+    try {
       const res = await api.requestCode(uid.trim());
       setStep(2);
       setResend(60);
       if (res.code) setHint(`DEV: код ${res.code}`);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "UID не найден");
+      setError(e instanceof Error ? e.message : "UID не найден в системе");
     } finally {
       setLoading(false);
     }
@@ -123,6 +133,17 @@ export default function LoginPage() {
               </label>
               <p className="text-xs text-text-muted">
                 Где взять UID: WEEX → Профиль → UID (числовой идентификатор аккаунта).
+              </p>
+              <p className="text-xs text-text-muted">
+                Нет аккаунта WEEX?{" "}
+                <a
+                  href="https://www.weex.com/ru/register?vipCode=kaktotakxme"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-cyan underline-offset-2 hover:underline"
+                >
+                  Зарегистрироваться →
+                </a>
               </p>
               <button
                 className="btn-primary w-full"

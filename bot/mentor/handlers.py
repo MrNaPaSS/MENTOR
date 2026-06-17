@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+import re
+import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
+
+logger = logging.getLogger("nmnh.mentor")
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -12,6 +19,7 @@ from aiogram.types import CallbackQuery, Message
 
 from core import repo
 from core.db import SessionLocal
+from core.models import Broadcast
 from core.parser import parse_signal
 from core.templates import fmt_money, fmt_price
 from core.weex.base import WeexClient
@@ -19,6 +27,11 @@ from bot.keyboards import audience_keyboard, confirm_keyboard, enter_trade_keybo
 from bot.middlewares import IsAdmin
 from bot.services import signal_service
 from bot.delivery import deliver_signal
+
+UPLOADS_DIR = Path(__file__).parent.parent.parent / "webapp" / "public" / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+TV_RE = re.compile(r"tradingview\.com/x/([A-Za-z0-9]+)")
 
 
 class SignalFlow(StatesGroup):
@@ -259,5 +272,54 @@ def build_mentor_router(admin_id: int) -> Router:
             pass
         await callback.message.edit_text(callback.message.text + "\n\n❌ Отклонён.")
         await callback.answer("Отклонён")
+
+    @router.message(StateFilter(None), F.photo | (F.text & ~F.text.startswith("/")))
+    async def save_analysis(message: Message, bot: Bot) -> None:
+        logger.info(
+            "save_analysis: from=%s type=%s has_photo=%s text=%.80r entities=%s",
+            getattr(message.from_user, "id", None),
+            message.content_type,
+            bool(message.photo),
+            message.text or message.caption,
+            message.entities or message.caption_entities,
+        )
+        text = message.caption or message.text or ""
+        chart_url: str | None = None
+
+        # Реальное фото (скриншот графика, отправленный напрямую)
+        if message.photo:
+            photo = message.photo[-1]
+            file = await bot.get_file(photo.file_id)
+            filename = f"{uuid.uuid4().hex}.jpg"
+            dest = UPLOADS_DIR / filename
+            await bot.download_file(file.file_path, destination=dest)
+            chart_url = f"/uploads/{filename}"
+        else:
+            # TV-ссылка в тексте сообщения
+            m = TV_RE.search(text)
+            if not m:
+                # TV-ссылка в entities (пересланные сообщения)
+                for ent in (message.entities or message.caption_entities or []):
+                    url = ent.url or (text[ent.offset: ent.offset + ent.length] if ent.type in ("url", "text_link") else "")
+                    m = TV_RE.search(url)
+                    if m:
+                        break
+            if m:
+                chart_url = f"https://www.tradingview.com/x/{m.group(1)}/"
+
+        if not text.strip() and not chart_url:
+            return
+
+        with SessionLocal() as session:
+            session.add(Broadcast(
+                text=text.strip(),
+                chart_url=chart_url,
+                audience="all",
+                sent_count=0,
+                created_at=datetime.now(timezone.utc),
+            ))
+            session.commit()
+
+        await message.answer("Анализ сохранён на сайте.")
 
     return router

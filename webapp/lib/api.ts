@@ -1,4 +1,4 @@
-// Клиент API NMNH Backend. Базовый URL — из NEXT_PUBLIC_API_URL.
+﻿// Клиент API NMNH Backend. Базовый URL - из NEXT_PUBLIC_API_URL.
 
 import { logout, logoutMentor, getMentorToken, getAccessToken } from "./auth";
 
@@ -17,8 +17,8 @@ export const API_URL = baseUrl;
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
     ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
   });
   if (res.status === 401 && typeof window !== "undefined") {
     const authHeader = init?.headers && (init.headers as any)["Authorization"];
@@ -109,6 +109,7 @@ export interface SignalOut {
   margin_type: string;
   target_audience: string;
   status: string;
+  chart_url?: string | null;
 }
 
 export interface Profile {
@@ -128,6 +129,69 @@ export interface AnalyticsMe {
   sent: number;
   skipped: number;
   failed: number;
+}
+
+export interface CalendarDay {
+  date: string;
+  signals: number;
+  balance: number | null;
+  pnl_pct: number | null;
+  estimated?: boolean;
+  trades?: number;
+  trade_volume?: number;
+  has_deposit?: boolean;
+}
+
+export interface AnalyticsCalendar {
+  days: CalendarDay[];
+}
+
+export interface Trade {
+  timestamp: number;
+  date_iso: string | null;
+  symbol: string;
+  product_type: string;
+  side: string;
+  volume: number;
+  taker_amount: number;
+  maker_amount: number;
+  fee: number;
+  commission: number;
+  coin: string;
+}
+
+export interface TradeStats {
+  total_trades: number;
+  total_volume: number;
+  total_fee: number;
+  futures_count: number;
+  spot_count: number;
+  by_symbol: { symbol: string; trades: number; volume: number }[];
+  by_day: { date: string; trades: number; volume: number }[];
+}
+
+export interface TradeSummary {
+  futures_volume: number;
+  spot_volume: number;
+  total_volume: number;
+  deposit_total: number;
+  withdrawal_total: number;
+  commission: number;
+}
+
+export interface DepositRecord {
+  amount: number;
+  coin: string;
+  timestamp: number;
+  date_iso: string | null;
+}
+
+export interface TradesResponse {
+  trades: Trade[];
+  stats: TradeStats | null;
+  summary: TradeSummary | null;
+  deposits: DepositRecord[];
+  needs_uid: boolean;
 }
 
 export interface StudentOut {
@@ -166,6 +230,11 @@ export const api = {
   signal: (id: number | string) => req<SignalOut>(`/api/signals/${id}`),
 
   // ── Auth ──
+  loginByUid: (weex_uid: string) =>
+    req<{ access_token: string; refresh_token: string }>("/api/auth/login-by-uid", {
+      method: "POST",
+      body: JSON.stringify({ weex_uid }),
+    }),
   requestCode: (weex_uid: string) =>
     req<{ ok: boolean; detail: string; code: string | null }>(
       "/api/auth/request-code",
@@ -194,6 +263,10 @@ export const api = {
     authReq<Profile>("/api/profile", token, { method: "PATCH", body: JSON.stringify(body) }),
   refreshBalance: (token: string) => authReq<Profile>("/api/profile/balance", token),
   analyticsMe: (token: string) => authReq<AnalyticsMe>("/api/analytics/me", token),
+  analyticsCalendar: (token: string, year: number, month: number) =>
+    authReq<AnalyticsCalendar>(`/api/analytics/calendar?year=${year}&month=${month + 1}`, token),
+  tradesMe: (token: string, days: number = 30) =>
+    authReq<TradesResponse>(`/api/trades/me?days=${days}`, token),
 
   // ── Авторизованные (ментор) ──
   students: (token: string) => authReq<StudentOut[]>("/api/students", token),
@@ -203,10 +276,26 @@ export const api = {
     authReq<StudentOut>(`/api/students/${id}/approve`, token, { method: "POST" }),
   studentDelete: (token: string, id: number) =>
     authReq<{ ok: boolean }>(`/api/students/${id}`, token, { method: "DELETE" }),
-  createSignal: (token: string, text: string, audience: string) =>
+  createSignal: (token: string, text: string, audience: string, chart_url?: string) =>
     authReq<{ signal: SignalOut; deliveries: DeliveryPreview[] }>("/api/signals", token, {
       method: "POST",
-      body: JSON.stringify({ text, audience }),
+      body: JSON.stringify({ text, audience, chart_url: chart_url || null }),
+    }),
+  broadcasts: (token: string) => authReq<BroadcastItem[]>("/api/broadcast", token),
+  broadcast: (token: string, body: { text: string; chart_url?: string | null; audience: string }) =>
+    authReq<{ sent: number; total: number }>("/api/broadcast", token, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  createSignalDirect: (token: string, body: {
+    symbol: string; direction: string; leverage: number;
+    entry_price: number; stop_loss: number;
+    tp1?: number; tp2?: number; tp3?: number;
+    audience: string; chart_url?: string;
+  }) =>
+    authReq<{ signal: SignalOut; deliveries: DeliveryPreview[] }>("/api/signals/direct", token, {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
   closeSignal: (token: string, id: number) =>
     authReq<SignalOut>(`/api/signals/${id}/close`, token, { method: "PATCH" }),
@@ -216,6 +305,8 @@ export const api = {
     authReq<AffiliateOverview>(`/api/admin/affiliate/overview?days=${days}`, token),
   affiliateReferrals: (token: string, days = 30) =>
     authReq<ReferralRow[]>(`/api/admin/affiliate/referrals?days=${days}`, token),
+  affiliateCommissionSeries: (token: string, days = 14) =>
+    authReq<CommissionPoint[]>(`/api/admin/affiliate/commission-series?days=${days}`, token),
   affiliateMentorBalance: (token: string) =>
     authReq<MentorBalance>(`/api/admin/affiliate/mentor-balance`, token),
 };
@@ -244,6 +335,22 @@ export interface ReferralRow {
   withdrawal: string;
   has_traded: boolean;
   has_deposit: boolean;
+}
+
+export interface CommissionPoint {
+  date: string;
+  commission: string;
+  spot: string;
+  futures: string;
+}
+
+export interface BroadcastItem {
+  id: number;
+  text: string;
+  chart_url: string | null;
+  audience: string;
+  sent_count: number;
+  created_at: string;
 }
 
 export interface MentorBalance {

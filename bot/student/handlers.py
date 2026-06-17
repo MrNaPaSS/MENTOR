@@ -25,7 +25,7 @@ class Onboarding(StatesGroup):
     weex_uid = State()
 
 
-def build_student_router(admin_id: int) -> Router:
+def build_student_router(admin_id: int, referral_link: str = "https://www.weex.com/ru/register?vipCode=kaktotakxme") -> Router:
     router = Router(name="student")
 
     @router.message(Command("start"))
@@ -33,28 +33,33 @@ def build_student_router(admin_id: int) -> Router:
         user = message.from_user
         with SessionLocal() as session:
             student = repo.get_or_create_student(session, user.id, user.username)
-            approved = student.is_approved
             has_uid = bool(student.weex_uid)
+            approved = student.is_approved
 
-        if not approved:
-            # Уведомить ментора с кнопками подтверждения.
-            try:
-                await message.bot.send_message(
-                    admin_id,
-                    f"🟢 Новый ученик: @{user.username or user.id} (id {user.id})",
-                    reply_markup=approve_keyboard(user.id),
-                )
-            except Exception:
-                pass
-            await message.answer("👋 Добро пожаловать! Ваша заявка отправлена ментору.")
-            return
-
-        if has_uid:
+        if approved and has_uid:
             await message.answer("Вы уже зарегистрированы. /balance · /active · /help")
             return
 
+        # Не ждём ручного одобрения — сразу даём ввести UID.
+        # Уведомляем ментора фоново, но не блокируем пользователя.
+        if not approved:
+            try:
+                await message.bot.send_message(
+                    admin_id,
+                    f"🟡 Новый пользователь: @{user.username or user.id} (id {user.id}) — начал регистрацию",
+                )
+            except Exception:
+                pass
+            await message.answer(
+                "👋 Добро пожаловать в NMNH — торговые сигналы по WEEX!\n\n"
+                "Для доступа к сигналам нужен аккаунт WEEX.\n"
+                "Если ещё не зарегистрирован — создай аккаунт по ссылке:\n"
+                f"👉 {referral_link}\n\n"
+                "Уже есть аккаунт? Продолжаем 👇"
+            )
+
         await state.set_state(Onboarding.language)
-        await message.answer("Доступ открыт! Выберите язык:", reply_markup=lang_keyboard())
+        await message.answer("Выберите язык:", reply_markup=lang_keyboard())
 
     @router.callback_query(F.data.startswith("lang:"), StateFilter(Onboarding.language))
     async def set_language(callback: CallbackQuery, state: FSMContext):
@@ -92,28 +97,71 @@ def build_student_router(admin_id: int) -> Router:
 
     @router.message(StateFilter(Onboarding.weex_uid))
     async def set_weex_uid(message: Message, state: FSMContext, weex: WeexClient):
+        from sqlalchemy import select as sa_select
+        from core.models import Student
+
         uid = (message.text or "").strip()
+        tg_id = message.from_user.id
+
+        # Проверяем: есть ли уже зарегистрированный с таким UID в базе.
+        with SessionLocal() as session:
+            existing = session.execute(
+                sa_select(Student).where(Student.weex_uid == uid)
+            ).scalar_one_or_none()
+
+            if existing is not None:
+                # UID уже есть в системе — привязываем текущего пользователя.
+                student = repo.get_or_create_student(session, tg_id, message.from_user.username)
+                data = await state.get_data()
+                student.language = data.get("language", "ru")
+                student.mode = data.get("mode", "moderate")
+                if data.get("risk"):
+                    student.risk_percent = Decimal(data["risk"])
+                student.weex_uid = uid
+                student.is_approved = True
+                student.balance_usdt = existing.balance_usdt
+                student.balance_updated_at = existing.balance_updated_at
+                session.commit()
+                await state.clear()
+                await message.answer(
+                    f"✅ Вы уже зарегистрированы в системе! Доступ открыт.\n"
+                    f"/balance · /active · /help"
+                )
+                return
+
+        # UID новый — проверяем через WEEX affiliate API.
         balance = await weex.get_affiliate_balance(uid)
         if balance is None:
-            await message.answer("UID не найден в системе WEEX. Попробуйте снова.")
+            await message.answer("❌ UID не найден в системе WEEX. Проверьте и попробуйте снова.")
             return
+
         data = await state.get_data()
         with SessionLocal() as session:
-            student = repo.get_or_create_student(session, message.from_user.id, message.from_user.username)
+            student = repo.get_or_create_student(session, tg_id, message.from_user.username)
             student.language = data.get("language", "ru")
             student.mode = data.get("mode", "moderate")
             if data.get("risk"):
                 student.risk_percent = Decimal(data["risk"])
             student.weex_uid = uid
+            student.is_approved = True
             student.balance_usdt = balance
             student.balance_source = "affiliate_api"
             student.balance_updated_at = utcnow()
             session.commit()
+
         await state.clear()
         await message.answer(
             f"✅ Регистрация завершена! Баланс: {fmt_money(balance, 2)} USDT\n"
             f"/balance · /active · /help"
         )
+
+        try:
+            await message.bot.send_message(
+                admin_id,
+                f"✅ Зарегистрирован: @{message.from_user.username or tg_id} · UID {uid} · {fmt_money(balance, 2)} USDT",
+            )
+        except Exception:
+            pass
 
     @router.message(Command("balance"))
     async def cmd_balance(message: Message, weex: WeexClient):

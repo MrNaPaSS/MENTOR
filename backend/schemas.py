@@ -69,6 +69,7 @@ class SignalOut(BaseModel):
     margin_type: str
     target_audience: str
     status: str
+    chart_url: Optional[str] = None
 
 
 # ── Статистика ──
@@ -130,6 +131,22 @@ class StudentOut(BaseModel):
 class SignalCreate(BaseModel):
     text: str = Field(examples=["XLM LONG\nПлечо 20х"])
     audience: str = Field(default="all", examples=["all", "moderate", "turbo"])
+    chart_url: Optional[str] = Field(default=None, examples=["https://www.tradingview.com/x/eQTQ071J/"])
+
+
+class SignalCreateDirect(BaseModel):
+    symbol: str
+    direction: str                     # LONG | SHORT
+    leverage: int = 20
+    entry_price: Decimal
+    stop_loss: Decimal
+    tp1: Optional[Decimal] = None
+    tp2: Optional[Decimal] = None
+    tp3: Optional[Decimal] = None
+    entry_type: str = "market"
+    margin_type: str = "cross"
+    audience: str = "all"
+    chart_url: Optional[str] = None
 
 
 class DeliveryPreview(BaseModel):

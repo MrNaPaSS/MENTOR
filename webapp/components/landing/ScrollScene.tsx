@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
@@ -24,7 +24,7 @@ export default function ScrollScene() {
     try {
       renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
     } catch {
-      return; // WebGL недоступен — остаётся CSS-фон
+      return; // WebGL недоступен - остаётся CSS-фон
     }
 
     const CYAN = new THREE.Color("#0AFFE0");

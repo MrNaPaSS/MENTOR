@@ -21,6 +21,7 @@ class Config:
     weex_use_mock: bool
     delivery_delay_seconds: float
     log_level: str
+    weex_referral_link: str
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -31,4 +32,5 @@ class Config:
             weex_use_mock=os.getenv("WEEX_USE_MOCK", "true").lower() != "false",
             delivery_delay_seconds=float(os.getenv("DELIVERY_DELAY_SECONDS", "3")),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
+            weex_referral_link=os.getenv("WEEX_REFERRAL_LINK", "https://www.weex.com/ru/register?vipCode=kaktotakxme"),
         )

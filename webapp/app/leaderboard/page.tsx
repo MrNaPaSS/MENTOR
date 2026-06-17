@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Header from "@/components/landing/Header";
 import Footer from "@/components/landing/Footer";
 import SectionHeading from "@/components/ui/SectionHeading";
@@ -9,7 +9,7 @@ import Leaderboard from "@/components/Leaderboard";
 export const metadata: Metadata = {
   title: "Лидерборд",
   description:
-    "Лучшие трейдеры платформы NMNH — реальные результаты учеников, торгующих по сигналам. Топ по балансу, винрейту и сделкам.",
+    "Лучшие трейдеры платформы NMNH - реальные результаты учеников, торгующих по сигналам. Топ по балансу, винрейту и сделкам.",
   alternates: { canonical: "/leaderboard" },
 };
 

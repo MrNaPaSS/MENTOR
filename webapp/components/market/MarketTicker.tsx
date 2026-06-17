@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 
@@ -28,7 +28,7 @@ export default function MarketTicker() {
   useEffect(() => {
     async function load() {
       try {
-        // Binance public API — без ключей, точные цены в реальном времени
+        // Binance public API - без ключей, точные цены в реальном времени
         const symbolsParam = encodeURIComponent(JSON.stringify(SYMBOLS));
         const res = await fetch(
           `https://api.binance.com/api/v3/ticker/24hr?symbols=${symbolsParam}`
@@ -48,7 +48,7 @@ export default function MarketTicker() {
           }))
         );
       } catch {
-        // При ошибке ничего не показываем — тикер скрыт
+        // При ошибке ничего не показываем - тикер скрыт
       }
     }
 

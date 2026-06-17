@@ -46,7 +46,7 @@ async def run() -> None:
 
     # Порядок важен: команды ментора (с фильтром по ID) — первыми.
     dp.include_router(build_mentor_router(config.admin_tg_id))
-    dp.include_router(build_student_router(config.admin_tg_id))
+    dp.include_router(build_student_router(config.admin_tg_id, config.weex_referral_link))
 
     with SessionLocal() as session:
         interval = repo.load_settings(session).balance_sync_interval

@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 interface RevealProps {
   children: ReactNode;
-  /** Задержка появления в секундах (ТЗ §5.3 — каскад 0.2с). */
+  /** Задержка появления в секундах (ТЗ §5.3 - каскад 0.2с). */
   delay?: number;
   className?: string;
   as?: "div" | "section" | "li" | "article";

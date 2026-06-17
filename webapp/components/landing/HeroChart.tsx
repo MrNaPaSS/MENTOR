@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { TrendingUp } from "lucide-react";
@@ -250,7 +250,7 @@ export default function HeroChart() {
         </div>
         <div className="text-right">
           <div className="font-mono text-base font-bold text-white tabular">
-            {price ? price.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "—"}
+            {price ? price.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "-"}
             <span className="text-text-muted"> $</span>
           </div>
           <div className={`text-xs font-semibold ${up ? "text-success" : "text-danger"}`}>

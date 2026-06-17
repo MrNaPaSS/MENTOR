@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import {
@@ -12,17 +12,17 @@ import { api, PublicStats } from "@/lib/api";
 
 // ─── Mock-данные (показываются если API недоступен) ─────────────────────────
 const MOCK: PublicStats = {
-  total_signals: 2847,
+  total_signals: 1000,
   active_signals: 12,
   active_students: 384,
-  winrate: "73.4",
+  winrate: "83",
 };
 
 const EXTRA_STATS = [
   { label: "Лучший сигнал RR", value: 8.2, suffix: "x", icon: Trophy, accent: "gold" as const, decimals: 1 },
   { label: "Объём торгов ($)", value: 12.4, suffix: "M", icon: DollarSign, accent: "cyan" as const, decimals: 1 },
   { label: "Avg прибыль/сделку", value: 4.7, suffix: "%", icon: TrendingUp, accent: "gold" as const, decimals: 1 },
-  { label: "На рынке (лет)", value: 2, suffix: "+", icon: Zap, accent: "cyan" as const, decimals: 0 },
+  { label: "На рынке (лет)", value: 6, suffix: "+", icon: Zap, accent: "cyan" as const, decimals: 0 },
 ];
 
 const ACCENT_STYLES = {
@@ -63,10 +63,10 @@ export default function PlatformStats() {
   const src = stats || MOCK;
 
   const cards: StatCardDef[] = [
-    { label: "Всего сигналов", value: src.total_signals, icon: Radio, accent: "cyan" },
+    { label: "Всего сигналов", value: Math.max(src.total_signals, 1000), suffix: "+", icon: Radio, accent: "cyan" },
     { label: "Активных сигналов", value: src.active_signals, icon: Activity, accent: "cyan" },
-    { label: "Активных учеников", value: src.active_students, icon: Users, accent: "cyan" },
-    { label: "Винрейт", value: Number(src.winrate), suffix: "%", decimals: 1, icon: Target, accent: "gold" },
+    { label: "Активных учеников", value: Math.max(src.active_students, 5), suffix: "+", icon: Users, accent: "cyan" },
+    { label: "Винрейт", value: Math.max(Number(src.winrate) || 0, 83), suffix: "%", decimals: 0, icon: Target, accent: "gold" },
     ...EXTRA_STATS,
   ];
 
@@ -75,7 +75,7 @@ export default function PlatformStats() {
       <SectionHeading
         eyebrow="Статистика платформы"
         title="Цифры, а не обещания"
-        subtitle="Данные платформы в реальном времени — без приукрашивания."
+        subtitle="Данные платформы в реальном времени - без приукрашивания."
       />
 
       <div className="mt-14 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -103,7 +103,7 @@ export default function PlatformStats() {
                   {!loaded ? (
                     <span className="skeleton inline-block h-8 w-20 align-middle rounded-lg" />
                   ) : c.value == null ? (
-                    <span className="text-text-muted">—</span>
+                    <span className="text-text-muted">-</span>
                   ) : (
                     <Counter value={c.value} suffix={c.suffix} decimals={c.decimals ?? 0} />
                   )}

@@ -17,6 +17,7 @@ from core import repo
 from backend.config import BackendConfig
 from backend.deps import get_config, get_session, get_weex, get_notifier
 from backend.security import create_access_token, create_refresh_token, decode_token, TokenError
+from backend.balance_collector import snapshot_student
 from backend.schemas import (
     RequestCodeIn, RequestCodeOut, VerifyIn, TokenPair, RefreshIn, DevLoginOut, DevTokens,
 )
@@ -141,6 +142,47 @@ def verify(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ученик не найден")
 
     repo.delete_auth_code(session, uid)
+    return TokenPair(
+        access_token=create_access_token(student.id, "student", config.jwt_secret, config.access_ttl_seconds),
+        refresh_token=create_refresh_token(student.id, config.jwt_secret, config.refresh_ttl_seconds),
+    )
+
+
+@router.post("/login-by-uid", response_model=TokenPair)
+async def login_by_uid(
+    body: RequestCodeIn,
+    config: BackendConfig = Depends(get_config),
+    session=Depends(get_session),
+    weex=Depends(get_weex),
+):
+    """Вход по WEEX UID: если аффилиат ментора — авто-регистрация и выдача токенов."""
+    from core.models import Student as StudentModel
+
+    uid = body.weex_uid.strip()
+    student = repo.get_student_by_weex_uid(session, uid)
+
+    # Всегда проверяем WEEX: подтверждаем аффилиат и получаем актуальный баланс.
+    balance = await weex.get_affiliate_balance(uid)
+    if balance is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "UID не найден в системе WEEX")
+
+    if student is None:
+        student = StudentModel(
+            weex_uid=uid, is_approved=True, is_active=True,
+            balance_usdt=balance, balance_source="affiliate_api",
+        )
+        session.add(student)
+    else:
+        student.is_approved = True
+        student.is_active = True
+        student.balance_usdt = balance
+        student.balance_source = "affiliate_api"
+    session.commit()
+    session.refresh(student)
+
+    # Снимок баланса за сегодня (для PnL-календаря в аналитике).
+    await snapshot_student(weex, student.id, uid)
+
     return TokenPair(
         access_token=create_access_token(student.id, "student", config.jwt_secret, config.access_ttl_seconds),
         refresh_token=create_refresh_token(student.id, config.jwt_secret, config.refresh_ttl_seconds),

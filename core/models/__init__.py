@@ -35,7 +35,7 @@ class Student(Base):
     __tablename__ = "students"
 
     id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
-    tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    tg_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True, nullable=True)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     weex_uid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     mode: Mapped[str] = mapped_column(String(16), default="moderate")
@@ -68,6 +68,7 @@ class Signal(Base):
     margin_type: Mapped[str] = mapped_column(String(8), default="cross")
     target_audience: Mapped[str] = mapped_column(String(8), default="all")
     has_photo: Mapped[bool] = mapped_column(Boolean, default=False)
+    chart_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     status: Mapped[str] = mapped_column(String(8), default="active", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -99,6 +100,35 @@ class SignalDelivery(Base):
     student: Mapped["Student"] = relationship(back_populates="deliveries")
 
 
+class Broadcast(Base):
+    __tablename__ = "broadcasts"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    chart_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    audience: Mapped[str] = mapped_column(String(16), default="all")
+    sent_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BalanceSnapshot(Base):
+    """Дневной снимок баланса ученика для расчёта PnL по дням."""
+
+    __tablename__ = "balance_snapshots"
+    __table_args__ = (
+        UniqueConstraint("student_id", "date", name="uq_snapshot_student_date"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    date: Mapped[str] = mapped_column(String(10), index=True)  # YYYY-MM-DD UTC
+    balance_usdt: Mapped[float] = mapped_column(Numeric(20, 8))
+    futures_volume: Mapped[float | None] = mapped_column(Numeric(20, 8), nullable=True)
+    spot_volume: Mapped[float | None] = mapped_column(Numeric(20, 8), nullable=True)
+    source: Mapped[str] = mapped_column(String(16), default="affiliate_api")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class SettingRow(Base):
     __tablename__ = "settings"
 
@@ -119,4 +149,4 @@ class AuthCode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "utcnow"]
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "utcnow"]

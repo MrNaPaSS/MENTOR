@@ -1,5 +1,5 @@
-// NMNH Service Worker — кэширование статики для быстрой загрузки (ТЗ §11).
-// Без офлайн-режима: кэшируем только успешные GET одного источника, навигации — из сети.
+// NMNH Service Worker - кэширование статики для быстрой загрузки (ТЗ §11).
+// Без офлайн-режима: кэшируем только успешные GET одного источника, навигации - из сети.
 
 const CACHE = "nmnh-static-v1";
 const STATIC = ["/icons/icon-192.png", "/icons/icon-512.png", "/manifest.webmanifest"];
@@ -24,7 +24,7 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;       // только свой источник
-  if (request.mode === "navigate") return;               // навигации — из сети (без офлайна)
+  if (request.mode === "navigate") return;               // навигации - из сети (без офлайна)
   if (!/\/_next\/static\/|\/icons\/|\.(png|jpg|svg|woff2?|css|js)$/.test(url.pathname)) return;
 
   // stale-while-revalidate для статики

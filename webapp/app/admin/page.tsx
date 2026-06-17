@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
@@ -55,7 +55,7 @@ export default function AdminDashboard() {
       .finally(() => setLoaded(true));
   }, [token]);
 
-  // Загрузка партнерской статистики WEEX — сброс при смене периода
+  // Загрузка партнерской статистики WEEX - сброс при смене периода
   useEffect(() => {
     setAff(null);
     setRefs([]);
@@ -239,7 +239,7 @@ export default function AdminDashboard() {
             </div>
             <div className="mt-4 flex items-baseline gap-2">
               <span className="font-mono text-3xl font-bold text-white">
-                {!loaded ? "—" : activeStudentsCount}
+                {!loaded ? "-" : activeStudentsCount}
               </span>
               <span className="text-[10px] text-text-muted">в системе</span>
             </div>
@@ -260,7 +260,7 @@ export default function AdminDashboard() {
             </div>
             <div className="mt-4 flex items-baseline gap-2">
               <span className={`font-mono text-3xl font-bold ${pendingStudentsCount > 0 ? "text-accent-gold" : "text-white"}`}>
-                {!loaded ? "—" : pendingStudentsCount}
+                {!loaded ? "-" : pendingStudentsCount}
               </span>
               <span className="text-[10px] text-text-muted">заявок</span>
             </div>
@@ -281,13 +281,13 @@ export default function AdminDashboard() {
             </div>
             <div className="mt-4 flex items-baseline gap-2">
               <span className="font-mono text-3xl font-bold text-success">
-                {!loaded ? "—" : stats?.total_signals ?? 0}
+                {!loaded ? "-" : stats?.total_signals ?? 0}
               </span>
               <span className="text-[10px] text-text-muted">всего</span>
             </div>
             <div className="mt-3 text-[11px] text-text-muted flex items-center gap-1">
               <span>Винрейт по сигналам:</span>
-              <span className="font-bold text-success font-mono">{stats?.winrate ? `${stats.winrate}%` : "—"}</span>
+              <span className="font-bold text-success font-mono">{stats?.winrate ? `${stats.winrate}%` : "-"}</span>
             </div>
           </div>
 
@@ -302,7 +302,7 @@ export default function AdminDashboard() {
             </div>
             <div className="mt-4 flex items-baseline gap-2">
               <span className="font-mono text-3xl font-bold text-white">
-                {!loaded ? "—" : stats?.active_signals ?? 0}
+                {!loaded ? "-" : stats?.active_signals ?? 0}
               </span>
               <span className="text-[10px] text-text-muted">в рынке</span>
             </div>
@@ -372,7 +372,7 @@ export default function AdminDashboard() {
               {!aff ? <span className="skeleton inline-block h-8 w-12" /> : aff.active_traders}
             </div>
             <div className="mt-2 text-[10px] text-text-muted">
-              {aff ? `из ${aff.referrals} — ${aff.referrals > 0 ? Math.round(aff.active_traders / aff.referrals * 100) : 0}% активных` : "загрузка..."}
+              {aff ? `из ${aff.referrals} - ${aff.referrals > 0 ? Math.round(aff.active_traders / aff.referrals * 100) : 0}% активных` : "загрузка..."}
             </div>
           </div>
 

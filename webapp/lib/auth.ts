@@ -1,4 +1,4 @@
-// Хранение токенов в localStorage (MVP). В проде — httpOnly cookie (ТЗ §4.2).
+﻿// Хранение токенов в localStorage (MVP). В проде - httpOnly cookie (ТЗ §4.2).
 
 const ACCESS = "nmnh_access";
 const REFRESH = "nmnh_refresh";

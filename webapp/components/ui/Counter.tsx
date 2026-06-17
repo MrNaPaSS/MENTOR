@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 
 interface CounterProps {
   value: number;
-  /** Длительность анимации в мс (ТЗ §10.5 — CountUp 1.5–2с). */
+  /** Длительность анимации в мс (ТЗ §10.5 - CountUp 1.5-2с). */
   duration?: number;
   decimals?: number;
   prefix?: string;

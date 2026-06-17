@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+﻿import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
@@ -7,8 +7,8 @@ import DevBar from "@/components/dev/DevBar";
 export const metadata: Metadata = {
   metadataBase: new URL("https://nmnh.io"),
   title: {
-    default: "NMNH — Персональные торговые сигналы",
-    template: "%s — NMNH",
+    default: "NMNH - Персональные торговые сигналы",
+    template: "%s - NMNH",
   },
   description:
     "Получай торговые сигналы под свой депозит. Реальный расчёт позиции, риск под контролем, закрытое сообщество учеников.",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     title: "NMNH",
   },
   openGraph: {
-    title: "NMNH — Персональные торговые сигналы",
+    title: "NMNH - Персональные торговые сигналы",
     description:
       "Торгуй как профи. Учись у лучших. Персональные сигналы под твой депозит.",
     type: "website",

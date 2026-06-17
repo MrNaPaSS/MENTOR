@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { RefreshCw, LogOut } from "lucide-react";
@@ -56,7 +56,7 @@ export default function ProfilePage() {
             {(p.username || "U").slice(0, 1).toUpperCase()}
           </span>
           <div>
-            <div className="text-lg font-semibold text-white">@{p.username || "—"}</div>
+            <div className="text-lg font-semibold text-white">@{p.username || "-"}</div>
             <div className="text-sm text-text-muted">WEEX UID: {maskUid(p.weex_uid)}</div>
           </div>
         </div>

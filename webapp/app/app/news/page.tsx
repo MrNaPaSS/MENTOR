@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useRef } from "react";
 
 // ─── Каналы с настоящими YouTube Channel ID (не handle!) ───────────────────
-// Важно: каналы должны разрешать embedding. CNBC и Al Jazeera — блокируют.
+// Важно: каналы должны разрешать embedding. CNBC и Al Jazeera - блокируют.
 const CHANNELS = [
   {
     id: "bloomberg",
@@ -348,7 +348,7 @@ export default function NewsPage() {
 
           {/* Примечание о YouTube */}
           <div className="rounded-xl border border-accent-gold/20 bg-accent-gold/5 px-4 py-2 text-[11px] text-accent-gold">
-            ⚠ Если канал не в эфире — отображается заглушка с кнопкой открыть на YouTube. Работа зависит от расписания канала.
+            ⚠ Если канал не в эфире - отображается заглушка с кнопкой открыть на YouTube. Работа зависит от расписания канала.
           </div>
 
           {/* Сетка трансляций */}

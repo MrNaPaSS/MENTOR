@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { Download, X, Share } from "lucide-react";
@@ -10,7 +10,7 @@ interface BIPEvent extends Event {
 
 const DISMISS_KEY = "nmnh_install_dismissed";
 
-/** Кнопка/баннер установки PWA (ТЗ §11): Android — beforeinstallprompt, iOS — инструкция. */
+/** Кнопка/баннер установки PWA (ТЗ §11): Android - beforeinstallprompt, iOS - инструкция. */
 export default function InstallPrompt() {
   const [deferred, setDeferred] = useState<BIPEvent | null>(null);
   const [iosHint, setIosHint] = useState(false);

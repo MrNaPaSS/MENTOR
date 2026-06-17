@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TrendingUp, TrendingDown, RefreshCw, AlertTriangle } from "lucide-react";
 import { api, CalcResponse } from "@/lib/api";
+import { getAccessToken } from "@/lib/auth";
 import { fmtUsd, fmtPct } from "@/lib/format";
 
 const MAX_LEV = { moderate: 25, turbo: 400 } as const;
@@ -10,7 +11,19 @@ const MAX_LEV = { moderate: 25, turbo: 400 } as const;
 export default function Calculator() {
   const [mode, setMode] = useState<"moderate" | "turbo">("moderate");
   const [balance, setBalance] = useState("1000");
+  const [balanceFromProfile, setBalanceFromProfile] = useState(false);
   const [entry, setEntry] = useState("100");
+
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    api.profile(token).then(p => {
+      if (p.balance_usdt && parseFloat(p.balance_usdt) > 0) {
+        setBalance(parseFloat(p.balance_usdt).toFixed(2));
+        setBalanceFromProfile(true);
+      }
+    }).catch(() => {});
+  }, []);
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG");
   const [leverage, setLeverage] = useState(10);
   const [pair, setPair] = useState("BTCUSDT");
@@ -32,7 +45,7 @@ export default function Calculator() {
       const res = await api.price(pair.trim().toUpperCase());
       setEntry(res.price);
     } catch {
-      /* без цены — оставляем введённое */
+      /* без цены - оставляем введённое */
     } finally {
       setPriceLoading(false);
     }
@@ -65,7 +78,7 @@ export default function Calculator() {
       <div className="border-b border-border px-6 py-4">
         <h3 className="text-xl font-semibold text-white">Калькулятор позиции</h3>
         <p className="mt-0.5 text-sm text-text-muted">
-          Рассчитай маржу, риск и профит под свой депозит — бесплатно.
+          Рассчитай маржу, риск и профит под свой депозит - бесплатно.
         </p>
       </div>
 
@@ -121,12 +134,17 @@ export default function Calculator() {
           {/* Депозит / Пара */}
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm text-text-secondary">
-              Депозит ($)
+              <span className="flex items-center justify-between">
+                Депозит ($)
+                {balanceFromProfile && (
+                  <span className="text-[10px] font-semibold text-accent-cyan">● с WEEX</span>
+                )}
+              </span>
               <input
                 className="input mt-1.5 font-mono"
                 inputMode="decimal"
                 value={balance}
-                onChange={(e) => setBalance(e.target.value)}
+                onChange={(e) => { setBalance(e.target.value); setBalanceFromProfile(false); }}
               />
             </label>
             <label className="block text-sm text-text-secondary">

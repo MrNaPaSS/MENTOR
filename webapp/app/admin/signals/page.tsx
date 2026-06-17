@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { api, SignalOut } from "@/lib/api";
@@ -75,7 +75,7 @@ export default function AdminSignals() {
                         {busy === s.id ? "…" : "Закрыть"}
                       </button>
                     ) : (
-                      <span className="text-text-muted">—</span>
+                      <span className="text-text-muted">-</span>
                     )}
                   </td>
                 </tr>

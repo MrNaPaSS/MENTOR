@@ -14,10 +14,11 @@ from core.db import init_engine, create_all, SessionLocal
 from core import repo
 from core.weex import get_weex_client
 from backend.config import BackendConfig
-from backend.api import auth, market, market_data, signals, stats, students, profile, admin_affiliate
+from backend.api import auth, market, market_data, signals, stats, students, profile, admin_affiliate, institutional, broadcast, pnl, trades
 from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
+from backend.balance_collector import BalanceCollector
 from backend.notify import get_notifier
 from backend.ratelimit import RateLimiter, AuthRateLimitMiddleware
 
@@ -36,14 +37,17 @@ def create_app(
 
     manager = ConnectionManager()
     collector = PriceCollector(weex, manager, interval=price_interval)
+    balance_collector = BalanceCollector(weex)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         collector.start()
+        balance_collector.start()
         try:
             yield
         finally:
             await collector.stop()
+            await balance_collector.stop()
             await weex.close()
             await notifier.close()
 
@@ -75,6 +79,10 @@ def create_app(
     app.include_router(students.router)
     app.include_router(profile.router)
     app.include_router(admin_affiliate.router)
+    app.include_router(institutional.router)
+    app.include_router(broadcast.router)
+    app.include_router(pnl.router)
+    app.include_router(trades.router)
     app.include_router(ws_routes.router)
 
     @app.get("/api/health", tags=["health"])

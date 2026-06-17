@@ -1,11 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
-  Radio,
   BarChart3,
   Globe,
   Tv,
@@ -15,6 +14,8 @@ import {
   Wallet,
   ChevronDown,
   Calculator,
+  ImageIcon,
+  ArrowLeftRight,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
@@ -25,10 +26,11 @@ import MarketTicker from "@/components/market/MarketTicker";
 
 const NAV = [
   { href: "/app/dashboard", label: "Дашборд", icon: LayoutDashboard, mobile: true },
-  { href: "/app/signals", label: "Сигналы", icon: Radio, mobile: true },
+  { href: "/app/analysis", label: "Анализы", icon: ImageIcon, mobile: true },
   { href: "/app/market", label: "Рынок", icon: Globe, mobile: true },
   { href: "/app/news", label: "ТВ", icon: Tv, mobile: false },
   { href: "/app/analytics", label: "Аналитика", icon: BarChart3, mobile: false },
+  { href: "/app/trades", label: "Сделки", icon: ArrowLeftRight, mobile: false },
   { href: "/app/calculator", label: "Калькулятор", icon: Calculator, mobile: false },
   { href: "/app/profile", label: "Профиль", icon: User, mobile: true },
 ];
@@ -90,11 +92,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Бегущая строка тикер */}
         <MarketTicker />
 
-        <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between px-4 md:px-6">
+        <div className="flex h-14 items-center justify-between px-4 md:px-6">
           {/* Лого */}
           <Logo />
 
-          {/* Навигация — десктоп */}
+          {/* Навигация - десктоп */}
           <nav className="hidden items-center gap-0.5 lg:flex">
             {NAV.map((n) => {
               const Icon = n.icon;
@@ -122,7 +124,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          {/* Правая часть — баланс + профиль */}
+          {/* Правая часть - баланс + профиль */}
           <div className="flex items-center gap-3">
             {/* Баланс */}
             {profile && (
@@ -155,7 +157,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ─── Контент (отступ под header + ticker = 14px + 38px ≈ 96px) ─── */}
-      <main className="mx-auto max-w-screen-2xl px-4 pb-24 pt-[96px] md:px-6 lg:pb-8">
+      <main className="px-4 pb-24 pt-[96px] md:px-6 lg:pb-8">
         {children}
       </main>
 
