@@ -31,13 +31,20 @@ class BackendConfig:
     allowed_origins: tuple = ("*",)     # CORS: домены фронта
     dev_login: bool = False             # dev: вход без кода/пароля (только не в проде)
 
+    @staticmethod
+    def _require(key: str) -> str:
+        val = os.getenv(key, "")
+        if not val:
+            raise RuntimeError(f"{key} не задан в .env")
+        return val
+
     @classmethod
     def from_env(cls) -> "BackendConfig":
         origins = os.getenv("ALLOWED_ORIGINS", "*")
         use_mock = os.getenv("WEEX_USE_MOCK", "true").lower() != "false"
         dev_login_env = os.getenv("DEV_LOGIN", "").lower()
         return cls(
-            jwt_secret=os.getenv("JWT_SECRET", "dev-insecure-secret-change-me"),
+            jwt_secret=cls._require("JWT_SECRET"),
             access_ttl_seconds=int(os.getenv("ACCESS_TTL", str(15 * 60))),
             refresh_ttl_seconds=int(os.getenv("REFRESH_TTL", str(30 * 24 * 3600))),
             weex_use_mock=use_mock,

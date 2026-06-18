@@ -26,13 +26,19 @@ async def list_pnl():
     return {"images": [f"/pln/{name}" for name in files]}
 
 
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
 @router.post("/upload", dependencies=[Depends(get_current_mentor)])
 async def upload_pnl(file: UploadFile = File(...)):
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED:
         raise HTTPException(400, "Только JPG, PNG или WEBP")
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "Файл слишком большой (макс. 10 МБ)")
     filename = f"{uuid.uuid4().hex}{ext}"
-    (PNL_DIR / filename).write_bytes(await file.read())
+    (PNL_DIR / filename).write_bytes(data)
     return {"url": f"/pln/{filename}"}
 
 

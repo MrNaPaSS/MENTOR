@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 
 from core import repo
 from backend.config import BackendConfig
@@ -245,11 +246,15 @@ def dev_login(config: BackendConfig = Depends(get_config), session=Depends(get_s
     )
 
 
+class MentorLoginBody(BaseModel):
+    password: str
+
+
 @router.post("/mentor-login", response_model=TokenPair)
-def mentor_login(password: str, config: BackendConfig = Depends(get_config)):
+def mentor_login(body: MentorLoginBody, config: BackendConfig = Depends(get_config)):
     """Вход ментора по паролю (MVP). В проде — отдельные креды/2FA."""
     expected = os.getenv("MENTOR_PASSWORD", "")
-    if not expected or not secrets.compare_digest(password, expected):
+    if not expected or not secrets.compare_digest(body.password, expected):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный пароль")
     return TokenPair(
         access_token=create_access_token("mentor", "mentor", config.jwt_secret, config.access_ttl_seconds),
