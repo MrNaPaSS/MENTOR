@@ -745,15 +745,19 @@ function FundingWidget({ symbol }: { symbol: string }) {
   }, []);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/market/ticker/${symbol}`, SKIP_NGROK)
-      .then(r => r.ok ? r.json() : null)
-      .then((d: TickerData | null) => {
-        if (d?.fundingRate) {
-          setRates([{ symbol, fundingRate: d.fundingRate }]);
-        }
-      })
-      .catch(() => {});
-  }, [symbol]);
+    const FUNDING_SYMBOLS = ["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT","DOGEUSDT","AVAXUSDT","ADAUSDT","LINKUSDT","DOTUSDT"];
+    Promise.all(
+      FUNDING_SYMBOLS.map(sym =>
+        fetch(`${API_URL}/api/market/ticker/${sym}`, SKIP_NGROK)
+          .then(r => r.ok ? r.json() : null)
+          .then((d: TickerData | null) => ({ symbol: sym, fundingRate: d?.fundingRate ?? "0" }))
+          .catch(() => ({ symbol: sym, fundingRate: "0" }))
+      )
+    ).then(results => {
+      const valid = results.filter(r => r.fundingRate && r.fundingRate !== "0");
+      setRates(valid.length ? results : FUNDING_FALLBACK);
+    });
+  }, []);
 
   const active = symbol.replace("USDT", "");
   const list = [...(rates.length ? rates : FUNDING_FALLBACK)].sort((a, b) => {
