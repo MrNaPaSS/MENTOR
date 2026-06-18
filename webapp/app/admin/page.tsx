@@ -35,6 +35,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<PublicStats | null>(null);
   const [students, setStudents] = useState<StudentOut[]>([]);
   const [aff, setAff] = useState<AffiliateOverview | null>(null);
+  const [today, setToday] = useState<AffiliateOverview | null>(null);
   const [refs, setRefs] = useState<ReferralRow[]>([]);
   const [mentorBal, setMentorBal] = useState<MentorBalance | null>(null);
   const [days, setDays] = useState<(typeof PERIODS)[number]>(30);
@@ -43,13 +44,19 @@ export default function AdminDashboard() {
   const [sortField, setSortField] = useState<SortField>("futures_volume");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
-  // Загрузка основной платформы + баланс ментора
+  // Загрузка основной платформы + баланс ментора + статистика за сегодня
   useEffect(() => {
-    Promise.all([api.publicStats(), api.students(token), api.affiliateMentorBalance(token)])
-      .then(([s, st, mb]) => {
+    Promise.all([
+      api.publicStats(),
+      api.students(token),
+      api.affiliateMentorBalance(token),
+      api.affiliateOverview(token, 1),
+    ])
+      .then(([s, st, mb, td]) => {
         setStats(s);
         setStudents(st);
         setMentorBal(mb);
+        setToday(td);
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
@@ -313,6 +320,58 @@ export default function AdminDashboard() {
             </div>
           </Link>
 
+        </div>
+      </section>
+
+      {/* Сегодня */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-text-muted flex items-center gap-2">
+          <Activity className="h-4 w-4 text-success" />
+          Сегодня (последние 24ч)
+        </h2>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          {/* Новых рефералов */}
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-bg-card/30 px-4 py-3.5">
+            <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-cyan/60 to-transparent" />
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Новых рефералов</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold text-white">
+              {!today ? <span className="skeleton inline-block h-7 w-8" /> : today.referrals}
+            </p>
+          </div>
+          {/* Активных трейдеров */}
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-bg-card/30 px-4 py-3.5">
+            <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-cyan/60 to-transparent" />
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Торговали сегодня</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold text-accent-cyan">
+              {!today ? <span className="skeleton inline-block h-7 w-8" /> : today.active_traders}
+            </p>
+          </div>
+          {/* Депозиты */}
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-bg-card/30 px-4 py-3.5">
+            <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-success/60 to-transparent" />
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Депозиты</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold text-success">
+              {!today ? <span className="skeleton inline-block h-7 w-16" /> : `$${fmtUsd(today.total_deposit)}`}
+            </p>
+          </div>
+          {/* Объём торговли */}
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-bg-card/30 px-4 py-3.5">
+            <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-gold/60 to-transparent" />
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Объём торгов</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold text-accent-gold">
+              {!today
+                ? <span className="skeleton inline-block h-7 w-20" />
+                : `$${fmtUsd(Number(today.total_futures_volume) + Number(today.total_spot_volume))}`}
+            </p>
+          </div>
+          {/* Мой доход */}
+          <div className="relative overflow-hidden rounded-xl border border-accent-gold/20 bg-gradient-to-br from-accent-gold/5 to-transparent px-4 py-3.5">
+            <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-gold/80 to-transparent" />
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-gold/70">Мой доход</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold text-accent-gold">
+              {!today ? <span className="skeleton inline-block h-7 w-14" /> : `$${fmtUsd(today.total_commission)}`}
+            </p>
+          </div>
         </div>
       </section>
 
