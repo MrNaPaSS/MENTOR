@@ -252,8 +252,18 @@ class RealWeexClient(WeexClient):
                 {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100},
                 signed=True, affiliate=True,
             )
+            # Сырой ответ для диагностики
+            logger.warning("COMM RAW payload type=%s keys=%s",
+                           type(payload).__name__,
+                           list(payload.keys()) if isinstance(payload, dict) else repr(payload)[:200])
+            if isinstance(payload, dict):
+                data_field = payload.get("data")
+                logger.warning("COMM RAW data type=%s value=%s",
+                               type(data_field).__name__, repr(data_field)[:300])
             data = self._data(payload)
             items = self._extract_list(data, ("channelCommissionInfoItems", "_list"))
+            logger.warning("COMM PAGE=%d items=%d data_keys=%s",
+                           page, len(items), list(data.keys()) if isinstance(data, dict) else "?")
             results.extend(items)
             pages = data.get("pages", 1) if isinstance(data, dict) else 1
             if page >= pages or not items:
