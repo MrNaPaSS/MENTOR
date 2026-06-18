@@ -920,17 +920,20 @@ function FundingHeatmapSection() {
   },[]);
 
   const avgFr   = rows.length ? rows.reduce((s,r)=>s+r.fr,0)/rows.length : 0;
-  const bullish  = rows.filter(r=>r.fr<-0.0001).length;
-  const bearish  = rows.filter(r=>r.fr>0.0001).length;
-  const maxAbsFr = Math.max(...rows.map(r=>Math.abs(r.fr)),0.0001);
+  // шорты платят = fr < 0 (лонги получают — бычий сигнал)
+  // лонги платят = fr > 0 (шорты получают — медвежий сигнал)
+  const bullish  = rows.filter(r=>r.fr<-0.000001).length;
+  const bearish  = rows.filter(r=>r.fr>0.000001).length;
+  const maxAbsFr = Math.max(...rows.map(r=>Math.abs(r.fr)),0.000001);
 
   function frTheme(fr:number) {
-    if(fr>0.025)  return {color:"#f6465d",glow:"rgba(246,70,93,0.4)",  bg:"rgba(246,70,93,0.10)", border:"rgba(246,70,93,0.30)", label:"ПЕРЕГРЕВ",pulse:true};
-    if(fr>0.010)  return {color:"#f59e0b",glow:"rgba(245,158,11,0.35)",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.22)",label:"ЛОНГИ",   pulse:false};
-    if(fr>0.0001) return {color:"#9ca3af",glow:"transparent",          bg:"rgba(255,255,255,0.03)",border:"rgba(255,255,255,0.07)",label:"НЕЙТР.", pulse:false};
-    if(fr>-0.0001)return {color:"#9ca3af",glow:"transparent",          bg:"rgba(255,255,255,0.03)",border:"rgba(255,255,255,0.07)",label:"НЕЙТР.", pulse:false};
-    if(fr>-0.010) return {color:"#0ecb81",glow:"rgba(14,203,129,0.35)",bg:"rgba(14,203,129,0.08)",border:"rgba(14,203,129,0.22)",label:"ШОРТЫ",   pulse:false};
-    return              {color:"#0affe0",glow:"rgba(10,255,224,0.40)", bg:"rgba(10,255,224,0.10)",border:"rgba(10,255,224,0.30)",label:"ДИСКОНТ",pulse:true};
+    // Пороги в decimal: 0.0003 = 0.03% per 8h (~33% APR) — перегрев
+    if(fr>0.0003)  return {color:"#f6465d",glow:"rgba(246,70,93,0.4)",  bg:"rgba(246,70,93,0.10)", border:"rgba(246,70,93,0.30)", label:"ПЕРЕГРЕВ",pulse:true};
+    if(fr>0.0001)  return {color:"#f59e0b",glow:"rgba(245,158,11,0.35)",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.22)",label:"ЛОНГИ",   pulse:false};
+    if(fr>0.000001)return {color:"#9ca3af",glow:"transparent",          bg:"rgba(255,255,255,0.03)",border:"rgba(255,255,255,0.07)",label:"НЕЙТР.", pulse:false};
+    if(fr>-0.000001)return{color:"#9ca3af",glow:"transparent",          bg:"rgba(255,255,255,0.03)",border:"rgba(255,255,255,0.07)",label:"НЕЙТР.", pulse:false};
+    if(fr>-0.0001) return {color:"#0ecb81",glow:"rgba(14,203,129,0.35)",bg:"rgba(14,203,129,0.08)",border:"rgba(14,203,129,0.22)",label:"ШОРТЫ",   pulse:false};
+    return               {color:"#0affe0",glow:"rgba(10,255,224,0.40)", bg:"rgba(10,255,224,0.10)",border:"rgba(10,255,224,0.30)",label:"ДИСКОНТ",pulse:true};
   }
 
   function fmtNext(ts:number) {
@@ -952,9 +955,9 @@ function FundingHeatmapSection() {
           {[
             {label:"Средний FR",
               value:`${avgFr>=0?"+":""}${(avgFr*100).toFixed(4)}%`,
-              color:avgFr>0.0001?"#f59e0b":avgFr<-0.0001?"#0ecb81":"#9ca3af",
-              bg:avgFr>0.0001?"rgba(245,158,11,0.07)":avgFr<-0.0001?"rgba(14,203,129,0.07)":"rgba(255,255,255,0.03)",
-              border:avgFr>0.0001?"rgba(245,158,11,0.2)":avgFr<-0.0001?"rgba(14,203,129,0.2)":"rgba(255,255,255,0.07)"},
+              color:avgFr>0.000001?"#f59e0b":avgFr<-0.000001?"#0ecb81":"#9ca3af",
+              bg:avgFr>0.000001?"rgba(245,158,11,0.07)":avgFr<-0.000001?"rgba(14,203,129,0.07)":"rgba(255,255,255,0.03)",
+              border:avgFr>0.000001?"rgba(245,158,11,0.2)":avgFr<-0.000001?"rgba(14,203,129,0.2)":"rgba(255,255,255,0.07)"},
             {label:"Шорты платят", value:`${bullish} из ${rows.length}`,
               color:"#0ecb81", bg:"rgba(14,203,129,0.07)", border:"rgba(14,203,129,0.2)"},
             {label:"Лонги платят", value:`${bearish} из ${rows.length}`,
