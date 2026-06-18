@@ -114,27 +114,48 @@ async function fetchJson<T>(url: string, opts?: RequestInit): Promise<T | null> 
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
 
-function Section({icon, title, sub, badge, children}: {
+function Section({icon, title, sub, badge, accent = "cyan", children}: {
   icon: React.ReactNode; title: string; sub?: string;
-  badge?: React.ReactNode; children: React.ReactNode;
+  badge?: React.ReactNode; accent?: "cyan" | "gold" | "green";
+  children: React.ReactNode;
 }) {
+  const accentColor = accent === "gold" ? "#f0b90b" : accent === "green" ? "#0ecb81" : "#0affe0";
   return (
-    <div className="rounded-xl border border-border/50 bg-bg-panel">
-      <div className="flex items-center gap-2 border-b border-border/40 px-4 py-3">
-        {icon}
+    <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-b from-white/[0.04] to-white/[0.02]"
+      style={{ boxShadow: "0 1px 0 0 rgba(255,255,255,0.04) inset, 0 24px 48px -12px rgba(0,0,0,0.5)" }}>
+      {/* Accent glow top */}
+      <div className="absolute inset-x-0 top-0 h-[1px]"
+        style={{ background: `linear-gradient(90deg, transparent, ${accentColor}55, transparent)` }} />
+      <div className="flex items-center gap-2.5 border-b border-white/[0.06] px-5 py-3.5">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg"
+          style={{ background: `${accentColor}18`, border: `1px solid ${accentColor}30` }}>
+          {icon}
+        </div>
         <span className="text-[13px] font-semibold text-white">{title}</span>
         {badge}
-        {sub && <span className="ml-auto text-[10px] text-text-muted">{sub}</span>}
+        {sub && <span className="ml-auto text-[10px] text-white/30">{sub}</span>}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-5">{children}</div>
     </div>
   );
 }
 
 function DemoBadge() {
   return (
-    <span className="rounded border border-accent-gold/40 bg-accent-gold/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-accent-gold">
+    <span className="rounded-md border border-accent-gold/40 bg-accent-gold/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-accent-gold">
       ДЕМО
+    </span>
+  );
+}
+
+function LiveBadge() {
+  return (
+    <span className="flex items-center gap-1 rounded-md border border-success/30 bg-success/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-success">
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
+      </span>
+      LIVE
     </span>
   );
 }
@@ -185,6 +206,7 @@ function CotSection() {
     <Section
       icon={<Building2 className="h-4 w-4 text-accent-gold" />}
       title="COT - Позиции институционалов"
+      accent="gold"
       badge={isDemo ? <DemoBadge /> : undefined}
       sub={!cot ? "CFTC · загрузка…" : isDemo ? "CFTC · ориентировочные данные" : "CFTC CME · актуально"}
     >
@@ -369,8 +391,9 @@ function MacroSection() {
     <Section
       icon={<BarChart3 className="h-4 w-4 text-accent-cyan" />}
       title="Макро индикаторы"
+      accent="cyan"
       badge={isDemo ? <DemoBadge /> : undefined}
-      sub={!items ? "загрузка…" : isDemo ? "Yahoo Finance · ориентировочные данные" : "Yahoo Finance · live"}
+      sub={!items ? "загрузка…" : isDemo ? "Yahoo Finance · ориентировочные" : "Yahoo Finance · live"}
     >
       {!items ? <Skeleton rows={3} /> : <>
 
@@ -438,8 +461,9 @@ function EtfSection() {
     <Section
       icon={<DollarSign className="h-4 w-4 text-success" />}
       title="Bitcoin Spot ETF - Институциональные холдинги"
+      accent="green"
       badge={isDemo ? <DemoBadge /> : undefined}
-      sub={!data ? "загрузка…" : isDemo ? "оценочные данные" : "Nasdaq · Yahoo Finance · CoinGecko · live"}
+      sub={!data ? "загрузка…" : isDemo ? "оценочные данные" : "Nasdaq · CoinGecko · live"}
     >
       {!data ? <Skeleton rows={5} /> : <div className="space-y-4">
 
@@ -599,20 +623,22 @@ function DerivativesSection() {
     <Section
       icon={<Activity className="h-4 w-4 text-accent-cyan" />}
       title="Деривативы - открытый интерес и лонг/шорт"
-      badge={<span className="rounded border border-success/40 bg-success/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-success">LIVE</span>}
-      sub={updatedAt ? `Bybit · обновлено ${updatedAt}` : "Bybit · загрузка…"}
+      accent="cyan"
+      badge={<LiveBadge />}
+      sub={updatedAt ? `WEEX · ${updatedAt}` : "загрузка…"}
     >
       {loading ? <Skeleton rows={5} /> : (
         <>
-          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="mb-4 grid grid-cols-3 gap-3">
             {[
-              { label:"Общий OI",      value: fmtB(totalOI),    color:"text-white"   },
-              { label:"BTC лонг",      value:`${btcLong.toFixed(1)}%`, color:"text-success" },
-              { label:"BTC шорт",      value:`${(100 - btcLong).toFixed(1)}%`, color:"text-danger" },
+              { label:"Общий OI",  value: fmtB(totalOI),                      color:"#ffffff",  bg:"rgba(255,255,255,0.04)", border:"rgba(255,255,255,0.08)" },
+              { label:"BTC лонг",  value:`${btcLong.toFixed(1)}%`,             color:"#0ecb81",  bg:"rgba(14,203,129,0.07)",  border:"rgba(14,203,129,0.18)" },
+              { label:"BTC шорт",  value:`${(100 - btcLong).toFixed(1)}%`,     color:"#f6465d",  bg:"rgba(246,70,93,0.07)",   border:"rgba(246,70,93,0.18)"  },
             ].map(s => (
-              <div key={s.label} className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-center">
-                <div className="text-[9px] uppercase tracking-wider text-white/25">{s.label}</div>
-                <div className={`mt-1 font-mono text-[14px] font-bold tabular-nums ${s.color}`}>{s.value}</div>
+              <div key={s.label} className="rounded-xl px-3 py-3 text-center"
+                style={{ background: s.bg, border: `1px solid ${s.border}` }}>
+                <div className="text-[9px] uppercase tracking-wider text-white/30">{s.label}</div>
+                <div className="mt-1.5 font-mono text-[17px] font-bold tabular-nums" style={{ color: s.color }}>{s.value}</div>
               </div>
             ))}
           </div>
@@ -657,7 +683,7 @@ function DerivativesSection() {
               );
             })}
           </div>
-          <p className="mt-2 text-[9px] text-white/20">
+          <p className="mt-3 text-[9px] text-white/20">
             Данные WEEX · Funding {">"} 0% = лонги переплачивают (перегрев рынка)
           </p>
         </>
@@ -731,7 +757,8 @@ function OnchainSection() {
     <Section
       icon={<Zap className="h-4 w-4 text-accent-cyan" />}
       title="Настроение и структура рынка"
-      badge={<span className="rounded border border-success/40 bg-success/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-success">LIVE</span>}
+      accent="cyan"
+      badge={<LiveBadge />}
       sub={updatedAt ? `Alternative.me · CoinGecko · ${updatedAt}` : "загрузка…"}
     >
       {loading || !d ? <Skeleton rows={4} /> : (
@@ -886,19 +913,26 @@ function FundingHeatmapSection() {
     <Section
       icon={<DollarSign className="h-4 w-4 text-accent-gold" />}
       title="Ставки финансирования (8ч)"
-      badge={<span className="rounded border border-success/40 bg-success/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-success">LIVE</span>}
-      sub={updatedAt ? `Bybit · обновлено ${updatedAt}` : "загрузка…"}
+      accent="gold"
+      badge={<LiveBadge />}
+      sub={updatedAt ? `WEEX · ${updatedAt}` : "загрузка…"}
     >
       {loading ? <Skeleton rows={4} /> : (
         <>
           {/* Summary */}
           <div className="mb-5 grid grid-cols-3 gap-3">
             {[
-              { label:"Средний FR",   value:`${avgFr >= 0 ? "+" : ""}${(avgFr * 100).toFixed(4)}%`, color: avgFr > 0.0001 ? "#f59e0b" : avgFr < -0.0001 ? "#0ecb81" : "#9ca3af" },
-              { label:"Бычий FR",    value:`${bullish} из ${rows.length}`,  color:"#0ecb81" },
-              { label:"Медвежий FR", value:`${bearish} из ${rows.length}`,  color:"#f6465d" },
+              {
+                label:"Средний FR", value:`${avgFr >= 0 ? "+" : ""}${(avgFr * 100).toFixed(4)}%`,
+                color: avgFr > 0.0001 ? "#f59e0b" : avgFr < -0.0001 ? "#0ecb81" : "#9ca3af",
+                bg: avgFr > 0.0001 ? "rgba(245,158,11,0.07)" : avgFr < -0.0001 ? "rgba(14,203,129,0.07)" : "rgba(255,255,255,0.03)",
+                border: avgFr > 0.0001 ? "rgba(245,158,11,0.2)" : avgFr < -0.0001 ? "rgba(14,203,129,0.2)" : "rgba(255,255,255,0.07)",
+              },
+              { label:"Бычий FR", value:`${bullish} из ${rows.length}`, color:"#0ecb81", bg:"rgba(14,203,129,0.07)", border:"rgba(14,203,129,0.2)" },
+              { label:"Медвежий FR", value:`${bearish} из ${rows.length}`, color:"#f6465d", bg:"rgba(246,70,93,0.07)", border:"rgba(246,70,93,0.2)" },
             ].map(s => (
-              <div key={s.label} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-3 text-center">
+              <div key={s.label} className="rounded-xl px-3 py-3 text-center"
+                style={{ background: s.bg, border: `1px solid ${s.border}` }}>
                 <div className="text-[9px] uppercase tracking-wider text-white/25 mb-1">{s.label}</div>
                 <div className="font-mono text-[15px] font-bold" style={{color: s.color}}>{s.value}</div>
               </div>
