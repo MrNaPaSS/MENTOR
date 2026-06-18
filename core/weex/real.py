@@ -244,29 +244,46 @@ class RealWeexClient(WeexClient):
         return self._extract_list(self._data(payload), ("channelCommissionInfoItems", "_list"))
 
     async def get_affiliate_commission_all(self, start_ms: int, end_ms: int) -> list:
-        """Все страницы getAffiliateCommission без фильтра productType (SPOT+FUTURES вместе)."""
+        """Все страницы getAffiliateCommission для FUTURES (единственный источник реального дохода)."""
         import datetime as _dt
         results, page = [], 1
-        logger.warning("COMM CALL start=%s end=%s start_dt=%s end_dt=%s",
-                       start_ms, end_ms,
+        logger.warning("COMM CALL start_dt=%s end_dt=%s",
                        _dt.datetime.utcfromtimestamp(start_ms / 1000).isoformat(),
                        _dt.datetime.utcfromtimestamp(end_ms / 1000).isoformat())
+
+        # Диагностика: вызов без дат (WEEX defaults = последние 7 дней)
+        payload_nodate = await self._get(
+            AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateCommission",
+            {"page": 1, "pageSize": 5},
+            signed=True, affiliate=True,
+        )
+        if isinstance(payload_nodate, dict):
+            cf = payload_nodate.get("channelCommissionInfoItems")
+            logger.warning("COMM NODATE total=%s pages=%s items=%s sample=%s",
+                           payload_nodate.get("total"), payload_nodate.get("pages"),
+                           len(cf) if isinstance(cf, list) else "N/A",
+                           repr(cf[:1] if isinstance(cf, list) else cf)[:300])
+
+        # Диагностика: вызов с productType=FUTURES
+        payload_fut = await self._get(
+            AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateCommission",
+            {"startTime": start_ms, "endTime": end_ms, "page": 1, "pageSize": 5, "productType": "FUTURES"},
+            signed=True, affiliate=True,
+        )
+        if isinstance(payload_fut, dict):
+            cf = payload_fut.get("channelCommissionInfoItems")
+            logger.warning("COMM FUTURES total=%s pages=%s items=%s sample=%s",
+                           payload_fut.get("total"), payload_fut.get("pages"),
+                           len(cf) if isinstance(cf, list) else "N/A",
+                           repr(cf[:1] if isinstance(cf, list) else cf)[:300])
+
+        # Основной цикл: пока productType нужно выяснить, используем FUTURES
         while True:
             payload = await self._get(
                 AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateCommission",
-                {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100},
+                {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100, "productType": "FUTURES"},
                 signed=True, affiliate=True,
             )
-            # Сырой ответ для диагностики
-            if isinstance(payload, dict):
-                comm_field = payload.get("channelCommissionInfoItems")
-                logger.warning(
-                    "COMM RAW total=%s pages=%s items_type=%s items_len=%s items_sample=%s",
-                    payload.get("total"), payload.get("pages"),
-                    type(comm_field).__name__,
-                    len(comm_field) if isinstance(comm_field, list) else "N/A",
-                    repr(comm_field[:1] if isinstance(comm_field, list) else comm_field)[:400],
-                )
             data = self._data(payload)
             items = self._extract_list(data, ("channelCommissionInfoItems", "_list"))
             results.extend(items)
@@ -274,6 +291,14 @@ class RealWeexClient(WeexClient):
             if page >= pages or not items:
                 break
             page += 1
+
+        def _safe_dec(v):
+            try:
+                return Decimal(str(v))
+            except Exception:
+                return Decimal(0)
+        total_comm = sum((_safe_dec(c.get("commission")) for c in results), Decimal(0))
+        logger.warning("COMM ALL total_items=%d total_commission=%s", len(results), total_comm)
         return results
 
     async def get_agency_assert(self, user_id: str, start_date: str = "", end_date: str = "") -> dict:
