@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { Trash2, ImageOff } from "lucide-react";
 import { useMentorToken } from "@/components/admin/AdminShell";
+import { API_URL } from "@/lib/api";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const SKIP = { "ngrok-skip-browser-warning": "1" };
 
 interface BroadcastItem {
   id: number;
@@ -28,26 +29,24 @@ export default function AnalysesPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<number | null>(null);
 
-  async function load() {
+  useEffect(() => {
+    if (!token) return;
     setLoading(true);
-    try {
-      const res = await fetch(`${API}/api/broadcast`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) setItems(await res.json());
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { load(); }, []);
+    fetch(`${API_URL}/api/broadcast`, {
+      headers: { Authorization: `Bearer ${token}`, ...SKIP },
+    })
+      .then((r) => r.ok ? r.json() : [])
+      .then(setItems)
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [token]);
 
   async function remove(id: number) {
     setDeleting(id);
     try {
-      await fetch(`${API}/api/broadcast/${id}`, {
+      await fetch(`${API_URL}/api/broadcast/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, ...SKIP },
       });
       setItems((prev) => prev.filter((x) => x.id !== id));
     } finally {
@@ -57,7 +56,7 @@ export default function AnalysesPage() {
 
   function resolveChart(url: string | null) {
     if (!url) return null;
-    if (url.startsWith("/")) return url;
+    if (url.startsWith("/uploads/")) return `${API_URL}${url}`;
     const m = url.match(/tradingview\.com\/x\/([A-Za-z0-9]+)/);
     if (m) return `https://s3.tradingview.com/snapshots/${m[1][0].toLowerCase()}/${m[1]}.png`;
     return url;
