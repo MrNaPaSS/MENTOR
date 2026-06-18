@@ -533,15 +533,15 @@ function EtfSection() {
 
 // ── Derivatives Section (реальные данные Bybit) ───────────────────────────────
 
-const BYBIT_API = "https://api.bybit.com/v5/market";
 const ALT_ME_API = "https://api.alternative.me/fng/?limit=1";
 const COINGECKO_API = "https://api.coingecko.com/api/v3";
+const SKIP = { headers: { "ngrok-skip-browser-warning": "1" } };
 const DERIV_SYMS = ["BTC", "ETH", "SOL", "XRP", "BNB"];
 const FR_SYMS = ["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT","LINKUSDT","DOTUSDT"];
 
 interface DerivRow {
   sym: string; oi: number; oiChg: number;
-  longPct: number; shortPct: number; fr: number;
+  longPct: number; shortPct: number; fr: number; pct24h?: number;
 }
 
 function fmtB(n: number) {
@@ -560,31 +560,27 @@ function DerivativesSection() {
       const results = await Promise.all(
         DERIV_SYMS.map(async sym => {
           const ticker = sym + "USDT";
-          const [bybitTk, bybitOI, bybitLS, backendTk] = await Promise.allSettled([
-            fetch(`${BYBIT_API}/tickers?category=linear&symbol=${ticker}`).then(r => r.json()),
-            fetch(`${BYBIT_API}/open-interest?category=linear&symbol=${ticker}&intervalTime=1d&limit=2`).then(r => r.json()),
-            fetch(`${BYBIT_API}/account-ratio?category=linear&symbol=${ticker}&period=1d&limit=1`).then(r => r.json()),
-            fetch(`${API_URL}/api/market/ticker/${ticker}`, { headers: { "ngrok-skip-browser-warning": "1" } }).then(r => r.json()),
+          const [derivRes, tkRes] = await Promise.allSettled([
+            fetch(`${API_URL}/api/market/derivatives/${ticker}`, SKIP).then(r => r.json()),
+            fetch(`${API_URL}/api/market/ticker/${ticker}`, SKIP).then(r => r.json()),
           ]);
 
-          const bt    = bybitTk.status  === "fulfilled" ? bybitTk.value?.result?.list?.[0]   : null;
-          const oiArr = bybitOI.status  === "fulfilled" ? bybitOI.value?.result?.list         : [];
-          const ls    = bybitLS.status  === "fulfilled" ? bybitLS.value?.result?.list?.[0]    : null;
-          const bk    = backendTk.status === "fulfilled" ? backendTk.value                    : null;
+          const d  = derivRes.status === "fulfilled" ? derivRes.value : null;
+          const tk = tkRes.status    === "fulfilled" ? tkRes.value    : null;
 
-          const oiCur  = parseFloat(oiArr?.[0]?.openInterest ?? "0");
-          const oiPrev = parseFloat(oiArr?.[1]?.openInterest ?? "0");
-          const oiUsd  = parseFloat(bt?.openInterestValue ?? "0") || 0;
-          const oiChg  = oiPrev > 0 ? (oiCur - oiPrev) / oiPrev * 100 : 0;
+          const fr  = parseFloat(d?.fundingRate ?? tk?.fundingRate ?? "0");
+          const pct = parseFloat(d?.priceChangePct ?? tk?.priceChangePercent ?? "0");
+          const oi  = parseFloat(d?.openInterestUsd ?? "0");
 
           return {
             sym,
-            oi:       oiUsd,
-            oiChg,
-            longPct:  ls ? parseFloat(ls.buyRatio) * 100 : 50,
-            shortPct: ls ? parseFloat(ls.sellRatio) * 100 : 50,
-            fr:       parseFloat(bk?.fundingRate ?? "0"),
-          } satisfies DerivRow;
+            oi,
+            oiChg:    0,   // WEEX не отдаёт исторический OI — показываем текущий
+            longPct:  50,  // WEEX не имеет public L/S ratio endpoint
+            shortPct: 50,
+            fr,
+            pct24h:   pct,
+          } satisfies DerivRow & { pct24h: number };
         })
       );
       setRows(results);
@@ -622,39 +618,47 @@ function DerivativesSection() {
           </div>
 
           <div className="space-y-1.5">
-            <div className="grid grid-cols-[44px_1fr_80px_58px_64px] gap-2 px-2 text-[9px] uppercase tracking-wider text-text-muted">
-              <span>Пара</span><span>Лонг / Шорт</span>
-              <span className="text-right">OI</span>
-              <span className="text-right">OI 24ч</span>
-              <span className="text-right">Funding</span>
+            <div className="grid grid-cols-[44px_1fr_80px_70px_70px] gap-2 px-2 text-[9px] uppercase tracking-wider text-text-muted">
+              <span>Пара</span><span>Funding rate</span>
+              <span className="text-right">OI (USDT)</span>
+              <span className="text-right">24ч цена</span>
+              <span className="text-right">Сигнал</span>
             </div>
-            {rows.map(r => (
-              <div key={r.sym} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5">
-                <div className="grid grid-cols-[44px_1fr_80px_58px_64px] items-center gap-2">
-                  <span className="font-bold text-[12px] text-white">{r.sym}</span>
-                  <div>
-                    <div className="flex h-[5px] overflow-hidden rounded-full">
-                      <div className="bg-success/70" style={{width:`${r.longPct}%`}} />
-                      <div className="bg-danger/70"  style={{width:`${r.shortPct}%`}} />
+            {rows.map(r => {
+              const fr = r.fr;
+              const frPct = fr * 100;
+              const frCol = fr > 0.01 ? "text-danger" : fr > 0 ? "text-amber-400" : fr < -0.001 ? "text-success" : "text-text-muted";
+              const signal = fr > 0.01 ? "Перегрев" : fr > 0.001 ? "Лонги" : fr < -0.001 ? "Шорты" : "Нейтр.";
+              const signalCol = fr > 0.001 ? "text-danger" : fr < -0.001 ? "text-success" : "text-text-muted";
+              const pct = r.pct24h ?? 0;
+              return (
+                <div key={r.sym} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5">
+                  <div className="grid grid-cols-[44px_1fr_80px_70px_70px] items-center gap-2">
+                    <span className="font-bold text-[13px] text-white">{r.sym}</span>
+                    <div>
+                      <div className={`font-mono text-[14px] font-bold ${frCol}`}>
+                        {fr >= 0 ? "+" : ""}{frPct.toFixed(4)}%
+                      </div>
+                      <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-white/[0.06]">
+                        <div className="h-full rounded-full transition-all"
+                          style={{ width:`${Math.min(100, Math.abs(frPct) / 0.05 * 100)}%`,
+                            backgroundColor: fr > 0 ? "#f6465d" : "#0ecb81", opacity: 0.6 }} />
+                      </div>
                     </div>
-                    <div className="mt-1 flex justify-between text-[8px]">
-                      <span className="text-success">{r.longPct.toFixed(1)}%</span>
-                      <span className="text-danger">{r.shortPct.toFixed(1)}%</span>
+                    <div className="text-right font-mono text-[11px] text-white">
+                      {r.oi > 0 ? fmtB(r.oi) : "—"}
                     </div>
-                  </div>
-                  <div className="text-right font-mono text-[11px] text-white">{fmtB(r.oi)}</div>
-                  <div className={`text-right font-mono text-[11px] ${r.oiChg >= 0 ? "text-success" : "text-danger"}`}>
-                    {r.oiChg >= 0 ? "+" : ""}{r.oiChg.toFixed(1)}%
-                  </div>
-                  <div className={`text-right font-mono text-[11px] ${r.fr > 0 ? "text-danger" : r.fr < 0 ? "text-success" : "text-text-muted"}`}>
-                    {r.fr >= 0 ? "+" : ""}{(r.fr * 100).toFixed(4)}%
+                    <div className={`text-right font-mono text-[11px] ${pct >= 0 ? "text-success" : "text-danger"}`}>
+                      {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
+                    </div>
+                    <div className={`text-right text-[11px] font-semibold ${signalCol}`}>{signal}</div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <p className="mt-2 text-[9px] text-white/20">
-            Funding {">"} 0% = лонги переплачивают (перегрев) · L/S ratio = аккаунты Bybit
+            Данные WEEX · Funding {">"} 0% = лонги переплачивают (перегрев рынка)
           </p>
         </>
       )}
@@ -817,22 +821,32 @@ function FundingHeatmapSection() {
 
   useEffect(() => {
     const load = async () => {
-      // Bybit даёт funding rate напрямую в одном запросе для всех пар
-      const res = await fetch(`${BYBIT_API}/tickers?category=linear`)
+      // Один запрос к нашему бэкенду — он сам ходит в WEEX
+      const res = await fetch(`${API_URL}/api/market/funding-rates`, SKIP)
         .then(r => r.json())
         .catch(() => null);
 
-      const list: Record<string, unknown>[] = res?.result?.list ?? [];
-      const map = new Map(list.map((t: Record<string, unknown>) => [t.symbol as string, t]));
+      const rateMap = new Map<string, Record<string, unknown>>(
+        (res?.rates ?? []).map((r: Record<string, unknown>) => [r.symbol as string, r])
+      );
 
-      const results = FR_SYMS.map(sym => {
-        const t = map.get(sym) ?? {};
+      // Для 24ч цены берём ticker параллельно (уже есть кэш в бэкенде)
+      const tickers = await Promise.all(
+        FR_SYMS.map(sym =>
+          fetch(`${API_URL}/api/market/ticker/${sym}`, SKIP)
+            .then(r => r.ok ? r.json() : null).catch(() => null)
+        )
+      );
+
+      const results = FR_SYMS.map((sym, i) => {
+        const rate = rateMap.get(sym) ?? {};
+        const tk   = tickers[i] ?? {};
         return {
-          sym:   sym.replace("USDT", ""),
-          fr:    parseFloat((t.fundingRate as string) ?? "0"),
-          pct24h: parseFloat((t.price24hPcnt as string) ?? "0") * 100,
-          nextFunding: parseInt((t.nextFundingTime as string) ?? "0"),
-          price: parseFloat((t.lastPrice as string) ?? "0"),
+          sym:         sym.replace("USDT", ""),
+          fr:          parseFloat((rate.fundingRate as string) ?? "0"),
+          pct24h:      parseFloat((tk.priceChangePercent as string) ?? "0"),
+          nextFunding: parseInt((rate.nextFundingTime as string) ?? "0") || 0,
+          price:       parseFloat((tk.lastPrice as string) ?? "0"),
         };
       });
 
