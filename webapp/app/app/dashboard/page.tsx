@@ -419,9 +419,9 @@ function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
 
     const tvSymbol = `WEEX:${symbol}`;
 
-    // Сдвигаем вверх, чтобы скрыть заголовок "Технический анализ BTCUSDT"
+    // Сдвигаем вверх, чтобы скрыть заголовок и строку времени
     const shifter = document.createElement("div");
-    shifter.style.cssText = "margin-top:-38px; height:420px;";
+    shifter.style.cssText = "margin-top:-78px; height:460px;";
     container.appendChild(shifter);
 
     const widgetDiv = document.createElement("div");
@@ -436,7 +436,7 @@ function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
       interval: "15m",
       width: "100%",
       isTransparent: true,
-      height: 420,
+      height: 460,
       symbol: tvSymbol,
       showIntervalTabs: true,
       displayMode: "single",
@@ -455,8 +455,9 @@ function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
       style={{
         height: 370,
         overflow: "hidden",
-        // скрываем нативный скролл внутри iframe-контейнера
         scrollbarWidth: "none",
+        background: "rgba(15,16,32,0.55)",
+        borderRadius: 12,
       }}
     />
   );
