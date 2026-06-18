@@ -792,7 +792,7 @@ function FundingWidget({ symbol }: { symbol: string }) {
   }, []);
 
   useEffect(() => {
-    const FUNDING_SYMBOLS = ["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT","DOGEUSDT","AVAXUSDT","ADAUSDT","LINKUSDT","DOTUSDT"];
+    const FUNDING_SYMBOLS = ["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT"];
     Promise.all(
       FUNDING_SYMBOLS.map(sym =>
         fetch(`${API_URL}/api/market/ticker/${sym}`, SKIP_NGROK)
