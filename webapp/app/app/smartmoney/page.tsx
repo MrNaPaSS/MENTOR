@@ -808,7 +808,7 @@ function OnchainSection() {
 
 // ── Funding Rates Heatmap (реальный бэкенд) ───────────────────────────────────
 
-interface FrRow { sym: string; fr: number; pct24h: number; }
+interface FrRow { sym: string; fr: number; pct24h: number; nextFunding: number; price: number; }
 
 function FundingHeatmapSection() {
   const [rows, setRows]       = useState<FrRow[]>([]);
@@ -817,18 +817,25 @@ function FundingHeatmapSection() {
 
   useEffect(() => {
     const load = async () => {
-      const results = await Promise.all(
-        FR_SYMS.map(sym =>
-          fetch(`${API_URL}/api/market/ticker/${sym}`, { headers: { "ngrok-skip-browser-warning": "1" } })
-            .then(r => r.ok ? r.json() : null)
-            .then(d => ({
-              sym: sym.replace("USDT",""),
-              fr:  parseFloat(d?.fundingRate ?? "0"),
-              pct24h: parseFloat(d?.priceChangePercent ?? "0"),
-            }))
-            .catch(() => ({ sym: sym.replace("USDT",""), fr: 0, pct24h: 0 }))
-        )
-      );
+      // Bybit даёт funding rate напрямую в одном запросе для всех пар
+      const res = await fetch(`${BYBIT_API}/tickers?category=linear`)
+        .then(r => r.json())
+        .catch(() => null);
+
+      const list: Record<string, unknown>[] = res?.result?.list ?? [];
+      const map = new Map(list.map((t: Record<string, unknown>) => [t.symbol as string, t]));
+
+      const results = FR_SYMS.map(sym => {
+        const t = map.get(sym) ?? {};
+        return {
+          sym:   sym.replace("USDT", ""),
+          fr:    parseFloat((t.fundingRate as string) ?? "0"),
+          pct24h: parseFloat((t.price24hPcnt as string) ?? "0") * 100,
+          nextFunding: parseInt((t.nextFundingTime as string) ?? "0"),
+          price: parseFloat((t.lastPrice as string) ?? "0"),
+        };
+      });
+
       setRows(results);
       setUpdatedAt(new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }));
       setLoading(false);
@@ -838,64 +845,102 @@ function FundingHeatmapSection() {
     return () => clearInterval(t);
   }, []);
 
-  const avgFr   = rows.length ? rows.reduce((s,r) => s + r.fr, 0) / rows.length : 0;
-  const bullish = rows.filter(r => r.fr < 0).length;
-  const bearish = rows.filter(r => r.fr > 0.0005).length;
+  const avgFr   = rows.length ? rows.reduce((s, r) => s + r.fr, 0) / rows.length : 0;
+  const bullish = rows.filter(r => r.fr < -0.0001).length;
+  const bearish = rows.filter(r => r.fr >  0.0001).length;
+  const maxAbsFr = Math.max(...rows.map(r => Math.abs(r.fr)), 0.0001);
 
-  function frColor(fr: number): string {
-    if (fr >  0.015) return "#f6465d";
-    if (fr >  0.005) return "#f59e0b";
-    if (fr >  0)     return "#9ca3af";
-    return "#0ecb81";
+  function frTheme(fr: number) {
+    if (fr >  0.025) return { color: "#f6465d", glow: "rgba(246,70,93,0.35)",  bg: "rgba(246,70,93,0.10)",  border: "rgba(246,70,93,0.28)",  label: "ПЕРЕГРЕВ" };
+    if (fr >  0.010) return { color: "#f59e0b", glow: "rgba(245,158,11,0.30)", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.22)", label: "ЛОНГИ" };
+    if (fr >  0.0001)return { color: "#9ca3af", glow: "transparent",           bg: "rgba(255,255,255,0.03)",border: "rgba(255,255,255,0.08)", label: "НЕЙТР." };
+    if (fr > -0.0001)return { color: "#9ca3af", glow: "transparent",           bg: "rgba(255,255,255,0.03)",border: "rgba(255,255,255,0.08)", label: "НЕЙТР." };
+    if (fr > -0.010) return { color: "#0ecb81", glow: "rgba(14,203,129,0.30)", bg: "rgba(14,203,129,0.08)", border: "rgba(14,203,129,0.22)", label: "ШОРТЫ" };
+    return              { color: "#0affe0", glow: "rgba(10,255,224,0.35)",  bg: "rgba(10,255,224,0.10)", border: "rgba(10,255,224,0.28)", label: "ДИСКОНТ" };
   }
-  function frBg(fr: number): string {
-    if (fr >  0.015) return "border-danger/30 bg-danger/[0.08]";
-    if (fr >  0.005) return "border-amber-500/30 bg-amber-500/[0.06]";
-    if (fr >  0)     return "border-white/[0.07] bg-white/[0.03]";
-    return "border-success/30 bg-success/[0.06]";
+
+  function fmtNextFunding(ts: number) {
+    if (!ts) return "";
+    const diff = ts - Date.now();
+    if (diff <= 0) return "сейчас";
+    const h = Math.floor(diff / 3_600_000);
+    const m = Math.floor((diff % 3_600_000) / 60_000);
+    return h > 0 ? `${h}ч ${m}м` : `${m}м`;
   }
 
   return (
     <Section
       icon={<DollarSign className="h-4 w-4 text-accent-gold" />}
-      title="Ставки финансирования (8ч) - хитмап"
+      title="Ставки финансирования (8ч)"
       badge={<span className="rounded border border-success/40 bg-success/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-success">LIVE</span>}
-      sub={updatedAt ? `WEEX · обновлено ${updatedAt}` : "загрузка…"}
+      sub={updatedAt ? `Bybit · обновлено ${updatedAt}` : "загрузка…"}
     >
       {loading ? <Skeleton rows={4} /> : (
         <>
-          <div className="mb-4 grid grid-cols-3 gap-2">
+          {/* Summary */}
+          <div className="mb-5 grid grid-cols-3 gap-3">
             {[
-              { label:"Средний FR",  value:`${avgFr >= 0 ? "+" : ""}${(avgFr*100).toFixed(4)}%`,
-                color: avgFr > 0 ? "text-danger" : "text-success" },
-              { label:"Бычий FR",   value:`${bullish} пар`,  color:"text-success" },
-              { label:"Медвежий FR", value:`${bearish} пар`,  color:"text-danger"  },
+              { label:"Средний FR",   value:`${avgFr >= 0 ? "+" : ""}${(avgFr * 100).toFixed(4)}%`, color: avgFr > 0.0001 ? "#f59e0b" : avgFr < -0.0001 ? "#0ecb81" : "#9ca3af" },
+              { label:"Бычий FR",    value:`${bullish} из ${rows.length}`,  color:"#0ecb81" },
+              { label:"Медвежий FR", value:`${bearish} из ${rows.length}`,  color:"#f6465d" },
             ].map(s => (
-              <div key={s.label} className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-center">
-                <div className="text-[9px] uppercase tracking-wider text-white/25">{s.label}</div>
-                <div className={`mt-1 font-mono text-[13px] font-bold ${s.color}`}>{s.value}</div>
+              <div key={s.label} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-3 text-center">
+                <div className="text-[9px] uppercase tracking-wider text-white/25 mb-1">{s.label}</div>
+                <div className="font-mono text-[15px] font-bold" style={{color: s.color}}>{s.value}</div>
               </div>
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
-            {rows.map(r => (
-              <div key={r.sym} className={`rounded-xl border p-2.5 text-center ${frBg(r.fr)}`}>
-                <div className="text-[10px] font-bold text-white">{r.sym}</div>
-                <div className="mt-1 font-mono text-[13px] font-bold" style={{color: frColor(r.fr)}}>
-                  {r.fr >= 0 ? "+" : ""}{(r.fr * 100).toFixed(4)}%
+          {/* Heatmap grid */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {rows.map(r => {
+              const th = frTheme(r.fr);
+              const barW = Math.min(100, Math.abs(r.fr) / maxAbsFr * 100);
+              const next = fmtNextFunding(r.nextFunding);
+              return (
+                <div key={r.sym} className="relative overflow-hidden rounded-2xl p-3"
+                  style={{ background: th.bg, border: `1px solid ${th.border}` }}>
+
+                  {/* Glow accent line top */}
+                  <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-2xl"
+                    style={{ background: th.color, opacity: 0.6 }} />
+
+                  {/* Symbol */}
+                  <div className="text-[11px] font-bold text-white/70 mb-2">{r.sym}</div>
+
+                  {/* Funding rate — main number */}
+                  <div className="font-mono text-[18px] font-extrabold leading-none tabular-nums"
+                    style={{ color: th.color, textShadow: `0 0 14px ${th.glow}` }}>
+                    {r.fr >= 0 ? "+" : ""}{(r.fr * 100).toFixed(4)}%
+                  </div>
+
+                  {/* Magnitude bar */}
+                  <div className="mt-2 h-[3px] rounded-full bg-white/[0.06]">
+                    <div className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${barW}%`, backgroundColor: th.color, opacity: 0.7,
+                        boxShadow: `0 0 6px ${th.glow}` }} />
+                  </div>
+
+                  {/* 24h + label */}
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className={`font-mono text-[10px] ${r.pct24h >= 0 ? "text-success" : "text-danger"}`}>
+                      {r.pct24h >= 0 ? "+" : ""}{r.pct24h.toFixed(2)}%
+                    </span>
+                    <span className="text-[8px] font-bold uppercase tracking-wider"
+                      style={{ color: th.color, opacity: 0.75 }}>{th.label}</span>
+                  </div>
+
+                  {/* Next funding countdown */}
+                  {next && (
+                    <div className="mt-1.5 text-[8px] text-white/20">через {next}</div>
+                  )}
                 </div>
-                <div className={`text-[9px] mt-0.5 ${r.pct24h >= 0 ? "text-success" : "text-danger"}`}>
-                  {r.pct24h >= 0 ? "+" : ""}{r.pct24h.toFixed(2)}%
-                </div>
-                <div className="mt-1.5 text-[7px] uppercase tracking-wider" style={{color:frColor(r.fr), opacity:0.7}}>
-                  {r.fr > 0.015 ? "перегрев" : r.fr > 0.005 ? "лонги" : r.fr > 0 ? "нейтр." : "шорты"}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-          <p className="mt-2 text-[9px] text-white/20">
-            FR {"<"} 0% = шорты платят лонгам (бычий сигнал) · FR {">"} 0.01% = рынок перегрет лонгами
+
+          <p className="mt-3 text-[9px] text-white/20">
+            FR {"<"} 0% = шорты переплачивают лонгам (бычий сигнал) · FR {">"} 0.01% = перегрев, рынок переплачивает за лонги
           </p>
         </>
       )}
