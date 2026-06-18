@@ -1,10 +1,31 @@
 "use client";
-// v7
+// v8
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowLeftRight, ArrowRight, BarChart2, ArrowDownCircle, Coins } from "lucide-react";
+
+// Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
+function fmtDot(n: number, dec = 0): string {
+  return n.toLocaleString("de-DE", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+// Объём коротко: 1_234_567 → "1.23M"
+function fmtVolShort(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2).replace(".", ",") + "M";
+  if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(".", ",") + "K";
+  return fmtDot(n, 0);
+}
+
+// Вехи объёма для наград
+const VOLUME_MILESTONES = [
+  { vol: 50_000,     label: "50K",  emoji: "🥉", title: "Старт",         reward: "common"    as const },
+  { vol: 100_000,    label: "100K", emoji: "🥈", title: "Набираю обороты", reward: "rare"     as const },
+  { vol: 500_000,    label: "500K", emoji: "🥇", title: "Серьёзный",      reward: "epic"      as const },
+  { vol: 1_000_000,  label: "1M",   emoji: "💎", title: "Миллионер",      reward: "legendary" as const },
+  { vol: 5_000_000,  label: "5M",   emoji: "👑", title: "Легенда NMNH",   reward: "legendary" as const },
+];
 
 interface Goal {
   id: string;
@@ -117,9 +138,18 @@ function DayCell({ day, onClick, active, isToday }: {
         ) : null}
       </div>
 
+      {/* Объём дня (если есть) */}
+      {hasTrades && (
+        <div className="flex justify-center">
+          <span className="text-[8px] font-bold tabular-nums text-accent-gold/70 leading-none">
+            {fmtVolShort(day.trade_volume ?? 0)}
+          </span>
+        </div>
+      )}
+
       {/* Точки событий */}
       {(day.signals > 0 || hasTrades || hasDeposit) && (
-        <div className="flex justify-center gap-[3px]">
+        <div className="flex justify-center gap-[3px] mt-[2px]">
           {day.signals > 0 && <span className="h-[5px] w-[5px] rounded-full bg-accent-cyan" />}
           {hasTrades && <span className="h-[5px] w-[5px] rounded-full bg-accent-gold" />}
           {hasDeposit && <span className="h-[5px] w-[5px] rounded-full bg-success" />}
@@ -250,6 +280,8 @@ export default function AnalyticsPage() {
     },
   ];
 
+  const totalVolume = tradeSummary?.total_volume ?? 0;
+
   const achievements: Achievement[] = [
     {
       id: "first_signal", title: "Первый сигнал", desc: "Получи первый торговый сигнал", icon: Zap,
@@ -275,6 +307,15 @@ export default function AnalyticsPage() {
       id: "legend", title: "Легенда", desc: "Выполни все 4 цели месяца", icon: Gift,
       earned: goals.every(g => g.unlocked), rarity: "legendary",
     },
+    // Вехи объёма
+    ...VOLUME_MILESTONES.map(m => ({
+      id: `vol_${m.label}`,
+      title: `${m.emoji} Объём ${m.label}`,
+      desc: `Наторговал ${m.label} USDT суммарного объёма`,
+      icon: BarChart2,
+      earned: totalVolume >= m.vol,
+      rarity: m.reward,
+    })),
   ];
 
   function prevMonth() {
@@ -321,7 +362,7 @@ export default function AnalyticsPage() {
               return (
                 <div className={`rounded-xl px-4 py-3 border ${isPos ? "bg-success/5 border-success/20" : "bg-danger/5 border-danger/20"}`}>
                   <p className={`font-mono text-lg font-extrabold ${isPos ? "text-success" : "text-danger"}`}>
-                    {isPos ? "+" : ""}{pnl.toLocaleString("ru", { maximumFractionDigits: 2 })} USDT
+                    {isPos ? "+" : ""}{fmtDot(pnl, 2)} USDT
                   </p>
                   <p className={`text-[10px] font-bold mt-0.5 ${isPos ? "text-success" : "text-danger"}`}>
                     {isPos ? "+" : ""}{pnlPct.toFixed(2)}%
@@ -334,7 +375,7 @@ export default function AnalyticsPage() {
             })()}
             <div className="rounded-xl bg-accent-cyan/5 border border-accent-cyan/10 px-4 py-3">
               <p className="font-mono text-lg font-extrabold text-white">
-                ${tradeSummary.futures_volume.toLocaleString("ru", { maximumFractionDigits: 0 })}
+                ${fmtDot(tradeSummary.futures_volume)}
               </p>
               <p className="text-[11px] text-text-muted flex items-center gap-1">
                 <TrendingUp className="h-3 w-3 text-accent-cyan" /> Фьючерсы
@@ -342,7 +383,7 @@ export default function AnalyticsPage() {
             </div>
             <div className="rounded-xl bg-success/5 border border-success/10 px-4 py-3">
               <p className="font-mono text-lg font-extrabold text-success">
-                ${tradeSummary.deposit_total.toLocaleString("ru", { maximumFractionDigits: 0 })}
+                ${fmtDot(tradeSummary.deposit_total)}
               </p>
               <p className="text-[11px] text-text-muted flex items-center gap-1">
                 <ArrowDownCircle className="h-3 w-3 text-success" /> Депозиты
@@ -350,9 +391,9 @@ export default function AnalyticsPage() {
             </div>
             <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] px-4 py-3">
               <p className="font-mono text-lg font-extrabold text-accent-gold">
-                {(tradeSummary.deposit_total > 0
-                  ? ((tradeSummary.total_volume / tradeSummary.deposit_total) * 100)
-                  : 0).toLocaleString("ru", { maximumFractionDigits: 0 })}x
+                {fmtDot(tradeSummary.deposit_total > 0
+                  ? Math.round((tradeSummary.total_volume / tradeSummary.deposit_total) * 100)
+                  : 0)}x
               </p>
               <p className="text-[11px] text-text-muted flex items-center gap-1">
                 <Coins className="h-3 w-3 text-accent-gold" /> Оборот vs депозит
@@ -397,6 +438,41 @@ export default function AnalyticsPage() {
           <span className="text-[10px] text-accent-gold">+3% за день</span>
         </div>
       </div>
+
+      {/* Вехи объёма */}
+      {tradeSummary && (
+        <div className="card space-y-3">
+          <div className="flex items-center gap-2">
+            <BarChart2 className="h-4 w-4 text-accent-gold" />
+            <h2 className="text-base font-bold text-white">Вехи объёма</h2>
+            <span className="ml-auto font-mono text-sm text-text-muted">${fmtDot(Math.round(totalVolume))} USDT всего</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {VOLUME_MILESTONES.map((m) => {
+              const reached = totalVolume >= m.vol;
+              const pct = Math.min((totalVolume / m.vol) * 100, 100);
+              const next = !reached;
+              return (
+                <div key={m.label}
+                  className={`rounded-xl border p-3 text-center transition ${reached ? "border-accent-gold/40 bg-accent-gold/5" : "border-white/[0.06] bg-white/[0.02]"}`}>
+                  <div className="text-xl mb-1">{m.emoji}</div>
+                  <div className={`font-mono text-xs font-bold ${reached ? "text-accent-gold" : "text-white/30"}`}>{m.label}</div>
+                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                    <div className="h-full rounded-full bg-accent-gold transition-all duration-700"
+                      style={{ width: `${pct}%`, opacity: reached ? 1 : 0.5 }} />
+                  </div>
+                  {next && (
+                    <div className="mt-1 text-[8px] text-white/25">
+                      ${fmtDot(Math.round(m.vol - totalVolume))} осталось
+                    </div>
+                  )}
+                  {reached && <div className="mt-1 text-[8px] text-accent-gold">✓ Получено</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Основной блок */}
       <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
@@ -498,7 +574,7 @@ export default function AnalyticsPage() {
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedDay.balance !== null && (
                       <span className="rounded-lg bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-white">
-                        💰 ${selectedDay.balance.toLocaleString("ru", { maximumFractionDigits: 2 })}
+                        💰 ${fmtDot(selectedDay.balance, 2)}
                       </span>
                     )}
                     {selectedDay.signals > 0 && (
@@ -508,7 +584,7 @@ export default function AnalyticsPage() {
                     )}
                     {(selectedDay.trade_volume ?? 0) > 0 && (
                       <span className="rounded-lg bg-accent-gold/10 px-2.5 py-1 text-[11px] font-semibold text-accent-gold">
-                        ↕ ${(selectedDay.trade_volume ?? 0).toLocaleString("ru", { maximumFractionDigits: 0 })} объём
+                        ↕ ${fmtDot(selectedDay.trade_volume ?? 0)} объём
                       </span>
                     )}
                     {selectedDay.has_deposit && (
@@ -678,7 +754,7 @@ export default function AnalyticsPage() {
                       </span>
                     </td>
                     <td className="py-2.5 text-right font-mono text-sm font-bold text-white">
-                      +{d.amount.toLocaleString("ru", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      +{fmtDot(d.amount, 2)}
                     </td>
                   </tr>
                 ))}
