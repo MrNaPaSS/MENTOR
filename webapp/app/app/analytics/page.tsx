@@ -304,7 +304,7 @@ export default function AnalyticsPage() {
     },
     {
       id: "week_streak", title: "Недельный стрик", desc: "7 дней подряд в плюс", icon: Flame,
-      earned: streak >= 7, rarity: "rare",
+      earned: activityStreak >= 7, rarity: "rare",
     },
     {
       id: "hot_day", title: "Горячий день", desc: "Получи 3%+ прибыли за день", icon: Star,
