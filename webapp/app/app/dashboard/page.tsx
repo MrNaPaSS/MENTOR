@@ -9,7 +9,6 @@ import { useRouter } from "next/navigation";
 const TradingChart = dynamic(() => import("@/components/market/TradingChart"), { ssr: false });
 const OrderBook    = dynamic(() => import("@/components/market/OrderBook"),    { ssr: false });
 
-const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT"];
 const SKIP_NGROK = { headers: { "ngrok-skip-browser-warning": "1" } };
 const COIN_COLOR: Record<string, string> = {
   BTC: "#F7931A", ETH: "#627EEA", SOL: "#9945FF", XRP: "#346AA9", BNB: "#F3BA2F",
@@ -84,6 +83,75 @@ interface TickerData {
   markPrice?: string; fundingRate?: string;
 }
 
+function SymbolSearch({ symbol, onSymChange }: { symbol: string; onSymChange: (s: string) => void }) {
+  const [allSymbols, setAllSymbols] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/market/symbols`, SKIP_NGROK)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { symbols: string[] } | null) => { if (d?.symbols) setAllSymbols(d.symbols); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const ticker = symbol.replace("USDT", "");
+  const filtered = allSymbols.filter(s =>
+    s.toLowerCase().includes(query.toLowerCase())
+  ).slice(0, 50);
+
+  return (
+    <div ref={ref} className="relative flex items-center border-r border-white/[0.05] px-3">
+      <button
+        onClick={() => { setOpen(o => !o); setQuery(""); }}
+        className="flex items-center gap-1.5 rounded-lg bg-white/[0.07] px-3 py-1.5 font-mono text-[13px] font-bold text-white transition hover:bg-white/[0.11]"
+      >
+        <span className="text-accent-cyan">{ticker}</span>
+        <span className="text-white/30 text-[10px]">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-white/[0.08] bg-bg-deep shadow-2xl">
+          <div className="border-b border-white/[0.06] p-2">
+            <input
+              autoFocus
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Поиск пары..."
+              className="w-full rounded-lg bg-white/[0.05] px-3 py-1.5 font-mono text-[12px] text-white placeholder-white/25 outline-none"
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto p-1">
+            {filtered.length === 0 ? (
+              <p className="py-4 text-center text-[11px] text-white/25">Не найдено</p>
+            ) : filtered.map(s => {
+              const t = s.replace("USDT", "");
+              const active = s === symbol;
+              return (
+                <button key={s} onClick={() => { onSymChange(s); setOpen(false); setQuery(""); }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left transition hover:bg-white/[0.05] ${active ? "bg-white/[0.08]" : ""}`}>
+                  <span className="font-mono text-[12px] font-bold text-white">{t}</span>
+                  <span className="text-[10px] text-white/25">USDT</span>
+                  {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-accent-cyan" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TickerBar({ symbol, onSymChange }: { symbol: string; onSymChange: (s: string) => void }) {
   const [data, setData] = useState<TickerData | null>(null);
 
@@ -122,24 +190,8 @@ function TickerBar({ symbol, onSymChange }: { symbol: string; onSymChange: (s: s
   return (
     <div className="flex items-stretch bg-bg-deep" style={{ height: 56 }}>
 
-      {/* Symbol pills */}
-      <div className="flex items-center gap-0.5 border-r border-white/[0.05] px-3">
-        {SYMBOLS.map(s => {
-          const t = s.replace("USDT", "");
-          const active = s === symbol;
-          return (
-            <button key={s} onClick={() => onSymChange(s)}
-              className={`relative rounded-lg px-2.5 py-1.5 font-mono text-[11px] font-bold transition-all ${
-                active ? "bg-white/[0.09] text-white" : "text-white/25 hover:text-white/55"
-              }`}>
-              {active && (
-                <span className="absolute bottom-0.5 left-1/2 h-[2px] w-3 -translate-x-1/2 rounded-full bg-accent-cyan" />
-              )}
-              {t}
-            </button>
-          );
-        })}
-      </div>
+      {/* Symbol search */}
+      <SymbolSearch symbol={symbol} onSymChange={onSymChange} />
 
       {/* Price + change */}
       <div className="flex items-center gap-3 border-r border-white/[0.05] px-5">
@@ -683,21 +735,15 @@ function FundingWidget({ symbol }: { symbol: string }) {
   }, []);
 
   useEffect(() => {
-    Promise.all(
-      SYMBOLS.map(sym =>
-        fetch(`${API_URL}/api/market/ticker/${sym}`, SKIP_NGROK)
-          .then(r => r.ok ? r.json() : null)
-          .then((d: TickerData | null) => ({
-            symbol: sym,
-            fundingRate: d?.fundingRate ?? "0",
-          }))
-          .catch(() => ({ symbol: sym, fundingRate: "0" }))
-      )
-    ).then(results => {
-      const valid = results.filter(r => r.fundingRate !== "0");
-      setRates(valid.length ? results : FUNDING_FALLBACK);
-    });
-  }, []);
+    fetch(`${API_URL}/api/market/ticker/${symbol}`, SKIP_NGROK)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: TickerData | null) => {
+        if (d?.fundingRate) {
+          setRates([{ symbol, fundingRate: d.fundingRate }]);
+        }
+      })
+      .catch(() => {});
+  }, [symbol]);
 
   const active = symbol.replace("USDT", "");
   const list = [...(rates.length ? rates : FUNDING_FALLBACK)].sort((a, b) => {

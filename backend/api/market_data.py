@@ -294,6 +294,42 @@ async def recent_trades(symbol: str, limit: int = 40):
     raise HTTPException(502, "Trades недоступны")
 
 
+# ── Все доступные символы WEEX ────────────────────────────────────────────────
+
+@router.get("/symbols")
+async def symbols():
+    """Список всех фьючерсных пар WEEX."""
+    data = await _weex("/capi/v3/market/contracts")
+    items: list[dict] = []
+    if isinstance(data, dict):
+        payload = data.get("data") or data
+        if isinstance(payload, list):
+            items = payload
+        elif isinstance(payload, dict):
+            for v in payload.values():
+                if isinstance(v, list):
+                    items = v
+                    break
+    elif isinstance(data, list):
+        items = data
+
+    result = []
+    for item in items:
+        sym = item.get("symbol") or item.get("contractName") or item.get("instrumentId")
+        if sym and str(sym).endswith("USDT"):
+            result.append(str(sym).upper())
+
+    if not result:
+        # запасной список если WEEX не вернул контракты
+        result = [
+            "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
+            "DOGEUSDT", "AVAXUSDT", "ADAUSDT", "LINKUSDT", "DOTUSDT",
+            "MATICUSDT", "LTCUSDT", "ATOMUSDT", "NEARUSDT", "FTMUSDT",
+        ]
+
+    return {"symbols": sorted(result)}
+
+
 # ── Fear & Greed ──────────────────────────────────────────────────────────────
 
 @router.get("/fear-greed")
