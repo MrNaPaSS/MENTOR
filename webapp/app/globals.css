@@ -208,6 +208,15 @@
   display: none;
 }
 
+/* TradingView виджет - убираем скролл и фон */
+.tradingview-widget-container iframe {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.tradingview-widget-container iframe::-webkit-scrollbar {
+  display: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     opacity: 1;

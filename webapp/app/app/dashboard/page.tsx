@@ -419,9 +419,14 @@ function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
 
     const tvSymbol = `WEEX:${symbol}`;
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "tradingview-widget-container__widget";
-    container.appendChild(wrapper);
+    // Сдвигаем вверх, чтобы скрыть заголовок "Технический анализ BTCUSDT"
+    const shifter = document.createElement("div");
+    shifter.style.cssText = "margin-top:-38px; height:420px;";
+    container.appendChild(shifter);
+
+    const widgetDiv = document.createElement("div");
+    widgetDiv.className = "tradingview-widget-container__widget";
+    shifter.appendChild(widgetDiv);
 
     const script = document.createElement("script");
     script.src = "https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js";
@@ -431,20 +436,29 @@ function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
       interval: "15m",
       width: "100%",
       isTransparent: true,
-      height: 350,
+      height: 420,
       symbol: tvSymbol,
       showIntervalTabs: true,
       displayMode: "single",
       locale: "ru",
       colorTheme: "dark",
     });
-    container.appendChild(script);
+    shifter.appendChild(script);
 
     return () => { if (container) container.innerHTML = ""; };
   }, [symbol]);
 
   return (
-    <div ref={containerRef} className="tradingview-widget-container" style={{ minHeight: 350 }} />
+    <div
+      ref={containerRef}
+      className="tradingview-widget-container"
+      style={{
+        height: 370,
+        overflow: "hidden",
+        // скрываем нативный скролл внутри iframe-контейнера
+        scrollbarWidth: "none",
+      }}
+    />
   );
 }
 
