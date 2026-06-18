@@ -83,28 +83,20 @@ async def trades_me(
             })
         return result
 
+    # getAssert возвращает только depositList (withdrawalList в API не существует).
+    # Суммарные выводы есть в summary.withdrawal_total из getChannelUserTradeAndAsset.
     deposits = _parse_tx_list(assets.get("depositList", []), "deposit")
-    # WEEX может возвращать выводы под разными ключами
-    withdraw_raw = (
-        assets.get("withdrawList") or
-        assets.get("withdrawalList") or
-        assets.get("withdrawRecordList") or
-        []
-    )
-    withdrawals = _parse_tx_list(withdraw_raw, "withdrawal")
-
-    transactions = sorted(deposits + withdrawals, key=lambda x: x["timestamp"], reverse=True)
 
     logger.info(
-        "Trades uid=%s summary=%s deposits=%d withdrawals=%d assert_keys=%s withdraw_raw=%d",
-        uid, summary, len(deposits), len(withdrawals), list(assets.keys()), len(withdraw_raw),
+        "Trades uid=%s summary=%s deposits=%d assert_keys=%s",
+        uid, summary, len(deposits), list(assets.keys()),
     )
 
     return {
         "trades":       [],
         "summary":      summary,
         "deposits":     deposits,
-        "withdrawals":  withdrawals,
-        "transactions": transactions,
+        "withdrawals":  [],
+        "transactions": deposits,
         "needs_uid":    False,
     }

@@ -46,10 +46,18 @@ class WeexClient(ABC):
         """Список UID рефералов (getAffiliateUIDs): uid, registerTime, kycResult,
         inviteCode, firstTrade, lastTrade, firstDeposit, lastDeposit."""
 
+    async def get_affiliate_uids_all(self, start_ms: int, end_ms: int) -> list:
+        """Все страницы getAffiliateUIDs. По умолчанию — одна страница (переопределяется в RealWeexClient)."""
+        return await self.get_affiliate_uids(start_ms, end_ms, page=1)
+
     @abstractmethod
     async def get_channel_trade_asset(self, start_ms: int, end_ms: int, page: int = 1) -> list:
         """Торговля и активы рефералов (getChannelUserTradeAndAsset): uid, depositAmount,
         withdrawalAmount, spotTradingAmount, futuresTradingAmount, commission."""
+
+    async def get_channel_trade_asset_all(self, start_ms: int, end_ms: int) -> list:
+        """Все страницы getChannelUserTradeAndAsset. По умолчанию — одна страница."""
+        return await self.get_channel_trade_asset(start_ms, end_ms, page=1)
 
     @abstractmethod
     async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1) -> list:
@@ -57,9 +65,10 @@ class WeexClient(ABC):
         productType, symbol, sourceType, takerAmount, makerAmount."""
 
     @abstractmethod
-    async def get_agency_assert(self, user_id: str, start_ms: int = 0, end_ms: int = 0) -> dict:
+    async def get_agency_assert(self, user_id: str, start_date: str = "", end_date: str = "") -> dict:
         """Снимок активов реферала по UID (agency/getAssert): availableBalance,
-        contractTotalUsdt, depositTotalAmount, fundingTotalUsdt, spotProTotalUsdt, unimarginTotalUsdt."""
+        contractTotalUsdt, depositTotalAmount, fundingTotalUsdt, spotProTotalUsdt, unimarginTotalUsdt.
+        Даты в формате yyyy-MM-dd (требование WEEX API)."""
 
     @abstractmethod
     async def get_own_balance(self) -> dict:

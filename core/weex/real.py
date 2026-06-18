@@ -184,33 +184,70 @@ class RealWeexClient(WeexClient):
     async def get_affiliate_uids(self, start_ms: int, end_ms: int, page: int = 1) -> list:
         payload = await self._get(
             AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateUIDs",
-            {"startTime": start_ms, "endTime": end_ms, "pageNo": page},
+            {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100},
             signed=True, affiliate=True,
         )
         return self._extract_list(self._data(payload), ("channelUserInfoItemList", "_list"))
 
+    async def get_affiliate_uids_all(self, start_ms: int, end_ms: int) -> list:
+        """Fetches all pages from getAffiliateUIDs."""
+        results, page = [], 1
+        while True:
+            payload = await self._get(
+                AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateUIDs",
+                {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100},
+                signed=True, affiliate=True,
+            )
+            data = self._data(payload)
+            items = self._extract_list(data, ("channelUserInfoItemList", "_list"))
+            results.extend(items)
+            pages = data.get("pages", 1) if isinstance(data, dict) else 1
+            if page >= pages or not items:
+                break
+            page += 1
+        return results
+
     async def get_channel_trade_asset(self, start_ms: int, end_ms: int, page: int = 1) -> list:
         payload = await self._get(
             AFFILIATE_BASE, "/api/v3/rebate/affiliate/getChannelUserTradeAndAsset",
-            {"startTime": start_ms, "endTime": end_ms, "pageNo": page},
+            {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100},
             signed=True, affiliate=True,
         )
         return self._extract_list(self._data(payload), ("records", "_list"))
 
+    async def get_channel_trade_asset_all(self, start_ms: int, end_ms: int) -> list:
+        """Fetches all pages from getChannelUserTradeAndAsset."""
+        results, page = [], 1
+        while True:
+            payload = await self._get(
+                AFFILIATE_BASE, "/api/v3/rebate/affiliate/getChannelUserTradeAndAsset",
+                {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100},
+                signed=True, affiliate=True,
+            )
+            data = self._data(payload)
+            items = self._extract_list(data, ("records", "_list"))
+            results.extend(items)
+            pages = data.get("pages", 1) if isinstance(data, dict) else 1
+            if page >= pages or not items:
+                break
+            page += 1
+        return results
+
     async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1) -> list:
         payload = await self._get(
             AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateCommission",
-            {"startTime": start_ms, "endTime": end_ms, "pageNo": page},
+            {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100},
             signed=True, affiliate=True,
         )
         return self._extract_list(self._data(payload), ("channelCommissionInfoItems", "_list"))
 
-    async def get_agency_assert(self, user_id: str, start_ms: int = 0, end_ms: int = 0) -> dict:
-        params = {"userId": user_id}
-        if start_ms:
-            params["startTime"] = start_ms
-        if end_ms:
-            params["endTime"] = end_ms
+    async def get_agency_assert(self, user_id: str, start_date: str = "", end_date: str = "") -> dict:
+        """Asset snapshot for a referral. Dates in yyyy-MM-dd format (WEEX requirement)."""
+        params: dict = {"userId": user_id}
+        if start_date:
+            params["startTime"] = start_date
+        if end_date:
+            params["endTime"] = end_date
         payload = await self._get(
             AFFILIATE_BASE, "/api/v3/agency/getAssert", params, signed=True, affiliate=True
         )

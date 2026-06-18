@@ -85,8 +85,10 @@ async def overview(days: int = 30, weex=Depends(get_weex)):
     uid_start = end - 85 * _DAY_MS
 
     async def build():
-        all_uids = await weex.get_affiliate_uids(uid_start, end)
-        trade = await weex.get_channel_trade_asset(start, end)
+        all_uids, trade = await asyncio.gather(
+            weex.get_affiliate_uids_all(uid_start, end),
+            weex.get_channel_trade_asset_all(start, end),
+        )
         return all_uids, trade
 
     all_uids, records = await _cached(f"overview:{days}", build)
@@ -134,10 +136,11 @@ async def referrals(days: int = 30, weex=Depends(get_weex)):
     uid_start = end - 85 * _DAY_MS
 
     async def build():
-        # Метаданные всех рефералов (KYC, дата) — за последние 90 дней
-        all_uids = await weex.get_affiliate_uids(uid_start, end)
-        # Торговый объём — только за выбранный период
-        trade = await weex.get_channel_trade_asset(start, end)
+        # Параллельно: метаданные (90 дней) + торговля (выбранный период), все страницы
+        all_uids, trade = await asyncio.gather(
+            weex.get_affiliate_uids_all(uid_start, end),
+            weex.get_channel_trade_asset_all(start, end),
+        )
         return all_uids, trade
 
     all_uids, trade = await _cached(f"refs:{days}", build)

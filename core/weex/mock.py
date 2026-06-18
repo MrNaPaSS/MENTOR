@@ -147,7 +147,7 @@ class MockWeexClient(WeexClient):
                 })
         return out
 
-    async def get_agency_assert(self, user_id: str, start_ms: int = 0, end_ms: int = 0) -> dict:
+    async def get_agency_assert(self, user_id: str, start_date: str = "", end_date: str = "") -> dict:
         h = _hash_float(str(user_id))
         contract = round(100 + h * 4900, 2)
         spot = round(h * 1500, 2)
