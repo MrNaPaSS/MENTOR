@@ -1,11 +1,12 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
-import { api, BroadcastItem } from "@/lib/api";
+import { api, API_URL, BroadcastItem } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { ExternalLink, TrendingUp } from "lucide-react";
 
-function tvImageUrl(url: string): string | null {
+function chartImgUrl(url: string): string | null {
+  if (url.startsWith("/uploads/")) return `${API_URL}${url}`;
   const m = url.match(/tradingview\.com\/x\/([A-Za-z0-9]+)/);
   if (!m) return null;
   const id = m[1];
@@ -36,7 +37,7 @@ const AUDIENCE_LABEL: Record<string, string> = {
 };
 
 function BroadcastCard({ item }: { item: BroadcastItem }) {
-  const img = item.chart_url ? tvImageUrl(item.chart_url) : null;
+  const img = item.chart_url ? chartImgUrl(item.chart_url) : null;
 
   return (
     <article className="overflow-hidden rounded-2xl border border-white/[0.07] bg-bg-panel">

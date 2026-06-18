@@ -20,12 +20,9 @@ import {
   Percent,
   CheckCircle2,
   XCircle,
-  HelpCircle,
-  Image as ImageIcon,
-  Trash2,
-  BarChart2
+  HelpCircle
 } from "lucide-react";
-import { api, API_URL, PublicStats, StudentOut, AffiliateOverview, ReferralRow, MentorBalance, BroadcastItem } from "@/lib/api";
+import { api, PublicStats, StudentOut, AffiliateOverview, ReferralRow, MentorBalance } from "@/lib/api";
 import { useMentorToken } from "@/components/admin/AdminShell";
 import { fmtUsd } from "@/lib/format";
 
@@ -39,7 +36,6 @@ export default function AdminDashboard() {
   const [students, setStudents] = useState<StudentOut[]>([]);
   const [aff, setAff] = useState<AffiliateOverview | null>(null);
   const [today, setToday] = useState<AffiliateOverview | null>(null);
-  const [broadcasts, setBroadcasts] = useState<BroadcastItem[] | null>(null);
   const [refs, setRefs] = useState<ReferralRow[]>([]);
   const [mentorBal, setMentorBal] = useState<MentorBalance | null>(null);
   const [days, setDays] = useState<(typeof PERIODS)[number]>(30);
@@ -64,14 +60,6 @@ export default function AdminDashboard() {
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
-  }, [token]);
-
-  // Загрузка анализов отдельно — не блокирует остальной дашборд
-  useEffect(() => {
-    if (!token) return;
-    api.broadcasts(token)
-      .then(setBroadcasts)
-      .catch(() => setBroadcasts([]));
   }, [token]);
 
   // Загрузка партнерской статистики WEEX - сброс при смене периода
@@ -135,25 +123,6 @@ export default function AdminDashboard() {
       setSortOrder("desc");
     }
   };
-
-  // Конвертация chart_url -> URL картинки
-  function chartImgUrl(url: string | null): string | null {
-    if (!url) return null;
-    if (url.startsWith("/uploads/")) return `${API_URL}${url}`;
-    const m = url.match(/tradingview\.com\/x\/([A-Za-z0-9]+)/);
-    if (m) return `https://s3.tradingview.com/snapshots/${m[1][0].toLowerCase()}/${m[1]}.png`;
-    return null;
-  }
-
-  async function deleteBroadcast(id: number) {
-    try {
-      await fetch(`${API_URL}/api/broadcast/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "1" },
-      });
-      setBroadcasts((prev) => prev?.filter((b) => b.id !== id) ?? prev);
-    } catch {}
-  }
 
   // Экспорт в CSV
   const exportToCSV = () => {
@@ -918,83 +887,6 @@ export default function AdminDashboard() {
         </div>
       </section>
 
-      {/* Мои анализы (из бота) */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-text-muted flex items-center gap-2">
-            <BarChart2 className="h-4 w-4 text-accent-cyan" />
-            Мои анализы
-          </h2>
-          {broadcasts !== null && (
-            <span className="text-[10px] text-text-muted">{broadcasts.length} публикаций</span>
-          )}
-        </div>
-
-        {broadcasts === null ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-48 rounded-2xl border border-white/5 bg-bg-card/30 skeleton" />
-            ))}
-          </div>
-        ) : broadcasts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-white/5 bg-bg-card/20 py-12 text-center">
-            <ImageIcon className="h-8 w-8 text-text-muted/40 mb-3" />
-            <p className="text-sm text-text-muted">Нет опубликованных анализов</p>
-            <p className="text-xs text-text-muted/60 mt-1">Отправьте фото или TradingView-ссылку через бот</p>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {broadcasts.slice(0, 12).map((bc) => {
-              const img = chartImgUrl(bc.chart_url);
-              return (
-                <div key={bc.id} className="relative group overflow-hidden rounded-2xl border border-white/5 bg-bg-card/30 backdrop-blur-sm">
-                  {img ? (
-                    <div className="relative h-40 bg-black/40 overflow-hidden">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={img}
-                        alt="chart"
-                        className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
-                      <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-bg-card to-transparent" />
-                    </div>
-                  ) : (
-                    <div className="h-16 flex items-center justify-center bg-white/[0.02]">
-                      <ImageIcon className="h-6 w-6 text-text-muted/30" />
-                    </div>
-                  )}
-                  <div className="p-3">
-                    {bc.text && (
-                      <p className="text-xs text-text-secondary leading-relaxed line-clamp-3">{bc.text}</p>
-                    )}
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-[10px] text-text-muted">
-                        {new Date(bc.created_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                        {" - "}{bc.audience === "all" ? "все" : bc.audience}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {bc.chart_url && bc.chart_url.startsWith("http") && (
-                          <a href={bc.chart_url} target="_blank" rel="noopener noreferrer" className="text-text-muted hover:text-accent-cyan transition">
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        )}
-                        <button
-                          onClick={() => deleteBroadcast(bc.id)}
-                          className="text-text-muted hover:text-danger transition opacity-0 group-hover:opacity-100"
-                          title="Удалить"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
 
       {/* Быстрые Действия Ментора */}
       <section className="space-y-4">
