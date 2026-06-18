@@ -208,13 +208,16 @@
   display: none;
 }
 
-/* TradingView виджет - убираем скролл и фон */
+/* TradingView виджет - убираем скролл, задаём фон под интерфейс */
 .tradingview-widget-container iframe {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
 }
 .tradingview-widget-container iframe::-webkit-scrollbar {
   display: none !important;
+}
+.tradingview-widget-container {
+  --tv-widget-background-color: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

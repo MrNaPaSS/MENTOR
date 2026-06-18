@@ -419,9 +419,9 @@ function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
 
     const tvSymbol = `WEEX:${symbol}`;
 
-    // Сдвигаем вверх, чтобы скрыть заголовок и строку времени
+    // Сдвигаем только на высоту заголовка (вкладки убраны через showIntervalTabs:false)
     const shifter = document.createElement("div");
-    shifter.style.cssText = "margin-top:-78px; height:460px;";
+    shifter.style.cssText = "margin-top:-42px; height:420px;";
     container.appendChild(shifter);
 
     const widgetDiv = document.createElement("div");
@@ -436,9 +436,10 @@ function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
       interval: "15m",
       width: "100%",
       isTransparent: true,
-      height: 460,
+      backgroundColor: "rgba(15, 16, 32, 0)",
+      height: 420,
       symbol: tvSymbol,
-      showIntervalTabs: true,
+      showIntervalTabs: false,
       displayMode: "single",
       locale: "ru",
       colorTheme: "dark",
@@ -453,11 +454,9 @@ function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
       ref={containerRef}
       className="tradingview-widget-container"
       style={{
-        height: 370,
+        height: 360,
         overflow: "hidden",
         scrollbarWidth: "none",
-        background: "rgba(15,16,32,0.55)",
-        borderRadius: 12,
       }}
     />
   );
