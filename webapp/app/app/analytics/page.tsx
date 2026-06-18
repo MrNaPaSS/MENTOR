@@ -350,7 +350,6 @@ export default function AnalyticsPage() {
   const bestDay = realDays.reduce<CalendarDay | null>((a, b) => (b.pnl_pct! > (a?.pnl_pct ?? -Infinity) ? b : a), null);
   const worstDay = realDays.reduce<CalendarDay | null>((a, b) => (b.pnl_pct! < (a?.pnl_pct ?? Infinity) ? b : a), null);
   const totalPnl = realDays.reduce((s, d) => s + (d.pnl_pct ?? 0), 0);
-  const tradingDays = calData.filter(d => (d.trade_volume ?? 0) > 0).length;
 
   return (
     <div className="space-y-6">
