@@ -49,15 +49,29 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   );
 }
 
-function WidgetHeader({ label, badge, badgeCls }: { label: string; badge?: string; badgeCls?: string }) {
+function LiveBadge() {
+  return (
+    <span className="flex items-center gap-1 rounded-md border border-success/30 bg-success/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-success">
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
+      </span>
+      LIVE
+    </span>
+  );
+}
+
+function WidgetHeader({ label, badge, badgeCls, badgeNode }: {
+  label: string; badge?: string; badgeCls?: string; badgeNode?: React.ReactNode;
+}) {
   return (
     <div className="mb-4 flex items-center justify-between">
       <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/35">{label}</span>
-      {badge && (
+      {badgeNode ?? (badge && (
         <span className={`rounded-full border px-2 py-0.5 text-[7px] font-bold uppercase tracking-wider ${badgeCls}`}>
           {badge}
         </span>
-      )}
+      ))}
     </div>
   );
 }
@@ -437,63 +451,118 @@ function calcSignal(pct: number, fr: number, volRatio: number): Signal {
 }
 
 function SentimentGauge({ value, color }: { value: number; color: string }) {
-  const W = 260, H = 130, cx = W / 2, cy = H - 4, r = 100;
-  const circ = Math.PI * r;
+  const W = 290, H = 158, cx = W / 2, cy = H - 8, r = 114;
+
   const ang = Math.PI - value * Math.PI;
-  const nx = cx + (r - 12) * Math.cos(ang);
-  const ny = cy - (r - 12) * Math.sin(ang);
+  const needleLen = r - 20;
+  const nx = cx + needleLen * Math.cos(ang);
+  const ny = cy - needleLen * Math.sin(ang);
+  const pa = ang + Math.PI / 2;
+  const hw = 5.5;
+  const bx1 = cx + hw * Math.cos(pa), by1 = cy - hw * Math.sin(pa);
+  const bx2 = cx - hw * Math.cos(pa), by2 = cy + hw * Math.sin(pa);
 
   const zones = [
-    { from: 0,    to: 0.2,  col: "#f6465d" },
-    { from: 0.2,  to: 0.4,  col: "#f59e0b" },
-    { from: 0.4,  to: 0.6,  col: "#9ca3af" },
-    { from: 0.6,  to: 0.8,  col: "#5ac87a" },
-    { from: 0.8,  to: 1.0,  col: "#0ecb81" },
+    { from: 0, to: 0.2, col: "#f6465d" },
+    { from: 0.2, to: 0.4, col: "#f59e0b" },
+    { from: 0.4, to: 0.6, col: "#6b7280" },
+    { from: 0.6, to: 0.8, col: "#22c55e" },
+    { from: 0.8, to: 1.0, col: "#0ecb81" },
+  ];
+
+  const ticks = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+  const labels = [
+    { v: 0.05, t: "Продажа" },
+    { v: 0.5,  t: "Нейтрально" },
+    { v: 0.95, t: "Покупка" },
   ];
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", overflow: "visible" }}>
-      {/* Zone arcs */}
+      <defs>
+        <radialGradient id="gaugeBg" cx="50%" cy="100%" r="80%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.08" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </radialGradient>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+
+      {/* Radial glow background */}
+      <ellipse cx={cx} cy={cy} rx={r + 30} ry={r * 0.7} fill="url(#gaugeBg)" />
+
+      {/* Track */}
+      <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+        fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="14" strokeLinecap="butt" />
+
+      {/* Colored zones */}
       {zones.map((z, i) => {
         const a1 = Math.PI - z.from * Math.PI;
-        const a2 = Math.PI - z.to   * Math.PI;
+        const a2 = Math.PI - z.to * Math.PI;
         const x1 = cx + r * Math.cos(a1), y1 = cy - r * Math.sin(a1);
         const x2 = cx + r * Math.cos(a2), y2 = cy - r * Math.sin(a2);
         return (
           <path key={i}
             d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`}
-            fill="none" stroke={z.col} strokeWidth="10" strokeLinecap="butt" opacity="0.22"
-          />
+            fill="none" stroke={z.col} strokeWidth="14" strokeLinecap="butt" opacity="0.28" />
         );
       })}
-      {/* Active arc */}
+
+      {/* Active zone glow overlay */}
       <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-        fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10" strokeLinecap="round" />
-      <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-        fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
-        strokeDasharray={`${value * circ} ${circ}`}
-        style={{ transition: "stroke-dasharray 0.8s ease", filter: `drop-shadow(0 0 6px ${color}88)` }}
-      />
+        fill="none" stroke={color} strokeWidth="14" strokeLinecap="butt"
+        strokeDasharray={`${value * Math.PI * r} ${Math.PI * r}`}
+        opacity="0.55"
+        style={{ transition: "stroke-dasharray 0.9s ease, stroke 0.4s ease",
+          filter: `drop-shadow(0 0 8px ${color}90)` }} />
+
+      {/* Tick marks */}
+      {ticks.map(t => {
+        const a = Math.PI - t * Math.PI;
+        const isMajor = t === 0 || t === 0.5 || t === 1;
+        const outer = r + 1, inner = r - 15 - (isMajor ? 6 : 2);
+        return (
+          <line key={t}
+            x1={cx + outer * Math.cos(a)} y1={cy - outer * Math.sin(a)}
+            x2={cx + inner * Math.cos(a)} y2={cy - inner * Math.sin(a)}
+            stroke={isMajor ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.12)"}
+            strokeWidth={isMajor ? 1.5 : 1} strokeLinecap="round" />
+        );
+      })}
+
       {/* Zone labels */}
-      {[
-        { v: 0.08, t: "Продажа" },
-        { v: 0.5,  t: "Нейтрально" },
-        { v: 0.92, t: "Покупка" },
-      ].map(({ v, t }) => {
+      {labels.map(({ v, t }) => {
         const a = Math.PI - v * Math.PI;
         return (
           <text key={t}
-            x={cx + (r + 16) * Math.cos(a)} y={cy - (r + 16) * Math.sin(a)}
-            textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="8" fontFamily="monospace">
+            x={cx + (r + 22) * Math.cos(a)} y={cy - (r + 22) * Math.sin(a)}
+            textAnchor="middle" dominantBaseline="middle"
+            fill="rgba(255,255,255,0.22)" fontSize="8.5" fontFamily="sans-serif" fontWeight="600">
             {t}
           </text>
         );
       })}
+
+      {/* Needle shadow */}
+      <polygon points={`${nx},${ny} ${bx1},${by1} ${bx2},${by2}`}
+        fill={color} opacity="0.2" filter="url(#glow)"
+        style={{ transition: "all 0.9s cubic-bezier(0.34,1.56,0.64,1)" }} />
+
       {/* Needle */}
-      <line x1={cx} y1={cy} x2={nx} y2={ny}
-        stroke={color} strokeWidth="2.5" strokeLinecap="round"
-        style={{ filter: `drop-shadow(0 0 4px ${color})`, transition: "all 0.8s ease" }} />
-      <circle cx={cx} cy={cy} r="5" fill={color} style={{ filter: `drop-shadow(0 0 6px ${color})` }} />
+      <polygon points={`${nx},${ny} ${bx1},${by1} ${bx2},${by2}`}
+        fill={color}
+        style={{ filter: `drop-shadow(0 0 5px ${color})`,
+          transition: "all 0.9s cubic-bezier(0.34,1.56,0.64,1)" }} />
+
+      {/* Hub outer ring */}
+      <circle cx={cx} cy={cy} r="11" fill="rgba(10,14,20,0.95)"
+        stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+      {/* Hub inner glow */}
+      <circle cx={cx} cy={cy} r="7" fill={color} opacity="0.15" />
+      <circle cx={cx} cy={cy} r="4.5" fill={color}
+        style={{ filter: `drop-shadow(0 0 8px ${color})` }} />
     </svg>
   );
 }
@@ -530,33 +599,53 @@ function MarketSentimentWidget({ symbol }: { symbol: string }) {
   const signal = calcSignal(pct, fr, volRatio);
   const meta   = SIGNAL_META[signal];
   const pos    = pct >= 0;
+  const c      = meta.color;
 
   const stats = [
-    { label: "24ч изм.",    value: `${pos ? "+" : ""}${pct.toFixed(2)}%`, color: pos ? "text-success" : "text-danger" },
-    { label: "Funding 8ч",  value: `${fr >= 0 ? "+" : ""}${(fr * 100).toFixed(4)}%`, color: fr < 0 ? "text-success" : "text-danger" },
-    { label: "Объём USDT",  value: curVol >= 1e9 ? `${(curVol/1e9).toFixed(1)}B` : `${(curVol/1e6).toFixed(0)}M`, color: "text-white/50" },
+    { label: "24ч изм.", value: `${pos ? "+" : ""}${pct.toFixed(2)}%`,
+      isPos: pos, col: pos ? "#0ecb81" : "#f6465d" },
+    { label: "Funding 8ч", value: `${fr >= 0 ? "+" : ""}${(fr * 100).toFixed(4)}%`,
+      isPos: fr < 0, col: fr < 0 ? "#0ecb81" : "#f6465d" },
+    { label: "Объём USDT",
+      value: curVol >= 1e9 ? `${(curVol/1e9).toFixed(1)}B` : `${(curVol/1e6).toFixed(0)}M`,
+      isPos: true, col: "#9ca3af" },
   ];
 
   return (
-    <div className="space-y-1">
-      <SentimentGauge value={meta.arc} color={meta.color} />
+    <div className="space-y-2">
+      <div className="-mx-1">
+        <SentimentGauge value={meta.arc} color={c} />
+      </div>
 
-      <p className="text-center font-bold text-[15px] leading-none" style={{ color: meta.color,
-        textShadow: `0 0 12px ${meta.color}66` }}>
-        {meta.label}
-      </p>
+      {/* Signal label */}
+      <div className="relative flex items-center justify-center py-0.5">
+        <div className="absolute inset-x-4 h-px"
+          style={{ background: `linear-gradient(90deg, transparent, ${c}40, transparent)` }} />
+        <span className="relative rounded-lg px-4 py-1 text-[14px] font-extrabold tracking-wide"
+          style={{ color: c, background: `${c}14`,
+            textShadow: `0 0 20px ${c}80, 0 0 40px ${c}40` }}>
+          {meta.label}
+        </span>
+      </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2 pt-2">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-2 pt-1">
         {stats.map(s => (
-          <div key={s.label} className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 text-center">
-            <div className="text-[8px] uppercase tracking-wider text-white/25 leading-none">{s.label}</div>
-            <div className={`mt-1.5 font-mono text-[13px] font-bold tabular-nums leading-none ${s.color}`}>{s.value}</div>
+          <div key={s.label} className="rounded-xl px-2.5 py-2.5 text-center"
+            style={{ background: `${s.col}0d`, border: `1px solid ${s.col}25` }}>
+            <div className="text-[7.5px] uppercase tracking-widest text-white/30 leading-none mb-1.5">
+              {s.label}
+            </div>
+            <div className="font-mono text-[13px] font-bold tabular-nums leading-none"
+              style={{ color: s.col }}>
+              {s.value}
+            </div>
           </div>
         ))}
       </div>
 
-      <p className="pt-1 text-center text-[8px] text-white/15">
-        на основе ценового импульса · финансирования · объёма
+      <p className="text-center text-[7.5px] text-white/12 tracking-wide">
+        импульс · финансирование · объём
       </p>
     </div>
   );
@@ -737,14 +826,17 @@ export default function Dashboard() {
 
         <div className="grid gap-3 sm:grid-cols-3">
 
-          <Card className="p-5">
-            <WidgetHeader
-              label="Настроение рынка"
-              badge="LIVE"
-              badgeCls="border-accent-cyan/25 bg-accent-cyan/10 text-accent-cyan"
-            />
+          <div className="relative overflow-hidden rounded-2xl p-5"
+            style={{
+              background: "linear-gradient(160deg, rgba(10,255,224,0.04) 0%, rgba(255,255,255,0.015) 60%)",
+              border: "1px solid rgba(10,255,224,0.12)",
+              boxShadow: "0 0 40px -8px rgba(10,255,224,0.12), inset 0 1px 0 rgba(255,255,255,0.05)",
+            }}>
+            <div className="absolute inset-x-0 top-0 h-[1px]"
+              style={{ background: "linear-gradient(90deg, transparent, #0affe090, transparent)" }} />
+            <WidgetHeader label="Настроение рынка" badgeNode={<LiveBadge />} />
             <MarketSentimentWidget symbol={activeSym} />
-          </Card>
+          </div>
 
           <Card className="p-5">
             <WidgetHeader
