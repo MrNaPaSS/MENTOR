@@ -407,54 +407,158 @@ function LiquidationWidget({ symbol }: { symbol: string }) {
   );
 }
 
-// ── Widget: Настроение рынка (TradingView Technical Analysis) ────────────────
+// ── Widget: Настроение рынка (кастомный) ────────────────────────────────────
 
-function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+type Signal = "strong_buy" | "buy" | "neutral" | "sell" | "strong_sell";
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    container.innerHTML = "";
+const SIGNAL_META: Record<Signal, { label: string; color: string; arc: number }> = {
+  strong_buy:  { label: "Активно покупать", color: "#0ecb81", arc: 0.92 },
+  buy:         { label: "Покупать",          color: "#5ac87a", arc: 0.68 },
+  neutral:     { label: "Нейтрально",        color: "#9ca3af", arc: 0.50 },
+  sell:        { label: "Продавать",          color: "#f59e0b", arc: 0.32 },
+  strong_sell: { label: "Активно продавать", color: "#f6465d", arc: 0.08 },
+};
 
-    const tvSymbol = `WEEX:${symbol}`;
+function calcSignal(pct: number, fr: number, volRatio: number): Signal {
+  // pct: 24h price change %, fr: funding rate, volRatio: vol vs typical
+  let score = 0;
+  // Price momentum (weight 60%)
+  score += Math.max(-3, Math.min(3, pct / 2)) * 0.6;
+  // Funding rate: positive = longs overheated = slightly bearish
+  score += Math.max(-3, Math.min(3, -fr * 500)) * 0.25;
+  // Volume confirmation (weight 15%)
+  score += Math.max(-1, Math.min(1, (volRatio - 1) * 2)) * 0.15;
 
-    // Сдвигаем только на высоту заголовка (вкладки убраны через showIntervalTabs:false)
-    const shifter = document.createElement("div");
-    shifter.style.cssText = "margin-top:-42px; height:420px;";
-    container.appendChild(shifter);
+  if (score >  1.5) return "strong_buy";
+  if (score >  0.5) return "buy";
+  if (score > -0.5) return "neutral";
+  if (score > -1.5) return "sell";
+  return "strong_sell";
+}
 
-    const widgetDiv = document.createElement("div");
-    widgetDiv.className = "tradingview-widget-container__widget";
-    shifter.appendChild(widgetDiv);
+function SentimentGauge({ value, color }: { value: number; color: string }) {
+  const W = 260, H = 130, cx = W / 2, cy = H - 4, r = 100;
+  const circ = Math.PI * r;
+  const ang = Math.PI - value * Math.PI;
+  const nx = cx + (r - 12) * Math.cos(ang);
+  const ny = cy - (r - 12) * Math.sin(ang);
 
-    const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js";
-    script.type = "text/javascript";
-    script.async = true;
-    script.innerHTML = JSON.stringify({
-      interval: "15m",
-      width: "100%",
-      isTransparent: false,
-      backgroundColor: "#0b0e11",
-      height: 420,
-      symbol: tvSymbol,
-      showIntervalTabs: false,
-      displayMode: "single",
-      locale: "ru",
-      colorTheme: "dark",
-    });
-    shifter.appendChild(script);
-
-    return () => { if (container) container.innerHTML = ""; };
-  }, [symbol]);
+  const zones = [
+    { from: 0,    to: 0.2,  col: "#f6465d" },
+    { from: 0.2,  to: 0.4,  col: "#f59e0b" },
+    { from: 0.4,  to: 0.6,  col: "#9ca3af" },
+    { from: 0.6,  to: 0.8,  col: "#5ac87a" },
+    { from: 0.8,  to: 1.0,  col: "#0ecb81" },
+  ];
 
   return (
-    <div
-      ref={containerRef}
-      className="tradingview-widget-container -mx-5 -mb-5"
-      style={{ height: 360, overflow: "hidden", scrollbarWidth: "none" }}
-    />
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", overflow: "visible" }}>
+      {/* Zone arcs */}
+      {zones.map((z, i) => {
+        const a1 = Math.PI - z.from * Math.PI;
+        const a2 = Math.PI - z.to   * Math.PI;
+        const x1 = cx + r * Math.cos(a1), y1 = cy - r * Math.sin(a1);
+        const x2 = cx + r * Math.cos(a2), y2 = cy - r * Math.sin(a2);
+        return (
+          <path key={i}
+            d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`}
+            fill="none" stroke={z.col} strokeWidth="10" strokeLinecap="butt" opacity="0.22"
+          />
+        );
+      })}
+      {/* Active arc */}
+      <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+        fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10" strokeLinecap="round" />
+      <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+        fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
+        strokeDasharray={`${value * circ} ${circ}`}
+        style={{ transition: "stroke-dasharray 0.8s ease", filter: `drop-shadow(0 0 6px ${color}88)` }}
+      />
+      {/* Zone labels */}
+      {[
+        { v: 0.08, t: "Продажа" },
+        { v: 0.5,  t: "Нейтрально" },
+        { v: 0.92, t: "Покупка" },
+      ].map(({ v, t }) => {
+        const a = Math.PI - v * Math.PI;
+        return (
+          <text key={t}
+            x={cx + (r + 16) * Math.cos(a)} y={cy - (r + 16) * Math.sin(a)}
+            textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="8" fontFamily="monospace">
+            {t}
+          </text>
+        );
+      })}
+      {/* Needle */}
+      <line x1={cx} y1={cy} x2={nx} y2={ny}
+        stroke={color} strokeWidth="2.5" strokeLinecap="round"
+        style={{ filter: `drop-shadow(0 0 4px ${color})`, transition: "all 0.8s ease" }} />
+      <circle cx={cx} cy={cy} r="5" fill={color} style={{ filter: `drop-shadow(0 0 6px ${color})` }} />
+    </svg>
+  );
+}
+
+function MarketSentimentWidget({ symbol }: { symbol: string }) {
+  const [ticker, setTicker] = useState<TickerData | null>(null);
+  const [prevVol, setPrevVol] = useState(0);
+
+  useEffect(() => {
+    const load = () =>
+      fetch(`${API_URL}/api/market/ticker/${symbol}`, SKIP_NGROK)
+        .then(r => r.ok ? r.json() : null)
+        .then((d: TickerData | null) => {
+          if (d) {
+            setPrevVol(v => v || parseFloat(d.quoteVolume ?? "0"));
+            setTicker(d);
+          }
+        })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 10_000);
+    return () => clearInterval(t);
+  }, [symbol]);
+
+  if (!ticker) {
+    return <div className="h-[340px] animate-pulse rounded-xl bg-white/[0.04]" />;
+  }
+
+  const pct    = parseFloat(ticker.priceChangePercent ?? "0");
+  const fr     = parseFloat(ticker.fundingRate ?? "0");
+  const curVol = parseFloat(ticker.quoteVolume ?? "0");
+  const volRatio = prevVol > 0 ? curVol / prevVol : 1;
+
+  const signal = calcSignal(pct, fr, volRatio);
+  const meta   = SIGNAL_META[signal];
+  const pos    = pct >= 0;
+
+  const stats = [
+    { label: "24ч изм.",    value: `${pos ? "+" : ""}${pct.toFixed(2)}%`, color: pos ? "text-success" : "text-danger" },
+    { label: "Funding 8ч",  value: `${fr >= 0 ? "+" : ""}${(fr * 100).toFixed(4)}%`, color: fr < 0 ? "text-success" : "text-danger" },
+    { label: "Объём USDT",  value: curVol >= 1e9 ? `${(curVol/1e9).toFixed(1)}B` : `${(curVol/1e6).toFixed(0)}M`, color: "text-white/50" },
+  ];
+
+  return (
+    <div className="space-y-1">
+      <SentimentGauge value={meta.arc} color={meta.color} />
+
+      <p className="text-center font-bold text-[15px] leading-none" style={{ color: meta.color,
+        textShadow: `0 0 12px ${meta.color}66` }}>
+        {meta.label}
+      </p>
+
+      <div className="mt-3 grid grid-cols-3 gap-2 pt-2">
+        {stats.map(s => (
+          <div key={s.label} className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 text-center">
+            <div className="text-[8px] uppercase tracking-wider text-white/25 leading-none">{s.label}</div>
+            <div className={`mt-1.5 font-mono text-[13px] font-bold tabular-nums leading-none ${s.color}`}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <p className="pt-1 text-center text-[8px] text-white/15">
+        на основе ценового импульса · финансирования · объёма
+      </p>
+    </div>
   );
 }
 
@@ -639,7 +743,7 @@ export default function Dashboard() {
               badge="LIVE"
               badgeCls="border-accent-cyan/25 bg-accent-cyan/10 text-accent-cyan"
             />
-            <TechnicalAnalysisWidget symbol={activeSym} />
+            <MarketSentimentWidget symbol={activeSym} />
           </Card>
 
           <Card className="p-5">
