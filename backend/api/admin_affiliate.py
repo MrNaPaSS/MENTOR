@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/admin/affiliate", tags=["admin-affiliate"],
 
 _DAY_MS = 86_400_000
 _cache: dict[str, tuple[float, object]] = {}
-_TTL = 120  # сек — 2 минуты кэш чтобы не жечь rate limits WEEX (500 req/10s per endpoint)
+_TTL = 300  # сек — 5 минут кэш; реже ходим к WEEX, глобальный семафор в _get уберёг от 429
 
 # WEEX использует UTC+8 для отчётных периодов
 import datetime as _dt

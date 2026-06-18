@@ -23,6 +23,19 @@ logger = logging.getLogger("nmnh.weex")
 FUTURES_BASE = "https://api-contract.weex.com"
 AFFILIATE_BASE = "https://api-spot.weex.com"
 
+# Глобальный ограничитель для ВСЕХ affiliate-вызовов WEEX (api-spot.weex.com).
+# WEEX банит при >~10 req/s к партнёрским endpoint'ам, причём по всем endpoint'ам суммарно.
+# 3 одновременных запроса при ~150ms латентности = ~20 req/s — безопасная зона.
+_affiliate_sem: "asyncio.Semaphore | None" = None
+
+
+def _get_affiliate_sem():
+    import asyncio as _asyncio
+    global _affiliate_sem
+    if _affiliate_sem is None:
+        _affiliate_sem = _asyncio.Semaphore(3)
+    return _affiliate_sem
+
 _PRICE_FIELDS = ("price", "last", "close", "markPrice", "lastPr")
 _BALANCE_FIELDS = (
     "futuresBalance", "availableBalance", "balance", "totalAsset", "asset", "equity",
@@ -102,6 +115,13 @@ class RealWeexClient(WeexClient):
 
     async def _get(self, base: str, path: str, params: dict | None = None,
                    *, signed: bool = False, affiliate: bool = False) -> Optional[dict]:
+        if affiliate:
+            async with _get_affiliate_sem():
+                return await self._get_raw(base, path, params, signed=signed, affiliate=True)
+        return await self._get_raw(base, path, params, signed=signed, affiliate=False)
+
+    async def _get_raw(self, base: str, path: str, params: dict | None = None,
+                       *, signed: bool = False, affiliate: bool = False) -> Optional[dict]:
         session = await self._get_session()
         headers = {}
         if signed:
