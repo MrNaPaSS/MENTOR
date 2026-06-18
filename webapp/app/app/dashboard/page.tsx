@@ -83,8 +83,16 @@ interface TickerData {
   markPrice?: string; fundingRate?: string;
 }
 
+const FALLBACK_SYMBOLS = [
+  "BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT","DOGEUSDT","AVAXUSDT",
+  "ADAUSDT","LINKUSDT","DOTUSDT","MATICUSDT","LTCUSDT","ATOMUSDT","NEARUSDT",
+  "FTMUSDT","ARBUSDT","OPUSDT","SUIUSDT","APTUSDT","INJUSDT","TIAUSDT",
+  "SEIUSDT","WLDUSDT","ORDIUSDT","PEPEUSDT","FLOKIUSDT","BONKUSDT","JUPUSDT",
+  "PENDLEUSDT","STRKUSDT","EIGENUSDT","MOODENGUSDT","PNUTUSDT","ACTUSDT",
+];
+
 function SymbolSearch({ symbol, onSymChange }: { symbol: string; onSymChange: (s: string) => void }) {
-  const [allSymbols, setAllSymbols] = useState<string[]>([]);
+  const [allSymbols, setAllSymbols] = useState<string[]>(FALLBACK_SYMBOLS);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -92,7 +100,9 @@ function SymbolSearch({ symbol, onSymChange }: { symbol: string; onSymChange: (s
   useEffect(() => {
     fetch(`${API_URL}/api/market/symbols`, SKIP_NGROK)
       .then(r => r.ok ? r.json() : null)
-      .then((d: { symbols: string[] } | null) => { if (d?.symbols) setAllSymbols(d.symbols); })
+      .then((d: { symbols: string[] } | null) => {
+        if (d?.symbols?.length) setAllSymbols(d.symbols);
+      })
       .catch(() => {});
   }, []);
 
