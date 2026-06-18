@@ -21,9 +21,11 @@ router = APIRouter(prefix="/api/pnl", tags=["pnl"])
 
 @router.get("")
 async def list_pnl(request: Request):
-    # Возвращаем абсолютный URL через request.base_url чтобы браузер грузил
-    # картинки напрямую с FastAPI (через ngrok), а не с Render (там их нет).
-    base = str(request.base_url).rstrip("/")
+    # ngrok прокидывает X-Forwarded-Host / X-Forwarded-Proto, но не меняет Host.
+    # Используем forwarded-заголовки чтобы вернуть правильный публичный URL.
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "localhost:8000")
+    proto = request.headers.get("x-forwarded-proto", "http")
+    base = f"{proto}://{host}"
     files = sorted(
         f.name for f in PNL_DIR.iterdir()
         if f.is_file() and f.suffix.lower() in ALLOWED
