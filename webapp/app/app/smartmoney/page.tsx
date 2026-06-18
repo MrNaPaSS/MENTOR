@@ -1,11 +1,11 @@
 ﻿"use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
 import {
-  Building2, TrendingUp, TrendingDown, Minus, Brain,
-  RefreshCw, AlertTriangle, ChevronDown, ChevronUp,
-  BarChart3, DollarSign, Zap,
+  Building2, TrendingUp, TrendingDown, Minus,
+  AlertTriangle, ChevronDown, ChevronUp,
+  BarChart3, DollarSign,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -57,24 +57,24 @@ const DEMO_COT: Record<"BTC" | "ETH", CotRow[]> = {
 };
 
 const DEMO_MACRO: MacroItem[] = [
-  {key:"DXY",   label:"Индекс доллара USD",  price:104.62, change:-0.31, changePct:-0.30},
-  {key:"US10Y", label:"US 10Y Treasury",     price:4.38,   change:0.04,  changePct:0.92},
-  {key:"SPX",   label:"S&P 500",             price:5812.0, change:28.5,  changePct:0.49},
-  {key:"GOLD",  label:"Золото XAU/USD",      price:2745.3, change:12.1,  changePct:0.44},
-  {key:"OIL",   label:"Нефть WTI",           price:73.4,   change:-0.82, changePct:-1.11},
-  {key:"VIX",   label:"VIX",                 price:14.8,   change:-0.30, changePct:-1.99},
+  {key:"DXY",   label:"Индекс доллара USD",  price:99.21,  change:-0.44, changePct:-0.44},
+  {key:"US10Y", label:"US 10Y Treasury",     price:4.41,   change:0.03,  changePct:0.68},
+  {key:"SPX",   label:"S&P 500",             price:5921.0, change:42.1,  changePct:0.72},
+  {key:"GOLD",  label:"Золото XAU/USD",      price:3247.5, change:18.3,  changePct:0.57},
+  {key:"OIL",   label:"Нефть WTI",           price:61.8,   change:-0.94, changePct:-1.50},
+  {key:"VIX",   label:"VIX",                 price:17.2,   change:-0.80, changePct:-4.44},
 ];
 
 const DEMO_ETF = {
-  total_btc: 1_144_000,
+  total_btc: 1_237_000,
   etfs: [
-    {name:"BlackRock IBIT",    ticker:"IBIT",  btc:821000, aum_usd:53_987_827_000, price:37.17, change:2.03, changePct:5.78, sharePct:71.8},
-    {name:"Fidelity FBTC",     ticker:"FBTC",  btc:209000, aum_usd:13_771_296_000, price:57.13, change:3.11, changePct:5.78, sharePct:18.3},
-    {name:"ARK 21Shares ARKB", ticker:"ARKB",  btc:45600,  aum_usd:3_001_589_000,  price:21.77, change:1.19, changePct:5.78, sharePct:4.0},
-    {name:"Bitwise BITB",      ticker:"BITB",  btc:38400,  aum_usd:2_523_993_000,  price:35.63, change:1.95, changePct:5.79, sharePct:3.4},
-    {name:"VanEck HODL",       ticker:"HODL",  btc:18400,  aum_usd:1_211_789_000,  price:18.56, change:1.02, changePct:5.82, sharePct:1.6},
-    {name:"Invesco BTCO",      ticker:"BTCO",  btc:5000,   aum_usd:327_938_000,    price:65.32, change:3.58, changePct:5.78, sharePct:0.4},
-    {name:"Franklin EZBC",     ticker:"EZBC",  btc:6000,   aum_usd:394_523_000,    price:37.93, change:2.05, changePct:5.71, sharePct:0.5},
+    {name:"BlackRock IBIT",    ticker:"IBIT",  btc:907000, aum_usd:61_200_000_000, price:63.42, change:1.18, changePct:1.89, sharePct:73.3},
+    {name:"Fidelity FBTC",     ticker:"FBTC",  btc:214000, aum_usd:14_420_000_000, price:97.55, change:1.81, changePct:1.89, sharePct:17.3},
+    {name:"ARK 21Shares ARKB", ticker:"ARKB",  btc:47200,  aum_usd:3_182_000_000,  price:37.14, change:0.69, changePct:1.89, sharePct:3.8},
+    {name:"Bitwise BITB",      ticker:"BITB",  btc:40100,  aum_usd:2_702_000_000,  price:38.87, change:0.73, changePct:1.91, sharePct:3.2},
+    {name:"VanEck HODL",       ticker:"HODL",  btc:16200,  aum_usd:1_092_000_000,  price:31.74, change:0.59, changePct:1.89, sharePct:1.3},
+    {name:"Invesco BTCO",      ticker:"BTCO",  btc:6800,   aum_usd:458_000_000,    price:111.6, change:2.07, changePct:1.89, sharePct:0.5},
+    {name:"Franklin EZBC",     ticker:"EZBC",  btc:5700,   aum_usd:384_000_000,    price:64.81, change:1.20, changePct:1.89, sharePct:0.5},
   ] as EtfItem[],
 };
 
@@ -531,110 +531,20 @@ function EtfSection() {
   );
 }
 
-// ── AI Section ────────────────────────────────────────────────────────────────
-
-function AiSection() {
-  const [analysis, setAnalysis] = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
-
-  const run = useCallback(async () => {
-    setLoading(true); setError(""); setAnalysis("");
-    try {
-      const [cotBtc, cotEth, macro] = await Promise.all([
-        fetchJson(`${API_URL}/api/institutional/cot/BTC`),
-        fetchJson(`${API_URL}/api/institutional/cot/ETH`),
-        fetchJson(`${API_URL}/api/institutional/macro`),
-      ]);
-      const res = await fetch(`${API_URL}/api/institutional/analyze`, {
-        method: "POST",
-        headers: {"content-type": "application/json", "ngrok-skip-browser-warning": "1"},
-        body: JSON.stringify({cot_btc: cotBtc, cot_eth: cotEth, macro}),
-      });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({detail: "Ошибка"}));
-        setError(e.detail ?? "Ошибка"); return;
-      }
-      const d = await res.json() as {analysis: string};
-      setAnalysis(d.analysis);
-    } catch {
-      setError("Сеть недоступна");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  return (
-    <Section
-      icon={<Brain className="h-4 w-4 text-accent-cyan" />}
-      title="AI Анализ - Smart Money Intelligence"
-      sub="Claude · CFTC COT + макро"
-    >
-      <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-lg border border-accent-cyan/20 bg-accent-cyan/[0.05] p-3">
-          <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-cyan" />
-          <p className="text-[11px] leading-relaxed text-text-secondary">
-            ИИ синтезирует CFTC COT позиции хедж-фондов и макро индикаторы (DXY, ставки, VIX) -
-            генерирует структурированный торговый брифинг: куда движется институциональный капитал
-            и какие активы заслуживают внимания прямо сейчас.
-          </p>
-        </div>
-
-        <button
-          onClick={run}
-          disabled={loading}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-cyan/30 bg-accent-cyan/15 py-3 text-[13px] font-semibold text-accent-cyan transition hover:bg-accent-cyan/25 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading
-            ? <><RefreshCw className="h-4 w-4 animate-spin" />Анализирую…</>
-            : <><Brain className="h-4 w-4" />Запустить AI анализ</>}
-        </button>
-
-        {error && (
-          <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/[0.08] px-3 py-2.5 text-[12px] text-danger">
-            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-            {error.includes("ANTHROPIC_API_KEY")
-              ? <span>Добавьте <code className="font-mono">ANTHROPIC_API_KEY=sk-ant-...</code> в <code className="font-mono">.env</code> бэкенда</span>
-              : error}
-          </div>
-        )}
-
-        {analysis && (
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 text-[12px] leading-relaxed">
-            {analysis.split("\n").map((line, i) => {
-              if (line.startsWith("## "))
-                return <p key={i} className="mt-4 text-[11px] font-bold uppercase tracking-wider text-accent-cyan first:mt-0">{line.slice(3)}</p>;
-              if (!line.trim())
-                return <div key={i} className="h-2" />;
-              return <p key={i} className="text-text-secondary">{line}</p>;
-            })}
-          </div>
-        )}
-      </div>
-    </Section>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
-
-function PageHeader() {
-  return (
-    <div>
-      <h1 className="flex items-center gap-2 text-[18px] font-bold text-white">
-        <Building2 className="h-5 w-5 text-accent-gold" />
-        Smart Money
-      </h1>
-      <p className="mt-0.5 text-[11px] text-text-muted">
-        Институциональные позиции · CFTC COT · Макро · Bitcoin ETF · AI анализ
-      </p>
-    </div>
-  );
-}
 
 export default function SmartMoneyPage() {
   return (
     <div className="space-y-5">
-      <PageHeader />
+      <div>
+        <h1 className="flex items-center gap-2 text-[18px] font-bold text-white">
+          <Building2 className="h-5 w-5 text-accent-gold" />
+          Smart Money
+        </h1>
+        <p className="mt-0.5 text-[11px] text-text-muted">
+          Институциональные позиции · CFTC COT · Макро индикаторы · Bitcoin ETF
+        </p>
+      </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
         <CotSection />
@@ -642,7 +552,6 @@ export default function SmartMoneyPage() {
       </div>
 
       <EtfSection />
-      <AiSection />
     </div>
   );
 }
