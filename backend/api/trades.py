@@ -62,32 +62,49 @@ async def trades_me(
             "commission": _to_float(user_row.get("commission")),
         }
 
-    # Депозити з agency assert
+    # Депозиты и выводы из agency assert
     assets = await weex.get_agency_assert(uid)
-    deposit_list = assets.get("depositList", [])
-    deposits = sorted(
-        [
-            {
-                "amount": _to_float(d.get("amount")),
-                "coin": d.get("coinName", "USDT"),
-                "timestamp": int(d.get("updateTime", 0)),
-                "date_iso": _ts_to_iso(d.get("updateTime")),
-            }
-            for d in deposit_list
-            if isinstance(d, dict)
-        ],
-        key=lambda x: x["timestamp"],
-        reverse=True,
+
+    def _parse_tx_list(raw_list: list, tx_type: str) -> list:
+        result = []
+        for d in raw_list:
+            if not isinstance(d, dict):
+                continue
+            # WEEX может возвращать сумму в разных полях
+            amount = _to_float(d.get("amount") or d.get("withdrawAmount") or d.get("value") or 0)
+            result.append({
+                "type":      tx_type,
+                "amount":    amount,
+                "coin":      d.get("coinName") or d.get("coin", "USDT"),
+                "status":    d.get("status") or d.get("state"),
+                "timestamp": int(d.get("updateTime") or d.get("createTime") or 0),
+                "date_iso":  _ts_to_iso(d.get("updateTime") or d.get("createTime")),
+                "txid":      d.get("txId") or d.get("hash"),
+            })
+        return result
+
+    deposits = _parse_tx_list(assets.get("depositList", []), "deposit")
+    # WEEX может возвращать выводы под разными ключами
+    withdraw_raw = (
+        assets.get("withdrawList") or
+        assets.get("withdrawalList") or
+        assets.get("withdrawRecordList") or
+        []
     )
+    withdrawals = _parse_tx_list(withdraw_raw, "withdrawal")
+
+    transactions = sorted(deposits + withdrawals, key=lambda x: x["timestamp"], reverse=True)
 
     logger.info(
-        "Trades uid=%s summary=%s deposits=%d",
-        uid, summary, len(deposits),
+        "Trades uid=%s summary=%s deposits=%d withdrawals=%d assert_keys=%s withdraw_raw=%d",
+        uid, summary, len(deposits), len(withdrawals), list(assets.keys()), len(withdraw_raw),
     )
 
     return {
-        "trades": [],        # індивідуальні угоди недоступні через affiliate API
-        "summary": summary,
-        "deposits": deposits,
-        "needs_uid": False,
+        "trades":       [],
+        "summary":      summary,
+        "deposits":     deposits,
+        "withdrawals":  withdrawals,
+        "transactions": transactions,
+        "needs_uid":    False,
     }

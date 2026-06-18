@@ -7,6 +7,7 @@ getAffiliateCommission / agency.getAssert) в KPI и таблицу рефера
 
 from __future__ import annotations
 
+import logging
 import time
 from decimal import Decimal, InvalidOperation
 
@@ -14,6 +15,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from backend.deps import get_weex, get_current_mentor
+
+logger = logging.getLogger("nmnh.admin_affiliate")
 
 router = APIRouter(prefix="/api/admin/affiliate", tags=["admin-affiliate"],
                    dependencies=[Depends(get_current_mentor)])
@@ -95,7 +98,7 @@ async def overview(days: int = 30, weex=Depends(get_weex)):
         total_spot_volume=sum((_d(r.get("spotTradingAmount")) for r in records), Decimal(0)),
         total_futures_volume=sum((_d(r.get("futuresTradingAmount")) for r in records), Decimal(0)),
         total_commission=sum((_d(r.get("commission")) for r in records), Decimal(0)),
-        total_withdrawal=sum((_d(r.get("withdrawalAmount")) for r in records), Decimal(0)),
+        total_withdrawal=sum((_d(r.get("withdrawalAmount") or r.get("withdrawAmount") or r.get("withdrawal")) for r in records), Decimal(0)),
         with_deposit=sum(1 for r in records if _d(r.get("depositAmount")) > 0),
         active_traders=sum(1 for r in records if _d(r.get("futuresTradingAmount")) > 0 or _d(r.get("spotTradingAmount")) > 0),
         period_days=days,
@@ -138,6 +141,8 @@ async def referrals(days: int = 30, weex=Depends(get_weex)):
         return all_uids, trade
 
     all_uids, trade = await _cached(f"refs:{days}", build)
+    if trade:
+        logger.info("WEEX getChannelUserTradeAndAsset sample keys: %s", list(trade[0].keys()))
     uid_meta = {u["uid"]: u for u in all_uids}
 
     # Получаем балансы всех рефералов параллельно (ограничиваем семафором на 10)
@@ -164,7 +169,7 @@ async def referrals(days: int = 30, weex=Depends(get_weex)):
             spot_volume=spt,
             futures_volume=fut,
             commission=_d(r.get("commission")),
-            withdrawal=_d(r.get("withdrawalAmount")),
+            withdrawal=_d(r.get("withdrawalAmount") or r.get("withdrawAmount") or r.get("withdrawal")),
             has_traded=(fut > 0 or spt > 0),
             has_deposit=(dep > 0),
         ))

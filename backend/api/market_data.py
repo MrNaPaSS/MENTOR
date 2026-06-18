@@ -1,9 +1,12 @@
 """Рыночные данные — прокси к WEEX Futures API и external APIs.
 
 Рабочие публичные эндпоинты WEEX (api-contract.weex.com):
-  /capi/v3/market/symbolPrice?symbol=X  → цена пары
-  /capi/v3/market/depth?symbol=X         → стакан цен (без param limit!)
+  /capi/v3/market/symbolPrice?symbol=X        → цена пары
+  /capi/v3/market/depth?symbol=X              → стакан цен (без param limit!)
   /capi/v3/market/klines?symbol=X&interval=15m&limit=N → свечи
+  /capi/v3/market/fundingRate?symbol=X        → ставка финансирования
+  /capi/v3/market/openInterest?symbol=X       → открытый интерес
+  /capi/v3/market/ticker?symbol=X             → расширенный тикер (прирост, объём)
 """
 
 from __future__ import annotations
@@ -19,10 +22,14 @@ router = APIRouter(prefix="/api/market", tags=["market-data"])
 WEEX_BASE = "https://api-contract.weex.com"
 FNG_URL = "https://api.alternative.me/fng/?limit=30&format=json"
 
-# Основные пары для тикера
 TICKER_SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
     "DOGEUSDT", "AVAXUSDT", "ADAUSDT", "MATICUSDT", "LTCUSDT",
+]
+
+FUNDING_SYMBOLS = [
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
+    "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "DOTUSDT",
 ]
 
 _session: aiohttp.ClientSession | None = None
@@ -93,49 +100,85 @@ async def tickers():
     return {"tickers": [r for r in results if r]}
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _extract_funding(raw: Any) -> str | None:
+    """Вытащить fundingRate из ответа WEEX (структура варьируется)."""
+    if not raw:
+        return None
+    payload = raw.get("data") if isinstance(raw, dict) else raw
+    if isinstance(payload, dict):
+        for key in ("fundingRate", "funding_rate", "rate"):
+            if key in payload:
+                return str(payload[key])
+    if isinstance(payload, list) and payload:
+        item = payload[0]
+        if isinstance(item, dict):
+            for key in ("fundingRate", "funding_rate", "rate"):
+                if key in item:
+                    return str(item[key])
+    # иногда rate лежит прямо в корне
+    for key in ("fundingRate", "funding_rate", "rate"):
+        if isinstance(raw, dict) and key in raw:
+            return str(raw[key])
+    return None
+
+
+def _extract_next_funding(raw: Any) -> int | None:
+    if not raw:
+        return None
+    payload = raw.get("data") if isinstance(raw, dict) else raw
+    if isinstance(payload, dict):
+        for key in ("nextFundingTime", "next_funding_time", "nextSettle"):
+            if key in payload:
+                return int(payload[key])
+    return None
+
+
+async def _fetch_funding_one(sym: str) -> dict:
+    for path in ["/capi/v3/market/fundingRate", "/capi/v1/market/fundingRate",
+                 "/capi/v3/market/ticker"]:
+        raw = await _weex(path, {"symbol": sym})
+        fr = _extract_funding(raw)
+        if fr and fr != "0":
+            return {
+                "symbol":          sym,
+                "fundingRate":     fr,
+                "nextFundingTime": _extract_next_funding(raw),
+            }
+    return {"symbol": sym, "fundingRate": "0", "nextFundingTime": None}
+
+
 # ── Funding Rates ────────────────────────────────────────────────────────────
 
 @router.get("/funding-rates")
 async def funding_rates():
-    """Ставки финансирования топ-пар."""
-    # WEEX публичный эндпоинт ставок — пробуем несколько вариантов
-    for path in ["/capi/v3/market/fundingRate", "/capi/v1/market/fundingRate"]:
-        data = await _weex(path, {"symbol": "BTCUSDT"})
-        if data:
-            if isinstance(data, dict):
-                payload = data.get("data") or data
-            else:
-                payload = data
-            return {"rates": payload if isinstance(payload, list) else [payload]}
-
-    # Фоллбэк — вычисленные из symbolPrice данные
-    SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"]
-    fallback = [{"symbol": s, "fundingRate": "0.0001"} for s in SYMBOLS]
-    return {"rates": fallback}
+    """Ставки финансирования для всех основных пар из WEEX."""
+    results = await asyncio.gather(*[_fetch_funding_one(s) for s in FUNDING_SYMBOLS])
+    return {"rates": list(results)}
 
 
 # ── 24h Ticker ───────────────────────────────────────────────────────────────
 
 @router.get("/ticker/{symbol}")
 async def ticker_24h(symbol: str):
-    """24-часовая статистика пары из WEEX: symbolPrice + klines(1d)."""
+    """24-часовая статистика пары из WEEX: symbolPrice + klines(1d) + fundingRate."""
     sym = symbol.upper()
 
-    # Параллельно берём текущую цену и дневную свечу с WEEX
-    price_data, klines_data = await asyncio.gather(
+    price_data, klines_data, funding_raw = await asyncio.gather(
         _weex("/capi/v3/market/symbolPrice", {"symbol": sym}),
         _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "1"}),
+        _weex("/capi/v3/market/fundingRate", {"symbol": sym}),
     )
 
     if price_data and klines_data and isinstance(klines_data, list) and klines_data:
-        # kline format: [openTime, open, high, low, close, baseVol, closeTime, quoteVol, trades, ...]
         k = klines_data[0]
         last_price = price_data.get("price", "0")
         open_price = str(k[1])
         high_price = str(k[2])
         low_price  = str(k[3])
-        base_vol   = str(k[5])   # объём в базовом активе (BTC)
-        quote_vol  = str(k[7])   # объём в USDT
+        base_vol   = str(k[5])
+        quote_vol  = str(k[7])
 
         try:
             change = float(last_price) - float(open_price)
@@ -154,7 +197,8 @@ async def ticker_24h(symbol: str):
             "quoteVolume":        quote_vol,
             "openPrice":          open_price,
             "markPrice":          None,
-            "fundingRate":        None,
+            "fundingRate":        _extract_funding(funding_raw),
+            "nextFundingTime":    _extract_next_funding(funding_raw),
         }
 
     raise HTTPException(502, f"WEEX ticker недоступен для {sym}")
@@ -164,10 +208,67 @@ async def ticker_24h(symbol: str):
 
 @router.get("/open-interest/{symbol}")
 async def open_interest(symbol: str):
-    """Открытый интерес по паре."""
-    data = await _weex("/capi/v3/market/openInterest", {"symbol": symbol.upper()})
+    """Открытый интерес по паре из WEEX."""
+    sym = symbol.upper()
+    data = await _weex("/capi/v3/market/openInterest", {"symbol": sym})
     payload = data.get("data") if data else None
-    return {"symbol": symbol.upper(), "open_interest": payload}
+    oi_value = None
+    if isinstance(payload, dict):
+        for key in ("openInterest", "open_interest", "oi", "value"):
+            if key in payload:
+                oi_value = str(payload[key])
+                break
+    elif isinstance(payload, (int, float, str)):
+        oi_value = str(payload)
+    return {"symbol": sym, "open_interest": oi_value, "raw": payload}
+
+
+# ── Derivatives (OI + Funding) ────────────────────────────────────────────────
+
+@router.get("/derivatives/{symbol}")
+async def derivatives(symbol: str):
+    """OI + ставка финансирования + 24ч изменение из WEEX для одной пары."""
+    sym = symbol.upper()
+
+    oi_raw, funding_raw, price_raw, klines_raw = await asyncio.gather(
+        _weex("/capi/v3/market/openInterest", {"symbol": sym}),
+        _weex("/capi/v3/market/fundingRate",  {"symbol": sym}),
+        _weex("/capi/v3/market/symbolPrice",  {"symbol": sym}),
+        _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "1"}),
+    )
+
+    last_price = float(price_raw.get("price", 0)) if price_raw else 0
+
+    # Открытый интерес
+    oi_payload = oi_raw.get("data") if oi_raw else None
+    oi_value = None
+    if isinstance(oi_payload, dict):
+        for key in ("openInterest", "open_interest", "oi", "value"):
+            if key in oi_payload:
+                try:
+                    oi_value = float(oi_payload[key]) * last_price
+                except (ValueError, TypeError):
+                    pass
+                break
+
+    # 24ч изменение
+    change_pct = 0.0
+    if klines_raw and isinstance(klines_raw, list) and klines_raw:
+        k = klines_raw[0]
+        try:
+            open_p = float(k[1])
+            change_pct = ((last_price - open_p) / open_p * 100) if open_p else 0
+        except (ValueError, TypeError, IndexError):
+            pass
+
+    return {
+        "symbol":          sym,
+        "openInterestUsd": oi_value,
+        "fundingRate":     _extract_funding(funding_raw),
+        "nextFundingTime": _extract_next_funding(funding_raw),
+        "lastPrice":       last_price,
+        "priceChangePct":  round(change_pct, 2),
+    }
 
 
 # ── Recent Trades ────────────────────────────────────────────────────────────

@@ -180,10 +180,13 @@ export interface TradeSummary {
 }
 
 export interface DepositRecord {
+  type?: "deposit" | "withdrawal";
   amount: number;
   coin: string;
   timestamp: number;
   date_iso: string | null;
+  status?: string | null;
+  txid?: string | null;
 }
 
 export interface TradesResponse {
@@ -191,6 +194,8 @@ export interface TradesResponse {
   stats: TradeStats | null;
   summary: TradeSummary | null;
   deposits: DepositRecord[];
+  withdrawals: DepositRecord[];
+  transactions: DepositRecord[];
   needs_uid: boolean;
 }
 

@@ -151,13 +151,27 @@ class MockWeexClient(WeexClient):
         h = _hash_float(str(user_id))
         contract = round(100 + h * 4900, 2)
         spot = round(h * 1500, 2)
+        now = int(time.time() * 1000)
+        day = 86_400_000
+        deposit_list = [
+            {"amount": f"{round(100 + h * 900, 2):.2f}", "coinName": "USDT",
+             "updateTime": now - int(h * 60 * day)},
+            {"amount": f"{round(50 + h * 200, 2):.2f}", "coinName": "USDT",
+             "updateTime": now - int(h * 30 * day)},
+        ]
+        withdraw_list = [
+            {"amount": f"{round(30 + h * 100, 2):.2f}", "coinName": "USDT",
+             "updateTime": now - int(h * 20 * day), "status": "completed"},
+        ] if h > 0.3 else []
         return {
-            "availableBalance": f"{round(contract * 0.8, 2):.2f}",
+            "availableBalance":  f"{round(contract * 0.8, 2):.2f}",
             "contractTotalUsdt": f"{contract:.2f}",
             "depositTotalAmount": f"{round(200 + h * 3000, 2):.2f}",
-            "fundingTotalUsdt": f"{round(h * 50, 2):.2f}",
-            "spotProTotalUsdt": f"{spot:.2f}",
+            "fundingTotalUsdt":  f"{round(h * 50, 2):.2f}",
+            "spotProTotalUsdt":  f"{spot:.2f}",
             "unimarginTotalUsdt": f"{round(h * 80, 2):.2f}",
+            "depositList":       deposit_list,
+            "withdrawalList":    withdraw_list,
         }
 
     async def check_uid_existence(self, uid: str, contact_type: str = "email", contact_value: str = "") -> bool:
