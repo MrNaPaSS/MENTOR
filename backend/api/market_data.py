@@ -273,30 +273,24 @@ async def derivatives(symbol: str):
 
 # ── Recent Trades ────────────────────────────────────────────────────────────
 
-BINANCE_TRADES = "https://api.binance.com/api/v3/trades"
-
 @router.get("/trades/{symbol}")
 async def recent_trades(symbol: str, limit: int = 40):
-    """Последние сделки — Binance public API (isBuyerMaker=true → продавец-тейкер)."""
-    session = await _get_session()
-    try:
-        async with session.get(BINANCE_TRADES, params={"symbol": symbol.upper(), "limit": limit}) as r:
-            if r.status == 200:
-                data = await r.json(content_type=None)
-                return {
-                    "trades": [
-                        {
-                            "price":    t["price"],
-                            "qty":      t["qty"],
-                            "quoteQty": t["quoteQty"],
-                            "time":     t["time"],
-                            "isBuy":    not t["isBuyerMaker"],
-                        }
-                        for t in reversed(data)   # новые сверху
-                    ]
+    """Последние сделки — WEEX Futures API /capi/v3/market/trades."""
+    sym = symbol.upper()
+    data = await _weex("/capi/v3/market/trades", {"symbol": sym, "limit": min(limit, 100)})
+    if data and isinstance(data, list):
+        return {
+            "trades": [
+                {
+                    "price":    t.get("price"),
+                    "qty":      t.get("qty"),
+                    "quoteQty": t.get("quoteQty"),
+                    "time":     t.get("time"),
+                    "isBuy":    not t.get("isBuyerMaker", True),
                 }
-    except Exception:
-        pass
+                for t in data
+            ]
+        }
     raise HTTPException(502, "Trades недоступны")
 
 
