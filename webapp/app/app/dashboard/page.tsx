@@ -163,14 +163,31 @@ function SymbolSearch({ symbol, onSymChange }: { symbol: string; onSymChange: (s
               autoFocus
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Поиск пары..."
+              onKeyDown={e => {
+                if (e.key === "Enter" && query.length >= 2) {
+                  const custom = query.toUpperCase().replace("USDT","") + "USDT";
+                  onSymChange(custom); setOpen(false); setQuery("");
+                }
+              }}
+              placeholder="Поиск или введи пару..."
               className="w-full rounded-lg bg-white/[0.05] px-3 py-1.5 font-mono text-[12px] text-white placeholder-white/25 outline-none"
             />
           </div>
           <div className="max-h-64 overflow-y-auto p-1">
-            {filtered.length === 0 ? (
-              <p className="py-4 text-center text-[11px] text-white/25">Не найдено</p>
-            ) : filtered.map(s => {
+            {query.length >= 2 && !filtered.some(s => s === query.toUpperCase() + "USDT") && (
+              <button
+                onClick={() => {
+                  const custom = query.toUpperCase().replace("USDT","") + "USDT";
+                  onSymChange(custom); setOpen(false); setQuery("");
+                }}
+                className="flex w-full items-center gap-2 rounded-lg border border-accent-cyan/20 bg-accent-cyan/5 px-3 py-1.5 text-left mb-1"
+              >
+                <span className="font-mono text-[12px] font-bold text-accent-cyan">{query.toUpperCase().replace("USDT","")}</span>
+                <span className="text-[10px] text-white/25">USDT</span>
+                <span className="ml-auto text-[10px] text-accent-cyan/60">Enter - открыть</span>
+              </button>
+            )}
+            {filtered.map(s => {
               const t = s.replace("USDT", "");
               const active = s === symbol;
               return (
@@ -182,6 +199,9 @@ function SymbolSearch({ symbol, onSymChange }: { symbol: string; onSymChange: (s
                 </button>
               );
             })}
+            {filtered.length === 0 && query.length < 2 && (
+              <p className="py-4 text-center text-[11px] text-white/25">Введи название монеты</p>
+            )}
           </div>
         </div>
       )}
