@@ -27,7 +27,7 @@ import { useMentorToken } from "@/components/admin/AdminShell";
 import { fmtUsd } from "@/lib/format";
 
 const PERIODS = [7, 30, 90] as const;
-type SortField = "uid" | "kyc" | "deposit" | "balance" | "spot_volume" | "futures_volume" | "commission";
+type SortField = "uid" | "kyc" | "deposit" | "withdrawal" | "balance" | "spot_volume" | "futures_volume" | "commission";
 type SortOrder = "asc" | "desc";
 
 export default function AdminDashboard() {
@@ -90,7 +90,7 @@ export default function AdminDashboard() {
       let valB: any = b[sortField];
 
       // Приведение к числам для сравнения объемов
-      if (["deposit", "balance", "spot_volume", "futures_volume", "commission"].includes(sortField)) {
+      if (["deposit", "withdrawal", "balance", "spot_volume", "futures_volume", "commission"].includes(sortField)) {
         valA = Number(valA || 0);
         valB = Number(valB || 0);
       }
@@ -120,11 +120,12 @@ export default function AdminDashboard() {
   // Экспорт в CSV
   const exportToCSV = () => {
     if (refs.length === 0) return;
-    const headers = ["UID", "KYC", "Deposit (USDT)", "Balance (USDT)", "Spot Volume (USDT)", "Futures Volume (USDT)", "Commission (USDT)"];
+    const headers = ["UID", "KYC", "Deposit (USDT)", "Withdrawal (USDT)", "Balance (USDT)", "Spot Volume (USDT)", "Futures Volume (USDT)", "Commission (USDT)"];
     const rows = refs.map(r => [
       r.uid,
       r.kyc ? "Yes" : "No",
       r.deposit,
+      r.withdrawal,
       r.balance,
       r.spot_volume,
       r.futures_volume,
@@ -638,12 +639,23 @@ export default function AdminDashboard() {
                     </th>
 
                     {/* Депозит */}
-                    <th 
+                    <th
                       onClick={() => handleSort("deposit")}
                       className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-white transition text-right"
                     >
                       <div className="flex items-center justify-end gap-1">
                         Депозит
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </th>
+
+                    {/* Вывод */}
+                    <th
+                      onClick={() => handleSort("withdrawal")}
+                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-white transition text-right"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        Вывод
                         <ArrowUpDown className="h-3 w-3" />
                       </div>
                     </th>
@@ -741,6 +753,15 @@ export default function AdminDashboard() {
                         {/* Депозит */}
                         <td className="py-3 px-3 text-right font-mono font-semibold text-white">
                           ${fmtUsd(r.deposit)}
+                        </td>
+
+                        {/* Вывод */}
+                        <td className="py-3 px-3 text-right font-mono font-semibold">
+                          {Number(r.withdrawal) > 0 ? (
+                            <span className="text-danger">-${fmtUsd(r.withdrawal)}</span>
+                          ) : (
+                            <span className="text-white/20">—</span>
+                          )}
                         </td>
 
                         {/* Баланс */}
