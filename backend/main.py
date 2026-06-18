@@ -7,11 +7,8 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from core.db import init_engine, create_all, SessionLocal
 from core import repo
@@ -87,12 +84,6 @@ def create_app(
     app.include_router(pnl.router)
     app.include_router(trades.router)
     app.include_router(ws_routes.router)
-
-    _public = Path(__file__).parent.parent / "webapp" / "public"
-    for _folder in ("pln", "uploads"):
-        _dir = _public / _folder
-        _dir.mkdir(parents=True, exist_ok=True)
-        app.mount(f"/{_folder}", StaticFiles(directory=str(_dir)), name=_folder)
 
     @app.get("/api/health", tags=["health"])
     async def health():
