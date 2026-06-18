@@ -407,118 +407,57 @@ function LiquidationWidget({ symbol }: { symbol: string }) {
   );
 }
 
-// ── Widget: Fear & Greed ──────────────────────────────────────────────────────
+// ── Widget: Настроение рынка (TradingView Technical Analysis) ────────────────
 
-interface FngPoint { value: string; value_classification: string }
-
-function fngColor(v: number) {
-  if (v <= 25) return "#f6465d";
-  if (v <= 45) return "#FF8C00";
-  if (v <= 55) return "#FFD700";
-  if (v <= 75) return "#0ecb81";
-  return "#0affe0";
-}
-function fngLabel(cls: string) {
-  const m: Record<string, string> = {
-    "Extreme Fear": "Крайний страх", "Fear": "Страх",
-    "Neutral": "Нейтрально", "Greed": "Жадность", "Extreme Greed": "Крайняя жадность",
-  };
-  return m[cls] ?? cls;
-}
-
-function FearGreedWidget() {
-  const [current, setCurrent] = useState<FngPoint | null>(null);
-  const [history, setHistory] = useState<FngPoint[]>([]);
+function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/market/fear-greed`, SKIP_NGROK);
-        if (!res.ok) return;
-        const d = await res.json();
-        setCurrent(d.current);
-        setHistory(d.history ?? []);
-      } catch { /* silent */ }
-    };
-    load();
-    const id = setInterval(load, 60_000);
-    return () => clearInterval(id);
-  }, []);
+    const container = containerRef.current;
+    if (!container) return;
+    container.innerHTML = "";
 
-  if (!current) return <div className="h-36 animate-pulse rounded-xl bg-white/[0.04]" />;
+    const tvSymbol = `WEEX:${symbol}`;
 
-  const val   = parseInt(current.value);
-  const color = fngColor(val);
-  const W = 260, H = 124, cx = W / 2, cy = H - 8, r = 100;
-  const circ  = Math.PI * r;
+    const wrapper = document.createElement("div");
+    wrapper.className = "tradingview-widget-container__widget";
+    container.appendChild(wrapper);
+
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      interval: "15m",
+      width: "100%",
+      isTransparent: true,
+      height: 350,
+      symbol: tvSymbol,
+      showIntervalTabs: true,
+      displayMode: "single",
+      locale: "ru",
+      colorTheme: "dark",
+    });
+    container.appendChild(script);
+
+    return () => { if (container) container.innerHTML = ""; };
+  }, [symbol]);
 
   return (
-    <div className="space-y-2">
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", overflow: "visible" }}>
-        {/* Track */}
-        <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
-          fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="12" strokeLinecap="round" />
-        {/* Active arc */}
-        <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
-          fill="none" stroke={color} strokeWidth="12" strokeLinecap="round"
-          strokeDasharray={`${(val/100)*circ} ${circ}`}
-          style={{ transition: "stroke-dasharray 1s ease", filter: `drop-shadow(0 0 8px ${color}66)` }} />
-        {/* Tick marks */}
-        {[0, 25, 50, 75, 100].map(pct => {
-          const ang = Math.PI - (pct / 100) * Math.PI;
-          return (
-            <text key={pct} x={cx + (r + 16) * Math.cos(ang)} y={cy - (r + 16) * Math.sin(ang)}
-              textAnchor="middle" fill="rgba(255,255,255,0.15)" fontSize="8" fontFamily="monospace">{pct}</text>
-          );
-        })}
-        {/* Needle */}
-        {(() => {
-          const ang = Math.PI - (val / 100) * Math.PI;
-          const nx = cx + (r - 10) * Math.cos(ang);
-          const ny = cy - (r - 10) * Math.sin(ang);
-          return (
-            <line x1={cx} y1={cy} x2={nx} y2={ny}
-              stroke={color} strokeWidth="2" strokeLinecap="round"
-              style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
-          );
-        })()}
-        <circle cx={cx} cy={cy} r="4" fill={color} style={{ filter: `drop-shadow(0 0 6px ${color})` }} />
-        {/* Value */}
-        <text x={cx} y={cy - 26} textAnchor="middle" fill="white"
-          fontSize="38" fontWeight="800" fontFamily="monospace">{val}</text>
-        <text x={cx} y={cy - 8} textAnchor="middle" fill={color}
-          fontSize="11" fontWeight="600" fontFamily="sans-serif">{fngLabel(current.value_classification)}</text>
-      </svg>
-
-      {history.length > 1 && (
-        <div>
-          <div className="flex items-end gap-[2px] rounded-xl bg-white/[0.03] p-2" style={{ height: 36 }}>
-            {history.slice(0, 14).reverse().map((h, i) => {
-              const v = parseInt(h.value);
-              return (
-                <div key={i} className="flex-1 rounded-sm transition-all duration-300" title={String(v)}
-                  style={{ height: `${Math.max((v / 100) * 30, 3)}px`, background: fngColor(v), opacity: 0.5 + 0.5 * (v / 100) }} />
-              );
-            })}
-          </div>
-          <div className="mt-1.5 flex justify-between text-[8px] text-white/20">
-            <span>14 дн. назад</span>
-            <span>сегодня</span>
-          </div>
-        </div>
-      )}
-    </div>
+    <div ref={containerRef} className="tradingview-widget-container" style={{ minHeight: 350 }} />
   );
 }
 
 // ── Widget: Финансирование ────────────────────────────────────────────────────
 
-type FundingEntry = { symbol?: string; pair?: string; fundingRate?: string; rate?: string; fr?: string };
+type FundingEntry = { symbol: string; fundingRate: string };
 
 const FUNDING_FALLBACK: FundingEntry[] = [
-  { symbol: "BTCUSDT", rate: "0.0001" }, { symbol: "ETHUSDT", rate: "-0.0050" },
-  { symbol: "SOLUSDT", rate: "0.0320" }, { symbol: "XRPUSDT", rate: "0.0150" },
-  { symbol: "BNBUSDT", rate: "-0.0080" },
+  { symbol: "BTCUSDT", fundingRate: "0.0001" },
+  { symbol: "ETHUSDT", fundingRate: "-0.0050" },
+  { symbol: "SOLUSDT", fundingRate: "0.0320" },
+  { symbol: "XRPUSDT", fundingRate: "0.0150" },
+  { symbol: "BNBUSDT", fundingRate: "-0.0080" },
 ];
 
 function nextFundingCountdown(): string {
@@ -541,23 +480,30 @@ function FundingWidget({ symbol }: { symbol: string }) {
   }, []);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/market/funding-rates`, SKIP_NGROK)
-      .then(r => r.ok ? r.json() : null)
-      .then((d: { rates?: FundingEntry[] } | null) => {
-        setRates(d?.rates?.length ? d.rates.slice(0, 5) : FUNDING_FALLBACK);
-      })
-      .catch(() => setRates(FUNDING_FALLBACK));
+    Promise.all(
+      SYMBOLS.map(sym =>
+        fetch(`${API_URL}/api/market/ticker/${sym}`, SKIP_NGROK)
+          .then(r => r.ok ? r.json() : null)
+          .then((d: TickerData | null) => ({
+            symbol: sym,
+            fundingRate: d?.fundingRate ?? "0",
+          }))
+          .catch(() => ({ symbol: sym, fundingRate: "0" }))
+      )
+    ).then(results => {
+      const valid = results.filter(r => r.fundingRate !== "0");
+      setRates(valid.length ? results : FUNDING_FALLBACK);
+    });
   }, []);
 
-  const raw    = rates.length ? rates : FUNDING_FALLBACK;
   const active = symbol.replace("USDT", "");
-  const list   = [...raw].sort((a, b) => {
-    const aIsActive = (a.symbol ?? a.pair ?? "").replace("USDT", "") === active;
-    const bIsActive = (b.symbol ?? b.pair ?? "").replace("USDT", "") === active;
-    return aIsActive ? -1 : bIsActive ? 1 : 0;
+  const list = [...(rates.length ? rates : FUNDING_FALLBACK)].sort((a, b) => {
+    const aActive = a.symbol.replace("USDT", "") === active;
+    const bActive = b.symbol.replace("USDT", "") === active;
+    return aActive ? -1 : bActive ? 1 : 0;
   });
-  const maxAbs    = Math.max(...list.map(r => Math.abs(parseFloat(r.fundingRate ?? r.rate ?? r.fr ?? "0"))), 0.0001);
-  const longCount = list.filter(r => parseFloat(r.fundingRate ?? r.rate ?? r.fr ?? "0") > 0).length;
+  const maxAbs    = Math.max(...list.map(r => Math.abs(parseFloat(r.fundingRate))), 0.0001);
+  const longCount = list.filter(r => parseFloat(r.fundingRate) > 0).length;
   const bias      = longCount > list.length / 2
     ? { label: "лонг перегрет",  col: "text-danger"   }
     : longCount < list.length / 2
@@ -575,8 +521,8 @@ function FundingWidget({ symbol }: { symbol: string }) {
 
       {/* Монеты */}
       {list.map((r) => {
-        const sym      = (r.symbol ?? r.pair ?? "?").replace("USDT", "");
-        const rate     = parseFloat(r.fundingRate ?? r.rate ?? r.fr ?? "0");
+        const sym      = r.symbol.replace("USDT", "");
+        const rate     = parseFloat(r.fundingRate);
         const pos      = rate >= 0;
         const frac     = Math.min(Math.abs(rate) / maxAbs, 1);
         const apr      = rate * 3 * 365 * 100;
@@ -683,7 +629,7 @@ export default function Dashboard() {
               badge="LIVE"
               badgeCls="border-accent-cyan/25 bg-accent-cyan/10 text-accent-cyan"
             />
-            <FearGreedWidget />
+            <TechnicalAnalysisWidget symbol={activeSym} />
           </Card>
 
           <Card className="p-5">
