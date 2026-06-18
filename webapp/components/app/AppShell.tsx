@@ -11,7 +11,6 @@ import {
   Trophy,
   User,
   LogOut,
-  Wallet,
   ChevronDown,
   Calculator,
   ImageIcon,
@@ -130,16 +129,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {profile && (
               <Link
                 href="/app/profile"
-                className="hidden items-center gap-2 rounded-xl border border-border bg-bg-panel/60 px-3 py-1.5 transition hover:border-accent-cyan/40 sm:flex"
+                className="hidden items-center rounded-xl border border-border bg-bg-panel/60 px-3 py-1.5 transition hover:border-accent-cyan/40 sm:flex"
               >
-                <Wallet className="h-4 w-4 text-text-muted" />
                 <span className="font-mono text-sm font-bold text-white tabular">
                   ${balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-                <span
-                  className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${MODE_COLORS[mode] || MODE_COLORS.moderate}`}
-                >
-                  {modeLabel(mode)}
                 </span>
               </Link>
             )}

@@ -5,7 +5,7 @@ import { API_URL } from "@/lib/api";
 import {
   Building2, TrendingUp, TrendingDown, Minus,
   AlertTriangle, ChevronDown, ChevronUp,
-  BarChart3, DollarSign,
+  BarChart3, DollarSign, Activity, Zap, ArrowDownToLine, ArrowUpFromLine,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -531,6 +531,292 @@ function EtfSection() {
   );
 }
 
+// ── Derivatives demo data ─────────────────────────────────────────────────────
+
+const DEMO_DERIV = [
+  { sym:"BTC",  oi:38_420_000_000, oiChg:+2.4, longPct:52.1, shortPct:47.9, liqLong:124_800_000, liqShort:67_300_000, fr:0.0082 },
+  { sym:"ETH",  oi:14_870_000_000, oiChg:-1.1, longPct:49.3, shortPct:50.7, liqLong:38_200_000,  liqShort:21_100_000, fr:0.0031 },
+  { sym:"SOL",  oi:3_210_000_000,  oiChg:+5.8, longPct:54.7, shortPct:45.3, liqLong:18_900_000,  liqShort:7_400_000,  fr:0.0114 },
+  { sym:"XRP",  oi:2_640_000_000,  oiChg:+0.9, longPct:50.8, shortPct:49.2, liqLong:9_200_000,   liqShort:4_800_000,  fr:0.0044 },
+  { sym:"BNB",  oi:1_180_000_000,  oiChg:-0.6, longPct:48.2, shortPct:51.8, liqLong:4_100_000,   liqShort:3_600_000,  fr:-0.0018 },
+];
+
+const DEMO_ONCHAIN = {
+  fearGreed:      { value: 68, label: "Жадность" },
+  btcExchReserve: { value: 2_310_000, chg: -18_400, chgPct: -0.79 },
+  activeAddr:     { value: 842_000,   chg: +21_000, chgPct: +2.56 },
+  whales24h:      { value: 143,       chg: +12 },
+  mvrvZ:          { value: 1.84,      zone: "neutral" as "neutral" | "hot" | "cold" },
+  netflow24h:     { value: -24_700,   note: "outflow" as "outflow" | "inflow" },
+};
+
+const DEMO_ETF_FLOWS = [
+  { date:"11 июн", net:+312.4 },
+  { date:"12 июн", net:+187.1 },
+  { date:"13 июн", net:-42.8  },
+  { date:"16 июн", net:+521.3 },
+  { date:"17 июн", net:+408.7 },
+  { date:"18 июн", net:+294.2 },
+];
+
+// ── Derivatives Section ───────────────────────────────────────────────────────
+
+function DerivativesSection() {
+  const totalOI   = DEMO_DERIV.reduce((s, r) => s + r.oi, 0);
+  const totalLiq  = DEMO_DERIV.reduce((s, r) => s + r.liqLong + r.liqShort, 0);
+
+  function fmtB(n: number) {
+    if (n >= 1e9) return `$${(n/1e9).toFixed(1)}B`;
+    if (n >= 1e6) return `$${(n/1e6).toFixed(0)}M`;
+    return `$${n}`;
+  }
+
+  return (
+    <Section
+      icon={<Activity className="h-4 w-4 text-accent-cyan" />}
+      title="Деривативы - открытый интерес и ликвидации"
+      badge={<DemoBadge />}
+      sub="Binance · Bybit · OKX"
+    >
+      {/* Summary strip */}
+      <div className="mb-4 grid grid-cols-3 gap-2">
+        {[
+          { label: "Общий OI", value: fmtB(totalOI), color: "text-white" },
+          { label: "Ликвид. 24ч", value: fmtB(totalLiq), color: "text-danger" },
+          { label: "Доминация лонг", value: `${DEMO_DERIV[0].longPct}%`, color: "text-success" },
+        ].map(s => (
+          <div key={s.label} className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-center">
+            <div className="text-[9px] uppercase tracking-wider text-white/25">{s.label}</div>
+            <div className={`mt-1 font-mono text-[14px] font-bold tabular-nums ${s.color}`}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Per-asset rows */}
+      <div className="space-y-1.5">
+        <div className="grid grid-cols-[48px_1fr_80px_60px_80px_64px] gap-2 px-2 text-[9px] uppercase tracking-wider text-text-muted">
+          <span>Пара</span><span>Лонг/Шорт</span><span className="text-right">OI</span>
+          <span className="text-right">OI 24ч</span><span className="text-right">Ликвид.</span>
+          <span className="text-right">Funding</span>
+        </div>
+        {DEMO_DERIV.map(r => {
+          const liqTotal = r.liqLong + r.liqShort;
+          const liqLongPct = liqTotal > 0 ? (r.liqLong / liqTotal * 100) : 50;
+          return (
+            <div key={r.sym} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5">
+              <div className="grid grid-cols-[48px_1fr_80px_60px_80px_64px] items-center gap-2">
+                <span className="font-bold text-[12px] text-white">{r.sym}</span>
+
+                {/* Long/Short bar */}
+                <div>
+                  <div className="flex h-[6px] overflow-hidden rounded-full">
+                    <div className="bg-success/70" style={{width:`${r.longPct}%`}} />
+                    <div className="bg-danger/70"  style={{width:`${r.shortPct}%`}} />
+                  </div>
+                  <div className="mt-1 flex justify-between text-[8px]">
+                    <span className="text-success">{r.longPct}%</span>
+                    <span className="text-danger">{r.shortPct}%</span>
+                  </div>
+                </div>
+
+                <div className="text-right font-mono text-[11px] text-white">{fmtB(r.oi)}</div>
+
+                <div className={`text-right font-mono text-[11px] ${r.oiChg >= 0 ? "text-success" : "text-danger"}`}>
+                  {r.oiChg >= 0 ? "+" : ""}{r.oiChg.toFixed(1)}%
+                </div>
+
+                {/* Liquidations mini-bar */}
+                <div className="text-right">
+                  <div className="font-mono text-[10px] text-white">{fmtB(liqTotal)}</div>
+                  <div className="mt-1 flex h-[4px] overflow-hidden rounded-full">
+                    <div className="bg-success/60" style={{width:`${100 - liqLongPct}%`}} />
+                    <div className="bg-danger/60"  style={{width:`${liqLongPct}%`}} />
+                  </div>
+                </div>
+
+                <div className={`text-right font-mono text-[11px] ${r.fr >= 0 ? "text-danger" : "text-success"}`}>
+                  {r.fr >= 0 ? "+" : ""}{(r.fr * 100).toFixed(4)}%
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[9px] text-white/20">Funding: положительный = лонги переплачивают (медвежий сигнал)</p>
+    </Section>
+  );
+}
+
+// ── On-chain Section ──────────────────────────────────────────────────────────
+
+function OnchainSection() {
+  const d = DEMO_ONCHAIN;
+
+  const fgColor = d.fearGreed.value >= 75 ? "text-danger"
+    : d.fearGreed.value >= 55 ? "text-accent-gold"
+    : d.fearGreed.value >= 45 ? "text-white/60"
+    : d.fearGreed.value >= 25 ? "text-accent-cyan"
+    : "text-success";
+
+  const fgArc = d.fearGreed.value / 100;
+
+  const mvrvColor = d.mvrvZ.zone === "hot" ? "text-danger"
+    : d.mvrvZ.zone === "cold" ? "text-success"
+    : "text-accent-gold";
+
+  return (
+    <Section
+      icon={<Zap className="h-4 w-4 text-accent-cyan" />}
+      title="Ончейн метрики Bitcoin"
+      badge={<DemoBadge />}
+      sub="Glassnode · CryptoQuant"
+    >
+      {/* Fear & Greed + MVRV-Z row */}
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        {/* Fear & Greed gauge */}
+        <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3 text-center">
+          <div className="text-[9px] uppercase tracking-wider text-white/25 mb-2">Fear & Greed Index</div>
+          <svg viewBox="0 0 120 60" className="w-full max-w-[120px] mx-auto overflow-visible">
+            {[
+              {from:0, to:0.25, col:"#0ecb81"}, {from:0.25, to:0.45, col:"#5ac87a"},
+              {from:0.45, to:0.55, col:"#9ca3af"}, {from:0.55, to:0.75, col:"#f59e0b"},
+              {from:0.75, to:1, col:"#f6465d"},
+            ].map((z,i) => {
+              const a1 = Math.PI - z.from*Math.PI, a2 = Math.PI - z.to*Math.PI;
+              const r=48, cx=60, cy=56;
+              return <path key={i} d={`M ${cx+r*Math.cos(a1)} ${cy-r*Math.sin(a1)} A ${r} ${r} 0 0 1 ${cx+r*Math.cos(a2)} ${cy-r*Math.sin(a2)}`} fill="none" stroke={z.col} strokeWidth="8" opacity="0.25" />;
+            })}
+            {/* Active arc */}
+            <path d={`M ${60-48} 56 A 48 48 0 0 1 ${60+48} 56`} fill="none" stroke={fgColor.replace("text-","")==="accent-gold"?"#f0b90b":fgColor.replace("text-","")==="accent-cyan"?"#0affe0":"#888"} strokeWidth="8" strokeDasharray={`${fgArc*Math.PI*48} ${Math.PI*48}`} strokeLinecap="round" opacity="0.5"/>
+            <text x="60" y="52" textAnchor="middle" fill="white" fontSize="18" fontWeight="bold" fontFamily="monospace">{d.fearGreed.value}</text>
+          </svg>
+          <div className={`text-[11px] font-bold mt-1 ${fgColor}`}>{d.fearGreed.label}</div>
+        </div>
+
+        {/* MVRV-Z */}
+        <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
+          <div className="text-[9px] uppercase tracking-wider text-white/25 mb-3">MVRV-Z Score</div>
+          <div className={`font-mono text-[28px] font-bold text-center ${mvrvColor}`}>{d.mvrvZ.value}</div>
+          <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="bg-success/60" style={{width:"25%"}} />
+            <div className="bg-success/30" style={{width:"20%"}} />
+            <div className="bg-white/20"   style={{width:"10%"}} />
+            <div className="bg-danger/30"  style={{width:"25%"}} />
+            <div className="bg-danger/60"  style={{width:"20%"}} />
+          </div>
+          <div className="mt-1 flex justify-between text-[8px] text-white/25">
+            <span>Дно (-7)</span><span>Нейтр.</span><span>Пик (+7)</span>
+          </div>
+          <div className="mt-2 text-center text-[10px] text-white/40">
+            {d.mvrvZ.zone === "hot" ? "Перегрев - осторожно" : d.mvrvZ.zone === "cold" ? "Зона накопления" : "Нейтральная зона"}
+          </div>
+        </div>
+      </div>
+
+      {/* Metric cards */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          {
+            label: "BTC на биржах", icon: <ArrowDownToLine className="h-3 w-3"/>,
+            value: `${(d.btcExchReserve.value/1000).toFixed(0)}K BTC`,
+            sub: `${d.btcExchReserve.chg > 0 ? "+" : ""}${(d.btcExchReserve.chg/1000).toFixed(1)}K за 24ч`,
+            positive: d.btcExchReserve.chg < 0,
+          },
+          {
+            label: "Активные адреса", icon: <Activity className="h-3 w-3"/>,
+            value: `${(d.activeAddr.value/1000).toFixed(0)}K`,
+            sub: `${d.activeAddr.chg > 0 ? "+" : ""}${(d.activeAddr.chg/1000).toFixed(0)}K за 24ч`,
+            positive: d.activeAddr.chg > 0,
+          },
+          {
+            label: "Whale сделки", icon: <Zap className="h-3 w-3"/>,
+            value: String(d.whales24h.value),
+            sub: `${d.whales24h.chg > 0 ? "+" : ""}${d.whales24h.chg} vs вчера`,
+            positive: d.whales24h.chg > 0,
+          },
+          {
+            label: "Нетто отток", icon: <ArrowUpFromLine className="h-3 w-3"/>,
+            value: `${d.netflow24h.value > 0 ? "+" : ""}${(d.netflow24h.value/1000).toFixed(1)}K`,
+            sub: d.netflow24h.note === "outflow" ? "Выход с бирж" : "Вход на биржи",
+            positive: d.netflow24h.note === "outflow",
+          },
+        ].map(m => (
+          <div key={m.label} className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-2.5">
+            <div className="flex items-center gap-1.5 text-white/30">{m.icon}<span className="text-[9px] uppercase tracking-wider">{m.label}</span></div>
+            <div className="mt-1.5 font-mono text-[15px] font-bold text-white">{m.value}</div>
+            <div className={`text-[9px] mt-0.5 ${m.positive ? "text-success" : "text-danger"}`}>{m.sub}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[9px] text-white/20">BTC на биржах: снижение = накопление (бычий сигнал) · Whale: транзакции {">"}$1M</p>
+    </Section>
+  );
+}
+
+// ── ETF Flows Section ─────────────────────────────────────────────────────────
+
+function EtfFlowsSection() {
+  const flows = DEMO_ETF_FLOWS;
+  const maxAbs = Math.max(...flows.map(f => Math.abs(f.net)));
+  const total7d = flows.reduce((s, f) => s + f.net, 0);
+  const inDays  = flows.filter(f => f.net > 0).length;
+
+  return (
+    <Section
+      icon={<DollarSign className="h-4 w-4 text-accent-gold" />}
+      title="Ежедневные потоки Bitcoin ETF"
+      badge={<DemoBadge />}
+      sub="Bloomberg · CoinShares"
+    >
+      {/* Summary */}
+      <div className="mb-4 grid grid-cols-3 gap-2">
+        {[
+          { label:"Итого 6 дней", value:`${total7d >= 0 ? "+" : ""}$${total7d.toFixed(0)}M`, color: total7d >= 0 ? "text-success" : "text-danger" },
+          { label:"Дней притока",  value:`${inDays} / ${flows.length}`,    color: "text-white" },
+          { label:"Крупнейший",    value:`+$${Math.max(...flows.map(f=>f.net)).toFixed(0)}M`, color:"text-success" },
+        ].map(s => (
+          <div key={s.label} className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-center">
+            <div className="text-[9px] uppercase tracking-wider text-white/25">{s.label}</div>
+            <div className={`mt-1 font-mono text-[13px] font-bold ${s.color}`}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Bar chart */}
+      <div className="space-y-2">
+        {flows.map(f => {
+          const pct = Math.abs(f.net) / maxAbs * 100;
+          const pos = f.net >= 0;
+          return (
+            <div key={f.date} className="flex items-center gap-3">
+              <span className="w-14 text-right text-[10px] text-white/40 shrink-0">{f.date}</span>
+              <div className="flex flex-1 items-center gap-1.5">
+                {pos ? (
+                  <>
+                    <div className="flex-1" />
+                    <div className="h-5 rounded-r-md bg-success/40 border-l border-success/50"
+                      style={{width:`${pct/2}%`, minWidth: 4}} />
+                  </>
+                ) : (
+                  <>
+                    <div className="h-5 rounded-l-md bg-danger/40 border-r border-danger/50 ml-auto"
+                      style={{width:`${pct/2}%`, minWidth: 4}} />
+                    <div className="flex-1" />
+                  </>
+                )}
+              </div>
+              <span className={`w-16 text-[11px] font-mono font-bold shrink-0 ${pos ? "text-success" : "text-danger"}`}>
+                {pos ? "+" : ""}{f.net.toFixed(0)}M
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-[9px] text-white/20">Нетто приток/отток во все спотовые Bitcoin ETF США · млн $</p>
+    </Section>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SmartMoneyPage() {
@@ -542,13 +828,20 @@ export default function SmartMoneyPage() {
           Smart Money
         </h1>
         <p className="mt-0.5 text-[11px] text-text-muted">
-          Институциональные позиции · CFTC COT · Макро индикаторы · Bitcoin ETF
+          CFTC COT · Деривативы · Ончейн · Макро · Bitcoin ETF · Потоки капитала
         </p>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
         <CotSection />
         <MacroSection />
+      </div>
+
+      <DerivativesSection />
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <OnchainSection />
+        <EtfFlowsSection />
       </div>
 
       <EtfSection />
