@@ -7,8 +7,11 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from core.db import init_engine, create_all, SessionLocal
 from core import repo
@@ -84,6 +87,12 @@ def create_app(
     app.include_router(pnl.router)
     app.include_router(trades.router)
     app.include_router(ws_routes.router)
+
+    # PnL-скриншоты раздаём напрямую через FastAPI, чтобы не зависеть от
+    # статического билда Next.js (out/) — новые файлы доступны сразу после загрузки.
+    _pnl_dir = Path(__file__).parent.parent / "webapp" / "public" / "pln"
+    _pnl_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/pln", StaticFiles(directory=str(_pnl_dir)), name="pln")
 
     @app.get("/api/health", tags=["health"])
     async def health():

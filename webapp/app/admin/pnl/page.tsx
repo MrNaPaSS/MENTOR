@@ -101,7 +101,7 @@ export default function PnlPage() {
             <div key={src} className="group relative overflow-hidden rounded-xl border border-border">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={src}
+                src={`${API_URL}${src}`}
                 alt="pnl"
                 className="h-52 w-full object-cover"
               />

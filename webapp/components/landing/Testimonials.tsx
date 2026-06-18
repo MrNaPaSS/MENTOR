@@ -46,7 +46,7 @@ export default function Testimonials() {
       <div className="group relative mt-14 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
         <div className="flex w-max gap-4 animate-marquee group-hover:[animation-play-state:paused]">
           {loop.map((src, i) => (
-            <PnlCard key={i} src={src} />
+            <PnlCard key={i} src={`${API_URL}${src}`} />
           ))}
         </div>
       </div>
