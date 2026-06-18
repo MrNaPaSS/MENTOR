@@ -20,11 +20,13 @@ function fmtVolShort(n: number): string {
 
 // Вехи объёма для наград
 const VOLUME_MILESTONES = [
-  { vol: 50_000,     label: "50K",  emoji: "🥉", title: "Старт",         reward: "common"    as const },
-  { vol: 100_000,    label: "100K", emoji: "🥈", title: "Набираю обороты", reward: "rare"     as const },
-  { vol: 500_000,    label: "500K", emoji: "🥇", title: "Серьёзный",      reward: "epic"      as const },
-  { vol: 1_000_000,  label: "1M",   emoji: "💎", title: "Миллионер",      reward: "legendary" as const },
-  { vol: 5_000_000,  label: "5M",   emoji: "👑", title: "Легенда NMNH",   reward: "legendary" as const },
+  { vol: 50_000,     label: "50K",  emoji: "🥉", title: "Старт",          reward: "common"    as const },
+  { vol: 100_000,    label: "100K", emoji: "🥈", title: "Набираю обороты", reward: "rare"      as const },
+  { vol: 500_000,    label: "500K", emoji: "🥇", title: "Серьёзный",       reward: "epic"      as const },
+  { vol: 1_000_000,  label: "1M",   emoji: "💎", title: "Миллионер",       reward: "legendary" as const },
+  { vol: 5_000_000,  label: "5M",   emoji: "👑", title: "Легенда NMNH",    reward: "legendary" as const },
+  { vol: 10_000_000, label: "10M",  emoji: "🚀", title: "К звёздам",       reward: "legendary" as const },
+  { vol: 25_000_000, label: "25M",  emoji: "⚡", title: "Элита",           reward: "legendary" as const },
 ];
 
 interface Goal {
@@ -124,28 +126,33 @@ function DayCell({ day, onClick, active, isToday }: {
         {dayNum}
       </span>
 
-      {/* PnL по центру */}
-      <div className="flex flex-1 items-center justify-center">
+      {/* Центр ячейки: PnL если есть, иначе объём/сигналы */}
+      <div className="flex flex-1 flex-col items-center justify-center gap-[2px]">
         {hasReal && pnl !== 0 ? (
-          <span
-            className="text-[11px] font-extrabold leading-none tracking-tight"
-            style={{ color: isPos ? "#00D4A0" : "#FF4757" }}
-          >
+          <span className="text-[11px] font-extrabold leading-none tracking-tight"
+            style={{ color: isPos ? "#00D4A0" : "#FF4757" }}>
             {isPos ? "+" : ""}{Math.abs(pnl!) >= 10 ? pnl!.toFixed(0) : pnl!.toFixed(1)}%
           </span>
         ) : hasReal && pnl === 0 ? (
           <span className="text-[9px] font-semibold text-white/18">0%</span>
         ) : null}
-      </div>
-
-      {/* Объём дня (если есть) */}
-      {hasTrades && (
-        <div className="flex justify-center">
+        {/* Объём — показывается всегда когда есть */}
+        {hasTrades && (
           <span className="text-[8px] font-bold tabular-nums text-accent-gold/70 leading-none">
             {fmtVolShort(day.trade_volume ?? 0)}
           </span>
-        </div>
-      )}
+        )}
+        {/* Сигналы без объёма */}
+        {!hasTrades && !hasReal && day.signals > 0 && (
+          <span className="text-[8px] font-semibold text-accent-cyan/50 leading-none">
+            ⚡{day.signals}
+          </span>
+        )}
+        {/* Депозит без торговли */}
+        {!hasTrades && !hasReal && hasDeposit && (
+          <span className="text-[8px] font-semibold text-success/60 leading-none">+$</span>
+        )}
+      </div>
 
       {/* Точки событий */}
       {(day.signals > 0 || hasTrades || hasDeposit) && (
@@ -238,49 +245,57 @@ export default function AnalyticsPage() {
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
-  // Статистика месяца (на реальных данных)
-  const profitDays = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 0).length;
-  const lossDays = calData.filter(d => d.pnl_pct !== null && d.pnl_pct < 0).length;
-  const activeDays = calData.filter(d => d.signals > 0).length;
-  const goalDays = calData.filter(d => d.signals > 0 && d.pnl_pct !== null && d.pnl_pct > 0).length;
+  // Статистика месяца
+  const profitDays   = calData.filter(d => d.pnl_pct !== null && !d.estimated && d.pnl_pct > 0).length;
+  const lossDays     = calData.filter(d => d.pnl_pct !== null && !d.estimated && d.pnl_pct < 0).length;
+  const activeDays   = calData.filter(d => d.signals > 0).length;                        // дни с сигналами
+  const tradingDays  = calData.filter(d => (d.trade_volume ?? 0) > 0).length;            // дни с торговлей
+  const monthVolume  = calData.reduce((s, d) => s + (d.trade_volume ?? 0), 0);           // объём за месяц
+  const totalVolume  = tradeSummary?.total_volume ?? 0;
+  const goalDays     = calData.filter(d => d.signals > 0 && d.pnl_pct !== null && d.pnl_pct > 0).length;
 
-  const streak = (() => {
+  // Стрик: последовательные дни С ТОРГОВЛЕЙ (не требует PnL снимков)
+  const activityStreak = (() => {
     let s = 0;
     for (let i = calData.length - 1; i >= 0; i--) {
-      const d = calData[i];
-      if (d.signals > 0 && d.pnl_pct !== null && d.pnl_pct > 0) s++;
+      if ((calData[i].trade_volume ?? 0) > 0 || calData[i].signals > 0) s++;
       else break;
     }
     return s;
   })();
-  const validPnl = calData.filter(d => d.pnl_pct !== null);
-  const avgProfit = validPnl.length
-    ? validPnl.reduce((a, d) => a + (d.pnl_pct ?? 0), 0) / validPnl.length
-    : 0;
-  const hotDays = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 3).length;
-  const totalDays = calData.length;
 
-  // Цели
+  const validPnl  = calData.filter(d => d.pnl_pct !== null && !d.estimated);
+  const avgProfit = validPnl.length
+    ? validPnl.reduce((a, d) => a + (d.pnl_pct ?? 0), 0) / validPnl.length : 0;
+  const hotDays   = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 3).length;
+
+  // Цели месяца — работают даже без PnL снимков
   const goals: Goal[] = [
     {
-      id: "days", label: "Дни с целью", icon: Calendar, target: 20, current: goalDays,
-      unit: "дней", reward: "🏅 Стабильный трейдер", color: "#0AFFE0", unlocked: goalDays >= 20,
+      id: "volume", label: "Объём за месяц", icon: BarChart2, target: 100_000,
+      current: Math.round(monthVolume > 0 ? monthVolume : totalVolume / 3),
+      unit: "USDT", reward: "💹 Активный трейдер",
+      color: "#0AFFE0", unlocked: (monthVolume > 0 ? monthVolume : totalVolume / 3) >= 100_000,
     },
     {
-      id: "streak", label: "Лучший стрик", icon: Flame, target: 7, current: streak,
-      unit: "дней подряд", reward: "🔥 Огонь", color: "#FF6B35", unlocked: streak >= 7,
+      id: "trading_days", label: "Дней торговали", icon: Calendar, target: 15,
+      current: tradingDays > 0 ? tradingDays : activeDays,
+      unit: "дней", reward: "📅 Дисциплина",
+      color: "#FF6B35", unlocked: (tradingDays > 0 ? tradingDays : activeDays) >= 15,
     },
     {
-      id: "signals", label: "Сигналов получено", icon: Zap, target: 30, current: analytics?.signals_received ?? 0,
-      unit: "сигналов", reward: "⚡ Активный участник", color: "#FFD700", unlocked: (analytics?.signals_received ?? 0) >= 30,
+      id: "signals", label: "Сигналов принято", icon: Zap, target: 20,
+      current: analytics?.signals_received ?? 0,
+      unit: "сигналов", reward: "⚡ Активный участник",
+      color: "#FFD700", unlocked: (analytics?.signals_received ?? 0) >= 20,
     },
     {
-      id: "profit", label: "Профитных дней", icon: TrendingUp, target: 15, current: profitDays,
-      unit: "дней в плюс", reward: "📈 Бычий режим", color: "#00D4A0", unlocked: profitDays >= 15,
+      id: "profit", label: "Прибыльных дней", icon: TrendingUp, target: 5,
+      current: profitDays,
+      unit: "дней в плюс", reward: "📈 Бычий режим",
+      color: "#00D4A0", unlocked: profitDays >= 5,
     },
   ];
-
-  const totalVolume = tradeSummary?.total_volume ?? 0;
 
   const achievements: Achievement[] = [
     {
@@ -405,21 +420,26 @@ export default function AnalyticsPage() {
 
       {/* KPI */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+        {/* Объём месяца */}
         <div className="card flex flex-col items-center gap-2 py-5">
-          <CircleProgress pct={(goalDays / 20) * 100} color="#0AFFE0" size={72}>
-            <span className="font-mono text-lg font-bold text-white">{goalDays}</span>
+          <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 100_000) * 100, 100)} color="#0AFFE0" size={72}>
+            <span className="font-mono text-[11px] font-bold text-white leading-tight text-center">
+              {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
+            </span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">Дней с целью</span>
-          <span className="text-[10px] text-accent-cyan">цель: 20</span>
+          <span className="text-xs text-text-muted">Объём месяца</span>
+          <span className="text-[10px] text-accent-cyan">цель: 100K</span>
         </div>
+        {/* Стрик активности */}
         <div className="card flex flex-col items-center gap-2 py-5">
-          <CircleProgress pct={(streak / 7) * 100} color="#FF6B35" size={72}>
+          <CircleProgress pct={(activityStreak / 7) * 100} color="#FF6B35" size={72}>
             <Flame className="h-5 w-5 text-orange-400" />
-            <span className="font-mono text-sm font-bold text-white">{streak}</span>
+            <span className="font-mono text-sm font-bold text-white">{activityStreak}</span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">Стрик (дней)</span>
-          <span className="text-[10px] text-orange-400">цель: 7</span>
+          <span className="text-xs text-text-muted">Стрик активности</span>
+          <span className="text-[10px] text-orange-400">цель: 7 дней</span>
         </div>
+        {/* Ср. доходность */}
         <div className="card flex flex-col items-center gap-2 py-5">
           <CircleProgress pct={Math.min(Math.abs(avgProfit) / 5 * 100, 100)} color={avgProfit >= 0 ? "#00D4A0" : "#FF4757"} size={72}>
             <span className={`font-mono text-sm font-bold ${avgProfit >= 0 ? "text-success" : "text-danger"}`}>
@@ -429,13 +449,14 @@ export default function AnalyticsPage() {
           <span className="text-xs text-text-muted">Ср. доходность/день</span>
           <span className="text-[10px] text-text-muted">за {validPnl.length} дней</span>
         </div>
+        {/* Дней торговали */}
         <div className="card flex flex-col items-center gap-2 py-5">
-          <CircleProgress pct={(hotDays / 5) * 100} color="#FFD700" size={72}>
-            <span className="text-xl">🔥</span>
-            <span className="font-mono text-sm font-bold text-white">{hotDays}</span>
+          <CircleProgress pct={Math.min(((tradingDays > 0 ? tradingDays : activeDays) / 15) * 100, 100)} color="#FFD700" size={72}>
+            <Calendar className="h-4 w-4 text-accent-gold" />
+            <span className="font-mono text-sm font-bold text-white">{tradingDays > 0 ? tradingDays : activeDays}</span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">Горячих дней</span>
-          <span className="text-[10px] text-accent-gold">+3% за день</span>
+          <span className="text-xs text-text-muted">Дней торговали</span>
+          <span className="text-[10px] text-accent-gold">цель: 15 дней</span>
         </div>
       </div>
 
@@ -685,7 +706,10 @@ export default function AnalyticsPage() {
               <h2 className="text-base font-bold text-white">Уровень трейдера</h2>
             </div>
             {(() => {
-              const xp = goalDays * 20 + streak * 30 + hotDays * 50 + (analytics?.sent ?? 0) * 5;
+              // XP: объём даёт основную массу (каждые 50K = 25 XP), остальное — активность
+            const volXp       = Math.floor(totalVolume / 50_000) * 25;
+            const activityXp  = goalDays * 20 + activityStreak * 30 + hotDays * 50 + (analytics?.signals_received ?? 0) * 5;
+            const xp = volXp + activityXp;
               const level = Math.floor(xp / 200) + 1;
               const xpInLevel = xp % 200;
               return (
@@ -704,10 +728,10 @@ export default function AnalyticsPage() {
                     {200 - xpInLevel} XP до уровня {level + 1}
                   </p>
                   <div className="grid grid-cols-2 gap-1.5 text-[10px] text-text-muted">
-                    <span>📅 Дни с целью: +{goalDays * 20} XP</span>
-                    <span>🔥 Стрик: +{streak * 30} XP</span>
-                    <span>🔥 Горячие дни: +{hotDays * 50} XP</span>
-                    <span>⚡ Доставлено: +{(analytics?.sent ?? 0) * 5} XP</span>
+                    <span>📊 Объём: +{Math.floor(totalVolume / 50_000) * 25} XP</span>
+                    <span>⚡ Сигналы: +{(analytics?.signals_received ?? 0) * 5} XP</span>
+                    <span>🔥 Стрик: +{activityStreak * 30} XP</span>
+                    <span>🌟 Горячие дни: +{hotDays * 50} XP</span>
                   </div>
                 </>
               );
