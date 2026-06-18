@@ -25,7 +25,7 @@ import {
   Trash2,
   BarChart2
 } from "lucide-react";
-import { api, PublicStats, StudentOut, AffiliateOverview, ReferralRow, MentorBalance, BroadcastItem } from "@/lib/api";
+import { api, API_URL, PublicStats, StudentOut, AffiliateOverview, ReferralRow, MentorBalance, BroadcastItem } from "@/lib/api";
 import { useMentorToken } from "@/components/admin/AdminShell";
 import { fmtUsd } from "@/lib/format";
 
@@ -55,17 +55,23 @@ export default function AdminDashboard() {
       api.students(token),
       api.affiliateMentorBalance(token),
       api.affiliateOverview(token, 1),
-      api.broadcasts(token),
     ])
-      .then(([s, st, mb, td, bc]) => {
+      .then(([s, st, mb, td]) => {
         setStats(s);
         setStudents(st);
         setMentorBal(mb);
         setToday(td);
-        setBroadcasts(bc);
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
+  }, [token]);
+
+  // Загрузка анализов отдельно — не блокирует остальной дашборд
+  useEffect(() => {
+    if (!token) return;
+    api.broadcasts(token)
+      .then(setBroadcasts)
+      .catch(() => setBroadcasts([]));
   }, [token]);
 
   // Загрузка партнерской статистики WEEX - сброс при смене периода
@@ -133,7 +139,7 @@ export default function AdminDashboard() {
   // Конвертация chart_url -> URL картинки
   function chartImgUrl(url: string | null): string | null {
     if (!url) return null;
-    if (url.startsWith("/uploads/")) return `${process.env.NEXT_PUBLIC_API_URL || ""}${url}`;
+    if (url.startsWith("/uploads/")) return `${API_URL}${url}`;
     const m = url.match(/tradingview\.com\/x\/([A-Za-z0-9]+)/);
     if (m) return `https://s3.tradingview.com/snapshots/${m[1][0].toLowerCase()}/${m[1]}.png`;
     return null;
@@ -141,7 +147,7 @@ export default function AdminDashboard() {
 
   async function deleteBroadcast(id: number) {
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/broadcast/${id}`, {
+      await fetch(`${API_URL}/api/broadcast/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "1" },
       });
