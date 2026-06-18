@@ -94,25 +94,7 @@ async def overview(days: int = 30, weex=Depends(get_weex)):
 
     all_uids, records, comm_items = await _cached(f"overview:{days}", build)
 
-    # Реальный доход ментора — из getAffiliateCommission
     total_commission = sum((_d(c.get("commission")) for c in comm_items), Decimal(0))
-
-    # DEBUG — всегда видно в логах
-    if comm_items:
-        sample = comm_items[0]
-        logger.warning(
-            "COMM SAMPLE keys=%s fee=%s commission=%s productType=%s",
-            list(sample.keys()), sample.get("fee"), sample.get("commission"), sample.get("productType")
-        )
-    else:
-        logger.warning("COMM ITEMS EMPTY for days=%s", days)
-
-    if total_commission == 0:
-        total_commission = sum((_d(r.get("commission")) for r in records), Decimal(0))
-        logger.warning("COMM FALLBACK from trade records: total=%s", total_commission)
-
-    logger.warning("OVERVIEW days=%s records=%d comm_items=%d total_commission=%s",
-                   days, len(records), len(comm_items), total_commission)
 
     return AffiliateOverview(
         referrals=len(records),

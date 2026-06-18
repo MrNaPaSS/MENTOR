@@ -244,61 +244,40 @@ class RealWeexClient(WeexClient):
         return self._extract_list(self._data(payload), ("channelCommissionInfoItems", "_list"))
 
     async def get_affiliate_commission_all(self, start_ms: int, end_ms: int) -> list:
-        """Все страницы getAffiliateCommission для FUTURES (единственный источник реального дохода)."""
-        import datetime as _dt
-        results, page = [], 1
-        logger.warning("COMM CALL start_dt=%s end_dt=%s",
-                       _dt.datetime.utcfromtimestamp(start_ms / 1000).isoformat(),
-                       _dt.datetime.utcfromtimestamp(end_ms / 1000).isoformat())
+        """Все страницы getAffiliateCommission (FUTURES) параллельно."""
+        import asyncio as _asyncio
 
-        # Диагностика: вызов без дат (WEEX defaults = последние 7 дней)
-        payload_nodate = await self._get(
+        def _params(page: int) -> dict:
+            return {
+                "startTime": start_ms, "endTime": end_ms,
+                "page": page, "pageSize": 100, "productType": "FUTURES",
+            }
+
+        # Первая страница: узнаём total_pages
+        first = await self._get(
             AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateCommission",
-            {"page": 1, "pageSize": 5},
-            signed=True, affiliate=True,
+            _params(1), signed=True, affiliate=True,
         )
-        if isinstance(payload_nodate, dict):
-            cf = payload_nodate.get("channelCommissionInfoItems")
-            logger.warning("COMM NODATE total=%s pages=%s items=%s sample=%s",
-                           payload_nodate.get("total"), payload_nodate.get("pages"),
-                           len(cf) if isinstance(cf, list) else "N/A",
-                           repr(cf[:1] if isinstance(cf, list) else cf)[:300])
+        data0 = self._data(first)
+        items0 = self._extract_list(data0, ("channelCommissionInfoItems", "_list"))
+        total_pages = data0.get("pages", 1) if isinstance(data0, dict) else 1
 
-        # Диагностика: вызов с productType=FUTURES
-        payload_fut = await self._get(
-            AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateCommission",
-            {"startTime": start_ms, "endTime": end_ms, "page": 1, "pageSize": 5, "productType": "FUTURES"},
-            signed=True, affiliate=True,
-        )
-        if isinstance(payload_fut, dict):
-            cf = payload_fut.get("channelCommissionInfoItems")
-            logger.warning("COMM FUTURES total=%s pages=%s items=%s sample=%s",
-                           payload_fut.get("total"), payload_fut.get("pages"),
-                           len(cf) if isinstance(cf, list) else "N/A",
-                           repr(cf[:1] if isinstance(cf, list) else cf)[:300])
+        if total_pages <= 1:
+            return items0
 
-        # Основной цикл: пока productType нужно выяснить, используем FUTURES
-        while True:
-            payload = await self._get(
+        # Остальные страницы — параллельно (WEEX rate limit 500 req/10s)
+        tasks = [
+            self._get(
                 AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateCommission",
-                {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100, "productType": "FUTURES"},
-                signed=True, affiliate=True,
+                _params(p), signed=True, affiliate=True,
             )
-            data = self._data(payload)
-            items = self._extract_list(data, ("channelCommissionInfoItems", "_list"))
-            results.extend(items)
-            pages = data.get("pages", 1) if isinstance(data, dict) else 1
-            if page >= pages or not items:
-                break
-            page += 1
+            for p in range(2, total_pages + 1)
+        ]
+        payloads = await _asyncio.gather(*tasks)
 
-        def _safe_dec(v):
-            try:
-                return Decimal(str(v))
-            except Exception:
-                return Decimal(0)
-        total_comm = sum((_safe_dec(c.get("commission")) for c in results), Decimal(0))
-        logger.warning("COMM ALL total_items=%d total_commission=%s", len(results), total_comm)
+        results = list(items0)
+        for payload in payloads:
+            results.extend(self._extract_list(self._data(payload), ("channelCommissionInfoItems", "_list")))
         return results
 
     async def get_agency_assert(self, user_id: str, start_date: str = "", end_date: str = "") -> dict:
