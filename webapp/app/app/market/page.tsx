@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { Globe, Building2, Map, Search, TrendingUp } from "lucide-react";
-import FearGreed from "@/components/market/FearGreed";
 
 const TradingChart = dynamic(() => import("@/components/market/TradingChart"), { ssr: false });
 const OrderBook    = dynamic(() => import("@/components/market/OrderBook"), { ssr: false });
@@ -350,7 +349,6 @@ export default function MarketPage() {
               </div>
               <OrderBook symbol={sym} rows={14} />
             </div>
-            <FearGreed />
           </div>
         </div>
       )}
