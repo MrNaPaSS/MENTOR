@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 
 interface LogoProps {
   href?: string;
@@ -11,17 +10,13 @@ export default function Logo({ href = "/", adminBadge, className = "" }: LogoPro
   return (
     <Link
       href={href}
-      className={`group inline-flex items-center gap-2 ${className}`}
+      className={`group inline-flex items-center gap-2 text-xl font-extrabold tracking-tight ${className}`}
     >
-      <Image
-        src="/logo.png"
-        alt="NMNH"
-        width={40}
-        height={40}
-        className="rounded-lg transition group-hover:opacity-90"
-      />
+      <span className="glitch text-white group-hover:text-glow-cyan" data-text="NMNH">
+        NMNH
+      </span>
       {adminBadge && (
-        <span className="badge-gold uppercase tracking-wider">admin</span>
+        <span className="badge-gold ml-1 uppercase tracking-wider">admin</span>
       )}
     </Link>
   );
