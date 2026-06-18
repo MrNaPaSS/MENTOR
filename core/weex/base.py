@@ -60,9 +60,15 @@ class WeexClient(ABC):
         return await self.get_channel_trade_asset(start_ms, end_ms, page=1)
 
     @abstractmethod
-    async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+    async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1, product_type: str = "") -> list:
         """История комиссий (getAffiliateCommission): uid, date, coin, fee, commission, rate,
-        productType, symbol, sourceType, takerAmount, makerAmount."""
+        productType, symbol, sourceType, takerAmount, makerAmount.
+        product_type: "" = оба, "SPOT" = только спот, "FUTURES" = только фьючерсы."""
+
+    async def get_affiliate_commission_all(self, start_ms: int, end_ms: int) -> list:
+        """Все страницы getAffiliateCommission для SPOT + FUTURES (наш реальный заработок-ребейт).
+        По умолчанию — одна страница без фильтра по типу."""
+        return await self.get_affiliate_commission(start_ms, end_ms, page=1)
 
     @abstractmethod
     async def get_agency_assert(self, user_id: str, start_date: str = "", end_date: str = "") -> dict:

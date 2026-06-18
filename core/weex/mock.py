@@ -124,7 +124,7 @@ class MockWeexClient(WeexClient):
             })
         return out
 
-    async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+    async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1, product_type: str = "") -> list:
         now = int(time.time() * 1000)
         day = 86_400_000
         out = []

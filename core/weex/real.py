@@ -233,13 +233,33 @@ class RealWeexClient(WeexClient):
             page += 1
         return results
 
-    async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1) -> list:
+    async def get_affiliate_commission(self, start_ms: int, end_ms: int, page: int = 1, product_type: str = "") -> list:
+        params: dict = {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100}
+        if product_type:
+            params["productType"] = product_type
         payload = await self._get(
             AFFILIATE_BASE, "/api/v3/rebate/affiliate/getAffiliateCommission",
-            {"startTime": start_ms, "endTime": end_ms, "page": page, "pageSize": 100},
-            signed=True, affiliate=True,
+            params, signed=True, affiliate=True,
         )
         return self._extract_list(self._data(payload), ("channelCommissionInfoItems", "_list"))
+
+    async def get_affiliate_commission_all(self, start_ms: int, end_ms: int) -> list:
+        """Все страницы getAffiliateCommission: SPOT + FUTURES параллельно, все пагинации."""
+        import asyncio as _asyncio
+
+        async def _fetch_type(pt: str) -> list:
+            results, page = [], 1
+            while True:
+                items = await self.get_affiliate_commission(start_ms, end_ms, page=page, product_type=pt)
+                results.extend(items)
+                # Если вернулось меньше 100 — это последняя страница
+                if len(items) < 100:
+                    break
+                page += 1
+            return results
+
+        spot, futures = await _asyncio.gather(_fetch_type("SPOT"), _fetch_type("FUTURES"))
+        return spot + futures
 
     async def get_agency_assert(self, user_id: str, start_date: str = "", end_date: str = "") -> dict:
         """Asset snapshot for a referral. Dates in yyyy-MM-dd format (WEEX requirement)."""

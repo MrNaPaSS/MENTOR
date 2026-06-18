@@ -85,21 +85,30 @@ async def overview(days: int = 30, weex=Depends(get_weex)):
     uid_start = end - 85 * _DAY_MS
 
     async def build():
-        all_uids, trade = await asyncio.gather(
+        all_uids, trade, comm = await asyncio.gather(
             weex.get_affiliate_uids_all(uid_start, end),
             weex.get_channel_trade_asset_all(start, end),
+            weex.get_affiliate_commission_all(start, end),
         )
-        return all_uids, trade
+        return all_uids, trade, comm
 
-    all_uids, records = await _cached(f"overview:{days}", build)
+    all_uids, records, comm_items = await _cached(f"overview:{days}", build)
 
-    # Рефералов показываем по торговым записям (реальный размер сети)
+    # Реальный доход ментора — из getAffiliateCommission (SPOT + FUTURES)
+    total_commission = sum((_d(c.get("commission")) for c in comm_items), Decimal(0))
+    if total_commission == 0:
+        # Fallback: поле commission в getChannelUserTradeAndAsset (если доступно)
+        total_commission = sum((_d(r.get("commission")) for r in records), Decimal(0))
+
+    logger.info("overview days=%s records=%d comm_items=%d total_commission=%s",
+                days, len(records), len(comm_items), total_commission)
+
     return AffiliateOverview(
         referrals=len(records),
         total_deposit=sum((_d(r.get("depositAmount")) for r in records), Decimal(0)),
         total_spot_volume=sum((_d(r.get("spotTradingAmount")) for r in records), Decimal(0)),
         total_futures_volume=sum((_d(r.get("futuresTradingAmount")) for r in records), Decimal(0)),
-        total_commission=sum((_d(r.get("commission")) for r in records), Decimal(0)),
+        total_commission=total_commission,
         total_withdrawal=sum((_d(r.get("withdrawalAmount") or r.get("withdrawAmount") or r.get("withdrawal")) for r in records), Decimal(0)),
         with_deposit=sum(1 for r in records if _d(r.get("depositAmount")) > 0),
         active_traders=sum(1 for r in records if _d(r.get("futuresTradingAmount")) > 0 or _d(r.get("spotTradingAmount")) > 0),
