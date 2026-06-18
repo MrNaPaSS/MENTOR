@@ -113,7 +113,7 @@ class RealWeexClient(WeexClient):
                 if resp.status != 200:
                     logger.warning("WEEX %s%s -> HTTP %s", base, path, resp.status)
                     return None
-                return await resp.json()
+                return await resp.json(content_type=None)
         except Exception as exc:  # noqa: BLE001
             logger.warning("WEEX запрос %s%s упал: %s", base, path, exc)
             return None
@@ -157,7 +157,7 @@ class RealWeexClient(WeexClient):
             async with session.post(base + path, data=raw, headers=headers) as resp:
                 if resp.status != 200:
                     return None
-                return await resp.json()
+                return await resp.json(content_type=None)
         except Exception as exc:  # noqa: BLE001
             logger.warning("WEEX POST %s%s упал: %s", base, path, exc)
             return None
