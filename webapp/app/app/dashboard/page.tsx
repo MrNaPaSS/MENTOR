@@ -435,8 +435,8 @@ function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
     script.innerHTML = JSON.stringify({
       interval: "15m",
       width: "100%",
-      isTransparent: true,
-      backgroundColor: "rgba(15, 16, 32, 0)",
+      isTransparent: false,
+      backgroundColor: "#0b0e11",
       height: 420,
       symbol: tvSymbol,
       showIntervalTabs: false,
@@ -452,12 +452,8 @@ function TechnicalAnalysisWidget({ symbol }: { symbol: string }) {
   return (
     <div
       ref={containerRef}
-      className="tradingview-widget-container"
-      style={{
-        height: 360,
-        overflow: "hidden",
-        scrollbarWidth: "none",
-      }}
+      className="tradingview-widget-container -mx-5 -mb-5"
+      style={{ height: 360, overflow: "hidden", scrollbarWidth: "none" }}
     />
   );
 }
