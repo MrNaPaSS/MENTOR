@@ -25,6 +25,10 @@ _DAY_MS = 86_400_000
 _cache: dict[str, tuple[float, object]] = {}
 _TTL = 120  # сек — 2 минуты кэш чтобы не жечь rate limits WEEX (500 req/10s per endpoint)
 
+# WEEX использует UTC+8 для отчётных периодов
+import datetime as _dt
+_TZ_UTC8 = _dt.timezone(_dt.timedelta(hours=8))
+
 
 def _d(v) -> Decimal:
     try:
@@ -34,8 +38,20 @@ def _d(v) -> Decimal:
 
 
 def _period(days: int) -> tuple[int, int]:
-    end = int(time.time() * 1000)
-    return end - days * _DAY_MS, end
+    """Период от начала UTC+8 дня N дней назад до конца сегодняшнего UTC+8 дня.
+
+    Выравнивание по UTC+8 гарантирует совпадение с тем, что показывает дашборд
+    партнёрки WEEX (он считает комиссии по календарным дням UTC+8, а не по скользящим
+    24-часовым окнам). Без этого числа расходились на ~7 USDT за 7 дней.
+    """
+    now_utc8 = _dt.datetime.now(_TZ_UTC8)
+    # Конец периода: конец сегодняшнего дня UTC+8
+    end_dt = now_utc8.replace(hour=23, minute=59, second=59, microsecond=999000)
+    # Начало периода: 00:00 UTC+8 N дней назад (days=1 → сегодня 00:00)
+    start_dt = (now_utc8 - _dt.timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return int(start_dt.timestamp() * 1000), int(end_dt.timestamp() * 1000)
 
 
 async def _cached(key: str, factory):
@@ -254,7 +270,9 @@ async def commission_series(days: int = 14, weex=Depends(get_weex)):
     start, end = _period(days)
 
     async def build():
-        return await weex.get_affiliate_commission(start, end)
+        # get_affiliate_commission_all всегда передаёт productType=FUTURES —
+        # без него WEEX возвращает пустой список
+        return await weex.get_affiliate_commission_all(start, end)
 
     items = await _cached(f"comm:{days}", build)
 
