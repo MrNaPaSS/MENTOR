@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 
 from backend.deps import get_current_mentor
 
@@ -20,12 +20,15 @@ router = APIRouter(prefix="/api/pnl", tags=["pnl"])
 
 
 @router.get("")
-async def list_pnl():
+async def list_pnl(request: Request):
+    # Возвращаем абсолютный URL через request.base_url чтобы браузер грузил
+    # картинки напрямую с FastAPI (через ngrok), а не с Render (там их нет).
+    base = str(request.base_url).rstrip("/")
     files = sorted(
         f.name for f in PNL_DIR.iterdir()
         if f.is_file() and f.suffix.lower() in ALLOWED
     )
-    return {"images": [f"/pln/{name}" for name in files]}
+    return {"images": [f"{base}/pln/{name}" for name in files]}
 
 
 @router.post("/upload", dependencies=[Depends(get_current_mentor)])
