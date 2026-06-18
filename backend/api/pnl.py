@@ -11,8 +11,11 @@ from fastapi.responses import JSONResponse
 
 from backend.deps import get_current_mentor
 
-PNL_DIR = Path(__file__).parent.parent.parent / "webapp" / "public" / "pln"
+_ROOT = Path(__file__).parent.parent.parent
+PNL_DIR = _ROOT / "webapp" / "public" / "pln"
+PNL_OUT_DIR = _ROOT / "webapp" / "out" / "pln"
 PNL_DIR.mkdir(parents=True, exist_ok=True)
+PNL_OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -34,9 +37,9 @@ async def upload_pnl(file: UploadFile = File(...)):
     if ext not in ALLOWED:
         raise HTTPException(400, "Только JPG, PNG или WEBP")
     filename = f"{uuid.uuid4().hex}{ext}"
-    dest = PNL_DIR / filename
     content = await file.read()
-    dest.write_bytes(content)
+    (PNL_DIR / filename).write_bytes(content)
+    (PNL_OUT_DIR / filename).write_bytes(content)
     return {"url": f"/pln/{filename}"}
 
 
@@ -44,8 +47,12 @@ async def upload_pnl(file: UploadFile = File(...)):
 async def delete_pnl(filename: str):
     if "/" in filename or "\\" in filename or ".." in filename:
         raise HTTPException(400, "Недопустимое имя файла")
-    path = PNL_DIR / filename
-    if not path.exists():
+    found = False
+    for directory in (PNL_DIR, PNL_OUT_DIR):
+        p = directory / filename
+        if p.exists():
+            p.unlink()
+            found = True
+    if not found:
         raise HTTPException(404, "Файл не найден")
-    path.unlink()
     return {"ok": True}
