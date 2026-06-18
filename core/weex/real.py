@@ -264,17 +264,17 @@ class RealWeexClient(WeexClient):
         return self._extract_list(self._data(payload), ("channelCommissionInfoItems", "_list"))
 
     async def get_affiliate_commission_all(self, start_ms: int, end_ms: int) -> list:
-        """Все страницы getAffiliateCommission (FUTURES) с ограничением конкурентности.
+        """Все страницы getAffiliateCommission (FUTURES) — строго последовательно с паузой.
 
-        WEEX допускает 500 req/10s на endpoint. При одновременной загрузке сотен страниц
-        rate limit срабатывает, страницы возвращают None и данные молча теряются.
-        Семафор на 5 + retry устраняет потери.
+        Параллельная загрузка страниц вызывала HTTP 429 даже с семафором, потому что
+        WEEX считает rate limit по burst-окну (~20 req/s max на endpoint). Последовательная
+        загрузка с 150мс паузой = ~6 req/s — гарантированно безопасно.
         """
         import asyncio as _asyncio
         import math as _math
 
         _EP = "/api/v3/rebate/affiliate/getAffiliateCommission"
-        _CONCURRENCY = 5   # WEEX лимит 500 req/10s = 50 req/s → 5 при ~100ms латентности
+        _PAGE_DELAY = 0.15  # 150мс между страницами = ~6 req/s для commission
 
         def _params(page: int) -> dict:
             return {
@@ -282,7 +282,6 @@ class RealWeexClient(WeexClient):
                 "page": page, "pageSize": 100, "productType": "FUTURES",
             }
 
-        # Первая страница — узнаём общее число страниц
         first = await self._get(AFFILIATE_BASE, _EP, _params(1), signed=True, affiliate=True)
         data0 = self._data(first)
         items0 = self._extract_list(data0, ("channelCommissionInfoItems", "_list"))
@@ -290,54 +289,45 @@ class RealWeexClient(WeexClient):
         if not isinstance(data0, dict):
             return items0
 
-        # WEEX возвращает `pages` (кол-во страниц) и `total` (кол-во записей).
-        # Берём максимум из обоих расчётов на случай несогласованности полей.
         pages_field = int(data0.get("pages", 1) or 1)
         total_field  = int(data0.get("total",  0) or 0)
         pages_from_total = _math.ceil(total_field / 100) if total_field else 0
         total_pages = max(pages_field, pages_from_total, 1)
 
         logger.info(
-            "getAffiliateCommission: pages=%s total_records=%s → fetch %s pages",
+            "getAffiliateCommission: pages=%s total=%s → sequential fetch %s pages",
             pages_field, total_field, total_pages,
         )
 
         if total_pages <= 1:
             return items0
 
-        sem = _asyncio.Semaphore(_CONCURRENCY)
-        failed_pages: list[int] = []
+        results = list(items0)
+        failed = 0
 
-        async def fetch_page(page: int) -> list:
-            async with sem:
+        for page in range(2, total_pages + 1):
+            await _asyncio.sleep(_PAGE_DELAY)
+            payload = await self._get(AFFILIATE_BASE, _EP, _params(page),
+                                      signed=True, affiliate=True)
+            if payload is None:
+                await _asyncio.sleep(0.5)
                 payload = await self._get(AFFILIATE_BASE, _EP, _params(page),
                                           signed=True, affiliate=True)
-                if payload is None:
-                    # Retry once after brief pause to absorb rate-limit burst
-                    await _asyncio.sleep(0.5)
-                    payload = await self._get(AFFILIATE_BASE, _EP, _params(page),
-                                              signed=True, affiliate=True)
-                if payload is None:
-                    failed_pages.append(page)
-                    logger.warning("getAffiliateCommission: page %s failed after retry", page)
-                    return []
-                return self._extract_list(self._data(payload), ("channelCommissionInfoItems", "_list"))
+            if payload is None:
+                failed += 1
+                logger.warning("getAffiliateCommission: page %s failed after retry", page)
+            else:
+                results.extend(
+                    self._extract_list(self._data(payload), ("channelCommissionInfoItems", "_list"))
+                )
 
-        pages_data = await _asyncio.gather(*[fetch_page(p) for p in range(2, total_pages + 1)])
-
-        results = list(items0)
-        for page_items in pages_data:
-            results.extend(page_items)
-
-        if failed_pages:
+        if failed:
             logger.error(
-                "getAffiliateCommission: %d/%d pages lost (rate limit?) → commission UNDERCOUNTED",
-                len(failed_pages), total_pages,
+                "getAffiliateCommission: %d/%d pages lost → commission UNDERCOUNTED", failed, total_pages,
             )
         else:
             logger.info(
-                "getAffiliateCommission: all %d pages OK, %d records total",
-                total_pages, len(results),
+                "getAffiliateCommission: all %d pages OK, %d records total", total_pages, len(results),
             )
 
         return results
