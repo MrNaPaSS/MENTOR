@@ -211,7 +211,7 @@ async def open_interest(symbol: str):
     """Открытый интерес по паре из WEEX."""
     sym = symbol.upper()
     data = await _weex("/capi/v3/market/openInterest", {"symbol": sym})
-    payload = data.get("data") if data else None
+    payload = (data.get("data") or data) if data else None
     oi_value = None
     if isinstance(payload, dict):
         for key in ("openInterest", "open_interest", "oi", "value"):
@@ -239,17 +239,18 @@ async def derivatives(symbol: str):
 
     last_price = float(price_raw.get("price", 0)) if price_raw else 0
 
-    # Открытый интерес
-    oi_payload = oi_raw.get("data") if oi_raw else None
+    # Открытый интерес — WEEX возвращает OI в корне ответа, не в data
     oi_value = None
-    if isinstance(oi_payload, dict):
-        for key in ("openInterest", "open_interest", "oi", "value"):
-            if key in oi_payload:
-                try:
-                    oi_value = float(oi_payload[key]) * last_price
-                except (ValueError, TypeError):
-                    pass
-                break
+    if oi_raw:
+        oi_payload = oi_raw.get("data") or oi_raw
+        if isinstance(oi_payload, dict):
+            for key in ("openInterest", "open_interest", "oi", "value"):
+                if key in oi_payload:
+                    try:
+                        oi_value = float(oi_payload[key]) * last_price
+                    except (ValueError, TypeError):
+                        pass
+                    break
 
     # 24ч изменение
     change_pct = 0.0
