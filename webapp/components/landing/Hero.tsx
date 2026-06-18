@@ -15,10 +15,6 @@ export default function Hero() {
 
       <div className="relative mx-auto grid max-w-6xl gap-10 px-4 md:px-6">
         <div className="max-w-3xl">
-          <span className="badge-cyan animate-pulse-glow mb-6">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" /> Работаем с 2023 · No Money No Honey
-          </span>
-
           <h1 className="text-h1 text-white">
             <span className="glitch" data-text="Торгуй как профи.">
               Торгуй как профи.
