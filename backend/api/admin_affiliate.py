@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/admin/affiliate", tags=["admin-affiliate"],
 
 _DAY_MS = 86_400_000
 _cache: dict[str, tuple[float, object]] = {}
-_TTL = 10  # сек — короткий TTL для быстрого обновления при смене периода
+_TTL = 120  # сек — 2 минуты кэш чтобы не жечь rate limits WEEX (500 req/10s per endpoint)
 
 
 def _d(v) -> Decimal:
@@ -94,10 +94,18 @@ async def overview(days: int = 30, weex=Depends(get_weex)):
 
     all_uids, records, comm_items = await _cached(f"overview:{days}", build)
 
-    # Реальный доход ментора — из getAffiliateCommission (SPOT + FUTURES)
+    # Реальный доход ментора — из getAffiliateCommission
     total_commission = sum((_d(c.get("commission")) for c in comm_items), Decimal(0))
+
+    # Лог первых записей чтобы понять структуру ответа WEEX
+    if comm_items:
+        sample = comm_items[0]
+        logger.info(
+            "comm sample keys=%s fee=%s commission=%s productType=%s",
+            list(sample.keys()), sample.get("fee"), sample.get("commission"), sample.get("productType")
+        )
+
     if total_commission == 0:
-        # Fallback: поле commission в getChannelUserTradeAndAsset (если доступно)
         total_commission = sum((_d(r.get("commission")) for r in records), Decimal(0))
 
     logger.info("overview days=%s records=%d comm_items=%d total_commission=%s",
