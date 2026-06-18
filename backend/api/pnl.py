@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from backend.deps import get_current_mentor
 
-# Файлы хранятся в public/pln/ и раздаются через FastAPI StaticFiles
-# (mount /pln → StaticFiles в backend/main.py), поэтому out/ не нужен.
-PNL_DIR = Path(__file__).parent.parent.parent / "webapp" / "public" / "pln"
+_ROOT = Path(__file__).parent.parent.parent
+PNL_DIR = _ROOT / "webapp" / "public" / "pln"
 PNL_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED = {".jpg", ".jpeg", ".png", ".webp"}
@@ -19,13 +19,21 @@ ALLOWED = {".jpg", ".jpeg", ".png", ".webp"}
 router = APIRouter(prefix="/api/pnl", tags=["pnl"])
 
 
+def _backend_url() -> str:
+    # Читаем NGROK_DOMAIN из tunnel.config (создаётся start.bat).
+    tunnel = _ROOT / "tunnel.config"
+    if tunnel.exists():
+        for line in tunnel.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.startswith("NGROK_DOMAIN="):
+                domain = line.split("=", 1)[1].strip()
+                if domain:
+                    return f"https://{domain}"
+    return os.getenv("BACKEND_URL", "http://localhost:8000")
+
+
 @router.get("")
-async def list_pnl(request: Request):
-    # ngrok прокидывает X-Forwarded-Host / X-Forwarded-Proto, но не меняет Host.
-    # Используем forwarded-заголовки чтобы вернуть правильный публичный URL.
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "localhost:8000")
-    proto = request.headers.get("x-forwarded-proto", "http")
-    base = f"{proto}://{host}"
+async def list_pnl():
+    base = _backend_url()
     files = sorted(
         f.name for f in PNL_DIR.iterdir()
         if f.is_file() and f.suffix.lower() in ALLOWED
