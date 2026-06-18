@@ -66,7 +66,8 @@ function TvWidget({
       height,
       colorTheme: "dark",
       locale: "ru",
-      isTransparent: true,
+      isTransparent: false,
+      backgroundColor: "#0b0e11",
     });
     el.appendChild(script);
 
@@ -179,11 +180,12 @@ function ScreenerSection() {
 function OverviewSection() {
   return (
     <div className="space-y-4">
+      {/* Обзор крипторынка + новости */}
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card p-0 overflow-hidden">
           <div className="border-b border-border px-4 py-3">
             <h3 className="text-sm font-semibold text-white">Обзор крипторынка</h3>
-            <p className="text-[11px] text-text-muted">Топ монеты · Изменения · Объёмы</p>
+            <p className="text-[11px] text-text-muted">Топ монеты · Индексы · Изменения</p>
           </div>
           <TvWidget
             scriptName="embed-widget-market-overview.js"
@@ -223,63 +225,33 @@ function OverviewSection() {
           />
         </div>
 
-        <div className="space-y-4">
-          <div className="card p-0 overflow-hidden">
-            <div className="border-b border-border px-4 py-3">
-              <h3 className="text-sm font-semibold text-white">Топ новости рынка</h3>
-              <p className="text-[11px] text-text-muted">Актуальные события</p>
-            </div>
-            <TvWidget
-              scriptName="embed-widget-timeline.js"
-              config={{
-                feedMode: "market",
-                market: "crypto",
-                displayMode: "regular",
-              }}
-              height={250}
-            />
+        <div className="card p-0 overflow-hidden">
+          <div className="border-b border-border px-4 py-3">
+            <h3 className="text-sm font-semibold text-white">Топ новости рынка</h3>
+            <p className="text-[11px] text-text-muted">Актуальные события</p>
           </div>
-
-          <div className="card p-0 overflow-hidden">
-            <div className="border-b border-border px-4 py-3">
-              <h3 className="text-sm font-semibold text-white">Экономический календарь</h3>
-              <p className="text-[11px] text-text-muted">События, влияющие на рынок</p>
-            </div>
-            <TvWidget
-              scriptName="embed-widget-events.js"
-              config={{
-                height: 250,
-              }}
-              height={250}
-            />
-          </div>
+          <TvWidget
+            scriptName="embed-widget-timeline.js"
+            config={{
+              feedMode: "market",
+              market: "crypto",
+              displayMode: "regular",
+            }}
+            height={520}
+          />
         </div>
       </div>
 
+      {/* Экономический календарь - полная ширина */}
       <div className="card p-0 overflow-hidden">
         <div className="border-b border-border px-4 py-3">
-          <h3 className="text-sm font-semibold text-white">Тикер - топ активы</h3>
-          <p className="text-[11px] text-text-muted">Бегущая строка с ценами в реальном времени</p>
+          <h3 className="text-sm font-semibold text-white">Экономический календарь</h3>
+          <p className="text-[11px] text-text-muted">Макроэкономические события, влияющие на рынок</p>
         </div>
         <TvWidget
-          scriptName="embed-widget-ticker-tape.js"
-          config={{
-            symbols: [
-              { proName: "BINANCE:BTCUSDT", title: "Bitcoin" },
-              { proName: "BINANCE:ETHUSDT", title: "Ethereum" },
-              { proName: "BINANCE:SOLUSDT", title: "Solana" },
-              { proName: "BINANCE:BNBUSDT", title: "BNB" },
-              { proName: "BINANCE:XRPUSDT", title: "XRP" },
-              { proName: "BINANCE:DOGEUSDT", title: "Doge" },
-              { proName: "FOREXCOM:SPXUSD", title: "S&P 500" },
-              { proName: "FOREXCOM:NSXUSD", title: "Nasdaq" },
-              { proName: "CRYPTOCAP:BTC.D", title: "BTC.D" },
-              { proName: "CRYPTOCAP:TOTAL", title: "Общая кап" },
-            ],
-            showSymbolLogo: true,
-            displayMode: "adaptive",
-          }}
-          height={60}
+          scriptName="embed-widget-events.js"
+          config={{}}
+          height={500}
         />
       </div>
     </div>
@@ -391,7 +363,7 @@ export default function MarketPage() {
                 <span className="text-sm font-semibold text-white">{p}</span>
                 <span className="text-[10px] text-text-muted">15м</span>
               </div>
-              <TradingChart symbol={p} interval="15" height={260} showToolbar={false} />
+              <TradingChart symbol={p} interval="15" height={420} showToolbar={false} />
             </div>
           ))}
         </div>
