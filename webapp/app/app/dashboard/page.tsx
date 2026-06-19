@@ -588,20 +588,6 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", overflow: "visible" }}>
-      <defs>
-        <radialGradient id="gaugeBg" cx="50%" cy="100%" r="80%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.08" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </radialGradient>
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="3" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-      </defs>
-
-      {/* Radial glow background */}
-      <ellipse cx={cx} cy={cy} rx={r + 30} ry={r * 0.7} fill="url(#gaugeBg)" />
-
       {/* Track */}
       <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
         fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="14" strokeLinecap="butt" />
@@ -619,13 +605,12 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
         );
       })}
 
-      {/* Active zone glow overlay */}
+      {/* Active zone overlay */}
       <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
         fill="none" stroke={color} strokeWidth="14" strokeLinecap="butt"
         strokeDasharray={`${value * Math.PI * r} ${Math.PI * r}`}
         opacity="0.55"
-        style={{ transition: "stroke-dasharray 0.9s ease, stroke 0.4s ease",
-          filter: `drop-shadow(0 0 8px ${color}90)` }} />
+        style={{ transition: "stroke-dasharray 0.9s ease, stroke 0.4s ease" }} />
 
       {/* Tick marks */}
       {ticks.map(t => {
@@ -654,24 +639,15 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
         );
       })}
 
-      {/* Needle shadow */}
-      <polygon points={`${nx},${ny} ${bx1},${by1} ${bx2},${by2}`}
-        fill={color} opacity="0.2" filter="url(#glow)"
-        style={{ transition: "all 0.9s cubic-bezier(0.34,1.56,0.64,1)" }} />
-
       {/* Needle */}
       <polygon points={`${nx},${ny} ${bx1},${by1} ${bx2},${by2}`}
         fill={color}
-        style={{ filter: `drop-shadow(0 0 5px ${color})`,
-          transition: "all 0.9s cubic-bezier(0.34,1.56,0.64,1)" }} />
+        style={{ transition: "all 0.9s cubic-bezier(0.34,1.56,0.64,1)" }} />
 
-      {/* Hub outer ring */}
+      {/* Hub */}
       <circle cx={cx} cy={cy} r="11" fill="rgba(10,14,20,0.95)"
         stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-      {/* Hub inner glow */}
-      <circle cx={cx} cy={cy} r="7" fill={color} opacity="0.15" />
-      <circle cx={cx} cy={cy} r="4.5" fill={color}
-        style={{ filter: `drop-shadow(0 0 8px ${color})` }} />
+      <circle cx={cx} cy={cy} r="4.5" fill={color} />
     </svg>
   );
 }

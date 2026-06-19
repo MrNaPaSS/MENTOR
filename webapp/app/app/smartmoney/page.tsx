@@ -740,13 +740,6 @@ function FearGaugeSmall({val,color}:{val:number;color:string}) {
   const circ = Math.PI*r;
   return (
     <svg viewBox="0 0 124 62" className="w-full overflow-visible">
-      <defs>
-        <radialGradient id="fgBg" cx="50%" cy="100%" r="90%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.1"/>
-          <stop offset="100%" stopColor={color} stopOpacity="0"/>
-        </radialGradient>
-      </defs>
-      <ellipse cx={cx} cy={cy} rx={r+16} ry={r*0.7} fill="url(#fgBg)"/>
       <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
         fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10" strokeLinecap="butt"/>
       {[{from:0,to:.25,c:"#0ecb81"},{from:.25,to:.45,c:"#5ac87a"},{from:.45,to:.55,c:"#9ca3af"},{from:.55,to:.75,c:"#f0b90b"},{from:.75,to:1,c:"#f6465d"}]
@@ -759,18 +752,16 @@ function FearGaugeSmall({val,color}:{val:number;color:string}) {
       <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
         fill="none" stroke={color} strokeWidth="10" strokeLinecap="round" opacity="0.7"
         strokeDasharray={`${arc*circ} ${circ}`}
-        style={{transition:"stroke-dasharray 0.9s ease",filter:`drop-shadow(0 0 6px ${color}80)`}}/>
-      {/* needle */}
+        style={{transition:"stroke-dasharray 0.9s ease"}}/>
       {(()=>{
         const a=Math.PI-arc*Math.PI;
         const nx=cx+(r-14)*Math.cos(a), ny=cy-(r-14)*Math.sin(a);
         const pa=a+Math.PI/2;
         return <polygon points={`${nx},${ny} ${cx+4*Math.cos(pa)},${cy-4*Math.sin(pa)} ${cx-4*Math.cos(pa)},${cy+4*Math.sin(pa)}`}
-          fill={color} style={{filter:`drop-shadow(0 0 4px ${color})`,transition:"all 0.9s ease"}}/>;
+          fill={color} style={{transition:"all 0.9s ease"}}/>;
       })()}
-      <circle cx={cx} cy={cy} r="4" fill={color} style={{filter:`drop-shadow(0 0 6px ${color})`}}/>
-      <text x={cx} y={cy-16} textAnchor="middle" fill="white" fontSize="18" fontWeight="900" fontFamily="monospace"
-        style={{filter:`drop-shadow(0 0 8px ${color})`}}>{val}</text>
+      <circle cx={cx} cy={cy} r="4" fill={color}/>
+      <text x={cx} y={cy-16} textAnchor="middle" fill="white" fontSize="18" fontWeight="900" fontFamily="monospace">{val}</text>
     </svg>
   );
 }
@@ -823,7 +814,7 @@ function OnchainSection() {
             <div className="mb-1 text-[9px] uppercase tracking-widest text-white/25">Fear & Greed Index</div>
             <FearGaugeSmall val={fgVal} color={fgColor}/>
             <div className="mt-1 text-center">
-              <span className="text-[13px] font-bold" style={{color:fgColor,textShadow:`0 0 16px ${fgColor}60`}}>
+              <span className="text-[13px] font-bold" style={{color:fgColor}}>
                 {d.fearGreed.label}
               </span>
             </div>
