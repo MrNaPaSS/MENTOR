@@ -426,63 +426,6 @@ export default function AnalyticsPage() {
         )}
       </div>
 
-      {/* WEEX торговая активность */}
-      {tradeSummary && (
-        <div className="card space-y-3">
-          <div className="flex items-center gap-2">
-            <BarChart2 className="h-4 w-4 text-accent-cyan" />
-            <h2 className="text-base font-bold text-white">Активность на WEEX</h2>
-            <span className="ml-auto text-[10px] text-text-muted">за 90 дней</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {/* Net PnL */}
-            {currentBalance !== null && tradeSummary.deposit_total > 0 && (() => {
-              const pnl = currentBalance - tradeSummary.deposit_total;
-              const pnlPct = (pnl / tradeSummary.deposit_total) * 100;
-              const isPos = pnl >= 0;
-              return (
-                <div className={`rounded-xl px-4 py-3 border ${isPos ? "bg-success/5 border-success/20" : "bg-danger/5 border-danger/20"}`}>
-                  <p className={`font-mono text-lg font-extrabold ${isPos ? "text-success" : "text-danger"}`}>
-                    {isPos ? "+" : ""}{fmtDot(pnl, 2)} USDT
-                  </p>
-                  <p className={`text-[10px] font-bold mt-0.5 ${isPos ? "text-success" : "text-danger"}`}>
-                    {isPos ? "+" : ""}{pnlPct.toFixed(2)}%
-                  </p>
-                  <p className="text-[11px] text-text-muted flex items-center gap-1 mt-1">
-                    <TrendingUp className="h-3 w-3" /> Итог. P&L
-                  </p>
-                </div>
-              );
-            })()}
-            <div className="rounded-xl bg-accent-cyan/5 border border-accent-cyan/10 px-4 py-3">
-              <p className="font-mono text-lg font-extrabold text-white">
-                ${fmtDot(tradeSummary.futures_volume)}
-              </p>
-              <p className="text-[11px] text-text-muted flex items-center gap-1">
-                <TrendingUp className="h-3 w-3 text-accent-cyan" /> Фьючерсы
-              </p>
-            </div>
-            <div className="rounded-xl bg-success/5 border border-success/10 px-4 py-3">
-              <p className="font-mono text-lg font-extrabold text-success">
-                ${fmtDot(tradeSummary.deposit_total)}
-              </p>
-              <p className="text-[11px] text-text-muted flex items-center gap-1">
-                <ArrowDownCircle className="h-3 w-3 text-success" /> Депозиты
-              </p>
-            </div>
-            <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] px-4 py-3">
-              <p className="font-mono text-lg font-extrabold text-accent-gold">
-                {fmtDot(tradeSummary.deposit_total > 0
-                  ? Math.round((tradeSummary.total_volume / tradeSummary.deposit_total) * 100)
-                  : 0)}x
-              </p>
-              <p className="text-[11px] text-text-muted flex items-center gap-1">
-                <Coins className="h-3 w-3 text-accent-gold" /> Оборот vs депозит
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* KPI */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
