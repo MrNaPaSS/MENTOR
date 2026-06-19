@@ -141,10 +141,13 @@ class ReferralRow(BaseModel):
 @router.get("/overview", response_model=AffiliateOverview)
 async def overview(days: int = 30, weex=Depends(get_weex)):
     days = max(1, min(days, 90))
-    _, records, comm_items, _ = await _fetch_weex_data(weex, days)
+    all_uids, records, comm_items, _ = await _fetch_weex_data(weex, days)
+    start, _ = _period(days)
+    # Count registrations that actually fall inside the requested period
+    new_referrals = sum(1 for u in all_uids if int(u.get("registerTime") or 0) >= start)
     total_commission = sum((_d(c.get("commission")) for c in comm_items), Decimal(0))
     return AffiliateOverview(
-        referrals=len(records),
+        referrals=new_referrals,
         total_deposit=sum((_d(r.get("depositAmount")) for r in records), Decimal(0)),
         total_spot_volume=sum((_d(r.get("spotTradingAmount")) for r in records), Decimal(0)),
         total_futures_volume=sum((_d(r.get("futuresTradingAmount")) for r in records), Decimal(0)),
