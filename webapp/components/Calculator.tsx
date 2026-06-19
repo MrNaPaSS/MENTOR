@@ -6,10 +6,9 @@ import { api, CalcResponse } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { fmtUsd } from "@/lib/format";
 
-const MAX_LEV = { moderate: 25, turbo: 400 } as const;
+const MAX_LEV = 400;
 
 export default function Calculator() {
-  const [mode, setMode] = useState<"moderate" | "turbo">("moderate");
   const [balance, setBalance] = useState("1000");
   const [balanceFromProfile, setBalanceFromProfile] = useState(false);
   const [entry, setEntry] = useState("100");
@@ -21,8 +20,7 @@ export default function Calculator() {
   const [loading, setLoading] = useState(false);
   const [priceLoading, setPriceLoading] = useState(false);
 
-  const maxLev = MAX_LEV[mode];
-  const leveragePct = (leverage / maxLev) * 100;
+  const leveragePct = (leverage / MAX_LEV) * 100;
 
   useEffect(() => {
     const token = getAccessToken();
@@ -34,11 +32,6 @@ export default function Calculator() {
       }
     }).catch(() => {});
   }, []);
-
-  function changeMode(m: "moderate" | "turbo") {
-    setMode(m);
-    setLeverage(lev => Math.min(lev, MAX_LEV[m]));
-  }
 
   async function fetchPrice() {
     setPriceLoading(true);
@@ -53,7 +46,7 @@ export default function Calculator() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.calculate({ mode, balance, entry_price: entry, direction, leverage });
+      const res = await api.calculate({ mode: "turbo", balance, entry_price: entry, direction, leverage });
       setResult(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Ошибка расчёта");
@@ -77,35 +70,6 @@ export default function Calculator() {
 
         {/* ─── LEFT: INPUT PANEL ─── */}
         <div className="space-y-6 p-7">
-
-          {/* Mode */}
-          <div
-            className="flex rounded-2xl p-1"
-            style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}
-          >
-            {(["moderate", "turbo"] as const).map((m) => {
-              const active = mode === m;
-              return (
-                <button
-                  key={m}
-                  onClick={() => changeMode(m)}
-                  className="relative flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all duration-200"
-                  style={{
-                    color: active ? (m === "turbo" ? "#FF4757" : "#0AFFE0") : "rgba(255,255,255,0.35)",
-                    background: active ? "rgba(255,255,255,0.07)" : "transparent",
-                  }}
-                >
-                  {m === "moderate" ? "Умеренный" : "Турбо"}
-                  {active && (
-                    <span
-                      className="absolute inset-x-4 bottom-0 h-[2px] rounded-full"
-                      style={{ background: m === "turbo" ? "#FF4757" : "#0AFFE0" }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
 
           {/* Direction */}
           <div className="grid grid-cols-2 gap-3">
@@ -198,7 +162,7 @@ export default function Calculator() {
               <input
                 type="range"
                 min={1}
-                max={maxLev}
+                max={MAX_LEV}
                 value={leverage}
                 onChange={(e) => setLeverage(Number(e.target.value))}
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
@@ -207,7 +171,7 @@ export default function Calculator() {
 
             <div className="mt-2 flex justify-between text-[11px] text-text-muted">
               <span>×1</span>
-              <span>до ×{maxLev}</span>
+              <span>×400</span>
             </div>
           </div>
 
