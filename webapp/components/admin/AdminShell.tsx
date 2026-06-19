@@ -13,6 +13,7 @@ import {
   Radio,
   Images,
   BarChart2,
+  ShoppingBag,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/admin/pnl", label: "PnL скриншоты", icon: Images },
   { href: "/admin/signal/new", label: "Новый сигнал", icon: PlusCircle },
   { href: "/admin/signals", label: "Сигналы", icon: ListOrdered },
+  { href: "/admin/shop", label: "Маркет", icon: ShoppingBag },
   { href: "/admin/students", label: "Ученики", icon: Users },
 ];
 

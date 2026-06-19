@@ -15,6 +15,7 @@ import {
   Calculator,
   ImageIcon,
   Coins,
+  ShoppingBag,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
@@ -29,6 +30,7 @@ const NAV = [
   { href: "/app/market", label: "Рынок", icon: Globe, mobile: true },
   { href: "/app/news", label: "ТВ", icon: Tv, mobile: false },
   { href: "/app/analytics", label: "Аналитика", icon: BarChart3, mobile: false },
+  { href: "/app/shop", label: "Маркет", icon: ShoppingBag, mobile: true },
   { href: "/app/calculator", label: "Калькулятор", icon: Calculator, mobile: false },
   { href: "/app/profile", label: "Профиль", icon: User, mobile: true },
 ];
@@ -133,9 +135,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* Монеты NMNH */}
             {coins !== null && (
               <Link
-                href="/app/analytics"
+                href="/app/shop"
                 className="hidden items-center gap-1.5 rounded-xl border border-accent-gold/30 bg-accent-gold/10 px-3 py-1.5 transition hover:border-accent-gold/50 sm:flex"
-                title="NMNH монеты — заработай за достижения"
+                title="NMNH монеты — потратить в маркете"
               >
                 <Coins className="h-3.5 w-3.5 text-accent-gold" />
                 <span className="font-mono text-sm font-bold text-accent-gold tabular">

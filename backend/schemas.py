@@ -227,3 +227,67 @@ class CoinSyncOut(BaseModel):
     balance: int
     added: int
     new_transactions: list[CoinTxOut]
+
+
+# ── Магазин NMNH ──
+
+class ShopItemOut(BaseModel):
+    id: int
+    title: str
+    description: str
+    price: int
+    category: str
+    section: str
+    icon: str
+    link_url: str
+    is_active: bool
+    sort_order: int
+
+
+class ShopItemIn(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    description: str = ""
+    price: int = Field(ge=0)
+    category: str = "other"
+    section: str = "shop"
+    icon: str = "Gift"
+    link_url: str = Field(default="", max_length=500)
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class ShopItemPatch(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=120)
+    description: Optional[str] = None
+    price: Optional[int] = Field(default=None, ge=0)
+    category: Optional[str] = None
+    section: Optional[str] = None
+    icon: Optional[str] = None
+    link_url: Optional[str] = Field(default=None, max_length=500)
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class ShopOrderCreate(BaseModel):
+    item_id: int
+    contact: str = Field(default="", max_length=255)
+
+
+class ShopOrderOut(BaseModel):
+    id: int
+    item_id: Optional[int]
+    item_title: str
+    price: int
+    status: str
+    contact: str
+    mentor_note: str
+    created_at: str
+    resolved_at: Optional[str]
+    # Только для админских ответов:
+    student_id: Optional[int] = None
+    student_username: Optional[str] = None
+    student_uid: Optional[str] = None
+
+
+class ShopOrderResolve(BaseModel):
+    mentor_note: str = Field(default="", max_length=255)

@@ -52,6 +52,7 @@ def create_all() -> None:
     engine = get_engine()
     Base.metadata.create_all(engine)
     _migrate_add_columns(engine)
+    _seed_shop_items(engine)
 
 
 def _migrate_add_columns(engine) -> None:
@@ -65,3 +66,47 @@ def _migrate_add_columns(engine) -> None:
         if "coins" not in existing_student_cols:
             conn.execute(text("ALTER TABLE students ADD COLUMN coins INTEGER DEFAULT 0 NOT NULL"))
             conn.commit()
+
+
+# Стартовый каталог магазина — вставляется один раз, если таблица пуста.
+# Кортеж: (title, description, price, category, section, icon, link_url, sort_order)
+_DEFAULT_SHOP_ITEMS = [
+    # ── Покупка за NMNH ──
+    ("Подписка на индикатор — 7 дней", "Доступ к приватному индикатору NMNH на TradingView на 7 дней.", 200, "indicator", "shop", "TrendingUp", "", 10),
+    ("Подписка на индикатор — 14 дней", "Доступ к приватному индикатору NMNH на 14 дней.", 350, "indicator", "shop", "TrendingUp", "", 20),
+    ("Подписка на индикатор — 1 месяц", "Доступ к приватному индикатору NMNH на 30 дней. Максимальная выгода.", 600, "indicator", "shop", "TrendingUp", "", 30),
+    ("Индивидуальное менторство", "Персональный разбор, стратегия и сопровождение 1-на-1 с ментором.", 3000, "mentorship", "shop", "GraduationCap", "", 40),
+
+    # ── Наш софт (витрина, ссылки добавляются из админки) ──
+    ("Индикатор #1 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", 100),
+    ("Индикатор #2 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", 110),
+    ("Индикатор #3 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", 120),
+    ("Академия NMNH", "Обучение, торговые стратегии и AI-агент в одной платформе.", 0, "academy", "software", "GraduationCap", "", 130),
+    ("Библиотека трейдера", "База знаний, материалы и инструменты трейдера.", 0, "library", "software", "BookOpen", "", 140),
+    ("Алерты на TradingView", "Готовые алерты на TradingView от NMNH.", 0, "alerts", "software", "BellRing", "", 150),
+    ("AI-агент по форексу", "AI-агент для анализа форекс-рынка.", 0, "ai", "software", "Bot", "", 160),
+    ("Веб-расширение FOREX для Chrome", "Расширение Chrome для торговли на форексе.", 0, "extension", "software", "Chrome", "", 170),
+    ("AI-ментор", "Персональный AI-ментор по трейдингу.", 0, "ai", "software", "Bot", "", 180),
+    ("AI-психолог", "AI-психолог для контроля эмоций в трейдинге.", 0, "ai", "software", "Brain", "", 190),
+    ("Алго-трейд", "Алгоритмическая торговая система NMNH.", 0, "algo", "software", "Cpu", "", 200),
+]
+
+
+def _seed_shop_items(engine) -> None:
+    """Вставить стартовый каталог магазина, если таблица shop_items пуста."""
+    from sqlalchemy import inspect, select
+    from sqlalchemy.orm import Session
+    from core.models import ShopItem
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names():
+        return
+    with Session(engine) as session:
+        if session.execute(select(ShopItem.id).limit(1)).first():
+            return
+        session.add_all([
+            ShopItem(title=title, description=desc, price=price, category=cat,
+                     section=section, icon=icon, link_url=link, sort_order=order)
+            for title, desc, price, cat, section, icon, link, order in _DEFAULT_SHOP_ITEMS
+        ])
+        session.commit()

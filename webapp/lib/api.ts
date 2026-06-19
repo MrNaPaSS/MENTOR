@@ -276,6 +276,30 @@ export const api = {
   coinsSync: (token: string, body: CoinSyncIn) =>
     authReq<CoinSyncOut>("/api/coins/sync", token, { method: "POST", body: JSON.stringify(body) }),
 
+  // ── Магазин (ученик) ──
+  shopItems: (token: string) => authReq<ShopItem[]>("/api/shop/items", token),
+  shopMyOrders: (token: string) => authReq<ShopOrder[]>("/api/shop/orders", token),
+  shopBuy: (token: string, item_id: number, contact: string) =>
+    authReq<ShopOrder>("/api/shop/orders", token, {
+      method: "POST",
+      body: JSON.stringify({ item_id, contact }),
+    }),
+
+  // ── Магазин (ментор) ──
+  shopAdminItems: (token: string) => authReq<ShopItem[]>("/api/shop/admin/items", token),
+  shopAdminCreate: (token: string, body: ShopItemInput) =>
+    authReq<ShopItem>("/api/shop/admin/items", token, { method: "POST", body: JSON.stringify(body) }),
+  shopAdminUpdate: (token: string, id: number, body: Partial<ShopItemInput>) =>
+    authReq<ShopItem>(`/api/shop/admin/items/${id}`, token, { method: "PATCH", body: JSON.stringify(body) }),
+  shopAdminDelete: (token: string, id: number) =>
+    authReq<{ ok: boolean }>(`/api/shop/admin/items/${id}`, token, { method: "DELETE" }),
+  shopAdminOrders: (token: string, status?: string) =>
+    authReq<ShopOrder[]>(`/api/shop/admin/orders${status ? `?status=${status}` : ""}`, token),
+  shopAdminFulfill: (token: string, id: number, mentor_note = "") =>
+    authReq<ShopOrder>(`/api/shop/admin/orders/${id}/fulfill`, token, { method: "POST", body: JSON.stringify({ mentor_note }) }),
+  shopAdminReject: (token: string, id: number, mentor_note = "") =>
+    authReq<ShopOrder>(`/api/shop/admin/orders/${id}/reject`, token, { method: "POST", body: JSON.stringify({ mentor_note }) }),
+
   // ── Авторизованные (ментор) ──
   students: (token: string) => authReq<StudentOut[]>("/api/students", token),
   studentPatch: (token: string, id: number, body: Partial<StudentOut>) =>
@@ -393,4 +417,44 @@ export interface CoinSyncOut {
   balance: number;
   added: number;
   new_transactions: CoinTx[];
+}
+
+export interface ShopItem {
+  id: number;
+  title: string;
+  description: string;
+  price: number;
+  category: string;
+  section: string;   // "shop" | "software"
+  icon: string;
+  link_url: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface ShopItemInput {
+  title: string;
+  description?: string;
+  price: number;
+  category?: string;
+  section?: string;
+  icon?: string;
+  link_url?: string;
+  is_active?: boolean;
+  sort_order?: number;
+}
+
+export interface ShopOrder {
+  id: number;
+  item_id: number | null;
+  item_title: string;
+  price: number;
+  status: string;    // "pending" | "fulfilled" | "rejected"
+  contact: string;
+  mentor_note: string;
+  created_at: string;
+  resolved_at: string | null;
+  student_id?: number | null;
+  student_username?: string | null;
+  student_uid?: string | null;
 }

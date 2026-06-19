@@ -153,6 +153,46 @@ class CoinTransaction(Base):
     student: Mapped["Student"] = relationship(back_populates="coin_transactions")
 
 
+class ShopItem(Base):
+    """Товар магазина NMNH — покупается за монеты (подписка на индикатор, менторство, VIP)."""
+
+    __tablename__ = "shop_items"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    price: Mapped[int] = mapped_column(Integer)               # цена в монетах NMNH (0 = не покупается, витрина)
+    category: Mapped[str] = mapped_column(String(32), default="other")  # indicator|mentorship|vip|academy|...
+    section: Mapped[str] = mapped_column(String(16), default="shop")     # shop (покупка) | software (витрина)
+    icon: Mapped[str] = mapped_column(String(32), default="Gift")        # имя lucide-иконки
+    link_url: Mapped[str] = mapped_column(String(500), default="")       # ссылка (индикатор/софт), видна в карточке
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    orders: Mapped[list["ShopOrder"]] = relationship(back_populates="item")
+
+
+class ShopOrder(Base):
+    """Заказ ученика в магазине. Монеты списываются сразу, выдача — вручную ментором."""
+
+    __tablename__ = "shop_orders"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("shop_items.id"), nullable=True)
+    item_title: Mapped[str] = mapped_column(String(120))       # снимок названия на момент покупки
+    price: Mapped[int] = mapped_column(Integer)                # снимок цены
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|fulfilled|rejected
+    contact: Mapped[str] = mapped_column(String(255), default="")        # контакт/пожелание ученика
+    mentor_note: Mapped[str] = mapped_column(String(255), default="")    # комментарий ментора при выдаче
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    student: Mapped["Student"] = relationship()
+    item: Mapped["ShopItem"] = relationship(back_populates="orders")
+
+
 class AuthCode(Base):
     """Одноразовый код входа в веб-платформу (UID → код, ТЗ §4.1, контракт A-10)."""
 
@@ -166,4 +206,4 @@ class AuthCode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "utcnow"]
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "utcnow"]
