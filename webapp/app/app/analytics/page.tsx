@@ -864,32 +864,26 @@ export default function AnalyticsPage() {
             </Link>
           </div>
 
-          {/* Итог по депозитам + выводы из summary */}
-          {(() => {
-            const totalIn  = recentTransactions.reduce((s, t) => s + t.amount, 0);
-            const totalOut = tradeSummary?.withdrawal_total ?? 0;
-            const net = totalIn - totalOut;
-            return (totalIn > 0 || totalOut > 0) ? (
-              <div className="flex gap-4 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5">
+          {/* Итог по депозитам */}
+          {recentTransactions.length > 0 && (() => {
+            const totalIn = recentTransactions.reduce((s, t) => s + t.amount, 0);
+            const depositCount = recentTransactions.length;
+            return (
+              <div className="flex items-center gap-4 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5">
                 <div>
                   <p className="text-[10px] text-white/30">Пополнено</p>
                   <p className="font-mono text-sm font-bold text-success">+${fmtDot(totalIn, 2)}</p>
                 </div>
                 <div className="w-px bg-white/[0.06]" />
                 <div>
-                  <p className="text-[10px] text-white/30">Выведено</p>
-                  <p className="font-mono text-sm font-bold text-danger">-${fmtDot(totalOut, 2)}</p>
-                  <p className="text-[9px] text-white/20">суммарно</p>
+                  <p className="text-[10px] text-white/30">Транзакций</p>
+                  <p className="font-mono text-sm font-bold text-white">{depositCount}</p>
                 </div>
-                <div className="w-px bg-white/[0.06]" />
-                <div>
-                  <p className="text-[10px] text-white/30">Чистый поток</p>
-                  <p className={`font-mono text-sm font-bold ${net >= 0 ? "text-success" : "text-danger"}`}>
-                    {net >= 0 ? "+" : ""}{fmtDot(net, 2)}
-                  </p>
+                <div className="ml-auto flex items-center gap-1.5 rounded-lg border border-white/[0.05] bg-white/[0.03] px-2.5 py-1">
+                  <span className="text-[9px] text-white/20">Выводы: данные недоступны в API WEEX</span>
                 </div>
               </div>
-            ) : null;
+            );
           })()}
 
           <div className="overflow-x-auto">

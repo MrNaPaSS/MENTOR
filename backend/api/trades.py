@@ -52,14 +52,8 @@ async def trades_me(
 
     summary = None
     if user_row:
-        logger.warning(
-            "USER_ROW uid=%s depositAmount=%s withdrawalAmount=%s futures=%s spot=%s",
-            uid,
-            user_row.get("depositAmount"),
-            user_row.get("withdrawalAmount"),
-            user_row.get("futuresTradingAmount"),
-            user_row.get("spotTradingAmount"),
-        )
+        logger.info("Trades uid=%s deposit=%.2f futures=%.2f", uid,
+                    _to_float(user_row.get("depositAmount")), _to_float(user_row.get("futuresTradingAmount")))
         futures_vol = _to_float(user_row.get("futuresTradingAmount"))
         spot_vol = _to_float(user_row.get("spotTradingAmount"))
         withdrawal = _to_float(
@@ -75,7 +69,7 @@ async def trades_me(
             "commission": _to_float(user_row.get("commission")),
         }
     else:
-        logger.warning("USER_ROW uid=%s NOT FOUND in channel_trade_asset (total rows=%d)", uid, len(all_rows))
+        logger.info("Trades uid=%s not found in channel_trade_asset", uid)
 
     assets = await weex.get_agency_assert(uid)
 
