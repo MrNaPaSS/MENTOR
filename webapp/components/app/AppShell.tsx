@@ -60,7 +60,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         logout();
         router.replace("/login");
       });
-    api.coins(token).then(c => setCoins(c.balance)).catch(() => {});
+    api.coins(token).then(c => setCoins(c.balance)).catch(() => setCoins(0));
+
+    const onSync = (e: Event) => setCoins((e as CustomEvent<{balance: number}>).detail.balance);
+    window.addEventListener("nmnh-coins-updated", onSync);
+    return () => window.removeEventListener("nmnh-coins-updated", onSync);
   }, [router]);
 
   function doLogout() {

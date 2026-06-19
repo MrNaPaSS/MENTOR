@@ -349,7 +349,10 @@ export default function AnalyticsPage() {
       earned_achievement_ids: earned,
       current_level: currentLevel,
       reached_volume_milestones: reachedMilestones,
-    }).then(r => setCoinsBalance(r.balance)).catch(() => {});
+    }).then(r => {
+      setCoinsBalance(r.balance);
+      window.dispatchEvent(new CustomEvent("nmnh-coins-updated", { detail: { balance: r.balance } }));
+    }).catch(() => {});
   }, [tradeSummary, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
