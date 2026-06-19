@@ -14,7 +14,6 @@ import {
   ChevronDown,
   Calculator,
   ImageIcon,
-  ArrowLeftRight,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
@@ -29,7 +28,6 @@ const NAV = [
   { href: "/app/market", label: "Рынок", icon: Globe, mobile: true },
   { href: "/app/news", label: "ТВ", icon: Tv, mobile: false },
   { href: "/app/analytics", label: "Аналитика", icon: BarChart3, mobile: false },
-  { href: "/app/trades", label: "Сделки", icon: ArrowLeftRight, mobile: false },
   { href: "/app/calculator", label: "Калькулятор", icon: Calculator, mobile: false },
   { href: "/app/profile", label: "Профиль", icon: User, mobile: true },
 ];
