@@ -299,13 +299,29 @@ async def commission_series(days: int = 14, weex=Depends(get_weex)):
 async def uid_raw_assert(uid: str, weex=Depends(get_weex)):
     """Сырой ответ getAssert для диагностики — показывает все поля что WEEX вернул."""
     import time as _time
+    import datetime as _dt
     from core.weex.real import AFFILIATE_BASE
-    # Запрос без кэша, напрямую
-    payload = await weex._get(
+    end_ms   = int(_time.time() * 1000)
+    start_ms = end_ms - 180 * 86_400_000
+    end_date   = _dt.datetime.utcfromtimestamp(end_ms / 1000).strftime("%Y-%m-%d")
+    start_date = _dt.datetime.utcfromtimestamp(start_ms / 1000).strftime("%Y-%m-%d")
+    # Два запроса: без дат и с датами
+    payload_no_date = await weex._get(
         AFFILIATE_BASE, "/api/v3/agency/getAssert",
         {"userId": uid}, signed=True, affiliate=True,
     )
-    return {"raw": payload, "uid": uid}
+    payload_with_date = await weex._get(
+        AFFILIATE_BASE, "/api/v3/agency/getAssert",
+        {"userId": uid, "startTime": start_date, "endTime": end_date},
+        signed=True, affiliate=True,
+    )
+    return {
+        "uid": uid,
+        "no_date": payload_no_date,
+        "with_date": payload_with_date,
+        "keys_no_date":   list((payload_no_date or {}).get("data", payload_no_date or {}).keys()),
+        "keys_with_date": list((payload_with_date or {}).get("data", payload_with_date or {}).keys()),
+    }
 
 
 @router.get("/uid/{uid}/raw-withdrawals")

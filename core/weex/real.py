@@ -348,26 +348,48 @@ class RealWeexClient(WeexClient):
 
     async def get_agency_withdrawals(self, user_id: str, page: int = 1) -> list:
         """Попытка получить список выводов реферала через несколько WEEX-эндпоинтов."""
+        import datetime as _dt
+        # Диапазон: последние 180 дней
+        end_ms = int(time.time() * 1000)
+        start_ms = end_ms - 180 * 86_400_000
+        end_date = _dt.datetime.utcfromtimestamp(end_ms / 1000).strftime("%Y-%m-%d")
+        start_date = _dt.datetime.utcfromtimestamp(start_ms / 1000).strftime("%Y-%m-%d")
+
+        base_params = {"userId": user_id, "page": page, "pageSize": 100}
+        uid_params  = {"uid":    user_id, "page": page, "pageSize": 100}
+        date_params = {**base_params, "startTime": start_date, "endTime": end_date}
+
         endpoints = [
-            ("/api/v3/agency/getWithdrawRecord",      {"userId": user_id, "page": page, "pageSize": 100}),
-            ("/api/v3/agency/getUserWithdrawRecord",  {"userId": user_id, "page": page, "pageSize": 100}),
-            ("/api/v3/agency/withdrawRecord",         {"userId": user_id, "page": page, "pageSize": 100}),
-            ("/api/v3/rebate/affiliate/getWithdrawRecord", {"uid": user_id, "page": page, "pageSize": 100}),
+            # Проверенные паттерны agency
+            ("/api/v3/agency/getWithdrawRecord",           base_params),
+            ("/api/v3/agency/getUserWithdrawRecord",       base_params),
+            ("/api/v3/agency/withdrawRecord",              base_params),
+            ("/api/v3/agency/getCapitalFlow",              base_params),
+            ("/api/v3/agency/getCapitalRecord",            base_params),
+            ("/api/v3/agency/getUserCapitalFlow",          base_params),
+            ("/api/v3/agency/getTransferRecord",           base_params),
+            ("/api/v3/agency/getTransactionRecord",        base_params),
+            # С датами
+            ("/api/v3/agency/getCapitalFlow",              date_params),
+            ("/api/v3/agency/getWithdrawRecord",           date_params),
+            # rebate паттерны
+            ("/api/v3/rebate/affiliate/getWithdrawRecord",    uid_params),
+            ("/api/v3/rebate/affiliate/getUserWithdrawList",  uid_params),
+            ("/api/v3/rebate/affiliate/getCapitalFlow",       uid_params),
         ]
+        list_keys = ("withdrawList", "withdrawalList", "records", "list", "data",
+                     "capitalFlowList", "transferList", "transactionList", "_list")
         for path, params in endpoints:
             payload = await self._get(AFFILIATE_BASE, path, params, signed=True, affiliate=True)
             if payload is None:
                 continue
             data = self._data(payload)
-            # Проверяем несколько имён поля со списком
-            for key in ("withdrawList", "withdrawalList", "records", "withdraw_list", "_list"):
+            logger.info("getAgencyWithdrawals %s -> keys=%s", path, list(data.keys())[:8])
+            for key in list_keys:
                 lst = data.get(key)
                 if isinstance(lst, list) and lst:
                     logger.info("getAgencyWithdrawals: found %d records via %s[%s]", len(lst), path, key)
                     return lst
-            # Если data — список сам по себе
-            if isinstance(data.get("_list"), list):
-                return data["_list"]
         return []
 
     async def check_uid_existence(self, uid: str, contact_type: str = "email", contact_value: str = "") -> bool:

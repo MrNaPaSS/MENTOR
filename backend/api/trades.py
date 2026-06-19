@@ -63,9 +63,15 @@ async def trades_me(
             "commission": _to_float(user_row.get("commission")),
         }
 
-    # Депозиты и выводы — параллельные запросы
+    # Депозиты и выводы — с диапазоном дат чтобы WEEX вернул полный список
+    from datetime import datetime, timezone as _tz
+    end_dt   = datetime.fromtimestamp(end_ms / 1000, tz=_tz.utc)
+    start_dt = datetime.fromtimestamp(start_ms / 1000, tz=_tz.utc)
+    end_date   = end_dt.strftime("%Y-%m-%d")
+    start_date = start_dt.strftime("%Y-%m-%d")
+
     assets, withdraw_raw = await asyncio.gather(
-        weex.get_agency_assert(uid),
+        weex.get_agency_assert(uid, start_date=start_date, end_date=end_date),
         weex.get_agency_withdrawals(uid),
     )
 
