@@ -41,6 +41,8 @@ interface Goal {
   unlocked: boolean;
 }
 
+type AchCategory = "all" | "volume" | "discipline" | "performance" | "deposit" | "special";
+
 interface Achievement {
   id: string;
   title: string;
@@ -49,6 +51,8 @@ interface Achievement {
   earned: boolean;
   rarity: "common" | "rare" | "epic" | "legendary";
   date?: string;
+  category: Exclude<AchCategory, "all">;
+  xp: number;
 }
 
 const RARITY_STYLES = {
@@ -57,6 +61,26 @@ const RARITY_STYLES = {
   epic: { border: "border-purple-400/40", glow: "shadow-[0_0_12px_rgba(167,139,250,0.25)]", badge: "bg-purple-400/20 text-purple-400", label: "Эпическая" },
   legendary: { border: "border-accent-gold/40", glow: "shadow-[0_0_16px_rgba(255,215,0,0.25)]", badge: "bg-accent-gold/20 text-accent-gold", label: "Легендарная" },
 };
+
+// Progressive XP levels: L2=200, L3=600, L4=1400, L5=3000, L6=6200...
+function xpToLevel(level: number): number {
+  if (level <= 1) return 0;
+  return 200 * (Math.pow(2, level - 1) - 1);
+}
+function getXpLevel(totalXp: number) {
+  let lvl = 1;
+  while (xpToLevel(lvl + 1) <= totalXp) lvl++;
+  return { level: lvl, xpInLevel: totalXp - xpToLevel(lvl), xpNeeded: xpToLevel(lvl + 1) - xpToLevel(lvl) };
+}
+
+const ACH_CATEGORIES: { id: AchCategory; label: string; emoji: string }[] = [
+  { id: "all",         label: "Все",        emoji: "🏆" },
+  { id: "volume",      label: "Объём",      emoji: "📊" },
+  { id: "discipline",  label: "Дисциплина", emoji: "📅" },
+  { id: "performance", label: "Результаты", emoji: "📈" },
+  { id: "deposit",     label: "Депозиты",   emoji: "💰" },
+  { id: "special",     label: "Особые",     emoji: "✨" },
+];
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const MONTHS_RU = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
@@ -214,6 +238,7 @@ export default function AnalyticsPage() {
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
   const [currentBalance, setCurrentBalance] = useState<number | null>(null);
+  const [achCategory, setAchCategory] = useState<AchCategory>("all");
 
   useEffect(() => {
     const token = getAccessToken();
@@ -269,9 +294,13 @@ export default function AnalyticsPage() {
   const validPnl  = calData.filter(d => d.pnl_pct !== null && !d.estimated);
   const avgProfit = validPnl.length
     ? validPnl.reduce((a, d) => a + (d.pnl_pct ?? 0), 0) / validPnl.length : 0;
-  const hotDays   = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 3).length;
+  const hotDays     = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 3).length;
+  const superHotDay = calData.some(d => d.pnl_pct !== null && d.pnl_pct >= 5);
+  const epicDay     = calData.some(d => d.pnl_pct !== null && d.pnl_pct >= 10);
+  const depositTotal = recentDeposits.reduce((s, d) => s + d.amount, 0);
 
   // Цели месяца — работают даже без PnL снимков
+  const effectiveTradeDays = tradingDays > 0 ? tradingDays : activeDays;
   const goals: Goal[] = [
     {
       id: "volume", label: "Объём за месяц", icon: BarChart2, target: 250_000,
@@ -281,9 +310,9 @@ export default function AnalyticsPage() {
     },
     {
       id: "trading_days", label: "Дней торговали", icon: Calendar, target: 15,
-      current: tradingDays > 0 ? tradingDays : activeDays,
+      current: effectiveTradeDays,
       unit: "дней", reward: "📅 Дисциплина",
-      color: "#FF6B35", unlocked: (tradingDays > 0 ? tradingDays : activeDays) >= 15,
+      color: "#FF6B35", unlocked: effectiveTradeDays >= 15,
     },
     {
       id: "profit", label: "Прибыльных дней", icon: TrendingUp, target: 5,
@@ -291,42 +320,73 @@ export default function AnalyticsPage() {
       unit: "дней в плюс", reward: "📈 Бычий режим",
       color: "#00D4A0", unlocked: profitDays >= 5,
     },
+    {
+      id: "streak", label: "Стрик активности", icon: Flame, target: 7,
+      current: activityStreak,
+      unit: "дней подряд", reward: "🔥 На волне",
+      color: "#f97316", unlocked: activityStreak >= 7,
+    },
+    {
+      id: "hot_day", label: "Горячий день", icon: Star, target: 1,
+      current: hotDays,
+      unit: "дней 3%+", reward: "🌟 День охотника",
+      color: "#eab308", unlocked: hotDays >= 1,
+    },
+    {
+      id: "month_profit", label: "Месяц в плюс", icon: TrendingUp, target: 1,
+      current: avgProfit > 0 ? 1 : 0,
+      unit: "", reward: "📈 Победный месяц",
+      color: "#22c55e", unlocked: avgProfit > 0 && validPnl.length >= 5,
+    },
   ];
 
+  const { level: xpLevel } = getXpLevel(
+    Math.floor(totalVolume / 50_000) * 25 +
+    activityStreak * 30 + goalDays * 20 + hotDays * 50 + profitDays * 15 + effectiveTradeDays * 10
+  );
+
   const achievements: Achievement[] = [
-    {
-      id: "first_signal", title: "Первый сигнал", desc: "Получи первый торговый сигнал", icon: Zap,
-      earned: (analytics?.signals_received ?? 0) > 0, rarity: "common",
-    },
-    {
-      id: "week_streak", title: "Недельный стрик", desc: "7 дней подряд в плюс", icon: Flame,
-      earned: activityStreak >= 7, rarity: "rare",
-    },
-    {
-      id: "hot_day", title: "Горячий день", desc: "Получи 3%+ прибыли за день", icon: Star,
-      earned: hotDays > 0, rarity: "rare",
-    },
-    {
-      id: "20_days", title: "Железная воля", desc: "20 дней в месяц с выполненной целью", icon: Trophy,
-      earned: goalDays >= 20, rarity: "epic",
-    },
-    {
-      id: "consistent", title: "Стабильность", desc: "Получи 30+ сигналов за всё время", icon: Target,
-      earned: (analytics?.signals_received ?? 0) >= 30, rarity: "epic",
-    },
-    {
-      id: "legend", title: "Легенда", desc: "Выполни все 4 цели месяца", icon: Gift,
-      earned: goals.every(g => g.unlocked), rarity: "legendary",
-    },
-    // Вехи объёма
-    ...VOLUME_MILESTONES.map(m => ({
-      id: `vol_${m.label}`,
-      title: `${m.emoji} Объём ${m.label}`,
-      desc: `Наторговал ${m.label} USDT суммарного объёма`,
-      icon: BarChart2,
-      earned: totalVolume >= m.vol,
-      rarity: m.reward,
-    })),
+    // ── Объём ────────────────────────────────────────────────────────────
+    { id: "vol_10k",  title: "Первые 10K",    desc: "Суммарный объём 10 000 USDT",    icon: BarChart2,  earned: totalVolume >= 10_000,    rarity: "common",    category: "volume",      xp: 10  },
+    { id: "vol_50k",  title: "Старт",         desc: "Суммарный объём 50 000 USDT",    icon: BarChart2,  earned: totalVolume >= 50_000,    rarity: "common",    category: "volume",      xp: 25  },
+    { id: "vol_100k", title: "Набираю обороты",desc: "Суммарный объём 100 000 USDT",  icon: BarChart2,  earned: totalVolume >= 100_000,   rarity: "rare",      category: "volume",      xp: 50  },
+    { id: "vol_500k", title: "Серьёзный",     desc: "Суммарный объём 500 000 USDT",   icon: BarChart2,  earned: totalVolume >= 500_000,   rarity: "rare",      category: "volume",      xp: 100 },
+    { id: "vol_1m",   title: "Миллионер",     desc: "Суммарный объём 1 000 000 USDT", icon: Trophy,     earned: totalVolume >= 1_000_000,  rarity: "epic",      category: "volume",      xp: 200 },
+    { id: "vol_5m",   title: "Легенда NMNH",  desc: "Суммарный объём 5 000 000 USDT", icon: Trophy,     earned: totalVolume >= 5_000_000,  rarity: "epic",      category: "volume",      xp: 400 },
+    { id: "vol_10m",  title: "К звёздам",     desc: "Суммарный объём 10 000 000 USDT",icon: Star,       earned: totalVolume >= 10_000_000, rarity: "legendary", category: "volume",      xp: 750 },
+    { id: "vol_25m",  title: "Элита",         desc: "Суммарный объём 25 000 000 USDT",icon: Star,       earned: totalVolume >= 25_000_000, rarity: "legendary", category: "volume",      xp: 1500 },
+    // ── Дисциплина ───────────────────────────────────────────────────────
+    { id: "first_trade",  title: "Первый шаг",      desc: "Первый торговый день",             icon: Calendar, earned: effectiveTradeDays >= 1,  rarity: "common",    category: "discipline", xp: 10  },
+    { id: "streak_3",     title: "Трёхдневка",      desc: "3 дня активности подряд",           icon: Flame,    earned: activityStreak >= 3,      rarity: "common",    category: "discipline", xp: 20  },
+    { id: "streak_7",     title: "Недельный стрик", desc: "7 дней активности подряд",          icon: Flame,    earned: activityStreak >= 7,      rarity: "rare",      category: "discipline", xp: 60  },
+    { id: "streak_14",    title: "Двухнедельник",   desc: "14 дней активности подряд",         icon: Flame,    earned: activityStreak >= 14,     rarity: "epic",      category: "discipline", xp: 150 },
+    { id: "streak_30",    title: "Железный трейдер",desc: "30 дней активности подряд",         icon: Trophy,   earned: activityStreak >= 30,     rarity: "legendary", category: "discipline", xp: 500 },
+    { id: "days_15",      title: "Полмесяца",       desc: "15 торговых дней в месяце",         icon: Calendar, earned: effectiveTradeDays >= 15, rarity: "rare",      category: "discipline", xp: 75  },
+    { id: "days_20",      title: "Настоящий трейдер",desc: "20 торговых дней в месяце",        icon: Calendar, earned: effectiveTradeDays >= 20, rarity: "epic",      category: "discipline", xp: 150 },
+    { id: "days_25",      title: "Профессионал",    desc: "25 торговых дней в месяце",         icon: Trophy,   earned: effectiveTradeDays >= 25, rarity: "legendary", category: "discipline", xp: 300 },
+    // ── Результаты ───────────────────────────────────────────────────────
+    { id: "first_profit", title: "Первый плюс",    desc: "Первый прибыльный день",            icon: TrendingUp, earned: profitDays >= 1,            rarity: "common",    category: "performance", xp: 15  },
+    { id: "profit_5",     title: "5 побед",         desc: "5 прибыльных дней в месяце",       icon: TrendingUp, earned: profitDays >= 5,            rarity: "rare",      category: "performance", xp: 60  },
+    { id: "profit_10",    title: "10 побед",        desc: "10 прибыльных дней в месяце",      icon: TrendingUp, earned: profitDays >= 10,           rarity: "epic",      category: "performance", xp: 200 },
+    { id: "hot_day_3",    title: "Горячий день",    desc: "День с прибылью 3%+",              icon: Star,       earned: hotDays >= 1,               rarity: "rare",      category: "performance", xp: 50  },
+    { id: "hot_day_5",    title: "Раскалённый день",desc: "День с прибылью 5%+",              icon: Star,       earned: superHotDay,                rarity: "epic",      category: "performance", xp: 100 },
+    { id: "hot_day_10",   title: "Снайпер",         desc: "День с прибылью 10%+",             icon: Zap,        earned: epicDay,                    rarity: "legendary", category: "performance", xp: 300 },
+    { id: "month_plus",   title: "Месяц в плюс",   desc: "Средний PnL месяца положительный", icon: TrendingUp, earned: avgProfit > 0 && validPnl.length >= 5, rarity: "epic", category: "performance", xp: 150 },
+    { id: "goal_days_10", title: "Ударник",         desc: "10 дней с выполненными целями",    icon: Target,     earned: goalDays >= 10,             rarity: "epic",      category: "performance", xp: 175 },
+    // ── Депозиты ─────────────────────────────────────────────────────────
+    { id: "dep_first",  title: "Первый депозит",  desc: "Первое пополнение счёта",           icon: ArrowDownCircle, earned: recentDeposits.length > 0,    rarity: "common",    category: "deposit", xp: 10  },
+    { id: "dep_500",    title: "Инвестор",        desc: "Пополнения от 500 USDT",            icon: Coins,          earned: depositTotal >= 500,          rarity: "rare",      category: "deposit", xp: 40  },
+    { id: "dep_1k",     title: "Серьёзный капитал",desc: "Пополнения от 1 000 USDT",         icon: Coins,          earned: depositTotal >= 1_000,        rarity: "rare",      category: "deposit", xp: 80  },
+    { id: "dep_5k",     title: "Фонд менеджер",   desc: "Пополнения от 5 000 USDT",         icon: Coins,          earned: depositTotal >= 5_000,        rarity: "epic",      category: "deposit", xp: 200 },
+    { id: "dep_10k",    title: "Кит",             desc: "Пополнения от 10 000 USDT",        icon: Trophy,         earned: depositTotal >= 10_000,       rarity: "legendary", category: "deposit", xp: 500 },
+    { id: "dep_3plus",  title: "Регулярный",      desc: "3 и более пополнений",             icon: ArrowDownCircle, earned: recentDeposits.length >= 3,  rarity: "rare",      category: "deposit", xp: 50  },
+    // ── Особые ───────────────────────────────────────────────────────────
+    { id: "joined",       title: "Добро пожаловать",desc: "Вступил в сообщество NMNH",        icon: Gift,   earned: true,                       rarity: "common",    category: "special", xp: 5   },
+    { id: "level_5",      title: "Уровень 5",      desc: "Достигни уровня трейдера 5",       icon: Star,   earned: xpLevel >= 5,               rarity: "rare",      category: "special", xp: 0   },
+    { id: "level_10",     title: "Уровень 10",     desc: "Достигни уровня трейдера 10",      icon: Trophy, earned: xpLevel >= 10,              rarity: "epic",      category: "special", xp: 0   },
+    { id: "level_20",     title: "Уровень 20",     desc: "Достигни уровня трейдера 20",      icon: Trophy, earned: xpLevel >= 20,              rarity: "legendary", category: "special", xp: 0   },
+    { id: "all_goals",    title: "Перфекционист",  desc: "Выполни все цели месяца",          icon: Target, earned: goals.every(g => g.unlocked), rarity: "epic",     category: "special", xp: 250 },
+    { id: "vol_250k_mo",  title: "Месячный рекорд",desc: "Объём за месяц 250K USDT",        icon: BarChart2, earned: (monthVolume > 0 ? monthVolume : 0) >= 250_000, rarity: "epic", category: "special", xp: 200 },
   ];
 
   function prevMonth() {
@@ -715,29 +775,21 @@ export default function AnalyticsPage() {
               const Icon = goal.icon;
               const pct = Math.min((goal.current / goal.target) * 100, 100);
               return (
-                <div key={goal.id} className={`rounded-xl border p-3 transition ${goal.unlocked ? "border-success/30 bg-success/5" : "border-border bg-bg-panel/40"}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4" style={{ color: goal.color }} />
-                      <span className="text-xs font-semibold text-white">{goal.label}</span>
-                    </div>
-                    {goal.unlocked ? (
-                      <CheckCircle2 className="h-4 w-4 text-success" />
-                    ) : (
-                      <span className="font-mono text-[11px] text-text-muted">
-                        {goal.current}/{goal.target} {goal.unit}
-                      </span>
-                    )}
+                <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-success/[0.04]" : "border-white/[0.06] bg-white/[0.02]"}`}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: goal.color }} />
+                    <span className="text-[11px] font-semibold text-white flex-1 min-w-0 truncate">{goal.label}</span>
+                    {goal.unlocked
+                      ? <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
+                      : <span className="font-mono text-[10px] text-white/30 shrink-0">{goal.current}/{goal.target}</span>
+                    }
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-bg-deep">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{ width: `${pct}%`, backgroundColor: goal.color }}
-                    />
+                  <div className="h-1 overflow-hidden rounded-full bg-bg-deep">
+                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
                   </div>
-                  <p className={`mt-1.5 text-[10px] ${goal.unlocked ? "text-success" : "text-text-muted"}`}>
-                    {goal.unlocked ? "✅ Получено: " : "🎁 Награда: "}{goal.reward}
-                  </p>
+                  {goal.unlocked && (
+                    <p className="mt-1 text-[9px] text-success/70 truncate">{goal.reward}</p>
+                  )}
                 </div>
               );
             })}
@@ -749,36 +801,49 @@ export default function AnalyticsPage() {
               <h2 className="text-base font-bold text-white">Уровень трейдера</h2>
             </div>
             {(() => {
-              // XP: объём даёт основную массу (каждые 50K = 25 XP), остальное — активность
-            const volXp       = Math.floor(totalVolume / 50_000) * 25;
-            const activityXp  = goalDays * 20 + activityStreak * 30 + hotDays * 50 + (analytics?.signals_received ?? 0) * 5;
-            const xp = volXp + activityXp;
-              const level = Math.floor(xp / 200) + 1;
-              const xpInLevel = xp % 200;
-              return (
-                <>
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-2xl font-extrabold text-accent-gold">Ур. {level}</span>
-                    <span className="font-mono text-sm text-text-muted">{xp} XP</span>
+            const volXp      = Math.floor(totalVolume / 50_000) * 25;
+            const streakXp   = activityStreak * 30;
+            const goalXp     = goalDays * 20;
+            const hotXp      = hotDays * 50;
+            const profitXp   = profitDays * 15;
+            const tradeDayXp = effectiveTradeDays * 10;
+            const xp = volXp + streakXp + goalXp + hotXp + profitXp + tradeDayXp;
+            const { level, xpInLevel, xpNeeded } = getXpLevel(xp);
+            const pct = (xpInLevel / xpNeeded) * 100;
+            const levelTitles: Record<number, string> = {
+              1: "Новичок", 2: "Начинающий", 3: "Трейдер", 4: "Уверенный",
+              5: "Опытный", 7: "Профи", 10: "Эксперт", 15: "Мастер", 20: "Легенда",
+            };
+            const levelTitle = Object.entries(levelTitles).reverse().find(([l]) => level >= +l)?.[1] ?? "Новичок";
+            return (
+              <>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-[10px] text-white/30 leading-none mb-1">{levelTitle}</p>
+                    <span className="font-mono text-3xl font-extrabold text-accent-gold leading-none">Ур. {level}</span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-bg-deep">
-                    <div
-                      className="h-full rounded-full bg-accent-gold transition-all duration-700"
-                      style={{ width: `${(xpInLevel / 200) * 100}%` }}
-                    />
+                  <div className="text-right">
+                    <span className="font-mono text-sm font-bold text-white">{xp.toLocaleString("ru")} XP</span>
+                    <p className="text-[10px] text-white/30">{xpInLevel}/{xpNeeded} до ур. {level + 1}</p>
                   </div>
-                  <p className="text-[10px] text-text-muted">
-                    {200 - xpInLevel} XP до уровня {level + 1}
-                  </p>
-                  <div className="grid grid-cols-2 gap-1.5 text-[10px] text-text-muted">
-                    <span>📊 Объём: +{Math.floor(totalVolume / 50_000) * 25} XP</span>
-                    <span>⚡ Сигналы: +{(analytics?.signals_received ?? 0) * 5} XP</span>
-                    <span>🔥 Стрик: +{activityStreak * 30} XP</span>
-                    <span>🌟 Горячие дни: +{hotDays * 50} XP</span>
-                  </div>
-                </>
-              );
-            })()}
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-bg-deep">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{ width: `${pct}%`, background: "linear-gradient(90deg, #f59e0b, #fde68a)" }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-[10px] text-white/30 pt-1">
+                  <span>📊 Объём: +{volXp} XP</span>
+                  <span>🔥 Стрик: +{streakXp} XP</span>
+                  <span>🌟 Горячие дни: +{hotXp} XP</span>
+                  <span>📈 Прибыль: +{profitXp} XP</span>
+                  <span>📅 Дни: +{tradeDayXp} XP</span>
+                  <span>🎯 Цели: +{goalXp} XP</span>
+                </div>
+              </>
+            );
+          })()}
           </div>
         </div>
       </div>
@@ -838,11 +903,33 @@ export default function AnalyticsPage() {
             <Trophy className="h-4 w-4 text-accent-gold" />
             <h2 className="text-base font-bold text-white">Достижения</h2>
           </div>
-          <span className="badge-gold">{achievements.filter(a => a.earned).length}/{achievements.length}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-accent-gold font-bold">{achievements.filter(a => a.earned).length}/{achievements.length}</span>
+            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-bg-deep">
+              <div className="h-full rounded-full bg-accent-gold transition-all duration-700"
+                style={{ width: `${(achievements.filter(a => a.earned).length / achievements.length) * 100}%` }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Категории */}
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+          {ACH_CATEGORIES.map(cat => {
+            const count = cat.id === "all" ? achievements.filter(a => a.earned).length : achievements.filter(a => a.category === cat.id && a.earned).length;
+            const total = cat.id === "all" ? achievements.length : achievements.filter(a => a.category === cat.id).length;
+            return (
+              <button key={cat.id} onClick={() => setAchCategory(cat.id)}
+                className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-accent-gold/10 text-accent-gold" : "border-white/[0.07] bg-white/[0.02] text-white/40 hover:text-white/70"}`}>
+                <span>{cat.emoji}</span>
+                <span>{cat.label}</span>
+                <span className={`font-mono text-[9px] ${achCategory === cat.id ? "text-accent-gold/60" : "text-white/20"}`}>{count}/{total}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {achievements.map((ach) => {
+          {achievements.filter(a => achCategory === "all" || a.category === achCategory).map((ach) => {
             const Icon = ach.icon;
             const r = RARITY_STYLES[ach.rarity];
             return (
