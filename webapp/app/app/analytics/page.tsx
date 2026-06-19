@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowLeftRight, ArrowRight, BarChart2, ArrowDownCircle, Coins } from "lucide-react";
+import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins } from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
 function fmtDot(n: number, dec = 0): string {
@@ -236,7 +236,6 @@ export default function AnalyticsPage() {
   const [calData, setCalData] = useState<CalendarDay[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<DepositRecord[]>([]);
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
   const [currentBalance, setCurrentBalance] = useState<number | null>(null);
   const [achCategory, setAchCategory] = useState<AchCategory>("all");
@@ -250,7 +249,6 @@ export default function AnalyticsPage() {
     }).catch(() => {});
     api.tradesMe(token, 90).then(r => {
       setRecentDeposits((r.deposits || []).slice(0, 5));
-      setRecentTransactions((r.transactions || r.deposits || []).slice(0, 15));
       setTradeSummary(r.summary);
     }).catch(() => {});
   }, []);
@@ -850,83 +848,6 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Транзакции (депозиты + выводы) */}
-      {recentTransactions.length > 0 && (
-        <div className="card space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ArrowLeftRight className="h-4 w-4 text-accent-cyan" />
-              <h2 className="text-base font-bold text-white">Транзакции</h2>
-              <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-white/40">{recentTransactions.length}</span>
-            </div>
-            <Link href="/app/trades" className="flex items-center gap-1 text-xs font-semibold text-accent-cyan hover:text-white">
-              Все <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-
-          {/* Итог по депозитам */}
-          {recentTransactions.length > 0 && (() => {
-            const totalIn = recentTransactions.reduce((s, t) => s + t.amount, 0);
-            const depositCount = recentTransactions.length;
-            return (
-              <div className="flex items-center gap-4 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5">
-                <div>
-                  <p className="text-[10px] text-white/30">Пополнено</p>
-                  <p className="font-mono text-sm font-bold text-success">+${fmtDot(totalIn, 2)}</p>
-                </div>
-                <div className="w-px bg-white/[0.06]" />
-                <div>
-                  <p className="text-[10px] text-white/30">Транзакций</p>
-                  <p className="font-mono text-sm font-bold text-white">{depositCount}</p>
-                </div>
-                <div className="ml-auto flex items-center gap-1.5 rounded-lg border border-white/[0.05] bg-white/[0.03] px-2.5 py-1">
-                  <span className="text-[9px] text-white/20">Выводы: данные недоступны в API WEEX</span>
-                </div>
-              </div>
-            );
-          })()}
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-white/[0.06] text-xs text-text-muted">
-                <tr className="text-left">
-                  <th className="pb-2 font-medium">Тип</th>
-                  <th className="pb-2 font-medium">Дата</th>
-                  <th className="pb-2 font-medium">Монета</th>
-                  <th className="pb-2 text-right font-medium">Сумма</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentTransactions.map((tx, i) => {
-                  const isDeposit = tx.type !== "withdrawal";
-                  return (
-                    <tr key={i} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition">
-                      <td className="py-2.5">
-                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${isDeposit ? "bg-success/15 text-success" : "bg-danger/15 text-danger"}`}>
-                          {isDeposit ? "▲ Ввод" : "▼ Вывод"}
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-xs text-text-secondary">
-                        {tx.date_iso ? new Date(tx.date_iso).toLocaleString("ru", {
-                          day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-                        }) : "—"}
-                      </td>
-                      <td className="py-2.5">
-                        <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold text-white/60">
-                          {tx.coin}
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-right font-mono text-sm font-bold" style={{ color: isDeposit ? "#00D4A0" : "#FF4757" }}>
-                        {isDeposit ? "+" : "-"}{fmtDot(tx.amount, 2)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* Достижения */}
       <div className="card space-y-4">
