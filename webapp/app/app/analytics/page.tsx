@@ -810,21 +810,7 @@ export default function AnalyticsPage() {
 
         {/* Цели */}
         <div className="space-y-4">
-          <div className="card space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Star className="h-4 w-4 text-accent-gold" />
-                <h2 className="text-base font-bold text-white">Уровень трейдера</h2>
-              </div>
-              {coinsBalance !== null && (
-                <div className="flex items-center gap-1.5 rounded-lg border border-accent-gold/30 bg-accent-gold/10 px-2.5 py-1">
-                  <Coins className="h-3.5 w-3.5 text-accent-gold" />
-                  <span className="font-mono text-sm font-extrabold text-accent-gold">{coinsBalance.toLocaleString("ru")}</span>
-                  <span className="text-[9px] font-bold text-accent-gold/50">NMNH</span>
-                </div>
-              )}
-            </div>
-            {(() => {
+          {(() => {
             const volXp      = Math.floor(totalVolume / 50_000) * 25;
             const streakXp   = activityStreak * 30;
             const goalXp     = goalDays * 20;
@@ -833,42 +819,83 @@ export default function AnalyticsPage() {
             const tradeDayXp = effectiveTradeDays * 10;
             const xp = volXp + streakXp + goalXp + hotXp + profitXp + tradeDayXp;
             const { level, xpInLevel, xpNeeded } = getXpLevel(xp);
-            const pct = (xpInLevel / xpNeeded) * 100;
+            const pct = Math.min(100, (xpInLevel / xpNeeded) * 100);
             const levelTitles: Record<number, string> = {
               1: "Новичок", 2: "Начинающий", 3: "Трейдер", 4: "Уверенный",
               5: "Опытный", 7: "Профи", 10: "Эксперт", 15: "Мастер", 20: "Легенда",
             };
             const levelTitle = Object.entries(levelTitles).reverse().find(([l]) => level >= +l)?.[1] ?? "Новичок";
+            const breakdown = [
+              { icon: BarChart2,    label: "Объём",       val: volXp,      color: "text-accent-cyan", bg: "bg-accent-cyan/10" },
+              { icon: Flame,        label: "Стрик",       val: streakXp,   color: "text-orange-400",  bg: "bg-orange-400/10" },
+              { icon: Zap,          label: "Горячие дни", val: hotXp,      color: "text-accent-gold", bg: "bg-accent-gold/10" },
+              { icon: TrendingUp,   label: "Прибыль",     val: profitXp,   color: "text-success",     bg: "bg-success/10" },
+              { icon: CalendarDays, label: "Дни",         val: tradeDayXp, color: "text-blue-400",    bg: "bg-blue-400/10" },
+              { icon: Target,       label: "Цели",        val: goalXp,     color: "text-purple-400",  bg: "bg-purple-400/10" },
+            ];
             return (
-              <>
-                <div className="flex items-end justify-between">
-                  <div>
-                    <p className="text-[10px] text-white/30 leading-none mb-1">{levelTitle}</p>
-                    <span className="font-mono text-3xl font-extrabold text-accent-gold leading-none">Ур. {level}</span>
+              <div className="relative overflow-hidden rounded-2xl border border-accent-gold/20 bg-gradient-to-br from-accent-gold/[0.07] via-bg-card/40 to-bg-card/20 p-5">
+                <div className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-accent-gold/10 blur-3xl" />
+
+                {/* Заголовок */}
+                <div className="relative flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-gold/15 text-accent-gold">
+                      <Star className="h-4 w-4" />
+                    </div>
+                    <h2 className="text-base font-bold text-white">Уровень трейдера</h2>
+                  </div>
+                  {coinsBalance !== null && (
+                    <div className="flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-accent-gold/10 px-2.5 py-1">
+                      <Coins className="h-3.5 w-3.5 text-accent-gold" />
+                      <span className="font-mono text-sm font-extrabold text-accent-gold">{coinsBalance.toLocaleString("ru")}</span>
+                      <span className="text-[9px] font-bold text-accent-gold/50">NMNH</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Уровень */}
+                <div className="relative mt-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-14 w-14 flex-col items-center justify-center rounded-2xl border border-accent-gold/30 bg-gradient-to-br from-accent-gold/20 to-accent-gold/5 shadow-[0_4px_16px_-6px_rgba(255,200,0,0.5)]">
+                      <span className="text-[8px] font-bold uppercase tracking-wider text-accent-gold/60 leading-none">ур.</span>
+                      <span className="font-mono text-2xl font-black text-accent-gold leading-none">{level}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white">{levelTitle}</p>
+                      <p className="mt-0.5 text-[11px] text-white/40">осталось {Math.max(0, xpNeeded - xpInLevel).toLocaleString("ru")} XP до ур. {level + 1}</p>
+                    </div>
                   </div>
                   <div className="text-right">
-                    <span className="font-mono text-sm font-bold text-white">{xp.toLocaleString("ru")} XP</span>
-                    <p className="text-[10px] text-white/30">{xpInLevel}/{xpNeeded} до ур. {level + 1}</p>
+                    <span className="font-mono text-2xl font-extrabold leading-none text-white">{xp.toLocaleString("ru")}</span>
+                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/30">всего XP</p>
                   </div>
                 </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-bg-deep">
+
+                {/* Прогресс */}
+                <div className="relative mt-4 h-2.5 overflow-hidden rounded-full bg-black/40">
                   <div
-                    className="h-full rounded-full transition-all duration-700"
+                    className="h-full rounded-full shadow-[0_0_10px_rgba(255,200,0,0.5)] transition-all duration-700"
                     style={{ width: `${pct}%`, background: "linear-gradient(90deg, #f59e0b, #fde68a)" }}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-1 text-[10px] text-white/30 pt-1">
-                  <span>📊 Объём: +{volXp} XP</span>
-                  <span>🔥 Стрик: +{streakXp} XP</span>
-                  <span>🌟 Горячие дни: +{hotXp} XP</span>
-                  <span>📈 Прибыль: +{profitXp} XP</span>
-                  <span>📅 Дни: +{tradeDayXp} XP</span>
-                  <span>🎯 Цели: +{goalXp} XP</span>
+                <p className="relative mt-1.5 text-right text-[10px] text-white/30">{xpInLevel.toLocaleString("ru")} / {xpNeeded.toLocaleString("ru")} XP</p>
+
+                {/* Разбивка XP */}
+                <div className="relative mt-4 grid grid-cols-2 gap-2">
+                  {breakdown.map(({ icon: Icon, label, val, color, bg }) => (
+                    <div key={label} className="flex items-center gap-2 rounded-xl border border-white/[0.05] bg-white/[0.02] px-2.5 py-2">
+                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${bg} ${color}`}>
+                        <Icon className="h-3.5 w-3.5" />
+                      </div>
+                      <span className="flex-1 truncate text-[11px] text-text-muted">{label}</span>
+                      <span className={`font-mono text-[11px] font-bold ${val > 0 ? "text-white" : "text-white/25"}`}>+{val}</span>
+                    </div>
+                  ))}
                 </div>
-              </>
+              </div>
             );
           })()}
-          </div>
 
           <div className="card space-y-4">
             <div className="flex items-center gap-2">
