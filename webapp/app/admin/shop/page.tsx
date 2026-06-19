@@ -21,6 +21,7 @@ export default function AdminShop() {
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [editing, setEditing] = useState<ShopItem | "new" | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   function load() {
     Promise.all([
@@ -37,9 +38,19 @@ export default function AdminShop() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-h2 text-white">Маркет NMNH</h1>
         {tab === "items" && (
-          <button onClick={() => setEditing("new")} className="btn-primary flex items-center gap-2 px-4 py-2 text-sm">
-            <Plus className="h-4 w-4" /> Новый товар
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => { setRefreshing(true); try { await api.shopRefreshPreviews(token); load(); } finally { setRefreshing(false); } }}
+              disabled={refreshing}
+              className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm text-text-secondary transition hover:text-white disabled:opacity-50"
+              title="Перетянуть обложки у всех товаров из их ссылок"
+            >
+              {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageDown className="h-4 w-4" />} Обновить превью
+            </button>
+            <button onClick={() => setEditing("new")} className="btn-primary flex items-center gap-2 px-4 py-2 text-sm">
+              <Plus className="h-4 w-4" /> Новый товар
+            </button>
+          </div>
         )}
       </div>
 

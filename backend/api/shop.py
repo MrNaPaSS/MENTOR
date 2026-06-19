@@ -107,6 +107,26 @@ async def _resolve_link_image(url: str) -> str | None:
     return None
 
 
+def _looks_like_image(url: str) -> bool:
+    return bool(re.search(r"\.(png|jpe?g|webp|gif|svg)(\?|$)", url or "", re.IGNORECASE))
+
+
+async def _autofill_image(item: ShopItem) -> None:
+    """Нормализовать обложку товара: явная картинка остаётся, страница/ссылка → og:image.
+
+    Так картинка чинится на бэкенде при любом фронте — ментор просто вставляет ссылку.
+    """
+    img = (item.image_url or "").strip()
+    if _looks_like_image(img):
+        return  # уже прямая картинка — не трогаем
+    source = img or (item.link_url or "").strip()
+    if not source:
+        return
+    resolved = await _resolve_link_image(source)
+    if resolved:
+        item.image_url = resolved
+
+
 def _item_out(it: ShopItem) -> ShopItemOut:
     return ShopItemOut(
         id=it.id, title=it.title, description=it.description, price=it.price,
@@ -244,13 +264,14 @@ def admin_list_items(session=Depends(get_session)):
 
 
 @admin_router.post("/items", response_model=ShopItemOut)
-def admin_create_item(body: ShopItemIn, session=Depends(get_session)):
+async def admin_create_item(body: ShopItemIn, session=Depends(get_session)):
     item = ShopItem(
         title=body.title, description=body.description, price=body.price,
         category=body.category, section=body.section, icon=body.icon,
         link_url=body.link_url, image_url=body.image_url, requires_tv=body.requires_tv,
         is_active=body.is_active, sort_order=body.sort_order,
     )
+    await _autofill_image(item)
     session.add(item)
     session.commit()
     session.refresh(item)
@@ -258,15 +279,30 @@ def admin_create_item(body: ShopItemIn, session=Depends(get_session)):
 
 
 @admin_router.patch("/items/{item_id}", response_model=ShopItemOut)
-def admin_update_item(item_id: int, body: ShopItemPatch, session=Depends(get_session)):
+async def admin_update_item(item_id: int, body: ShopItemPatch, session=Depends(get_session)):
     item = session.get(ShopItem, item_id)
     if item is None:
         raise HTTPException(404, "Товар не найден")
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
+    await _autofill_image(item)
     session.commit()
     session.refresh(item)
     return _item_out(item)
+
+
+@admin_router.post("/refresh-previews")
+async def admin_refresh_previews(session=Depends(get_session)):
+    """Перетянуть обложки у всех товаров (og:image / snapshot) — чинит битые image_url."""
+    rows = session.execute(select(ShopItem)).scalars().all()
+    updated = 0
+    for it in rows:
+        before = it.image_url
+        await _autofill_image(it)
+        if it.image_url != before:
+            updated += 1
+    session.commit()
+    return {"updated": updated, "total": len(rows)}
 
 
 @admin_router.delete("/items/{item_id}")
