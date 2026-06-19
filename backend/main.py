@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from core.db import init_engine, create_all, SessionLocal
 from core import repo
@@ -87,6 +89,12 @@ def create_app(
     app.include_router(shop.router)
     app.include_router(shop.admin_router)
     app.include_router(ws_routes.router)
+
+    # Отдача загруженных файлов (картинки товаров и т.п.). Фронт подставляет API_URL
+    # к путям /uploads/..., поэтому файлы грузятся с бэкенда даже при сплит-деплое.
+    uploads_dir = Path(__file__).parent.parent / "webapp" / "public" / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
     @app.get("/api/health", tags=["health"])
     async def health():

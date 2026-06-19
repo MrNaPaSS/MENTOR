@@ -291,6 +291,20 @@ export const api = {
     authReq<{ image: string | null }>(`/api/shop/admin/link-preview?url=${encodeURIComponent(url)}`, token),
   shopRefreshPreviews: (token: string) =>
     authReq<{ updated: number; total: number }>("/api/shop/admin/refresh-previews", token, { method: "POST" }),
+  shopUploadImage: async (token: string, file: File): Promise<{ url: string }> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${API_URL}/api/shop/admin/upload-image`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "ngrok-skip-browser-warning": "1" },
+      body: fd,
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error((d as { detail?: string }).detail || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<{ url: string }>;
+  },
   shopAdminCreate: (token: string, body: ShopItemInput) =>
     authReq<ShopItem>("/api/shop/admin/items", token, { method: "POST", body: JSON.stringify(body) }),
   shopAdminUpdate: (token: string, id: number, body: Partial<ShopItemInput>) =>

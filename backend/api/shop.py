@@ -10,10 +10,12 @@ from __future__ import annotations
 import ipaddress
 import re
 import socket
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import select
 
 import logging
@@ -252,6 +254,26 @@ async def _notify_mentor(config: BackendConfig, notifier, student: Student, item
 async def admin_link_preview(url: str):
     """Вытащить картинку-превью из ссылки (og:image / TradingView snapshot)."""
     return {"image": await _resolve_link_image(url)}
+
+
+_SHOP_IMG_DIR = Path(__file__).parent.parent.parent / "webapp" / "public" / "uploads" / "shop"
+_ALLOWED_IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+_MAX_IMG_BYTES = 8 * 1024 * 1024  # 8 МБ
+
+
+@admin_router.post("/upload-image")
+async def admin_upload_image(file: UploadFile = File(...)):
+    """Загрузить картинку товара. Возвращает путь /uploads/shop/<file> (фронт подставит API_URL)."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in _ALLOWED_IMG_EXT:
+        raise HTTPException(400, "Только JPG, PNG, WEBP или GIF")
+    data = await file.read(_MAX_IMG_BYTES + 1)
+    if len(data) > _MAX_IMG_BYTES:
+        raise HTTPException(413, "Файл слишком большой (макс. 8 МБ)")
+    _SHOP_IMG_DIR.mkdir(parents=True, exist_ok=True)
+    name = f"{uuid.uuid4().hex}{ext}"
+    (_SHOP_IMG_DIR / name).write_bytes(data)
+    return {"url": f"/uploads/shop/{name}"}
 
 
 @admin_router.get("/items", response_model=list[ShopItemOut])

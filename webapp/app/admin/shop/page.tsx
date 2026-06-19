@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Check, X, Eye, EyeOff, ExternalLink, Coins, Loader2, ImageDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Eye, EyeOff, ExternalLink, Coins, Loader2, ImageDown, Upload } from "lucide-react";
 import { api, ShopItem, ShopItemInput, ShopOrder } from "@/lib/api";
 import { useMentorToken } from "@/components/admin/AdminShell";
 import { cardImage } from "@/lib/tvImage";
@@ -254,6 +254,17 @@ function ItemEditor({ token, item, onClose, onSaved }: {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
+  // Загрузить картинку файлом
+  async function uploadFile(file: File) {
+    setPulling(true); setPullMsg(null);
+    try {
+      const r = await api.shopUploadImage(token, file);
+      setForm((f) => ({ ...f, image_url: r.url }));
+    } catch (e) {
+      setPullMsg(e instanceof Error ? e.message : "Не удалось загрузить файл");
+    } finally { setPulling(false); }
+  }
+
   // Подтянуть картинку из ссылки (og:image / TradingView snapshot)
   async function pullPreview(auto = false) {
     const link = (form.link_url || "").trim();
@@ -325,9 +336,14 @@ function ItemEditor({ token, item, onClose, onSaved }: {
               placeholder="https://tradingview.com/script/…"
             />
           </Field>
-          <Field label="Картинка / скрин (URL — показывается в карточке)">
+          <Field label="Картинка / скрин товара">
             <div className="flex gap-2">
-              <input value={form.image_url} onChange={(e) => set("image_url", e.target.value)} className="input" placeholder="https://…/preview.png" />
+              <input value={form.image_url} onChange={(e) => set("image_url", e.target.value)} className="input" placeholder="URL картинки или загрузите файл →" />
+              <label className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-accent-gold/40 bg-accent-gold/10 px-3 text-xs font-bold text-accent-gold transition hover:bg-accent-gold/20 ${pulling ? "pointer-events-none opacity-50" : ""}`} title="Загрузить картинку файлом">
+                {pulling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                Файл
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }} />
+              </label>
               <button
                 type="button"
                 onClick={() => pullPreview(false)}
@@ -340,7 +356,7 @@ function ItemEditor({ token, item, onClose, onSaved }: {
               </button>
             </div>
             <p className="mt-1 text-[11px] text-text-muted">
-              Картинка тянется из ссылки автоматически (og:image / снапшот TradingView). Можно вставить URL картинки вручную.
+              Загрузите файл (надёжнее всего), вставьте прямой URL картинки, либо «Из ссылки» — для снапшота TradingView / og:image.
             </p>
             {pullMsg && <p className="mt-1 text-[11px] text-accent-gold">{pullMsg}</p>}
           </Field>
