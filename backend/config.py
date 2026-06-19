@@ -26,6 +26,7 @@ class BackendConfig:
     max_code_attempts: int
     expose_codes: bool  # dev: возвращать код в ответе request-code
     bot_token: str = ""  # для доставки кода в Telegram
+    admin_tg_id: int = 0  # Telegram chat_id ментора для уведомлений (заказы магазина и т.д.)
     rate_limit_max: int = 10            # попыток на /api/auth/* за окно
     rate_limit_window: int = 900        # окно, сек (15 мин)
     allowed_origins: tuple = ("*",)     # CORS: домены фронта
@@ -52,6 +53,7 @@ class BackendConfig:
             max_code_attempts=int(os.getenv("AUTH_MAX_ATTEMPTS", "5")),
             expose_codes=os.getenv("AUTH_EXPOSE_CODES", "false").lower() == "true",
             bot_token=os.getenv("BOT_TOKEN", ""),
+            admin_tg_id=int(os.getenv("ADMIN_TG_ID", "0") or "0"),
             rate_limit_max=int(os.getenv("RATE_LIMIT_MAX", "10")),
             rate_limit_window=int(os.getenv("RATE_LIMIT_WINDOW", "900")),
             allowed_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),

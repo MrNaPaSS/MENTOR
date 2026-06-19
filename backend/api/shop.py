@@ -12,12 +12,17 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
+import logging
+
 from core.models import CoinTransaction, ShopItem, ShopOrder, Student
-from backend.deps import get_session, get_current_student, get_current_mentor
+from backend.deps import get_session, get_current_student, get_current_mentor, get_config, get_notifier
+from backend.config import BackendConfig
 from backend.schemas import (
     ShopItemOut, ShopItemIn, ShopItemPatch,
     ShopOrderOut, ShopOrderCreate, ShopOrderResolve,
 )
+
+logger = logging.getLogger("nmnh.shop")
 
 router = APIRouter(prefix="/api/shop", tags=["shop"])
 admin_router = APIRouter(
@@ -30,7 +35,7 @@ def _item_out(it: ShopItem) -> ShopItemOut:
     return ShopItemOut(
         id=it.id, title=it.title, description=it.description, price=it.price,
         category=it.category, section=it.section, icon=it.icon, link_url=it.link_url,
-        is_active=it.is_active, sort_order=it.sort_order,
+        requires_tv=it.requires_tv, is_active=it.is_active, sort_order=it.sort_order,
     )
 
 
@@ -71,10 +76,12 @@ def my_orders(student: Student = Depends(get_current_student), session=Depends(g
 
 
 @router.post("/orders", response_model=ShopOrderOut)
-def create_order(
+async def create_order(
     body: ShopOrderCreate,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
+    config: BackendConfig = Depends(get_config),
+    notifier=Depends(get_notifier),
 ):
     """Купить товар: проверить баланс, списать монеты, создать заказ ``pending``."""
     item = session.get(ShopItem, body.item_id)
@@ -82,6 +89,10 @@ def create_order(
         raise HTTPException(404, "Товар не найден или снят с продажи")
     if item.price <= 0:
         raise HTTPException(400, "Этот товар нельзя купить за монеты")
+
+    contact = body.contact.strip()[:255]
+    if item.requires_tv and not contact:
+        raise HTTPException(400, "Укажите ваш ник TradingView для выдачи доступа")
 
     fresh = session.get(Student, student.id)
     if (fresh.coins or 0) < item.price:
@@ -93,7 +104,7 @@ def create_order(
         item_title=item.title,
         price=item.price,
         status="pending",
-        contact=body.contact.strip()[:255],
+        contact=contact,
     )
     session.add(order)
     session.flush()  # получить order.id для ref
@@ -109,7 +120,34 @@ def create_order(
 
     session.commit()
     session.refresh(order)
+
+    # Уведомление ментору в Telegram (не критично — покупка уже проведена)
+    await _notify_mentor(config, notifier, fresh, item, order)
+
     return _order_out(order)
+
+
+async def _notify_mentor(config: BackendConfig, notifier, student: Student, item: ShopItem, order: ShopOrder) -> None:
+    """Сообщить ментору о новом заказе. Ошибки доставки не влияют на покупку."""
+    if not config.admin_tg_id:
+        return
+    who = student.username or f"UID {student.weex_uid}" or f"id{student.id}"
+    lines = [
+        "🛒 Новый заказ в маркете NMNH",
+        f"Товар: {item.title}",
+        f"Цена: {item.price} NMNH",
+        f"Ученик: {who}",
+    ]
+    if student.weex_uid:
+        lines.append(f"WEEX UID: {student.weex_uid}")
+    if order.contact:
+        label = "TradingView" if item.requires_tv else "Контакт"
+        lines.append(f"{label}: {order.contact}")
+    lines.append(f"Заказ #{order.id} — выдайте доступ в админке.")
+    try:
+        await notifier.send_message(config.admin_tg_id, "\n".join(lines))
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Не удалось уведомить ментора о заказе #%s: %s", order.id, exc)
 
 
 # ─────────────────────── Ментор: каталог ───────────────────────
@@ -128,7 +166,8 @@ def admin_create_item(body: ShopItemIn, session=Depends(get_session)):
     item = ShopItem(
         title=body.title, description=body.description, price=body.price,
         category=body.category, section=body.section, icon=body.icon,
-        link_url=body.link_url, is_active=body.is_active, sort_order=body.sort_order,
+        link_url=body.link_url, requires_tv=body.requires_tv,
+        is_active=body.is_active, sort_order=body.sort_order,
     )
     session.add(item)
     session.commit()
@@ -170,8 +209,21 @@ def admin_list_orders(status: str | None = None, session=Depends(get_session)):
     return [_order_out(o, with_student=True) for o in rows]
 
 
+async def _notify_student(notifier, student: Student | None, text: str) -> None:
+    """Сообщить ученику в Telegram, если у него есть tg_id."""
+    if student is None or not student.tg_id:
+        return
+    try:
+        await notifier.send_message(int(student.tg_id), text)
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Не удалось уведомить ученика %s: %s", student.id, exc)
+
+
 @admin_router.post("/orders/{order_id}/fulfill", response_model=ShopOrderOut)
-def admin_fulfill_order(order_id: int, body: ShopOrderResolve, session=Depends(get_session)):
+async def admin_fulfill_order(
+    order_id: int, body: ShopOrderResolve,
+    session=Depends(get_session), notifier=Depends(get_notifier),
+):
     """Отметить заказ выполненным (монеты уже списаны при покупке)."""
     order = session.get(ShopOrder, order_id)
     if order is None:
@@ -183,11 +235,19 @@ def admin_fulfill_order(order_id: int, body: ShopOrderResolve, session=Depends(g
     order.resolved_at = datetime.now(timezone.utc)
     session.commit()
     session.refresh(order)
+
+    student = session.get(Student, order.student_id)
+    note = f"\n{order.mentor_note}" if order.mentor_note else ""
+    await _notify_student(notifier, student, f"✅ Ваш заказ «{order.item_title}» выполнен!{note}")
+
     return _order_out(order, with_student=True)
 
 
 @admin_router.post("/orders/{order_id}/reject", response_model=ShopOrderOut)
-def admin_reject_order(order_id: int, body: ShopOrderResolve, session=Depends(get_session)):
+async def admin_reject_order(
+    order_id: int, body: ShopOrderResolve,
+    session=Depends(get_session), notifier=Depends(get_notifier),
+):
     """Отклонить заказ и вернуть монеты ученику."""
     order = session.get(ShopOrder, order_id)
     if order is None:
@@ -210,4 +270,8 @@ def admin_reject_order(order_id: int, body: ShopOrderResolve, session=Depends(ge
     order.resolved_at = datetime.now(timezone.utc)
     session.commit()
     session.refresh(order)
+
+    note = f"\nПричина: {order.mentor_note}" if order.mentor_note else ""
+    await _notify_student(notifier, student, f"↩️ Заказ «{order.item_title}» отклонён, {order.price} NMNH возвращены.{note}")
+
     return _order_out(order, with_student=True)

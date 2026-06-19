@@ -192,19 +192,24 @@ export default function ShopPage() {
               <span className="font-mono font-bold text-accent-gold">{buying.price.toLocaleString("ru")} NMNH</span>.
               Монеты спишутся сразу, ментор выдаст доступ вручную.
             </p>
-            <label className="mt-4 block text-xs font-semibold text-text-muted">Контакт для связи (Telegram / email) — необязательно</label>
+            <label className="mt-4 block text-xs font-semibold text-text-muted">
+              {buying.requires_tv ? "Ваш ник TradingView (обязательно для выдачи доступа)" : "Контакт для связи (Telegram / email) — необязательно"}
+            </label>
             <input
               value={contact}
               onChange={(e) => setContact(e.target.value)}
-              placeholder="@username"
+              placeholder={buying.requires_tv ? "Ваш username на TradingView" : "@username"}
               className="mt-1.5 w-full rounded-xl border border-border bg-bg-deep px-3 py-2.5 text-sm text-white outline-none focus:border-accent-gold/50"
             />
+            {buying.requires_tv && !contact.trim() && (
+              <p className="mt-1.5 text-xs text-text-muted">Доступ к индикатору выдаётся на этот аккаунт TradingView.</p>
+            )}
             {error && <p className="mt-3 text-sm text-danger">{error}</p>}
             <div className="mt-5 flex gap-2">
               <button onClick={() => setBuying(null)} disabled={busy} className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm text-text-muted transition hover:text-white">
                 Отмена
               </button>
-              <button onClick={confirmBuy} disabled={busy} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-bg transition hover:bg-accent-gold/90 disabled:opacity-60">
+              <button onClick={confirmBuy} disabled={busy || (buying.requires_tv && !contact.trim())} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-bg transition hover:bg-accent-gold/90 disabled:opacity-60">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Coins className="h-4 w-4" />}
                 {busy ? "Покупка…" : "Купить"}
               </button>

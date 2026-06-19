@@ -166,6 +166,7 @@ class ShopItem(Base):
     section: Mapped[str] = mapped_column(String(16), default="shop")     # shop (покупка) | software (витрина)
     icon: Mapped[str] = mapped_column(String(32), default="Gift")        # имя lucide-иконки
     link_url: Mapped[str] = mapped_column(String(500), default="")       # ссылка (индикатор/софт), видна в карточке
+    requires_tv: Mapped[bool] = mapped_column(Boolean, default=False)    # требовать ник TradingView при покупке
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -67,28 +67,38 @@ def _migrate_add_columns(engine) -> None:
             conn.execute(text("ALTER TABLE students ADD COLUMN coins INTEGER DEFAULT 0 NOT NULL"))
             conn.commit()
 
+        if "shop_items" in inspector.get_table_names():
+            existing_shop_cols = {c["name"] for c in inspector.get_columns("shop_items")}
+            if "requires_tv" not in existing_shop_cols:
+                conn.execute(text("ALTER TABLE shop_items ADD COLUMN requires_tv BOOLEAN DEFAULT 0 NOT NULL"))
+                # уже засеянные подписки на индикатор должны требовать ник TradingView
+                conn.execute(text(
+                    "UPDATE shop_items SET requires_tv = 1 WHERE category = 'indicator' AND section = 'shop'"
+                ))
+                conn.commit()
+
 
 # Стартовый каталог магазина — вставляется один раз, если таблица пуста.
-# Кортеж: (title, description, price, category, section, icon, link_url, sort_order)
+# Кортеж: (title, description, price, category, section, icon, link_url, requires_tv, sort_order)
 _DEFAULT_SHOP_ITEMS = [
-    # ── Покупка за NMNH ──
-    ("Подписка на индикатор — 7 дней", "Доступ к приватному индикатору NMNH на TradingView на 7 дней.", 200, "indicator", "shop", "TrendingUp", "", 10),
-    ("Подписка на индикатор — 14 дней", "Доступ к приватному индикатору NMNH на 14 дней.", 350, "indicator", "shop", "TrendingUp", "", 20),
-    ("Подписка на индикатор — 1 месяц", "Доступ к приватному индикатору NMNH на 30 дней. Максимальная выгода.", 600, "indicator", "shop", "TrendingUp", "", 30),
-    ("Индивидуальное менторство", "Персональный разбор, стратегия и сопровождение 1-на-1 с ментором.", 3000, "mentorship", "shop", "GraduationCap", "", 40),
+    # ── Покупка за NMNH (подписки на индикатор требуют ник TradingView) ──
+    ("Подписка на индикатор — 7 дней", "Доступ к приватному индикатору NMNH на TradingView на 7 дней.", 200, "indicator", "shop", "TrendingUp", "", True, 10),
+    ("Подписка на индикатор — 14 дней", "Доступ к приватному индикатору NMNH на 14 дней.", 350, "indicator", "shop", "TrendingUp", "", True, 20),
+    ("Подписка на индикатор — 1 месяц", "Доступ к приватному индикатору NMNH на 30 дней. Максимальная выгода.", 600, "indicator", "shop", "TrendingUp", "", True, 30),
+    ("Индивидуальное менторство", "Персональный разбор, стратегия и сопровождение 1-на-1 с ментором.", 3000, "mentorship", "shop", "GraduationCap", "", False, 40),
 
     # ── Наш софт (витрина, ссылки добавляются из админки) ──
-    ("Индикатор #1 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", 100),
-    ("Индикатор #2 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", 110),
-    ("Индикатор #3 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", 120),
-    ("Академия NMNH", "Обучение, торговые стратегии и AI-агент в одной платформе.", 0, "academy", "software", "GraduationCap", "", 130),
-    ("Библиотека трейдера", "База знаний, материалы и инструменты трейдера.", 0, "library", "software", "BookOpen", "", 140),
-    ("Алерты на TradingView", "Готовые алерты на TradingView от NMNH.", 0, "alerts", "software", "BellRing", "", 150),
-    ("AI-агент по форексу", "AI-агент для анализа форекс-рынка.", 0, "ai", "software", "Bot", "", 160),
-    ("Веб-расширение FOREX для Chrome", "Расширение Chrome для торговли на форексе.", 0, "extension", "software", "Chrome", "", 170),
-    ("AI-ментор", "Персональный AI-ментор по трейдингу.", 0, "ai", "software", "Bot", "", 180),
-    ("AI-психолог", "AI-психолог для контроля эмоций в трейдинге.", 0, "ai", "software", "Brain", "", 190),
-    ("Алго-трейд", "Алгоритмическая торговая система NMNH.", 0, "algo", "software", "Cpu", "", 200),
+    ("Индикатор #1 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 100),
+    ("Индикатор #2 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 110),
+    ("Индикатор #3 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 120),
+    ("Академия NMNH", "Обучение, торговые стратегии и AI-агент в одной платформе.", 0, "academy", "software", "GraduationCap", "", False, 130),
+    ("Библиотека трейдера", "База знаний, материалы и инструменты трейдера.", 0, "library", "software", "BookOpen", "", False, 140),
+    ("Алерты на TradingView", "Готовые алерты на TradingView от NMNH.", 0, "alerts", "software", "BellRing", "", False, 150),
+    ("AI-агент по форексу", "AI-агент для анализа форекс-рынка.", 0, "ai", "software", "Bot", "", False, 160),
+    ("Веб-расширение FOREX для Chrome", "Расширение Chrome для торговли на форексе.", 0, "extension", "software", "Chrome", "", False, 170),
+    ("AI-ментор", "Персональный AI-ментор по трейдингу.", 0, "ai", "software", "Bot", "", False, 180),
+    ("AI-психолог", "AI-психолог для контроля эмоций в трейдинге.", 0, "ai", "software", "Brain", "", False, 190),
+    ("Алго-трейд", "Алгоритмическая торговая система NMNH.", 0, "algo", "software", "Cpu", "", False, 200),
 ]
 
 
@@ -106,7 +116,7 @@ def _seed_shop_items(engine) -> None:
             return
         session.add_all([
             ShopItem(title=title, description=desc, price=price, category=cat,
-                     section=section, icon=icon, link_url=link, sort_order=order)
-            for title, desc, price, cat, section, icon, link, order in _DEFAULT_SHOP_ITEMS
+                     section=section, icon=icon, link_url=link, requires_tv=req_tv, sort_order=order)
+            for title, desc, price, cat, section, icon, link, req_tv, order in _DEFAULT_SHOP_ITEMS
         ])
         session.commit()
