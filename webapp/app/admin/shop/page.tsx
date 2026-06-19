@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Check, X, Eye, EyeOff, ExternalLink, Coins, Loader2 } from "lucide-react";
 import { api, ShopItem, ShopItemInput, ShopOrder } from "@/lib/api";
 import { useMentorToken } from "@/components/admin/AdminShell";
+import { cardImage } from "@/lib/tvImage";
 import ShopIcon, { ICON_NAMES } from "@/components/shop/ShopIcon";
 
 type Tab = "items" | "orders";
@@ -292,10 +293,11 @@ function ItemEditor({ token, item, onClose, onSaved }: {
           </Field>
           <Field label="Картинка / скрин (URL — показывается в карточке)">
             <input value={form.image_url} onChange={(e) => set("image_url", e.target.value)} className="input" placeholder="https://…/preview.png" />
+            <p className="mt-1 text-[11px] text-text-muted">Пусто? Превью возьмётся из ссылки-снапшота TradingView (формат tradingview.com/x/…).</p>
           </Field>
-          {form.image_url && (
+          {cardImage(form.image_url, form.link_url) && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={form.image_url} alt="превью" className="h-32 w-full rounded-xl border border-border object-cover" />
+            <img src={cardImage(form.image_url, form.link_url)!} alt="превью" className="h-32 w-full rounded-xl border border-border object-cover" />
           )}
           <label className="flex items-center gap-2 text-sm text-text-secondary">
             <input type="checkbox" checked={form.requires_tv} onChange={(e) => set("requires_tv", e.target.checked)} className="h-4 w-4 accent-accent-gold" />

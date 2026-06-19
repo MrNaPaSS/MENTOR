@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Coins, ExternalLink, ShoppingBag, Check, Clock, X, Loader2 } from "lucide-react";
 import { api, ShopItem, ShopOrder, CoinsBalance } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
+import { cardImage } from "@/lib/tvImage";
 import ShopIcon from "@/components/shop/ShopIcon";
 
 const STATUS: Record<string, { label: string; cls: string; icon: typeof Check }> = {
@@ -87,41 +88,57 @@ export default function ShopPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shopItems.map((it) => {
             const affordable = (balance ?? 0) >= it.price;
+            const img = cardImage(it.image_url, it.link_url);
             return (
-              <div key={it.id} className="flex flex-col overflow-hidden rounded-2xl border border-border bg-bg-card/40 transition hover:border-accent-gold/30">
-                {it.image_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={it.image_url} alt={it.title} className="h-36 w-full object-cover" />
-                )}
-                <div className="flex flex-1 flex-col p-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-gold/10 text-accent-gold">
-                    <ShopIcon name={it.icon} className="h-5 w-5" />
-                  </div>
-                  <div className="flex items-center gap-1.5 rounded-lg bg-accent-gold/10 px-2.5 py-1">
+              <div
+                key={it.id}
+                className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-b from-bg-card/80 to-bg-card/20 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.6)] transition duration-300 hover:-translate-y-1 hover:border-accent-gold/40 hover:shadow-[0_16px_44px_-14px_rgba(255,200,0,0.28)]"
+              >
+                {/* Hero */}
+                <div className="relative h-40 overflow-hidden">
+                  {img ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img} alt={it.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-bg-card via-bg-card/10 to-transparent" />
+                    </>
+                  ) : (
+                    <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-accent-gold/[0.16] via-bg-card/30 to-transparent">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,200,0,0.18),transparent_62%)]" />
+                      <ShopIcon name={it.icon} className="h-12 w-12 text-accent-gold/80" />
+                    </div>
+                  )}
+                  <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-black/45 px-3 py-1.5 backdrop-blur-md">
                     <Coins className="h-3.5 w-3.5 text-accent-gold" />
                     <span className="font-mono text-sm font-bold text-accent-gold">{it.price.toLocaleString("ru")}</span>
                   </div>
+                  {img && (
+                    <div className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/45 text-accent-gold backdrop-blur-md">
+                      <ShopIcon name={it.icon} className="h-4 w-4" />
+                    </div>
+                  )}
                 </div>
-                <h3 className="mt-4 font-semibold text-white">{it.title}</h3>
-                <p className="mt-1 flex-1 text-sm text-text-muted">{it.description}</p>
-                {it.link_url && (
-                  <a href={it.link_url} target="_blank" rel="noopener noreferrer"
-                     className="mt-3 inline-flex items-center gap-1 text-xs text-accent-cyan hover:underline">
-                    <ExternalLink className="h-3 w-3" /> Подробнее
-                  </a>
-                )}
-                <button
-                  onClick={() => { setBuying(it); setError(null); }}
-                  disabled={!affordable}
-                  className={`mt-4 rounded-xl px-4 py-2.5 text-sm font-bold transition ${
-                    affordable
-                      ? "bg-accent-gold text-bg hover:bg-accent-gold/90"
-                      : "cursor-not-allowed border border-border bg-bg-panel/40 text-text-muted"
-                  }`}
-                >
-                  {affordable ? "Купить" : "Недостаточно монет"}
-                </button>
+                {/* Body */}
+                <div className="flex flex-1 flex-col p-5">
+                  <h3 className="font-semibold leading-snug text-white">{it.title}</h3>
+                  <p className="mt-1.5 flex-1 text-sm leading-relaxed text-text-muted line-clamp-3">{it.description}</p>
+                  {it.link_url && (
+                    <a href={it.link_url} target="_blank" rel="noopener noreferrer"
+                       className="mt-3 inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-cyan transition hover:gap-1.5 hover:underline">
+                      <ExternalLink className="h-3 w-3" /> Подробнее
+                    </a>
+                  )}
+                  <button
+                    onClick={() => { setBuying(it); setError(null); }}
+                    disabled={!affordable}
+                    className={`mt-4 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition ${
+                      affordable
+                        ? "bg-gradient-to-r from-accent-gold to-amber-400 text-bg shadow-[0_6px_18px_-6px_rgba(255,200,0,0.6)] hover:shadow-[0_8px_24px_-6px_rgba(255,200,0,0.8)]"
+                        : "cursor-not-allowed border border-white/10 bg-white/[0.03] text-text-muted"
+                    }`}
+                  >
+                    {affordable ? <><Coins className="h-4 w-4" /> Купить</> : "Недостаточно монет"}
+                  </button>
                 </div>
               </div>
             );
@@ -134,35 +151,52 @@ export default function ShopPage() {
       <section className="space-y-4">
         <h2 className="text-sm font-bold uppercase tracking-wider text-text-muted">Наш софт</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {softwareItems.map((it) => (
-            <div key={it.id} className="flex flex-col overflow-hidden rounded-2xl border border-border bg-bg-card/40 transition hover:border-accent-cyan/30">
-              {it.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={it.image_url} alt={it.title} className="h-36 w-full object-cover" />
-              )}
-              <div className="flex flex-1 flex-col p-5">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-cyan/10 text-accent-cyan">
-                <ShopIcon name={it.icon} className="h-5 w-5" />
+          {softwareItems.map((it) => {
+            const img = cardImage(it.image_url, it.link_url);
+            return (
+            <div key={it.id} className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-b from-bg-card/80 to-bg-card/20 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.6)] transition duration-300 hover:-translate-y-1 hover:border-accent-cyan/40 hover:shadow-[0_16px_44px_-14px_rgba(10,255,224,0.22)]">
+              {/* Hero */}
+              <div className="relative h-40 overflow-hidden">
+                {img ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img} alt={it.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-bg-card via-bg-card/10 to-transparent" />
+                  </>
+                ) : (
+                  <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-accent-cyan/[0.14] via-bg-card/30 to-transparent">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(10,255,224,0.16),transparent_62%)]" />
+                    <ShopIcon name={it.icon} className="h-12 w-12 text-accent-cyan/80" />
+                  </div>
+                )}
+                {it.price > 0 && (
+                  <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-black/45 px-3 py-1.5 backdrop-blur-md">
+                    <Coins className="h-3.5 w-3.5 text-accent-gold" />
+                    <span className="font-mono text-sm font-bold text-accent-gold">{it.price.toLocaleString("ru")}</span>
+                  </div>
+                )}
+                {img && (
+                  <div className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/45 text-accent-cyan backdrop-blur-md">
+                    <ShopIcon name={it.icon} className="h-4 w-4" />
+                  </div>
+                )}
               </div>
-              <h3 className="mt-4 font-semibold text-white">{it.title}</h3>
-              <p className="mt-1 flex-1 text-sm text-text-muted">{it.description}</p>
-              {it.price > 0 && (
-                <div className="mt-2 flex items-center gap-1.5 text-accent-gold">
-                  <Coins className="h-3.5 w-3.5" />
-                  <span className="font-mono text-sm font-bold">{it.price.toLocaleString("ru")} NMNH</span>
-                </div>
-              )}
-              {it.link_url ? (
-                <a href={it.link_url} target="_blank" rel="noopener noreferrer"
-                   className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl border border-accent-cyan/40 bg-accent-cyan/10 px-4 py-2.5 text-sm font-bold text-accent-cyan transition hover:bg-accent-cyan/20">
-                  <ExternalLink className="h-4 w-4" /> Открыть
-                </a>
-              ) : (
-                <span className="mt-4 rounded-xl border border-border px-4 py-2.5 text-center text-sm text-text-muted">Скоро</span>
-              )}
+              {/* Body */}
+              <div className="flex flex-1 flex-col p-5">
+                <h3 className="font-semibold leading-snug text-white">{it.title}</h3>
+                <p className="mt-1.5 flex-1 text-sm leading-relaxed text-text-muted line-clamp-3">{it.description}</p>
+                {it.link_url ? (
+                  <a href={it.link_url} target="_blank" rel="noopener noreferrer"
+                     className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl border border-accent-cyan/40 bg-accent-cyan/[0.08] px-4 py-3 text-sm font-bold text-accent-cyan transition hover:bg-accent-cyan/20">
+                    <ExternalLink className="h-4 w-4" /> Открыть
+                  </a>
+                ) : (
+                  <span className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-center text-sm text-text-muted">Скоро</span>
+                )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         {softwareItems.length === 0 && <p className="text-sm text-text-muted">Раздел наполняется.</p>}
       </section>
