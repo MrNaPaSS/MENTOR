@@ -274,10 +274,10 @@ export default function AnalyticsPage() {
   // Цели месяца — работают даже без PnL снимков
   const goals: Goal[] = [
     {
-      id: "volume", label: "Объём за месяц", icon: BarChart2, target: 100_000,
+      id: "volume", label: "Объём за месяц", icon: BarChart2, target: 250_000,
       current: Math.round(monthVolume > 0 ? monthVolume : totalVolume / 3),
       unit: "USDT", reward: "💹 Активный трейдер",
-      color: "#0AFFE0", unlocked: (monthVolume > 0 ? monthVolume : totalVolume / 3) >= 100_000,
+      color: "#0AFFE0", unlocked: (monthVolume > 0 ? monthVolume : totalVolume / 3) >= 250_000,
     },
     {
       id: "trading_days", label: "Дней торговали", icon: Calendar, target: 15,
@@ -434,13 +434,13 @@ export default function AnalyticsPage() {
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {/* Объём месяца */}
         <div className="card flex flex-col items-center gap-2 py-5">
-          <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 100_000) * 100, 100)} color="#0AFFE0" size={72}>
+          <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)} color="#0AFFE0" size={72}>
             <span className="font-mono text-[11px] font-bold text-white leading-tight text-center">
               {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
             </span>
           </CircleProgress>
           <span className="text-xs text-text-muted">Объём месяца</span>
-          <span className="text-[10px] text-accent-cyan">цель: 100K</span>
+          <span className="text-[10px] text-accent-cyan">цель: 250K</span>
         </div>
         {/* Стрик активности */}
         <div className="card flex flex-col items-center gap-2 py-5">
