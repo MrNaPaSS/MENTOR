@@ -52,7 +52,7 @@ export default function AdminDashboard() {
     api.publicStats().then(setStats).catch(() => {}).finally(finish);
     api.students(token).then(setStudents).catch(() => {}).finally(finish);
     api.affiliateMentorBalance(token).then(setMentorBal).catch(() => {}).finally(finish);
-    api.affiliateOverview(token, 1).then(setToday).catch(() => {}).finally(finish);
+    api.affiliateOverview(token, 2).then(setToday).catch(() => {}).finally(finish);
   }, [token]);
 
   // Загрузка партнерской статистики WEEX - сброс при смене периода
@@ -320,7 +320,7 @@ export default function AdminDashboard() {
       <section className="space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-wider text-text-muted flex items-center gap-2">
           <Activity className="h-4 w-4 text-success" />
-          Сегодня (последние 24ч)
+          Сегодня / Вчера (UTC+8)
         </h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           {/* Новых рефералов */}
