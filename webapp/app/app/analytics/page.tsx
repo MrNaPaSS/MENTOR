@@ -581,8 +581,7 @@ export default function AnalyticsPage() {
           : nextIdx === -1 ? 100 : Math.min((totalVolume / VOLUME_MILESTONES[0].vol) * 100, 100);
 
         return (
-          <div className="overflow-hidden rounded-2xl border border-white/[0.07]"
-            style={{ background: "linear-gradient(135deg, rgba(255,215,0,0.04) 0%, rgba(0,0,0,0) 60%)" }}>
+          <div className="overflow-hidden rounded-xl border border-border bg-bg-card">
             {/* Шапка */}
             <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-white/[0.05]">
               <BarChart2 className="h-4 w-4 text-accent-gold" />
@@ -834,9 +833,7 @@ export default function AnalyticsPage() {
               { icon: Target,       label: "Цели",        val: goalXp,     color: "text-purple-400",  bg: "bg-purple-400/10" },
             ];
             return (
-              <div className="relative overflow-hidden rounded-2xl border border-accent-gold/20 bg-gradient-to-br from-accent-gold/[0.07] via-bg-card/40 to-bg-card/20 p-5">
-                <div className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-accent-gold/10 blur-3xl" />
-
+              <div className="relative overflow-hidden rounded-xl border border-border bg-bg-card p-5">
                 {/* Заголовок */}
                 <div className="relative flex items-center justify-between">
                   <div className="flex items-center gap-2">
