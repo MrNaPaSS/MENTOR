@@ -99,9 +99,12 @@ async def trades_me(
     # Объединяем и сортируем по времени (новые сверху)
     transactions = sorted(deposits + withdrawals, key=lambda x: x["timestamp"], reverse=True)
 
+    # Логируем ВСЕ ключи из getAssert чтобы понять структуру
+    assert_keys = list(assets.keys())
+    assert_list_sizes = {k: len(v) for k, v in assets.items() if isinstance(v, list)}
     logger.info(
-        "Trades uid=%s deposits=%d withdrawals=%d assert_keys=%s",
-        uid, len(deposits), len(withdrawals), list(assets.keys()),
+        "Trades uid=%s deposits=%d withdrawals=%d | assert_keys=%s list_sizes=%s | withdraw_raw=%d",
+        uid, len(deposits), len(withdrawals), assert_keys, assert_list_sizes, len(withdraw_raw),
     )
 
     return {

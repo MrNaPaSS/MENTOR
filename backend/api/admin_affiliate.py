@@ -293,3 +293,38 @@ async def commission_series(days: int = 14, weex=Depends(get_weex)):
         CommissionPoint(date=d, commission=v["commission"], spot=v["spot"], futures=v["futures"])
         for d, v in sorted(buckets.items())
     ]
+
+
+@router.get("/uid/{uid}/raw-assert")
+async def uid_raw_assert(uid: str, weex=Depends(get_weex)):
+    """Сырой ответ getAssert для диагностики — показывает все поля что WEEX вернул."""
+    import time as _time
+    from core.weex.real import AFFILIATE_BASE
+    # Запрос без кэша, напрямую
+    payload = await weex._get(
+        AFFILIATE_BASE, "/api/v3/agency/getAssert",
+        {"userId": uid}, signed=True, affiliate=True,
+    )
+    return {"raw": payload, "uid": uid}
+
+
+@router.get("/uid/{uid}/raw-withdrawals")
+async def uid_raw_withdrawals(uid: str, weex=Depends(get_weex)):
+    """Перебирает все известные WEEX-эндпоинты выводов и возвращает что нашлось."""
+    from core.weex.real import AFFILIATE_BASE
+    results = {}
+    endpoints = [
+        "/api/v3/agency/getWithdrawRecord",
+        "/api/v3/agency/getUserWithdrawRecord",
+        "/api/v3/agency/withdrawRecord",
+        "/api/v3/agency/getTransferRecord",
+        "/api/v3/agency/getCapitalRecord",
+        "/api/v3/agency/getUserCapitalFlow",
+        "/api/v3/rebate/affiliate/getWithdrawRecord",
+        "/api/v3/rebate/affiliate/getUserWithdrawList",
+    ]
+    for ep in endpoints:
+        resp = await weex._get(AFFILIATE_BASE, ep, {"userId": uid, "page": 1, "pageSize": 10},
+                               signed=True, affiliate=True)
+        results[ep] = resp
+    return {"uid": uid, "results": results}
