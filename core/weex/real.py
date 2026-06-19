@@ -384,7 +384,7 @@ class RealWeexClient(WeexClient):
             if payload is None:
                 continue
             data = self._data(payload)
-            logger.info("getAgencyWithdrawals %s -> keys=%s", path, list(data.keys())[:8])
+            logger.warning("WITHDRAW_DEBUG %s -> keys=%s", path, list(data.keys())[:8])
             for key in list_keys:
                 lst = data.get(key)
                 if isinstance(lst, list) and lst:

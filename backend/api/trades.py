@@ -105,12 +105,12 @@ async def trades_me(
     # Объединяем и сортируем по времени (новые сверху)
     transactions = sorted(deposits + withdrawals, key=lambda x: x["timestamp"], reverse=True)
 
-    # Логируем ВСЕ ключи из getAssert чтобы понять структуру
+    # WARNING-уровень чтобы попасть в uvicorn-лог
     assert_keys = list(assets.keys())
     assert_list_sizes = {k: len(v) for k, v in assets.items() if isinstance(v, list)}
-    logger.info(
-        "Trades uid=%s deposits=%d withdrawals=%d | assert_keys=%s list_sizes=%s | withdraw_raw=%d",
-        uid, len(deposits), len(withdrawals), assert_keys, assert_list_sizes, len(withdraw_raw),
+    logger.warning(
+        "ASSERT_DEBUG uid=%s deposits=%d withdrawals=%d | keys=%s | list_sizes=%s",
+        uid, len(deposits), len(withdrawals), assert_keys, assert_list_sizes,
     )
 
     return {
