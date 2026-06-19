@@ -254,7 +254,7 @@ class ShopItemIn(BaseModel):
     section: str = "shop"
     icon: str = "Gift"
     link_url: str = Field(default="", max_length=500)
-    image_url: str = Field(default="", max_length=500)
+    image_url: str = ""   # URL или data-URL (сжатая картинка) — без лимита длины
     requires_tv: bool = False
     is_active: bool = True
     sort_order: int = 0
@@ -268,7 +268,7 @@ class ShopItemPatch(BaseModel):
     section: Optional[str] = None
     icon: Optional[str] = None
     link_url: Optional[str] = Field(default=None, max_length=500)
-    image_url: Optional[str] = Field(default=None, max_length=500)
+    image_url: Optional[str] = None   # URL или data-URL — без лимита длины
     requires_tv: Optional[bool] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None

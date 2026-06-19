@@ -80,6 +80,14 @@ def _migrate_add_columns(engine) -> None:
             if "image_url" not in existing_shop_cols:
                 conn.execute(text("ALTER TABLE shop_items ADD COLUMN image_url VARCHAR(500) DEFAULT '' NOT NULL"))
                 conn.commit()
+            # image_url теперь хранит data-URL (длинные) — расширяем тип до TEXT на Postgres.
+            # SQLite не ограничивает длину VARCHAR, поэтому там менять не нужно.
+            if engine.dialect.name == "postgresql":
+                try:
+                    conn.execute(text("ALTER TABLE shop_items ALTER COLUMN image_url TYPE TEXT"))
+                    conn.commit()
+                except Exception:
+                    pass
 
 
 # Стартовый каталог магазина — вставляется один раз, если таблица пуста.

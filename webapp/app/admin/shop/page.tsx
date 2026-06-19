@@ -14,6 +14,35 @@ const EMPTY: ShopItemInput = {
   section: "shop", icon: "Gift", link_url: "", image_url: "", requires_tv: false, is_active: true, sort_order: 0,
 };
 
+// Сжать выбранный файл в браузере (canvas) до компактного JPEG data-URL.
+// Хранится прямо в БД и встраивается в <img> — работает при любом хостинге.
+function fileToDataUrl(file: File, maxSize = 900, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Не удалось открыть картинку"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (Math.max(width, height) > maxSize) {
+          const scale = maxSize / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Canvas недоступен"));
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function AdminShop() {
   const token = useMentorToken();
   const [tab, setTab] = useState<Tab>("items");
@@ -254,14 +283,14 @@ function ItemEditor({ token, item, onClose, onSaved }: {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  // Загрузить картинку файлом
+  // Загрузить картинку файлом — сжимаем в браузере и кладём как data-URL (без сети)
   async function uploadFile(file: File) {
     setPulling(true); setPullMsg(null);
     try {
-      const r = await api.shopUploadImage(token, file);
-      setForm((f) => ({ ...f, image_url: r.url }));
+      const dataUrl = await fileToDataUrl(file);
+      setForm((f) => ({ ...f, image_url: dataUrl }));
     } catch (e) {
-      setPullMsg(e instanceof Error ? e.message : "Не удалось загрузить файл");
+      setPullMsg(e instanceof Error ? e.message : "Не удалось обработать картинку");
     } finally { setPulling(false); }
   }
 

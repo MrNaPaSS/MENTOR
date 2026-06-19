@@ -119,8 +119,8 @@ async def _autofill_image(item: ShopItem) -> None:
     Так картинка чинится на бэкенде при любом фронте — ментор просто вставляет ссылку.
     """
     img = (item.image_url or "").strip()
-    if _looks_like_image(img):
-        return  # уже прямая картинка — не трогаем
+    if img.startswith("data:") or _looks_like_image(img):
+        return  # встроенная картинка (data-URL) или прямой URL — не трогаем
     source = img or (item.link_url or "").strip()
     if not source:
         return
