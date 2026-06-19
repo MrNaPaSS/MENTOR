@@ -52,7 +52,14 @@ async def trades_me(
 
     summary = None
     if user_row:
-        logger.warning("USER_ROW uid=%s keys=%s", uid, list(user_row.keys()))
+        logger.warning(
+            "USER_ROW uid=%s depositAmount=%s withdrawalAmount=%s futures=%s spot=%s",
+            uid,
+            user_row.get("depositAmount"),
+            user_row.get("withdrawalAmount"),
+            user_row.get("futuresTradingAmount"),
+            user_row.get("spotTradingAmount"),
+        )
         futures_vol = _to_float(user_row.get("futuresTradingAmount"))
         spot_vol = _to_float(user_row.get("spotTradingAmount"))
         withdrawal = _to_float(
