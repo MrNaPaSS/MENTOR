@@ -23,7 +23,8 @@ router = APIRouter(prefix="/api/admin/affiliate", tags=["admin-affiliate"],
 
 _DAY_MS = 86_400_000
 _cache: dict[str, tuple[float, object]] = {}
-_TTL = 300  # сек — 5 минут кэш; реже ходим к WEEX, глобальный семафор в _get уберёг от 429
+_TTL = 600          # 10 мин — основной кэш trade/uid данных
+_TTL_BALANCE = 600  # 10 мин — кэш балансов рефералов
 
 # WEEX использует UTC+8 для отчётных периодов
 import datetime as _dt
@@ -54,14 +55,60 @@ def _period(days: int) -> tuple[int, int]:
     return int(start_dt.timestamp() * 1000), int(end_dt.timestamp() * 1000)
 
 
+import asyncio
+
+_cache_locks: dict[str, asyncio.Event] = {}
+
+
 async def _cached(key: str, factory):
+    """Cache with concurrent-request deduplication.
+
+    If two requests arrive simultaneously for an empty cache entry,
+    the second one waits for the first to finish instead of making duplicate WEEX calls.
+    """
     now = time.time()
     hit = _cache.get(key)
     if hit and now - hit[0] < _TTL:
         return hit[1]
-    value = await factory()
-    _cache[key] = (now, value)
-    return value
+
+    evt = _cache_locks.get(key)
+    if evt:
+        await evt.wait()
+        hit = _cache.get(key)
+        if hit:
+            return hit[1]
+
+    evt = asyncio.Event()
+    _cache_locks[key] = evt
+    try:
+        value = await factory()
+        _cache[key] = (time.time(), value)
+        return value
+    finally:
+        evt.set()
+        _cache_locks.pop(key, None)
+
+
+async def _fetch_weex_data(weex, days: int):
+    """Single unified WEEX data fetch shared by overview and referrals.
+
+    Fetches uids + trade + commission + balances in one cache entry (10 min TTL).
+    Eliminates duplicate WEEX calls when both endpoints are hit simultaneously.
+    """
+    start, end = _period(days)
+    uid_start = end - 85 * _DAY_MS
+
+    async def build():
+        all_uids, trade, comm = await asyncio.gather(
+            weex.get_affiliate_uids_all(uid_start, end),
+            weex.get_channel_trade_asset_all(start, end),
+            weex.get_affiliate_commission_all(start, end),
+        )
+        uids = [r["uid"] for r in trade]
+        balances = await _fetch_balances(weex, uids)
+        return all_uids, trade, comm, balances
+
+    return await _cached(f"raw:{days}", build)
 
 
 class AffiliateOverview(BaseModel):
@@ -71,12 +118,10 @@ class AffiliateOverview(BaseModel):
     total_futures_volume: Decimal
     total_commission: Decimal
     total_withdrawal: Decimal
-    with_deposit: int       # сколько рефералов имеют депозит > 0
-    active_traders: int     # сколько рефералов торговали (futures > 0)
+    with_deposit: int
+    active_traders: int
     period_days: int
 
-
-import asyncio
 
 class ReferralRow(BaseModel):
     uid: str
@@ -96,22 +141,8 @@ class ReferralRow(BaseModel):
 @router.get("/overview", response_model=AffiliateOverview)
 async def overview(days: int = 30, weex=Depends(get_weex)):
     days = max(1, min(days, 90))
-    start, end = _period(days)
-    # getAffiliateUIDs максимум поддерживает 90 дней, берем 85 с запасом
-    uid_start = end - 85 * _DAY_MS
-
-    async def build():
-        all_uids, trade, comm = await asyncio.gather(
-            weex.get_affiliate_uids_all(uid_start, end),
-            weex.get_channel_trade_asset_all(start, end),
-            weex.get_affiliate_commission_all(start, end),
-        )
-        return all_uids, trade, comm
-
-    all_uids, records, comm_items = await _cached(f"overview:{days}", build)
-
+    _, records, comm_items, _ = await _fetch_weex_data(weex, days)
     total_commission = sum((_d(c.get("commission")) for c in comm_items), Decimal(0))
-
     return AffiliateOverview(
         referrals=len(records),
         total_deposit=sum((_d(r.get("depositAmount")) for r in records), Decimal(0)),
@@ -129,7 +160,7 @@ async def _get_user_balance(weex, uid: str) -> Decimal:
     key = f"user_balance:{uid}"
     now = time.time()
     hit = _cache.get(key)
-    if hit and now - hit[0] < 60:  # кэш баланса 60 секунд
+    if hit and now - hit[0] < _TTL_BALANCE:
         return hit[1]
     try:
         a = await weex.get_agency_assert(uid)
@@ -146,34 +177,21 @@ async def _get_user_balance(weex, uid: str) -> Decimal:
     return balance
 
 
+async def _fetch_balances(weex, uids: list[str]) -> dict[str, Decimal]:
+    """Параллельно получить балансы для списка uid (семафор 3 — под лимит WEEX affiliate)."""
+    sem = asyncio.Semaphore(3)
+    async def get_bal(uid: str):
+        async with sem:
+            return uid, await _get_user_balance(weex, uid)
+    results = await asyncio.gather(*(get_bal(uid) for uid in uids))
+    return dict(results)
+
+
 @router.get("/referrals", response_model=list[ReferralRow])
 async def referrals(days: int = 30, weex=Depends(get_weex)):
     days = max(1, min(days, 90))
-    start, end = _period(days)
-    # getAffiliateUIDs максимум поддерживает 90 дней, берем 85 с запасом
-    uid_start = end - 85 * _DAY_MS
-
-    async def build():
-        # Параллельно: метаданные (90 дней) + торговля (выбранный период), все страницы
-        all_uids, trade = await asyncio.gather(
-            weex.get_affiliate_uids_all(uid_start, end),
-            weex.get_channel_trade_asset_all(start, end),
-        )
-        return all_uids, trade
-
-    all_uids, trade = await _cached(f"refs:{days}", build)
-    if trade:
-        logger.info("WEEX getChannelUserTradeAndAsset sample keys: %s", list(trade[0].keys()))
+    all_uids, trade, _, balances = await _fetch_weex_data(weex, days)
     uid_meta = {u["uid"]: u for u in all_uids}
-
-    # Получаем балансы всех рефералов параллельно (ограничиваем семафором на 10)
-    sem = asyncio.Semaphore(10)
-    async def get_bal(uid):
-        async with sem:
-            return uid, await _get_user_balance(weex, uid)
-
-    bal_results = await asyncio.gather(*(get_bal(r["uid"]) for r in trade))
-    balances = dict(bal_results)
 
     rows = []
     for r in trade:
