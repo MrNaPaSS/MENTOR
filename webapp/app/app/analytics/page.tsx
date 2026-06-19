@@ -286,12 +286,6 @@ export default function AnalyticsPage() {
       color: "#FF6B35", unlocked: (tradingDays > 0 ? tradingDays : activeDays) >= 15,
     },
     {
-      id: "signals", label: "Сигналов принято", icon: Zap, target: 20,
-      current: analytics?.signals_received ?? 0,
-      unit: "сигналов", reward: "⚡ Активный участник",
-      color: "#FFD700", unlocked: (analytics?.signals_received ?? 0) >= 20,
-    },
-    {
       id: "profit", label: "Прибыльных дней", icon: TrendingUp, target: 5,
       current: profitDays,
       unit: "дней в плюс", reward: "📈 Бычий режим",
