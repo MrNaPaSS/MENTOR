@@ -7,7 +7,11 @@
 
 from __future__ import annotations
 
+import ipaddress
+import re
+import socket
 from datetime import datetime, timezone
+from urllib.parse import urljoin, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -29,6 +33,78 @@ admin_router = APIRouter(
     prefix="/api/shop/admin", tags=["shop-admin"],
     dependencies=[Depends(get_current_mentor)],
 )
+
+
+_OG_PATTERNS = (
+    r'<meta[^>]+property=["\']og:image(?::secure_url|:url)?["\'][^>]+content=["\']([^"\']+)["\']',
+    r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+    r'<meta[^>]+name=["\']twitter:image(?::src)?["\'][^>]+content=["\']([^"\']+)["\']',
+    r'<link[^>]+rel=["\']image_src["\'][^>]+href=["\']([^"\']+)["\']',
+)
+
+
+def _is_public_host(hostname: str) -> bool:
+    """SSRF-защита: хост резолвится только в публичные IP (не localhost/приватные/служебные)."""
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except Exception:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+            return False
+    return True
+
+
+async def _resolve_link_image(url: str) -> str | None:
+    """Вернуть URL картинки для ссылки.
+
+    TradingView snapshot (/x/ID) → s3 PNG без запроса. Для остальных страниц —
+    загрузить HTML и вытащить og:image / twitter:image. Прямая ссылка на картинку
+    возвращается как есть. Только http/https и публичные хосты (SSRF-guard).
+    """
+    url = (url or "").strip()
+    if not url:
+        return None
+
+    m = re.search(r"tradingview\.com/x/([A-Za-z0-9]+)", url)
+    if m:
+        i = m.group(1)
+        return f"https://s3.tradingview.com/snapshots/{i[0].lower()}/{i}.png"
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None
+    if not _is_public_host(parsed.hostname):
+        return None
+
+    try:
+        import aiohttp
+        timeout = aiohttp.ClientTimeout(total=6)
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; NMNHBot/1.0; +preview)"}
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+            async with session.get(url, allow_redirects=True, max_redirects=4) as resp:
+                if resp.status != 200:
+                    return None
+                ctype = resp.headers.get("Content-Type", "").lower()
+                if ctype.startswith("image/"):
+                    return url
+                if "html" not in ctype:
+                    return None
+                raw = await resp.content.read(524_288)  # максимум 512 КБ
+        html = raw.decode("utf-8", "ignore")
+    except Exception as exc:
+        logger.info("link-preview: не удалось загрузить %s: %s", url, exc)
+        return None
+
+    for pat in _OG_PATTERNS:
+        mm = re.search(pat, html, re.IGNORECASE)
+        if mm:
+            return urljoin(url, mm.group(1).strip())
+    return None
 
 
 def _item_out(it: ShopItem) -> ShopItemOut:
@@ -151,6 +227,12 @@ async def _notify_mentor(config: BackendConfig, notifier, student: Student, item
 
 
 # ─────────────────────── Ментор: каталог ───────────────────────
+
+@admin_router.get("/link-preview")
+async def admin_link_preview(url: str):
+    """Вытащить картинку-превью из ссылки (og:image / TradingView snapshot)."""
+    return {"image": await _resolve_link_image(url)}
+
 
 @admin_router.get("/items", response_model=list[ShopItemOut])
 def admin_list_items(session=Depends(get_session)):

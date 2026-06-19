@@ -287,6 +287,8 @@ export const api = {
 
   // ── Магазин (ментор) ──
   shopAdminItems: (token: string) => authReq<ShopItem[]>("/api/shop/admin/items", token),
+  shopLinkPreview: (token: string, url: string) =>
+    authReq<{ image: string | null }>(`/api/shop/admin/link-preview?url=${encodeURIComponent(url)}`, token),
   shopAdminCreate: (token: string, body: ShopItemInput) =>
     authReq<ShopItem>("/api/shop/admin/items", token, { method: "POST", body: JSON.stringify(body) }),
   shopAdminUpdate: (token: string, id: number, body: Partial<ShopItemInput>) =>

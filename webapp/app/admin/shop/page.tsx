@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Check, X, Eye, EyeOff, ExternalLink, Coins, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Eye, EyeOff, ExternalLink, Coins, Loader2, ImageDown } from "lucide-react";
 import { api, ShopItem, ShopItemInput, ShopOrder } from "@/lib/api";
 import { useMentorToken } from "@/components/admin/AdminShell";
 import { cardImage } from "@/lib/tvImage";
@@ -236,9 +236,26 @@ function ItemEditor({ token, item, onClose, onSaved }: {
   } : EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pulling, setPulling] = useState(false);
+  const [pullMsg, setPullMsg] = useState<string | null>(null);
 
   function set<K extends keyof ShopItemInput>(k: K, v: ShopItemInput[K]) {
     setForm((f) => ({ ...f, [k]: v }));
+  }
+
+  // Подтянуть картинку из ссылки (og:image / TradingView snapshot)
+  async function pullPreview(auto = false) {
+    const link = (form.link_url || "").trim();
+    if (!link) return;
+    if (auto && form.image_url) return; // не перетирать вручную заданную картинку
+    setPulling(true); setPullMsg(null);
+    try {
+      const r = await api.shopLinkPreview(token, link);
+      if (r.image) { setForm((f) => ({ ...f, image_url: r.image! })); setPullMsg(null); }
+      else setPullMsg("Картинку из ссылки вытащить не удалось — вставьте URL картинки вручную.");
+    } catch {
+      setPullMsg("Не удалось получить превью.");
+    } finally { setPulling(false); }
   }
 
   async function save() {
@@ -289,11 +306,32 @@ function ItemEditor({ token, item, onClose, onSaved }: {
             </select>
           </Field>
           <Field label="Ссылка (видна в карточке)">
-            <input value={form.link_url} onChange={(e) => set("link_url", e.target.value)} className="input" placeholder="https://tradingview.com/…" />
+            <input
+              value={form.link_url}
+              onChange={(e) => set("link_url", e.target.value)}
+              onBlur={() => pullPreview(true)}
+              className="input"
+              placeholder="https://tradingview.com/script/…"
+            />
           </Field>
           <Field label="Картинка / скрин (URL — показывается в карточке)">
-            <input value={form.image_url} onChange={(e) => set("image_url", e.target.value)} className="input" placeholder="https://…/preview.png" />
-            <p className="mt-1 text-[11px] text-text-muted">Пусто? Превью возьмётся из ссылки-снапшота TradingView (формат tradingview.com/x/…).</p>
+            <div className="flex gap-2">
+              <input value={form.image_url} onChange={(e) => set("image_url", e.target.value)} className="input" placeholder="https://…/preview.png" />
+              <button
+                type="button"
+                onClick={() => pullPreview(false)}
+                disabled={pulling || !form.link_url?.trim()}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-accent-cyan/40 bg-accent-cyan/10 px-3 text-xs font-bold text-accent-cyan transition hover:bg-accent-cyan/20 disabled:opacity-50"
+                title="Вытащить картинку из ссылки"
+              >
+                {pulling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageDown className="h-3.5 w-3.5" />}
+                Из ссылки
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-text-muted">
+              Картинка тянется из ссылки автоматически (og:image / снапшот TradingView). Можно вставить URL картинки вручную.
+            </p>
+            {pullMsg && <p className="mt-1 text-[11px] text-accent-gold">{pullMsg}</p>}
           </Field>
           {cardImage(form.image_url, form.link_url) && (
             // eslint-disable-next-line @next/next/no-img-element

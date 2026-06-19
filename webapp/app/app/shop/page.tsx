@@ -6,6 +6,7 @@ import { api, ShopItem, ShopOrder, CoinsBalance } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { cardImage } from "@/lib/tvImage";
 import ShopIcon from "@/components/shop/ShopIcon";
+import CardHero from "@/components/shop/CardHero";
 
 const STATUS: Record<string, { label: string; cls: string; icon: typeof Check }> = {
   pending:   { label: "Ожидает выдачи", cls: "text-accent-gold border-accent-gold/40 bg-accent-gold/10", icon: Clock },
@@ -95,19 +96,7 @@ export default function ShopPage() {
                 className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-b from-bg-card/80 to-bg-card/20 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.6)] transition duration-300 hover:-translate-y-1 hover:border-accent-gold/40 hover:shadow-[0_16px_44px_-14px_rgba(255,200,0,0.28)]"
               >
                 {/* Hero */}
-                <div className="relative h-40 overflow-hidden">
-                  {img ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img} alt={it.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-bg-card via-bg-card/10 to-transparent" />
-                    </>
-                  ) : (
-                    <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-accent-gold/[0.16] via-bg-card/30 to-transparent">
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,200,0,0.18),transparent_62%)]" />
-                      <ShopIcon name={it.icon} className="h-12 w-12 text-accent-gold/80" />
-                    </div>
-                  )}
+                <CardHero image={img} icon={it.icon} accent="gold">
                   <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-black/45 px-3 py-1.5 backdrop-blur-md">
                     <Coins className="h-3.5 w-3.5 text-accent-gold" />
                     <span className="font-mono text-sm font-bold text-accent-gold">{it.price.toLocaleString("ru")}</span>
@@ -117,7 +106,7 @@ export default function ShopPage() {
                       <ShopIcon name={it.icon} className="h-4 w-4" />
                     </div>
                   )}
-                </div>
+                </CardHero>
                 {/* Body */}
                 <div className="flex flex-1 flex-col p-5">
                   <h3 className="font-semibold leading-snug text-white">{it.title}</h3>
@@ -156,19 +145,7 @@ export default function ShopPage() {
             return (
             <div key={it.id} className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-b from-bg-card/80 to-bg-card/20 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.6)] transition duration-300 hover:-translate-y-1 hover:border-accent-cyan/40 hover:shadow-[0_16px_44px_-14px_rgba(10,255,224,0.22)]">
               {/* Hero */}
-              <div className="relative h-40 overflow-hidden">
-                {img ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img} alt={it.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-bg-card via-bg-card/10 to-transparent" />
-                  </>
-                ) : (
-                  <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-accent-cyan/[0.14] via-bg-card/30 to-transparent">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(10,255,224,0.16),transparent_62%)]" />
-                    <ShopIcon name={it.icon} className="h-12 w-12 text-accent-cyan/80" />
-                  </div>
-                )}
+              <CardHero image={img} icon={it.icon} accent="cyan">
                 {it.price > 0 && (
                   <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-black/45 px-3 py-1.5 backdrop-blur-md">
                     <Coins className="h-3.5 w-3.5 text-accent-gold" />
@@ -180,7 +157,7 @@ export default function ShopPage() {
                     <ShopIcon name={it.icon} className="h-4 w-4" />
                   </div>
                 )}
-              </div>
+              </CardHero>
               {/* Body */}
               <div className="flex flex-1 flex-col p-5">
                 <h3 className="font-semibold leading-snug text-white">{it.title}</h3>
