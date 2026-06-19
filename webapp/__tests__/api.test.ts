@@ -81,13 +81,17 @@ describe("api client", () => {
     expect(JSON.parse(init.body).audience).toBe("all");
   });
 
-  it("mentorLogin passes password in query", async () => {
+  it("mentorLogin sends password in JSON body", async () => {
     const mock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ access_token: "a", refresh_token: "r" }),
     });
     vi.stubGlobal("fetch", mock);
     await api.mentorLogin("p@ss word");
-    expect(mock.mock.calls[0][0]).toContain("password=p%40ss%20word");
+    const [url, init] = mock.mock.calls[0];
+    expect(url).toContain("/api/auth/mentor-login");
+    expect(url).not.toContain("password=");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body).password).toBe("p@ss word");
   });
 });

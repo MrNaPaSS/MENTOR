@@ -252,8 +252,8 @@ export const api = {
     }),
   mentorLogin: (password: string) =>
     req<{ access_token: string; refresh_token: string }>(
-      `/api/auth/mentor-login?password=${encodeURIComponent(password)}`,
-      { method: "POST" }
+      `/api/auth/mentor-login`,
+      { method: "POST", body: JSON.stringify({ password }) }
     ),
   devLogin: () =>
     req<{
