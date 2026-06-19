@@ -63,61 +63,31 @@ async def trades_me(
             "commission": _to_float(user_row.get("commission")),
         }
 
-    # Депозиты и выводы — с диапазоном дат чтобы WEEX вернул полный список
-    from datetime import datetime, timezone as _tz
-    end_dt   = datetime.fromtimestamp(end_ms / 1000, tz=_tz.utc)
-    start_dt = datetime.fromtimestamp(start_ms / 1000, tz=_tz.utc)
-    end_date   = end_dt.strftime("%Y-%m-%d")
-    start_date = start_dt.strftime("%Y-%m-%d")
+    assets = await weex.get_agency_assert(uid)
 
-    assets, withdraw_raw = await asyncio.gather(
-        weex.get_agency_assert(uid, start_date=start_date, end_date=end_date),
-        weex.get_agency_withdrawals(uid),
-    )
-
-    def _parse_tx(d: dict, tx_type: str) -> dict:
-        amount = _to_float(
-            d.get("amount") or d.get("withdrawAmount") or d.get("depositAmount") or d.get("value") or 0
-        )
-        ts = int(d.get("updateTime") or d.get("createTime") or d.get("time") or 0)
+    def _parse_deposit(d: dict) -> dict:
+        amount = _to_float(d.get("amount") or d.get("depositAmount") or d.get("value") or 0)
+        ts = int(d.get("updateTime") or d.get("createTime") or 0)
         return {
-            "type":      tx_type,
+            "type":      "deposit",
             "amount":    amount,
-            "coin":      d.get("coinName") or d.get("coin") or d.get("currency") or "USDT",
+            "coin":      d.get("coinName") or d.get("coin") or "USDT",
             "status":    d.get("status") or d.get("state"),
             "timestamp": ts,
             "date_iso":  _ts_to_iso(ts),
-            "txid":      d.get("txId") or d.get("id") or d.get("hash"),
+            "txid":      d.get("txId") or d.get("id"),
         }
 
-    def _parse_tx_list(raw_list: list, tx_type: str) -> list:
-        return [_parse_tx(d, tx_type) for d in raw_list if isinstance(d, dict)]
+    deposits = [_parse_deposit(d) for d in assets.get("depositList", []) if isinstance(d, dict)]
+    deposits.sort(key=lambda x: x["timestamp"], reverse=True)
 
-    # getAssert может вернуть depositList и/или withdrawalList
-    deposits    = _parse_tx_list(assets.get("depositList",   []), "deposit")
-    # Выводы: сначала из отдельного эндпоинта, иначе из getAssert
-    withdraw_from_assert = (
-        assets.get("withdrawalList") or assets.get("withdrawList") or
-        assets.get("withdrawal_list") or []
-    )
-    withdrawals = _parse_tx_list(withdraw_raw or withdraw_from_assert, "withdrawal")
-
-    # Объединяем и сортируем по времени (новые сверху)
-    transactions = sorted(deposits + withdrawals, key=lambda x: x["timestamp"], reverse=True)
-
-    # WARNING-уровень чтобы попасть в uvicorn-лог
-    assert_keys = list(assets.keys())
-    assert_list_sizes = {k: len(v) for k, v in assets.items() if isinstance(v, list)}
-    logger.warning(
-        "ASSERT_DEBUG uid=%s deposits=%d withdrawals=%d | keys=%s | list_sizes=%s",
-        uid, len(deposits), len(withdrawals), assert_keys, assert_list_sizes,
-    )
+    logger.info("Trades uid=%s deposits=%d summary=%s", uid, len(deposits), summary)
 
     return {
-        "trades":       [],
-        "summary":      summary,
-        "deposits":     deposits,
-        "withdrawals":  withdrawals,
-        "transactions": transactions,
-        "needs_uid":    False,
+        "trades":            [],
+        "summary":           summary,
+        "deposits":          deposits,
+        "withdrawals":       [],
+        "transactions":      deposits,
+        "needs_uid":         False,
     }
