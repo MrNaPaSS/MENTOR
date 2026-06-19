@@ -80,7 +80,7 @@ function DayCell({ day, onClick, active, isToday }: {
   const goalMet = day.signals > 0 && isPos;
 
   const intensity = hasReal ? Math.min(Math.abs(pnl!) / 6, 1) : 0;
-  let bg = "transparent";
+  let bg = "rgba(255,255,255,0.015)";
   if (isEstimated) {
     bg = "rgba(255,255,255,0.018)";
   } else if (isPos) {
@@ -98,16 +98,18 @@ function DayCell({ day, onClick, active, isToday }: {
   const borderCls = active
     ? "border-accent-cyan shadow-[0_0_14px_rgba(10,255,224,0.25)]"
     : isToday
-    ? "border-white/25"
+    ? "border-white/25 shadow-[0_0_8px_rgba(255,255,255,0.06)]"
     : goalMet
-    ? "border-success/25"
+    ? "border-success/30 shadow-[0_0_8px_rgba(0,212,160,0.12)]"
     : isPos
-    ? "border-success/12"
+    ? "border-success/20"
     : isNeg
-    ? "border-danger/12"
+    ? "border-danger/20"
     : hasDeposit
-    ? "border-accent-cyan/20"
-    : "border-white/[0.05]";
+    ? "border-accent-cyan/25"
+    : day.signals > 0
+    ? "border-accent-cyan/10"
+    : "border-white/[0.04]";
 
   return (
     <button
@@ -354,9 +356,20 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       {/* Заголовок */}
-      <div>
-        <h1 className="text-2xl font-extrabold text-white">Аналитика & Прогресс</h1>
-        <p className="text-sm text-text-muted">Реальные данные на основе снимков баланса и активности по сигналам</p>
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">Аналитика <span className="text-accent-cyan">&</span> Прогресс</h1>
+          <p className="text-sm text-text-muted mt-0.5">Реальные данные на основе снимков баланса и активности по сигналам</p>
+        </div>
+        {tradeSummary && (
+          <div className="hidden md:flex items-center gap-3 rounded-xl border border-accent-gold/20 bg-accent-gold/5 px-4 py-2">
+            <span className="text-lg">🏆</span>
+            <div>
+              <p className="font-mono text-xs text-white/40 leading-none">Всего объёма</p>
+              <p className="font-mono text-base font-extrabold text-accent-gold leading-tight">${fmtDot(Math.round(totalVolume))}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* WEEX торговая активность */}
@@ -459,40 +472,77 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Вехи объёма */}
-      {tradeSummary && (
-        <div className="card space-y-3">
-          <div className="flex items-center gap-2">
-            <BarChart2 className="h-4 w-4 text-accent-gold" />
-            <h2 className="text-base font-bold text-white">Вехи объёма</h2>
-            <span className="ml-auto font-mono text-sm text-text-muted">${fmtDot(Math.round(totalVolume))} USDT всего</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {VOLUME_MILESTONES.map((m) => {
-              const reached = totalVolume >= m.vol;
-              const pct = Math.min((totalVolume / m.vol) * 100, 100);
-              const next = !reached;
-              return (
-                <div key={m.label}
-                  className={`rounded-xl border p-3 text-center transition ${reached ? "border-accent-gold/40 bg-accent-gold/5" : "border-white/[0.06] bg-white/[0.02]"}`}>
-                  <div className="text-xl mb-1">{m.emoji}</div>
-                  <div className={`font-mono text-xs font-bold ${reached ? "text-accent-gold" : "text-white/30"}`}>{m.label}</div>
-                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.06]">
-                    <div className="h-full rounded-full bg-accent-gold transition-all duration-700"
-                      style={{ width: `${pct}%`, opacity: reached ? 1 : 0.5 }} />
+      {/* Вехи объёма — горизонтальный трек */}
+      {tradeSummary && (() => {
+        const nextIdx = VOLUME_MILESTONES.findIndex(m => totalVolume < m.vol);
+        const nextM   = nextIdx >= 0 ? VOLUME_MILESTONES[nextIdx] : null;
+        const prevM   = nextIdx > 0  ? VOLUME_MILESTONES[nextIdx - 1] : nextIdx === -1 ? VOLUME_MILESTONES[VOLUME_MILESTONES.length - 1] : null;
+        const trackPct = nextM && prevM
+          ? Math.min(((totalVolume - prevM.vol) / (nextM.vol - prevM.vol)) * 100, 100)
+          : nextIdx === -1 ? 100 : Math.min((totalVolume / VOLUME_MILESTONES[0].vol) * 100, 100);
+
+        return (
+          <div className="overflow-hidden rounded-2xl border border-white/[0.07]"
+            style={{ background: "linear-gradient(135deg, rgba(255,215,0,0.04) 0%, rgba(0,0,0,0) 60%)" }}>
+            {/* Шапка */}
+            <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-white/[0.05]">
+              <BarChart2 className="h-4 w-4 text-accent-gold" />
+              <div>
+                <h2 className="text-sm font-bold text-white leading-none">Путь трейдера</h2>
+                <p className="text-[10px] text-white/30 mt-0.5">Суммарный объём на WEEX</p>
+              </div>
+              <div className="ml-auto text-right">
+                <span className="font-mono text-base font-extrabold text-accent-gold">${fmtDot(Math.round(totalVolume))}</span>
+                <span className="text-[10px] text-white/30 ml-1">USDT</span>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+              {/* Линия прогресса между вехами */}
+              {nextM && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-white/30">{prevM ? prevM.label : "0"}</span>
+                    <span className="text-white/50">до <span className="text-accent-gold font-bold">{nextM.label}</span> осталось <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
+                    <span className="text-accent-gold font-bold">{nextM.label}</span>
                   </div>
-                  {next && (
-                    <div className="mt-1 text-[8px] text-white/25">
-                      ${fmtDot(Math.round(m.vol - totalVolume))} осталось
-                    </div>
-                  )}
-                  {reached && <div className="mt-1 text-[8px] text-accent-gold">✓ Получено</div>}
+                  <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
+                    <div className="h-full rounded-full transition-all duration-1000"
+                      style={{ width: `${trackPct}%`, background: "linear-gradient(90deg, #f59e0b, #fde68a)" }} />
+                  </div>
+                  <p className="text-[10px] text-white/25 text-right">{trackPct.toFixed(1)}% до следующей вехи</p>
                 </div>
-              );
-            })}
+              )}
+
+              {/* Точки вех */}
+              <div className="flex items-end gap-2 overflow-x-auto pb-1">
+                {VOLUME_MILESTONES.map((m, i) => {
+                  const reached = totalVolume >= m.vol;
+                  const isCurrent = nextIdx === i;
+                  return (
+                    <div key={m.label} className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5">
+                      {/* Индикатор */}
+                      <div className={`relative flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${
+                        reached
+                          ? "border-accent-gold bg-accent-gold/15 shadow-[0_0_16px_rgba(251,191,36,0.4)]"
+                          : isCurrent
+                          ? "border-white/30 bg-white/[0.04]"
+                          : "border-white/10 bg-white/[0.02]"
+                      }`}>
+                        <span className={`text-lg leading-none ${reached ? "" : "opacity-25"}`}>{m.emoji}</span>
+                        {reached && (
+                          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-accent-gold text-[7px] font-black text-black">✓</span>
+                        )}
+                      </div>
+                      <span className={`font-mono text-[10px] font-bold ${reached ? "text-accent-gold" : isCurrent ? "text-white/50" : "text-white/20"}`}>{m.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Основной блок */}
       <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
