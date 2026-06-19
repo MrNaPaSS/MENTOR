@@ -49,4 +49,19 @@ def create_all() -> None:
     """Создать таблицы (для dev/тестов; в проде — миграции)."""
     from core import models  # noqa: F401 — регистрация моделей
 
-    Base.metadata.create_all(get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    _migrate_add_columns(engine)
+
+
+def _migrate_add_columns(engine) -> None:
+    """Добавить новые колонки к существующим таблицам (SQLite-safe ALTER TABLE)."""
+    from sqlalchemy import text, inspect
+
+    with engine.connect() as conn:
+        inspector = inspect(engine)
+
+        existing_student_cols = {c["name"] for c in inspector.get_columns("students")}
+        if "coins" not in existing_student_cols:
+            conn.execute(text("ALTER TABLE students ADD COLUMN coins INTEGER DEFAULT 0 NOT NULL"))
+            conn.commit()

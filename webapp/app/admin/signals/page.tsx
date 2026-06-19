@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { api, SignalOut } from "@/lib/api";
 import { useMentorToken } from "@/components/admin/AdminShell";
 import { fmtUsd, isLong, modeLabel } from "@/lib/format";
@@ -10,6 +11,7 @@ export default function AdminSignals() {
   const [signals, setSignals] = useState<SignalOut[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   function load() {
     api.signals().then(setSignals).catch(() => setSignals([])).finally(() => setLoaded(true));
@@ -21,6 +23,17 @@ export default function AdminSignals() {
     try {
       await api.closeSignal(token, id);
       setSignals((prev) => prev.map((s) => (s.id === id ? { ...s, status: "closed" } : s)));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function del(id: number) {
+    setBusy(id);
+    setConfirmDelete(null);
+    try {
+      await api.deleteSignal(token, id);
+      setSignals((prev) => prev.filter((s) => s.id !== id));
     } finally {
       setBusy(null);
     }
@@ -46,7 +59,7 @@ export default function AdminSignals() {
                 <th>Аудитория</th>
                 <th className="text-right">Вход</th>
                 <th className="text-center">Статус</th>
-                <th className="text-right">Действие</th>
+                <th className="text-right">Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -66,17 +79,43 @@ export default function AdminSignals() {
                     </span>
                   </td>
                   <td className="text-right">
-                    {s.status === "active" ? (
-                      <button
-                        onClick={() => close(s.id)}
-                        disabled={busy === s.id}
-                        className="btn-outline px-3 py-1.5 text-xs"
-                      >
-                        {busy === s.id ? "…" : "Закрыть"}
-                      </button>
-                    ) : (
-                      <span className="text-text-muted">-</span>
-                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      {s.status === "active" && (
+                        <button
+                          onClick={() => close(s.id)}
+                          disabled={busy === s.id}
+                          className="btn-outline px-3 py-1.5 text-xs"
+                        >
+                          {busy === s.id ? "…" : "Закрыть"}
+                        </button>
+                      )}
+                      {confirmDelete === s.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => del(s.id)}
+                            disabled={busy === s.id}
+                            className="rounded-lg border border-danger/50 bg-danger/10 px-2.5 py-1.5 text-xs font-bold text-danger hover:bg-danger/20 transition"
+                          >
+                            {busy === s.id ? "…" : "Да, удалить"}
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete(null)}
+                            className="rounded-lg border border-border px-2 py-1.5 text-xs text-text-muted hover:text-white transition"
+                          >
+                            Отмена
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDelete(s.id)}
+                          disabled={busy === s.id}
+                          title="Удалить сигнал"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-text-muted hover:border-danger/50 hover:text-danger transition"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

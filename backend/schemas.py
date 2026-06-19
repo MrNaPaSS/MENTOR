@@ -200,3 +200,30 @@ class DevLoginOut(BaseModel):
     mentor: DevTokens
     student: DevTokens
     student_username: str
+
+
+# ── Монеты NMNH ──
+
+class CoinTxOut(BaseModel):
+    id: int
+    amount: int
+    reason: str
+    ref: str
+    created_at: str
+
+
+class CoinsBalance(BaseModel):
+    balance: int
+    transactions: list[CoinTxOut]
+
+
+class CoinSyncIn(BaseModel):
+    earned_achievement_ids: list[str]
+    current_level: int
+    reached_volume_milestones: list[str]  # ["50K", "100K", ...]
+
+
+class CoinSyncOut(BaseModel):
+    balance: int
+    added: int
+    new_transactions: list[CoinTxOut]

@@ -14,10 +14,11 @@ import {
   ChevronDown,
   Calculator,
   ImageIcon,
+  Coins,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
-import { api, Profile } from "@/lib/api";
+import { api, Profile, CoinsBalance } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { fmtUsd, modeLabel } from "@/lib/format";
 import MarketTicker from "@/components/market/MarketTicker";
@@ -43,6 +44,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [coins, setCoins] = useState<number | null>(null);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -58,6 +60,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         logout();
         router.replace("/login");
       });
+    api.coins(token).then(c => setCoins(c.balance)).catch(() => {});
   }, [router]);
 
   function doLogout() {
@@ -123,6 +126,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Правая часть - баланс + профиль */}
           <div className="flex items-center gap-3">
+            {/* Монеты NMNH */}
+            {coins !== null && (
+              <Link
+                href="/app/analytics"
+                className="hidden items-center gap-1.5 rounded-xl border border-accent-gold/30 bg-accent-gold/10 px-3 py-1.5 transition hover:border-accent-gold/50 sm:flex"
+                title="NMNH монеты — заработай за достижения"
+              >
+                <Coins className="h-3.5 w-3.5 text-accent-gold" />
+                <span className="font-mono text-sm font-bold text-accent-gold tabular">
+                  {coins.toLocaleString("ru")}
+                </span>
+                <span className="text-[9px] font-bold text-accent-gold/50">NMNH</span>
+              </Link>
+            )}
+
             {/* Баланс */}
             {profile && (
               <Link

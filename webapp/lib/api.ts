@@ -272,6 +272,9 @@ export const api = {
     authReq<AnalyticsCalendar>(`/api/analytics/calendar?year=${year}&month=${month + 1}`, token),
   tradesMe: (token: string, days: number = 30) =>
     authReq<TradesResponse>(`/api/trades/me?days=${days}`, token),
+  coins: (token: string) => authReq<CoinsBalance>("/api/coins", token),
+  coinsSync: (token: string, body: CoinSyncIn) =>
+    authReq<CoinSyncOut>("/api/coins/sync", token, { method: "POST", body: JSON.stringify(body) }),
 
   // ── Авторизованные (ментор) ──
   students: (token: string) => authReq<StudentOut[]>("/api/students", token),
@@ -304,6 +307,8 @@ export const api = {
     }),
   closeSignal: (token: string, id: number) =>
     authReq<SignalOut>(`/api/signals/${id}/close`, token, { method: "PATCH" }),
+  deleteSignal: (token: string, id: number) =>
+    authReq<{ ok: boolean }>(`/api/signals/${id}`, token, { method: "DELETE" }),
 
   // ── Партнёрская статистика WEEX (ментор) ──
   affiliateOverview: (token: string, days = 30) =>
@@ -363,4 +368,29 @@ export interface MentorBalance {
   contract_total: string;
   spot_total: string;
   total_usdt: string;
+}
+
+export interface CoinTx {
+  id: number;
+  amount: number;
+  reason: string;
+  ref: string;
+  created_at: string;
+}
+
+export interface CoinsBalance {
+  balance: number;
+  transactions: CoinTx[];
+}
+
+export interface CoinSyncIn {
+  earned_achievement_ids: string[];
+  current_level: number;
+  reached_volume_milestones: string[];
+}
+
+export interface CoinSyncOut {
+  balance: number;
+  added: number;
+  new_transactions: CoinTx[];
 }

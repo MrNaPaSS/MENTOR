@@ -7,8 +7,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from sqlalchemy import delete as sql_delete
+
 from core import repo
-from core.models import Student
+from core.models import BalanceSnapshot, SignalDelivery, Student
 from backend.deps import get_session, get_current_mentor
 from backend.schemas import StudentOut
 
@@ -69,6 +71,8 @@ def delete(student_id: int, session=Depends(get_session)):
     s = session.get(Student, student_id)
     if s is None:
         raise HTTPException(404, "Ученик не найден")
+    session.execute(sql_delete(SignalDelivery).where(SignalDelivery.student_id == student_id))
+    session.execute(sql_delete(BalanceSnapshot).where(BalanceSnapshot.student_id == student_id))
     session.delete(s)
     session.commit()
     return {"ok": True}

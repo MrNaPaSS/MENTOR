@@ -47,9 +47,11 @@ class Student(Base):
     balance_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    coins: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     deliveries: Mapped[list["SignalDelivery"]] = relationship(back_populates="student")
+    coin_transactions: Mapped[list["CoinTransaction"]] = relationship(back_populates="student")
 
 
 class Signal(Base):
@@ -136,6 +138,21 @@ class SettingRow(Base):
     value: Mapped[str] = mapped_column(Text)
 
 
+class CoinTransaction(Base):
+    """История начислений монет NMNH ученику."""
+
+    __tablename__ = "coin_transactions"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    amount: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(32))   # achievement | level_up | volume_milestone
+    ref: Mapped[str] = mapped_column(String(64))       # achievement_id, level number, or milestone label
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    student: Mapped["Student"] = relationship(back_populates="coin_transactions")
+
+
 class AuthCode(Base):
     """Одноразовый код входа в веб-платформу (UID → код, ТЗ §4.1, контракт A-10)."""
 
@@ -149,4 +166,4 @@ class AuthCode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "utcnow"]
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "utcnow"]

@@ -2,7 +2,7 @@
 // v8
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary } from "@/lib/api";
+import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles } from "lucide-react";
 
@@ -60,6 +60,10 @@ const RARITY_STYLES = {
   rare: { border: "border-blue-400/40", glow: "shadow-[0_0_12px_rgba(96,165,250,0.2)]", badge: "bg-blue-400/20 text-blue-400", label: "Редкая" },
   epic: { border: "border-purple-400/40", glow: "shadow-[0_0_12px_rgba(167,139,250,0.25)]", badge: "bg-purple-400/20 text-purple-400", label: "Эпическая" },
   legendary: { border: "border-accent-gold/40", glow: "shadow-[0_0_16px_rgba(255,215,0,0.25)]", badge: "bg-accent-gold/20 text-accent-gold", label: "Легендарная" },
+};
+
+const RARITY_COINS: Record<string, number> = {
+  common: 10, rare: 25, epic: 50, legendary: 100,
 };
 
 // Progressive XP levels: L2=200, L3=600, L4=1400, L5=3000, L6=6200...
@@ -239,6 +243,8 @@ export default function AnalyticsPage() {
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
   const [currentBalance, setCurrentBalance] = useState<number | null>(null);
   const [achCategory, setAchCategory] = useState<AchCategory>("all");
+  const [coinsBalance, setCoinsBalance] = useState<number | null>(null);
+  const [coinsSynced, setCoinsSynced] = useState(false);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -251,7 +257,100 @@ export default function AnalyticsPage() {
       setRecentDeposits((r.deposits || []).slice(0, 5));
       setTradeSummary(r.summary);
     }).catch(() => {});
+    api.coins(token).then(c => setCoinsBalance(c.balance)).catch(() => {});
   }, []);
+
+  // Sync монет когда все данные загружены (один раз за сессию)
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token || coinsSynced || !tradeSummary || !loaded) return;
+
+    const totalVol     = tradeSummary.total_volume ?? 0;
+    const depTotal     = recentDeposits.reduce((s, d) => s + d.amount, 0);
+    const vProfitDays  = calData.filter(d => d.pnl_pct !== null && !d.estimated && d.pnl_pct > 0).length;
+    const vHotDays     = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 3).length;
+    const vTradingDays = calData.filter(d => (d.trade_volume ?? 0) > 0).length;
+    const vActiveDays  = calData.filter(d => d.signals > 0).length;
+    const vEffTrade    = vTradingDays > 0 ? vTradingDays : vActiveDays;
+    const vGoalDays    = calData.filter(d => d.signals > 0 && d.pnl_pct !== null && d.pnl_pct > 0).length;
+    const vMonthVol    = calData.reduce((s, d) => s + (d.trade_volume ?? 0), 0);
+    const vStreak      = (() => {
+      let s = 0;
+      for (let i = calData.length - 1; i >= 0; i--) {
+        if ((calData[i].trade_volume ?? 0) > 0 || calData[i].signals > 0) s++;
+        else break;
+      }
+      return s;
+    })();
+    const vValidPnl    = calData.filter(d => d.pnl_pct !== null && !d.estimated);
+    const vAvgProfit   = vValidPnl.length ? vValidPnl.reduce((a, d) => a + (d.pnl_pct ?? 0), 0) / vValidPnl.length : 0;
+    const vSuperHot    = calData.some(d => d.pnl_pct !== null && d.pnl_pct >= 5);
+    const vEpicDay     = calData.some(d => d.pnl_pct !== null && d.pnl_pct >= 10);
+
+    const volXp      = Math.floor(totalVol / 50_000) * 25;
+    const streakXp   = vStreak * 30;
+    const goalXp     = vGoalDays * 20;
+    const hotXp      = vHotDays * 50;
+    const profitXp   = vProfitDays * 15;
+    const tradeDayXp = vEffTrade * 10;
+    const { level: currentLevel } = getXpLevel(volXp + streakXp + goalXp + hotXp + profitXp + tradeDayXp);
+
+    const vAllGoalsUnlocked = (
+      (vMonthVol > 0 ? vMonthVol : totalVol / 3) >= 250_000 &&
+      vEffTrade >= 15 &&
+      vProfitDays >= 5 &&
+      vStreak >= 7 &&
+      vHotDays >= 1 &&
+      vAvgProfit > 0 && vValidPnl.length >= 5
+    );
+
+    const earned: string[] = [];
+    if (totalVol >= 10_000)    earned.push("vol_10k");
+    if (totalVol >= 50_000)    earned.push("vol_50k");
+    if (totalVol >= 100_000)   earned.push("vol_100k");
+    if (totalVol >= 500_000)   earned.push("vol_500k");
+    if (totalVol >= 1_000_000) earned.push("vol_1m");
+    if (totalVol >= 5_000_000) earned.push("vol_5m");
+    if (totalVol >= 10_000_000) earned.push("vol_10m");
+    if (totalVol >= 25_000_000) earned.push("vol_25m");
+    if (vEffTrade >= 1)   earned.push("first_trade");
+    if (vStreak >= 3)     earned.push("streak_3");
+    if (vStreak >= 7)     earned.push("streak_7");
+    if (vStreak >= 14)    earned.push("streak_14");
+    if (vStreak >= 30)    earned.push("streak_30");
+    if (vEffTrade >= 15)  earned.push("days_15");
+    if (vEffTrade >= 20)  earned.push("days_20");
+    if (vEffTrade >= 25)  earned.push("days_25");
+    if (vProfitDays >= 1) earned.push("first_profit");
+    if (vProfitDays >= 5) earned.push("profit_5");
+    if (vProfitDays >= 10) earned.push("profit_10");
+    if (vHotDays >= 1)    earned.push("hot_day_3");
+    if (vSuperHot)        earned.push("hot_day_5");
+    if (vEpicDay)         earned.push("hot_day_10");
+    if (vAvgProfit > 0 && vValidPnl.length >= 5) earned.push("month_plus");
+    if (vGoalDays >= 10)  earned.push("goal_days_10");
+    if (recentDeposits.length > 0)   earned.push("dep_first");
+    if (depTotal >= 500)  earned.push("dep_500");
+    if (depTotal >= 1_000) earned.push("dep_1k");
+    if (depTotal >= 5_000) earned.push("dep_5k");
+    if (depTotal >= 10_000) earned.push("dep_10k");
+    if (recentDeposits.length >= 3)  earned.push("dep_3plus");
+    earned.push("joined");
+    if (currentLevel >= 5)  earned.push("level_5");
+    if (currentLevel >= 10) earned.push("level_10");
+    if (currentLevel >= 20) earned.push("level_20");
+    if (vAllGoalsUnlocked)  earned.push("all_goals");
+    if (vMonthVol >= 250_000) earned.push("vol_250k_mo");
+
+    const reachedMilestones = VOLUME_MILESTONES.filter(m => totalVol >= m.vol).map(m => m.label);
+
+    setCoinsSynced(true);
+    api.coinsSync(token, {
+      earned_achievement_ids: earned,
+      current_level: currentLevel,
+      reached_volume_milestones: reachedMilestones,
+    }).then(r => setCoinsBalance(r.balance)).catch(() => {});
+  }, [tradeSummary, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const token = getAccessToken();
@@ -709,9 +808,18 @@ export default function AnalyticsPage() {
         {/* Цели */}
         <div className="space-y-4">
           <div className="card space-y-3">
-            <div className="flex items-center gap-2">
-              <Star className="h-4 w-4 text-accent-gold" />
-              <h2 className="text-base font-bold text-white">Уровень трейдера</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Star className="h-4 w-4 text-accent-gold" />
+                <h2 className="text-base font-bold text-white">Уровень трейдера</h2>
+              </div>
+              {coinsBalance !== null && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-accent-gold/30 bg-accent-gold/10 px-2.5 py-1">
+                  <Coins className="h-3.5 w-3.5 text-accent-gold" />
+                  <span className="font-mono text-sm font-extrabold text-accent-gold">{coinsBalance.toLocaleString("ru")}</span>
+                  <span className="text-[9px] font-bold text-accent-gold/50">NMNH</span>
+                </div>
+              )}
             </div>
             {(() => {
             const volXp      = Math.floor(totalVolume / 50_000) * 25;
@@ -850,6 +958,12 @@ export default function AnalyticsPage() {
                       </span>
                     </div>
                     <p className="mt-0.5 text-[11px] text-text-muted">{ach.desc}</p>
+                    <div className="mt-1.5 flex items-center gap-1">
+                      <Coins className="h-3 w-3 text-accent-gold/70" />
+                      <span className="font-mono text-[10px] font-bold text-accent-gold/80">
+                        {ach.earned ? "" : "+"}{RARITY_COINS[ach.rarity]} NMNH
+                      </span>
+                    </div>
                   </div>
                 </div>
                 {ach.earned && (

@@ -44,22 +44,15 @@ export default function AdminDashboard() {
   const [sortField, setSortField] = useState<SortField>("futures_volume");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
-  // Загрузка основной платформы + баланс ментора + статистика за сегодня
+  // Загрузка основной платформы — каждый запрос независимо, чтобы один сбой не блокировал остальные
   useEffect(() => {
-    Promise.all([
-      api.publicStats(),
-      api.students(token),
-      api.affiliateMentorBalance(token),
-      api.affiliateOverview(token, 1),
-    ])
-      .then(([s, st, mb, td]) => {
-        setStats(s);
-        setStudents(st);
-        setMentorBal(mb);
-        setToday(td);
-      })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
+    let done = 0;
+    const finish = () => { done++; if (done >= 4) setLoaded(true); };
+
+    api.publicStats().then(setStats).catch(() => {}).finally(finish);
+    api.students(token).then(setStudents).catch(() => {}).finally(finish);
+    api.affiliateMentorBalance(token).then(setMentorBal).catch(() => {}).finally(finish);
+    api.affiliateOverview(token, 1).then(setToday).catch(() => {}).finally(finish);
   }, [token]);
 
   // Загрузка партнерской статистики WEEX - сброс при смене периода
@@ -335,7 +328,7 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-cyan/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Новых рефералов</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-white">
-              {!today ? <span className="skeleton inline-block h-7 w-8" /> : today.referrals}
+              {!loaded && !today ? <span className="skeleton inline-block h-7 w-8" /> : (today?.referrals ?? 0)}
             </p>
           </div>
           {/* Активных трейдеров */}
@@ -343,7 +336,7 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-cyan/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Торговали сегодня</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-accent-cyan">
-              {!today ? <span className="skeleton inline-block h-7 w-8" /> : today.active_traders}
+              {!loaded && !today ? <span className="skeleton inline-block h-7 w-8" /> : (today?.active_traders ?? 0)}
             </p>
           </div>
           {/* Депозиты */}
@@ -351,7 +344,7 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-success/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Депозиты</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-success">
-              {!today ? <span className="skeleton inline-block h-7 w-16" /> : `$${fmtUsd(today.total_deposit)}`}
+              {!loaded && !today ? <span className="skeleton inline-block h-7 w-16" /> : `$${fmtUsd(today?.total_deposit ?? 0)}`}
             </p>
           </div>
           {/* Объём торговли */}
@@ -359,9 +352,9 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-gold/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Объём торгов</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-accent-gold">
-              {!today
+              {!loaded && !today
                 ? <span className="skeleton inline-block h-7 w-20" />
-                : `$${fmtUsd(Number(today.total_futures_volume) + Number(today.total_spot_volume))}`}
+                : `$${fmtUsd(Number(today?.total_futures_volume ?? 0) + Number(today?.total_spot_volume ?? 0))}`}
             </p>
           </div>
           {/* Мой доход */}
@@ -369,7 +362,7 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-gold/80 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-gold/70">Мой доход</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-accent-gold">
-              {!today ? <span className="skeleton inline-block h-7 w-14" /> : `$${fmtUsd(today.total_commission)}`}
+              {!loaded && !today ? <span className="skeleton inline-block h-7 w-14" /> : `$${fmtUsd(today?.total_commission ?? 0)}`}
             </p>
           </div>
         </div>

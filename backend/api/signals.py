@@ -179,3 +179,17 @@ async def close_signal(signal_id: int, session=Depends(get_session), ws=Depends(
     session.commit()
     await ws.broadcast("signal_closed", {"signal_id": s.id})
     return _to_out(s)
+
+
+@router.delete("/{signal_id}", dependencies=[Depends(get_current_mentor)])
+async def delete_signal(signal_id: int, session=Depends(get_session), ws=Depends(get_ws_manager)):
+    from sqlalchemy import delete as sql_delete
+    from core.models import SignalDelivery
+    s = session.get(Signal, signal_id)
+    if s is None:
+        raise HTTPException(404, "Сигнал не найден")
+    session.execute(sql_delete(SignalDelivery).where(SignalDelivery.signal_id == signal_id))
+    session.delete(s)
+    session.commit()
+    await ws.broadcast("signal_deleted", {"signal_id": signal_id})
+    return {"ok": True}
