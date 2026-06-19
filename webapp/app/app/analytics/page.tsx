@@ -708,36 +708,6 @@ export default function AnalyticsPage() {
 
         {/* Цели */}
         <div className="space-y-4">
-          <div className="card space-y-4">
-            <div className="flex items-center gap-2">
-              <Target className="h-4 w-4 text-accent-cyan" />
-              <h2 className="text-base font-bold text-white">Цели месяца</h2>
-            </div>
-
-            {goals.map((goal) => {
-              const Icon = goal.icon;
-              const pct = Math.min((goal.current / goal.target) * 100, 100);
-              return (
-                <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-success/[0.04]" : "border-white/[0.06] bg-white/[0.02]"}`}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: goal.color }} />
-                    <span className="text-[11px] font-semibold text-white flex-1 min-w-0 truncate">{goal.label}</span>
-                    {goal.unlocked
-                      ? <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
-                      : <span className="font-mono text-[10px] text-white/30 shrink-0">{goal.current}/{goal.target}</span>
-                    }
-                  </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-bg-deep">
-                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
-                  </div>
-                  {goal.unlocked && (
-                    <p className="mt-1 text-[9px] text-success/70 truncate">{goal.reward}</p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
           <div className="card space-y-3">
             <div className="flex items-center gap-2">
               <Star className="h-4 w-4 text-accent-gold" />
@@ -787,6 +757,36 @@ export default function AnalyticsPage() {
               </>
             );
           })()}
+          </div>
+
+          <div className="card space-y-4">
+            <div className="flex items-center gap-2">
+              <Target className="h-4 w-4 text-accent-cyan" />
+              <h2 className="text-base font-bold text-white">Цели месяца</h2>
+            </div>
+
+            {goals.map((goal) => {
+              const Icon = goal.icon;
+              const pct = Math.min((goal.current / goal.target) * 100, 100);
+              return (
+                <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-success/[0.04]" : "border-white/[0.06] bg-white/[0.02]"}`}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: goal.color }} />
+                    <span className="text-[11px] font-semibold text-white flex-1 min-w-0 truncate">{goal.label}</span>
+                    {goal.unlocked
+                      ? <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
+                      : <span className="font-mono text-[10px] text-white/30 shrink-0">{goal.current}/{goal.target}</span>
+                    }
+                  </div>
+                  <div className="h-1 overflow-hidden rounded-full bg-bg-deep">
+                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
+                  </div>
+                  {goal.unlocked && (
+                    <p className="mt-1 text-[9px] text-success/70 truncate">{goal.reward}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
