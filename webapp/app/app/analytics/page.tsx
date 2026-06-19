@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins } from "lucide-react";
+import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles } from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
 function fmtDot(n: number, dec = 0): string {
@@ -73,13 +73,13 @@ function getXpLevel(totalXp: number) {
   return { level: lvl, xpInLevel: totalXp - xpToLevel(lvl), xpNeeded: xpToLevel(lvl + 1) - xpToLevel(lvl) };
 }
 
-const ACH_CATEGORIES: { id: AchCategory; label: string; emoji: string }[] = [
-  { id: "all",         label: "Все",        emoji: "🏆" },
-  { id: "volume",      label: "Объём",      emoji: "📊" },
-  { id: "discipline",  label: "Дисциплина", emoji: "📅" },
-  { id: "performance", label: "Результаты", emoji: "📈" },
-  { id: "deposit",     label: "Депозиты",   emoji: "💰" },
-  { id: "special",     label: "Особые",     emoji: "✨" },
+const ACH_CATEGORIES: { id: AchCategory; label: string; icon: React.ElementType }[] = [
+  { id: "all",         label: "Все",        icon: Trophy        },
+  { id: "volume",      label: "Объём",      icon: BarChart2     },
+  { id: "discipline",  label: "Дисциплина", icon: CalendarDays  },
+  { id: "performance", label: "Результаты", icon: TrendingUp    },
+  { id: "deposit",     label: "Депозиты",   icon: Wallet        },
+  { id: "special",     label: "Особые",     icon: Sparkles      },
 ];
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -816,7 +816,7 @@ export default function AnalyticsPage() {
             return (
               <button key={cat.id} onClick={() => setAchCategory(cat.id)}
                 className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-accent-gold/10 text-accent-gold" : "border-white/[0.07] bg-white/[0.02] text-white/40 hover:text-white/70"}`}>
-                <span>{cat.emoji}</span>
+                <cat.icon className="h-3 w-3 shrink-0" />
                 <span>{cat.label}</span>
                 <span className={`font-mono text-[9px] ${achCategory === cat.id ? "text-accent-gold/60" : "text-white/20"}`}>{count}/{total}</span>
               </button>
