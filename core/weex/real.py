@@ -342,7 +342,33 @@ class RealWeexClient(WeexClient):
         payload = await self._get(
             AFFILIATE_BASE, "/api/v3/agency/getAssert", params, signed=True, affiliate=True
         )
-        return self._data(payload) if payload else {}
+        result = self._data(payload) if payload else {}
+        logger.debug("getAssert keys for uid=%s: %s", user_id, list(result.keys()))
+        return result
+
+    async def get_agency_withdrawals(self, user_id: str, page: int = 1) -> list:
+        """Попытка получить список выводов реферала через несколько WEEX-эндпоинтов."""
+        endpoints = [
+            ("/api/v3/agency/getWithdrawRecord",      {"userId": user_id, "page": page, "pageSize": 100}),
+            ("/api/v3/agency/getUserWithdrawRecord",  {"userId": user_id, "page": page, "pageSize": 100}),
+            ("/api/v3/agency/withdrawRecord",         {"userId": user_id, "page": page, "pageSize": 100}),
+            ("/api/v3/rebate/affiliate/getWithdrawRecord", {"uid": user_id, "page": page, "pageSize": 100}),
+        ]
+        for path, params in endpoints:
+            payload = await self._get(AFFILIATE_BASE, path, params, signed=True, affiliate=True)
+            if payload is None:
+                continue
+            data = self._data(payload)
+            # Проверяем несколько имён поля со списком
+            for key in ("withdrawList", "withdrawalList", "records", "withdraw_list", "_list"):
+                lst = data.get(key)
+                if isinstance(lst, list) and lst:
+                    logger.info("getAgencyWithdrawals: found %d records via %s[%s]", len(lst), path, key)
+                    return lst
+            # Если data — список сам по себе
+            if isinstance(data.get("_list"), list):
+                return data["_list"]
+        return []
 
     async def check_uid_existence(self, uid: str, contact_type: str = "email", contact_value: str = "") -> bool:
         payload = await self._post(

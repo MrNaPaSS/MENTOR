@@ -236,6 +236,7 @@ export default function AnalyticsPage() {
   const [calData, setCalData] = useState<CalendarDay[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<DepositRecord[]>([]);
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
   const [currentBalance, setCurrentBalance] = useState<number | null>(null);
   const [achCategory, setAchCategory] = useState<AchCategory>("all");
@@ -249,6 +250,7 @@ export default function AnalyticsPage() {
     }).catch(() => {});
     api.tradesMe(token, 90).then(r => {
       setRecentDeposits((r.deposits || []).slice(0, 5));
+      setRecentTransactions((r.transactions || r.deposits || []).slice(0, 15));
       setTradeSummary(r.summary);
     }).catch(() => {});
   }, []);
@@ -848,48 +850,82 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Последние депозиты */}
-      {recentDeposits.length > 0 && (
+      {/* Транзакции (депозиты + выводы) */}
+      {recentTransactions.length > 0 && (
         <div className="card space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ArrowLeftRight className="h-4 w-4 text-accent-cyan" />
-              <h2 className="text-base font-bold text-white">Последние пополнения</h2>
+              <h2 className="text-base font-bold text-white">Транзакции</h2>
+              <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-white/40">{recentTransactions.length}</span>
             </div>
-            <Link
-              href="/app/trades"
-              className="flex items-center gap-1 text-xs font-semibold text-accent-cyan hover:text-white"
-            >
-              Вся активность <ArrowRight className="h-3 w-3" />
+            <Link href="/app/trades" className="flex items-center gap-1 text-xs font-semibold text-accent-cyan hover:text-white">
+              Все <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
+
+          {/* Мини-итог */}
+          {(() => {
+            const totalIn  = recentTransactions.filter(t => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
+            const totalOut = recentTransactions.filter(t => t.type === "withdrawal").reduce((s, t) => s + t.amount, 0);
+            return (totalIn > 0 || totalOut > 0) ? (
+              <div className="flex gap-4 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5">
+                <div>
+                  <p className="text-[10px] text-white/30">Пополнено</p>
+                  <p className="font-mono text-sm font-bold text-success">+{fmtDot(totalIn, 2)}</p>
+                </div>
+                <div className="w-px bg-white/[0.06]" />
+                <div>
+                  <p className="text-[10px] text-white/30">Выведено</p>
+                  <p className="font-mono text-sm font-bold text-danger">-{fmtDot(totalOut, 2)}</p>
+                </div>
+                <div className="w-px bg-white/[0.06]" />
+                <div>
+                  <p className="text-[10px] text-white/30">Чистый поток</p>
+                  <p className={`font-mono text-sm font-bold ${totalIn - totalOut >= 0 ? "text-success" : "text-danger"}`}>
+                    {totalIn - totalOut >= 0 ? "+" : ""}{fmtDot(totalIn - totalOut, 2)}
+                  </p>
+                </div>
+              </div>
+            ) : null;
+          })()}
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-white/[0.06] text-xs text-text-muted">
                 <tr className="text-left">
+                  <th className="pb-2 font-medium">Тип</th>
                   <th className="pb-2 font-medium">Дата</th>
                   <th className="pb-2 font-medium">Монета</th>
                   <th className="pb-2 text-right font-medium">Сумма</th>
                 </tr>
               </thead>
               <tbody>
-                {recentDeposits.map((d, i) => (
-                  <tr key={i} className="border-b border-white/[0.04]">
-                    <td className="py-2.5 text-xs text-text-secondary">
-                      {d.date_iso ? new Date(d.date_iso).toLocaleString("ru", {
-                        day: "numeric", month: "short", year: "numeric",
-                      }) : "—"}
-                    </td>
-                    <td className="py-2.5">
-                      <span className="rounded-md bg-success/15 px-1.5 py-0.5 text-[10px] font-bold text-success">
-                        {d.coin}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-right font-mono text-sm font-bold text-white">
-                      +{fmtDot(d.amount, 2)}
-                    </td>
-                  </tr>
-                ))}
+                {recentTransactions.map((tx, i) => {
+                  const isDeposit = tx.type !== "withdrawal";
+                  return (
+                    <tr key={i} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition">
+                      <td className="py-2.5">
+                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${isDeposit ? "bg-success/15 text-success" : "bg-danger/15 text-danger"}`}>
+                          {isDeposit ? "▲ Ввод" : "▼ Вывод"}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-xs text-text-secondary">
+                        {tx.date_iso ? new Date(tx.date_iso).toLocaleString("ru", {
+                          day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+                        }) : "—"}
+                      </td>
+                      <td className="py-2.5">
+                        <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold text-white/60">
+                          {tx.coin}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-right font-mono text-sm font-bold" style={{ color: isDeposit ? "#00D4A0" : "#FF4757" }}>
+                        {isDeposit ? "+" : "-"}{fmtDot(tx.amount, 2)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

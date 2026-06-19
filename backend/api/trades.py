@@ -62,41 +62,52 @@ async def trades_me(
             "commission": _to_float(user_row.get("commission")),
         }
 
-    # Депозиты и выводы из agency assert
-    assets = await weex.get_agency_assert(uid)
+    # Депозиты и выводы — параллельные запросы
+    assets, withdraw_raw = await asyncio.gather(
+        weex.get_agency_assert(uid),
+        weex.get_agency_withdrawals(uid),
+    )
+
+    def _parse_tx(d: dict, tx_type: str) -> dict:
+        amount = _to_float(
+            d.get("amount") or d.get("withdrawAmount") or d.get("depositAmount") or d.get("value") or 0
+        )
+        ts = int(d.get("updateTime") or d.get("createTime") or d.get("time") or 0)
+        return {
+            "type":      tx_type,
+            "amount":    amount,
+            "coin":      d.get("coinName") or d.get("coin") or d.get("currency") or "USDT",
+            "status":    d.get("status") or d.get("state"),
+            "timestamp": ts,
+            "date_iso":  _ts_to_iso(ts),
+            "txid":      d.get("txId") or d.get("id") or d.get("hash"),
+        }
 
     def _parse_tx_list(raw_list: list, tx_type: str) -> list:
-        result = []
-        for d in raw_list:
-            if not isinstance(d, dict):
-                continue
-            # WEEX может возвращать сумму в разных полях
-            amount = _to_float(d.get("amount") or d.get("withdrawAmount") or d.get("value") or 0)
-            result.append({
-                "type":      tx_type,
-                "amount":    amount,
-                "coin":      d.get("coinName") or d.get("coin", "USDT"),
-                "status":    d.get("status") or d.get("state"),
-                "timestamp": int(d.get("updateTime") or d.get("createTime") or 0),
-                "date_iso":  _ts_to_iso(d.get("updateTime") or d.get("createTime")),
-                "txid":      d.get("txId") or d.get("hash"),
-            })
-        return result
+        return [_parse_tx(d, tx_type) for d in raw_list if isinstance(d, dict)]
 
-    # getAssert возвращает только depositList (withdrawalList в API не существует).
-    # Суммарные выводы есть в summary.withdrawal_total из getChannelUserTradeAndAsset.
-    deposits = _parse_tx_list(assets.get("depositList", []), "deposit")
+    # getAssert может вернуть depositList и/или withdrawalList
+    deposits    = _parse_tx_list(assets.get("depositList",   []), "deposit")
+    # Выводы: сначала из отдельного эндпоинта, иначе из getAssert
+    withdraw_from_assert = (
+        assets.get("withdrawalList") or assets.get("withdrawList") or
+        assets.get("withdrawal_list") or []
+    )
+    withdrawals = _parse_tx_list(withdraw_raw or withdraw_from_assert, "withdrawal")
+
+    # Объединяем и сортируем по времени (новые сверху)
+    transactions = sorted(deposits + withdrawals, key=lambda x: x["timestamp"], reverse=True)
 
     logger.info(
-        "Trades uid=%s summary=%s deposits=%d assert_keys=%s",
-        uid, summary, len(deposits), list(assets.keys()),
+        "Trades uid=%s deposits=%d withdrawals=%d assert_keys=%s",
+        uid, len(deposits), len(withdrawals), list(assets.keys()),
     )
 
     return {
         "trades":       [],
         "summary":      summary,
         "deposits":     deposits,
-        "withdrawals":  [],
-        "transactions": deposits,
+        "withdrawals":  withdrawals,
+        "transactions": transactions,
         "needs_uid":    False,
     }
