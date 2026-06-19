@@ -35,7 +35,7 @@ def _item_out(it: ShopItem) -> ShopItemOut:
     return ShopItemOut(
         id=it.id, title=it.title, description=it.description, price=it.price,
         category=it.category, section=it.section, icon=it.icon, link_url=it.link_url,
-        requires_tv=it.requires_tv, is_active=it.is_active, sort_order=it.sort_order,
+        image_url=it.image_url, requires_tv=it.requires_tv, is_active=it.is_active, sort_order=it.sort_order,
     )
 
 
@@ -166,7 +166,7 @@ def admin_create_item(body: ShopItemIn, session=Depends(get_session)):
     item = ShopItem(
         title=body.title, description=body.description, price=body.price,
         category=body.category, section=body.section, icon=body.icon,
-        link_url=body.link_url, requires_tv=body.requires_tv,
+        link_url=body.link_url, image_url=body.image_url, requires_tv=body.requires_tv,
         is_active=body.is_active, sort_order=body.sort_order,
     )
     session.add(item)

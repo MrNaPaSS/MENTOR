@@ -88,7 +88,12 @@ export default function ShopPage() {
           {shopItems.map((it) => {
             const affordable = (balance ?? 0) >= it.price;
             return (
-              <div key={it.id} className="flex flex-col rounded-2xl border border-border bg-bg-card/40 p-5 transition hover:border-accent-gold/30">
+              <div key={it.id} className="flex flex-col overflow-hidden rounded-2xl border border-border bg-bg-card/40 transition hover:border-accent-gold/30">
+                {it.image_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={it.image_url} alt={it.title} className="h-36 w-full object-cover" />
+                )}
+                <div className="flex flex-1 flex-col p-5">
                 <div className="flex items-start justify-between">
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-gold/10 text-accent-gold">
                     <ShopIcon name={it.icon} className="h-5 w-5" />
@@ -117,6 +122,7 @@ export default function ShopPage() {
                 >
                   {affordable ? "Купить" : "Недостаточно монет"}
                 </button>
+                </div>
               </div>
             );
           })}
@@ -129,7 +135,12 @@ export default function ShopPage() {
         <h2 className="text-sm font-bold uppercase tracking-wider text-text-muted">Наш софт</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {softwareItems.map((it) => (
-            <div key={it.id} className="flex flex-col rounded-2xl border border-border bg-bg-card/40 p-5 transition hover:border-accent-cyan/30">
+            <div key={it.id} className="flex flex-col overflow-hidden rounded-2xl border border-border bg-bg-card/40 transition hover:border-accent-cyan/30">
+              {it.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={it.image_url} alt={it.title} className="h-36 w-full object-cover" />
+              )}
+              <div className="flex flex-1 flex-col p-5">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-cyan/10 text-accent-cyan">
                 <ShopIcon name={it.icon} className="h-5 w-5" />
               </div>
@@ -149,6 +160,7 @@ export default function ShopPage() {
               ) : (
                 <span className="mt-4 rounded-xl border border-border px-4 py-2.5 text-center text-sm text-text-muted">Скоро</span>
               )}
+              </div>
             </div>
           ))}
         </div>

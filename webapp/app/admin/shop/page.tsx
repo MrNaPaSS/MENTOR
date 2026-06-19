@@ -10,7 +10,7 @@ type Tab = "items" | "orders";
 
 const EMPTY: ShopItemInput = {
   title: "", description: "", price: 0, category: "indicator",
-  section: "shop", icon: "Gift", link_url: "", requires_tv: false, is_active: true, sort_order: 0,
+  section: "shop", icon: "Gift", link_url: "", image_url: "", requires_tv: false, is_active: true, sort_order: 0,
 };
 
 export default function AdminShop() {
@@ -230,8 +230,8 @@ function ItemEditor({ token, item, onClose, onSaved }: {
 }) {
   const [form, setForm] = useState<ShopItemInput>(item ? {
     title: item.title, description: item.description, price: item.price, category: item.category,
-    section: item.section, icon: item.icon, link_url: item.link_url, requires_tv: item.requires_tv,
-    is_active: item.is_active, sort_order: item.sort_order,
+    section: item.section, icon: item.icon, link_url: item.link_url, image_url: item.image_url,
+    requires_tv: item.requires_tv, is_active: item.is_active, sort_order: item.sort_order,
   } : EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -290,6 +290,13 @@ function ItemEditor({ token, item, onClose, onSaved }: {
           <Field label="Ссылка (видна в карточке)">
             <input value={form.link_url} onChange={(e) => set("link_url", e.target.value)} className="input" placeholder="https://tradingview.com/…" />
           </Field>
+          <Field label="Картинка / скрин (URL — показывается в карточке)">
+            <input value={form.image_url} onChange={(e) => set("image_url", e.target.value)} className="input" placeholder="https://…/preview.png" />
+          </Field>
+          {form.image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={form.image_url} alt="превью" className="h-32 w-full rounded-xl border border-border object-cover" />
+          )}
           <label className="flex items-center gap-2 text-sm text-text-secondary">
             <input type="checkbox" checked={form.requires_tv} onChange={(e) => set("requires_tv", e.target.checked)} className="h-4 w-4 accent-accent-gold" />
             Требовать ник TradingView при покупке

@@ -428,6 +428,7 @@ export interface ShopItem {
   section: string;   // "shop" | "software"
   icon: string;
   link_url: string;
+  image_url: string;
   requires_tv: boolean;
   is_active: boolean;
   sort_order: number;
@@ -441,6 +442,7 @@ export interface ShopItemInput {
   section?: string;
   icon?: string;
   link_url?: string;
+  image_url?: string;
   requires_tv?: boolean;
   is_active?: boolean;
   sort_order?: number;

@@ -53,6 +53,7 @@ def create_all() -> None:
     Base.metadata.create_all(engine)
     _migrate_add_columns(engine)
     _seed_shop_items(engine)
+    _apply_shop_catalog_v2(engine)
 
 
 def _migrate_add_columns(engine) -> None:
@@ -76,23 +77,26 @@ def _migrate_add_columns(engine) -> None:
                     "UPDATE shop_items SET requires_tv = 1 WHERE category = 'indicator' AND section = 'shop'"
                 ))
                 conn.commit()
+            if "image_url" not in existing_shop_cols:
+                conn.execute(text("ALTER TABLE shop_items ADD COLUMN image_url VARCHAR(500) DEFAULT '' NOT NULL"))
+                conn.commit()
 
 
 # Стартовый каталог магазина — вставляется один раз, если таблица пуста.
 # Кортеж: (title, description, price, category, section, icon, link_url, requires_tv, sort_order)
+# Цены: 1 NMNH = $0.10 (индикатор/мес = $100 = 1000 NMNH, менторство = $1000 = 10000 NMNH).
 _DEFAULT_SHOP_ITEMS = [
     # ── Покупка за NMNH (подписки на индикатор требуют ник TradingView) ──
-    ("Подписка на индикатор — 7 дней", "Доступ к приватному индикатору NMNH на TradingView на 7 дней.", 200, "indicator", "shop", "TrendingUp", "", True, 10),
-    ("Подписка на индикатор — 14 дней", "Доступ к приватному индикатору NMNH на 14 дней.", 350, "indicator", "shop", "TrendingUp", "", True, 20),
-    ("Подписка на индикатор — 1 месяц", "Доступ к приватному индикатору NMNH на 30 дней. Максимальная выгода.", 600, "indicator", "shop", "TrendingUp", "", True, 30),
-    ("Индивидуальное менторство", "Персональный разбор, стратегия и сопровождение 1-на-1 с ментором.", 3000, "mentorship", "shop", "GraduationCap", "", False, 40),
+    ("Подписка на индикатор — 7 дней", "Доступ к приватному индикатору NMNH на TradingView на 7 дней.", 300, "indicator", "shop", "TrendingUp", "", True, 10),
+    ("Подписка на индикатор — 14 дней", "Доступ к приватному индикатору NMNH на 14 дней.", 550, "indicator", "shop", "TrendingUp", "", True, 20),
+    ("Подписка на индикатор — 1 месяц", "Доступ к приватному индикатору NMNH на 30 дней. Максимальная выгода.", 1000, "indicator", "shop", "TrendingUp", "", True, 30),
+    ("Индивидуальное менторство", "Персональный разбор, стратегия и сопровождение 1-на-1 с ментором.", 10000, "mentorship", "shop", "GraduationCap", "", False, 40),
 
     # ── Наш софт (витрина, ссылки добавляются из админки) ──
     ("Индикатор #1 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 100),
     ("Индикатор #2 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 110),
     ("Индикатор #3 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 120),
-    ("Академия NMNH", "Обучение, торговые стратегии и AI-агент в одной платформе.", 0, "academy", "software", "GraduationCap", "", False, 130),
-    ("Библиотека трейдера", "База знаний, материалы и инструменты трейдера.", 0, "library", "software", "BookOpen", "", False, 140),
+    ("Академия NMNH", "Обучение, торговые стратегии, AI-агент и библиотека трейдера в одной платформе.", 0, "academy", "software", "GraduationCap", "", False, 130),
     ("Алерты на TradingView", "Готовые алерты на TradingView от NMNH.", 0, "alerts", "software", "BellRing", "", False, 150),
     ("AI-агент по форексу", "AI-агент для анализа форекс-рынка.", 0, "ai", "software", "Bot", "", False, 160),
     ("Веб-расширение FOREX для Chrome", "Расширение Chrome для торговли на форексе.", 0, "extension", "software", "Chrome", "", False, 170),
@@ -119,4 +123,47 @@ def _seed_shop_items(engine) -> None:
                      section=section, icon=icon, link_url=link, requires_tv=req_tv, sort_order=order)
             for title, desc, price, cat, section, icon, link, req_tv, order in _DEFAULT_SHOP_ITEMS
         ])
+        session.commit()
+
+
+def _apply_shop_catalog_v2(engine) -> None:
+    """Одноразовая коррекция уже засеянного каталога (цены 1 NMNH = $0.10, библиотека → в академию).
+
+    Гейт через settings-флаг ``shop_catalog_version``, поэтому выполняется один раз и не
+    затирает товары при последующих рестартах. Для свежей БД сидинг уже даёт v2-цены —
+    но флаг всё равно выставляется, чтобы коррекция не запускалась.
+    """
+    from sqlalchemy import inspect, select, update, delete
+    from sqlalchemy.orm import Session
+    from core.models import ShopItem, SettingRow
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names() or "settings" not in inspector.get_table_names():
+        return
+
+    with Session(engine) as session:
+        flag = session.get(SettingRow, "shop_catalog_version")
+        if flag and (flag.value or "").isdigit() and int(flag.value) >= 2:
+            return
+
+        # Новые цены (1 NMNH = $0.10)
+        new_prices = {
+            "Подписка на индикатор — 7 дней": 300,
+            "Подписка на индикатор — 14 дней": 550,
+            "Подписка на индикатор — 1 месяц": 1000,
+            "Индивидуальное менторство": 10000,
+        }
+        for title, price in new_prices.items():
+            session.execute(update(ShopItem).where(ShopItem.title == title).values(price=price))
+
+        # Библиотека трейдера теперь часть Академии, а не отдельный товар
+        session.execute(update(ShopItem).where(ShopItem.title == "Академия NMNH").values(
+            description="Обучение, торговые стратегии, AI-агент и библиотека трейдера в одной платформе."
+        ))
+        session.execute(delete(ShopItem).where(ShopItem.title == "Библиотека трейдера"))
+
+        if flag:
+            flag.value = "2"
+        else:
+            session.add(SettingRow(key="shop_catalog_version", value="2"))
         session.commit()
