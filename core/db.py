@@ -68,6 +68,12 @@ def _migrate_add_columns(engine) -> None:
             conn.execute(text("ALTER TABLE students ADD COLUMN coins INTEGER DEFAULT 0 NOT NULL"))
             conn.commit()
 
+        if "broadcasts" in inspector.get_table_names():
+            existing_broadcast_cols = {c["name"] for c in inspector.get_columns("broadcasts")}
+            if "symbol" not in existing_broadcast_cols:
+                conn.execute(text("ALTER TABLE broadcasts ADD COLUMN symbol VARCHAR(32)"))
+                conn.commit()
+
         if "shop_items" in inspector.get_table_names():
             existing_shop_cols = {c["name"] for c in inspector.get_columns("shop_items")}
             if "requires_tv" not in existing_shop_cols:
