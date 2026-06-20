@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { api, API_URL, BroadcastItem } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { ExternalLink, TrendingUp } from "lucide-react";
+import { ExternalLink, TrendingUp, ImageIcon, Radio } from "lucide-react";
+import SignalsFeed from "@/components/signals/SignalsFeed";
+
+type Tab = "analysis" | "signals";
 
 function chartImgUrl(url: string): string | null {
   if (url.startsWith("/uploads/")) return `${API_URL}${url}`;
@@ -120,7 +123,7 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
   );
 }
 
-export default function AnalysisPage() {
+function AnalysisFeed() {
   const [items,  setItems]  = useState<BroadcastItem[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -134,17 +137,7 @@ export default function AnalysisPage() {
   }, []);
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold text-white">Анализы</h1>
-          <p className="text-sm text-text-muted">Разборы рынка от ментора</p>
-        </div>
-        {loaded && items.length > 0 && (
-          <span className="badge-muted">{items.length}</span>
-        )}
-      </div>
-
+    <>
       {!loaded ? (
         <div className="space-y-4 xl:max-w-2xl">
           {[0, 1, 2].map((i) => (
@@ -170,6 +163,48 @@ export default function AnalysisPage() {
           ))}
         </div>
       )}
+    </>
+  );
+}
+
+const TABS: { key: Tab; label: string; icon: typeof ImageIcon }[] = [
+  { key: "analysis", label: "Анализы", icon: ImageIcon },
+  { key: "signals",  label: "Сигналы", icon: Radio },
+];
+
+export default function AnalysisPage() {
+  const [tab, setTab] = useState<Tab>("analysis");
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-extrabold text-white">Анализы</h1>
+        <p className="text-sm text-text-muted">
+          {tab === "analysis" ? "Разборы рынка от ментора" : "Сигналы, рассчитанные под ваш депозит"}
+        </p>
+      </div>
+
+      {/* Переключатель вкладок */}
+      <div className="flex gap-1 rounded-xl border border-border bg-bg-panel p-1 w-fit">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
+                active ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "analysis" ? <AnalysisFeed /> : <SignalsFeed />}
     </div>
   );
 }
