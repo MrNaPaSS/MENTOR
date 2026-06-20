@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { TrendingUp, TrendingDown, AreaChart, Layers, ArrowRight } from "lucide-react";
+import { TrendingUp, TrendingDown, CandlestickChart, Layers, ExternalLink } from "lucide-react";
 import { SignalOut } from "@/lib/api";
-import { fmtUsd, isLong, modeLabel } from "@/lib/format";
-import TradingChartWidget from "@/components/market/TradingChartWidget";
+import { fmtUsd, isLong } from "@/lib/format";
+import TradingChart from "@/components/market/TradingChart";
 import OrderBook from "@/components/market/OrderBook";
-import Link from "next/link";
 
 function tvImageUrl(url: string): string | null {
   const m = url.match(/tradingview\.com\/x\/([A-Za-z0-9]+)/);
@@ -171,7 +170,6 @@ interface Props {
   currentPrice?: number;
   showChart?: boolean;
   showBook?: boolean;
-  linkToDetail?: boolean;
 }
 
 export default function SignalCard({
@@ -180,7 +178,6 @@ export default function SignalCard({
   currentPrice,
   showChart = false,
   showBook = false,
-  linkToDetail = true,
 }: Props) {
   const [chartOpen, setChartOpen] = useState(showChart);
   const [bookOpen, setBookOpen] = useState(showBook);
@@ -215,7 +212,7 @@ export default function SignalCard({
           <div className="flex flex-col leading-tight">
             <span className="font-mono text-[17px] font-extrabold tracking-tight text-white">{s.symbol}</span>
             <span className="text-[9px] font-semibold uppercase tracking-wider text-white/30">
-              {modeLabel(s.target_audience)} · ×{s.leverage}
+              Плечо ×{s.leverage}
             </span>
           </div>
         </div>
@@ -277,15 +274,15 @@ export default function SignalCard({
 
         {/* Actions */}
         <div className="flex items-center gap-2 pt-0.5">
-          {linkToDetail && (
-            <Link
-              href={`/app/signals/detail?id=${s.id}`}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent-cyan/[0.08] py-2.5 text-[12px] font-bold tracking-wide text-accent-cyan ring-1 ring-inset ring-accent-cyan/20 transition-all duration-200 hover:bg-accent-cyan/[0.14] hover:ring-accent-cyan/40"
-            >
-              Детали
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          )}
+          <a
+            href={`https://www.weex.com/ru/futures/${s.symbol}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent-cyan py-2.5 text-[12px] font-bold tracking-wide text-bg-deep transition-all duration-200 hover:brightness-110"
+          >
+            Войти в сделку
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
           <button
             onClick={() => setChartOpen(!chartOpen)}
             title="График"
@@ -295,7 +292,7 @@ export default function SignalCard({
                 : "bg-white/[0.02] text-white/40 ring-white/[0.07] hover:text-white/70 hover:ring-white/[0.14]"
             }`}
           >
-            <AreaChart className="h-3.5 w-3.5" />
+            <CandlestickChart className="h-3.5 w-3.5" />
             График
           </button>
           <button
@@ -312,10 +309,10 @@ export default function SignalCard({
           </button>
         </div>
 
-        {/* Expandable chart */}
+        {/* Expandable chart — свечной график той же пары */}
         {chartOpen && (
           <div className="overflow-hidden rounded-xl border border-white/[0.08]">
-            <TradingChartWidget symbol={s.symbol} height={240} compact />
+            <TradingChart symbol={s.symbol} interval="15" height={360} chartStyle="1" showToolbar />
           </div>
         )}
 

@@ -7,7 +7,6 @@ import SignalCard from "@/components/signals/SignalCard";
 import { Search, Wallet, Radio } from "lucide-react";
 
 type StatusKey = "all" | "active" | "closed";
-type ModeKey = "all" | "moderate" | "turbo";
 
 interface SegOption<T extends string> {
   key: T;
@@ -19,12 +18,6 @@ const STATUS_OPTIONS: SegOption<StatusKey>[] = [
   { key: "all", label: "Все" },
   { key: "active", label: "Активные", dot: "bg-success shadow-[0_0_6px] shadow-success/60" },
   { key: "closed", label: "Закрытые", dot: "bg-text-muted" },
-];
-
-const MODE_OPTIONS: SegOption<ModeKey>[] = [
-  { key: "all", label: "Все режимы" },
-  { key: "moderate", label: "Умеренный", dot: "bg-accent-cyan" },
-  { key: "turbo", label: "Турбо", dot: "bg-accent-gold" },
 ];
 
 function Segmented<T extends string>({
@@ -67,7 +60,6 @@ export default function SignalsFeed() {
   const [signals, setSignals] = useState<SignalOut[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<StatusKey>("all");
-  const [mode, setMode] = useState<ModeKey>("all");
   const [q, setQ] = useState("");
   const [balance, setBalance] = useState(1000);
 
@@ -86,11 +78,10 @@ export default function SignalsFeed() {
     () =>
       signals.filter((s) => {
         if (filter !== "all" && s.status !== filter) return false;
-        if (mode !== "all" && s.target_audience !== mode) return false;
         if (q && !s.symbol.toLowerCase().includes(q.toLowerCase())) return false;
         return true;
       }),
-    [signals, filter, mode, q]
+    [signals, filter, q]
   );
 
   const activeCount = useMemo(() => signals.filter((s) => s.status === "active").length, [signals]);
@@ -103,7 +94,6 @@ export default function SignalsFeed() {
           {/* Фильтры */}
           <div className="flex flex-wrap items-center gap-2">
             <Segmented options={STATUS_OPTIONS} value={filter} onChange={setFilter} />
-            <Segmented options={MODE_OPTIONS} value={mode} onChange={setMode} />
           </div>
 
           {/* Депозит для расчёта */}
