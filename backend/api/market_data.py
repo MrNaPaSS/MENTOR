@@ -30,6 +30,7 @@ TICKER_SYMBOLS = [
 FUNDING_SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
     "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "DOTUSDT",
+    "LTCUSDT", "TRXUSDT", "TONUSDT", "SUIUSDT", "NEARUSDT",
 ]
 
 _session: aiohttp.ClientSession | None = None

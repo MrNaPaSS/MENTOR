@@ -118,7 +118,7 @@ const DEMO_ETF = {
 
 const SKIP = { headers:{ "ngrok-skip-browser-warning":"1" } };
 const DERIV_SYMS = ["BTC","ETH","SOL","XRP","BNB"];
-const FR_SYMS    = ["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT","LINKUSDT","DOTUSDT"];
+const FR_SYMS    = ["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT","LINKUSDT","DOTUSDT","LTCUSDT","TRXUSDT","TONUSDT","SUIUSDT","NEARUSDT"];
 const ALT_ME_API = "https://api.alternative.me/fng/?limit=1";
 const COINGECKO_API = "https://api.coingecko.com/api/v3";
 
