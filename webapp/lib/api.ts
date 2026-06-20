@@ -234,6 +234,13 @@ export const api = {
   activeSignals: () => req<SignalOut[]>("/api/signals/active"),
   signal: (id: number | string) => req<SignalOut>(`/api/signals/${id}`),
 
+  // ── Внешние рыночные данные (CoinGecko / mempool / Frankfurter) ──
+  marketGlobal: () => req<GlobalMarket>("/api/market/global"),
+  marketTrending: () => req<{ coins: TrendingCoin[] }>("/api/market/trending"),
+  marketOnchain: () => req<OnChainStats>("/api/market/onchain"),
+  marketForex: (base = "USD", symbols = "EUR,GBP,JPY,CHF,CAD,AUD") =>
+    req<ForexRates>(`/api/market/forex?base=${base}&symbols=${symbols}`),
+
   // ── Auth ──
   loginByUid: (weex_uid: string) =>
     req<{ access_token: string; refresh_token: string }>("/api/auth/login-by-uid", {
@@ -394,6 +401,39 @@ export interface CommissionPoint {
   commission: string;
   spot: string;
   futures: string;
+}
+
+export interface GlobalMarket {
+  total_market_cap_usd: number;
+  total_volume_usd: number;
+  btc_dominance: number;
+  market_cap_change_24h: number;
+  active_cryptos: number;
+  source: string;
+}
+
+export interface TrendingCoin {
+  id: string;
+  name: string;
+  symbol: string;
+  rank: number | null;
+  thumb: string;
+  price_btc: number;
+}
+
+export interface OnChainStats {
+  fees: { fastest: number; half_hour: number; hour: number; economy: number };
+  hash_rate_ehs: number;
+  tx_count_24h: number;
+  market_price_usd: number;
+  difficulty_change_pct: number;
+  retarget_progress_pct: number;
+}
+
+export interface ForexRates {
+  base: string;
+  date: string;
+  rates: Record<string, number>;
 }
 
 export interface BroadcastItem {
