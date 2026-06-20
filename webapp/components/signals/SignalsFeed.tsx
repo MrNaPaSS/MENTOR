@@ -4,19 +4,60 @@ import { useEffect, useMemo, useState } from "react";
 import { api, SignalOut } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import SignalCard from "@/components/signals/SignalCard";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, Wallet, Radio } from "lucide-react";
 
-const FILTERS = [
+type StatusKey = "all" | "active" | "closed";
+type ModeKey = "all" | "moderate" | "turbo";
+
+interface SegOption<T extends string> {
+  key: T;
+  label: string;
+  dot?: string;
+}
+
+const STATUS_OPTIONS: SegOption<StatusKey>[] = [
   { key: "all", label: "Все" },
-  { key: "active", label: "🟢 Активные" },
-  { key: "closed", label: "⚫ Закрытые" },
-] as const;
+  { key: "active", label: "Активные", dot: "bg-success shadow-[0_0_6px] shadow-success/60" },
+  { key: "closed", label: "Закрытые", dot: "bg-text-muted" },
+];
 
-const MODES = [
+const MODE_OPTIONS: SegOption<ModeKey>[] = [
   { key: "all", label: "Все режимы" },
-  { key: "moderate", label: "📊 Умеренный" },
-  { key: "turbo", label: "⚡ Турбо" },
-] as const;
+  { key: "moderate", label: "Умеренный", dot: "bg-accent-cyan" },
+  { key: "turbo", label: "Турбо", dot: "bg-accent-gold" },
+];
+
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: SegOption<T>[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex gap-0.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-1">
+      {options.map((o) => {
+        const active = value === o.key;
+        return (
+          <button
+            key={o.key}
+            onClick={() => onChange(o.key)}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
+              active
+                ? "bg-white/[0.07] text-white ring-1 ring-inset ring-white/[0.08]"
+                : "text-text-muted hover:text-white/80"
+            }`}
+          >
+            {o.dot && <span className={`h-1.5 w-1.5 rounded-full ${o.dot}`} />}
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * Лента сигналов с расчётом позиции под депозит пользователя.
@@ -25,89 +66,118 @@ const MODES = [
 export default function SignalsFeed() {
   const [signals, setSignals] = useState<SignalOut[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [filter, setFilter] = useState<"all" | "active" | "closed">("all");
-  const [mode, setMode] = useState<"all" | "moderate" | "turbo">("all");
+  const [filter, setFilter] = useState<StatusKey>("all");
+  const [mode, setMode] = useState<ModeKey>("all");
   const [q, setQ] = useState("");
   const [balance, setBalance] = useState(1000);
 
   useEffect(() => {
     api.signals().then(setSignals).catch(() => setSignals([])).finally(() => setLoaded(true));
     const token = getAccessToken();
-    if (token) api.profile(token).then(p => { if (p.balance_usdt) setBalance(parseFloat(p.balance_usdt)); }).catch(() => {});
+    if (token)
+      api.profile(token)
+        .then((p) => {
+          if (p.balance_usdt) setBalance(Math.round(parseFloat(p.balance_usdt)));
+        })
+        .catch(() => {});
   }, []);
 
-  const visible = useMemo(() => signals.filter((s) => {
-    if (filter !== "all" && s.status !== filter) return false;
-    if (mode !== "all" && s.target_audience !== mode) return false;
-    if (q && !s.symbol.toLowerCase().includes(q.toLowerCase())) return false;
-    return true;
-  }), [signals, filter, mode, q]);
+  const visible = useMemo(
+    () =>
+      signals.filter((s) => {
+        if (filter !== "all" && s.status !== filter) return false;
+        if (mode !== "all" && s.target_audience !== mode) return false;
+        if (q && !s.symbol.toLowerCase().includes(q.toLowerCase())) return false;
+        return true;
+      }),
+    [signals, filter, mode, q]
+  );
+
+  const activeCount = useMemo(() => signals.filter((s) => s.status === "active").length, [signals]);
 
   return (
     <div className="space-y-5">
-      {/* Фильтры */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Статус */}
-        <div className="flex gap-1 rounded-xl border border-border bg-bg-panel p-1">
-          {FILTERS.map((f) => (
-            <button key={f.key} onClick={() => setFilter(f.key)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                filter === f.key ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"
-              }`}>{f.label}</button>
-          ))}
-        </div>
+      {/* ── Панель управления ───────────────────────────────────── */}
+      <div className="rounded-2xl border border-white/[0.06] bg-bg-panel/40 p-3 sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          {/* Фильтры */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented options={STATUS_OPTIONS} value={filter} onChange={setFilter} />
+            <Segmented options={MODE_OPTIONS} value={mode} onChange={setMode} />
+          </div>
 
-        {/* Режим */}
-        <div className="flex gap-1 rounded-xl border border-border bg-bg-panel p-1">
-          {MODES.map((m) => (
-            <button key={m.key} onClick={() => setMode(m.key)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                mode === m.key ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"
-              }`}>{m.label}</button>
-          ))}
+          {/* Депозит для расчёта */}
+          <div className="flex items-center gap-2.5 rounded-xl border border-accent-cyan/20 bg-accent-cyan/[0.05] px-3.5 py-2">
+            <Wallet className="h-4 w-4 shrink-0 text-accent-cyan/70" />
+            <div className="flex flex-col leading-tight">
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-text-muted">
+                Депозит для расчёта
+              </span>
+              <div className="flex items-baseline gap-1">
+                <span className="font-mono text-sm text-accent-cyan/60">$</span>
+                <input
+                  inputMode="numeric"
+                  value={balance.toLocaleString("en-US")}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value.replace(/\D/g, ""), 10);
+                    setBalance(Number.isNaN(n) ? 0 : n);
+                  }}
+                  className="w-24 bg-transparent font-mono text-sm font-bold text-white outline-none tabular"
+                />
+                <span className="text-[10px] font-medium text-text-muted">USDT</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Поиск */}
-        <div className="relative flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-          <input className="input pl-9" placeholder="Поиск по паре (BTC, ETH...)"
-            value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-
-        {/* Баланс для расчёта */}
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-bg-panel px-3 py-2">
-          <SlidersHorizontal className="h-3.5 w-3.5 text-text-muted" />
-          <span className="text-[10px] text-text-muted">Депозит</span>
+        <div className="relative mt-3">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
           <input
-            type="number"
-            value={balance}
-            onChange={(e) => setBalance(parseFloat(e.target.value) || 1000)}
-            className="w-20 bg-transparent font-mono text-xs text-white outline-none tabular"
+            className="w-full rounded-xl border border-white/[0.06] bg-white/[0.02] py-2.5 pl-10 pr-3 text-sm text-white placeholder:text-text-muted outline-none transition focus:border-accent-cyan/40 focus:bg-white/[0.03]"
+            placeholder="Поиск по паре — BTC, ETH, SOL…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
           />
-          <span className="text-[10px] text-text-muted">USDT</span>
         </div>
       </div>
 
-      {/* Список */}
+      {/* ── Список ──────────────────────────────────────────────── */}
       {!loaded ? (
         <div className="grid gap-4 xl:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="card">
-              <div className="skeleton h-48 w-full" />
+            <div key={i} className="overflow-hidden rounded-2xl border border-white/[0.06] bg-bg-panel">
+              <div className="skeleton h-64 w-full" />
             </div>
           ))}
         </div>
       ) : visible.length === 0 ? (
-        <div className="card grid place-items-center py-16 text-center text-text-muted">
-          <Search className="mb-3 h-10 w-10 opacity-30" />
-          <p>Сигналов не найдено</p>
+        <div className="grid place-items-center rounded-2xl border border-white/[0.06] bg-bg-panel py-20 text-center text-text-muted">
+          <Radio className="mb-3 h-10 w-10 opacity-20" />
+          <p className="font-medium">Сигналов не найдено</p>
+          <p className="mt-1 text-sm opacity-60">
+            {signals.length === 0 ? "Ментор ещё не опубликовал сигналы" : "Попробуйте изменить фильтры"}
+          </p>
         </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {visible.map((s) => (
-            <SignalCard key={s.id} signal={s} balance={balance} />
-          ))}
-        </div>
+        <>
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs text-text-muted">
+              Показано <span className="font-semibold text-white">{visible.length}</span>
+              {activeCount > 0 && (
+                <>
+                  {" · "}
+                  <span className="text-success">{activeCount} активных</span>
+                </>
+              )}
+            </span>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            {visible.map((s) => (
+              <SignalCard key={s.id} signal={s} balance={balance} />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

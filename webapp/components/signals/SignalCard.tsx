@@ -1,6 +1,12 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
+import { TrendingUp, TrendingDown, AreaChart, Layers, ArrowRight } from "lucide-react";
+import { SignalOut } from "@/lib/api";
+import { fmtUsd, isLong, modeLabel } from "@/lib/format";
+import TradingChartWidget from "@/components/market/TradingChartWidget";
+import OrderBook from "@/components/market/OrderBook";
+import Link from "next/link";
 
 function tvImageUrl(url: string): string | null {
   const m = url.match(/tradingview\.com\/x\/([A-Za-z0-9]+)/);
@@ -8,13 +14,6 @@ function tvImageUrl(url: string): string | null {
   const id = m[1];
   return `https://s3.tradingview.com/snapshots/${id[0].toLowerCase()}/${id}.png`;
 }
-
-import { TrendingUp, TrendingDown, AreaChart, Layers, ExternalLink } from "lucide-react";
-import { SignalOut } from "@/lib/api";
-import { fmtUsd, isLong, modeLabel } from "@/lib/format";
-import TradingChartWidget from "@/components/market/TradingChartWidget";
-import OrderBook from "@/components/market/OrderBook";
-import Link from "next/link";
 
 interface CalcResult {
   margin: number;
@@ -52,87 +51,116 @@ function calcPosition(signal: SignalOut, balance: number): CalcResult | null {
     tp1_profit: position * tp1Dist,
     tp2_profit: position * tp2Dist,
     tp3_profit: position * tp3Dist,
-    rr1: tp1Dist / slDist,
+    rr1: slDist ? tp1Dist / slDist : 0,
   };
 }
 
+/** Горизонтальная шкала: SL → Entry → TP с подписями под маркерами. */
 function PriceTrack({ signal, currentPrice }: { signal: SignalOut; currentPrice?: number }) {
   const entry = parseFloat(signal.entry_price);
   const sl = parseFloat(signal.stop_loss || "0");
   const tp3val = parseFloat(signal.tp3 || signal.tp2 || signal.tp1 || "0");
   if (!sl || !tp3val) return null;
 
-  const min = Math.min(sl, entry, tp3val) * 0.9995;
-  const max = Math.max(sl, entry, tp3val) * 1.0005;
+  const min = Math.min(sl, entry, tp3val) * 0.9992;
+  const max = Math.max(sl, entry, tp3val) * 1.0008;
   const range = max - min;
-  const pct = (v: number) => ((v - min) / range) * 100;
+  const pct = (v: number) => Math.max(0, Math.min(100, ((v - min) / range) * 100));
 
   const cur = currentPrice || entry;
-  const curPct = Math.max(0, Math.min(100, pct(cur)));
   const longDir = isLong(signal.direction);
   const curVsEntry = ((cur - entry) / entry) * 100;
 
   const slPct = pct(sl);
   const entryPct = pct(entry);
   const tp3Pct = pct(tp3val);
+  const curPct = pct(cur);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5 pt-1">
       {/* Track */}
-      <div className="relative h-7 rounded-xl overflow-hidden bg-white/[0.03] border border-white/[0.06]">
+      <div className="relative h-2 rounded-full bg-white/[0.04]">
         {/* Loss zone */}
         {longDir ? (
-          <div className="absolute inset-y-0 left-0 bg-danger/[0.15]" style={{ width: `${entryPct}%` }} />
+          <div className="absolute inset-y-0 left-0 rounded-l-full bg-danger/25" style={{ width: `${entryPct}%` }} />
         ) : (
-          <div className="absolute inset-y-0 right-0 bg-danger/[0.15]" style={{ width: `${100 - entryPct}%` }} />
+          <div className="absolute inset-y-0 right-0 rounded-r-full bg-danger/25" style={{ width: `${100 - entryPct}%` }} />
         )}
         {/* Profit zone */}
         {longDir ? (
-          <div className="absolute inset-y-0 bg-success/[0.12]" style={{ left: `${entryPct}%`, width: `${tp3Pct - entryPct}%` }} />
+          <div className="absolute inset-y-0 bg-gradient-to-r from-success/30 to-accent-cyan/35" style={{ left: `${entryPct}%`, width: `${tp3Pct - entryPct}%` }} />
         ) : (
-          <div className="absolute inset-y-0 bg-success/[0.12]" style={{ left: `${tp3Pct}%`, width: `${entryPct - tp3Pct}%` }} />
+          <div className="absolute inset-y-0 bg-gradient-to-l from-success/30 to-accent-cyan/35" style={{ left: `${tp3Pct}%`, width: `${entryPct - tp3Pct}%` }} />
         )}
 
-        {/* SL vertical */}
-        <div className="absolute inset-y-0 w-[2px] bg-danger/60" style={{ left: `${slPct}%` }} />
-        {/* Entry vertical */}
-        <div className="absolute inset-y-0 w-[2px] bg-white/50" style={{ left: `${entryPct}%` }} />
-        {/* TP verticals */}
-        {signal.tp1 && (
-          <div className="absolute inset-y-0 w-px bg-success/45" style={{ left: `${pct(parseFloat(signal.tp1))}%` }} />
-        )}
-        {signal.tp2 && (
-          <div className="absolute inset-y-0 w-px bg-success/55" style={{ left: `${pct(parseFloat(signal.tp2))}%` }} />
-        )}
-        {signal.tp3 && (
-          <div className="absolute inset-y-0 w-px bg-accent-cyan/60" style={{ left: `${pct(parseFloat(signal.tp3))}%` }} />
-        )}
+        {/* Markers */}
+        <Dot pos={slPct} className="bg-danger ring-danger/30" />
+        <Dot pos={entryPct} className="bg-white ring-white/30" />
+        <Dot pos={tp3Pct} className="bg-accent-cyan ring-accent-cyan/30" />
 
-        {/* Current price bar */}
+        {/* Current price marker */}
         <div
-          className="absolute inset-y-0 w-[3px] rounded-sm transition-all duration-500 shadow-[0_0_6px_rgba(255,255,255,0.6)] bg-white"
-          style={{ left: `${curPct}%`, transform: "translateX(-50%)" }}
+          className="absolute top-1/2 z-10 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-bg-panel bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)] transition-all duration-500"
+          style={{ left: `${curPct}%` }}
         />
-
-        {/* Zone text labels */}
-        <div className="absolute inset-0 flex items-center justify-between px-2.5 pointer-events-none select-none">
-          <span className="text-[9px] font-bold tracking-wider text-danger/60 uppercase">SL</span>
-          <span className="text-[9px] font-bold tracking-wider text-white/30 uppercase">Entry</span>
-          <span className="text-[9px] font-bold tracking-wider text-accent-cyan/60 uppercase">TP</span>
-        </div>
       </div>
 
-      {/* Price row below track */}
-      <div className="flex items-center justify-between font-mono text-[10px]">
-        <span className="text-danger font-bold">{fmtUsd(sl, 2)}</span>
-        <span className="flex items-center gap-1 text-white/50">
-          {fmtUsd(cur, 2)}
-          <span className={`text-[9px] font-semibold ${curVsEntry >= 0 ? "text-success" : "text-danger"}`}>
-            {curVsEntry >= 0 ? "+" : ""}{curVsEntry.toFixed(2)}%
-          </span>
-        </span>
-        <span className="text-accent-cyan font-bold">{fmtUsd(tp3val, 2)}</span>
+      {/* Labels under markers */}
+      <div className="relative h-9 text-[10px] font-mono">
+        <Label pos={slPct} value={fmtUsd(sl, 4)} caption="SL" tone="text-danger" />
+        <Label
+          pos={entryPct}
+          value={fmtUsd(entry, 4)}
+          caption={`${curVsEntry >= 0 ? "+" : ""}${curVsEntry.toFixed(2)}%`}
+          tone="text-white/80"
+          captionTone={curVsEntry >= 0 ? "text-success" : "text-danger"}
+        />
+        <Label pos={tp3Pct} value={fmtUsd(tp3val, 4)} caption="TP" tone="text-accent-cyan" />
       </div>
+    </div>
+  );
+}
+
+function Dot({ pos, className }: { pos: number; className: string }) {
+  return (
+    <div
+      className={`absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ${className}`}
+      style={{ left: `${pos}%` }}
+    />
+  );
+}
+
+function Label({
+  pos,
+  value,
+  caption,
+  tone,
+  captionTone,
+}: {
+  pos: number;
+  value: string;
+  caption: string;
+  tone: string;
+  captionTone?: string;
+}) {
+  // Держим крайние подписи в пределах карточки
+  const align = pos < 12 ? "left-0 items-start" : pos > 88 ? "right-0 items-end" : "-translate-x-1/2 items-center";
+  const style = pos < 12 ? { left: 0 } : pos > 88 ? { right: 0 } : { left: `${pos}%` };
+  return (
+    <div className={`absolute flex flex-col ${align}`} style={style}>
+      <span className={`font-bold ${tone}`}>{value}</span>
+      <span className={`text-[9px] font-semibold uppercase tracking-wider ${captionTone ?? "text-white/30"}`}>
+        {caption}
+      </span>
+    </div>
+  );
+}
+
+function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1 py-3">
+      <span className="text-[8px] font-semibold uppercase tracking-[0.15em] text-white/30">{label}</span>
+      <span className={`font-mono text-[13px] font-bold tabular-nums ${tone}`}>{value}</span>
     </div>
   );
 }
@@ -160,68 +188,57 @@ export default function SignalCard({
   const long = isLong(s.direction);
   const active = s.status === "active";
   const DirectionIcon = long ? TrendingUp : TrendingDown;
+  const bestProfit = calc ? calc.tp3_profit || calc.tp2_profit || calc.tp1_profit : 0;
 
   return (
     <div
-      className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 ${
+      className={`group relative overflow-hidden rounded-2xl border bg-[#0f1318] transition-all duration-300 ${
         active
-          ? "border-white/[0.08] bg-[#0f1318] shadow-[0_4px_24px_rgba(0,0,0,0.5)] hover:border-white/[0.14] hover:shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
-          : "border-white/[0.05] bg-[#0c0f13]/70 opacity-60"
+          ? "border-white/[0.08] shadow-[0_4px_24px_rgba(0,0,0,0.45)] hover:border-white/[0.16] hover:shadow-[0_8px_36px_rgba(0,0,0,0.6)]"
+          : "border-white/[0.05] opacity-55"
       }`}
     >
-      {/* Top direction banner */}
-      <div
-        className={`relative flex items-center justify-between px-4 py-3 ${
-          long
-            ? "bg-gradient-to-r from-success/[0.14] via-success/[0.06] to-transparent"
-            : "bg-gradient-to-r from-danger/[0.14] via-danger/[0.06] to-transparent"
-        }`}
-      >
-        {/* Direction + Symbol */}
+      {/* Accent line on top */}
+      <div className={`h-px w-full ${long ? "bg-gradient-to-r from-transparent via-success/50 to-transparent" : "bg-gradient-to-r from-transparent via-danger/50 to-transparent"}`} />
+
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-4 pt-3.5 pb-3">
         <div className="flex items-center gap-3">
           <div
-            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-bold text-xs tracking-widest uppercase border ${
-              long
-                ? "bg-success/[0.12] text-success border-success/25"
-                : "bg-danger/[0.12] text-danger border-danger/25"
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${
+              long ? "border-success/25 bg-success/[0.12] text-success" : "border-danger/25 bg-danger/[0.12] text-danger"
             }`}
           >
-            <DirectionIcon className="h-3 w-3" strokeWidth={2.5} />
+            <DirectionIcon className="h-3.5 w-3.5" strokeWidth={2.5} />
             {s.direction}
           </div>
-          <span className="font-mono text-[17px] font-extrabold tracking-tight text-white leading-none">
-            {s.symbol}
-          </span>
+          <div className="flex flex-col leading-tight">
+            <span className="font-mono text-[17px] font-extrabold tracking-tight text-white">{s.symbol}</span>
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-white/30">
+              {modeLabel(s.target_audience)} · ×{s.leverage}
+            </span>
+          </div>
         </div>
 
-        {/* Meta chips */}
-        <div className="flex items-center gap-1.5">
-          <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] font-bold text-white/70">
-            ×{s.leverage}
-          </span>
-          <span className="rounded-md border border-white/8 bg-white/[0.03] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white/40">
-            {modeLabel(s.target_audience)}
-          </span>
-          <span
-            className={`rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
-              active
-                ? "bg-success/[0.10] text-success border-success/20"
-                : "bg-white/[0.04] text-white/30 border-white/8"
-            }`}
-          >
-            {active ? "Live" : "Closed"}
-          </span>
+        {/* Status */}
+        <div
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+            active ? "border-success/20 bg-success/[0.08] text-success" : "border-white/[0.08] bg-white/[0.03] text-white/30"
+          }`}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-success shadow-[0_0_6px] shadow-success/70" : "bg-white/30"}`} />
+          {active ? "Live" : "Closed"}
         </div>
       </div>
 
-      <div className="p-4 space-y-3.5">
+      <div className="space-y-3.5 px-4 pb-4">
         {/* TradingView chart snapshot */}
         {s.chart_url && tvImageUrl(s.chart_url) && (
           <a href={s.chart_url} target="_blank" rel="noopener noreferrer">
             <img
               src={tvImageUrl(s.chart_url)!}
               alt="chart"
-              className="w-full rounded-xl border border-white/[0.06] object-cover max-h-44 hover:border-white/[0.14] transition-colors"
+              className="max-h-44 w-full rounded-xl border border-white/[0.06] object-cover transition-colors hover:border-white/[0.14]"
             />
           </a>
         )}
@@ -230,85 +247,52 @@ export default function SignalCard({
         <PriceTrack signal={s} currentPrice={currentPrice} />
 
         {/* Price levels grid */}
-        <div className="grid grid-cols-4 gap-0 rounded-xl overflow-hidden border border-white/[0.06]">
-          {[
-            { label: "Вход", value: s.entry_price, cls: "text-white" },
-            { label: "Стоп", value: s.stop_loss, cls: "text-danger" },
-            { label: "TP1", value: s.tp1, cls: "text-success" },
-            { label: "TP2/3", value: s.tp3 || s.tp2, cls: "text-accent-cyan" },
-          ].map((item, idx) => (
-            <div
-              key={item.label}
-              className={`flex flex-col items-center py-2.5 px-1 bg-white/[0.02] hover:bg-white/[0.04] transition-colors ${
-                idx < 3 ? "border-r border-white/[0.05]" : ""
-              }`}
-            >
-              <span className="text-[8px] font-semibold uppercase tracking-widest text-white/30 mb-1">
-                {item.label}
-              </span>
-              <span className={`font-mono text-[11px] font-bold tabular-nums ${item.cls}`}>
-                {item.value ? fmtUsd(parseFloat(item.value), 2) : "-"}
-              </span>
-            </div>
-          ))}
+        <div className="grid grid-cols-4 divide-x divide-white/[0.05] overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]">
+          <Metric label="Вход" value={s.entry_price ? fmtUsd(parseFloat(s.entry_price), 4) : "-"} tone="text-white" />
+          <Metric label="Стоп" value={s.stop_loss ? fmtUsd(parseFloat(s.stop_loss), 4) : "-"} tone="text-danger" />
+          <Metric label="TP1" value={s.tp1 ? fmtUsd(parseFloat(s.tp1), 4) : "-"} tone="text-success" />
+          <Metric label="TP2/3" value={(s.tp3 || s.tp2) ? fmtUsd(parseFloat(s.tp3 || s.tp2!), 4) : "-"} tone="text-accent-cyan" />
         </div>
 
-        {/* Calc row */}
+        {/* Calc panel */}
         {calc && (
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-            {/* Top row: margin / risk / profit */}
+          <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]">
             <div className="grid grid-cols-3 divide-x divide-white/[0.05]">
-              <div className="flex flex-col items-center py-2.5 px-2">
-                <span className="text-[8px] font-semibold uppercase tracking-widest text-white/30 mb-1">Маржа</span>
-                <span className="font-mono text-[11px] font-bold text-white/80 tabular-nums">
-                  ${calc.margin.toFixed(0)}
-                </span>
-              </div>
-              <div className="flex flex-col items-center py-2.5 px-2">
-                <span className="text-[8px] font-semibold uppercase tracking-widest text-white/30 mb-1">Риск</span>
-                <span className="font-mono text-[11px] font-bold text-danger tabular-nums">
-                  −${calc.risk.toFixed(1)}
-                </span>
-              </div>
-              <div className="flex flex-col items-center py-2.5 px-2">
-                <span className="text-[8px] font-semibold uppercase tracking-widest text-white/30 mb-1">
-                  {calc.tp3_profit > 0 ? "TP3 +" : calc.tp2_profit > 0 ? "TP2 +" : "TP1 +"}
-                </span>
-                <span className="font-mono text-[11px] font-bold text-success tabular-nums">
-                  ${(calc.tp3_profit || calc.tp2_profit || calc.tp1_profit).toFixed(0)}
-                </span>
-              </div>
+              <Metric label="Маржа" value={`$${calc.margin.toFixed(0)}`} tone="text-white/80" />
+              <Metric label="Риск" value={`−$${calc.risk.toFixed(0)}`} tone="text-danger" />
+              <Metric
+                label={calc.tp3_profit > 0 ? "Профит TP3" : calc.tp2_profit > 0 ? "Профит TP2" : "Профит TP1"}
+                value={`+$${bestProfit.toFixed(0)}`}
+                tone="text-success"
+              />
             </div>
-
-            {/* Bottom: RR ratio */}
-            <div className="flex items-center justify-between border-t border-white/[0.05] px-4 py-2">
-              <span className="text-[9px] font-semibold uppercase tracking-widest text-white/25">
-                Risk / Reward
-              </span>
-              <span className="font-mono text-sm font-black bg-gradient-to-r from-accent-gold to-yellow-300 bg-clip-text text-transparent">
+            <div className="flex items-center justify-between border-t border-white/[0.05] bg-white/[0.01] px-4 py-2.5">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/30">Risk / Reward</span>
+              <span className="bg-gradient-to-r from-accent-gold to-yellow-300 bg-clip-text font-mono text-sm font-black text-transparent">
                 1 : {calc.rr1.toFixed(1)}
               </span>
             </div>
           </div>
         )}
 
-        {/* Action buttons */}
+        {/* Actions */}
         <div className="flex items-center gap-2 pt-0.5">
           {linkToDetail && (
             <Link
               href={`/app/signals/detail?id=${s.id}`}
-              className="flex items-center justify-center gap-1.5 flex-1 rounded-xl border border-accent-cyan/20 bg-accent-cyan/[0.06] py-2 text-[11px] font-bold tracking-wide text-accent-cyan transition-all duration-200 hover:border-accent-cyan/40 hover:bg-accent-cyan/[0.12] hover:shadow-[0_0_12px_rgba(10,255,224,0.12)]"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent-cyan/[0.08] py-2.5 text-[12px] font-bold tracking-wide text-accent-cyan ring-1 ring-inset ring-accent-cyan/20 transition-all duration-200 hover:bg-accent-cyan/[0.14] hover:ring-accent-cyan/40"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
               Детали
+              <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           )}
           <button
             onClick={() => setChartOpen(!chartOpen)}
-            className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 px-3 text-[11px] font-semibold transition-all duration-150 ${
+            title="График"
+            className={`flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2.5 text-[12px] font-semibold ring-1 ring-inset transition-all duration-150 ${
               chartOpen
-                ? "border-accent-cyan/30 bg-accent-cyan/[0.08] text-accent-cyan"
-                : "border-white/[0.08] bg-white/[0.02] text-white/40 hover:border-white/[0.14] hover:text-white/70"
+                ? "bg-accent-cyan/[0.08] text-accent-cyan ring-accent-cyan/30"
+                : "bg-white/[0.02] text-white/40 ring-white/[0.07] hover:text-white/70 hover:ring-white/[0.14]"
             }`}
           >
             <AreaChart className="h-3.5 w-3.5" />
@@ -316,10 +300,11 @@ export default function SignalCard({
           </button>
           <button
             onClick={() => setBookOpen(!bookOpen)}
-            className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 px-3 text-[11px] font-semibold transition-all duration-150 ${
+            title="Стакан"
+            className={`flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2.5 text-[12px] font-semibold ring-1 ring-inset transition-all duration-150 ${
               bookOpen
-                ? "border-accent-cyan/30 bg-accent-cyan/[0.08] text-accent-cyan"
-                : "border-white/[0.08] bg-white/[0.02] text-white/40 hover:border-white/[0.14] hover:text-white/70"
+                ? "bg-accent-cyan/[0.08] text-accent-cyan ring-accent-cyan/30"
+                : "bg-white/[0.02] text-white/40 ring-white/[0.07] hover:text-white/70 hover:ring-white/[0.14]"
             }`}
           >
             <Layers className="h-3.5 w-3.5" />

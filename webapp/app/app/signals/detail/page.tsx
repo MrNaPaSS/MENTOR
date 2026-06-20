@@ -59,7 +59,7 @@ function SignalDetailContent() {
               <span className="text-text-muted">x{signal.leverage}</span>
             </div>
             <span className={`badge-${signal.status === "active" ? "cyan" : "muted"}`}>
-              {signal.status === "active" ? "🟢 Активен" : "⚫ Закрыт"}
+              {signal.status === "active" ? "Активен" : "Закрыт"}
             </span>
           </div>
 

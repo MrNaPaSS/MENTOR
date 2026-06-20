@@ -24,7 +24,7 @@ export function fmtRR(v: string | number): string {
 }
 
 export function modeLabel(mode: string): string {
-  return mode === "turbo" ? "⚡ ТУРБО" : "📊 УМЕРЕННЫЙ";
+  return mode === "turbo" ? "ТУРБО" : "УМЕРЕННЫЙ";
 }
 
 export function isLong(direction: string): boolean {
