@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { API_URL, GlobalMarket, TrendingCoin, OnChainStats, ForexRates } from "@/lib/api";
+import { API_URL, GlobalMarket, TrendingCoin, OnChainStats } from "@/lib/api";
 import {
   Building2, TrendingUp, TrendingDown, Minus,
   AlertTriangle, BarChart3, DollarSign, Activity, Zap,
-  ChevronUp, ChevronDown, Globe, Flame, Boxes, Banknote,
+  ChevronUp, ChevronDown, Globe, Flame, Boxes,
 } from "lucide-react";
 
 // ── Embedded CSS ──────────────────────────────────────────────────────────────
@@ -1185,57 +1185,6 @@ function BtcNetworkSection() {
   );
 }
 
-// ── Forex Section (Frankfurter) ───────────────────────────────────────────────
-
-const FOREX_META: Record<string, { flag: string; name: string }> = {
-  EUR: { flag: "🇪🇺", name: "Евро" },
-  GBP: { flag: "🇬🇧", name: "Фунт стерлингов" },
-  JPY: { flag: "🇯🇵", name: "Иена" },
-  CHF: { flag: "🇨🇭", name: "Швейцарский франк" },
-  CAD: { flag: "🇨🇦", name: "Канадский доллар" },
-  AUD: { flag: "🇦🇺", name: "Австралийский доллар" },
-};
-
-function ForexSection() {
-  const [fx, setFx] = useState<ForexRates | null>(null);
-
-  useEffect(() => {
-    const load = () => fetchJson<ForexRates>(`${API_URL}/api/market/forex`).then(d => { if (d) setFx(d); });
-    load();
-    const t = setInterval(load, 600_000);
-    return () => clearInterval(t);
-  }, []);
-
-  return (
-    <Section icon={<Banknote className="h-4 w-4 text-accent-cyan" />}
-      title="Форекс" accent="cyan" delay={0.2}
-      badge={fx ? <span className="rounded-md border border-white/[0.08] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-white/40">{fx.date}</span> : undefined}
-      sub="Frankfurter · базовая USD">
-      {!fx ? <Skeleton rows={4} /> : (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {Object.entries(fx.rates).map(([cur, rate], i) => {
-            const meta = FOREX_META[cur] ?? { flag: "💱", name: cur };
-            return (
-              <div key={cur} className="sm-fade-up sm-hover flex items-center gap-3 rounded-xl px-3.5 py-3"
-                style={{ animationDelay: `${i * 0.04}s`, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <span className="text-[22px] leading-none">{meta.flag}</span>
-                <div className="min-w-0">
-                  <div className="font-bold text-[13px] text-white">{fx.base}/{cur}</div>
-                  <div className="truncate text-[10px] text-white/30">{meta.name}</div>
-                </div>
-                <span className="ml-auto font-mono text-[16px] font-extrabold tabular-nums text-accent-cyan"
-                  style={{ textShadow: "0 0 16px rgba(10,255,224,0.25)" }}>
-                  {rate.toFixed(4)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Section>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SmartMoneyPage() {
@@ -1276,18 +1225,6 @@ export default function SmartMoneyPage() {
           </div>
         </div>
 
-        {/* Глобальный рынок */}
-        <GlobalMarketSection/>
-
-        {/* Grid: Трендовые монеты + Сеть Bitcoin */}
-        <div className="grid gap-5 xl:grid-cols-2">
-          <TrendingSection/>
-          <BtcNetworkSection/>
-        </div>
-
-        {/* Форекс — full width */}
-        <ForexSection/>
-
         {/* Grid: COT + Ставки и финансирование */}
         <div className="grid gap-5 xl:grid-cols-2">
           <CotSection/>
@@ -1305,6 +1242,15 @@ export default function SmartMoneyPage() {
 
         {/* ETF — full width */}
         <EtfSection/>
+
+        {/* Глобальный рынок */}
+        <GlobalMarketSection/>
+
+        {/* Grid: Трендовые монеты + Сеть Bitcoin */}
+        <div className="grid gap-5 xl:grid-cols-2">
+          <TrendingSection/>
+          <BtcNetworkSection/>
+        </div>
 
       </div>
     </>
