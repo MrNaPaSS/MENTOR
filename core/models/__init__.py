@@ -108,6 +108,7 @@ class Broadcast(Base):
     id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
     text: Mapped[str] = mapped_column(Text, default="")
     chart_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    symbol: Mapped[str | None] = mapped_column(String(32), nullable=True)  # торговая пара для графика
     audience: Mapped[str] = mapped_column(String(16), default="all")
     sent_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

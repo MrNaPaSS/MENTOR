@@ -27,6 +27,7 @@ def _tv_image_url(url: str) -> str | None:
 class BroadcastIn(BaseModel):
     text: str = ""
     chart_url: Optional[str] = None
+    symbol: Optional[str] = None
     audience: str = "all"
 
 
@@ -34,6 +35,7 @@ class BroadcastOut(BaseModel):
     id: int
     text: str
     chart_url: Optional[str]
+    symbol: Optional[str] = None
     audience: str
     sent_count: int
     created_at: datetime
@@ -104,9 +106,11 @@ async def broadcast(
         if ok:
             sent += 1
 
+    symbol = body.symbol.strip().upper() if body.symbol else None
     record = Broadcast(
         text=body.text,
         chart_url=body.chart_url,
+        symbol=symbol or None,
         audience=body.audience,
         sent_count=sent,
         created_at=datetime.now(timezone.utc),

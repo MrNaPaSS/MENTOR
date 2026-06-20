@@ -332,7 +332,7 @@ export const api = {
       body: JSON.stringify({ text, audience, chart_url: chart_url || null }),
     }),
   broadcasts: (token: string) => authReq<BroadcastItem[]>("/api/broadcast", token),
-  broadcast: (token: string, body: { text: string; chart_url?: string | null; audience: string }) =>
+  broadcast: (token: string, body: { text: string; chart_url?: string | null; symbol?: string | null; audience: string }) =>
     authReq<{ sent: number; total: number }>("/api/broadcast", token, {
       method: "POST",
       body: JSON.stringify(body),
@@ -400,6 +400,7 @@ export interface BroadcastItem {
   id: number;
   text: string;
   chart_url: string | null;
+  symbol: string | null;
   audience: string;
   sent_count: number;
   created_at: string;

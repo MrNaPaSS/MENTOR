@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { api, API_URL, BroadcastItem } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { ExternalLink, TrendingUp, ImageIcon, Radio, Lock } from "lucide-react";
+import { ExternalLink, TrendingUp, ImageIcon, Radio, Lock, CandlestickChart } from "lucide-react";
 import SignalsFeed from "@/components/signals/SignalsFeed";
+import ChartOverlay from "@/components/market/ChartOverlay";
 
 type Tab = "analysis" | "signals";
 
@@ -41,6 +42,7 @@ const AUDIENCE_LABEL: Record<string, string> = {
 
 function BroadcastCard({ item }: { item: BroadcastItem }) {
   const img = item.chart_url ? chartImgUrl(item.chart_url) : null;
+  const [chartOpen, setChartOpen] = useState(false);
 
   return (
     <article className="overflow-hidden rounded-2xl border border-white/[0.07] bg-bg-panel">
@@ -113,11 +115,25 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
         </div>
       )}
 
-      {/* ── Нижняя линия с датой (только если нет графика) ───── */}
-      {!img && (
-        <div className="border-t border-white/[0.05] px-5 py-3">
-          <span className="text-[11px] text-text-muted">{fmtDate(item.created_at)}</span>
+      {/* ── Футер: дата + кнопка «Открыть график» ───────────── */}
+      {(!img || item.symbol) && (
+        <div className="flex items-center justify-between gap-3 border-t border-white/[0.05] px-5 py-3">
+          <span className="text-[11px] text-text-muted">{!img ? fmtDate(item.created_at) : ""}</span>
+          {item.symbol && (
+            <button
+              onClick={() => setChartOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-white/[0.03] px-3.5 py-2 text-[12px] font-semibold text-accent-cyan ring-1 ring-inset ring-accent-cyan/20 transition hover:bg-accent-cyan/[0.1] hover:ring-accent-cyan/40"
+            >
+              <CandlestickChart className="h-3.5 w-3.5" />
+              Открыть график
+              <span className="font-mono text-[11px] text-white/50">{item.symbol}</span>
+            </button>
+          )}
         </div>
+      )}
+
+      {chartOpen && item.symbol && (
+        <ChartOverlay symbol={item.symbol} onClose={() => setChartOpen(false)} />
       )}
     </article>
   );

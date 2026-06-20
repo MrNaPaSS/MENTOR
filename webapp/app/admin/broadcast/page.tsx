@@ -22,6 +22,7 @@ export default function BroadcastPage() {
   const token = useMentorToken();
   const [text,      setText]      = useState("");
   const [chartUrl,  setChartUrl]  = useState("");
+  const [symbol,    setSymbol]    = useState("");
   const [audience,  setAudience]  = useState<(typeof AUDIENCE)[number]["key"]>("all");
   const [result,    setResult]    = useState<{ sent: number; total: number } | null>(null);
   const [error,     setError]     = useState<string | null>(null);
@@ -39,6 +40,7 @@ export default function BroadcastPage() {
       const res = await api.broadcast(token, {
         text: text.trim(),
         chart_url: chartUrl.trim() || null,
+        symbol: symbol.trim().toUpperCase() || null,
         audience,
       });
       setResult(res);
@@ -77,6 +79,20 @@ export default function BroadcastPage() {
             value={chartUrl}
             onChange={(e) => setChartUrl(e.target.value.trim())}
           />
+        </label>
+
+        {/* Торговая пара — для кнопки «Открыть график» у студентов */}
+        <label className="block text-sm text-text-secondary">
+          Пара для графика (необязательно)
+          <input
+            className="input mt-1.5 font-mono text-sm uppercase"
+            placeholder="BTCUSDT"
+            value={symbol}
+            onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+          />
+          <span className="mt-1 block text-[11px] text-text-muted">
+            Если указать — на карточке анализа появится кнопка «Открыть график» с этой парой и стаканом.
+          </span>
         </label>
 
         {/* Превью чарта */}
