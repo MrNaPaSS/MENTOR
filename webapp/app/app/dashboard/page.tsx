@@ -640,7 +640,7 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
           <stop offset="100%" stopColor="#0affe0" />
         </linearGradient>
         <filter id="gaugeGlow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="4" result="b" />
+          <feGaussianBlur stdDeviation="2.5" result="b" />
           <feMerge>
             <feMergeNode in="b" />
             <feMergeNode in="SourceGraphic" />
@@ -652,15 +652,15 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
       <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
         fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="16" strokeLinecap="round" />
 
-      {/* Свечение под дугой */}
+      {/* Мягкое свечение под дугой */}
       <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
         fill="none" stroke="url(#gaugeRainbow)" strokeWidth="14" strokeLinecap="round"
-        opacity="0.45" filter="url(#gaugeGlow)" />
+        opacity="0.18" filter="url(#gaugeGlow)" />
 
       {/* Основная радужная дуга */}
       <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
         fill="none" stroke="url(#gaugeRainbow)" strokeWidth="14" strokeLinecap="round"
-        opacity="0.95" />
+        opacity="0.7" />
 
       {/* Tick marks */}
       {ticks.map(t => {
@@ -690,17 +690,16 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
       })}
 
       {/* Маркер текущей позиции на дуге */}
-      <circle cx={markX} cy={markY} r="8" fill={color} opacity="0.35" filter="url(#gaugeGlow)" />
-      <circle cx={markX} cy={markY} r="4" fill="#fff" />
+      <circle cx={markX} cy={markY} r="7" fill={color} opacity="0.2" />
+      <circle cx={markX} cy={markY} r="3.5" fill="#fff" opacity="0.9" />
 
       {/* Needle (анимируется через requestAnimationFrame) */}
-      <polygon points={`${nx},${ny} ${bx1},${by1} ${bx2},${by2}`} fill={color}
-        filter="url(#gaugeGlow)" />
+      <polygon points={`${nx},${ny} ${bx1},${by1} ${bx2},${by2}`} fill={color} opacity="0.9" />
 
       {/* Hub */}
       <circle cx={cx} cy={cy} r="11" fill="rgba(10,14,20,0.95)"
-        stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
-      <circle cx={cx} cy={cy} r="4.5" fill={color} filter="url(#gaugeGlow)" />
+        stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+      <circle cx={cx} cy={cy} r="4.5" fill={color} />
     </svg>
   );
 }
@@ -758,8 +757,8 @@ function MarketSentimentWidget({ symbol }: { symbol: string }) {
         <div className="absolute inset-x-4 h-px"
           style={{ background: `linear-gradient(90deg, transparent, ${c}40, transparent)` }} />
         <span className="relative rounded-lg px-4 py-1 text-[14px] font-extrabold tracking-wide"
-          style={{ color: c, background: `${c}14`,
-            textShadow: `0 0 20px ${c}80, 0 0 40px ${c}40` }}>
+          style={{ color: c, background: `${c}10`,
+            textShadow: `0 0 12px ${c}40` }}>
           {meta.label}
         </span>
       </div>
