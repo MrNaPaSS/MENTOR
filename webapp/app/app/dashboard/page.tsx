@@ -614,13 +614,9 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
   const bx1 = cx + hw * Math.cos(pa), by1 = cy - hw * Math.sin(pa);
   const bx2 = cx - hw * Math.cos(pa), by2 = cy + hw * Math.sin(pa);
 
-  const zones = [
-    { from: 0, to: 0.2, col: "#f6465d" },
-    { from: 0.2, to: 0.4, col: "#f59e0b" },
-    { from: 0.4, to: 0.6, col: "#6b7280" },
-    { from: 0.6, to: 0.8, col: "#22c55e" },
-    { from: 0.8, to: 1.0, col: "#0ecb81" },
-  ];
+  // Маркер текущей позиции на дуге (для подсветки)
+  const markX = cx + r * Math.cos(ang);
+  const markY = cy - r * Math.sin(ang);
 
   const ticks = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
   const labels = [
@@ -631,29 +627,40 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", overflow: "visible" }}>
-      {/* Track */}
-      <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-        fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="14" strokeLinecap="butt" />
+      <defs>
+        {/* Радужный градиент дуги: продажа → нейтрально → покупка */}
+        <linearGradient id="gaugeRainbow" gradientUnits="userSpaceOnUse"
+          x1={cx - r} y1={cy} x2={cx + r} y2={cy}>
+          <stop offset="0%"   stopColor="#f6465d" />
+          <stop offset="22%"  stopColor="#fb7185" />
+          <stop offset="40%"  stopColor="#f59e0b" />
+          <stop offset="52%"  stopColor="#facc15" />
+          <stop offset="66%"  stopColor="#a3e635" />
+          <stop offset="82%"  stopColor="#22c55e" />
+          <stop offset="100%" stopColor="#0affe0" />
+        </linearGradient>
+        <filter id="gaugeGlow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="4" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
 
-      {/* Colored zones */}
-      {zones.map((z, i) => {
-        const a1 = Math.PI - z.from * Math.PI;
-        const a2 = Math.PI - z.to * Math.PI;
-        const x1 = cx + r * Math.cos(a1), y1 = cy - r * Math.sin(a1);
-        const x2 = cx + r * Math.cos(a2), y2 = cy - r * Math.sin(a2);
-        return (
-          <path key={i}
-            d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`}
-            fill="none" stroke={z.col} strokeWidth="14" strokeLinecap="butt" opacity="0.28" />
-        );
-      })}
-
-      {/* Active zone overlay */}
+      {/* Тёмная подложка для глубины */}
       <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-        fill="none" stroke={color} strokeWidth="14" strokeLinecap="butt"
-        strokeDasharray={`${v * Math.PI * r} ${Math.PI * r}`}
-        opacity="0.55"
-        style={{ transition: "stroke 0.4s ease" }} />
+        fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="16" strokeLinecap="round" />
+
+      {/* Свечение под дугой */}
+      <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+        fill="none" stroke="url(#gaugeRainbow)" strokeWidth="14" strokeLinecap="round"
+        opacity="0.45" filter="url(#gaugeGlow)" />
+
+      {/* Основная радужная дуга */}
+      <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+        fill="none" stroke="url(#gaugeRainbow)" strokeWidth="14" strokeLinecap="round"
+        opacity="0.95" />
 
       {/* Tick marks */}
       {ticks.map(t => {
@@ -682,13 +689,18 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
         );
       })}
 
+      {/* Маркер текущей позиции на дуге */}
+      <circle cx={markX} cy={markY} r="8" fill={color} opacity="0.35" filter="url(#gaugeGlow)" />
+      <circle cx={markX} cy={markY} r="4" fill="#fff" />
+
       {/* Needle (анимируется через requestAnimationFrame) */}
-      <polygon points={`${nx},${ny} ${bx1},${by1} ${bx2},${by2}`} fill={color} />
+      <polygon points={`${nx},${ny} ${bx1},${by1} ${bx2},${by2}`} fill={color}
+        filter="url(#gaugeGlow)" />
 
       {/* Hub */}
       <circle cx={cx} cy={cy} r="11" fill="rgba(10,14,20,0.95)"
-        stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-      <circle cx={cx} cy={cy} r="4.5" fill={color} />
+        stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+      <circle cx={cx} cy={cy} r="4.5" fill={color} filter="url(#gaugeGlow)" />
     </svg>
   );
 }
