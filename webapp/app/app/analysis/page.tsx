@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, API_URL, BroadcastItem } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { ExternalLink, TrendingUp, ImageIcon, Radio } from "lucide-react";
+import { ExternalLink, TrendingUp, ImageIcon, Radio, Lock } from "lucide-react";
 import SignalsFeed from "@/components/signals/SignalsFeed";
 
 type Tab = "analysis" | "signals";
@@ -167,13 +167,22 @@ function AnalysisFeed() {
   );
 }
 
-const TABS: { key: Tab; label: string; icon: typeof ImageIcon }[] = [
-  { key: "analysis", label: "Анализы", icon: ImageIcon },
-  { key: "signals",  label: "Сигналы", icon: Radio },
-];
-
 export default function AnalysisPage() {
   const [tab, setTab] = useState<Tab>("analysis");
+  // null — ещё проверяем, число — количество активных сигналов
+  const [activeCount, setActiveCount] = useState<number | null>(null);
+  const signalsLocked = activeCount === 0;
+
+  useEffect(() => {
+    api.activeSignals()
+      .then((list) => setActiveCount(list.length))
+      .catch(() => setActiveCount(0));
+  }, []);
+
+  // Если активные сигналы пропали, пока пользователь был на их вкладке — вернём на анализы
+  useEffect(() => {
+    if (signalsLocked && tab === "signals") setTab("analysis");
+  }, [signalsLocked, tab]);
 
   return (
     <div className="space-y-5">
@@ -186,22 +195,38 @@ export default function AnalysisPage() {
 
       {/* Переключатель вкладок */}
       <div className="flex gap-1 rounded-xl border border-border bg-bg-panel p-1 w-fit">
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const active = tab === t.key;
-          return (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
-                active ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {t.label}
-            </button>
-          );
-        })}
+        {/* Анализы */}
+        <button
+          onClick={() => setTab("analysis")}
+          className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
+            tab === "analysis" ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"
+          }`}
+        >
+          <ImageIcon className="h-4 w-4" />
+          Анализы
+        </button>
+
+        {/* Сигналы — активны только при наличии активного сигнала */}
+        <button
+          onClick={() => !signalsLocked && setTab("signals")}
+          disabled={signalsLocked}
+          title={signalsLocked ? "Нет активных сигналов" : undefined}
+          className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
+            signalsLocked
+              ? "cursor-not-allowed text-text-muted/40"
+              : tab === "signals"
+              ? "bg-accent-cyan/15 text-accent-cyan"
+              : "text-text-muted hover:text-white"
+          }`}
+        >
+          {signalsLocked ? <Lock className="h-3.5 w-3.5" /> : <Radio className="h-4 w-4" />}
+          Сигналы
+          {!signalsLocked && activeCount !== null && activeCount > 0 && (
+            <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-cyan/20 px-1 text-[10px] font-bold text-accent-cyan">
+              {activeCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {tab === "analysis" ? <AnalysisFeed /> : <SignalsFeed />}
