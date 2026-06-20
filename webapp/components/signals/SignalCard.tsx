@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TrendingUp, TrendingDown, CandlestickChart, ExternalLink, X } from "lucide-react";
 import { SignalOut } from "@/lib/api";
 import { fmtUsd, isLong } from "@/lib/format";
@@ -166,6 +166,8 @@ function Metric({ label, value, tone }: { label: string; value: string; tone: st
 /** Полноэкранный график (Heikin-Ashi) + стакан, появляется анимацией переворота. */
 function ChartOverlay({ signal: s, onClose }: { signal: SignalOut; onClose: () => void }) {
   const [show, setShow] = useState(false);
+  const [bookRows, setBookRows] = useState(16);
+  const bookRef = useRef<HTMLDivElement>(null);
   const long = isLong(s.direction);
   const DirectionIcon = long ? TrendingUp : TrendingDown;
 
@@ -180,6 +182,21 @@ function ChartOverlay({ signal: s, onClose }: { signal: SignalOut; onClose: () =
       window.removeEventListener("keydown", onKey);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Подбираем число строк стакана так, чтобы он заполнял высоту графика
+  useEffect(() => {
+    const el = bookRef.current;
+    if (!el) return;
+    const update = () => {
+      // ROW_H≈20px на строку; вычитаем шапку/итоги стакана (~150px), делим на asks+bids
+      const r = Math.max(8, Math.floor((el.clientHeight - 150) / (2 * 20)));
+      setBookRows(r);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   function handleClose() {
@@ -232,18 +249,12 @@ function ChartOverlay({ signal: s, onClose }: { signal: SignalOut; onClose: () =
           </div>
 
           {/* График + стакан */}
-          <div className="grid min-h-0 flex-1 grid-rows-[1fr_auto] lg:grid-cols-[1fr_340px] lg:grid-rows-1">
+          <div className="grid min-h-0 flex-1 grid-rows-[1fr_40vh] lg:grid-cols-[1fr_340px] lg:grid-rows-1">
             <div className="relative min-h-0">
               <TradingChart symbol={s.symbol} interval="15" chartStyle="8" showToolbar fullHeight />
             </div>
-            <div className="flex min-h-0 flex-col border-t border-white/[0.07] lg:border-l lg:border-t-0">
-              <div className="flex shrink-0 items-center justify-between px-4 py-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Стакан цен</span>
-                <span className="font-mono text-[10px] text-text-muted">{s.symbol}</span>
-              </div>
-              <div className="min-h-0 flex-1 overflow-auto">
-                <OrderBook symbol={s.symbol} rows={18} compact />
-              </div>
+            <div ref={bookRef} className="min-h-0 overflow-hidden border-t border-white/[0.07] lg:border-l lg:border-t-0">
+              <OrderBook symbol={s.symbol} rows={bookRows} />
             </div>
           </div>
         </div>
