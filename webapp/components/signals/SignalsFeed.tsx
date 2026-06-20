@@ -162,7 +162,7 @@ export default function SignalsFeed() {
               )}
             </span>
           </div>
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid items-start gap-4 xl:grid-cols-2">
             {visible.map((s) => (
               <SignalCard key={s.id} signal={s} balance={balance} />
             ))}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { TrendingUp, TrendingDown, CandlestickChart, Layers, ExternalLink } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { TrendingUp, TrendingDown, CandlestickChart, ExternalLink, ArrowLeft } from "lucide-react";
 import { SignalOut } from "@/lib/api";
 import { fmtUsd, isLong } from "@/lib/format";
 import TradingChart from "@/components/market/TradingChart";
@@ -142,7 +142,6 @@ function Label({
   tone: string;
   captionTone?: string;
 }) {
-  // Держим крайние подписи в пределах карточки
   const align = pos < 12 ? "left-0 items-start" : pos > 88 ? "right-0 items-end" : "-translate-x-1/2 items-center";
   const style = pos < 12 ? { left: 0 } : pos > 88 ? { right: 0 } : { left: `${pos}%` };
   return (
@@ -164,164 +163,208 @@ function Metric({ label, value, tone }: { label: string; value: string; tone: st
   );
 }
 
+const BACK_HEIGHT = 620; // высота развёрнутого экрана график+стакан
+
 interface Props {
   signal: SignalOut;
   balance?: number;
   currentPrice?: number;
-  showChart?: boolean;
-  showBook?: boolean;
 }
 
-export default function SignalCard({
-  signal: s,
-  balance = 1000,
-  currentPrice,
-  showChart = false,
-  showBook = false,
-}: Props) {
-  const [chartOpen, setChartOpen] = useState(showChart);
-  const [bookOpen, setBookOpen] = useState(showBook);
+export default function SignalCard({ signal: s, balance = 1000, currentPrice }: Props) {
+  const [flipped, setFlipped] = useState(false);
+  const [everFlipped, setEverFlipped] = useState(false); // ленивая загрузка тяжёлых виджетов
+  const [frontH, setFrontH] = useState<number>();
+  const frontRef = useRef<HTMLDivElement>(null);
+
   const calc = calcPosition(s, balance);
   const long = isLong(s.direction);
   const active = s.status === "active";
   const DirectionIcon = long ? TrendingUp : TrendingDown;
   const bestProfit = calc ? calc.tp3_profit || calc.tp2_profit || calc.tp1_profit : 0;
 
-  return (
-    <div
-      className={`group relative overflow-hidden rounded-2xl border bg-[#0f1318] transition-all duration-300 ${
-        active
-          ? "border-white/[0.08] shadow-[0_4px_24px_rgba(0,0,0,0.45)] hover:border-white/[0.16] hover:shadow-[0_8px_36px_rgba(0,0,0,0.6)]"
-          : "border-white/[0.05] opacity-55"
-      }`}
-    >
-      {/* Accent line on top */}
-      <div className={`h-px w-full ${long ? "bg-gradient-to-r from-transparent via-success/50 to-transparent" : "bg-gradient-to-r from-transparent via-danger/50 to-transparent"}`} />
+  // Меряем высоту лицевой стороны, чтобы плавно анимировать переворот к/от большого экрана
+  useEffect(() => {
+    const el = frontRef.current;
+    if (!el) return;
+    const update = () => setFrontH(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 pt-3.5 pb-3">
-        <div className="flex items-center gap-3">
+  function openChart() {
+    setEverFlipped(true);
+    setFlipped(true);
+  }
+
+  return (
+    <div style={{ perspective: "1800px" }}>
+      <div
+        className="relative"
+        style={{
+          transformStyle: "preserve-3d",
+          height: frontH ? (flipped ? BACK_HEIGHT : frontH) : undefined,
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+          transition: "transform 700ms cubic-bezier(.22,.68,.16,1), height 700ms cubic-bezier(.22,.68,.16,1)",
+        }}
+      >
+        {/* ── ЛИЦЕВАЯ СТОРОНА — сигнал ─────────────────────────── */}
+        <div ref={frontRef} style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}>
           <div
-            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${
-              long ? "border-success/25 bg-success/[0.12] text-success" : "border-danger/25 bg-danger/[0.12] text-danger"
+            className={`group relative overflow-hidden rounded-2xl border bg-[#0f1318] transition-colors duration-300 ${
+              active
+                ? "border-white/[0.08] shadow-[0_4px_24px_rgba(0,0,0,0.45)] hover:border-white/[0.16]"
+                : "border-white/[0.05] opacity-55"
             }`}
           >
-            <DirectionIcon className="h-3.5 w-3.5" strokeWidth={2.5} />
-            {s.direction}
-          </div>
-          <div className="flex flex-col leading-tight">
-            <span className="font-mono text-[17px] font-extrabold tracking-tight text-white">{s.symbol}</span>
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-white/30">
-              Плечо ×{s.leverage}
-            </span>
-          </div>
-        </div>
+            {/* Accent line */}
+            <div className={`h-px w-full ${long ? "bg-gradient-to-r from-transparent via-success/50 to-transparent" : "bg-gradient-to-r from-transparent via-danger/50 to-transparent"}`} />
 
-        {/* Status */}
-        <div
-          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-            active ? "border-success/20 bg-success/[0.08] text-success" : "border-white/[0.08] bg-white/[0.03] text-white/30"
-          }`}
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-success shadow-[0_0_6px] shadow-success/70" : "bg-white/30"}`} />
-          {active ? "Live" : "Closed"}
-        </div>
-      </div>
-
-      <div className="space-y-3.5 px-4 pb-4">
-        {/* TradingView chart snapshot */}
-        {s.chart_url && tvImageUrl(s.chart_url) && (
-          <a href={s.chart_url} target="_blank" rel="noopener noreferrer">
-            <img
-              src={tvImageUrl(s.chart_url)!}
-              alt="chart"
-              className="max-h-44 w-full rounded-xl border border-white/[0.06] object-cover transition-colors hover:border-white/[0.14]"
-            />
-          </a>
-        )}
-
-        {/* Price track */}
-        <PriceTrack signal={s} currentPrice={currentPrice} />
-
-        {/* Price levels grid */}
-        <div className="grid grid-cols-4 divide-x divide-white/[0.05] overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]">
-          <Metric label="Вход" value={s.entry_price ? fmtUsd(parseFloat(s.entry_price), 4) : "-"} tone="text-white" />
-          <Metric label="Стоп" value={s.stop_loss ? fmtUsd(parseFloat(s.stop_loss), 4) : "-"} tone="text-danger" />
-          <Metric label="TP1" value={s.tp1 ? fmtUsd(parseFloat(s.tp1), 4) : "-"} tone="text-success" />
-          <Metric label="TP2/3" value={(s.tp3 || s.tp2) ? fmtUsd(parseFloat(s.tp3 || s.tp2!), 4) : "-"} tone="text-accent-cyan" />
-        </div>
-
-        {/* Calc panel */}
-        {calc && (
-          <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]">
-            <div className="grid grid-cols-3 divide-x divide-white/[0.05]">
-              <Metric label="Маржа" value={`$${calc.margin.toFixed(0)}`} tone="text-white/80" />
-              <Metric label="Риск" value={`−$${calc.risk.toFixed(0)}`} tone="text-danger" />
-              <Metric
-                label={calc.tp3_profit > 0 ? "Профит TP3" : calc.tp2_profit > 0 ? "Профит TP2" : "Профит TP1"}
-                value={`+$${bestProfit.toFixed(0)}`}
-                tone="text-success"
-              />
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 pt-3.5 pb-3">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${
+                    long ? "border-success/25 bg-success/[0.12] text-success" : "border-danger/25 bg-danger/[0.12] text-danger"
+                  }`}
+                >
+                  <DirectionIcon className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  {s.direction}
+                </div>
+                <div className="flex flex-col leading-tight">
+                  <span className="font-mono text-[17px] font-extrabold tracking-tight text-white">{s.symbol}</span>
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-white/30">Плечо ×{s.leverage}</span>
+                </div>
+              </div>
+              <div
+                className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                  active ? "border-success/20 bg-success/[0.08] text-success" : "border-white/[0.08] bg-white/[0.03] text-white/30"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-success shadow-[0_0_6px] shadow-success/70" : "bg-white/30"}`} />
+                {active ? "Live" : "Closed"}
+              </div>
             </div>
-            <div className="flex items-center justify-between border-t border-white/[0.05] bg-white/[0.01] px-4 py-2.5">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/30">Risk / Reward</span>
-              <span className="bg-gradient-to-r from-accent-gold to-yellow-300 bg-clip-text font-mono text-sm font-black text-transparent">
-                1 : {calc.rr1.toFixed(1)}
+
+            <div className="space-y-3.5 px-4 pb-4">
+              {/* Snapshot */}
+              {s.chart_url && tvImageUrl(s.chart_url) && (
+                <a href={s.chart_url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={tvImageUrl(s.chart_url)!}
+                    alt="chart"
+                    className="max-h-44 w-full rounded-xl border border-white/[0.06] object-cover transition-colors hover:border-white/[0.14]"
+                  />
+                </a>
+              )}
+
+              <PriceTrack signal={s} currentPrice={currentPrice} />
+
+              {/* Levels */}
+              <div className="grid grid-cols-4 divide-x divide-white/[0.05] overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]">
+                <Metric label="Вход" value={s.entry_price ? fmtUsd(parseFloat(s.entry_price), 4) : "-"} tone="text-white" />
+                <Metric label="Стоп" value={s.stop_loss ? fmtUsd(parseFloat(s.stop_loss), 4) : "-"} tone="text-danger" />
+                <Metric label="TP1" value={s.tp1 ? fmtUsd(parseFloat(s.tp1), 4) : "-"} tone="text-success" />
+                <Metric label="TP2/3" value={(s.tp3 || s.tp2) ? fmtUsd(parseFloat(s.tp3 || s.tp2!), 4) : "-"} tone="text-accent-cyan" />
+              </div>
+
+              {/* Calc */}
+              {calc && (
+                <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]">
+                  <div className="grid grid-cols-3 divide-x divide-white/[0.05]">
+                    <Metric label="Маржа" value={`$${calc.margin.toFixed(0)}`} tone="text-white/80" />
+                    <Metric label="Риск" value={`−$${calc.risk.toFixed(0)}`} tone="text-danger" />
+                    <Metric
+                      label={calc.tp3_profit > 0 ? "Профит TP3" : calc.tp2_profit > 0 ? "Профит TP2" : "Профит TP1"}
+                      value={`+$${bestProfit.toFixed(0)}`}
+                      tone="text-success"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between border-t border-white/[0.05] bg-white/[0.01] px-4 py-2.5">
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/30">Risk / Reward</span>
+                    <span className="bg-gradient-to-r from-accent-gold to-yellow-300 bg-clip-text font-mono text-sm font-black text-transparent">
+                      1 : {calc.rr1.toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 pt-0.5">
+                <a
+                  href={`https://www.weex.com/ru/futures/${s.symbol}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent-cyan py-2.5 text-[12px] font-bold tracking-wide text-bg-deep transition-all duration-200 hover:brightness-110"
+                >
+                  Войти в сделку
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+                <button
+                  onClick={openChart}
+                  title="Открыть график и стакан"
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-white/[0.02] px-3.5 py-2.5 text-[12px] font-semibold text-white/50 ring-1 ring-inset ring-white/[0.07] transition-all duration-150 hover:text-white/80 hover:ring-white/[0.16]"
+                >
+                  <CandlestickChart className="h-3.5 w-3.5" />
+                  График
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── ОБРАТНАЯ СТОРОНА — большой график (Heikin-Ashi) + стакан ── */}
+        <div
+          className="absolute inset-0"
+          style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+        >
+          <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0b0e11] shadow-[0_8px_36px_rgba(0,0,0,0.6)]">
+            {/* Шапка с кнопкой назад */}
+            <div className="flex shrink-0 items-center justify-between border-b border-white/[0.08] px-3 py-2.5">
+              <button
+                onClick={() => setFlipped(false)}
+                className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] px-3 py-1.5 text-[12px] font-semibold text-white/70 ring-1 ring-inset ring-white/[0.08] transition hover:bg-white/[0.08] hover:text-white"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Назад
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm font-extrabold text-white">{s.symbol}</span>
+                <span
+                  className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                    long ? "border-success/25 bg-success/[0.1] text-success" : "border-danger/25 bg-danger/[0.1] text-danger"
+                  }`}
+                >
+                  <DirectionIcon className="h-3 w-3" strokeWidth={2.5} />
+                  {s.direction}
+                </span>
+              </div>
+              <span className="rounded-md border border-accent-cyan/25 bg-accent-cyan/[0.08] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-cyan">
+                Heikin-Ashi
               </span>
             </div>
-          </div>
-        )}
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 pt-0.5">
-          <a
-            href={`https://www.weex.com/ru/futures/${s.symbol}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent-cyan py-2.5 text-[12px] font-bold tracking-wide text-bg-deep transition-all duration-200 hover:brightness-110"
-          >
-            Войти в сделку
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          <button
-            onClick={() => setChartOpen(!chartOpen)}
-            title="График"
-            className={`flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2.5 text-[12px] font-semibold ring-1 ring-inset transition-all duration-150 ${
-              chartOpen
-                ? "bg-accent-cyan/[0.08] text-accent-cyan ring-accent-cyan/30"
-                : "bg-white/[0.02] text-white/40 ring-white/[0.07] hover:text-white/70 hover:ring-white/[0.14]"
-            }`}
-          >
-            <CandlestickChart className="h-3.5 w-3.5" />
-            График
-          </button>
-          <button
-            onClick={() => setBookOpen(!bookOpen)}
-            title="Стакан"
-            className={`flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2.5 text-[12px] font-semibold ring-1 ring-inset transition-all duration-150 ${
-              bookOpen
-                ? "bg-accent-cyan/[0.08] text-accent-cyan ring-accent-cyan/30"
-                : "bg-white/[0.02] text-white/40 ring-white/[0.07] hover:text-white/70 hover:ring-white/[0.14]"
-            }`}
-          >
-            <Layers className="h-3.5 w-3.5" />
-            Стакан
-          </button>
+            {/* График (свечи Heikin-Ashi) */}
+            <div className="h-[360px] shrink-0">
+              {everFlipped && (
+                <TradingChart symbol={s.symbol} interval="15" height={360} chartStyle="8" showToolbar />
+              )}
+            </div>
+
+            {/* Стакан */}
+            <div className="flex min-h-0 flex-1 flex-col border-t border-white/[0.07]">
+              <div className="flex shrink-0 items-center justify-between px-4 py-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Стакан цен</span>
+                <span className="font-mono text-[10px] text-text-muted">{s.symbol}</span>
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto">
+                {everFlipped && <OrderBook symbol={s.symbol} rows={12} compact />}
+              </div>
+            </div>
+          </div>
         </div>
-
-        {/* Expandable chart — свечной график той же пары */}
-        {chartOpen && (
-          <div className="overflow-hidden rounded-xl border border-white/[0.08]">
-            <TradingChart symbol={s.symbol} interval="15" height={360} chartStyle="1" showToolbar />
-          </div>
-        )}
-
-        {/* Expandable orderbook */}
-        {bookOpen && (
-          <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-bg-panel">
-            <OrderBook symbol={s.symbol} rows={10} compact />
-          </div>
-        )}
       </div>
     </div>
   );
