@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { API_URL } from "@/lib/api";
+import { API_URL, GlobalMarket } from "@/lib/api";
 import {
   Building2, TrendingUp, TrendingDown, Minus,
   AlertTriangle, BarChart3, DollarSign, Activity, Zap,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, Globe,
 } from "lucide-react";
 
 // ── Embedded CSS ──────────────────────────────────────────────────────────────
@@ -1024,6 +1024,50 @@ function FundingHeatmapSection() {
   );
 }
 
+// ── Global Market Section (CoinGecko via бэкенд) ──────────────────────────────
+
+function fmtMoney(n: number): string {
+  if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9)  return `$${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6)  return `$${(n / 1e6).toFixed(0)}M`;
+  return `$${n.toFixed(0)}`;
+}
+
+function GlobalMarketSection() {
+  const [g, setG] = useState<GlobalMarket | null>(null);
+
+  useEffect(() => {
+    const load = () => fetchJson<GlobalMarket>(`${API_URL}/api/market/global`).then(d => { if (d) setG(d); });
+    load();
+    const t = setInterval(load, 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const pos = (g?.market_cap_change_24h ?? 0) >= 0;
+
+  return (
+    <Section icon={<Globe className="h-4 w-4 text-accent-cyan" />}
+      title="Глобальный рынок" accent="cyan" delay={0.05}
+      badge={<LiveBadge />} sub="CoinGecko · вся крипта">
+      {!g ? <Skeleton rows={2} /> : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <KpiCard label="Капитализация" value={fmtMoney(g.total_market_cap_usd)}
+            sub={g.active_cryptos ? `${fmt(g.active_cryptos)} монет` : undefined}
+            color="#ffffff" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0} />
+          <KpiCard label="BTC доминация" value={`${g.btc_dominance.toFixed(1)}%`}
+            color="#f0b90b" bg="rgba(240,185,11,0.07)" border="rgba(240,185,11,0.18)" delay={0.05} />
+          <KpiCard label="Объём 24ч" value={fmtMoney(g.total_volume_usd)}
+            color="#0affe0" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.1} />
+          <KpiCard label="Капа 24ч" value={`${pos ? "+" : ""}${g.market_cap_change_24h.toFixed(2)}%`}
+            color={pos ? "#0ecb81" : "#f6465d"}
+            bg={pos ? "rgba(14,203,129,0.07)" : "rgba(246,70,93,0.07)"}
+            border={pos ? "rgba(14,203,129,0.2)" : "rgba(246,70,93,0.2)"} delay={0.15} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SmartMoneyPage() {
@@ -1063,6 +1107,9 @@ export default function SmartMoneyPage() {
             </div>
           </div>
         </div>
+
+        {/* Глобальный рынок */}
+        <GlobalMarketSection/>
 
         {/* Grid: COT + Macro */}
         <div className="grid gap-5 xl:grid-cols-2">

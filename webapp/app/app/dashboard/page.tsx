@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { api, API_URL, GlobalMarket, TrendingCoin, OnChainStats, ForexRates } from "@/lib/api";
+import { api, API_URL, TrendingCoin, OnChainStats, ForexRates } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 
@@ -919,42 +919,6 @@ function FundingWidget({ symbol }: { symbol: string }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-// ── Widget: Глобальный рынок (CoinGecko) ──────────────────────────────────────
-
-function GlobalMarketWidget() {
-  const [g, setG] = useState<GlobalMarket | null>(null);
-  useEffect(() => {
-    const load = () => api.marketGlobal().then(setG).catch(() => {});
-    load();
-    const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
-  }, []);
-
-  const pos = (g?.market_cap_change_24h ?? 0) >= 0;
-  const cells = [
-    { label: "Капа рынка", value: g ? `$${fmtVol(g.total_market_cap_usd)}` : "—", col: "#fff" },
-    { label: "BTC доминация", value: g ? `${g.btc_dominance.toFixed(1)}%` : "—", col: "#F7931A" },
-    { label: "Объём 24ч", value: g ? `$${fmtVol(g.total_volume_usd)}` : "—", col: "#9ca3af" },
-    {
-      label: "Капа 24ч",
-      value: g ? `${pos ? "+" : ""}${g.market_cap_change_24h.toFixed(2)}%` : "—",
-      col: pos ? "#0ecb81" : "#f6465d",
-    },
-  ];
-  return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {cells.map((c) => (
-        <div key={c.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-center">
-          <div className="mb-1 text-[7.5px] uppercase tracking-widest text-white/30 leading-none">{c.label}</div>
-          <div className="font-mono text-[14px] font-bold tabular-nums leading-none" style={{ color: c.col }}>
-            {c.value}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── Widget: Трендовые монеты (CoinGecko) ──────────────────────────────────────
 
 function TrendingWidget() {
@@ -1107,12 +1071,6 @@ export default function Dashboard() {
 
       {/* Widgets */}
       <div className="flex flex-col gap-3 p-3">
-
-        {/* Глобальный рынок (CoinGecko) */}
-        <Card className="p-5">
-          <WidgetHeader label="Глобальный рынок" badgeNode={<LiveBadge />} />
-          <GlobalMarketWidget />
-        </Card>
 
         <div className="grid gap-3 sm:grid-cols-3">
 
