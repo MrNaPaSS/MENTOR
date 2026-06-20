@@ -871,6 +871,19 @@ function FundingWidget({ symbol }: { symbol: string }) {
 export default function Dashboard() {
   const router = useRouter();
   const [activeSym, setActiveSym] = useState("BTCUSDT");
+  const [bookRows, setBookRows] = useState(11);
+  const bookRef = useRef<HTMLDivElement>(null);
+
+  // Стакан заполняет высоту графика: число строк под высоту колонки
+  useEffect(() => {
+    const el = bookRef.current;
+    if (!el) return;
+    const update = () => setBookRows(Math.max(8, Math.floor((el.clientHeight - 150) / (2 * 20))));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -898,9 +911,9 @@ export default function Dashboard() {
           <TradingChart symbol={activeSym} interval="15" height={600} showToolbar={false}
             studies={["PUB;RmG5HL1Q", "PUB;CnB3fSph"]} />
         </div>
-        <div className="hidden flex-shrink-0 overflow-hidden border-l border-white/[0.05] lg:flex lg:flex-col"
+        <div ref={bookRef} className="hidden flex-shrink-0 overflow-hidden border-l border-white/[0.05] lg:flex lg:flex-col"
           style={{ width: 260 }}>
-          <OrderBook symbol={activeSym} rows={16} />
+          <OrderBook symbol={activeSym} rows={bookRows} />
         </div>
       </div>
 
