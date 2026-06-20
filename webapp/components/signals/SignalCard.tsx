@@ -196,7 +196,7 @@ function ChartOverlay({ signal: s, onClose }: { signal: SignalOut; onClose: () =
       />
 
       {/* Панель — переворачивается при появлении */}
-      <div style={{ perspective: "2200px" }} className="relative z-10 h-[94vh] w-full max-w-6xl">
+      <div style={{ perspective: "2200px" }} className="relative z-10 h-[78vh] max-h-[760px] w-full max-w-[1400px]">
         <div
           className="flex h-full flex-col overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0b0e11] shadow-[0_24px_80px_rgba(0,0,0,0.7)] transition-all duration-500 ease-[cubic-bezier(.22,.68,.16,1)]"
           style={{
