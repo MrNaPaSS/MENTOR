@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { API_URL, GlobalMarket } from "@/lib/api";
+import { API_URL, GlobalMarket, TrendingCoin, OnChainStats, ForexRates } from "@/lib/api";
 import {
   Building2, TrendingUp, TrendingDown, Minus,
   AlertTriangle, BarChart3, DollarSign, Activity, Zap,
-  ChevronUp, ChevronDown, Globe,
+  ChevronUp, ChevronDown, Globe, Flame, Boxes, Banknote,
 } from "lucide-react";
 
 // ── Embedded CSS ──────────────────────────────────────────────────────────────
@@ -1068,6 +1068,174 @@ function GlobalMarketSection() {
   );
 }
 
+// ── Trending Coins Section (CoinGecko) ────────────────────────────────────────
+
+function TrendingSection() {
+  const [coins, setCoins] = useState<TrendingCoin[] | null>(null);
+
+  useEffect(() => {
+    const load = () => fetchJson<{ coins: TrendingCoin[] }>(`${API_URL}/api/market/trending`)
+      .then(d => { if (d?.coins) setCoins(d.coins); });
+    load();
+    const t = setInterval(load, 120_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const rankStyle = (i: number) =>
+    i === 0 ? { color: "#f0b90b", bg: "rgba(240,185,11,0.15)", bd: "rgba(240,185,11,0.4)" }
+    : i === 1 ? { color: "#cbd5e1", bg: "rgba(203,213,225,0.12)", bd: "rgba(203,213,225,0.3)" }
+    : i === 2 ? { color: "#d8895a", bg: "rgba(216,137,90,0.12)", bd: "rgba(216,137,90,0.3)" }
+    : { color: "rgba(255,255,255,0.35)", bg: "rgba(255,255,255,0.04)", bd: "rgba(255,255,255,0.08)" };
+
+  return (
+    <Section icon={<Flame className="h-4 w-4 text-accent-gold" />}
+      title="Трендовые монеты" accent="gold" delay={0.1}
+      badge={<LiveBadge />} sub="CoinGecko · поиск за 24ч">
+      {!coins ? <Skeleton rows={6} /> : (
+        <div className="space-y-1.5">
+          {coins.slice(0, 8).map((c, i) => {
+            const rs = rankStyle(i);
+            return (
+              <div key={c.id} className="sm-fade-up sm-hover flex items-center gap-3 rounded-xl px-3 py-2.5"
+                style={{ animationDelay: `${i * 0.04}s`, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg font-mono text-[11px] font-black"
+                  style={{ color: rs.color, background: rs.bg, border: `1px solid ${rs.bd}` }}>
+                  {i + 1}
+                </span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={c.thumb} alt={c.symbol} className="h-6 w-6 flex-shrink-0 rounded-full ring-1 ring-white/10" />
+                <span className="font-bold text-[13px] text-white">{c.symbol}</span>
+                <span className="truncate text-[11px] text-white/30">{c.name}</span>
+                {c.rank != null && (
+                  <span className="ml-auto flex-shrink-0 rounded-md bg-white/[0.05] px-2 py-0.5 font-mono text-[9px] font-semibold text-white/40">
+                    #{c.rank}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ── Bitcoin Network / On-chain Section (mempool.space + blockchain.info) ───────
+
+function BtcNetworkSection() {
+  const [d, setD] = useState<OnChainStats | null>(null);
+
+  useEffect(() => {
+    const load = () => fetchJson<OnChainStats>(`${API_URL}/api/market/onchain`).then(x => { if (x) setD(x); });
+    load();
+    const t = setInterval(load, 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const diffPos = (d?.difficulty_change_pct ?? 0) >= 0;
+
+  const feeTiers = d ? [
+    { label: "Срочно", value: d.fees.fastest, color: "#f6465d" },
+    { label: "30 мин", value: d.fees.half_hour, color: "#f0b90b" },
+    { label: "1 час", value: d.fees.hour, color: "#0affe0" },
+    { label: "Эконом", value: d.fees.economy, color: "#0ecb81" },
+  ] : [];
+
+  return (
+    <Section icon={<Boxes className="h-4 w-4 text-accent-gold" />}
+      title="Сеть Bitcoin" accent="gold" delay={0.15}
+      badge={<LiveBadge />} sub="mempool.space · blockchain.info">
+      {!d ? <Skeleton rows={4} /> : (
+        <div className="space-y-4">
+          {/* Комиссии по приоритету */}
+          <div>
+            <div className="mb-2 text-[9px] uppercase tracking-widest text-white/25">Комиссия сети (sat/vB)</div>
+            <div className="grid grid-cols-4 gap-2">
+              {feeTiers.map((f, i) => (
+                <div key={f.label} className="sm-fade-up rounded-xl px-2 py-2.5 text-center"
+                  style={{ animationDelay: `${i * 0.04}s`, background: `${f.color}0d`, border: `1px solid ${f.color}25` }}>
+                  <div className="font-mono text-[18px] font-extrabold leading-none" style={{ color: f.color, textShadow: `0 0 16px ${f.color}40` }}>
+                    {f.value}
+                  </div>
+                  <div className="mt-1.5 text-[8px] uppercase tracking-wider text-white/30">{f.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* KPI */}
+          <div className="grid grid-cols-3 gap-3">
+            <KpiCard label="Хешрейт" value={`${d.hash_rate_ehs.toFixed(0)}`} sub="EH/s"
+              color="#0affe0" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.05} />
+            <KpiCard label="Транзакций 24ч" value={fmtB(d.tx_count_24h).replace("$", "")}
+              color="#ffffff" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0.1} />
+            <KpiCard label="Сложность" value={`${diffPos ? "+" : ""}${d.difficulty_change_pct.toFixed(2)}%`}
+              sub={`ретаргет ${d.retarget_progress_pct.toFixed(0)}%`}
+              color={diffPos ? "#0ecb81" : "#f6465d"}
+              bg={diffPos ? "rgba(14,203,129,0.07)" : "rgba(246,70,93,0.07)"}
+              border={diffPos ? "rgba(14,203,129,0.2)" : "rgba(246,70,93,0.2)"} delay={0.15} />
+          </div>
+
+          <p className="text-[9px] text-white/15">
+            Низкая комиссия = свободная сеть · рост сложности = приток майнеров (бычий сигнал для безопасности сети).
+          </p>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ── Forex Section (Frankfurter) ───────────────────────────────────────────────
+
+const FOREX_META: Record<string, { flag: string; name: string }> = {
+  EUR: { flag: "🇪🇺", name: "Евро" },
+  GBP: { flag: "🇬🇧", name: "Фунт стерлингов" },
+  JPY: { flag: "🇯🇵", name: "Иена" },
+  CHF: { flag: "🇨🇭", name: "Швейцарский франк" },
+  CAD: { flag: "🇨🇦", name: "Канадский доллар" },
+  AUD: { flag: "🇦🇺", name: "Австралийский доллар" },
+};
+
+function ForexSection() {
+  const [fx, setFx] = useState<ForexRates | null>(null);
+
+  useEffect(() => {
+    const load = () => fetchJson<ForexRates>(`${API_URL}/api/market/forex`).then(d => { if (d) setFx(d); });
+    load();
+    const t = setInterval(load, 600_000);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <Section icon={<Banknote className="h-4 w-4 text-accent-cyan" />}
+      title="Форекс" accent="cyan" delay={0.2}
+      badge={fx ? <span className="rounded-md border border-white/[0.08] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-white/40">{fx.date}</span> : undefined}
+      sub="Frankfurter · базовая USD">
+      {!fx ? <Skeleton rows={4} /> : (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {Object.entries(fx.rates).map(([cur, rate], i) => {
+            const meta = FOREX_META[cur] ?? { flag: "💱", name: cur };
+            return (
+              <div key={cur} className="sm-fade-up sm-hover flex items-center gap-3 rounded-xl px-3.5 py-3"
+                style={{ animationDelay: `${i * 0.04}s`, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <span className="text-[22px] leading-none">{meta.flag}</span>
+                <div className="min-w-0">
+                  <div className="font-bold text-[13px] text-white">{fx.base}/{cur}</div>
+                  <div className="truncate text-[10px] text-white/30">{meta.name}</div>
+                </div>
+                <span className="ml-auto font-mono text-[16px] font-extrabold tabular-nums text-accent-cyan"
+                  style={{ textShadow: "0 0 16px rgba(10,255,224,0.25)" }}>
+                  {rate.toFixed(4)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SmartMoneyPage() {
@@ -1111,19 +1279,28 @@ export default function SmartMoneyPage() {
         {/* Глобальный рынок */}
         <GlobalMarketSection/>
 
-        {/* Grid: COT + Macro */}
+        {/* Grid: Трендовые монеты + Сеть Bitcoin */}
+        <div className="grid gap-5 xl:grid-cols-2">
+          <TrendingSection/>
+          <BtcNetworkSection/>
+        </div>
+
+        {/* Форекс — full width */}
+        <ForexSection/>
+
+        {/* Grid: COT + Ставки и финансирование */}
         <div className="grid gap-5 xl:grid-cols-2">
           <CotSection/>
-          <MacroSection/>
+          <FundingHeatmapSection/>
         </div>
 
         {/* Derivatives — full width */}
         <DerivativesSection/>
 
-        {/* Grid: Onchain + Funding */}
+        {/* Grid: Onchain + Макро индикаторы */}
         <div className="grid gap-5 xl:grid-cols-2">
           <OnchainSection/>
-          <FundingHeatmapSection/>
+          <MacroSection/>
         </div>
 
         {/* ETF — full width */}

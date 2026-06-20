@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { api, API_URL, TrendingCoin, OnChainStats, ForexRates } from "@/lib/api";
+import { api, API_URL } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 
@@ -919,107 +919,6 @@ function FundingWidget({ symbol }: { symbol: string }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-// ── Widget: Трендовые монеты (CoinGecko) ──────────────────────────────────────
-
-function TrendingWidget() {
-  const [coins, setCoins] = useState<TrendingCoin[]>([]);
-  useEffect(() => {
-    const load = () => api.marketTrending().then((d) => setCoins(d.coins)).catch(() => {});
-    load();
-    const t = setInterval(load, 120_000);
-    return () => clearInterval(t);
-  }, []);
-
-  if (!coins.length) return <div className="h-[200px] animate-pulse rounded-xl bg-white/[0.04]" />;
-  return (
-    <div className="space-y-1.5">
-      {coins.slice(0, 7).map((c, i) => (
-        <div key={c.id} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-white/[0.03]">
-          <span className="w-4 text-center font-mono text-[11px] font-bold text-white/25">{i + 1}</span>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={c.thumb} alt={c.symbol} className="h-5 w-5 rounded-full" />
-          <span className="font-semibold text-[13px] text-white">{c.symbol}</span>
-          <span className="truncate text-[11px] text-white/35">{c.name}</span>
-          {c.rank != null && (
-            <span className="ml-auto rounded-md bg-white/[0.05] px-1.5 py-0.5 font-mono text-[9px] text-white/40">
-              #{c.rank}
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Widget: Сеть BTC / on-chain (mempool.space + blockchain.info) ─────────────
-
-function OnChainWidget() {
-  const [d, setD] = useState<OnChainStats | null>(null);
-  useEffect(() => {
-    const load = () => api.marketOnchain().then(setD).catch(() => {});
-    load();
-    const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
-  }, []);
-
-  if (!d) return <div className="h-[200px] animate-pulse rounded-xl bg-white/[0.04]" />;
-  const diffPos = d.difficulty_change_pct >= 0;
-  const rows = [
-    { label: "Комиссия (быстро)", value: `${d.fees.fastest} sat/vB`, col: "#fff" },
-    { label: "Комиссия (час)", value: `${d.fees.hour} sat/vB`, col: "#9ca3af" },
-    { label: "Хешрейт", value: `${d.hash_rate_ehs.toFixed(0)} EH/s`, col: "#0affe0" },
-    { label: "Транзакций 24ч", value: fmtVol(d.tx_count_24h), col: "#fff" },
-    {
-      label: "Сложность (ретаргет)",
-      value: `${diffPos ? "+" : ""}${d.difficulty_change_pct.toFixed(2)}%`,
-      col: diffPos ? "#0ecb81" : "#f6465d",
-    },
-  ];
-  return (
-    <div className="space-y-1.5">
-      {rows.map((r) => (
-        <div key={r.label} className="flex items-center justify-between rounded-lg px-2 py-1.5">
-          <span className="text-[11px] text-white/40">{r.label}</span>
-          <span className="font-mono text-[12px] font-bold tabular-nums" style={{ color: r.col }}>{r.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Widget: Форекс (Frankfurter) ──────────────────────────────────────────────
-
-const FOREX_FLAGS: Record<string, string> = {
-  EUR: "🇪🇺", GBP: "🇬🇧", JPY: "🇯🇵", CHF: "🇨🇭", CAD: "🇨🇦", AUD: "🇦🇺",
-};
-
-function ForexWidget() {
-  const [fx, setFx] = useState<ForexRates | null>(null);
-  useEffect(() => {
-    const load = () => api.marketForex().then(setFx).catch(() => {});
-    load();
-    const t = setInterval(load, 600_000);
-    return () => clearInterval(t);
-  }, []);
-
-  if (!fx) return <div className="h-[200px] animate-pulse rounded-xl bg-white/[0.04]" />;
-  const entries = Object.entries(fx.rates);
-  return (
-    <div className="space-y-1.5">
-      {entries.map(([cur, rate]) => (
-        <div key={cur} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/[0.03]">
-          <span className="flex items-center gap-2 text-[12px] font-semibold text-white">
-            <span>{FOREX_FLAGS[cur] ?? "💱"}</span>
-            {fx.base}/{cur}
-          </span>
-          <span className="font-mono text-[12px] font-bold tabular-nums text-white/80">{rate.toFixed(4)}</span>
-        </div>
-      ))}
-      <p className="pt-1 text-center text-[8px] text-white/20">обновлено {fx.date}</p>
-    </div>
-  );
-}
-
 export default function Dashboard() {
   const router = useRouter();
   const [activeSym, setActiveSym] = useState("BTCUSDT");
@@ -1113,22 +1012,6 @@ export default function Dashboard() {
           </div>
           <LiquidationWidget symbol={activeSym} />
         </Card>
-
-        {/* Трендовые монеты · Сеть BTC · Форекс */}
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Card className="p-5">
-            <WidgetHeader label="Трендовые монеты" badge="CoinGecko" badgeCls="border-accent-gold/25 bg-accent-gold/10 text-accent-gold" />
-            <TrendingWidget />
-          </Card>
-          <Card className="p-5">
-            <WidgetHeader label="Сеть Bitcoin" badgeNode={<LiveBadge />} />
-            <OnChainWidget />
-          </Card>
-          <Card className="p-5">
-            <WidgetHeader label="Форекс" badge="USD" badgeCls="border-white/[0.08] text-white/30" />
-            <ForexWidget />
-          </Card>
-        </div>
 
       </div>
     </div>
