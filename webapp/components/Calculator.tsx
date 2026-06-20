@@ -227,7 +227,7 @@ export default function Calculator() {
                   value={`$${fmtUsd(result.risk_usd)}`}
                   accent={riskPct > 5 ? "danger" : "neutral"}
                 />
-                <ResultCard label="Цена стопа" value={`$${result.sl_price}`} accent="neutral" />
+                <ResultCard label="Цена стопа" value={`$${fmtUsd(result.sl_price, 4)}`} accent="neutral" />
               </div>
 
               {/* TP rows */}
