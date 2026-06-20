@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Menu, X, Moon, ArrowRight } from "lucide-react";
+import { Menu, X, ArrowRight } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import { NAV_LINKS } from "@/lib/content";
 import { getAccessToken } from "@/lib/auth";
@@ -11,7 +11,6 @@ export default function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
-  const [lang, setLang] = useState<"RU" | "EN">("RU");
 
   useEffect(() => {
     setAuthed(!!getAccessToken());
@@ -55,19 +54,6 @@ export default function Header() {
 
         {/* Действия справа */}
         <div className="hidden items-center gap-2 md:flex">
-          <button
-            onClick={() => setLang((p) => (p === "RU" ? "EN" : "RU"))}
-            className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-text-secondary ring-1 ring-border transition hover:text-white hover:ring-accent-cyan/40"
-            aria-label="Сменить язык"
-          >
-            {lang} | {lang === "RU" ? "EN" : "RU"}
-          </button>
-          <button
-            className="grid h-8 w-8 place-items-center rounded-lg text-text-secondary ring-1 ring-border transition hover:text-accent-cyan hover:ring-accent-cyan/40"
-            aria-label="Тема"
-          >
-            <Moon className="h-4 w-4" />
-          </button>
           {authed ? (
             <Link href="/app/dashboard" className="btn-primary">
               Кабинет <ArrowRight className="h-4 w-4" />
