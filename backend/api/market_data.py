@@ -167,18 +167,34 @@ async def ticker_24h(symbol: str):
 
     price_data, klines_data, funding_raw = await asyncio.gather(
         _weex("/capi/v3/market/symbolPrice", {"symbol": sym}),
-        _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "1"}),
+        _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "14"}),
         _weex("/capi/v3/market/fundingRate", {"symbol": sym}),
     )
 
     if price_data and klines_data and isinstance(klines_data, list) and klines_data:
-        k = klines_data[0]
+        # Текущая свеча — с наибольшим таймстемпом (порядок ответа API не гарантирован)
+        rows = [r for r in klines_data if isinstance(r, (list, tuple)) and len(r) > 7]
+        rows.sort(key=lambda r: float(r[0]), reverse=True)
+        k = rows[0] if rows else klines_data[0]
+
         last_price = price_data.get("price", "0")
         open_price = str(k[1])
         high_price = str(k[2])
         low_price  = str(k[3])
         base_vol   = str(k[5])
         quote_vol  = str(k[7])
+
+        # Средний дневной объём за прошлые дни (без текущего) — для оценки активности
+        avg_quote_vol = "0"
+        prior = rows[1:]
+        prior_vols: list[float] = []
+        for row in prior:
+            try:
+                prior_vols.append(float(row[7]))
+            except (ValueError, TypeError, IndexError):
+                pass
+        if prior_vols:
+            avg_quote_vol = f"{sum(prior_vols) / len(prior_vols):.8f}"
 
         try:
             change = float(last_price) - float(open_price)
@@ -195,6 +211,7 @@ async def ticker_24h(symbol: str):
             "lowPrice":           low_price,
             "volume":             base_vol,
             "quoteVolume":        quote_vol,
+            "avgQuoteVolume":     avg_quote_vol,
             "openPrice":          open_price,
             "markPrice":          None,
             "fundingRate":        _extract_funding(funding_raw),

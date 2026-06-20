@@ -80,7 +80,7 @@ function WidgetHeader({ label, badge, badgeCls, badgeNode }: {
 interface TickerData {
   lastPrice?: string; priceChange?: string; priceChangePercent?: string;
   highPrice?: string; lowPrice?: string; volume?: string; quoteVolume?: string;
-  markPrice?: string; fundingRate?: string;
+  avgQuoteVolume?: string; markPrice?: string; fundingRate?: string;
 }
 
 const FALLBACK_SYMBOLS = [
@@ -559,10 +559,53 @@ function calcSignal(pct: number, fr: number, volRatio: number): Signal {
   return "strong_sell";
 }
 
+const easeOutQuad  = (t: number) => 1 - (1 - t) * (1 - t);
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+const easeOutBack  = (t: number) => {
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+};
+
 function SentimentGauge({ value, color }: { value: number; color: string }) {
   const W = 290, H = 158, cx = W / 2, cy = H - 8, r = 114;
 
-  const ang = Math.PI - value * Math.PI;
+  // Анимация стрелки: при первом показе — «оборот газа» (0 → редлайн → позиция рынка),
+  // далее плавный переход при обновлении данных.
+  const [display, setDisplay] = useState(0);
+  const displayRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+  const introDone = useRef(false);
+
+  useEffect(() => {
+    const segs = introDone.current
+      ? [{ to: value, dur: 700, ease: easeOutCubic }]
+      : [
+          { to: 1, dur: 480, ease: easeOutQuad },   // резкий взлёт к редлайну
+          { to: value, dur: 1000, ease: easeOutBack }, // откат и упор в позицию рынка
+        ];
+    introDone.current = true;
+
+    let i = 0, start = 0, from = displayRef.current;
+    const step = (now: number) => {
+      if (!start) { start = now; from = displayRef.current; }
+      const seg = segs[i];
+      const t = Math.min(1, (now - start) / seg.dur);
+      const v = from + (seg.to - from) * seg.ease(t);
+      displayRef.current = v;
+      setDisplay(v);
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(step);
+      } else if (i < segs.length - 1) {
+        i++; start = 0;
+        rafRef.current = requestAnimationFrame(step);
+      }
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [value]);
+
+  const v = Math.max(0, Math.min(1, display));
+  const ang = Math.PI - v * Math.PI;
   const needleLen = r - 20;
   const nx = cx + needleLen * Math.cos(ang);
   const ny = cy - needleLen * Math.sin(ang);
@@ -608,9 +651,9 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
       {/* Active zone overlay */}
       <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
         fill="none" stroke={color} strokeWidth="14" strokeLinecap="butt"
-        strokeDasharray={`${value * Math.PI * r} ${Math.PI * r}`}
+        strokeDasharray={`${v * Math.PI * r} ${Math.PI * r}`}
         opacity="0.55"
-        style={{ transition: "stroke-dasharray 0.9s ease, stroke 0.4s ease" }} />
+        style={{ transition: "stroke 0.4s ease" }} />
 
       {/* Tick marks */}
       {ticks.map(t => {
@@ -639,10 +682,8 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
         );
       })}
 
-      {/* Needle */}
-      <polygon points={`${nx},${ny} ${bx1},${by1} ${bx2},${by2}`}
-        fill={color}
-        style={{ transition: "all 0.9s cubic-bezier(0.34,1.56,0.64,1)" }} />
+      {/* Needle (анимируется через requestAnimationFrame) */}
+      <polygon points={`${nx},${ny} ${bx1},${by1} ${bx2},${by2}`} fill={color} />
 
       {/* Hub */}
       <circle cx={cx} cy={cy} r="11" fill="rgba(10,14,20,0.95)"
@@ -654,17 +695,13 @@ function SentimentGauge({ value, color }: { value: number; color: string }) {
 
 function MarketSentimentWidget({ symbol }: { symbol: string }) {
   const [ticker, setTicker] = useState<TickerData | null>(null);
-  const [prevVol, setPrevVol] = useState(0);
 
   useEffect(() => {
     const load = () =>
       fetch(`${API_URL}/api/market/ticker/${symbol}`, SKIP_NGROK)
         .then(r => r.ok ? r.json() : null)
         .then((d: TickerData | null) => {
-          if (d) {
-            setPrevVol(v => v || parseFloat(d.quoteVolume ?? "0"));
-            setTicker(d);
-          }
+          if (d) setTicker(d);
         })
         .catch(() => {});
     load();
@@ -679,7 +716,9 @@ function MarketSentimentWidget({ symbol }: { symbol: string }) {
   const pct    = parseFloat(ticker.priceChangePercent ?? "0");
   const fr     = parseFloat(ticker.fundingRate ?? "0");
   const curVol = parseFloat(ticker.quoteVolume ?? "0");
-  const volRatio = prevVol > 0 ? curVol / prevVol : 1;
+  const avgVol = parseFloat(ticker.avgQuoteVolume ?? "0");
+  // Сегодняшний объём (частичный) против среднего дневного за прошлые дни
+  const volRatio = avgVol > 0 ? curVol / avgVol : 1;
 
   const signal = calcSignal(pct, fr, volRatio);
   const meta   = SIGNAL_META[signal];
