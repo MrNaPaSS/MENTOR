@@ -179,68 +179,6 @@ function ScreenerSection() {
 function OverviewSection() {
   return (
     <div className="space-y-4">
-      {/* Обзор крипторынка + новости */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="card p-0 overflow-hidden">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-white">Обзор крипторынка</h3>
-            <p className="text-[11px] text-text-muted">Топ монеты · Индексы · Изменения</p>
-          </div>
-          <TvWidget
-            scriptName="embed-widget-market-overview.js"
-            config={{
-              showFloatingTooltip: true,
-              tabs: [
-                {
-                  title: "Крипто",
-                  symbols: [
-                    { s: "BINANCE:BTCUSDT", d: "Bitcoin" },
-                    { s: "BINANCE:ETHUSDT", d: "Ethereum" },
-                    { s: "BINANCE:SOLUSDT", d: "Solana" },
-                    { s: "BINANCE:BNBUSDT", d: "BNB" },
-                    { s: "BINANCE:XRPUSDT", d: "XRP" },
-                    { s: "BINANCE:DOGEUSDT", d: "Dogecoin" },
-                    { s: "BINANCE:ADAUSDT", d: "Cardano" },
-                    { s: "BINANCE:AVAXUSDT", d: "Avalanche" },
-                  ],
-                  originalTitle: "Crypto",
-                },
-                {
-                  title: "Индексы",
-                  symbols: [
-                    { s: "FOREXCOM:SPXUSD", d: "S&P 500" },
-                    { s: "FOREXCOM:NSXUSD", d: "Nasdaq 100" },
-                    { s: "FOREXCOM:DJI", d: "Dow Jones" },
-                    { s: "INDEX:NKY", d: "Nikkei 225" },
-                    { s: "INDEX:DEU40", d: "DAX" },
-                    { s: "CRYPTOCAP:TOTAL", d: "Крипто капитал" },
-                    { s: "CRYPTOCAP:BTC.D", d: "BTC доминация" },
-                  ],
-                  originalTitle: "Indices",
-                },
-              ],
-            }}
-            height={520}
-          />
-        </div>
-
-        <div className="card p-0 overflow-hidden">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-white">Топ новости рынка</h3>
-            <p className="text-[11px] text-text-muted">Актуальные события</p>
-          </div>
-          <TvWidget
-            scriptName="embed-widget-timeline.js"
-            config={{
-              feedMode: "market",
-              market: "crypto",
-              displayMode: "regular",
-            }}
-            height={520}
-          />
-        </div>
-      </div>
-
       {/* Экономический календарь - полная ширина */}
       <div className="card p-0 overflow-hidden">
         <div className="border-b border-border px-4 py-3">
@@ -250,7 +188,7 @@ function OverviewSection() {
         <TvWidget
           scriptName="embed-widget-events.js"
           config={{}}
-          height={500}
+          height={760}
         />
       </div>
     </div>
