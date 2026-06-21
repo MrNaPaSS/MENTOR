@@ -1,7 +1,7 @@
 ﻿// Статический контент лендинга (ТЗ §5). Не зависит от API.
 
 export const SOCIAL_LINKS = {
-  weexAffiliate: "https://www.weex.com",
+  weexAffiliate: "https://www.weex.com/ru/register?vipCode=kaktotakxme",
   telegram: "https://t.me/+81HEkQveJic2YmEy",
   telegramBot: "https://t.me/nmnh_bot",
   youtube: "https://youtube.com/@nmnh",
