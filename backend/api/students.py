@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete as sql_delete
 
 from core import repo
-from core.models import BalanceSnapshot, SignalDelivery, Student
+from core.models import BalanceSnapshot, CoinTransaction, SignalDelivery, Student
 from backend.deps import get_session, get_current_mentor
 from backend.schemas import StudentOut
 
@@ -73,6 +73,7 @@ def delete(student_id: int, session=Depends(get_session)):
         raise HTTPException(404, "Ученик не найден")
     session.execute(sql_delete(SignalDelivery).where(SignalDelivery.student_id == student_id))
     session.execute(sql_delete(BalanceSnapshot).where(BalanceSnapshot.student_id == student_id))
+    session.execute(sql_delete(CoinTransaction).where(CoinTransaction.student_id == student_id))
     session.delete(s)
     session.commit()
     return {"ok": True}
