@@ -25,7 +25,14 @@ export default function Testimonials() {
   useEffect(() => {
     fetch(`${API_URL}/api/pnl`, { headers: { "ngrok-skip-browser-warning": "1" } })
       .then((r) => r.ok ? r.json() : { images: [] })
-      .then((d) => setImages((d.images ?? []).map((i: { url: string }) => i.url)))
+      // Терпим оба формата ответа: строки "/pln/x" (старый бэк) и {name,url} (новый)
+      .then((d) => {
+        const items: unknown[] = d.images ?? [];
+        const urls = items
+          .map((i) => (typeof i === "string" ? i : (i as { url?: string }).url))
+          .filter((u): u is string => typeof u === "string" && u.length > 0);
+        setImages(urls);
+      })
       .catch(() => {});
   }, []);
 
