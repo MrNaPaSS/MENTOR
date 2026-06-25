@@ -5,9 +5,11 @@ import { Trash2, Upload, ImageIcon } from "lucide-react";
 import { API_URL } from "@/lib/api";
 import { useMentorToken } from "@/components/admin/AdminShell";
 
+interface PnlImage { name: string; url: string }
+
 export default function PnlPage() {
   const token = useMentorToken();
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<PnlImage[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,8 +49,7 @@ export default function PnlPage() {
     }
   }
 
-  async function handleDelete(src: string) {
-    const filename = src.split("/").pop();
+  async function handleDelete(filename: string) {
     if (!filename) return;
     await fetch(`${API_URL}/api/pnl/${filename}`, {
       method: "DELETE",
@@ -97,16 +98,16 @@ export default function PnlPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {images.map((src) => (
-            <div key={src} className="group relative overflow-hidden rounded-xl border border-border">
+          {images.map((img) => (
+            <div key={img.name} className="group relative overflow-hidden rounded-xl border border-border">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={src.startsWith("http") ? src : `${API_URL}${src}`}
+                src={img.url}
                 alt="pnl"
                 className="h-52 w-full object-cover"
               />
               <button
-                onClick={() => handleDelete(src)}
+                onClick={() => handleDelete(img.name)}
                 className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/70 text-white opacity-0 transition hover:bg-danger/80 group-hover:opacity-100"
               >
                 <Trash2 className="h-3.5 w-3.5" />

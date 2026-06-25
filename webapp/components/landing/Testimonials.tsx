@@ -9,7 +9,7 @@ function PnlCard({ src }: { src: string }) {
     <div className="group relative w-[380px] shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-bg-deep shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300 hover:-translate-y-1 hover:border-accent-cyan/25 hover:shadow-[0_12px_40px_rgba(10,255,224,0.07)]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src.startsWith("http") ? src : `${API_URL}${src}`}
+        src={src}
         alt="PnL результат"
         className="w-full transition-transform duration-500 group-hover:scale-[1.03]"
         loading="lazy"
@@ -25,7 +25,7 @@ export default function Testimonials() {
   useEffect(() => {
     fetch(`${API_URL}/api/pnl`, { headers: { "ngrok-skip-browser-warning": "1" } })
       .then((r) => r.ok ? r.json() : { images: [] })
-      .then((d) => setImages(d.images ?? []))
+      .then((d) => setImages((d.images ?? []).map((i: { url: string }) => i.url)))
       .catch(() => {});
   }, []);
 

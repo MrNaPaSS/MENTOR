@@ -1,7 +1,15 @@
-"""Управление PnL-скриншотами для лендинга."""
+"""Управление PnL-скриншотами для лендинга.
+
+Картинки отдаются как data-URL (base64) внутри JSON: фронт на Render и бэкенд на
+домашнем сервере (через ngrok) — разные хосты, а `<img src="/pln/...">` искал бы
+файл не там. К тому же ngrok-free перехватывает прямые запросы картинок из браузера
+и отдаёт HTML-заглушку. data-URL рендерится инлайн и обходит обе проблемы. Файлы
+по-прежнему хранятся на диске бэкенда.
+"""
 
 from __future__ import annotations
 
+import base64
 import uuid
 from pathlib import Path
 
@@ -13,17 +21,24 @@ PNL_DIR = Path(__file__).parent.parent.parent / "webapp" / "public" / "pln"
 PNL_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED = {".jpg", ".jpeg", ".png", ".webp"}
+_MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 
 router = APIRouter(prefix="/api/pnl", tags=["pnl"])
+
+
+def _data_url(path: Path) -> str:
+    mime = _MIME.get(path.suffix.lower(), "image/jpeg")
+    b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{b64}"
 
 
 @router.get("")
 async def list_pnl():
     files = sorted(
-        f.name for f in PNL_DIR.iterdir()
+        f for f in PNL_DIR.iterdir()
         if f.is_file() and f.suffix.lower() in ALLOWED
     )
-    return {"images": [f"/pln/{name}" for name in files]}
+    return {"images": [{"name": f.name, "url": _data_url(f)} for f in files]}
 
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
