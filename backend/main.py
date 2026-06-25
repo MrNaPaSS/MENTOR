@@ -97,6 +97,12 @@ def create_app(
     uploads_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
+    # PnL-скриншоты грузятся на бэкенд (этот сервер), поэтому раздаём их отсюда же.
+    # Фронт на Render берёт их по ${API_URL}/pln/... (иначе новые файлы видны только локально).
+    pln_dir = Path(__file__).parent.parent / "webapp" / "public" / "pln"
+    pln_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/pln", StaticFiles(directory=str(pln_dir)), name="pln")
+
     @app.get("/api/health", tags=["health"])
     async def health():
         return {"status": "ok", "weex_mock": config.weex_use_mock, "ws_clients": manager.count}
