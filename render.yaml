@@ -1,0 +1,42 @@
+# Конфигурация Render для статического фронта NMNH.
+#
+# Ключевой момент — routes: запросы /api/* и /pln/* уходят на туннель бэкенда
+# через Rewrite. Браузер при этом обращается только к www.nmnh.trade, поэтому
+# CORS и preflight OPTIONS не задействованы вообще, а ngrok не показывает
+# interstitial (запрос к нему идёт от сервера Render, а не из браузера).
+#
+# ВНИМАНИЕ: если сервис уже создан вручную через Dashboard, этот файл сам по себе
+# не применится — правила нужно продублировать в
+# Dashboard → сервис MENTOR → Redirects/Rewrites (см. docs/deploy/render.md).
+# Файл держим в репозитории как источник истины и для пересоздания сервиса.
+
+services:
+  - type: web
+    name: MENTOR
+    runtime: static
+    repo: https://github.com/MrNaPaSS/MENTOR
+    branch: main
+    rootDir: webapp
+    buildCommand: npm ci && npm run build
+    staticPublishPath: out
+
+    envVars:
+      # Пусто намеренно: фронт ходит на свой домен, дальше работает Rewrite ниже.
+      - key: NEXT_PUBLIC_API_URL
+        value: ""
+
+    routes:
+      # REST API бэкенда.
+      - type: rewrite
+        source: /api/*
+        destination: https://preformed-unadvised-slicing.ngrok-free.dev/api/*
+
+      # Раздача PnL-скриншотов бэкендом.
+      - type: rewrite
+        source: /pln/*
+        destination: https://preformed-unadvised-slicing.ngrok-free.dev/pln/*
+
+      # SPA-фолбэк: любые остальные пути отдаём статикой (клиентский роутинг).
+      - type: rewrite
+        source: /*
+        destination: /index.html
