@@ -2,9 +2,13 @@
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
+:: Imya tunnelya i publichnyj adres API (menjaetsja tut, esli nuzhno)
+set "TUNNEL_NAME=nmnh-api"
+set "API_DOMAIN=api.nmnh.trade"
+
 echo.
 echo ================================================
-echo   MENTOR - Avtozapusk + ngrok tunnel
+echo   MENTOR - Avtozapusk + Cloudflare Tunnel
 echo ================================================
 echo.
 
@@ -45,63 +49,94 @@ if not exist ".env" (
     echo.
     start /wait notepad ".env"
 )
+:: ALLOWED_ORIGINS objazatelen: bez javnogo spiska ispolzuetsja "*",
+:: a takoe sochetanie s credentials brauzer otvergaet po specifikacii CORS.
+findstr /b /c:"ALLOWED_ORIGINS=" ".env" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo   Dobavljaju ALLOWED_ORIGINS v .env...
+    echo.>> ".env"
+    echo ALLOWED_ORIGINS=https://www.nmnh.trade,https://nmnh.trade>> ".env"
+)
 echo   .env - OK
 
-:: ===== 4. NGROK =====
-echo [4/5] ngrok...
-where ngrok >nul 2>&1
+:: ===== 4. CLOUDFLARED =====
+echo [4/5] Cloudflare Tunnel...
+set "CF=cloudflared"
+where cloudflared >nul 2>&1
 if %errorlevel% neq 0 (
-    echo   ngrok ne najden. Ustanavlivayu...
-    winget install Ngrok.Ngrok -e --silent --accept-package-agreements --accept-source-agreements
-    if !errorlevel! neq 0 (
-        echo   Skachivaju ngrok naprjamuju...
-        powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip' -OutFile 'ngrok.zip'; Expand-Archive -Path 'ngrok.zip' -DestinationPath '%~dp0' -Force; Remove-Item 'ngrok.zip'"
-        if not exist "ngrok.exe" (
-            echo   OSHIBKA: skachaj ngrok vruchnuyu: https://ngrok.com/download
-            pause & exit /b 1
+    :: Lokalnaja kopija rjadom so skriptom (esli uzhe skachivali ranshe)
+    if exist "%~dp0cloudflared.exe" (
+        set "CF=%~dp0cloudflared.exe"
+    ) else (
+        echo   cloudflared ne najden. Ustanavlivayu...
+        :: winget est ne vezde (Windows Server) - snachala probujem ego,
+        :: potom prjamuju zagruzku exe s oficialnyh relizov.
+        where winget >nul 2>&1
+        if !errorlevel! equ 0 (
+            winget install --id Cloudflare.cloudflared -e --silent --accept-package-agreements --accept-source-agreements
         )
-        set "PATH=%~dp0;%PATH%"
+        where cloudflared >nul 2>&1
+        if !errorlevel! neq 0 (
+            echo   Skachivaju cloudflared.exe naprjamuju...
+            powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' -OutFile '%~dp0cloudflared.exe'"
+            if not exist "%~dp0cloudflared.exe" (
+                echo   OSHIBKA: skachaj vruchnuyu:
+                echo   https://github.com/cloudflare/cloudflared/releases/latest
+                pause & exit /b 1
+            )
+            set "CF=%~dp0cloudflared.exe"
+        )
     )
 )
-echo   ngrok - OK
+for /f "tokens=*" %%v in ('"!CF!" --version 2^>^&1') do echo   %%v
 
-:: ===== TUNNEL CONFIG =====
-if not exist "tunnel.config" (
+set "CF_DIR=%USERPROFILE%\.cloudflared"
+set "CF_CFG=%CF_DIR%\config.yml"
+
+:: ===== TUNNEL CONFIG (pervyj zapusk) =====
+if not exist "%CF_CFG%" (
     echo.
     echo ================================================
-    echo   Nastrojka ngrok tunnelya (pervyj zapusk)
+    echo   Nastrojka tunnelya (pervyj zapusk)
     echo ================================================
     echo.
-    echo   1. Zaregistrijsja na ngrok.com
-    echo   2. Authtoken: dashboard.ngrok.com/authtokens
-    echo   3. Statichnyi domen: dashboard.ngrok.com/domains
-    echo      (besplatno: 1 domen na akkaunt)
+    echo   Sejchas otkroetsja brauzer - vyberi domen nmnh.trade
     echo.
-    set /p "NGROK_TOKEN=  Vstav' Authtoken: "
-    set /p "NGROK_DOMAIN=  Vstav' statichnyi domen (abc.ngrok-free.app): "
+    pause
+    "!CF!" tunnel login
+    if !errorlevel! neq 0 (
+        echo   OSHIBKA: ne udalos vojti v Cloudflare.
+        pause & exit /b 1
+    )
+
+    echo   Sozdayu tunnel !TUNNEL_NAME!...
+    "!CF!" tunnel create !TUNNEL_NAME! >nul 2>&1
+
+    echo   Privjazyvaju DNS !API_DOMAIN!...
+    "!CF!" tunnel route dns !TUNNEL_NAME! !API_DOMAIN!
+
+    :: Tunnel ID beryom iz spiska tunnelej
+    set "TUNNEL_ID="
+    for /f "tokens=1" %%i in ('"!CF!" tunnel list ^| findstr /c:"!TUNNEL_NAME!"') do set "TUNNEL_ID=%%i"
+    if "!TUNNEL_ID!"=="" (
+        echo   OSHIBKA: ne udalos poluchit Tunnel ID.
+        echo   Vypolni vruchnuyu: cloudflared tunnel create !TUNNEL_NAME!
+        pause & exit /b 1
+    )
+
     (
-        echo NGROK_AUTHTOKEN=!NGROK_TOKEN!
-        echo NGROK_DOMAIN=!NGROK_DOMAIN!
-    ) > tunnel.config
-    echo   Konfiguratsiya sohranena v tunnel.config
+        echo tunnel: !TUNNEL_ID!
+        echo credentials-file: !CF_DIR!\!TUNNEL_ID!.json
+        echo metrics: 127.0.0.1:20241
+        echo ingress:
+        echo   - hostname: !API_DOMAIN!
+        echo     service: http://localhost:8000
+        echo   - service: http_status:404
+    ) > "%CF_CFG%"
+    echo   Konfiguratsiya sohranena: %CF_CFG%
     echo.
 )
-
-for /f "usebackq tokens=1,* delims==" %%a in ("tunnel.config") do (
-    if "%%a"=="NGROK_AUTHTOKEN" set "NGROK_TOKEN=%%b"
-    if "%%a"=="NGROK_DOMAIN"    set "NGROK_DOMAIN=%%b"
-)
-
-if "!NGROK_TOKEN!"=="" (
-    echo   OSHIBKA: NGROK_AUTHTOKEN pust v tunnel.config. Udali fajl i zapusti snova.
-    pause & exit /b 1
-)
-if "!NGROK_DOMAIN!"=="" (
-    echo   OSHIBKA: NGROK_DOMAIN pust v tunnel.config. Udali fajl i zapusti snova.
-    pause & exit /b 1
-)
-
-ngrok config add-authtoken !NGROK_TOKEN! > nul 2>&1
+echo   Tunnel - OK
 
 :: ===== 5. ZAPUSK =====
 echo [5/5] Zapusk komponentov...
@@ -116,13 +151,15 @@ echo ================================================
 echo   VSE ZAPUSHENO
 echo ================================================
 echo   Backend:  http://localhost:8000
-echo   Tunnel:   https://!NGROK_DOMAIN!
+echo   Tunnel:   https://!API_DOMAIN!
 echo.
 echo   Render - Environment Variables:
-echo   NEXT_PUBLIC_API_URL = https://!NGROK_DOMAIN!
+echo   NEXT_PUBLIC_API_URL = https://!API_DOMAIN!
+echo.
+echo   Proverka: https://!API_DOMAIN!/api/health
 echo ================================================
 echo.
-echo   Eto okno - ngrok tunnel. Ne zakryvaj ego!
+echo   Eto okno - Cloudflare Tunnel. Ne zakryvaj ego!
 echo.
 
-ngrok http --domain=!NGROK_DOMAIN! 8000
+"!CF!" tunnel run !TUNNEL_NAME!

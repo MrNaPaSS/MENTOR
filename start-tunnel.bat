@@ -9,19 +9,23 @@ echo ================================================
 echo.
 
 :: ===== 1. CLOUDFLARED =====
+set "CF=cloudflared"
 where cloudflared >nul 2>&1
 if %errorlevel% neq 0 (
-    echo   cloudflared ne najden. Ustanavlivayu...
-    winget install --id Cloudflare.cloudflared -e --silent --accept-package-agreements --accept-source-agreements
-    if !errorlevel! neq 0 (
-        echo   OSHIBKA: ustanovi vruchnuyu:
-        echo   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-        pause & exit /b 1
+    if exist "%~dp0cloudflared.exe" (
+        set "CF=%~dp0cloudflared.exe"
+    ) else (
+        echo   cloudflared ne najden. Skachivaju...
+        powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' -OutFile '%~dp0cloudflared.exe'"
+        if not exist "%~dp0cloudflared.exe" (
+            echo   OSHIBKA: skachaj vruchnuyu:
+            echo   https://github.com/cloudflare/cloudflared/releases/latest
+            pause & exit /b 1
+        )
+        set "CF=%~dp0cloudflared.exe"
     )
-    echo   Ustanovlen. Perezapusti start-tunnel.bat
-    pause & exit /b 0
 )
-for /f "tokens=*" %%v in ('cloudflared --version 2^>^&1') do echo   %%v
+for /f "tokens=*" %%v in ('"!CF!" --version 2^>^&1') do echo   %%v
 
 :: ===== 2. KONFIG =====
 set "CFG=%USERPROFILE%\.cloudflared\config.yml"
@@ -46,4 +50,4 @@ echo.
 echo   Tunnel: api.nmnh.trade -^> http://localhost:8000
 echo   Ostanovka: Ctrl+C
 echo.
-cloudflared tunnel run nmnh-api
+"!CF!" tunnel run nmnh-api

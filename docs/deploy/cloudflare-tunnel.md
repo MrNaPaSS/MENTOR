@@ -28,11 +28,22 @@ Cloudflare покажет два NS-сервера → прописать их �
 
 **1. Поставить cloudflared**
 
+Если есть `winget`:
+
 ```powershell
 winget install --id Cloudflare.cloudflared
 ```
 
-Проверка: `cloudflared --version`
+На Windows Server `winget` обычно отсутствует — тогда качаем бинарь напрямую
+в папку проекта (дальше вызываем как `.\cloudflared.exe`):
+
+```powershell
+cd C:\Users\Администратор\Desktop\WEEX\MENTOR
+Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile ".\cloudflared.exe"
+.\cloudflared.exe --version
+```
+
+`start.bat` и `start-tunnel.bat` делают это сами, если `cloudflared` не найден.
 
 **2. Войти в аккаунт Cloudflare** (откроется браузер, выбрать домен `nmnh.trade`)
 
