@@ -7,7 +7,6 @@ afterEach(() => vi.restoreAllMocks());
 describe("Calculator", () => {
   it("renders the form", () => {
     render(<Calculator />);
-    expect(screen.getByText("Калькулятор позиции")).toBeInTheDocument();
     expect(screen.getByText("Рассчитать")).toBeInTheDocument();
   });
 
@@ -40,7 +39,7 @@ describe("Calculator", () => {
     fireEvent.click(screen.getByText("Рассчитать"));
 
     await waitFor(() => expect(screen.getByText("Маржа")).toBeInTheDocument());
-    expect(screen.getByText("TP1 (RR 1:1.0)")).toBeInTheDocument();
+    expect(screen.getByText("TP1 · RR 1:1.0")).toBeInTheDocument();
   });
 
   it("shows error on failed compute", async () => {

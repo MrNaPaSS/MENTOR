@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { DomTrade } from "@/lib/api";
-import { fmtPrice, fmtSize } from "./DomLadder";
+import { fmtPrice, fmtVol } from "./DomTrader";
 
 interface Props {
   trades: DomTrade[];
@@ -62,7 +62,7 @@ export default function Tape({ trades, tick, bigFactor = 4, rows = 26 }: Props) 
                   big ? "font-semibold text-text-primary" : "text-text-secondary"
                 }`}
               >
-                {fmtSize(t.qty)}
+                {fmtVol(t.qty)}
               </span>
             </div>
           );

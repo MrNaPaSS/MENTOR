@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, Pause, Play, Layers } from "lucide-react";
 import { api, type DomSnapshot } from "@/lib/api";
-import DomLadder, { fmtPrice, fmtSize } from "@/components/scalping/DomLadder";
+import DomTrader, { fmtPrice, fmtVol } from "@/components/scalping/DomTrader";
 import Tape from "@/components/scalping/Tape";
-import LiquidityHeatmap from "@/components/scalping/LiquidityHeatmap";
 import PressureBar from "@/components/scalping/PressureBar";
+import { addTrades, emptyState, type ClusterState } from "@/lib/clusters";
 
 const PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"];
 
@@ -18,22 +18,35 @@ const SPEEDS = [
   { ms: 2000, label: "2с" },
 ];
 
-const DEPTHS = [15, 30, 45];
+const DEPTHS = [20, 40, 60];
+
+// Укрупнение ценовой сетки биржи. ×1 — шаг биржи как есть.
+const AGGS = [1, 5, 10, 20];
 
 // Порог имбаланса — из настроек Tiger.Trade заказчика (BidAskImbalanceRatio).
 const IMBALANCES = [140, 200, 300];
 
-const HISTORY_LEN = 120;
+// Ширина одного столбца истории.
+const BUCKETS = [
+  { ms: 60_000, label: "1м" },
+  { ms: 300_000, label: "5м" },
+  { ms: 900_000, label: "15м" },
+];
+
+const MAX_BUCKETS = 12;
 
 export default function ScalpingPage() {
   const [symbol, setSymbol] = useState(PAIRS[0]);
   const [speed, setSpeed] = useState(SPEEDS[1].ms);
-  const [rows, setRows] = useState(30);
+  const [rows, setRows] = useState(40);
+  const [agg, setAgg] = useState(10);
   const [imbalance, setImbalance] = useState(300);
+  const [bucketMs, setBucketMs] = useState(BUCKETS[1].ms);
+  const [notional, setNotional] = useState(true);
   const [live, setLive] = useState(true);
 
   const [snap, setSnap] = useState<DomSnapshot | null>(null);
-  const [history, setHistory] = useState<DomSnapshot[]>([]);
+  const [clusters, setClusters] = useState<ClusterState>(emptyState);
   const [error, setError] = useState<string | null>(null);
 
   // Не даём догоняющим ответам перезаписать более свежие: при смене пары
@@ -43,22 +56,28 @@ export default function ScalpingPage() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api.scalpingDom(symbolRef.current, { rows, imbalance });
+      const data = await api.scalpingDom(symbolRef.current, { rows, agg, imbalance });
       if (data.symbol !== symbolRef.current) return;
       setSnap(data);
-      setHistory((prev) => [...prev, data].slice(-HISTORY_LEN));
+      setClusters((prev) =>
+        addTrades(prev, data.trades, {
+          bucketMs,
+          tick: data.tick,
+          maxBuckets: MAX_BUCKETS,
+        }),
+      );
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Стакан недоступен");
     }
-  }, [rows, imbalance]);
+  }, [rows, agg, imbalance, bucketMs]);
 
-  // Смена пары обнуляет карту ликвидности — иначе на ней смешаются два
-  // разных ценовых диапазона и шкала схлопнется.
+  // Смена пары или шага сетки обнуляет историю: кластеры привязаны к ценам,
+  // при другом шаге они встанут не напротив своих уровней.
   useEffect(() => {
-    setHistory([]);
+    setClusters(emptyState());
     setSnap(null);
-  }, [symbol]);
+  }, [symbol, agg, bucketMs]);
 
   useEffect(() => {
     if (!live) return;
@@ -68,9 +87,10 @@ export default function ScalpingPage() {
   }, [live, speed, load, symbol]);
 
   const tape = snap?.tape;
+  const mult = notional && snap ? snap.mid : 1;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* ── Панель управления ─────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto flex items-center gap-2">
@@ -108,10 +128,18 @@ export default function ScalpingPage() {
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2 text-[11px]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px]">
         <Selector label="Частота" options={SPEEDS.map((s) => ({ value: s.ms, label: s.label }))} value={speed} onChange={setSpeed} />
         <Selector label="Глубина" options={DEPTHS.map((d) => ({ value: d, label: String(d) }))} value={rows} onChange={setRows} />
+        <Selector label="Шаг" options={AGGS.map((a) => ({ value: a, label: `×${a}` }))} value={agg} onChange={setAgg} />
+        <Selector label="Столбец" options={BUCKETS.map((b) => ({ value: b.ms, label: b.label }))} value={bucketMs} onChange={setBucketMs} />
         <Selector label="Имбаланс" options={IMBALANCES.map((i) => ({ value: i, label: `${i}%` }))} value={imbalance} onChange={setImbalance} />
+        <button
+          onClick={() => setNotional((v) => !v)}
+          className="rounded-lg border border-border/60 bg-bg-panel px-2 py-1 text-text-muted transition hover:text-text-secondary"
+        >
+          {notional ? "$" : symbol.replace("USDT", "")}
+        </button>
       </div>
 
       {error && (
@@ -121,22 +149,26 @@ export default function ScalpingPage() {
       )}
 
       {/* ── Сводка ────────────────────────────────────────────────────── */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Цена"
           value={snap ? fmtPrice(snap.mid, snap.tick) : "—"}
-          sub={snap ? `спред ${snap.spread_bp.toFixed(1)} б.п.` : ""}
+          sub={snap ? `спред ${snap.spread_bp.toFixed(1)} б.п. · шаг ${fmtPrice(snap.tick, snap.tick)}` : ""}
         />
         <Stat
           label="Дельта ленты"
-          value={tape ? (tape.delta >= 0 ? "+" : "") + fmtSize(tape.delta) : "—"}
+          value={tape ? (tape.delta >= 0 ? "+" : "-") + fmtVol(Math.abs(tape.delta) * mult) : "—"}
           tone={tape ? (tape.delta >= 0 ? "up" : "down") : undefined}
-          sub={tape ? `${fmtSize(tape.buy_volume)} / ${fmtSize(tape.sell_volume)}` : ""}
+          sub={tape ? `${fmtVol(tape.buy_volume * mult)} / ${fmtVol(tape.sell_volume * mult)}` : ""}
         />
         <Stat
           label="Объём стакана"
-          value={snap ? fmtSize(snap.bid_volume + snap.ask_volume) : "—"}
-          sub={snap ? `шаг ${fmtPrice(snap.tick, snap.tick)}` : ""}
+          value={snap ? fmtVol((snap.bid_volume + snap.ask_volume) * mult) : "—"}
+          sub={
+            snap
+              ? `биржа отдала ${snap.depth_available.bids}/${snap.depth_available.asks} уровней`
+              : ""
+          }
         />
         <Stat
           label="Плиты"
@@ -145,30 +177,27 @@ export default function ScalpingPage() {
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-2">
         <PressureBar
           label="Перевес стакана"
           ratio={snap?.book_ratio ?? 0.5}
-          left={snap ? fmtSize(snap.bid_volume) : "—"}
-          right={snap ? fmtSize(snap.ask_volume) : "—"}
+          left={snap ? fmtVol(snap.bid_volume * mult) : "—"}
+          right={snap ? fmtVol(snap.ask_volume * mult) : "—"}
           hint="лимитные заявки"
         />
         <PressureBar
           label="Давление по ленте"
           ratio={tape?.buy_ratio ?? 0.5}
-          left={tape ? fmtSize(tape.buy_volume) : "—"}
-          right={tape ? fmtSize(tape.sell_volume) : "—"}
+          left={tape ? fmtVol(tape.buy_volume * mult) : "—"}
+          right={tape ? fmtVol(tape.sell_volume * mult) : "—"}
           hint="рыночные сделки"
         />
       </div>
 
-      {/* ── Карта ликвидности ─────────────────────────────────────────── */}
-      <LiquidityHeatmap history={history} />
-
-      {/* ── Стакан и лента ────────────────────────────────────────────── */}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <DomLadder data={snap} />
-        <div className="space-y-3">
+      {/* ── Стакан с историей кластеров ───────────────────────────────── */}
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <DomTrader data={snap} buckets={clusters.buckets} notional={notional} />
+        <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-text-muted">
             <Activity className="h-3 w-3" />
             Лента сделок
@@ -178,10 +207,11 @@ export default function ScalpingPage() {
       </div>
 
       <p className="text-[11px] leading-relaxed text-text-muted">
-        Уровни с полосой сбоку — имбаланс: объём стороны превышает противоположную
-        в {imbalance}% и более. Золотая цена — плита, объём кратно выше среднего по
-        стороне. На карте ликвидности яркость показывает плотность заявок, белая
-        линия — движение цены.
+        Колонки слева — объём прошедших сделок по ценам, столбец на каждый интервал.
+        История копится с момента открытия страницы: биржа отдаёт только последние
+        сделки, готового «объёма по ценам за прошлые часы» у неё нет. Оранжевым
+        выделены крупнейшие кластеры, золотой ценой — плиты в стакане, жирным —
+        уровни с имбалансом от {imbalance}%.
       </p>
     </div>
   );
@@ -234,10 +264,10 @@ function Stat({
   const color =
     tone === "up" ? "text-success" : tone === "down" ? "text-danger" : "text-text-primary";
   return (
-    <div className="rounded-xl border border-border/60 bg-bg-panel p-3">
+    <div className="rounded-xl border border-border/60 bg-bg-panel p-2.5">
       <div className="text-[10px] uppercase tracking-wider text-text-muted">{label}</div>
-      <div className={`mt-1 font-mono text-lg tabular-nums ${color}`}>{value}</div>
-      {sub && <div className="mt-0.5 font-mono text-[11px] text-text-muted">{sub}</div>}
+      <div className={`mt-1 font-mono text-base tabular-nums ${color}`}>{value}</div>
+      {sub && <div className="mt-0.5 font-mono text-[10px] text-text-muted">{sub}</div>}
     </div>
   );
 }

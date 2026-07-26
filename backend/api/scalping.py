@@ -29,18 +29,15 @@ router = APIRouter(prefix="/api/scalping", tags=["scalping"])
 DEFAULT_IMBALANCE_RATIO = 300  # BidAskImbalanceRatio
 DEFAULT_ROWS = 30              # DomAutoscaleDepth
 
-# Во сколько раз укрупняем сетку биржи, если шаг не задан явно.
-# У заказчика PriceScaleMultiplier = 10.
-PRICE_SCALE_MULTIPLIER = 10
-
-# Готовый шаг агрегации для основных пар: шаг биржи × PRICE_SCALE_MULTIPLIER.
-TICK_HINTS: dict[str, float] = {
-    "BTCUSDT": 1.0,
-    "ETHUSDT": 0.1,
-    "SOLUSDT": 0.01,
-    "BNBUSDT": 0.01,
-    "XRPUSDT": 0.0001,
-    "DOGEUSDT": 0.00001,
+# Шаг ценовой сетки биржи — запасной вариант, если по стакану его не вычислить.
+# Основной путь: определяем по минимальному зазору между уровнями.
+BASE_TICKS: dict[str, float] = {
+    "BTCUSDT": 0.1,
+    "ETHUSDT": 0.01,
+    "SOLUSDT": 0.001,
+    "BNBUSDT": 0.001,
+    "XRPUSDT": 0.00001,
+    "DOGEUSDT": 0.000001,
 }
 
 
@@ -156,19 +153,25 @@ def tape_metrics(trades: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
-def _resolve_tick(symbol: str, tick: float | None, bids: list, asks: list) -> float:
-    """Шаг агрегации: явный из запроса → подсказка по паре → сетка биржи."""
+def detect_grid(symbol: str, bids: list, asks: list) -> float:
+    """Шаг ценовой сетки биржи — минимальный зазор между соседними уровнями."""
+    prices = sorted({p for p, _ in bids + asks})
+    gaps = [round(b - a, 10) for a, b in zip(prices, prices[1:]) if b > a]
+    if gaps:
+        return min(gaps)
+    return BASE_TICKS.get(symbol.upper(), 0.0)
+
+
+def _resolve_tick(symbol: str, tick: float | None, agg: int, bids: list, asks: list) -> float:
+    """Шаг агрегации: явный из запроса → сетка биржи, умноженная на agg.
+
+    Укрупнять по умолчанию нельзя: WEEX отдаёт узкий стакан, и агрегация
+    ×10 схлопывает его в считанные строки — глубина 30 превращается в 9.
+    """
     if tick is not None and tick > 0:
         return tick
-    hint = TICK_HINTS.get(symbol.upper())
-    if hint:
-        return hint
-    prices = sorted({p for p, _ in bids + asks})
-    if len(prices) >= 2:
-        gaps = [round(b - a, 10) for a, b in zip(prices, prices[1:]) if b > a]
-        if gaps:
-            return round(min(gaps) * PRICE_SCALE_MULTIPLIER, 10)
-    return 0.0
+    base = detect_grid(symbol, bids, asks)
+    return round(base * max(1, agg), 10)
 
 
 @router.get("/dom/{symbol}")
@@ -176,6 +179,7 @@ async def dom(
     symbol: str,
     rows: int = Query(DEFAULT_ROWS, ge=4, le=60),
     tick: float | None = Query(None, gt=0, description="Шаг агрегации цен"),
+    agg: int = Query(1, ge=1, le=100, description="Укрупнение сетки биржи, разы"),
     imbalance_ratio: float = Query(DEFAULT_IMBALANCE_RATIO, ge=100, le=1000),
     trades_limit: int = Query(40, ge=0, le=100),
 ) -> dict[str, Any]:
@@ -198,7 +202,8 @@ async def dom(
     if not bids_raw or not asks_raw:
         raise HTTPException(502, f"Пустой стакан для {sym}")
 
-    step = _resolve_tick(sym, tick, bids_raw, asks_raw)
+    base_tick = detect_grid(sym, bids_raw, asks_raw)
+    step = _resolve_tick(sym, tick, agg, bids_raw, asks_raw)
     bids = aggregate(bids_raw, step, "bid", rows)
     asks = aggregate(asks_raw, step, "ask", rows)
     mark_imbalance(bids, asks, imbalance_ratio)
@@ -227,6 +232,10 @@ async def dom(
     return {
         "symbol": sym,
         "tick": step,
+        "base_tick": base_tick,
+        # Сколько уровней реально отдала биржа — видно, упёрлись мы в её
+        # глубину или в запрошенное число строк.
+        "depth_available": {"bids": len(bids_raw), "asks": len(asks_raw)},
         "bids": bids,
         "asks": asks,
         "best_bid": best_bid,

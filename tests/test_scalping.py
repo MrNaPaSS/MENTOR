@@ -6,6 +6,7 @@ import pytest
 
 from backend.api.scalping import (
     aggregate,
+    detect_grid,
     find_walls,
     mark_imbalance,
     parse_levels,
@@ -169,25 +170,39 @@ def test_tape_ignores_broken_rows():
     assert m["buy_volume"] == 2.0
 
 
-# ── _resolve_tick ────────────────────────────────────────────────────────────
+# ── detect_grid / _resolve_tick ──────────────────────────────────────────────
 
-def test_resolve_tick_explicit_wins():
-    assert _resolve_tick("BTCUSDT", 5.0, [], []) == 5.0
-
-
-def test_resolve_tick_uses_hint():
-    assert _resolve_tick("BTCUSDT", None, [], []) == 1.0
-
-
-def test_resolve_tick_infers_from_grid():
-    """Незнакомая пара: минимальный зазор сетки × PriceScaleMultiplier (10)."""
+def test_detect_grid_from_levels():
+    """Шаг сетки — минимальный зазор между соседними уровнями стакана."""
     bids = [(10.0, 1.0), (9.5, 1.0)]
     asks = [(10.5, 1.0), (11.0, 1.0)]
-    assert _resolve_tick("UNKNOWNUSDT", None, bids, asks) == 5.0
+    assert detect_grid("UNKNOWNUSDT", bids, asks) == 0.5
 
 
-def test_resolve_tick_falls_back_to_zero():
-    assert _resolve_tick("UNKNOWNUSDT", None, [(10.0, 1.0)], []) == 0.0
+def test_detect_grid_falls_back_to_known_tick():
+    """Один уровень — зазора нет, берём известный шаг пары."""
+    assert detect_grid("BTCUSDT", [(10.0, 1.0)], []) == 0.1
+
+
+def test_detect_grid_unknown_pair_without_levels():
+    assert detect_grid("UNKNOWNUSDT", [], []) == 0.0
+
+
+def test_resolve_tick_explicit_wins():
+    assert _resolve_tick("BTCUSDT", 5.0, 10, [], []) == 5.0
+
+
+def test_resolve_tick_keeps_exchange_grid_by_default():
+    """agg=1 — сетку биржи не укрупняем, иначе узкий стакан схлопнется."""
+    bids = [(10.0, 1.0), (9.5, 1.0)]
+    asks = [(10.5, 1.0), (11.0, 1.0)]
+    assert _resolve_tick("UNKNOWNUSDT", None, 1, bids, asks) == 0.5
+
+
+def test_resolve_tick_applies_aggregation():
+    bids = [(10.0, 1.0), (9.5, 1.0)]
+    asks = [(10.5, 1.0), (11.0, 1.0)]
+    assert _resolve_tick("UNKNOWNUSDT", None, 10, bids, asks) == 5.0
 
 
 # ── эндпоинт целиком ─────────────────────────────────────────────────────────

@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import DomLadder, { fmtPrice, fmtSize } from "@/components/scalping/DomLadder";
+import DomTrader, { fmtPrice, fmtVol } from "@/components/scalping/DomTrader";
 import Tape from "@/components/scalping/Tape";
 import PressureBar from "@/components/scalping/PressureBar";
-import { priceBounds, maxLevelSize } from "@/components/scalping/LiquidityHeatmap";
+import { addTrades, emptyState } from "@/lib/clusters";
 import type { DomSnapshot, DomLevel } from "@/lib/api";
 
 function lvl(price: number, size: number, strong = false): DomLevel {
@@ -13,6 +13,8 @@ function lvl(price: number, size: number, strong = false): DomLevel {
 const snap: DomSnapshot = {
   symbol: "BTCUSDT",
   tick: 1,
+  base_tick: 0.1,
+  depth_available: { bids: 50, asks: 50 },
   bids: [lvl(100, 5, true), lvl(99, 2), lvl(98, 20)],
   asks: [lvl(101, 3), lvl(102, 1), lvl(103, 1)],
   best_bid: 100,
@@ -44,43 +46,53 @@ describe("fmtPrice", () => {
   });
 });
 
-describe("fmtSize", () => {
-  it("сжимает крупные объёмы", () => {
-    expect(fmtSize(1_500_000)).toBe("1.50M");
-    expect(fmtSize(2_400)).toBe("2.4K");
-    expect(fmtSize(12.34)).toBe("12.3");
-    expect(fmtSize(0.5)).toBe("0.500");
+describe("fmtVol", () => {
+  it("пишет объёмы компактно, как в терминале", () => {
+    expect(fmtVol(1_710_000)).toBe("1,71M");
+    expect(fmtVol(917_000)).toBe("917K");
+    expect(fmtVol(320)).toBe("320");
+    expect(fmtVol(4.9)).toBe("4.9");
+    expect(fmtVol(0.004)).toBe("0.004");
   });
 });
 
-describe("DomLadder", () => {
-  it("рисует обе стороны стакана", () => {
-    render(<DomLadder data={snap} />);
-    expect(screen.getAllByTestId("dom-row-bid")).toHaveLength(3);
-    expect(screen.getAllByTestId("dom-row-ask")).toHaveLength(3);
-  });
-
-  it("показывает спред между сторонами", () => {
-    render(<DomLadder data={snap} />);
-    expect(screen.getByText("спред")).toBeInTheDocument();
-    expect(screen.getByText("99.5 б.п.")).toBeInTheDocument();
+describe("DomTrader", () => {
+  it("строит строку на каждый ценовой уровень диапазона", () => {
+    render(<DomTrader data={snap} buckets={[]} notional={false} />);
+    // Цены от 98 до 103 с шагом 1 — шесть строк
+    expect(screen.getAllByTestId("dom-trader-row")).toHaveLength(6);
   });
 
   it("на пустых данных показывает заглушку, а не падает", () => {
-    const { container } = render(<DomLadder data={null} />);
+    const { container } = render(<DomTrader data={null} buckets={[]} />);
     expect(container.querySelector(".animate-pulse")).toBeTruthy();
   });
 
   it("выделяет плиту золотым", () => {
-    render(<DomLadder data={snap} />);
-    // Цена 98 помечена как плита в bid_walls
-    const wall = screen.getByText("98");
-    expect(wall.className).toContain("accent-gold");
+    render(<DomTrader data={snap} buckets={[]} notional={false} />);
+    expect(screen.getByText("98").className).toContain("accent-gold");
   });
 
-  it("не подсвечивает плиты при showWalls=false", () => {
-    render(<DomLadder data={snap} showWalls={false} />);
-    expect(screen.getByText("98").className).not.toContain("accent-gold");
+  it("показывает колонки истории и подписи времени", () => {
+    const state = addTrades(
+      emptyState(),
+      [{ price: 100, qty: 3, time: 1_700_000_000_000, isBuy: true }],
+      { bucketMs: 300_000, tick: 1, maxBuckets: 12 },
+    );
+    render(<DomTrader data={snap} buckets={state.buckets} notional={false} />);
+    // Объём кластера попал в свою ячейку
+    expect(screen.getByTitle("покупки 3.0 / продажи 0.000")).toBeInTheDocument();
+  });
+
+  it("расширяет ценовую шкалу под кластеры вне стакана", () => {
+    const state = addTrades(
+      emptyState(),
+      [{ price: 95, qty: 1, time: 1_700_000_000_000, isBuy: true }],
+      { bucketMs: 300_000, tick: 1, maxBuckets: 12 },
+    );
+    render(<DomTrader data={snap} buckets={state.buckets} notional={false} />);
+    // Диапазон 95..103 — девять строк вместо шести
+    expect(screen.getAllByTestId("dom-trader-row")).toHaveLength(9);
   });
 });
 
@@ -125,20 +137,5 @@ describe("PressureBar", () => {
   it("зажимает значения вне диапазона 0..1", () => {
     render(<PressureBar label="Перевес" ratio={2.5} left="a" right="b" />);
     expect(screen.getByTestId("pressure-fill").style.width).toBe("100%");
-  });
-});
-
-describe("LiquidityHeatmap helpers", () => {
-  it("находит границы цен по всей истории", () => {
-    expect(priceBounds([snap])).toEqual({ min: 98, max: 103 });
-  });
-
-  it("на пустой истории отдаёт нули вместо Infinity", () => {
-    expect(priceBounds([])).toEqual({ min: 0, max: 0 });
-  });
-
-  it("находит максимальный объём уровня", () => {
-    expect(maxLevelSize([snap])).toBe(20);
-    expect(maxLevelSize([])).toBe(0);
   });
 });

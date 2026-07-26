@@ -242,10 +242,14 @@ export const api = {
     req<ForexRates>(`/api/market/forex?base=${base}&symbols=${symbols}`),
 
   // ── Скальпинг: стакан + лента + метрики одним снимком ──
-  scalpingDom: (symbol: string, opts?: { rows?: number; tick?: number; imbalance?: number }) => {
+  scalpingDom: (
+    symbol: string,
+    opts?: { rows?: number; tick?: number; agg?: number; imbalance?: number },
+  ) => {
     const q = new URLSearchParams();
     if (opts?.rows) q.set("rows", String(opts.rows));
     if (opts?.tick) q.set("tick", String(opts.tick));
+    if (opts?.agg) q.set("agg", String(opts.agg));
     if (opts?.imbalance) q.set("imbalance_ratio", String(opts.imbalance));
     const qs = q.toString();
     return req<DomSnapshot>(`/api/scalping/dom/${symbol}${qs ? `?${qs}` : ""}`);
@@ -552,6 +556,10 @@ export interface DomTrade {
 export interface DomSnapshot {
   symbol: string;
   tick: number;
+  /** Шаг ценовой сетки самой биржи, до укрупнения. */
+  base_tick: number;
+  /** Сколько уровней реально отдала биржа. */
+  depth_available: { bids: number; asks: number };
   bids: DomLevel[];
   asks: DomLevel[];
   best_bid: number;
