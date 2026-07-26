@@ -1,0 +1,26 @@
+# Cloudflare Tunnel для бэкенда NMNH.
+#
+# Скопировать в:  C:\Users\Администратор\.cloudflared\config.yml
+# и подставить свой TUNNEL-ID (выдаётся командой `cloudflared tunnel create nmnh-api`).
+#
+# Почему Cloudflare, а не ngrok: у ngrok Free лимит 1 ГБ трафика в месяц
+# (ERR_NGROK_725 — именно он положил API). У Cloudflare Tunnel лимита трафика нет,
+# адрес постоянный, страницы-предупреждения для браузера тоже нет.
+
+tunnel: ЗАМЕНИ-НА-TUNNEL-ID
+credentials-file: C:\Users\Администратор\.cloudflared\ЗАМЕНИ-НА-TUNNEL-ID.json
+
+# Необязательно, но удобно: локальные метрики туннеля.
+metrics: 127.0.0.1:20241
+
+ingress:
+  # Публичный адрес API → локальный uvicorn на удалённом рабочем столе.
+  - hostname: api.nmnh.trade
+    service: http://localhost:8000
+    originRequest:
+      # Бэкенд отвечает быстро; таймаут с запасом на медленные вызовы WEEX.
+      connectTimeout: 30s
+      noTLSVerify: false
+
+  # Обязательное правило-заглушка: всё остальное отбрасываем.
+  - service: http_status:404
