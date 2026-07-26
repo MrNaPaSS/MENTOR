@@ -241,6 +241,16 @@ export const api = {
   marketForex: (base = "USD", symbols = "EUR,GBP,JPY,CHF,CAD,AUD") =>
     req<ForexRates>(`/api/market/forex?base=${base}&symbols=${symbols}`),
 
+  // ── Скальпинг: стакан + лента + метрики одним снимком ──
+  scalpingDom: (symbol: string, opts?: { rows?: number; tick?: number; imbalance?: number }) => {
+    const q = new URLSearchParams();
+    if (opts?.rows) q.set("rows", String(opts.rows));
+    if (opts?.tick) q.set("tick", String(opts.tick));
+    if (opts?.imbalance) q.set("imbalance_ratio", String(opts.imbalance));
+    const qs = q.toString();
+    return req<DomSnapshot>(`/api/scalping/dom/${symbol}${qs ? `?${qs}` : ""}`);
+  },
+
   // ── Auth ──
   loginByUid: (weex_uid: string) =>
     req<{ access_token: string; refresh_token: string }>("/api/auth/login-by-uid", {
@@ -520,4 +530,47 @@ export interface ShopOrder {
   student_id?: number | null;
   student_username?: string | null;
   student_uid?: string | null;
+}
+
+// ── Скальпинг ────────────────────────────────────────────────────────────────
+
+export interface DomLevel {
+  price: number;
+  size: number;
+  cum: number;
+  /** Уровень перевешивает противоположный в imbalance_ratio раз. */
+  strong: boolean;
+}
+
+export interface DomTrade {
+  price: number;
+  qty: number;
+  time: number;
+  isBuy: boolean;
+}
+
+export interface DomSnapshot {
+  symbol: string;
+  tick: number;
+  bids: DomLevel[];
+  asks: DomLevel[];
+  best_bid: number;
+  best_ask: number;
+  mid: number;
+  spread: number;
+  spread_bp: number;
+  bid_volume: number;
+  ask_volume: number;
+  /** Доля бидов в общем объёме стакана, 0..1. */
+  book_ratio: number;
+  bid_walls: number[];
+  ask_walls: number[];
+  trades: DomTrade[];
+  tape: {
+    buy_volume: number;
+    sell_volume: number;
+    delta: number;
+    /** Доля покупок в ленте, 0..1. */
+    buy_ratio: number;
+  };
 }
