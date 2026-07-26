@@ -1,25 +1,69 @@
-﻿// Клиент API NMNH Backend. Базовый URL - из NEXT_PUBLIC_API_URL.
+﻿// Клиент API NMNH Backend.
+// Базовый URL: NEXT_PUBLIC_API_URL (вшивается при сборке, т.к. next.config output:"export").
+// Фолбэки подобраны так, чтобы прод НИКОГДА не собирал http:// на https-странице
+// (mixed content браузер режет молча → "Failed to fetch").
 
 import { logout, logoutMentor, getMentorToken, getAccessToken } from "./auth";
 
-let baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function resolveApiUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  const isPlaceholder =
+    !configured || configured.includes("localhost") || configured.includes("127.0.0.1");
 
-if (typeof window !== "undefined") {
-  if (baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1")) {
-    const currentHostname = window.location.hostname;
-    if (currentHostname !== "localhost" && currentHostname !== "127.0.0.1") {
-      baseUrl = `http://${currentHostname}:8000`;
-    }
+  // Задан реальный адрес — используем как есть.
+  if (!isPlaceholder) return configured!.replace(/\/+$/, "");
+
+  if (typeof window === "undefined") return "http://localhost:8000";
+
+  const { protocol, hostname } = window.location;
+  const isLocalHost =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(hostname); // LAN-IP при разработке
+
+  // Локальная разработка: бэкенд рядом, на :8000 (тем же протоколом).
+  if (isLocalHost) return `${protocol}//${hostname}:8000`;
+
+  // Прод-домен без заданного NEXT_PUBLIC_API_URL: ходим на тот же origin
+  // (ожидается reverse-proxy /api → backend). Порт 8000 тут не выдумываем —
+  // это гарантированный mixed-content/недоступный порт.
+  return "";
+}
+
+export const API_URL = resolveApiUrl();
+
+/** Ошибка сети с понятным текстом: видно, куда именно не достучались. */
+export class ApiUnreachableError extends Error {
+  constructor(public url: string, cause?: unknown) {
+    super(
+      `Бэкенд недоступен: ${url || "(тот же домен)"}. ` +
+        `Проверь, что API запущен и NEXT_PUBLIC_API_URL задан при сборке фронта.`
+    );
+    this.name = "ApiUnreachableError";
+    this.cause = cause;
   }
 }
 
-export const API_URL = baseUrl;
-
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1", ...(init?.headers || {}) },
-  });
+  const url = `${API_URL}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "1",
+        ...(init?.headers || {}),
+      },
+    });
+  } catch (e) {
+    // fetch падает так при: недоступном хосте, CORS-отказе, mixed content.
+    if (typeof console !== "undefined") {
+      console.error("[NMNH] Запрос к API не прошёл:", url, e);
+    }
+    throw new ApiUnreachableError(API_URL, e);
+  }
+
   if (res.status === 401 && typeof window !== "undefined") {
     const authHeader = init?.headers && (init.headers as any)["Authorization"];
     if (authHeader) {
