@@ -244,12 +244,19 @@ export const api = {
   // ── Скальпинг: стакан + лента + метрики одним снимком ──
   scalpingDom: (
     symbol: string,
-    opts?: { rows?: number; tick?: number; agg?: number; imbalance?: number },
+    opts?: {
+      rows?: number;
+      tick?: number;
+      agg?: number;
+      imbalance?: number;
+      source?: "binance" | "weex";
+    },
   ) => {
     const q = new URLSearchParams();
     if (opts?.rows) q.set("rows", String(opts.rows));
     if (opts?.tick) q.set("tick", String(opts.tick));
     if (opts?.agg) q.set("agg", String(opts.agg));
+    if (opts?.source) q.set("source", opts.source);
     if (opts?.imbalance) q.set("imbalance_ratio", String(opts.imbalance));
     const qs = q.toString();
     return req<DomSnapshot>(`/api/scalping/dom/${symbol}${qs ? `?${qs}` : ""}`);
@@ -555,6 +562,8 @@ export interface DomTrade {
 
 export interface DomSnapshot {
   symbol: string;
+  /** Откуда взят стакан: binance или weex. */
+  source: string;
   tick: number;
   /** Шаг ценовой сетки самой биржи, до укрупнения. */
   base_tick: number;

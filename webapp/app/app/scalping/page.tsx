@@ -18,7 +18,7 @@ const SPEEDS = [
   { ms: 2000, label: "2с" },
 ];
 
-const DEPTHS = [20, 40, 60];
+const DEPTHS = [30, 60, 90];
 
 // Укрупнение ценовой сетки биржи. ×1 — шаг биржи как есть.
 const AGGS = [1, 5, 10, 20];
@@ -38,8 +38,9 @@ const MAX_BUCKETS = 12;
 export default function ScalpingPage() {
   const [symbol, setSymbol] = useState(PAIRS[0]);
   const [speed, setSpeed] = useState(SPEEDS[1].ms);
-  const [rows, setRows] = useState(40);
+  const [rows, setRows] = useState(60);
   const [agg, setAgg] = useState(10);
+  const [source, setSource] = useState<"binance" | "weex">("binance");
   const [imbalance, setImbalance] = useState(300);
   const [bucketMs, setBucketMs] = useState(BUCKETS[1].ms);
   const [notional, setNotional] = useState(true);
@@ -56,7 +57,7 @@ export default function ScalpingPage() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api.scalpingDom(symbolRef.current, { rows, agg, imbalance });
+      const data = await api.scalpingDom(symbolRef.current, { rows, agg, imbalance, source });
       if (data.symbol !== symbolRef.current) return;
       setSnap(data);
       setClusters((prev) =>
@@ -70,14 +71,14 @@ export default function ScalpingPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Стакан недоступен");
     }
-  }, [rows, agg, imbalance, bucketMs]);
+  }, [rows, agg, imbalance, bucketMs, source]);
 
   // Смена пары или шага сетки обнуляет историю: кластеры привязаны к ценам,
   // при другом шаге они встанут не напротив своих уровней.
   useEffect(() => {
     setClusters(emptyState());
     setSnap(null);
-  }, [symbol, agg, bucketMs]);
+  }, [symbol, agg, bucketMs, source]);
 
   useEffect(() => {
     if (!live) return;
@@ -134,6 +135,24 @@ export default function ScalpingPage() {
         <Selector label="Шаг" options={AGGS.map((a) => ({ value: a, label: `×${a}` }))} value={agg} onChange={setAgg} />
         <Selector label="Столбец" options={BUCKETS.map((b) => ({ value: b.ms, label: b.label }))} value={bucketMs} onChange={setBucketMs} />
         <Selector label="Имбаланс" options={IMBALANCES.map((i) => ({ value: i, label: `${i}%` }))} value={imbalance} onChange={setImbalance} />
+        <div className="flex items-center gap-1.5">
+          <span className="text-text-muted">Стакан</span>
+          <div className="flex rounded-lg border border-border/60 bg-bg-panel p-0.5">
+            {(["binance", "weex"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSource(s)}
+                className={`rounded-md px-2 py-0.5 transition ${
+                  source === s
+                    ? "bg-white/[0.06] text-text-primary"
+                    : "text-text-muted hover:text-text-secondary"
+                }`}
+              >
+                {s === "binance" ? "Binance" : "WEEX"}
+              </button>
+            ))}
+          </div>
+        </div>
         <button
           onClick={() => setNotional((v) => !v)}
           className="rounded-lg border border-border/60 bg-bg-panel px-2 py-1 text-text-muted transition hover:text-text-secondary"
@@ -166,7 +185,7 @@ export default function ScalpingPage() {
           value={snap ? fmtVol((snap.bid_volume + snap.ask_volume) * mult) : "—"}
           sub={
             snap
-              ? `биржа отдала ${snap.depth_available.bids}/${snap.depth_available.asks} уровней`
+              ? `${snap.source}: ${snap.depth_available.bids}/${snap.depth_available.asks} уровней`
               : ""
           }
         />

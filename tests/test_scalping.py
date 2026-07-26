@@ -7,6 +7,7 @@ import pytest
 from backend.api.scalping import (
     aggregate,
     detect_grid,
+    fetch_binance,
     find_walls,
     mark_imbalance,
     parse_levels,
@@ -235,7 +236,8 @@ def fake_weex(monkeypatch):
 async def test_dom_endpoint_shape(fake_weex):
     from backend.api.scalping import dom
 
-    r = await dom("btcusdt", rows=10, tick=1.0, imbalance_ratio=140, trades_limit=40)
+    r = await dom("btcusdt", rows=10, tick=1.0, agg=1, imbalance_ratio=140,
+                  trades_limit=40, source="weex")
 
     assert r["symbol"] == "BTCUSDT"
     assert r["best_bid"] == 100.0
@@ -259,7 +261,8 @@ async def test_dom_endpoint_survives_no_trades(monkeypatch):
     monkeypatch.setattr("backend.api.scalping._weex", _fake)
     from backend.api.scalping import dom
 
-    r = await dom("ethusdt", rows=10, tick=1.0, imbalance_ratio=140, trades_limit=40)
+    r = await dom("ethusdt", rows=10, tick=1.0, agg=1, imbalance_ratio=140,
+                  trades_limit=40, source="weex")
     assert r["trades"] == []
     assert r["tape"]["buy_ratio"] == 0.5
 
@@ -274,5 +277,78 @@ async def test_dom_endpoint_502_on_dead_weex(monkeypatch):
     from backend.api.scalping import dom
 
     with pytest.raises(HTTPException) as e:
-        await dom("btcusdt", rows=10, tick=1.0, imbalance_ratio=140, trades_limit=0)
+        await dom("btcusdt", rows=10, tick=1.0, agg=1, imbalance_ratio=140,
+                  trades_limit=0, source="weex")
     assert e.value.status_code == 502
+
+
+# ── Binance как источник стакана ─────────────────────────────────────────────
+
+@pytest.fixture()
+def fake_binance(monkeypatch):
+    """Публичные эндпоинты Binance: depth отдаёт объект, aggTrades — массив."""
+    async def _fake(url: str, params: dict | None = None):
+        if "depth" in url:
+            return {
+                "bids": [["64672.1", "0.5"], ["64672.0", "1.2"]],
+                "asks": [["64672.2", "0.3"], ["64672.3", "0.9"]],
+            }
+        if "aggTrades" in url:
+            return [
+                {"p": "64672.2", "q": "0.01", "T": 1_700_000_000_000, "m": False},
+                {"p": "64672.1", "q": "0.02", "T": 1_700_000_001_000, "m": True},
+            ]
+        return None
+
+    monkeypatch.setattr("backend.api.scalping._http_json", _fake)
+
+
+async def test_fetch_binance_parses_book_and_tape(fake_binance):
+    bids, asks, trades = await fetch_binance("BTCUSDT", 40)
+    assert bids == [(64672.1, 0.5), (64672.0, 1.2)]
+    assert asks == [(64672.2, 0.3), (64672.3, 0.9)]
+    assert len(trades) == 2
+
+
+async def test_fetch_binance_maker_flag_means_seller_aggression(fake_binance):
+    """m=true — покупатель был мейкером, значит по рынку продавали."""
+    _, _, trades = await fetch_binance("BTCUSDT", 40)
+    assert trades[0]["isBuy"] is True
+    assert trades[1]["isBuy"] is False
+
+
+async def test_fetch_binance_skips_tape_when_not_requested(fake_binance):
+    _, _, trades = await fetch_binance("BTCUSDT", 0)
+    assert trades == []
+
+
+async def test_fetch_binance_502_when_depth_dead(monkeypatch):
+    from fastapi import HTTPException
+
+    async def _fake(url: str, params: dict | None = None):
+        return None
+
+    monkeypatch.setattr("backend.api.scalping._http_json", _fake)
+    with pytest.raises(HTTPException) as e:
+        await fetch_binance("BTCUSDT", 40)
+    assert e.value.status_code == 502
+
+
+async def test_dom_rejects_unknown_source():
+    from fastapi import HTTPException
+    from backend.api.scalping import dom
+
+    with pytest.raises(HTTPException) as e:
+        await dom("btcusdt", rows=10, tick=None, agg=1, imbalance_ratio=300,
+                  trades_limit=0, source="bybit")
+    assert e.value.status_code == 400
+
+
+async def test_dom_uses_binance_source(fake_binance):
+    from backend.api.scalping import dom
+
+    r = await dom("btcusdt", rows=10, tick=None, agg=1, imbalance_ratio=300,
+                  trades_limit=40, source="binance")
+    assert r["source"] == "binance"
+    assert r["best_bid"] == 64672.1
+    assert r["best_ask"] == 64672.2

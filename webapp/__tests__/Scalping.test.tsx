@@ -12,6 +12,7 @@ function lvl(price: number, size: number, strong = false): DomLevel {
 
 const snap: DomSnapshot = {
   symbol: "BTCUSDT",
+  source: "binance",
   tick: 1,
   base_tick: 0.1,
   depth_available: { bids: 50, asks: 50 },

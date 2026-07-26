@@ -21,9 +21,24 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.api.market_data import _weex
+from backend.api.market_data import _get_session, _weex
 
 router = APIRouter(prefix="/api/scalping", tags=["scalping"])
+
+# Публичные рыночные данные фьючерсов Binance. Ключи не нужны и не используются:
+# depth и aggTrades открыты без авторизации.
+BINANCE_BASE = "https://fapi.binance.com"
+
+
+async def _http_json(url: str, params: dict | None = None) -> Any:
+    session = await _get_session()
+    try:
+        async with session.get(url, params=params) as r:
+            if r.status != 200:
+                return None
+            return await r.json(content_type=None)
+    except Exception:
+        return None
 
 # Значения по умолчанию — из конфига Tiger.Trade заказчика.
 DEFAULT_IMBALANCE_RATIO = 300  # BidAskImbalanceRatio
@@ -174,43 +189,20 @@ def _resolve_tick(symbol: str, tick: float | None, agg: int, bids: list, asks: l
     return round(base * max(1, agg), 10)
 
 
-@router.get("/dom/{symbol}")
-async def dom(
-    symbol: str,
-    rows: int = Query(DEFAULT_ROWS, ge=4, le=60),
-    tick: float | None = Query(None, gt=0, description="Шаг агрегации цен"),
-    agg: int = Query(1, ge=1, le=100, description="Укрупнение сетки биржи, разы"),
-    imbalance_ratio: float = Query(DEFAULT_IMBALANCE_RATIO, ge=100, le=1000),
-    trades_limit: int = Query(40, ge=0, le=100),
-) -> dict[str, Any]:
-    """Стакан + лента + метрики давления одним снимком."""
-    sym = symbol.upper()
-
+async def fetch_weex(sym: str, trades_limit: int) -> tuple[list, list, list]:
+    """Стакан и лента с WEEX. Глубина — 15 уровней, больше биржа не отдаёт."""
     depth_raw, trades_raw = await asyncio.gather(
         _weex("/capi/v3/market/depth", {"symbol": sym}),
         _weex("/capi/v3/market/trades", {"symbol": sym, "limit": trades_limit})
         if trades_limit
         else asyncio.sleep(0, result=None),
     )
-
     if not depth_raw:
         raise HTTPException(502, f"WEEX depth недоступен для {sym}")
 
     payload = depth_raw.get("data") or depth_raw if isinstance(depth_raw, dict) else {}
-    bids_raw = parse_levels(payload.get("bids") or payload.get("bid"))
-    asks_raw = parse_levels(payload.get("asks") or payload.get("ask"))
-    if not bids_raw or not asks_raw:
-        raise HTTPException(502, f"Пустой стакан для {sym}")
-
-    base_tick = detect_grid(sym, bids_raw, asks_raw)
-    step = _resolve_tick(sym, tick, agg, bids_raw, asks_raw)
-    bids = aggregate(bids_raw, step, "bid", rows)
-    asks = aggregate(asks_raw, step, "ask", rows)
-    mark_imbalance(bids, asks, imbalance_ratio)
-
-    best_bid = bids[0]["price"]
-    best_ask = asks[0]["price"]
-    mid = (best_bid + best_ask) / 2
+    bids = parse_levels(payload.get("bids") or payload.get("bid"))
+    asks = parse_levels(payload.get("asks") or payload.get("ask"))
 
     trades: list[dict[str, Any]] = []
     if isinstance(trades_raw, list):
@@ -224,6 +216,81 @@ async def dom(
                 })
             except (TypeError, ValueError):
                 continue
+    return bids, asks, trades
+
+
+async def fetch_binance(sym: str, trades_limit: int) -> tuple[list, list, list]:
+    """Стакан и лента с публичного API фьючерсов Binance.
+
+    Нужен как источник данных для стакана: WEEX отдаёт 15 уровней, а для
+    скальпинга нужна глубина в сотни — именно её показывает терминал заказчика
+    (в его конфиге инструмент подписан как BTCUSDT_FUT_BINANCE-FUT).
+    Ключи не требуются, эндпоинты публичные.
+    """
+    depth_raw, trades_raw = await asyncio.gather(
+        _http_json(f"{BINANCE_BASE}/fapi/v1/depth", {"symbol": sym, "limit": 500}),
+        _http_json(
+            f"{BINANCE_BASE}/fapi/v1/aggTrades",
+            {"symbol": sym, "limit": min(trades_limit, 100)},
+        )
+        if trades_limit
+        else asyncio.sleep(0, result=None),
+    )
+    if not isinstance(depth_raw, dict):
+        raise HTTPException(502, f"Binance depth недоступен для {sym}")
+
+    bids = parse_levels(depth_raw.get("bids"))
+    asks = parse_levels(depth_raw.get("asks"))
+
+    trades: list[dict[str, Any]] = []
+    if isinstance(trades_raw, list):
+        for t in trades_raw:
+            try:
+                trades.append({
+                    "price": float(t.get("p") or 0),
+                    "qty": float(t.get("q") or 0),
+                    "time": int(t.get("T") or 0),
+                    # m=true — покупатель был мейкером, значит агрессия продавца.
+                    "isBuy": not t.get("m", True),
+                })
+            except (TypeError, ValueError):
+                continue
+    return bids, asks, trades
+
+
+SOURCES = {"weex": fetch_weex, "binance": fetch_binance}
+
+
+@router.get("/dom/{symbol}")
+async def dom(
+    symbol: str,
+    rows: int = Query(DEFAULT_ROWS, ge=4, le=120),
+    tick: float | None = Query(None, gt=0, description="Шаг агрегации цен"),
+    agg: int = Query(1, ge=1, le=100, description="Укрупнение сетки биржи, разы"),
+    imbalance_ratio: float = Query(DEFAULT_IMBALANCE_RATIO, ge=100, le=1000),
+    trades_limit: int = Query(40, ge=0, le=100),
+    source: str = Query("binance", description="Источник данных: binance или weex"),
+) -> dict[str, Any]:
+    """Стакан + лента + метрики давления одним снимком."""
+    sym = symbol.upper()
+
+    fetch = SOURCES.get(source.lower())
+    if fetch is None:
+        raise HTTPException(400, f"Неизвестный источник: {source}")
+
+    bids_raw, asks_raw, trades = await fetch(sym, trades_limit)
+    if not bids_raw or not asks_raw:
+        raise HTTPException(502, f"Пустой стакан для {sym}")
+
+    base_tick = detect_grid(sym, bids_raw, asks_raw)
+    step = _resolve_tick(sym, tick, agg, bids_raw, asks_raw)
+    bids = aggregate(bids_raw, step, "bid", rows)
+    asks = aggregate(asks_raw, step, "ask", rows)
+    mark_imbalance(bids, asks, imbalance_ratio)
+
+    best_bid = bids[0]["price"]
+    best_ask = asks[0]["price"]
+    mid = (best_bid + best_ask) / 2
 
     bid_vol = sum(l["size"] for l in bids)
     ask_vol = sum(l["size"] for l in asks)
@@ -231,6 +298,7 @@ async def dom(
 
     return {
         "symbol": sym,
+        "source": source.lower(),
         "tick": step,
         "base_tick": base_tick,
         # Сколько уровней реально отдала биржа — видно, упёрлись мы в её
