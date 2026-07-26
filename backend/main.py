@@ -65,17 +65,12 @@ def create_app(
     app.state.rate_limiter = limiter
     app.add_middleware(AuthRateLimitMiddleware, limiter=limiter)
 
-    # CORS. Спека запрещает сочетание "*" + credentials: браузер отвергает такой ответ.
-    # Поэтому при открытом списке origins отключаем credentials (мы ходим Bearer-токеном,
-    # куки не используются), а при явном списке доменов — включаем.
-    cors_origins = list(config.allowed_origins)
-    allow_all = "*" in cors_origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins,  # из ALLOWED_ORIGINS (прод — домен фронта)
+        allow_origins=list(config.allowed_origins),  # из ALLOWED_ORIGINS (прод — домен фронта)
         allow_methods=["*"],
         allow_headers=["*"],
-        allow_credentials=not allow_all,
+        allow_credentials=True,
     )
 
     app.include_router(auth.router)

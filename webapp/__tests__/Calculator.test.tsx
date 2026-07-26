@@ -7,10 +7,8 @@ afterEach(() => vi.restoreAllMocks());
 describe("Calculator", () => {
   it("renders the form", () => {
     render(<Calculator />);
-    // Заголовок секции живёт на странице, в самом компоненте — управление формой.
+    expect(screen.getByText("Калькулятор позиции")).toBeInTheDocument();
     expect(screen.getByText("Рассчитать")).toBeInTheDocument();
-    expect(screen.getByText("LONG")).toBeInTheDocument();
-    expect(screen.getByText("SHORT")).toBeInTheDocument();
   });
 
   it("shows result after compute", async () => {
@@ -42,13 +40,7 @@ describe("Calculator", () => {
     fireEvent.click(screen.getByText("Рассчитать"));
 
     await waitFor(() => expect(screen.getByText("Маржа")).toBeInTheDocument());
-    // Строка тейка рендерится как "TP1 · RR 1:1.0" внутри одного span,
-    // но разбита на текстовые узлы — сверяем по textContent элемента.
-    const tpRow = screen.getByText((_, el) => {
-      if (el?.tagName !== "SPAN") return false;
-      return el.textContent?.replace(/\s+/g, " ").trim() === "TP1 · RR 1:1.0";
-    });
-    expect(tpRow).toBeInTheDocument();
+    expect(screen.getByText("TP1 (RR 1:1.0)")).toBeInTheDocument();
   });
 
   it("shows error on failed compute", async () => {
