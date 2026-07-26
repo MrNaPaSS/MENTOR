@@ -112,6 +112,32 @@ https://api.nmnh.trade
 2. Вход на `https://www.nmnh.trade` проходит; в `F12 → Network` запросы к
    `api.nmnh.trade` со статусом `200`, без `CORS error`.
 
+## Если туннель поднялся, а API не отвечает
+
+В логе `cloudflared`:
+
+```
+ERR error="Unable to reach the origin service ... dial tcp [::1]:8000:
+connectex: No connection could be made because the target machine actively refused it."
+```
+
+Причин две, проверять в этом порядке:
+
+1. **Бэкенд не запущен.** Открыть `http://localhost:8000/api/health` на самой
+   машине. Пусто — значит `uvicorn` упал или окно закрыли.
+2. **IPv6.** `localhost` на Windows резолвится в `[::1]`, а `uvicorn --host 0.0.0.0`
+   слушает только IPv4. В `C:\Users\Администратор\.cloudflared\config.yml`
+   должно быть `service: http://127.0.0.1:8000`, а не `http://localhost:8000`.
+
+Заменить одной командой:
+
+```powershell
+$c = "$env:USERPROFILE\.cloudflared\config.yml"
+(Get-Content $c -Raw) -replace 'http://localhost:8000','http://127.0.0.1:8000' | Set-Content $c -Encoding UTF8
+```
+
+После правки — перезапустить туннель.
+
 ## Дальше
 
 Адрес `api.nmnh.trade` постоянный — пересобирать фронт при перезапусках

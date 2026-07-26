@@ -118,7 +118,7 @@ if not exist "!CRED!" goto :eof
     echo credentials-file: !CRED!
     echo ingress:
     echo   - hostname: !API_DOMAIN!
-    echo     service: http://localhost:8000
+    echo     service: http://127.0.0.1:8000
     echo   - service: http_status:404
 ) > "%LOCAL_CFG%"
 "!CF!" tunnel route dns !TUNNEL_NAME! !API_DOMAIN! >nul 2>&1

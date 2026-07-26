@@ -15,8 +15,10 @@ metrics: 127.0.0.1:20241
 
 ingress:
   # Публичный адрес API → локальный uvicorn на удалённом рабочем столе.
+  # Именно 127.0.0.1, а не localhost: на Windows localhost резолвится в IPv6 [::1],
+  # а uvicorn с --host 0.0.0.0 слушает только IPv4 → "connection refused".
   - hostname: api.nmnh.trade
-    service: http://localhost:8000
+    service: http://127.0.0.1:8000
     originRequest:
       # Бэкенд отвечает быстро; таймаут с запасом на медленные вызовы WEEX.
       connectTimeout: 30s
