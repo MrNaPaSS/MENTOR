@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { Coins, ExternalLink, ShoppingBag, Check, Clock, X, Loader2 } from "lucide-react";
-import { api, ShopItem, ShopOrder, CoinsBalance } from "@/lib/api";
+import { api, ShopItem, ShopOrder } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
+import { useCoins, COINS_EVENT } from "@/lib/useCoins";
 import { cardImage } from "@/lib/tvImage";
 import ShopIcon from "@/components/shop/ShopIcon";
 import CardHero from "@/components/shop/CardHero";
@@ -17,7 +18,9 @@ const STATUS: Record<string, { label: string; cls: string; icon: typeof Check }>
 export default function ShopPage() {
   const [items, setItems] = useState<ShopItem[]>([]);
   const [orders, setOrders] = useState<ShopOrder[]>([]);
-  const [balance, setBalance] = useState<number | null>(null);
+  // Один источник с шапкой: два независимых запроса расходились, когда
+  // монеты начисляла академия — мимо браузера, без события во вкладке.
+  const { coins: balance } = useCoins();
   const [loaded, setLoaded] = useState(false);
   const [buying, setBuying] = useState<ShopItem | null>(null);
   const [contact, setContact] = useState("");
@@ -27,7 +30,6 @@ export default function ShopPage() {
   function reload(token: string) {
     api.shopItems(token).then(setItems).catch(() => {});
     api.shopMyOrders(token).then(setOrders).catch(() => {});
-    api.coins(token).then((c: CoinsBalance) => setBalance(c.balance)).catch(() => {});
   }
 
   useEffect(() => {
@@ -36,7 +38,6 @@ export default function ShopPage() {
     Promise.all([
       api.shopItems(token).then(setItems).catch(() => {}),
       api.shopMyOrders(token).then(setOrders).catch(() => {}),
-      api.coins(token).then((c: CoinsBalance) => setBalance(c.balance)).catch(() => {}),
     ]).finally(() => setLoaded(true));
   }, []);
 
@@ -48,8 +49,11 @@ export default function ShopPage() {
     try {
       const order = await api.shopBuy(token, buying.id, contact.trim());
       setOrders((prev) => [order, ...prev]);
-      setBalance((b) => (b === null ? b : b - buying.price));
-      window.dispatchEvent(new CustomEvent("nmnh-coins-updated", { detail: { balance: (balance ?? 0) - buying.price } }));
+      // Списание показываем сразу, не дожидаясь перезапроса; хук разошлёт его
+      // и в шапку, поэтому оба числа меняются одновременно.
+      window.dispatchEvent(
+        new CustomEvent(COINS_EVENT, { detail: { balance: (balance ?? 0) - buying.price } }),
+      );
       setBuying(null);
       setContact("");
     } catch (e) {
@@ -76,7 +80,9 @@ export default function ShopPage() {
           </h1>
           <p className="mt-1 text-sm text-text-muted">Трать монеты NMNH на подписки, менторство и доступ к софту.</p>
         </div>
-        <div className="flex items-center gap-2 rounded-2xl border border-accent-gold/30 bg-accent-gold/10 px-4 py-2.5">
+        {/* На широком экране баланс уже показан в шапке — здесь не дублируем.
+            На мобильном бейдж шапки скрыт, поэтому оставляем этот. */}
+        <div className="flex items-center gap-2 rounded-2xl border border-accent-gold/30 bg-accent-gold/10 px-4 py-2.5 sm:hidden">
           <Coins className="h-5 w-5 text-accent-gold" />
           <span className="font-mono text-xl font-bold text-accent-gold tabular">{(balance ?? 0).toLocaleString("ru")}</span>
           <span className="text-[10px] font-bold text-accent-gold/60">NMNH</span>

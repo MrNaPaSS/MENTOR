@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 // v8
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
+import { COINS_EVENT } from "@/lib/useCoins";
 import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles } from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
@@ -351,7 +352,7 @@ export default function AnalyticsPage() {
       reached_volume_milestones: reachedMilestones,
     }).then(r => {
       setCoinsBalance(r.balance);
-      window.dispatchEvent(new CustomEvent("nmnh-coins-updated", { detail: { balance: r.balance } }));
+      window.dispatchEvent(new CustomEvent(COINS_EVENT, { detail: { balance: r.balance } }));
     }).catch(() => {});
   }, [tradeSummary, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 

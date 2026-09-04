@@ -19,8 +19,9 @@ import {
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
-import { api, Profile, CoinsBalance } from "@/lib/api";
+import { api, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
+import { useCoins } from "@/lib/useCoins";
 import { fmtUsd, modeLabel } from "@/lib/format";
 import MarketTicker from "@/components/market/MarketTicker";
 
@@ -46,7 +47,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [coins, setCoins] = useState<number | null>(null);
+  // Баланс монет обновляется сам: их начисляет ещё и академия — снаружи вкладки.
+  const { coins } = useCoins(pathname);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -62,11 +64,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         logout();
         router.replace("/login");
       });
-    api.coins(token).then(c => setCoins(c.balance)).catch(() => setCoins(0));
-
-    const onSync = (e: Event) => setCoins((e as CustomEvent<{balance: number}>).detail.balance);
-    window.addEventListener("nmnh-coins-updated", onSync);
-    return () => window.removeEventListener("nmnh-coins-updated", onSync);
   }, [router]);
 
   function doLogout() {
