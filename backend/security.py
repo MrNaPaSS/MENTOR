@@ -60,9 +60,10 @@ def create_access_token(sub: str, role: str, secret: str, ttl_seconds: int) -> s
     )
 
 
-def create_refresh_token(sub: str, secret: str, ttl_seconds: int) -> str:
+def create_refresh_token(sub: str, secret: str, ttl_seconds: int, role: str = "student") -> str:
+    """Refresh-токен несёт роль: без неё обновление сбрасывало ментора в ученика."""
     now = int(time.time())
     return encode_token(
-        {"sub": str(sub), "type": "refresh", "iat": now, "exp": now + ttl_seconds},
+        {"sub": str(sub), "role": role, "type": "refresh", "iat": now, "exp": now + ttl_seconds},
         secret,
     )

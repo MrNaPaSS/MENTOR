@@ -49,6 +49,13 @@ class Student(Base):
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
     coins: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Откуда появилась запись: bot | web | academy. Ученик может быть заведён
+    # сервером академии до того, как он вообще откроет кабинет.
+    created_via: Mapped[str] = mapped_column(String(16), default="bot")
+    # Учёт входов в кабинет. first_login_at = NULL означает «ни разу не заходил».
+    first_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    login_count: Mapped[int] = mapped_column(Integer, default=0)
 
     deliveries: Mapped[list["SignalDelivery"]] = relationship(back_populates="student")
     coin_transactions: Mapped[list["CoinTransaction"]] = relationship(back_populates="student")
@@ -143,11 +150,16 @@ class CoinTransaction(Base):
     """История начислений монет NMNH ученику."""
 
     __tablename__ = "coin_transactions"
+    # Начисления идут и из кабинета, и с сервера академии. Проверки «есть ли
+    # такой ref» на стороне кода мало: два одновременных запроса пройдут её оба.
+    __table_args__ = (
+        UniqueConstraint("student_id", "ref", name="uq_coin_tx_student_ref"),
+    )
 
     id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
     amount: Mapped[int] = mapped_column(Integer)
-    reason: Mapped[str] = mapped_column(String(32))   # achievement | level_up | volume_milestone
+    reason: Mapped[str] = mapped_column(String(32))   # achievement | level_up | volume_milestone | academy
     ref: Mapped[str] = mapped_column(String(64))       # achievement_id, level number, or milestone label
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

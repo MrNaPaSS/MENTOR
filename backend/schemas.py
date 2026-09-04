@@ -119,11 +119,20 @@ class StudentOut(BaseModel):
     id: int
     username: Optional[str]
     weex_uid: Optional[str]
+    tg_id: Optional[int] = None
     mode: str
     language: str
     balance_usdt: Optional[Decimal]
     is_active: bool
     is_approved: bool
+    coins: int = 0
+    # Откуда запись: bot | web | academy
+    created_via: str = "bot"
+    created_at: Optional[str] = None
+    # Входы в кабинет. first_login_at = null означает «ни разу не заходил».
+    first_login_at: Optional[str] = None
+    last_login_at: Optional[str] = None
+    login_count: int = 0
 
 
 # ── Создание/закрытие сигнала (ментор) ──
@@ -227,6 +236,33 @@ class CoinSyncOut(BaseModel):
     balance: int
     added: int
     new_transactions: list[CoinTxOut]
+
+
+class CoinGrantIn(BaseModel):
+    """Начисление от сервера академии.
+
+    Ученик ищется по ``tg_id`` или ``weex_uid`` — нужен хотя бы один.
+    ``ref`` — идентификатор события (например ``module_3``): повторный вызов
+    с тем же ref ничего не начисляет, поэтому академия может слать смело.
+    ``amount`` не обязателен: если не задан, берётся тариф по ``reason``.
+    """
+
+    tg_id: Optional[int] = None
+    weex_uid: Optional[str] = None
+    ref: str
+    reason: str = "academy"
+    amount: Optional[int] = None
+    username: Optional[str] = None
+
+
+class CoinGrantOut(BaseModel):
+    student_id: int
+    balance: int
+    added: int
+    # false, если ref уже был начислен раньше — вызов признан повтором.
+    granted: bool
+    # true, если ученика завели прямо сейчас: в академии он есть, в кабинет не заходил.
+    student_created: bool
 
 
 # ── Магазин NMNH ──

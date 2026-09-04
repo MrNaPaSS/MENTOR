@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { Check, Trash2 } from "lucide-react";
 import { api, StudentOut } from "@/lib/api";
 import { useMentorToken } from "@/components/admin/AdminShell";
-import { fmtUsd, maskUid } from "@/lib/format";
+import { fmtUsd, maskUid, fmtAgo, fmtDateTime, sourceLabel } from "@/lib/format";
 
 export default function AdminStudents() {
   const token = useMentorToken();
@@ -62,6 +62,29 @@ export default function AdminStudents() {
     <div className="space-y-6">
       <h1 className="text-h2 text-white">Ученики ({students.length})</h1>
 
+      {/* Сводка по входам: сразу видно, до кого платформа ещё не дотянулась. */}
+      {loaded && students.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <SummaryCard
+            label="Заходили в кабинет"
+            value={students.filter((s) => s.first_login_at).length}
+            total={students.length}
+          />
+          <SummaryCard
+            label="Ни разу не заходили"
+            value={students.filter((s) => !s.first_login_at).length}
+            total={students.length}
+            tone="warn"
+          />
+          <SummaryCard
+            label="Активны за неделю"
+            value={students.filter((s) => isRecent(s.last_login_at, 7)).length}
+            total={students.length}
+            tone="ok"
+          />
+        </div>
+      )}
+
       {/* Заявки */}
       {pending.length > 0 && (
         <div className="card border-accent-gold/30">
@@ -97,6 +120,9 @@ export default function AdminStudents() {
                 <th>UID</th>
                 <th>Режим</th>
                 <th className="text-right">Баланс</th>
+                <th>Последний вход</th>
+                <th className="text-center">Входов</th>
+                <th>Источник</th>
                 <th className="text-center">Активен</th>
                 <th className="text-right">Действия</th>
               </tr>
@@ -123,6 +149,18 @@ export default function AdminStudents() {
                     </div>
                   </td>
                   <td className="text-right font-mono">{fmtUsd(s.balance_usdt)}$</td>
+                  <td
+                    className={s.first_login_at ? "text-text-secondary" : "text-text-muted"}
+                    title={
+                      s.first_login_at
+                        ? `Первый вход: ${fmtDateTime(s.first_login_at)}\nПоследний: ${fmtDateTime(s.last_login_at)}`
+                        : "В кабинет ни разу не заходил"
+                    }
+                  >
+                    {s.first_login_at ? fmtAgo(s.last_login_at) : "не заходил"}
+                  </td>
+                  <td className="text-center font-mono text-text-muted">{s.login_count || 0}</td>
+                  <td className="text-text-muted">{sourceLabel(s.created_via)}</td>
                   <td className="text-center">
                     <button
                       onClick={() => toggleActive(s)}
@@ -148,6 +186,35 @@ export default function AdminStudents() {
           </table>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Был ли вход за последние N дней. */
+function isRecent(iso: string | null | undefined, days: number): boolean {
+  if (!iso) return false;
+  const ts = Date.parse(iso);
+  return !Number.isNaN(ts) && Date.now() - ts < days * 86_400_000;
+}
+
+function SummaryCard({
+  label,
+  value,
+  total,
+  tone,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  tone?: "ok" | "warn";
+}) {
+  const color = tone === "ok" ? "text-success" : tone === "warn" ? "text-accent-gold" : "text-white";
+  const share = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="rounded-xl border border-border bg-bg-panel p-4">
+      <div className="text-xs uppercase tracking-wider text-text-muted">{label}</div>
+      <div className={`mt-1 font-mono text-2xl ${color}`}>{value}</div>
+      <div className="mt-0.5 font-mono text-xs text-text-muted">{share}% от всех</div>
     </div>
   );
 }

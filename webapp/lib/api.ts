@@ -1,6 +1,15 @@
 ﻿// Клиент API NMNH Backend. Базовый URL - из NEXT_PUBLIC_API_URL.
 
-import { logout, logoutMentor, getMentorToken, getAccessToken } from "./auth";
+import {
+  logout,
+  logoutMentor,
+  getMentorToken,
+  getMentorRefreshToken,
+  getAccessToken,
+  getRefreshToken,
+  setStudentTokens,
+  setMentorToken,
+} from "./auth";
 
 let baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -15,27 +24,92 @@ if (typeof window !== "undefined") {
 
 export const API_URL = baseUrl;
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+type TokenKind = "student" | "mentor";
+
+/** Какому входу принадлежит токен из заголовка запроса. */
+function whoseToken(token: string): TokenKind | null {
+  if (token && token === getMentorToken()) return "mentor";
+  if (token && token === getAccessToken()) return "student";
+  return null;
+}
+
+// Пока обновление в полёте, параллельные запросы ждут его, а не плодят свои:
+// иначе десяток виджетов дашборда разом отправил бы десяток /auth/refresh.
+const refreshing: Partial<Record<TokenKind, Promise<string | null>>> = {};
+
+async function requestNewAccessToken(kind: TokenKind): Promise<string | null> {
+  const refreshToken = kind === "mentor" ? getMentorRefreshToken() : getRefreshToken();
+  if (!refreshToken) return null;
+
+  const res = await fetch(`${API_URL}/api/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  if (!res.ok) return null;
+
+  const pair = (await res.json()) as { access_token: string; refresh_token: string };
+  if (kind === "mentor") setMentorToken(pair.access_token, pair.refresh_token);
+  else setStudentTokens(pair.access_token, pair.refresh_token);
+  return pair.access_token;
+}
+
+function refreshAccessToken(kind: TokenKind): Promise<string | null> {
+  if (!refreshing[kind]) {
+    refreshing[kind] = requestNewAccessToken(kind)
+      .catch(() => null)
+      .finally(() => {
+        delete refreshing[kind];
+      });
+  }
+  return refreshing[kind]!;
+}
+
+function endSession(kind: TokenKind) {
+  if (kind === "mentor") {
+    logoutMentor();
+    window.location.href = "/admin";
+  } else {
+    logout();
+    window.location.href = "/";
+  }
+}
+
+function send(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${API_URL}${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1", ...(init?.headers || {}) },
   });
+}
+
+async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  let res = await send(path, init);
+
+  // 401 с истёкшим access-токеном — это не разлогин, а повод его обновить:
+  // refresh живёт 30 дней, поэтому вход должен переживать и перезаход на сайт.
   if (res.status === 401 && typeof window !== "undefined") {
-    const authHeader = init?.headers && (init.headers as any)["Authorization"];
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      if (token === getMentorToken()) {
-        logoutMentor();
-        window.location.href = "/admin";
-      } else if (token === getAccessToken()) {
-        logout();
-        window.location.href = "/";
+    const authHeader = init?.headers && (init.headers as Record<string, string>)["Authorization"];
+    const token = authHeader ? authHeader.replace("Bearer ", "") : "";
+    const kind = whoseToken(token);
+
+    if (kind) {
+      const fresh = await refreshAccessToken(kind);
+      if (fresh) {
+        res = await send(path, {
+          ...init,
+          headers: { ...(init?.headers || {}), Authorization: `Bearer ${fresh}` },
+        });
+        // Свежий токен тоже отвергнут — сессию не спасти.
+        if (res.status === 401) endSession(kind);
+      } else {
+        endSession(kind);
       }
     }
   }
+
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
-    throw new Error((detail as any).detail || `HTTP ${res.status}`);
+    throw new Error((detail as { detail?: string }).detail || `HTTP ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -203,11 +277,20 @@ export interface StudentOut {
   id: number;
   username: string | null;
   weex_uid: string | null;
+  tg_id: number | null;
   mode: string;
   language: string;
   balance_usdt: string | null;
   is_active: boolean;
   is_approved: boolean;
+  coins: number;
+  /** Откуда запись: bot | web | academy. */
+  created_via: string;
+  created_at: string | null;
+  /** null — в кабинет ни разу не заходил. */
+  first_login_at: string | null;
+  last_login_at: string | null;
+  login_count: number;
 }
 
 export interface DeliveryPreview {
@@ -264,7 +347,7 @@ export const api = {
     ),
   devLogin: () =>
     req<{
-      mentor: { access_token: string };
+      mentor: { access_token: string; refresh_token?: string };
       student: { access_token: string; refresh_token: string };
       student_username: string;
     }>("/api/auth/dev-login", { method: "POST" }),

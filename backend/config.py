@@ -31,6 +31,10 @@ class BackendConfig:
     rate_limit_window: int = 900        # окно, сек (15 мин)
     allowed_origins: tuple = ("*",)     # CORS: домены фронта
     dev_login: bool = False             # dev: вход без кода/пароля (только не в проде)
+    # Общий секрет для служебных вызовов от сервера академии (заголовок X-Service-Key).
+    # Пустая строка = ручка выключена: без явно заданного ключа её открывать нельзя.
+    service_api_key: str = ""
+
 
     @staticmethod
     def _require(key: str) -> str:
@@ -56,6 +60,7 @@ class BackendConfig:
             admin_tg_id=int(os.getenv("ADMIN_TG_ID", "0") or "0"),
             rate_limit_max=int(os.getenv("RATE_LIMIT_MAX", "10")),
             rate_limit_window=int(os.getenv("RATE_LIMIT_WINDOW", "900")),
+            service_api_key=os.getenv("SERVICE_API_KEY", ""),
             allowed_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
             # dev-вход включён, если явно DEV_LOGIN=true, либо мы на моках WEEX (=dev),
             # и НЕ отключён явно DEV_LOGIN=false.

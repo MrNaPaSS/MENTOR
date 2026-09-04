@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+import secrets
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from core.models import CoinTransaction, Student
-from backend.deps import get_session, get_current_student
-from backend.schemas import CoinsBalance, CoinSyncIn, CoinSyncOut, CoinTxOut
+from backend.config import BackendConfig
+from backend.deps import get_config, get_session, get_current_student
+from backend.schemas import (
+    CoinGrantIn, CoinGrantOut, CoinsBalance, CoinSyncIn, CoinSyncOut, CoinTxOut,
+)
 
 router = APIRouter(prefix="/api/coins", tags=["coins"])
 
@@ -68,7 +74,44 @@ ACHIEVEMENT_RARITY: dict[str, str] = {
     "level_20":     "legendary",
     "all_goals":    "epic",
     "vol_250k_mo":  "epic",
+
+    # ── Учебные достижения (академия) ──
+    # Ученик один и тот же, монеты общие: за уроки платим так же, как за торговлю.
+    "academy_joined":      "common",     # первый заход в академию
+    "module_completed":    "common",     # модуль пройден
+    "test_passed":         "rare",       # тест сдан
+    "course_completed":    "epic",       # курс целиком
+    "verification":        "rare",       # верификация ученика
+    "friend_invited":      "rare",       # приглашённый друг дошёл до регистрации
+    "friend_verified":     "epic",       # приглашённый друг верифицировался
+    "homework_accepted":   "common",     # домашка принята
+    "streak_lessons_7":    "rare",       # неделя занятий без пропуска
+    "streak_lessons_30":   "legendary",  # месяц занятий без пропуска
 }
+
+# Тарифы для служебных начислений из академии. Ключ — reason, а не ref:
+# модулей много, событие одно. Если reason незнаком, берётся ставка common.
+ACADEMY_REWARDS: dict[str, int] = {
+    "academy_joined":    10,
+    "module_completed":  15,
+    "test_passed":       25,
+    "course_completed":  100,
+    "verification":      50,
+    "friend_invited":    25,
+    "friend_verified":   75,
+    "homework_accepted": 10,
+    "lesson_watched":    5,
+}
+
+
+def academy_amount(reason: str) -> int:
+    """Сколько монет положено за учебное событие."""
+    if reason in ACADEMY_REWARDS:
+        return ACADEMY_REWARDS[reason]
+    rarity = ACHIEVEMENT_RARITY.get(reason)
+    if rarity:
+        return RARITY_COINS[rarity]
+    return RARITY_COINS["common"]
 
 
 def _tx_to_out(tx: CoinTransaction) -> CoinTxOut:
@@ -170,4 +213,121 @@ def sync_coins(
         balance=fresh.coins,
         added=added,
         new_transactions=[_tx_to_out(t) for t in new_txs],
+    )
+
+
+# ── Служебная ручка для сервера академии ────────────────────────────────────
+
+def require_service_key(
+    x_service_key: str = Header(default="", alias="X-Service-Key"),
+    config: BackendConfig = Depends(get_config),
+) -> None:
+    """Пускать только по общему секрету.
+
+    Ходит сервер академии, а не браузер ученика, поэтому JWT здесь не подходит.
+    Пустой SERVICE_API_KEY означает, что интеграцию не настраивали — ручку
+    в этом случае держим закрытой, иначе любой смог бы начислять себе монеты.
+    """
+    if not config.service_api_key:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Интеграция не настроена: SERVICE_API_KEY не задан",
+        )
+    if not secrets.compare_digest(x_service_key, config.service_api_key):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный служебный ключ")
+
+
+def find_or_create_student(
+    session, *, tg_id: int | None, weex_uid: str | None, username: str | None,
+) -> tuple[Student, bool]:
+    """Найти ученика по любому из ключей, при отсутствии — завести.
+
+    Человек может пройти половину академии, ни разу не открыв кабинет.
+    Начислять монеты всё равно надо, поэтому запись создаём сами; в кабинет
+    он войдёт позже по тому же UID и увидит накопленное.
+    """
+    student = None
+    if tg_id is not None:
+        student = session.execute(
+            select(Student).where(Student.tg_id == tg_id)
+        ).scalar_one_or_none()
+    if student is None and weex_uid:
+        student = session.execute(
+            select(Student).where(Student.weex_uid == weex_uid)
+        ).scalar_one_or_none()
+
+    if student is not None:
+        # Второй ключ мог появиться позже — дописываем, чтобы связка окрепла.
+        if tg_id is not None and student.tg_id is None:
+            student.tg_id = tg_id
+        if weex_uid and not student.weex_uid:
+            student.weex_uid = weex_uid
+        if username and not student.username:
+            student.username = username
+        return student, False
+
+    student = Student(
+        tg_id=tg_id,
+        weex_uid=weex_uid,
+        username=username,
+        created_via="academy",
+        # Доступ к сигналам подтверждает ментор — академия его не выдаёт.
+        is_approved=False,
+        is_active=True,
+    )
+    session.add(student)
+    session.flush()
+    return student, True
+
+
+@router.post("/grant", response_model=CoinGrantOut, dependencies=[Depends(require_service_key)])
+def grant_coins(body: CoinGrantIn, session=Depends(get_session)):
+    """Начислить монеты за учебное событие. Повторный вызов с тем же ref — не начисляет."""
+    if body.tg_id is None and not body.weex_uid:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Нужен tg_id или weex_uid",
+        )
+    if body.amount is not None and body.amount <= 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "amount должен быть больше нуля")
+
+    student, created = find_or_create_student(
+        session,
+        tg_id=body.tg_id,
+        weex_uid=(body.weex_uid or "").strip() or None,
+        username=body.username,
+    )
+
+    amount = body.amount if body.amount is not None else academy_amount(body.reason)
+
+    tx = CoinTransaction(
+        student_id=student.id,
+        amount=amount,
+        reason=body.reason[:32],
+        ref=body.ref[:64],
+    )
+    session.add(tx)
+    student.coins = (student.coins or 0) + amount
+
+    try:
+        session.commit()
+    except IntegrityError:
+        # Такой ref у этого ученика уже есть — событие пришло повторно.
+        # Уникальный индекс ловит и гонку двух одновременных запросов.
+        session.rollback()
+        fresh = session.get(Student, student.id)
+        return CoinGrantOut(
+            student_id=fresh.id,
+            balance=fresh.coins or 0,
+            added=0,
+            granted=False,
+            student_created=False,
+        )
+
+    session.refresh(student)
+    return CoinGrantOut(
+        student_id=student.id,
+        balance=student.coins,
+        added=amount,
+        granted=True,
+        student_created=created,
     )

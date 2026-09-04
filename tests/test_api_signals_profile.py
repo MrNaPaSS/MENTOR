@@ -25,7 +25,7 @@ def ctx(tmp_path, monkeypatch):
 
 
 def _mentor(client):
-    tok = client.post("/api/auth/mentor-login", params={"password": "secret"}).json()["access_token"]
+    tok = client.post("/api/auth/mentor-login", json={"password": "secret"}).json()["access_token"]
     return {"Authorization": f"Bearer {tok}"}
 
 

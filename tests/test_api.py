@@ -104,7 +104,7 @@ def test_students_requires_mentor(client):
 
 def test_mentor_login_and_list(client):
     _seed_student("123456")
-    r = client.post("/api/auth/mentor-login", params={"password": "secret"})
+    r = client.post("/api/auth/mentor-login", json={"password": "secret"})
     assert r.status_code == 200
     token = r.json()["access_token"]
     r = client.get("/api/students", headers={"Authorization": f"Bearer {token}"})
@@ -113,4 +113,4 @@ def test_mentor_login_and_list(client):
 
 
 def test_mentor_login_bad_password(client):
-    assert client.post("/api/auth/mentor-login", params={"password": "nope"}).status_code == 401
+    assert client.post("/api/auth/mentor-login", json={"password": "nope"}).status_code == 401

@@ -17,11 +17,21 @@ from backend.schemas import StudentOut
 router = APIRouter(prefix="/api/students", tags=["students"], dependencies=[Depends(get_current_mentor)])
 
 
+def _iso(value) -> str | None:
+    return value.isoformat() if value else None
+
+
 def _to_out(s: Student) -> StudentOut:
     return StudentOut(
-        id=s.id, username=s.username, weex_uid=s.weex_uid, mode=s.mode,
+        id=s.id, username=s.username, weex_uid=s.weex_uid, tg_id=s.tg_id, mode=s.mode,
         language=s.language, balance_usdt=s.balance_usdt,
         is_active=s.is_active, is_approved=s.is_approved,
+        coins=s.coins or 0,
+        created_via=s.created_via or "bot",
+        created_at=_iso(s.created_at),
+        first_login_at=_iso(s.first_login_at),
+        last_login_at=_iso(s.last_login_at),
+        login_count=s.login_count or 0,
     )
 
 

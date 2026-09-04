@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -35,7 +35,7 @@ export default function DevBar() {
     try {
       const res = await api.devLogin();
       if (as === "mentor") {
-        setMentorToken(res.mentor.access_token);
+        setMentorToken(res.mentor.access_token, res.mentor.refresh_token);
         window.location.href = "/admin";
       } else {
         setStudentTokens(res.student.access_token, res.student.refresh_token);

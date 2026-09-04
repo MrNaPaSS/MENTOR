@@ -26,6 +26,20 @@ from backend.schemas import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+def record_login(session, student) -> None:
+    """Отметить вход ученика в кабинет.
+
+    ``first_login_at`` остаётся пустым у тех, кто есть в базе, но кабинет ни
+    разу не открывал — именно по этому полю в админке видно «не заходил».
+    Коммит остаётся за вызывающим: вход и так завершается записью в базу.
+    """
+    now = _now()
+    if student.first_login_at is None:
+        student.first_login_at = now
+    student.last_login_at = now
+    student.login_count = (student.login_count or 0) + 1
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -143,6 +157,8 @@ def verify(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ученик не найден")
 
     repo.delete_auth_code(session, uid)
+    record_login(session, student)
+    session.commit()
     return TokenPair(
         access_token=create_access_token(student.id, "student", config.jwt_secret, config.access_ttl_seconds),
         refresh_token=create_refresh_token(student.id, config.jwt_secret, config.refresh_ttl_seconds),
@@ -171,6 +187,7 @@ async def login_by_uid(
         student = StudentModel(
             weex_uid=uid, is_approved=True, is_active=True,
             balance_usdt=balance, balance_source="affiliate_api",
+            created_via="web",
         )
         session.add(student)
     else:
@@ -178,6 +195,8 @@ async def login_by_uid(
         student.is_active = True
         student.balance_usdt = balance
         student.balance_source = "affiliate_api"
+    session.flush()
+    record_login(session, student)
     session.commit()
     session.refresh(student)
 
@@ -199,9 +218,11 @@ def refresh(body: RefreshIn, config: BackendConfig = Depends(get_config)):
     if payload.get("type") != "refresh":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Нужен refresh-токен")
     sub = payload["sub"]
+    # У токенов, выданных до появления роли в refresh, её нет — определяем по sub.
+    role = payload.get("role") or ("mentor" if sub == "mentor" else "student")
     return TokenPair(
-        access_token=create_access_token(sub, "student", config.jwt_secret, config.access_ttl_seconds),
-        refresh_token=create_refresh_token(sub, config.jwt_secret, config.refresh_ttl_seconds),
+        access_token=create_access_token(sub, role, config.jwt_secret, config.access_ttl_seconds),
+        refresh_token=create_refresh_token(sub, config.jwt_secret, config.refresh_ttl_seconds, role),
     )
 
 
@@ -234,9 +255,14 @@ def dev_login(config: BackendConfig = Depends(get_config), session=Depends(get_s
     if not has_deliveries:
         _seed_demo(session, student)
 
+    record_login(session, student)
+    session.commit()
+
     return DevLoginOut(
         mentor=DevTokens(
             access_token=create_access_token("mentor", "mentor", config.jwt_secret, config.access_ttl_seconds),
+            # Ментору тоже нужен refresh: иначе админку выбрасывает через 15 минут.
+            refresh_token=create_refresh_token("mentor", config.jwt_secret, config.refresh_ttl_seconds, "mentor"),
         ),
         student=DevTokens(
             access_token=create_access_token(student.id, "student", config.jwt_secret, config.access_ttl_seconds),
@@ -258,5 +284,5 @@ def mentor_login(body: MentorLoginBody, config: BackendConfig = Depends(get_conf
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный пароль")
     return TokenPair(
         access_token=create_access_token("mentor", "mentor", config.jwt_secret, config.access_ttl_seconds),
-        refresh_token=create_refresh_token("mentor", config.jwt_secret, config.refresh_ttl_seconds),
+        refresh_token=create_refresh_token("mentor", config.jwt_secret, config.refresh_ttl_seconds, "mentor"),
     )

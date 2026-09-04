@@ -126,9 +126,11 @@ async def test_student_start_new_notifies_mentor(env):
     dp, bot, session = env
     await feed_message(dp, bot, 777, "/start")
     texts = session.texts()
-    assert any("заявка отправлена" in t.lower() for t in texts)
-    # Уведомление ментору тоже ушло (новый ученик).
-    assert any("Новый ученик" in t for t in texts)
+    # Ручного одобрения больше не ждём: сразу ведём в онбординг.
+    assert any("Добро пожаловать" in t for t in texts)
+    assert any("Выберите язык" in t for t in texts)
+    # Ментору при этом уходит уведомление о новом пользователе.
+    assert any("Новый пользователь" in t for t in texts)
 
 
 async def test_student_help(env):

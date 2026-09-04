@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, createContext, useContext } from "react";
 import Link from "next/link";
@@ -122,7 +122,7 @@ function MentorLogin({ onLogin }: { onLogin: (t: string) => void }) {
     setError(null);
     try {
       const res = await api.mentorLogin(password);
-      setMentorToken(res.access_token);
+      setMentorToken(res.access_token, res.refresh_token);
       onLogin(res.access_token);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Неверный пароль");
