@@ -12,7 +12,8 @@ from core.models import CoinTransaction, Student
 from backend.config import BackendConfig
 from backend.deps import get_config, get_session, get_current_student
 from backend.schemas import (
-    CoinGrantIn, CoinGrantOut, CoinsBalance, CoinSyncIn, CoinSyncOut, CoinTxOut,
+    CoinBalanceOut, CoinGrantIn, CoinGrantOut, CoinsBalance, CoinSyncIn, CoinSyncOut,
+    CoinTxOut,
 )
 
 router = APIRouter(prefix="/api/coins", tags=["coins"])
@@ -330,4 +331,48 @@ def grant_coins(body: CoinGrantIn, session=Depends(get_session)):
         added=amount,
         granted=True,
         student_created=created,
+    )
+
+
+@router.get(
+    "/balance",
+    response_model=CoinBalanceOut,
+    dependencies=[Depends(require_service_key)],
+)
+def service_balance(
+    tg_id: int | None = None,
+    weex_uid: str | None = None,
+    session=Depends(get_session),
+):
+    """Баланс ученика по служебному ключу — для мини-аппа академии.
+
+    У бота нет JWT ученика, поэтому обычная ``GET /api/coins`` ему недоступна.
+    Ученика ищем по любому из ключей связки.
+    """
+    if tg_id is None and not weex_uid:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен tg_id или weex_uid")
+
+    student = None
+    if tg_id is not None:
+        student = session.execute(
+            select(Student).where(Student.tg_id == tg_id)
+        ).scalar_one_or_none()
+    if student is None and weex_uid:
+        student = session.execute(
+            select(Student).where(Student.weex_uid == weex_uid.strip())
+        ).scalar_one_or_none()
+
+    if student is None:
+        # Не 404: для мини-аппа «ещё нет записи» — обычное состояние новичка,
+        # а не сбой. Отличить его от найденного ученика даёт поле exists.
+        return CoinBalanceOut(exists=False)
+
+    return CoinBalanceOut(
+        exists=True,
+        student_id=student.id,
+        balance=student.coins or 0,
+        tg_id=student.tg_id,
+        weex_uid=student.weex_uid,
+        created_via=student.created_via or "bot",
+        first_login_at=student.first_login_at.isoformat() if student.first_login_at else None,
     )

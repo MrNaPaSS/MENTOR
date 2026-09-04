@@ -80,6 +80,33 @@ curl -X POST https://api.nmnh.trade/api/coins/grant \
 | 401 | неверный `X-Service-Key` |
 | 503 | `SERVICE_API_KEY` не задан на бэкенде — интеграция не настроена |
 
+## 1a. Чтение баланса
+
+```
+GET https://api.nmnh.trade/api/coins/balance?tg_id=123456789
+X-Service-Key: <SERVICE_API_KEY>
+```
+
+Вместо `tg_id` принимается `weex_uid`. Ответ:
+
+```json
+{
+  "exists": true,
+  "student_id": 42,
+  "balance": 165,
+  "tg_id": 123456789,
+  "weex_uid": "9001",
+  "created_via": "academy",
+  "first_login_at": null
+}
+```
+
+`exists: false` означает, что записи ещё нет — для новичка это норма, а не
+ошибка, поэтому ответ `200` с нулевым балансом, а не `404`.
+
+`first_login_at: null` — ученик в кабинет ни разу не заходил. Хороший повод
+позвать его туда из мини-аппа.
+
 ### Экономика монет — расхождение, которое надо закрыть
 
 Состояние магазина на 28.07.2026 (`python check_shop.py`):

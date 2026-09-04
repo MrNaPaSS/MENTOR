@@ -255,6 +255,21 @@ class CoinGrantIn(BaseModel):
     username: Optional[str] = None
 
 
+class CoinBalanceOut(BaseModel):
+    """Баланс ученика для мини-аппа академии (запрос по служебному ключу)."""
+
+    # false — такого ученика в базе нет; баланс тогда 0, а не ошибка:
+    # мини-аппу нечего показывать, но и падать ему незачем.
+    exists: bool
+    student_id: Optional[int] = None
+    balance: int = 0
+    tg_id: Optional[int] = None
+    weex_uid: Optional[str] = None
+    created_via: Optional[str] = None
+    # null — ученик в кабинет ни разу не заходил; повод позвать его туда.
+    first_login_at: Optional[str] = None
+
+
 class CoinGrantOut(BaseModel):
     student_id: int
     balance: int

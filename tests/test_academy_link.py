@@ -275,3 +275,58 @@ def test_refresh_rejects_access_token(client):
     login = client.post("/api/auth/login-by-uid", json={"weex_uid": "12349"})
     r = client.post("/api/auth/refresh", json={"refresh_token": login.json()["access_token"]})
     assert r.status_code == 401
+
+
+# ── Баланс по служебному ключу (для мини-аппа академии) ──────────────────────
+
+def balance(client, **params):
+    return client.get("/api/coins/balance", params=params, headers=HEADERS)
+
+
+def test_balance_requires_service_key(client):
+    r = client.get("/api/coins/balance", params={"tg_id": 1})
+    assert r.status_code == 401
+
+
+def test_balance_returns_current_amount(client):
+    grant(client, tg_id=556001, ref="m1", reason="module_completed")  # 15
+    grant(client, tg_id=556001, ref="t1", reason="test_passed")       # 25
+
+    r = balance(client, tg_id=556001)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["exists"] is True
+    assert body["balance"] == 40
+    assert body["tg_id"] == 556001
+    assert body["created_via"] == "academy"
+
+
+def test_balance_for_unknown_student_is_not_an_error(client):
+    """Новичка ещё нет в базе — мини-аппу нужен ноль, а не 404."""
+    r = balance(client, tg_id=999999999)
+    assert r.status_code == 200
+    assert r.json() == {
+        "exists": False, "student_id": None, "balance": 0,
+        "tg_id": None, "weex_uid": None, "created_via": None, "first_login_at": None,
+    }
+
+
+def test_balance_by_weex_uid(client):
+    grant(client, weex_uid="7100", ref="m1")
+    r = balance(client, weex_uid="7100")
+    assert r.json()["exists"] is True
+    assert r.json()["weex_uid"] == "7100"
+
+
+def test_balance_requires_some_identifier(client):
+    r = client.get("/api/coins/balance", headers=HEADERS)
+    assert r.status_code == 400
+
+
+def test_balance_shows_never_logged_in(client):
+    """Академия может звать в кабинет тех, кто там ни разу не был."""
+    grant(client, tg_id=556002, ref="m1")
+    assert balance(client, tg_id=556002).json()["first_login_at"] is None
+
+    client.post("/api/auth/login-by-uid", json={"weex_uid": "12350"})
+    assert balance(client, weex_uid="12350").json()["first_login_at"] is not None
