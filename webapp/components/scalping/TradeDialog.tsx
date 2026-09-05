@@ -14,17 +14,10 @@
 // «Войти» не отправляет ордер на биржу: сделка начинает ждать свою цену, а
 // разметка остаётся на графике.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
-import {
-  computeTrade,
-  MAX_LEVERAGE,
-  MAX_STOP_PCT,
-  MIN_STOP_PCT,
-  sideForShelf,
-  DEFAULT_TAKES,
-} from "@/lib/trade/plan";
+import { computeTrade, sideForShelf, DEFAULT_TAKES } from "@/lib/trade/plan";
 
 export type TradeDraft = {
   shelf: Wall;
@@ -40,12 +33,9 @@ const MARGINS = [10, 25, 50, 100, 250, 500];
 const LEVERAGES = [10, 25, 50, 100, 200, 400];
 const STOPS = [0.05, 0.1, 0.2, 0.5, 1];
 
-// Стрелки числового поля убраны: они съедают ширину и промахиваются пальцем.
 const FIELD =
   "w-full rounded-md border border-border bg-bg-deep px-2.5 py-2 text-right font-mono text-[15px] " +
-  "text-text-primary outline-none transition-colors duration-150 ease-out focus:border-accent-cyan " +
-  "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none " +
-  "[&::-webkit-outer-spin-button]:appearance-none";
+  "text-text-primary outline-none transition-colors duration-150 ease-out focus:border-accent-cyan";
 
 const CHIP =
   "rounded px-1.5 py-0.5 font-mono text-[11px] transition-[background-color,color,transform] " +
@@ -137,8 +127,6 @@ export default function TradeDialog({
             value={draft.margin}
             presets={MARGINS}
             format={(v) => String(v)}
-            min={1}
-            step="any"
             inputRef={firstFieldRef}
             onPick={(margin) => onChange({ ...draft, margin })}
           />
@@ -147,9 +135,6 @@ export default function TradeDialog({
             value={draft.leverage}
             presets={LEVERAGES}
             format={(v) => `x${v}`}
-            min={1}
-            max={MAX_LEVERAGE}
-            step={1}
             onPick={(leverage) => onChange({ ...draft, leverage })}
           />
           <Field
@@ -157,9 +142,6 @@ export default function TradeDialog({
             value={draft.stopPct}
             presets={STOPS}
             format={(v) => String(v)}
-            min={MIN_STOP_PCT}
-            max={MAX_STOP_PCT}
-            step={0.01}
             onPick={(stopPct) => onChange({ ...draft, stopPct })}
           />
         </div>
@@ -237,16 +219,21 @@ export default function TradeDialog({
   );
 }
 
-/** Поле ввода с частыми значениями строкой под ним. */
+/**
+ * Поле ввода с частыми значениями строкой под ним.
+ *
+ * Набранное держим строкой, а число отдаём только когда оно получилось. Иначе
+ * промежуточный ввод не пережить: «0.» и «0,» превращаются в ноль, а пустое
+ * поле — в ноль или NaN, и набранное стирается прямо под пальцами. Поле
+ * текстовое намеренно: числовое браузер чистит по-своему и запятую съедает
+ * вовсе, а на русской раскладке дробь набирают именно запятой.
+ */
 function Field({
   label,
   value,
   presets,
   format,
   onPick,
-  min,
-  max,
-  step,
   inputRef,
 }: {
   label: string;
@@ -254,29 +241,45 @@ function Field({
   presets: number[];
   format: (value: number) => string;
   onPick: (value: number) => void;
-  min?: number;
-  max?: number;
-  step?: number | "any";
   inputRef?: React.RefObject<HTMLInputElement>;
 }) {
+  const [text, setText] = useState(String(value));
+
+  // Значение сменилось снаружи — кнопкой готового значения или другим полем.
+  // Пока в поле лежит то же число, набранное не трогаем.
+  useEffect(() => {
+    setText((current) => (Number(current.replace(",", ".")) === value ? current : String(value)));
+  }, [value]);
+
   return (
     <div>
       <span className="mb-1.5 block text-[11px] text-text-muted">{label}</span>
       <input
         ref={inputRef}
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onPick(Number(e.target.value))}
+        type="text"
+        inputMode="decimal"
+        value={text}
+        onChange={(e) => {
+          const raw = e.target.value;
+          setText(raw);
+          const parsed = Number(raw.replace(",", "."));
+          if (Number.isFinite(parsed) && parsed > 0) onPick(parsed);
+        }}
+        onBlur={() => {
+          // Ушли из поля с мусором — возвращаем последнее рабочее число.
+          const parsed = Number(text.replace(",", "."));
+          if (!Number.isFinite(parsed) || parsed <= 0) setText(String(value));
+        }}
         className={FIELD}
       />
       <div className="mt-1.5 flex flex-wrap gap-1">
         {presets.map((preset) => (
           <button
             key={preset}
-            onClick={() => onPick(preset)}
+            onClick={() => {
+              onPick(preset);
+              setText(String(preset));
+            }}
             className={`${CHIP} ${
               preset === value
                 ? "bg-accent-cyan/15 text-accent-cyan"

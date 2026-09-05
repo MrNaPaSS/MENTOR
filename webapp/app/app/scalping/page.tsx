@@ -50,7 +50,7 @@ import {
   DEFAULT_TAKES,
 } from "@/lib/trade/plan";
 import {
-  advance,
+  advanceQuote,
   closeManually,
   createTrade,
   type ActiveTrade,
@@ -456,23 +456,6 @@ export default function ScalpingPage() {
    * умолчанию. Все три поля трейдер всё равно правит в самом окне.
    */
   function openTrade(level: Wall, atr = 0) {
-    // Новый уровень — новая сделка. Прежняя, если она уже вошла, закрывается
-    // по текущей цене и уходит в журнал: бросать вошедшую сделку без записи
-    // нельзя, иначе статистика начнёт врать. Раньше она молча оставалась на
-    // графике, и нажатие по стакану выглядело как «ничего не произошло».
-    if (trade && trade.status === "open") {
-      const done = closeManually(trade, dom?.mid ?? 0, Date.now());
-      savedTradeRef.current = done.id;
-      saveTrade(done)
-        .then((saved) => {
-          if (saved) setJournalKey((k) => k + 1);
-        })
-        .catch(() => {
-          savedTradeRef.current = null;
-        });
-    }
-    setTrade(null);
-
     setDraft({
       shelf: level,
       tick: dom?.tick ?? 0,
@@ -499,19 +482,64 @@ export default function ScalpingPage() {
   /**
    * Подтвердить расчёт.
    *
-   * В обычном режиме это просто закрывает окно: сделка начинает ждать свою
-   * цену на графике. В боевом — уходит на биржу лимитным ордером по цене
-   * полки, вместе со стопом и целями, тем же расчётом, что показан в окне.
+   * Только здесь прежняя сделка уступает место новой. Пока окно просто открыто,
+   * трейдер разглядывает уровень — трогать за это уже идущую сделку нельзя.
+   *
+   * Вошедшая сделка перед заменой закрывается по текущей цене и уходит в
+   * журнал: бросать её без записи значит испортить собственную статистику.
+   * В боевом режиме новая сделка следом уходит на биржу тем же расчётом.
    */
   async function confirmTrade() {
     setDialogOpen(false);
-    if (!liveMode || !exchange?.connected || !trade) return;
+    if (!plan || !draft || !symbol) return;
+
+    if (trade && trade.status === "open") {
+      const done = closeManually(trade, dom?.mid ?? 0, Date.now());
+      savedTradeRef.current = done.id;
+      saveTrade(done)
+        .then((saved) => {
+          if (saved) setJournalKey((k) => k + 1);
+        })
+        .catch(() => {
+          savedTradeRef.current = null;
+        });
+    }
+
+    const next = createTrade(
+      {
+        symbol,
+        side: plan.side,
+        entry: plan.entry,
+        stop: plan.stop,
+        targets: plan.targets.map((t) => t.price),
+        qty: plan.qty,
+        margin: draft.margin,
+        leverage: draft.leverage,
+      },
+      `${symbol}-${Date.now()}`,
+    );
+    setTrade(next);
+    setDraft(null);
+
+    if (!liveMode || !exchange?.connected) return;
     try {
-      await openPosition(trade, true);
-      setOrderNote(`Ордер отправлен: ${trade.side === "long" ? "лонг" : "шорт"} ${base(trade.symbol)}`);
+      await openPosition(next, true);
+      setOrderNote(`Ордер отправлен: ${next.side === "long" ? "лонг" : "шорт"} ${base(next.symbol)}`);
     } catch (err) {
       setOrderNote(err instanceof Error ? err.message : "Биржа не приняла ордер");
     }
+  }
+
+  /**
+   * Закрыть окно расчёта, ничего не сделав.
+   *
+   * Идущую сделку это не трогает: трейдер посмотрел новый уровень и передумал.
+   * Убирается только разметка, которую сам этот расчёт и нарисовал.
+   */
+  function cancelDialog() {
+    setDialogOpen(false);
+    setDraft(null);
+    setTrade((current) => (current && current.status === "planned" ? null : current));
   }
 
   function updateDraft(next: TradeDraft) {
@@ -559,15 +587,13 @@ export default function ScalpingPage() {
     ? `${plan.entry}|${plan.stop}|${plan.qty}|${plan.targets.map((t) => t.price).join(",")}`
     : "";
 
-  // Пока сделка не открылась, она следует за вводом в окне расчёта. Как только
-  // цена дошла до уровня, параметры замораживаются: менять стоп открытой
-  // позиции задним числом — это подделка собственной статистики.
+  // Пока окно открыто, расчёт виден на графике: линии входа, стопа и целей
+  // рисуются сразу, чтобы уровень было с чем сравнить. Но только если ничего
+  // не идёт — вошедшую сделку черновик не подменяет.
   useEffect(() => {
-    if (!plan || !draft || !symbol) return;
+    if (!plan || !draft || !symbol || !dialogOpen) return;
     setTrade((current) => {
-      // Замораживаем только вошедшую сделку: у неё уже есть цена входа, и
-      // менять ей стоп задним числом — подделка собственной статистики.
-      if (current && current.status === "open") return current;
+      if (current && current.status !== "planned") return current;
       return createTrade(
         {
           symbol,
@@ -584,16 +610,19 @@ export default function ScalpingPage() {
     });
     // planKey намеренно вместо plan: у объекта расчёта каждый раз новая ссылка.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planKey, symbol]);
+  }, [planKey, symbol, dialogOpen]);
 
   // Живой ход сделки по цене стакана: вход, взятые цели, перенос стопа в
   // безубыток и закрытие. Функция возвращает прежнюю ссылку, когда ничего не
   // изменилось, поэтому восемь кадров в секунду не приводят к перерисовке.
   useEffect(() => {
-    const price = dom?.mid ?? 0;
-    if (!(price > 0)) return;
-    setTrade((current) => (current ? advance(current, price, Date.now()) : current));
-  }, [dom?.mid]);
+    const bid = dom?.best_bid ?? 0;
+    const ask = dom?.best_ask ?? 0;
+    if (!(bid > 0) || !(ask > 0)) return;
+    setTrade((current) =>
+      current ? advanceQuote(current, { bid, ask }, Date.now()) : current,
+    );
+  }, [dom?.best_bid, dom?.best_ask]);
 
   // Разметка сделки переживает уход со страницы.
   useEffect(() => {
@@ -946,7 +975,7 @@ export default function ScalpingPage() {
           draft={draft}
           onChange={updateDraft}
           onConfirm={confirmTrade}
-          onCancel={closeTrade}
+          onCancel={cancelDialog}
           live={liveMode && Boolean(exchange?.connected)}
         />
       )}

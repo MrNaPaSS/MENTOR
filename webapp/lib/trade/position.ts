@@ -154,6 +154,35 @@ export function advance(trade: ActiveTrade, price: number, now: number): ActiveT
   return { ...trade, takesHit: hit, breakeven: true, stop: trade.entry };
 }
 
+/**
+ * Продвинуть сделку по стакану, а не по средней цене.
+ *
+ * Заявка исполняется не «по цене вообще», а по своей стороне книги: лимитная
+ * покупка на поддержке срабатывает, когда до неё дошло предложение, то есть
+ * лучшая продажа. Средняя цена в этот момент ещё выше уровня, и сделка,
+ * которую рынок уже задел, оставалась бы ждущей.
+ *
+ * У открытой позиции всё наоборот: закрывать её придётся встречной стороной,
+ * поэтому стоп и цели лонга считаются по лучшей покупке.
+ */
+export function advanceQuote(
+  trade: ActiveTrade,
+  quote: { bid: number; ask: number },
+  now: number,
+): ActiveTrade {
+  const long = trade.side === "long";
+  const price =
+    trade.status === "planned"
+      ? long
+        ? quote.ask
+        : quote.bid
+      : long
+        ? quote.bid
+        : quote.ask;
+  if (!(price > 0)) return trade;
+  return advance(trade, price, now);
+}
+
 /** Закрыть руками по текущей цене. */
 export function closeManually(trade: ActiveTrade, price: number, now: number): ActiveTrade {
   if (trade.status === "closed") return trade;

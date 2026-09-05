@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   advance,
+  advanceQuote,
   closeManually,
   createTrade,
   pendingTargets,
@@ -156,5 +157,38 @@ describe("закрытие руками", () => {
     const trade = closeManually(long(), 100.7, T0 + 1);
     expect(trade.status).toBe("closed");
     expect(trade.pnl).toBe(0);
+  });
+});
+
+describe("исполнение по стакану", () => {
+  it("лонг входит, когда до уровня дошло предложение", () => {
+    // Средняя цена ещё выше уровня, но продать по нему уже готовы.
+    const planned = long();
+    const filled = advanceQuote(planned, { bid: 99.9, ask: 100 }, T0);
+    expect(filled.status).toBe("open");
+  });
+
+  it("лонг не входит, пока предложение выше уровня", () => {
+    const planned = long();
+    expect(advanceQuote(planned, { bid: 100, ask: 100.1 }, T0).status).toBe("planned");
+  });
+
+  it("шорт входит по лучшей покупке", () => {
+    expect(advanceQuote(short(), { bid: 100, ask: 100.1 }, T0).status).toBe("open");
+    expect(advanceQuote(short(), { bid: 99.9, ask: 100 }, T0).status).toBe("planned");
+  });
+
+  it("открытый лонг считает стоп по покупке, а не по продаже", () => {
+    let trade = advanceQuote(long(), { bid: 99.9, ask: 100 }, T0);
+    // Покупка провалилась ниже стопа, продажа ещё выше — позицию закрывать
+    // придётся именно в покупку.
+    trade = advanceQuote(trade, { bid: 98.9, ask: 99.2 }, T0 + 1);
+    expect(trade.status).toBe("closed");
+    expect(trade.outcome).toBe("stop");
+  });
+
+  it("пустой стакан ничего не меняет", () => {
+    const planned = long();
+    expect(advanceQuote(planned, { bid: 0, ask: 0 }, T0)).toBe(planned);
   });
 });
