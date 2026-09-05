@@ -143,3 +143,52 @@ def test_unknown_side_is_rejected_before_the_network():
         asyncio.run(
             client.place_order(symbol="BTCUSDT", side="BUY", position_side="ВНИЗ", quantity="1")
         )
+
+
+def test_limit_order_always_carries_time_in_force():
+    """Без срока жизни биржа отклоняет лимитный ордер: код -1141."""
+    import asyncio
+
+    from core.weex.futures import WeexFutures
+
+    sent: dict = {}
+
+    class Recording(WeexFutures):
+        async def _request(self, method, path, *, params=None, data=None):
+            sent.update(data or {})
+            return {}
+
+    client = Recording(Credentials("k", "s", "p"), lambda: None)  # type: ignore[arg-type]
+    asyncio.run(
+        client.place_order(
+            symbol="BTCUSDT",
+            side="BUY",
+            position_side="LONG",
+            quantity="1",
+            order_type="LIMIT",
+            price="80000",
+        )
+    )
+    assert sent["timeInForce"] == "GTC"
+    assert sent["price"] == "80000"
+
+
+def test_market_order_does_not_invent_time_in_force():
+    import asyncio
+
+    from core.weex.futures import WeexFutures
+
+    sent: dict = {}
+
+    class Recording(WeexFutures):
+        async def _request(self, method, path, *, params=None, data=None):
+            sent.update(data or {})
+            return {}
+
+    client = Recording(Credentials("k", "s", "p"), lambda: None)  # type: ignore[arg-type]
+    asyncio.run(
+        client.place_order(
+            symbol="BTCUSDT", side="BUY", position_side="LONG", quantity="1"
+        )
+    )
+    assert "timeInForce" not in sent

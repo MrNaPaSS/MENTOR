@@ -225,6 +225,12 @@ class WeexFutures:
             if price is None:
                 raise WeexTradeError("Лимитному ордеру нужна цена")
             data["price"] = price
+            # Биржа отклоняет лимитный ордер без срока жизни: «Parameter
+            # timeInForce cannot be empty». GTC — заявка стоит, пока её не
+            # исполнят или не снимут; именно это и значит «лимитка на уровне».
+            data["timeInForce"] = time_in_force or "GTC"
+        elif time_in_force:
+            data["timeInForce"] = time_in_force
         if client_order_id:
             data["newClientOrderId"] = client_order_id
         if tp_trigger:
@@ -233,8 +239,6 @@ class WeexFutures:
             data["slTriggerPrice"] = sl_trigger
         if reduce_only is not None:
             data["reduceOnly"] = bool(reduce_only)
-        if time_in_force:
-            data["timeInForce"] = time_in_force
 
         logger.info("WEEX ордер %s %s %s %s", symbol, side, position_side, quantity)
         return await self._request("POST", ENDPOINTS["order"], data=data)
