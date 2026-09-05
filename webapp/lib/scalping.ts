@@ -63,7 +63,7 @@ export type DomFrame = {
   book_ratio: number;
   rows: LadderRow[];
   wall: Wall | null;
-  /** Полки ликвидности: уровни, где в стакане стоит от миллиона. */
+  /** Полки ликвидности: уровни, где в стакане стоит от двух миллионов. */
   shelves: Wall[];
   clusters: ClusterColumn[];
 };
