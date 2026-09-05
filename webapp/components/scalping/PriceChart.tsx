@@ -1041,24 +1041,6 @@ function PriceChart({
   return (
     <div className="relative h-full w-full">
       <div ref={boxRef} className="h-full w-full" />
-      {/* Инструмент, цена и плита — на самом графике, а не в шапке панели.
-          Взгляд скальпера живёт на свечах, и ради ответа «что это и почём»
-          уводить его к рамке незачем. */}
-      <div className="pointer-events-none absolute left-2 top-1 z-10 flex items-baseline gap-2 font-mono text-[11px] tabular-nums">
-        <span className="text-[12px] font-semibold text-[var(--pane-text)]">
-          {symbol.replace(/USDT$/, "")}
-        </span>
-        <span className="text-[var(--pane-text-2)]">
-          {fmtPrice(livePrice > 0 ? livePrice : dataRef.current.at(-1)?.close ?? 0)}
-        </span>
-        {wall && (
-          <span className="text-[var(--pane-gold)]">
-            плита {money(wall.notional)} · {fmtPrice(wall.price)} ·{" "}
-            {wall.side === "bid" ? "поддержка" : "сопротивление"}
-          </span>
-        )}
-      </div>
-
       {cfg.levels && levels.length > 0 && (
         <LevelsStrip levels={levels} price={dataRef.current.at(-1)?.close ?? 0} />
       )}
@@ -1149,7 +1131,7 @@ function LevelsStrip({
     .slice(0, 4);
 
   return (
-    <div className="pointer-events-none absolute left-2 top-6 z-10 flex gap-3 font-mono text-[10px] tabular-nums text-[var(--pane-muted)]">
+    <div className="pointer-events-none absolute left-2 top-1 z-10 flex gap-3 font-mono text-[10px] tabular-nums text-[var(--pane-muted)]">
       {sorted.map((l) => (
         <span key={l.title}>
           {l.title}{" "}

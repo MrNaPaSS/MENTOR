@@ -59,6 +59,7 @@ import {
 } from "@/lib/trade/position";
 import {
   base,
+  money,
   price as fmtPrice,
   type LadderRow,
   type Wall,
@@ -935,6 +936,28 @@ export default function ScalpingPage() {
                     {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
                   </button>
                 </div>
+              </div>
+
+              {/* Инструмент, цена и плита — отдельной строкой под таймфреймами.
+                  Наложением поверх холста эта строка терялась: библиотека
+                  графика рисует своим слоем, и спорить с ним ради трёх слов
+                  незачем. */}
+              <div className="flex items-baseline gap-3 border-b border-[var(--pane-border)] px-3 py-1 font-mono text-[11px] tabular-nums">
+                <span className="text-[12px] font-semibold text-[var(--pane-text)]">
+                  {base(symbol)}
+                </span>
+                <span className="text-[var(--pane-text-2)]">
+                  {dom ? fmtPrice(dom.mid, dom.tick) : "—"}
+                </span>
+                {dom?.wall && (
+                  <span className="text-[var(--pane-gold)]">
+                    плита {money(dom.wall.notional)} · {fmtPrice(dom.wall.price, dom.tick)} ·{" "}
+                    {dom.wall.side === "bid" ? "поддержка" : "сопротивление"}
+                  </span>
+                )}
+                {orderNote && (
+                  <span className="ml-auto text-[var(--pane-accent)]">{orderNote}</span>
+                )}
               </div>
 
               <div className="min-h-0 flex-1 p-1">
