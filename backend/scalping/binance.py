@@ -59,6 +59,20 @@ class BinanceRest:
         data = await self._get("/fapi/v1/depth", {"symbol": symbol.upper(), "limit": limit})
         return data if isinstance(data, dict) else None
 
+    async def klines(self, symbol: str, interval: str = "1m", limit: int = 240) -> list[list]:
+        """Свечи для графика рядом со стаканом.
+
+        Берутся у того же источника, что и стакан: график обязан совпадать с
+        книгой до тика, иначе трейдер видит на нём одну цену, а в стакане другую.
+        Поток свечей на нашем эндпоинте молчит, поэтому только REST — вес 1 при
+        лимите до сотни, 2 до пятисот.
+        """
+        data = await self._get(
+            "/fapi/v1/klines",
+            {"symbol": symbol.upper(), "interval": interval, "limit": min(limit, 500)},
+        )
+        return data if isinstance(data, list) else []
+
     async def tickers_24h(self) -> list[dict]:
         """Суточная сводка по всем инструментам одним запросом."""
         data = await self._get("/fapi/v1/ticker/24hr")

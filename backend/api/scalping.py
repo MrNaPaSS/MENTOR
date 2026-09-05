@@ -96,6 +96,53 @@ async def dom(
     }
 
 
+# Свечи меняются раз в минуту, а график перерисовывается чаще — короткий кэш
+# держит расход лимита биржи около нуля независимо от числа открытых вкладок.
+_KLINE_TTL = 2.0
+_klines_cache: dict[str, tuple[float, list]] = {}
+
+
+@router.get("/klines/{symbol}")
+async def klines(
+    request: Request,
+    symbol: str,
+    interval: str = Query("1m", pattern=r"^(1m|3m|5m|15m|1h)$"),
+    limit: int = Query(240, ge=20, le=500),
+) -> dict[str, Any]:
+    """Свечи для графика рядом со стаканом — из того же источника, что и книга."""
+    collector = get_collector(request)
+    sym = symbol.upper()
+    key = f"{sym}:{interval}:{limit}"
+
+    cached = _klines_cache.get(key)
+    now = time.monotonic()
+    if cached and now - cached[0] < _KLINE_TTL:
+        rows = cached[1]
+    else:
+        raw = await collector.rest.klines(sym, interval, limit)
+        rows = []
+        for r in raw:
+            try:
+                rows.append(
+                    {
+                        # Секунды, а не миллисекунды: график ждёт их в секундах.
+                        "time": int(r[0]) // 1000,
+                        "open": float(r[1]),
+                        "high": float(r[2]),
+                        "low": float(r[3]),
+                        "close": float(r[4]),
+                        "volume": float(r[5]),
+                    }
+                )
+            except (TypeError, ValueError, IndexError):
+                continue
+        _klines_cache[key] = (now, rows)
+
+    if not rows:
+        raise HTTPException(502, f"Свечи {sym} недоступны")
+    return {"symbol": sym, "interval": interval, "candles": rows}
+
+
 @router.get("/status")
 async def status(request: Request) -> dict[str, Any]:
     """Состояние сборщика — что под наблюдением и жив ли поток биржи."""

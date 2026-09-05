@@ -75,10 +75,15 @@ export type SortKey =
   | "spread"
   | "change";
 
-export const SORT_LABELS: Record<SortKey, string> = {
+// «Всплеск» из интерфейса убран: он сравнивает текущую активность с нормой
+// монеты, а норма набирается за минуты — в списке колонка стояла ровно ×1.0 и
+// только занимала ширину. Метрика остаётся в ответе бэкенда на будущее.
+/** Сортировки, доступные в интерфейсе. */
+export type VisibleSortKey = Exclude<SortKey, "spike">;
+
+export const SORT_LABELS: Record<VisibleSortKey, string> = {
   walls: "Плиты",
   volume: "Оборот",
-  spike: "Всплеск",
   delta: "Дельта",
   range: "Ход",
   imbalance: "Перевес",

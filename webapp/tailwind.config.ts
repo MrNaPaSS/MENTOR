@@ -3,6 +3,12 @@ import type { Config } from "tailwindcss";
 // Палитра и токены дизайн-системы NMNH (ТЗ §10)
 const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
+  future: {
+    // На тач-устройствах тап срабатывает как наведение, и hover-состояние
+    // «залипает» после нажатия. Флаг заворачивает hover: в
+    // @media (hover: hover) and (pointer: fine), где ему и место.
+    hoverOnlyWhenSupported: true,
+  },
   theme: {
     extend: {
       colors: {

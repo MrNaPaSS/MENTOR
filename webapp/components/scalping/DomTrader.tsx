@@ -24,6 +24,11 @@ import {
 
 const ROW_HEIGHT = 20;
 
+// Ширина колонки истории. Фиксированная, а не доля свободного места: пока
+// история не набралась, пустые колонки растягивались на всю ширину экрана и
+// оставляли стакану полоску у правого края.
+const COL_W = "w-[54px]";
+
 /** Ячейки истории приходят тройками — раскладываем в карту по цене строки. */
 function indexCells(columns: ClusterColumn[]): Map<number, [number, number]>[] {
   return columns.map((column) => {
@@ -69,20 +74,18 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
     centered.current = true;
   }, [askCount, frame.rows.length]);
 
-  const columnCount = frame.clusters.length;
-
   return (
-    <div className="flex h-full flex-col text-[10px]">
+    <div className="flex h-full flex-col text-[10px] tabular-nums">
       <Header frame={frame} />
 
       <div className="flex border-b border-border bg-bg-deep/60 text-text-muted">
         {frame.clusters.map((column) => (
-          <div key={column.start} className="flex-1 py-1 text-center">
+          <div key={column.start} className={`${COL_W} py-1 text-center`}>
             {clockLabel(column.start)}
           </div>
         ))}
-        <div className="w-24 py-1 text-right">объём</div>
-        <div className="w-20 py-1 pr-2 text-right">цена</div>
+        <div className="w-[88px] py-1 text-right">объём</div>
+        <div className="w-[72px] py-1 pr-2 text-right">цена</div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono">
@@ -90,7 +93,7 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
           const items = [];
           if (index === askCount && askCount > 0) {
             items.push(
-              <SpreadRow key="spread" frame={frame} columnCount={columnCount} />,
+              <SpreadRow key="spread" frame={frame} />,
             );
           }
           items.push(
@@ -130,8 +133,8 @@ function Header({ frame }: { frame: DomFrame }) {
       <div className="mt-2 flex items-center gap-2">
         <span className="w-7 text-right font-mono text-[10px] text-danger">{100 - buy}</span>
         <div className="flex h-2 flex-1 overflow-hidden rounded-sm bg-bg-deep">
-          <div className="bg-success/70 transition-all" style={{ width: `${buy}%` }} />
-          <div className="bg-danger/70 transition-all" style={{ width: `${100 - buy}%` }} />
+          <div className="bg-success/70" style={{ width: `${buy}%` }} />
+          <div className="bg-danger/70" style={{ width: `${100 - buy}%` }} />
         </div>
         <span className="w-7 font-mono text-[10px] text-success">{buy}</span>
       </div>
@@ -147,15 +150,15 @@ function Header({ frame }: { frame: DomFrame }) {
   );
 }
 
-function SpreadRow({ frame, columnCount }: { frame: DomFrame; columnCount: number }) {
+function SpreadRow({ frame }: { frame: DomFrame }) {
   return (
     <div
       className="flex items-center border-y border-accent-cyan/30 bg-accent-cyan/5 text-accent-cyan"
       style={{ height: ROW_HEIGHT }}
     >
-      <div className="flex-1" style={{ flexGrow: Math.max(1, columnCount) }} />
-      <div className="w-24 pr-1 text-right">{fmtPrice(frame.best_bid, frame.tick)}</div>
-      <div className="w-20 pr-2 text-right">{fmtPrice(frame.best_ask, frame.tick)}</div>
+      <div className="flex-1" />
+      <div className="w-[88px] pr-1 text-right">{fmtPrice(frame.best_bid, frame.tick)}</div>
+      <div className="w-[72px] pr-2 text-right">{fmtPrice(frame.best_ask, frame.tick)}</div>
     </div>
   );
 }
@@ -187,7 +190,7 @@ const Row = memo(function Row({
       })}
 
       {/* Объём стоящей заявки: полоса под текстом растёт от левого края. */}
-      <div className="relative w-24 pr-1 text-right">
+      <div className="relative w-[88px] pr-1 text-right">
         <div
           className={`absolute inset-y-[2px] left-0 ${
             row.is_wall ? "bg-accent-gold/30" : isBid ? "bg-success/25" : "bg-danger/25"
@@ -207,7 +210,7 @@ const Row = memo(function Row({
         </span>
       </div>
 
-      <div className="w-20 pr-2 text-right text-text-secondary">
+      <div className="w-[72px] pr-2 text-right text-text-secondary">
         {fmtPrice(row.price, tick)}
       </div>
     </div>
@@ -222,10 +225,10 @@ function ClusterCell({
   cell: [number, number] | undefined;
   scale: number;
 }) {
-  if (!cell) return <div className="flex-1" />;
+  if (!cell) return <div className={COL_W} />;
   const [buy, sell] = cell;
   return (
-    <div className="flex flex-1 items-center justify-end gap-1 px-1">
+    <div className={`flex ${COL_W} items-center justify-end gap-0.5 px-1`}>
       <span
         className="text-right text-danger/90"
         style={{ opacity: sell > 0 ? 0.45 + 0.55 * (sell / scale) : 0.25 }}
@@ -250,7 +253,7 @@ function Totals({ columns }: { columns: ClusterColumn[] }) {
       {columns.map((column) => {
         const delta = column.buy - column.sell;
         return (
-          <div key={column.start} className="flex-1 px-1 py-1 text-right">
+          <div key={column.start} className={`${COL_W} px-1 py-1 text-right`}>
             <div className="text-text-muted">{money(column.buy + column.sell)}</div>
             <div className={delta >= 0 ? "text-success" : "text-danger"}>
               {delta >= 0 ? "+" : "−"}
@@ -259,7 +262,7 @@ function Totals({ columns }: { columns: ClusterColumn[] }) {
           </div>
         );
       })}
-      <div className="w-44" />
+      <div className="w-[160px]" />
     </div>
   );
 }
