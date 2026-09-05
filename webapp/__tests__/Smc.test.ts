@@ -227,12 +227,12 @@ describe("сборка фигур для графика", () => {
     expect(on.boxes.length).toBe(smc.orderBlocks.length);
   });
 
-  it("бокс блока тянется вправо до края окна", () => {
-    // В оригинале блок не кончается на последней свече: уровень продолжает
-    // действовать и в будущем, поэтому бокс рисуется до правого края.
+  it("бокс блока тянется вправо до последней свечи", () => {
+    // Блок растёт вместе с графиком, но в пустое поле справа не заходит: там
+    // разметка сделки, и рядом с ней блок читался как сбой отрисовки.
     const shapes = buildShapes(smc, lastTime, { ...SHAPE_DEFAULTS, fvg: false, zones: false });
     for (const box of shapes.boxes) {
-      expect(box.toTime).toBe("edge");
+      expect(box.toTime).toBe(lastTime);
       expect(Number(box.fromTime)).toBeLessThanOrEqual(lastTime);
     }
   });

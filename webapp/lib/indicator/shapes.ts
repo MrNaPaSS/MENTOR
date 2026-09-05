@@ -154,12 +154,15 @@ export function buildShapes(
     flush();
 
     for (const signal of ce.signals) {
+      // Только точка, без подписи: разворотов на экране десятки, и каждый
+      // подписанный превращает график в текст. Где точка — там уровень
+      // перевернулся, этого достаточно.
       points.push({
         time: at(signal.time),
         price: signal.price,
-        text: signal.dir === 1 ? "BY↑" : "SL↓",
         color: signal.dir === 1 ? COLORS.trendUpMark : COLORS.trendDownMark,
         above: signal.dir === -1,
+        dot: 3.5,
       });
     }
   }
@@ -168,10 +171,7 @@ export function buildShapes(
     for (const zone of smc.zones) {
       boxes.push({
         fromTime: at(smc.trailing?.bottomTime ?? lastTime),
-        // До правого края окна: в оригинале зоны и блоки тянутся вправо без
-        // конца, а обрыв на последней свече читается как «здесь уровень
-        // кончился», чего в них нет.
-        toTime: "edge",
+        toTime: at(lastTime),
         top: zone.top,
         bottom: zone.bottom,
         // Зоны без подписей: они занимают полэкрана, и три надписи поверх
@@ -194,7 +194,10 @@ export function buildShapes(
       const strong = !block.internal;
       boxes.push({
         fromTime: at(block.fromTime),
-        toTime: "edge",
+        // До последней свечи, а не до края окна: блок тянется за графиком и
+        // растёт вместе с ним. В пустом поле справа ему делать нечего — там
+        // разметка сделки, и рядом с ней блок читался как сбой отрисовки.
+        toTime: at(lastTime),
         top: block.top,
         bottom: block.bottom,
         fill: support

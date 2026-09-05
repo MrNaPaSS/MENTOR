@@ -53,10 +53,13 @@ export type ShapeSegment = {
 export type ShapePoint = {
   time: Time;
   price: number;
-  text: string;
+  /** Подпись. Пусто — значит рисуем только точку. */
+  text?: string;
   color: string;
   /** Подпись над баром или под ним. */
   above: boolean;
+  /** Радиус точки в пикселях. Без него точка не рисуется. */
+  dot?: number;
 };
 
 /** Точка ленты: у каждого бара своя верхняя и нижняя граница. */
@@ -180,15 +183,26 @@ class ShapesRenderer implements IPrimitivePaneRenderer {
 
       for (const point of this.ready.points) {
         context.fillStyle = point.color;
-        context.font = FONT;
-        context.textAlign = "center";
-        context.textBaseline = point.above ? "bottom" : "top";
-        context.fillText(
-          point.text,
-          point.x * hx,
-          (point.y + (point.above ? -4 : 4)) * vy,
-        );
-        context.textAlign = "left";
+
+        if (point.dot) {
+          context.beginPath();
+          // Радиус по горизонтальному масштабу: на экранах с разной плотностью
+          // точка должна оставаться круглой, а не превращаться в овал.
+          context.arc(point.x * hx, point.y * vy, point.dot * hx, 0, Math.PI * 2);
+          context.fill();
+        }
+
+        if (point.text) {
+          context.font = FONT;
+          context.textAlign = "center";
+          context.textBaseline = point.above ? "bottom" : "top";
+          context.fillText(
+            point.text,
+            point.x * hx,
+            (point.y + (point.above ? -4 : 4)) * vy,
+          );
+          context.textAlign = "left";
+        }
       }
     });
   }
