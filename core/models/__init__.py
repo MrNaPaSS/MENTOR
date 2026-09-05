@@ -221,4 +221,58 @@ class AuthCode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "utcnow"]
+class ScalpTrade(Base):
+    """Сделка из журнала скальпинг-терминала.
+
+    Пишется, когда сделка закрылась: по стопу, по последней цели или руками.
+    Незакрытые сюда не попадают — журнал это факт, а не намерение.
+
+    Цены хранятся с десятью знаками: на монетах вроде PEPE шаг цены — восьмой
+    знак после запятой, и обычной точности не хватит.
+    """
+
+    __tablename__ = "scalp_trades"
+    __table_args__ = (UniqueConstraint("student_id", "client_id", name="uq_scalp_trade_client"),)
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    # Идентификатор сделки на клиенте: страница может отправить запись повторно
+    # после обрыва связи, и дубликат в статистике исказил бы её.
+    client_id: Mapped[str] = mapped_column(String(64))
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    side: Mapped[str] = mapped_column(String(8))               # long | short
+    entry: Mapped[float] = mapped_column(Numeric(24, 10))
+    stop: Mapped[float] = mapped_column(Numeric(24, 10))
+    exit_price: Mapped[float | None] = mapped_column(Numeric(24, 10), nullable=True)
+    qty: Mapped[float] = mapped_column(Numeric(24, 10))
+    margin: Mapped[float] = mapped_column(Numeric(20, 8))
+    leverage: Mapped[int] = mapped_column(Integer, default=1)
+    takes_hit: Mapped[int] = mapped_column(Integer, default=0)
+    outcome: Mapped[str] = mapped_column(String(8))            # stop | take | manual
+    pnl: Mapped[float] = mapped_column(Numeric(20, 8), default=0)
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    note: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    student: Mapped["Student"] = relationship()
+
+
+class ScalpWorkspace(Base):
+    """Сохранённый шаблон рабочего места скальпера.
+
+    Один на ученика: ширины панелей, тема, индикаторы, шаг и глубина стакана.
+    Хранится строкой JSON, а не колонками, намеренно — набор настроек меняется
+    с каждой версией интерфейса, и заводить миграцию на каждый переключатель
+    значит не заводить их вовсе.
+    """
+
+    __tablename__ = "scalp_workspaces"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), unique=True, index=True)
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "utcnow"]

@@ -8,7 +8,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
-from core.models import BalanceSnapshot, SignalDelivery, Student
+from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student
 from backend.deps import get_session, get_current_student, get_weex
 from backend.schemas import ProfileOut, ProfilePatch, AnalyticsMe
 
@@ -152,6 +152,27 @@ async def analytics_calendar(
             if _ds < first_snap_date and _ds not in balance_by_date:
                 balance_by_date[_ds] = first_snap_bal
 
+    # ── Журнал скальпинга: прибыль по дням ──────────────────────────────────
+    #
+    # Календарь до этого знал только про изменение баланса на бирже, а оно
+    # приходит снимками раз в час и молчит, если ученик торгует со своего счёта.
+    # Журнал терминала — это прибыль, посчитанная по самим сделкам.
+    month_start = datetime(year, month, 1, tzinfo=timezone.utc)
+    month_end = datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=timezone.utc)
+    journal = session.execute(
+        select(ScalpTrade)
+        .where(ScalpTrade.student_id == student.id)
+        .where(ScalpTrade.closed_at >= month_start)
+        .where(ScalpTrade.closed_at < month_end)
+    ).scalars().all()
+
+    journal_by_date: dict[str, dict[str, float]] = {}
+    for t in journal:
+        closed = t.closed_at if t.closed_at.tzinfo else t.closed_at.replace(tzinfo=timezone.utc)
+        cell = journal_by_date.setdefault(closed.strftime("%Y-%m-%d"), {"pnl": 0.0, "trades": 0})
+        cell["pnl"] += float(t.pnl)
+        cell["trades"] += 1
+
     # ── Строим список дней ──────────────────────────────────────────────────
     prev_balance: Decimal | None = Decimal(str(prev_snap.balance_usdt)) if prev_snap else None
     first_snapshot_seen = False
@@ -177,6 +198,8 @@ async def analytics_calendar(
             "trades": 1 if vol > 0 else 0,        # был ли торговый объём за день
             "trade_volume": vol,
             "has_deposit": date_str in deposit_dates,
+            "journal_pnl": round(journal_by_date.get(date_str, {}).get("pnl", 0.0), 2),
+            "journal_trades": int(journal_by_date.get(date_str, {}).get("trades", 0)),
         })
         if balance is not None:
             prev_balance = balance

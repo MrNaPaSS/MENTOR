@@ -17,6 +17,9 @@ import {
   HistogramSeries,
   LineSeries,
   createChart,
+  createSeriesMarkers,
+  type ISeriesMarkersPluginApi,
+  type SeriesMarker,
   type IChartApi,
   type IPriceLine,
   type ISeriesApi,
@@ -34,6 +37,7 @@ import {
   type Shapes,
 } from "./primitives/ShapesPrimitive";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
+import { loadTrades } from "@/lib/journal";
 import {
   pendingTargets,
   pnlAt,
@@ -218,6 +222,29 @@ function untilClose(interval: string, now = Date.now()): string {
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
 }
 
+/**
+ * Ближайший бар к моменту сделки.
+ *
+ * Метку можно ставить только на существующий бар: на минутном графике сделка
+ * закрылась в 12:03:47, а бар есть только на 12:03. За краем загруженной
+ * истории метки нет вовсе — сделка была раньше, чем начинается график.
+ */
+function snapToBar(candles: Candle[], iso: string | null): number | null {
+  if (!iso) return null;
+  const seconds = Math.floor(new Date(iso).getTime() / 1000);
+  if (!Number.isFinite(seconds)) return null;
+  if (seconds < candles[0].time) return null;
+
+  let low = 0;
+  let high = candles.length - 1;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (candles[mid].time <= seconds) low = mid;
+    else high = mid - 1;
+  }
+  return candles[low].time;
+}
+
 /** ATR последних баров: по нему предлагается стоп. */
 function currentAtr(candles: Candle[]): number {
   if (candles.length < 15) return 0;
@@ -252,6 +279,8 @@ export default function PriceChart({
   trade,
   livePrice,
   onCloseTrade,
+  showJournal,
+  journalKey,
   onShelfClick,
 }: {
   symbol: string;
@@ -266,6 +295,10 @@ export default function PriceChart({
   livePrice: number;
   /** Закрыть сделку по нажатию на ярлык позиции. */
   onCloseTrade?: () => void;
+  /** Показывать отработанные сетапы из журнала прямо на графике. */
+  showJournal?: boolean;
+  /** Растёт после каждой записи в журнал — повод перечитать метки. */
+  journalKey?: number;
   /**
    * Нажатие по линии полки. Вторым аргументом идёт ATR текущего таймфрейма:
    * по нему предлагается стоп, а волатильность известна только здесь — свечи
@@ -297,6 +330,7 @@ export default function PriceChart({
   const shelfLinesRef = useRef<IPriceLine[]>([]);
   const tradeLinesRef = useRef<IPriceLine[]>([]);
   const tradeShapesRef = useRef<Shapes | null>(null);
+  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const dataRef = useRef<Candle[]>([]);
   // Нажатие по полке ищет ближайшую линию к точке клика, а слушатель графика
   // ставится один раз — значит и полки, и обработчик читаются из ref.
@@ -852,6 +886,66 @@ export default function PriceChart({
     const id = setInterval(tick, 250);
     return () => clearInterval(id);
   }, [trade, interval]);
+
+  // Отработанные сетапы из журнала прямо на графике.
+  //
+  // Смотреть статистику списком и смотреть её на графике — разные вещи: в
+  // списке видно, сколько сделка принесла, а на графике — почему. Метки идут
+  // парами: вход и выход, с результатом у выхода.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+    if (!markersRef.current) markersRef.current = createSeriesMarkers(series, []);
+    const markers = markersRef.current;
+
+    if (!showJournal) {
+      markers.setMarkers([]);
+      return;
+    }
+
+    let cancelled = false;
+    loadTrades(90, symbol)
+      .then((body) => {
+        if (cancelled || !body) return;
+        const candles = dataRef.current;
+        if (candles.length === 0) return;
+
+        const marks: SeriesMarker<Time>[] = [];
+        for (const t of body.trades) {
+          const opened = snapToBar(candles, t.opened_at);
+          const closed = snapToBar(candles, t.closed_at);
+          const win = t.pnl >= 0;
+          if (opened !== null) {
+            marks.push({
+              time: opened as UTCTimestamp,
+              position: t.side === "long" ? "belowBar" : "aboveBar",
+              shape: t.side === "long" ? "arrowUp" : "arrowDown",
+              color: THEMES[themeRef.current].mtf,
+              text: t.side === "long" ? "вход ↑" : "вход ↓",
+            });
+          }
+          if (closed !== null) {
+            marks.push({
+              time: closed as UTCTimestamp,
+              position: t.side === "long" ? "aboveBar" : "belowBar",
+              shape: "circle",
+              color: win ? THEMES[themeRef.current].bidLine : THEMES[themeRef.current].askLine,
+              text: `${win ? "+" : "−"}${Math.abs(t.pnl).toFixed(2)}`,
+            });
+          }
+        }
+        // Библиотека требует метки по возрастанию времени.
+        marks.sort((a, b) => Number(a.time) - Number(b.time));
+        markers.setMarkers(marks);
+      })
+      .catch(() => {
+        // Журнал недоступен — график от этого не страдает.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showJournal, journalKey, symbol, interval]);
 
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.

@@ -11,14 +11,29 @@
 // таймфрейм и индикаторы у графика. Прошлая версия начиналась с семи
 // переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
-import { useEffect, useState } from "react";
-import { Moon, PanelLeftClose, PanelLeftOpen, Sun, Wifi, WifiOff } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  BookText,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Sun,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import PaneDivider from "@/components/scalping/PaneDivider";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
 import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
 import type { ChartTheme } from "@/lib/indicator/shapes";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
+import JournalPanel from "@/components/scalping/JournalPanel";
+import {
+  journalAvailable,
+  loadWorkspace,
+  saveTrade,
+  saveWorkspace,
+} from "@/lib/journal";
 import {
   computeTrade,
   sideForShelf,
@@ -99,7 +114,15 @@ const CHIP_OFF = "text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
 // раздела убран — он занимал полсотни пикселей и не нёс ничего, чего не видно
 // по самим панелям. Стакан и график получают одинаковую высоту и заканчиваются
 // на одной линии, иначе под коротким из них остаётся пустота.
-const PANE_H = "h-[calc(100vh-124px)] min-h-[520px]";
+// Высота рабочей области. Журнал раскрывается снизу и забирает своё место:
+// накрывать им график нельзя — сделки сверяют именно с ним.
+const JOURNAL_H = 300;
+
+function paneHeight(journalOpen: boolean): React.CSSProperties {
+  return journalOpen
+    ? { height: `calc(100vh - ${124 + JOURNAL_H + 12}px)`, minHeight: 300 }
+    : { height: "calc(100vh - 124px)", minHeight: 520 };
+}
 
 // Ширины панелей по умолчанию и границы, за которые их не утянуть.
 // Нижняя граница стакана — 111 (колонка истории) + 177 (цена) плюс поля:
@@ -166,6 +189,10 @@ export default function ScalpingPage() {
   // Живая сделка: пока цена не дошла до уровня — «ждём», дальше открыта и
   // считает результат, после стопа или последней цели закрывается сама.
   const [trade, setTrade] = useState<ActiveTrade | null>(null);
+  const [journalOpen, setJournalOpen] = useState(false);
+  // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
+  const [journalKey, setJournalKey] = useState(0);
+  const savedTradeRef = useRef<string | null>(null);
   const [margin, setMargin] = useState(DEFAULT_MARGIN);
   const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
   const [timeframe, setTimeframe] = useState("1m");
@@ -181,11 +208,14 @@ export default function ScalpingPage() {
 
   const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort, shelf });
 
-  // Рабочее место трейдера живёт в его браузере: ширины панелей, набор
-  // индикаторов, таймфрейм, шаг и глубина стакана. Настроил один раз — и после
-  // перезагрузки всё на месте, а не сброшено к заводскому.
-  useEffect(() => {
-    const saved = readWorkspace();
+  // Рабочее место трейдера: ширины панелей, набор индикаторов, таймфрейм, шаг
+  // и глубина стакана. Настроил один раз — и после перезагрузки всё на месте.
+  //
+  // Источников два. Браузер отвечает мгновенно и работает без входа в кабинет,
+  // сервер помнит настройки на любом устройстве. Сначала показываем local,
+  // потом, если сервер что-то хранит, подменяем на него: шаблон, сохранённый
+  // трейдером, важнее того, что осталось в этом браузере.
+  const applyWorkspace = useCallback((saved: Partial<Workspace> | null) => {
     if (!saved) return;
     if (saved.theme === "light" || saved.theme === "dark") setTheme(saved.theme);
     if (typeof saved.screener === "number") {
@@ -215,26 +245,53 @@ export default function ScalpingPage() {
   }, []);
 
   useEffect(() => {
+    applyWorkspace(readWorkspace());
+    if (!journalAvailable()) return;
+    let cancelled = false;
+    loadWorkspace()
+      .then((body) => {
+        if (!cancelled && body?.payload) {
+          applyWorkspace(body.payload as Partial<Workspace>);
+        }
+      })
+      .catch(() => {
+        // Сервер молчит — работаем на том, что сохранил браузер.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyWorkspace]);
+
+  useEffect(() => {
+    const snapshot = {
+      theme,
+      screener: screenerW,
+      dom: domW,
+      indicators,
+      sort,
+      timeframe,
+      agg,
+      rows,
+      shelf,
+      margin,
+      leverage,
+    } satisfies Workspace;
+
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          theme,
-          screener: screenerW,
-          dom: domW,
-          indicators,
-          sort,
-          timeframe,
-          agg,
-          rows,
-          shelf,
-          margin,
-          leverage,
-        } satisfies Workspace),
-      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     } catch {
       // Не сохранилось — не повод ломать экран.
     }
+
+    if (!journalAvailable()) return;
+    // Задержка перед отправкой: ширина панели меняется десятками событий на
+    // одно перетаскивание, и слать каждое значит долбить сервер впустую.
+    const id = setTimeout(() => {
+      saveWorkspace(snapshot).catch(() => {
+        // Настройки уже в браузере — потеря запроса ничего не стоит.
+      });
+    }, 1500);
+    return () => clearTimeout(id);
   }, [
     theme,
     screenerW,
@@ -399,8 +456,26 @@ export default function ScalpingPage() {
     setTrade((current) => (current ? advance(current, price, Date.now()) : current));
   }, [dom?.mid]);
 
+  // Закрытая сделка уходит в журнал ровно один раз. Идентификатор сделки
+  // сохраняется на клиенте, поэтому повтор после обрыва связи не создаст
+  // вторую запись — сервер обновит существующую.
+  useEffect(() => {
+    if (!trade || trade.status !== "closed") return;
+    if (savedTradeRef.current === trade.id) return;
+    savedTradeRef.current = trade.id;
+    saveTrade(trade)
+      .then((saved) => {
+        if (saved) setJournalKey((k) => k + 1);
+      })
+      .catch(() => {
+        // Не записалось — сделка всё равно закрыта, ломать экран незачем.
+        savedTradeRef.current = null;
+      });
+  }, [trade]);
+
   // Класс темы для рабочих панелей: стакан и график светлеют вместе.
   const pane = theme === "light" ? "pane-light" : "pane-dark";
+  const paneStyle = paneHeight(journalOpen);
 
   return (
     <div>
@@ -420,7 +495,8 @@ export default function ScalpingPage() {
           <button
             onClick={() => setScreenerOpen(true)}
             title="Развернуть скринер"
-            className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-border bg-bg-card py-3 text-text-muted transition-colors duration-150 ease-out hover:text-text-primary xl:flex ${PANE_H}`}
+            className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-border bg-bg-card py-3 text-text-muted transition-colors duration-150 ease-out hover:text-text-primary xl:flex`}
+            style={paneStyle}
           >
             <PanelLeftOpen className="h-4 w-4" />
             <span
@@ -435,7 +511,8 @@ export default function ScalpingPage() {
 
         {/* Скринер: ширина по своим колонкам, без растягивания. */}
         <section
-          className={`${screenerOpen ? "flex" : "hidden"} shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[var(--screener-w)] ${PANE_H}`}
+          className={`${screenerOpen ? "flex" : "hidden"} shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[var(--screener-w)]`}
+          style={paneStyle}
         >
           <div className="flex items-center justify-between border-b border-border px-2 py-1.5">
             <span className="text-xs font-semibold text-text-primary">Скринер</span>
@@ -497,7 +574,8 @@ export default function ScalpingPage() {
           <>
             {/* Стакан: ширина по своим колонкам, история прокручивается влево. */}
             <section
-              className={`${pane} flex shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] xl:w-[var(--dom-w)] ${PANE_H}`}
+              className={`${pane} flex shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] xl:w-[var(--dom-w)]`}
+              style={paneStyle}
             >
               <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-3 py-2">
                 <span className="font-semibold text-[var(--pane-text)]">{base(symbol)}</span>
@@ -551,7 +629,8 @@ export default function ScalpingPage() {
 
             {/* График занимает всё оставшееся место. */}
             <section
-              className={`${pane} flex min-w-0 flex-1 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] ${PANE_H}`}
+              className={`${pane} flex min-w-0 flex-1 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]`}
+              style={paneStyle}
             >
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--pane-border)] px-3 py-2">
                 <div className="flex items-center gap-0.5">
@@ -606,6 +685,14 @@ export default function ScalpingPage() {
                     </button>
                   )}
 
+                  <button
+                    onClick={() => setJournalOpen((v) => !v)}
+                    title="Журнал сделок"
+                    className={`${CHIP} ${journalOpen ? CHIP_ON : CHIP_OFF}`}
+                  >
+                    <BookText className="h-3.5 w-3.5" />
+                  </button>
+
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
                   <button
                     onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
@@ -628,6 +715,8 @@ export default function ScalpingPage() {
                   trade={trade}
                   livePrice={dom?.mid ?? 0}
                   onCloseTrade={closeTrade}
+                  showJournal={journalOpen}
+                  journalKey={journalKey}
                   onShelfClick={openTrade}
                 />
               </div>
@@ -635,12 +724,26 @@ export default function ScalpingPage() {
           </>
         ) : (
           <section
-            className={`grid flex-1 place-items-center rounded-xl border border-border bg-bg-card px-6 text-center text-sm text-text-muted ${PANE_H}`}
+            className={`grid flex-1 place-items-center rounded-xl border border-border bg-bg-card px-6 text-center text-sm text-text-muted`}
+            style={paneStyle}
           >
             Выберите монету в списке — здесь появятся её стакан и график
           </section>
         )}
       </div>
+
+      {journalOpen && (
+        <section
+          className={`${pane} mt-3 overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]`}
+          style={{ height: JOURNAL_H }}
+        >
+          <JournalPanel
+            symbol={symbol ?? undefined}
+            refreshKey={journalKey}
+            onClose={() => setJournalOpen(false)}
+          />
+        </section>
+      )}
 
       {dialogOpen && draft && (
         <TradeDialog draft={draft} onChange={updateDraft} onClose={() => setDialogOpen(false)} />
