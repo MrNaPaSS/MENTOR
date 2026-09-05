@@ -1000,9 +1000,15 @@ export default function ScalpingPage() {
         />
       )}
 
-      {exchangeOpen && exchange && (
+      {/* Окно открывается всегда: если состояние счёта получить не удалось,
+          оно само объяснит почему. Кнопка, которая молча ничего не делает,
+          выглядит сломанной. */}
+      {exchangeOpen && (
         <ExchangeDialog
-          status={exchange}
+          status={
+            exchange ?? { enabled: false, connected: false, key_tail: "", updated_at: null }
+          }
+          reachable={exchange !== null}
           onClose={() => setExchangeOpen(false)}
           onSaved={() => {
             loadExchange();

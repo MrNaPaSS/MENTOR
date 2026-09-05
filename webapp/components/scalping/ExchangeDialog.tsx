@@ -21,10 +21,13 @@ const BUTTON =
 
 export default function ExchangeDialog({
   status,
+  reachable = true,
   onClose,
   onSaved,
 }: {
   status: TradingStatus;
+  /** Состояние счёта удалось получить с сервера. */
+  reachable?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -96,7 +99,13 @@ export default function ExchangeDialog({
           </button>
         </div>
 
-        {!status.enabled ? (
+        {!reachable ? (
+          <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-text-muted">
+            Состояние счёта получить не удалось. Войдите в кабинет — торговый
+            раздел привязан к ученику; если вход выполнен, значит сервер сейчас
+            недоступен.
+          </p>
+        ) : !status.enabled ? (
           <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-text-muted">
             На сервере не задан ключ шифрования, и торговля выключена целиком.
             Хранить ваши ключи открытым текстом мы не будем.
@@ -162,7 +171,7 @@ export default function ExchangeDialog({
             </button>
             <button
               onClick={submit}
-              disabled={busy || !status.enabled || !apiKey || !secret || !passphrase}
+              disabled={busy || !reachable || !status.enabled || !apiKey || !secret || !passphrase}
               className={`${BUTTON} bg-accent-cyan/20 text-accent-cyan disabled:opacity-40`}
             >
               {busy ? "Проверяем…" : "Подключить"}
