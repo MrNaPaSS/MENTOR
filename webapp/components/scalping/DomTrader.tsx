@@ -94,15 +94,19 @@ export default function DomTrader({
     centered.current = false;
   }, [frame.symbol, frame.tick]);
 
-  // Колесо масштабирует стакан, как на графике. Слушатель нативный, потому что
-  // React вешает wheel пассивно и отменить прокрутку страницы через него
-  // нельзя. С Shift колесо оставляем странице — иначе не пролистать вглубь.
+  // Масштаб — на Ctrl или Alt с колесом. Само колесо листает стакан, как и
+  // раньше: отдать ему масштаб значило бы отобрать прокрутку, которой
+  // пользуются постоянно, ради жеста, который нужен изредка.
+  //
+  // Слушатель нативный: React вешает wheel пассивно, и отменить через него
+  // масштабирование страницы по Ctrl нельзя — вместе со стаканом уезжал бы
+  // весь интерфейс.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !onZoom) return;
 
     function handleWheel(event: WheelEvent) {
-      if (event.shiftKey || event.ctrlKey) return;
+      if (!event.ctrlKey && !event.altKey) return;
       event.preventDefault();
       onZoom?.(event.deltaY > 0 ? 1 : -1);
     }
@@ -147,7 +151,7 @@ export default function DomTrader({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        title="Колесо — масштаб, Shift+колесо — прокрутка"
+        title="Колесо — прокрутка, Ctrl+колесо — масштаб"
         className="relative flex-1 overflow-auto font-mono"
       >
         <div className="w-full min-w-max">
