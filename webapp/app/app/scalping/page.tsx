@@ -410,6 +410,23 @@ export default function ScalpingPage() {
    * умолчанию. Все три поля трейдер всё равно правит в самом окне.
    */
   function openTrade(level: Wall, atr = 0) {
+    // Новый уровень — новая сделка. Прежняя, если она уже вошла, закрывается
+    // по текущей цене и уходит в журнал: бросать вошедшую сделку без записи
+    // нельзя, иначе статистика начнёт врать. Раньше она молча оставалась на
+    // графике, и нажатие по стакану выглядело как «ничего не произошло».
+    if (trade && trade.status === "open") {
+      const done = closeManually(trade, dom?.mid ?? 0, Date.now());
+      savedTradeRef.current = done.id;
+      saveTrade(done)
+        .then((saved) => {
+          if (saved) setJournalKey((k) => k + 1);
+        })
+        .catch(() => {
+          savedTradeRef.current = null;
+        });
+    }
+    setTrade(null);
+
     setDraft({
       shelf: level,
       tick: dom?.tick ?? 0,
@@ -484,7 +501,9 @@ export default function ScalpingPage() {
   useEffect(() => {
     if (!plan || !draft || !symbol) return;
     setTrade((current) => {
-      if (current && current.status !== "planned") return current;
+      // Замораживаем только вошедшую сделку: у неё уже есть цена входа, и
+      // менять ей стоп задним числом — подделка собственной статистики.
+      if (current && current.status === "open") return current;
       return createTrade(
         {
           symbol,
