@@ -12,7 +12,7 @@
 // переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
 import { useEffect, useState } from "react";
-import { Wifi, WifiOff } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Wifi, WifiOff } from "lucide-react";
 import PaneDivider from "@/components/scalping/PaneDivider";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
@@ -99,6 +99,7 @@ function clamp(value: number, { min, max }: { min: number; max: number }) {
 
 /** Настройки рабочего места, которые переживают перезагрузку страницы. */
 type Workspace = {
+  screenerOpen: boolean;
   screener: number;
   dom: number;
   indicators: Indicators;
@@ -125,6 +126,7 @@ export default function ScalpingPage() {
   const [timeframe, setTimeframe] = useState("1m");
   const [indicators, setIndicators] = useState<Indicators>(DEFAULT_INDICATORS);
 
+  const [screenerOpen, setScreenerOpen] = useState(true);
   const [screenerW, setScreenerW] = useState(PANE_LIMITS.screener.def);
   const [domW, setDomW] = useState(PANE_LIMITS.dom.def);
 
@@ -136,6 +138,7 @@ export default function ScalpingPage() {
   useEffect(() => {
     const saved = readWorkspace();
     if (!saved) return;
+    if (typeof saved.screenerOpen === "boolean") setScreenerOpen(saved.screenerOpen);
     if (typeof saved.screener === "number") {
       setScreenerW(clamp(saved.screener, PANE_LIMITS.screener));
     }
@@ -160,6 +163,7 @@ export default function ScalpingPage() {
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
+          screenerOpen,
           screener: screenerW,
           dom: domW,
           indicators,
@@ -172,7 +176,7 @@ export default function ScalpingPage() {
     } catch {
       // Не сохранилось — не повод ломать экран.
     }
-  }, [screenerW, domW, indicators, sort, timeframe, agg, rows]);
+  }, [screenerOpen, screenerW, domW, indicators, sort, timeframe, agg, rows]);
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
   function resizeScreener(delta: number) {
@@ -241,10 +245,37 @@ export default function ScalpingPage() {
           } as React.CSSProperties
         }
       >
+        {/* Свёрнутый скринер: узкая полоса, по которой его видно и можно
+            вернуть. Прятать совсем нельзя — трейдер не должен вспоминать, где
+            была панель. */}
+        {!screenerOpen && (
+          <button
+            onClick={() => setScreenerOpen(true)}
+            title="Развернуть скринер"
+            className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-border bg-bg-card py-3 text-text-muted transition-colors duration-150 ease-out hover:text-text-primary xl:flex ${PANE_H}`}
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+            <span className="text-[11px]" style={{ writingMode: "vertical-rl" }}>
+              Скринер
+            </span>
+          </button>
+        )}
+
         {/* Скринер: ширина по своим колонкам, без растягивания. */}
         <section
-          className={`flex shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[var(--screener-w)] ${PANE_H}`}
+          className={`${screenerOpen ? "flex" : "hidden"} shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[var(--screener-w)] ${PANE_H}`}
         >
+          <div className="flex items-center justify-between border-b border-border px-2 py-1.5">
+            <span className="text-xs font-semibold text-text-primary">Скринер</span>
+            <button
+              onClick={() => setScreenerOpen(false)}
+              title="Свернуть скринер"
+              className={`${CHIP} ${CHIP_OFF}`}
+            >
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-2">
             <span className="mr-1 text-[11px] text-text-muted">Сортировка:</span>
             {(Object.keys(SORT_LABELS) as VisibleSortKey[]).map((key) => (
@@ -271,7 +302,10 @@ export default function ScalpingPage() {
           </div>
         </section>
 
-        <PaneDivider onResize={resizeScreener} title="Ширина списка · двойной клик сбрасывает" />
+        {/* Свёрнутую панель тянуть не за что — разделитель не нужен. */}
+        {screenerOpen && (
+          <PaneDivider onResize={resizeScreener} title="Ширина списка · двойной клик сбрасывает" />
+        )}
 
         {symbol ? (
           <>
