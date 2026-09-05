@@ -16,6 +16,7 @@ import asyncio
 import logging
 from dataclasses import asdict
 
+from backend.scalping.clusters import fit_to_rows
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.ladder import DEFAULT_ROWS, build_ladder
 from backend.scalping.state import DEFAULT_SORT, biggest_wall
@@ -174,4 +175,25 @@ class ScalpingHub:
             "book_ratio": state.book_ratio,
             "rows": [asdict(r) for r in ladder],
             "wall": asdict(wall) if wall else None,
+            "clusters": _clusters(state, ladder, step),
         }
+
+
+def _clusters(state, ladder, step) -> list[dict]:
+    """История объёмов, схлопнутая под строки текущего экрана."""
+    if state.clusters is None:
+        return []
+    prices = [row.price for row in ladder]
+    columns = fit_to_rows(state.clusters.snapshot(), prices, step)
+    return [
+        {
+            "start": column.start,
+            "buy": column.buy,
+            "sell": column.sell,
+            # Тройками, а не словарём: ключи JSON обязаны быть строками, а
+            # str(1e-05) в Python даёт "1e-05" против "0.00001" в JavaScript —
+            # на монетах с мелким шагом ячейки просто не нашлись бы.
+            "cells": [[price, cell.buy, cell.sell] for price, cell in column.cells.items()],
+        }
+        for column in columns
+    ]

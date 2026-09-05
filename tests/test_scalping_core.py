@@ -234,3 +234,23 @@ def test_prune_drops_far_levels():
 
 def test_prune_keeps_book_when_price_unknown():
     assert OrderBook("X").prune(band_bp=100) == 0
+
+
+def test_walls_are_capped_per_side():
+    """Плотный стакан выдаёт десяток формально проходящих уровней.
+
+    Если показать все, подсвеченной окажется треть экрана и подсветка перестанет
+    что-либо значить — как это и было в откаченной версии раздела.
+    """
+    levels = [Level(100.0, 1.0)] + [
+        Level(100.0 - i / 100, 900.0 if i % 5 == 0 else 1.0) for i in range(1, 30)
+    ]
+    walls = find_walls(levels, "bid", mid=100.5, min_notional=100.0)
+    assert len(walls) == 3      # крупных уровней пять, показываем три
+
+
+def test_wall_limit_can_be_lifted():
+    levels = [Level(100.0, 1.0)] + [
+        Level(100.0 - i / 100, 900.0 if i % 5 == 0 else 1.0) for i in range(1, 30)
+    ]
+    assert len(find_walls(levels, "bid", mid=100.5, min_notional=100.0, limit=None)) == 5

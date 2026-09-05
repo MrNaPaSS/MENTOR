@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from backend.scalping.clusters import fit_to_rows
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.ladder import DEFAULT_ROWS, MAX_ROWS, build_ladder
 from backend.scalping.state import BAND_BP, DEFAULT_SORT, SORT_KEYS, biggest_wall
@@ -79,6 +80,19 @@ async def dom(
         "rows": [asdict(r) for r in ladder],
         "wall": asdict(wall) if wall else None,
         "tape": asdict(tape),
+        "clusters": [
+            {
+                "start": c.start,
+                "buy": c.buy,
+                "sell": c.sell,
+                "cells": [[p, x.buy, x.sell] for p, x in c.cells.items()],
+            }
+            for c in (
+                fit_to_rows(state.clusters.snapshot(), [r.price for r in ladder], step)
+                if state.clusters
+                else []
+            )
+        ],
     }
 
 

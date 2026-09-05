@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { Wifi, WifiOff } from "lucide-react";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
-import DomLadder from "@/components/scalping/DomLadder";
+import DomTrader from "@/components/scalping/DomTrader";
 import { base, useScalpingFeed, SORT_LABELS, type SortKey } from "@/lib/scalping";
 
 // Укрупнение ценовой шкалы. На BTC шаг биржи — десять центов, и без укрупнения
@@ -53,7 +53,7 @@ export default function ScalpingPage() {
         </span>
       </header>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+      <div className="space-y-4">
         <section className="rounded-xl border border-border bg-bg-card">
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
             <span className="text-xs text-text-muted">Сортировка:</span>
@@ -119,9 +119,9 @@ export default function ScalpingPage() {
                 </div>
               </div>
 
-              <div className="h-[640px]">
+              <div className="h-[560px]">
                 {dom ? (
-                  <DomLadder frame={dom} />
+                  <DomTrader frame={dom} />
                 ) : (
                   <p className="grid h-full place-items-center text-sm text-text-muted">
                     Собираем стакан {base(symbol)}…

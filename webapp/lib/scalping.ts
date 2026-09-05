@@ -45,6 +45,14 @@ export type Wall = {
   ratio: number;
 };
 
+/** Один интервал истории: [цена, покупки, продажи] по каждой строке экрана. */
+export type ClusterColumn = {
+  start: number;
+  buy: number;
+  sell: number;
+  cells: [number, number, number][];
+};
+
 export type DomFrame = {
   symbol: string;
   tick: number;
@@ -54,6 +62,7 @@ export type DomFrame = {
   book_ratio: number;
   rows: LadderRow[];
   wall: Wall | null;
+  clusters: ClusterColumn[];
 };
 
 export type SortKey =
@@ -204,6 +213,12 @@ export function price(value: number, tick = 0): string {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+}
+
+/** Время начала интервала в виде ЧЧ:ММ. */
+export function clockLabel(startSeconds: number): string {
+  const d = new Date(startSeconds * 1000);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 /** Короткое имя инструмента: BTCUSDT → BTC. */

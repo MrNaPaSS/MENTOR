@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass, field
 
 from backend.scalping.book import OrderBook
+from backend.scalping.clusters import ClusterHistory
 from backend.scalping.metrics import Wall, book_imbalance, find_walls, spread_bp
 from backend.scalping.tape import TapeWindow
 
@@ -42,6 +43,10 @@ class SymbolState:
     # Сглаженный перевес стакана. Обновляется на каждом событии глубины, здесь
     # хранится готовым, чтобы сборка строки оставалась чистой функцией.
     book_ratio: float = 0.5
+
+    # История прошедших объёмов. Заводится только когда инструмент открыт в
+    # стакане: по всему списку скринера это сотни тысяч ячеек впустую.
+    clusters: ClusterHistory | None = None
 
     def __post_init__(self) -> None:
         if self.book is None:

@@ -24,6 +24,8 @@ import time
 import aiohttp
 
 from backend.scalping.binance import BinanceRest, StreamClient
+from backend.scalping.clusters import ClusterHistory
+from backend.scalping.ladder import detect_tick
 from backend.scalping.state import BAND_BP, MarketState
 
 logger = logging.getLogger("nmnh.scalping")
@@ -200,11 +202,17 @@ class ScalpingCollector:
     # ── инструмент, открытый в стакане ──────────────────────────────────────
 
     async def pin(self, symbol: str) -> None:
-        """Удержать инструмент под наблюдением, даже если он вне топа."""
+        """Удержать инструмент под наблюдением и начать копить историю сделок."""
         sym = symbol.upper()
         self._pinned[sym] = self._pinned.get(sym, 0) + 1
         if sym not in self._tracked:
             await self._track(sym)
+
+        state = self.state.ensure(sym)
+        if state.clusters is None:
+            # Шаг берём у биржи и больше не меняем: под экран история
+            # схлопывается при отдаче, а не при записи.
+            state.clusters = ClusterHistory(tick=detect_tick(state.book))
 
     async def unpin(self, symbol: str) -> None:
         """Последний клиент ушёл — инструмент снова живёт по правилам топа."""
@@ -212,8 +220,13 @@ class ScalpingCollector:
         left = self._pinned.get(sym, 0) - 1
         if left > 0:
             self._pinned[sym] = left
-        else:
-            self._pinned.pop(sym, None)
+            return
+        self._pinned.pop(sym, None)
+        # Последний клиент ушёл — историю держать незачем, она самая объёмная
+        # структура на инструмент.
+        state = self.state.get(sym)
+        if state:
+            state.clusters = None
 
     # ── синхронизация книги ─────────────────────────────────────────────────
 
@@ -262,13 +275,16 @@ class ScalpingCollector:
             return
 
         if stream.endswith("@trade"):
-            state.tape.add(
-                int(data.get("T") or 0),
-                _f(data.get("p")),
-                _f(data.get("q")),
-                # m=true — покупатель стоял лимитом, значит по рынку бил продавец.
-                not bool(data.get("m", True)),
-            )
+            ts = int(data.get("T") or 0)
+            price = _f(data.get("p"))
+            qty = _f(data.get("q"))
+            # m=true — покупатель стоял лимитом, значит по рынку бил продавец.
+            is_buy = not bool(data.get("m", True))
+            state.tape.add(ts, price, qty, is_buy)
+            if state.clusters is not None:
+                if state.clusters.tick <= 0:
+                    state.clusters.ensure_tick(detect_tick(state.book))
+                state.clusters.add(ts, price, qty, is_buy)
         elif "@depth@" in stream:
             if symbol in self._resyncing:
                 self._buffers.setdefault(symbol, []).append(data)

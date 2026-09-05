@@ -26,6 +26,12 @@ WALL_FACTOR = 6.0
 # стоит в стороне и до чего цена может дойти.
 SKIP_BEST_LEVELS = 1
 
+# Сколько плит показываем на одной стороне. Плотный стакан выдаёт по десятку
+# уровней, формально проходящих порог, — подсвеченной оказывается треть экрана,
+# и подсветка перестаёт что-либо значить. Трейдеру нужны те немногие уровни,
+# мимо которых цена не пройдёт незамеченной.
+MAX_WALLS_PER_SIDE = 3
+
 # Ниже этой суммы уровень не плита, даже если соседи совсем пустые. Отсекает
 # «плиты» на неликвиде, где медиана уровня — пара долларов.
 WALL_MIN_NOTIONAL = 50_000.0
@@ -62,6 +68,7 @@ def find_walls(
     factor: float = WALL_FACTOR,
     min_notional: float = WALL_MIN_NOTIONAL,
     skip_best: int = SKIP_BEST_LEVELS,
+    limit: int | None = MAX_WALLS_PER_SIDE,
 ) -> list[Wall]:
     """Плиты на одной стороне стакана, от самой крупной к мелкой.
 
@@ -93,7 +100,8 @@ def find_walls(
         for l in candidates
         if l.notional >= base * factor and l.notional >= min_notional
     ]
-    return sorted(walls, key=lambda w: w.notional, reverse=True)
+    walls.sort(key=lambda w: w.notional, reverse=True)
+    return walls[:limit] if limit else walls
 
 
 def book_imbalance(bids: list[Level], asks: list[Level]) -> float:
