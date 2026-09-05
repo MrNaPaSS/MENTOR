@@ -136,6 +136,23 @@ const PANE_LIMITS = {
 
 const STORAGE_KEY = "nmnh.scalping.panes";
 
+// Открытая сделка хранится отдельно от настроек: она живёт своей жизнью,
+// пишется на каждом изменении и не должна тащить за собой ширины панелей.
+// Уйти со страницы и вернуться — обычное дело, а позиция на рынке от этого не
+// закрывается, значит и разметка её пропадать не должна.
+const TRADE_KEY = "nmnh.scalping.trade";
+
+function readTrade(): ActiveTrade | null {
+  try {
+    const raw = localStorage.getItem(TRADE_KEY);
+    const trade = raw ? (JSON.parse(raw) as ActiveTrade) : null;
+    // Закрытая сделка уже в журнале — на графике ей делать нечего.
+    return trade && trade.status !== "closed" ? trade : null;
+  } catch {
+    return null;
+  }
+}
+
 // По умолчанию включено всё, кроме зон: они заливают половину окна сплошным
 // цветом и нужны, только когда смотришь картину крупнее минуты.
 const DEFAULT_INDICATORS: Indicators = {
@@ -168,6 +185,8 @@ type Workspace = {
   margin: number;
   leverage: number;
   journal: number;
+  /** Последняя открытая монета: возврат в раздел не должен начинаться с нуля. */
+  symbol: string | null;
 };
 
 function readWorkspace(): Partial<Workspace> | null {
@@ -250,9 +269,16 @@ export default function ScalpingPage() {
     if (typeof saved.journal === "number") {
       setJournalH(clamp(saved.journal, JOURNAL_LIMITS));
     }
+    if (typeof saved.symbol === "string" && saved.symbol) setSymbol(saved.symbol);
   }, []);
 
   useEffect(() => {
+    const restored = readTrade();
+    if (restored) {
+      setTrade(restored);
+      // Сделка уже записана в журнал только после закрытия, поэтому метка
+      // «уже сохранено» здесь не ставится.
+    }
     applyWorkspace(readWorkspace());
     if (!journalAvailable()) return;
     let cancelled = false;
@@ -284,6 +310,7 @@ export default function ScalpingPage() {
       margin,
       leverage,
       journal: journalH,
+      symbol,
     } satisfies Workspace;
 
     try {
@@ -314,6 +341,7 @@ export default function ScalpingPage() {
     margin,
     leverage,
     journalH,
+    symbol,
   ]);
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
@@ -473,6 +501,19 @@ export default function ScalpingPage() {
     if (!(price > 0)) return;
     setTrade((current) => (current ? advance(current, price, Date.now()) : current));
   }, [dom?.mid]);
+
+  // Разметка сделки переживает уход со страницы.
+  useEffect(() => {
+    try {
+      if (trade && trade.status !== "closed") {
+        localStorage.setItem(TRADE_KEY, JSON.stringify(trade));
+      } else {
+        localStorage.removeItem(TRADE_KEY);
+      }
+    } catch {
+      // Не сохранилось — сделка всё равно на экране.
+    }
+  }, [trade]);
 
   // Закрытая сделка уходит в журнал ровно один раз. Идентификатор сделки
   // сохраняется на клиенте, поэтому повтор после обрыва связи не создаст
@@ -731,7 +772,7 @@ export default function ScalpingPage() {
                   shelves={dom?.shelves ?? []}
                   theme={theme}
                   indicators={indicators}
-                  trade={trade}
+                  trade={trade && trade.symbol === symbol ? trade : null}
                   livePrice={dom?.mid ?? 0}
                   onCloseTrade={closeTrade}
                   showJournal={journalOpen}
@@ -772,7 +813,12 @@ export default function ScalpingPage() {
       )}
 
       {dialogOpen && draft && (
-        <TradeDialog draft={draft} onChange={updateDraft} onClose={() => setDialogOpen(false)} />
+        <TradeDialog
+          draft={draft}
+          onChange={updateDraft}
+          onConfirm={() => setDialogOpen(false)}
+          onCancel={closeTrade}
+        />
       )}
     </div>
   );

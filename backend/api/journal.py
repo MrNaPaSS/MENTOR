@@ -47,7 +47,7 @@ class TradeIn(BaseModel):
     exit_price: float | None = Field(default=None, gt=0)
     qty: float = Field(gt=0)
     margin: float = Field(gt=0)
-    leverage: int = Field(ge=1, le=125)
+    leverage: int = Field(ge=1, le=400)
     takes_hit: int = Field(default=0, ge=0, le=10)
     outcome: str
     pnl: float

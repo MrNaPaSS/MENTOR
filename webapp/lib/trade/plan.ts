@@ -55,7 +55,8 @@ export const DEFAULT_TAKES = [1, 2, 3];
 export const DEFAULT_MARGIN = 100;
 export const DEFAULT_LEVERAGE = 10;
 
-export const MAX_LEVERAGE = 125;
+// Потолок плеча. Четыреста — предел, который биржа даёт на ликвидных парах.
+export const MAX_LEVERAGE = 400;
 
 // Границы стопа. Ниже сотой доли процента стоп попадает в спред и выбивается
 // шумом; больше десяти процентов — это уже не скальп от уровня.

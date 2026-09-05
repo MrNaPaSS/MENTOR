@@ -93,7 +93,14 @@ const FONT = "10px ui-monospace, monospace";
 
 type Ready = {
   bands: { xs: number[]; tops: number[]; bottoms: number[]; band: ShapeBand }[];
-  boxes: (ShapeBox & { x1: number; x2: number; y1: number; y2: number })[];
+  boxes: (ShapeBox & {
+    x1: number;
+    x2: number;
+    y1: number;
+    y2: number;
+    /** Где поставить подпись: середина видимой части бокса. */
+    labelX: number;
+  })[];
   segments: (ShapeSegment & { x1: number; x2: number; y: number })[];
   points: (ShapePoint & { x: number; y: number })[];
 };
@@ -157,7 +164,7 @@ class ShapesRenderer implements IPrimitivePaneRenderer {
           context.font = FONT;
           context.textAlign = "center";
           context.textBaseline = "middle";
-          context.fillText(box.label, x + w / 2, y + h / 2);
+          context.fillText(box.label, box.labelX * hx, y + h / 2);
           context.textAlign = "left";
           context.textBaseline = "top";
         }
@@ -269,7 +276,12 @@ class ShapesPaneView implements IPrimitivePaneView {
       // Это тот самый случай, когда история отмотана и левый край фигуры ушёл
       // правее экрана: рисовать нечего.
       if (x2 <= x1) continue;
-      boxes.push({ ...box, x1, x2, y1, y2 });
+      // Подпись ставим по середине того, что видно, а не всего бокса. Бокс
+      // тянется от своей свечи до последней и уходит за левый край экрана —
+      // середина такого прямоугольника оказывается у правого конца, где
+      // подпись читается как чужая.
+      const labelX = (Math.max(x1, 0) + Math.min(x2, edge)) / 2;
+      boxes.push({ ...box, x1, x2, y1, y2, labelX });
     }
 
     const segments: Ready["segments"] = [];

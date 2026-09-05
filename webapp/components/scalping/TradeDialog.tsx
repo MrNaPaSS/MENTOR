@@ -2,17 +2,18 @@
 
 // Окно расчёта сделки от полки ликвидности.
 //
-// Открывается по нажатию на полку — на графике или в списке под ним. Сторона
-// не спрашивается: полка в заявках на покупку это поддержка, значит лонг,
-// полка в продажах — сопротивление, значит шорт. Спрашивать у трейдера то,
-// что уже известно из стакана, значит давать ему возможность ошибиться.
+// Открывается по нажатию на полку — на графике или в стакане. Сторона не
+// спрашивается: полка в заявках на покупку это поддержка, значит лонг, полка в
+// продажах — сопротивление, значит шорт. Спрашивать у трейдера то, что уже
+// известно из стакана, значит давать ему возможность ошибиться.
 //
 // Трейдер вводит два числа — сумму и плечо, — а видит все, которые нужны для
 // решения: объём позиции, потери на стопе, прибыль по каждой цели и цену
-// ликвидации. Пока окно открыто, разметка уже нарисована на графике: цифры и
-// картинка меняются вместе, и нажимать «применить» не нужно.
+// ликвидации. Разметка на графике меняется вместе с цифрами, поэтому «Войти»
+// здесь не отправляет ордер на биржу, а закрепляет расчёт: сделка начинает
+// ждать свою цену.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 import {
@@ -32,31 +33,45 @@ export type TradeDraft = {
   stopPct: number;
 };
 
+// Готовые значения под пальцем: скальпер работает одними и теми же суммами, и
+// набирать «50» с клавиатуры двадцать раз за сессию — потерянное время. Своё
+// число вводится там же, список только предлагает частое.
+const MARGINS = [5, 10, 15, 25, 50, 100, 250, 500, 1000];
+const LEVERAGES = [5, 10, 20, 25, 50, 75, 100, 125, 200, 400];
+const STOPS = [0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1, 2];
+
 const FIELD =
   "w-full rounded border border-border bg-bg-deep px-2 py-1.5 text-right font-mono text-sm " +
   "text-text-primary outline-none transition-colors duration-150 ease-out focus:border-accent-cyan";
 
+const BUTTON =
+  "rounded px-3 py-1.5 text-[12px] font-semibold transition-[background-color,transform] " +
+  "duration-150 ease-out active:scale-[0.98]";
+
 export default function TradeDialog({
   draft,
   onChange,
-  onClose,
+  onConfirm,
+  onCancel,
 }: {
   draft: TradeDraft;
   onChange: (next: TradeDraft) => void;
-  onClose: () => void;
+  /** Расчёт принят: окно закрывается, разметка остаётся на графике. */
+  onConfirm: () => void;
+  /** Отказ: сделка снимается с графика целиком. */
+  onCancel: () => void;
 }) {
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
-  // Escape закрывает: окно перекрывает график, и тянуться мышью к крестику
-  // посреди работы — лишнее движение.
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCancel();
+      if (event.key === "Enter") onConfirm();
     }
     document.addEventListener("keydown", onKey);
     firstFieldRef.current?.select();
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onCancel, onConfirm]);
 
   const side = sideForShelf(draft.shelf.side);
   const long = side === "long";
@@ -74,7 +89,7 @@ export default function TradeDialog({
   return (
     <div
       className="fixed inset-0 z-50 grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
-      onClick={onClose}
+      onClick={onCancel}
     >
       <div
         onClick={(event) => event.stopPropagation()}
@@ -99,8 +114,8 @@ export default function TradeDialog({
               {long ? "ЛОНГ" : "ШОРТ"}
             </span>
             <button
-              onClick={onClose}
-              title="Закрыть · Esc"
+              onClick={onCancel}
+              title="Отмена · Esc"
               className="text-text-muted transition-colors duration-150 ease-out hover:text-text-primary"
             >
               <X className="h-4 w-4" />
@@ -109,42 +124,36 @@ export default function TradeDialog({
         </div>
 
         <div className="grid grid-cols-3 gap-3 px-4 py-3">
-          <label className="block">
-            <span className="mb-1 block text-[11px] text-text-muted">Сумма, $</span>
-            <input
-              ref={firstFieldRef}
-              type="number"
-              min={1}
-              step="any"
-              value={draft.margin}
-              onChange={(e) => onChange({ ...draft, margin: Number(e.target.value) })}
-              className={FIELD}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[11px] text-text-muted">Плечо</span>
-            <input
-              type="number"
-              min={1}
-              max={MAX_LEVERAGE}
-              step={1}
-              value={draft.leverage}
-              onChange={(e) => onChange({ ...draft, leverage: Number(e.target.value) })}
-              className={FIELD}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[11px] text-text-muted">Стоп, %</span>
-            <input
-              type="number"
-              min={MIN_STOP_PCT}
-              max={MAX_STOP_PCT}
-              step={0.01}
-              value={draft.stopPct}
-              onChange={(e) => onChange({ ...draft, stopPct: Number(e.target.value) })}
-              className={FIELD}
-            />
-          </label>
+          <PickerField
+            label="Сумма, $"
+            value={draft.margin}
+            presets={MARGINS}
+            format={(v) => String(v)}
+            min={1}
+            step="any"
+            inputRef={firstFieldRef}
+            onPick={(margin) => onChange({ ...draft, margin })}
+          />
+          <PickerField
+            label="Плечо"
+            value={draft.leverage}
+            presets={LEVERAGES}
+            format={(v) => `x${v}`}
+            min={1}
+            max={MAX_LEVERAGE}
+            step={1}
+            onPick={(leverage) => onChange({ ...draft, leverage })}
+          />
+          <PickerField
+            label="Стоп, %"
+            value={draft.stopPct}
+            presets={STOPS}
+            format={(v) => `${v}%`}
+            min={MIN_STOP_PCT}
+            max={MAX_STOP_PCT}
+            step={0.01}
+            onPick={(stopPct) => onChange({ ...draft, stopPct })}
+          />
         </div>
 
         {plan ? (
@@ -189,7 +198,102 @@ export default function TradeDialog({
             Введите сумму, плечо и стоп — расчёт появится здесь
           </p>
         )}
+
+        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+          <button onClick={onCancel} className={`${BUTTON} text-text-muted hover:text-text-primary`}>
+            Отмена
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!plan}
+            className={`${BUTTON} ${
+              long ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+            } disabled:opacity-40`}
+          >
+            Войти
+          </button>
+        </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Поле с готовыми значениями.
+ *
+ * Список раскрывается по нажатию на само поле: это одно движение вместо
+ * отдельной кнопки рядом. Ввести своё число можно там же — поле остаётся
+ * обычным полем ввода.
+ */
+function PickerField({
+  label,
+  value,
+  presets,
+  format,
+  onPick,
+  min,
+  max,
+  step,
+  inputRef,
+}: {
+  label: string;
+  value: number;
+  presets: number[];
+  format: (value: number) => string;
+  onPick: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number | "any";
+  inputRef?: React.RefObject<HTMLInputElement>;
+}) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // Закрытие по клику мимо: список перекрывает расчёт, и оставлять его висеть,
+  // пока трейдер смотрит цифры, нельзя.
+  useEffect(() => {
+    if (!open) return;
+    function onDown(event: MouseEvent) {
+      if (!boxRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  return (
+    <div ref={boxRef} className="relative">
+      <span className="mb-1 block text-[11px] text-text-muted">{label}</span>
+      <input
+        ref={inputRef}
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
+        onChange={(e) => onPick(Number(e.target.value))}
+        className={FIELD}
+      />
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-auto rounded border border-border bg-bg-panel py-1 shadow-xl">
+          {presets.map((preset) => (
+            <button
+              key={preset}
+              onClick={() => {
+                onPick(preset);
+                setOpen(false);
+              }}
+              className={`block w-full px-2 py-1 text-right font-mono text-[12px] transition-colors duration-150 ease-out hover:bg-accent-cyan/10 ${
+                preset === value ? "text-accent-cyan" : "text-text-secondary"
+              }`}
+            >
+              {format(preset)}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

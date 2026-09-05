@@ -113,6 +113,22 @@ type Options = {
   shelf: number;
 };
 
+// Последний список монет держим в сессии вкладки: при возврате в раздел он
+// показывается сразу, а не через секунду ожидания первого кадра. Данные в нём
+// секундной давности — для выбора инструмента этого достаточно, а живые цифры
+// приезжают следом.
+const SCREENER_CACHE = "nmnh.scalping.screener";
+
+function cachedScreener(): ScreenerRow[] {
+  try {
+    const raw = sessionStorage.getItem(SCREENER_CACHE);
+    const rows = raw ? JSON.parse(raw) : null;
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
 export function useScalpingFeed({ symbol, rows, agg, sort, shelf }: Options) {
   const [screener, setScreener] = useState<ScreenerRow[]>([]);
   const [dom, setDom] = useState<DomFrame | null>(null);
@@ -129,6 +145,12 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf }: Options) {
   const send = useCallback((message: object) => {
     const ws = socketRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+  }, []);
+
+  // Пока идёт первое подключение, показываем прошлый список.
+  useEffect(() => {
+    const cached = cachedScreener();
+    if (cached.length > 0) setScreener((current) => (current.length > 0 ? current : cached));
   }, []);
 
   useEffect(() => {
@@ -168,6 +190,11 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf }: Options) {
         if (message.event === "screener") {
           const payload = message.payload as { rows: ScreenerRow[] };
           setScreener(payload.rows ?? []);
+          try {
+            sessionStorage.setItem(SCREENER_CACHE, JSON.stringify(payload.rows ?? []));
+          } catch {
+            // Приватное окно — переживём без кэша.
+          }
         } else if (message.event === "dom") {
           setDom(message.payload as DomFrame);
         }

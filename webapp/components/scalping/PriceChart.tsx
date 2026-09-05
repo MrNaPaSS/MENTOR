@@ -38,7 +38,7 @@ import {
   type Shapes,
 } from "./primitives/ShapesPrimitive";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
-import { loadTrades } from "@/lib/journal";
+import { loadCalendar, loadTrades } from "@/lib/journal";
 import {
   pendingTargets,
   pnlAt,
@@ -383,6 +383,9 @@ export default function PriceChart({
   const [entryY, setEntryY] = useState<number | null>(null);
   const [priceY, setPriceY] = useState<number | null>(null);
   const [countdown, setCountdown] = useState("");
+  // Результат за сегодня по журналу. null — журнал недоступен: ученик не вошёл
+  // в кабинет, и показывать ему чужой ноль незачем.
+  const [todayPnl, setTodayPnl] = useState<number | null>(null);
   const livePriceRef = useRef(livePrice);
   livePriceRef.current = livePrice;
 
@@ -967,6 +970,25 @@ export default function PriceChart({
     };
   }, [showJournal, journalKey, symbol, interval]);
 
+  // Итог дня из журнала. Перечитываем после каждой записанной сделки: цифра в
+  // углу должна отвечать на «сколько я сегодня», а не «сколько было на входе».
+  useEffect(() => {
+    let cancelled = false;
+    const now = new Date();
+    loadCalendar(now.getUTCFullYear(), now.getUTCMonth() + 1)
+      .then((body) => {
+        if (cancelled || !body) return;
+        const today = now.toISOString().slice(0, 10);
+        setTodayPnl(body.days.find((d) => d.date === today)?.pnl ?? 0);
+      })
+      .catch(() => {
+        // Журнал недоступен — угол просто останется пустым.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [journalKey]);
+
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.
   useEffect(() => {
@@ -1048,6 +1070,17 @@ export default function PriceChart({
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* Итог дня: одна цифра в углу. Всё остальное — в журнале. */}
+      {todayPnl !== null && (
+        <div className="pointer-events-none absolute right-16 top-1 z-10 font-mono text-[11px] tabular-nums">
+          <span className="text-[var(--pane-muted)]">PnL сегодня </span>
+          <span className={todayPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
+            {todayPnl >= 0 ? "+" : "−"}
+            {Math.abs(todayPnl).toFixed(2)} $
+          </span>
         </div>
       )}
 
