@@ -39,14 +39,6 @@ export type ShapeSegment = {
   color: string;
   dashed: boolean;
   label?: string;
-  /**
-   * Где стоит подпись: по центру отрезка или у его правого конца.
-   *
-   * Для структуры центр правильный — линия короткая и подпись к ней привязана.
-   * Полка тянется во всю ширину, и подпись по центру повисла бы посреди свечей;
-   * у правого края она читается как метка уровня.
-   */
-  labelAt?: "center" | "end";
 };
 
 export type ShapePoint = {
@@ -127,26 +119,9 @@ class ShapesRenderer implements IPrimitivePaneRenderer {
           context.fillStyle = segment.color;
           context.font = FONT;
           context.textBaseline = "bottom";
-          if (segment.labelAt === "end") {
-            context.textAlign = "right";
-            const right = segment.x2 * hx - LABEL_PADDING * hx;
-            // Подложка под текстом: подпись стоит у правого края поверх свечей,
-            // и без неё цифры сливаются с телом бара.
-            const width = context.measureText(segment.label).width;
-            const height = 12 * vy;
-            context.fillStyle = "rgba(11, 14, 17, 0.85)";
-            context.fillRect(
-              right - width - 3 * hx,
-              y - height - 2 * vy,
-              width + 6 * hx,
-              height,
-            );
-            context.fillStyle = segment.color;
-            context.fillText(segment.label, right, y - 3 * vy);
-          } else {
-            context.textAlign = "center";
-            context.fillText(segment.label, ((segment.x1 + segment.x2) / 2) * hx, y - 2 * vy);
-          }
+          context.textAlign = "center";
+          // Подпись по центру линии: так её видно и когда линия короткая.
+          context.fillText(segment.label, ((segment.x1 + segment.x2) / 2) * hx, y - 2 * vy);
           context.textAlign = "left";
         }
       }
@@ -218,8 +193,9 @@ class ShapesPaneView implements IPrimitivePaneView {
     return new ShapesRenderer(this.ready);
   }
 
+  /** Под свечами: фигуры — это контекст, а не сами данные. */
   zOrder() {
-    return this.source.zOrderValue;
+    return "bottom" as const;
   }
 }
 
@@ -230,13 +206,6 @@ export class ShapesPrimitive implements ISeriesPrimitive<Time> {
 
   private readonly view = new ShapesPaneView(this);
   private requestUpdate?: () => void;
-
-  /**
-   * Структура и блоки идут под свечами: это контекст, а не сами данные.
-   * Полкам нужен верх — их подписи стоят у правого края, где как раз свечи, и
-   * снизу они оказывались за ними.
-   */
-  constructor(readonly zOrderValue: "bottom" | "top" = "bottom") {}
 
   attached(param: SeriesAttachedParameter<Time>) {
     this.chart = param.chart;
