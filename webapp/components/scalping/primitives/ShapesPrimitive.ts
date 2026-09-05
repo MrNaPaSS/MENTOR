@@ -90,7 +90,6 @@ export type Shapes = {
 export const EMPTY_SHAPES: Shapes = { bands: [], boxes: [], segments: [], points: [] };
 
 const FONT = "10px ui-monospace, monospace";
-const LABEL_PADDING = 4;
 
 type Ready = {
   bands: { xs: number[]; tops: number[]; bottoms: number[]; band: ShapeBand }[];
@@ -152,10 +151,15 @@ class ShapesRenderer implements IPrimitivePaneRenderer {
           context.strokeRect(x, y, w, h);
         }
         if (box.label) {
+          // По центру бокса, а не в углу: у края подпись сливается с соседними
+          // фигурами, а в середине она однозначно про этот прямоугольник.
           context.fillStyle = box.labelColor ?? "#B7BDC6";
           context.font = FONT;
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.fillText(box.label, x + w / 2, y + h / 2);
+          context.textAlign = "left";
           context.textBaseline = "top";
-          context.fillText(box.label, x + LABEL_PADDING, y + LABEL_PADDING);
         }
       }
 

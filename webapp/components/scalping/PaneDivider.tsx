@@ -12,21 +12,25 @@ import { useRef } from "react";
 export default function PaneDivider({
   onResize,
   title,
+  horizontal = false,
 }: {
-  onResize: (deltaX: number) => void;
+  /** Смещение указателя: по X у вертикального разделителя, по Y у поперечного. */
+  onResize: (delta: number) => void;
   title: string;
+  /** Поперечный разделитель — тянет по высоте, а не по ширине. */
+  horizontal?: boolean;
 }) {
-  const lastX = useRef(0);
+  const last = useRef(0);
   const dragging = useRef(false);
 
   return (
     <div
       role="separator"
-      aria-orientation="vertical"
+      aria-orientation={horizontal ? "horizontal" : "vertical"}
       title={title}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
-        lastX.current = e.clientX;
+        last.current = horizontal ? e.clientY : e.clientX;
         dragging.current = true;
         // Пока тянем, текст выделяться не должен — иначе перетаскивание
         // превращается в выделение таблицы.
@@ -34,8 +38,9 @@ export default function PaneDivider({
       }}
       onPointerMove={(e) => {
         if (!dragging.current) return;
-        const delta = e.clientX - lastX.current;
-        lastX.current = e.clientX;
+        const point = horizontal ? e.clientY : e.clientX;
+        const delta = point - last.current;
+        last.current = point;
         if (delta !== 0) onResize(delta);
       }}
       onPointerUp={(e) => {
@@ -48,9 +53,17 @@ export default function PaneDivider({
         document.body.style.userSelect = "";
       }}
       onDoubleClick={() => onResize(Number.NaN)}   // сброс к ширине по умолчанию
-      className="hidden w-2 shrink-0 cursor-col-resize touch-none items-center justify-center xl:flex"
+      className={
+        horizontal
+          ? "flex h-2 shrink-0 cursor-row-resize touch-none items-center justify-center"
+          : "hidden w-2 shrink-0 cursor-col-resize touch-none items-center justify-center xl:flex"
+      }
     >
-      <span className="h-10 w-[3px] rounded-full bg-border transition-colors duration-150 ease-out hover:bg-accent-cyan/60" />
+      <span
+        className={`rounded-full bg-border transition-colors duration-150 ease-out hover:bg-accent-cyan/60 ${
+          horizontal ? "h-[3px] w-10" : "h-10 w-[3px]"
+        }`}
+      />
     </div>
   );
 }

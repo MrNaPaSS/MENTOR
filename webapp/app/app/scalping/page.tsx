@@ -115,13 +115,14 @@ const CHIP_OFF = "text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
 // раздела убран — он занимал полсотни пикселей и не нёс ничего, чего не видно
 // по самим панелям. Стакан и график получают одинаковую высоту и заканчиваются
 // на одной линии, иначе под коротким из них остаётся пустота.
-// Высота рабочей области. Журнал раскрывается снизу и забирает своё место:
-// накрывать им график нельзя — сделки сверяют именно с ним.
-const JOURNAL_H = 300;
+// Высота журнала: раскрывается снизу и забирает своё место у панелей.
+// Накрывать им график нельзя — сделки сверяют именно с ним, — но и разбирать
+// месяц сделок в трёхстах пикселях невозможно, поэтому высота тянется.
+const JOURNAL_LIMITS = { def: 300, min: 180, max: 900 };
 
-function paneHeight(journalOpen: boolean): React.CSSProperties {
+function paneHeight(journalOpen: boolean, journalH: number): React.CSSProperties {
   return journalOpen
-    ? { height: `calc(100vh - ${124 + JOURNAL_H + 12}px)`, minHeight: 300 }
+    ? { height: `calc(100vh - ${124 + journalH + 20}px)`, minHeight: 220 }
     : { height: "calc(100vh - 124px)", minHeight: 520 };
 }
 
@@ -166,6 +167,7 @@ type Workspace = {
   shelf: number;
   margin: number;
   leverage: number;
+  journal: number;
 };
 
 function readWorkspace(): Partial<Workspace> | null {
@@ -192,6 +194,7 @@ export default function ScalpingPage() {
   // считает результат, после стопа или последней цели закрывается сама.
   const [trade, setTrade] = useState<ActiveTrade | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
+  const [journalH, setJournalH] = useState(JOURNAL_LIMITS.def);
   // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
   const [journalKey, setJournalKey] = useState(0);
   const savedTradeRef = useRef<string | null>(null);
@@ -244,6 +247,9 @@ export default function ScalpingPage() {
     // в каждой сделке незачем.
     if (typeof saved.margin === "number" && saved.margin > 0) setMargin(saved.margin);
     if (typeof saved.leverage === "number" && saved.leverage >= 1) setLeverage(saved.leverage);
+    if (typeof saved.journal === "number") {
+      setJournalH(clamp(saved.journal, JOURNAL_LIMITS));
+    }
   }, []);
 
   useEffect(() => {
@@ -277,6 +283,7 @@ export default function ScalpingPage() {
       shelf,
       margin,
       leverage,
+      journal: journalH,
     } satisfies Workspace;
 
     try {
@@ -306,12 +313,21 @@ export default function ScalpingPage() {
     shelf,
     margin,
     leverage,
+    journalH,
   ]);
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
   function resizeScreener(delta: number) {
     setScreenerW((w) =>
       Number.isNaN(delta) ? PANE_LIMITS.screener.def : clamp(w + delta, PANE_LIMITS.screener),
+    );
+  }
+
+  // Тянем за верхний край журнала: вниз — журнал меньше, вверх — больше,
+  // поэтому знак смещения обратный.
+  function resizeJournal(delta: number) {
+    setJournalH((h) =>
+      Number.isNaN(delta) ? JOURNAL_LIMITS.def : clamp(h - delta, JOURNAL_LIMITS),
     );
   }
 
@@ -477,7 +493,7 @@ export default function ScalpingPage() {
 
   // Класс темы для рабочих панелей: стакан и график светлеют вместе.
   const pane = theme === "light" ? "pane-light" : "pane-dark";
-  const paneStyle = paneHeight(journalOpen);
+  const paneStyle = paneHeight(journalOpen, journalH);
 
   return (
     <div>
@@ -735,16 +751,23 @@ export default function ScalpingPage() {
       </div>
 
       {journalOpen && (
-        <section
-          className={`${pane} mt-3 overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]`}
-          style={{ height: JOURNAL_H }}
-        >
-          <JournalPanel
-            symbol={symbol ?? undefined}
-            refreshKey={journalKey}
-            onClose={() => setJournalOpen(false)}
+        <>
+          <PaneDivider
+            onResize={resizeJournal}
+            title="Высота журнала · двойной клик сбрасывает"
+            horizontal
           />
-        </section>
+          <section
+            className={`${pane} overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]`}
+            style={{ height: journalH }}
+          >
+            <JournalPanel
+              symbol={symbol ?? undefined}
+              refreshKey={journalKey}
+              onClose={() => setJournalOpen(false)}
+            />
+          </section>
+        </>
       )}
 
       {dialogOpen && draft && (

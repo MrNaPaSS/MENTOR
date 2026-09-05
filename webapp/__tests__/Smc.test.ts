@@ -240,10 +240,8 @@ describe("сборка фигур для графика", () => {
   it("блоки и разрывы подписаны — их не отличить по форме", () => {
     const shapes = buildShapes(smc, lastTime, { ...SHAPE_DEFAULTS, zones: false });
     const labels = new Set(shapes.boxes.map((b) => b.label));
-    // Блок подписан своей ролью: поддержка снизу, сопротивление сверху.
-    expect(
-      labels.has("FVG") || labels.has("поддержка") || labels.has("сопротивление"),
-    ).toBe(true);
+    // Ордер-блок подписан OB, разрыв — FVG; роль блока читается по цвету.
+    expect(labels.has("FVG") || labels.has("OB")).toBe(true);
   });
 
   it("структура превращается в отрезки и подписи", () => {
