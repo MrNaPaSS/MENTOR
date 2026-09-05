@@ -26,6 +26,10 @@ class FakeExchange:
     async def balance(self, margin_coin: str = "USDT"):
         return {"available": "1000"}
 
+    async def symbol_filters(self, symbol: str):
+        # Как у BTCUSDT на бирже: шаг лота четыре знака, шаг цены десятая.
+        return {"step": 0.0001, "tick": 0.1, "min_qty": 0.0001}
+
     async def positions(self):
         return []
 
@@ -132,10 +136,44 @@ def test_open_sends_stop_together_with_entry(app_and_exchange):
     assert res.status_code == 200
     entry = exchange.orders[0]
     assert entry["symbol"] == "BTCUSDT"
+    assert entry["quantity"] == "0.5"        # уже приведён к шагу лота
     assert entry["side"] == "BUY"
     assert entry["order_type"] == "MARKET"
     assert entry["sl_trigger"] == "79000"
     assert exchange.leverage == ("BTCUSDT", 10)
+
+
+def test_order_size_is_floored_to_the_lot_step(app_and_exchange):
+    """Объём не кратный шагу биржа отклоняет: код -1054."""
+    client, exchange, _ = app_and_exchange
+    client.post(
+        "/api/trading/open",
+        json={
+            "symbol": "BTCUSDT",
+            "side": "long",
+            "quantity": 0.2506265664,
+            "leverage": 400,
+            "stop": 79000,
+            "takes": [],
+        },
+    )
+    assert exchange.orders[0]["quantity"] == "0.2506"
+
+
+def test_too_small_order_is_rejected_before_the_exchange(app_and_exchange):
+    client, exchange, _ = app_and_exchange
+    res = client.post(
+        "/api/trading/open",
+        json={
+            "symbol": "BTCUSDT",
+            "side": "long",
+            "quantity": 0.00001,
+            "leverage": 10,
+            "stop": 79000,
+        },
+    )
+    assert res.status_code == 422
+    assert exchange.orders == []          # на биржу ничего не ушло
 
 
 def test_takes_are_reduce_only_and_split_the_volume(app_and_exchange):

@@ -192,3 +192,53 @@ def test_market_order_does_not_invent_time_in_force():
         )
     )
     assert "timeInForce" not in sent
+
+
+# ── шаги инструмента ─────────────────────────────────────────────────────────
+
+def test_quantity_is_floored_to_the_lot_step():
+    """Биржа отклоняет объём не кратный шагу: код -1054."""
+    from core.weex.futures import floor_to_step
+
+    assert floor_to_step(0.2506265664, 0.0001) == 0.2506
+    assert floor_to_step(0.3, 0.1) == 0.3          # без двоичного хвоста
+    assert floor_to_step(7.9, 1) == 7.0
+    assert floor_to_step(0.00005, 0.0001) == 0.0   # меньше шага — нечего слать
+    assert floor_to_step(-1, 0.1) == 0.0
+
+
+def test_quantity_rounds_down_and_never_up():
+    """Вверх нельзя: это увеличило бы позицию и риск, о котором не просили."""
+    from core.weex.futures import floor_to_step
+
+    assert floor_to_step(0.19999, 0.1) == 0.1
+
+
+def test_price_snaps_to_the_tick_without_binary_tail():
+    from core.weex.futures import round_to_tick
+
+    assert round_to_tick(79812.37, 0.1) == 79812.4
+    assert round_to_tick(1.23456, 0.0001) == 1.2346
+    assert round_to_tick(0, 0.1) == 0
+
+
+def test_filters_are_read_from_either_shape_of_answer():
+    from core.weex.futures import _parse_filters
+
+    binance_like = _parse_filters(
+        {
+            "symbol": "BTCUSDT",
+            "filters": [
+                {"filterType": "LOT_SIZE", "stepSize": "0.0001", "minQty": "0.0001"},
+                {"filterType": "PRICE_FILTER", "tickSize": "0.1"},
+            ],
+        }
+    )
+    assert binance_like == {"step": 0.0001, "tick": 0.1, "min_qty": 0.0001}
+
+    by_precision = _parse_filters(
+        {"symbol": "ETHUSDT", "quantityPrecision": 3, "pricePrecision": 2}
+    )
+    assert by_precision["step"] == 0.001 and by_precision["tick"] == 0.01
+
+    assert _parse_filters({"symbol": "X"}) is None

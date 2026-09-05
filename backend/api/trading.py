@@ -27,7 +27,13 @@ from backend.deps import get_current_student, get_session
 from core.models import LiveTrade, Student, WeexCredential, utcnow
 from core.trading.position import Position, breakeven_price, should_move_stop
 from core.weex import keys as keystore
-from core.weex.futures import Credentials, WeexFutures, WeexTradeError
+from core.weex.futures import (
+    Credentials,
+    WeexFutures,
+    WeexTradeError,
+    floor_to_step,
+    round_to_tick,
+)
 
 router = APIRouter(prefix="/api/trading", tags=["trading"])
 logger = logging.getLogger("nmnh.trading")
@@ -116,9 +122,15 @@ def _require_client(session, student: Student) -> WeexFutures:
 
 
 def _fail(exc: WeexTradeError) -> HTTPException:
-    """Отказ биржи наружу отдаём как есть: трейдеру нужно знать причину."""
+    """Отказ биржи наружу отдаём как есть: трейдеру нужно знать причину.
+
+    Отказ по существу — это 400, а не 502: шлюз ни при чём, не подошли данные
+    ордера. Заодно 502 от приложения браузер и прокси разбирают по-разному, и
+    сообщение биржи до трейдера не доезжало.
+    """
     logger.warning("WEEX отказал: %s (код %s)", exc, exc.code)
-    return HTTPException(502, f"Биржа: {exc}")
+    status = 502 if exc.retryable else 400
+    return HTTPException(status, f"Биржа: {exc}")
 
 
 @router.get("/status")
@@ -225,6 +237,19 @@ async def open_position(
     long = body.side == "long"
     position_side = "LONG" if long else "SHORT"
 
+    # Объём и цены приводим к шагам инструмента до отправки. Биржа отклоняет
+    # ордер, если объём не кратен шагу лота: «order size must match stepSize».
+    filters = await client.symbol_filters(symbol)
+    quantity = floor_to_step(body.quantity, filters["step"])
+    if quantity < filters["min_qty"]:
+        raise HTTPException(
+            422,
+            f"Объём {body.quantity:g} меньше минимального на бирже "
+            f"({filters['min_qty']:g} {symbol[:-4]}). Увеличьте сумму или плечо.",
+        )
+    entry_price = round_to_tick(body.entry, filters["tick"]) if body.entry else None
+    stop_price = round_to_tick(body.stop, filters["tick"])
+
     try:
         await client.set_leverage(symbol, body.leverage)
 
@@ -232,10 +257,10 @@ async def open_position(
             symbol=symbol,
             side="BUY" if long else "SELL",
             position_side=position_side,
-            quantity=_num(body.quantity),
-            order_type="LIMIT" if body.entry else "MARKET",
-            price=_num(body.entry) if body.entry else None,
-            sl_trigger=_num(body.stop),
+            quantity=_num(quantity),
+            order_type="LIMIT" if entry_price else "MARKET",
+            price=_num(entry_price) if entry_price else None,
+            sl_trigger=_num(stop_price),
             client_order_id=body.client_order_id,
         )
 
@@ -245,15 +270,17 @@ async def open_position(
         takes: list[Any] = []
         placed: list[dict[str, Any]] = []
         if body.takes:
-            share = body.quantity / len(body.takes)
-            for i, price in enumerate(body.takes):
+            # Доля цели тоже кратна шагу лота, иначе биржа отклонит уже её. Если
+            # доля не набирает даже одного шага, цели не ставим: дробить нечего.
+            share = floor_to_step(quantity / len(body.takes), filters["step"])
+            for i, price in enumerate(body.takes if share >= filters["min_qty"] else []):
                 order = await client.place_order(
                     symbol=symbol,
                     side="SELL" if long else "BUY",
                     position_side=position_side,
                     quantity=_num(share),
                     order_type="LIMIT",
-                    price=_num(price),
+                    price=_num(round_to_tick(price, filters["tick"])),
                     reduce_only=True,
                     time_in_force="GTC",
                     client_order_id=f"{body.client_order_id}_tp{i + 1}"
@@ -284,14 +311,14 @@ async def open_position(
         session.add(live)
     live.symbol = symbol
     live.side = body.side
-    live.entry = body.entry or 0.0
-    live.initial_stop = body.stop
-    live.current_stop = body.stop
+    live.entry = entry_price or 0.0
+    live.initial_stop = stop_price
+    live.current_stop = stop_price
     live.targets_json = json.dumps(body.takes)
     live.tp_orders_json = json.dumps(placed, ensure_ascii=False)
-    live.qty = body.quantity
+    live.qty = quantity
     live.leverage = body.leverage
-    live.margin = body.quantity * (body.entry or 0.0) / max(1, body.leverage)
+    live.margin = quantity * (entry_price or 0.0) / max(1, body.leverage)
     live.takes_hit = 0
     live.status = "waiting"
     live.sl_order_id = ""

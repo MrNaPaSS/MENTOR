@@ -47,8 +47,90 @@ ENDPOINTS = {
     "algo_orders": "/capi/v3/openAlgoOrders",
     "cancel_algo": "/capi/v3/algoOpenOrders",
     "user_trades": "/capi/v3/userTrades",
+    "exchange_info": "/capi/v3/market/exchangeInfo",
     "time": "/capi/v3/market/time",
 }
+
+# Шаги инструмента, если биржа их не отдала. Не догадка: столько же стоит в
+# боте заказчика как DEFAULT. Но живые шаги всегда важнее — они меняются, и на
+# BTC биржа уже отвечает 0.0001 там, где в таблице записано 0.001.
+DEFAULT_FILTERS = {"step": 0.001, "tick": 0.01, "min_qty": 0.001}
+
+# Кэш на процесс: состав инструментов меняется раз в месяцы, а запрос тяжёлый.
+_FILTERS: dict[str, dict[str, float]] = {}
+
+
+def floor_to_step(value: float, step: float) -> float:
+    """Округлить объём вниз до шага лота.
+
+    Вниз, а не к ближайшему: округление вверх увеличивает позицию, а значит и
+    риск, о котором трейдер не просил, и может не пройти по марже.
+
+    Считаем в целых шагах: 0.1 + 0.2 в двоичной дроби даёт 0.30000000000000004,
+    и деление такой величины на шаг промахивается мимо целого.
+    """
+    if not (value > 0) or not (step > 0):
+        return 0.0
+    steps = int((value + step * 1e-9) / step)
+    return round(steps * step, _decimals(step))
+
+
+def round_to_tick(value: float, tick: float) -> float:
+    """Цену — к ближайшему шагу цены: она не про размер риска.
+
+    Результат округляем по числу знаков в самом шаге: умножение обратно на шаг
+    возвращает двоичный хвост (79812.40000000001), и биржа такую цену не берёт.
+    """
+    if not (value > 0) or not (tick > 0):
+        return value
+    return round(round(value / tick) * tick, _decimals(tick))
+
+
+def _decimals(step: float) -> int:
+    """Сколько знаков после запятой в шаге."""
+    text = f"{step:.12f}".rstrip("0")
+    return len(text.split(".")[1]) if "." in text else 0
+
+
+def _parse_filters(row: dict[str, Any]) -> dict[str, float] | None:
+    """Шаги инструмента из ответа биржи.
+
+    Формат близок к бинансовскому, но не обязан совпадать до поля, поэтому
+    читаем и фильтры, и «точность в знаках» — что найдётся.
+    """
+    out: dict[str, float] = {}
+    for f in row.get("filters") or []:
+        kind = str(f.get("filterType") or "").upper()
+        if kind in ("LOT_SIZE", "MARKET_LOT_SIZE"):
+            out.setdefault("step", _f(f.get("stepSize")))
+            out.setdefault("min_qty", _f(f.get("minQty")))
+        elif kind == "PRICE_FILTER":
+            out.setdefault("tick", _f(f.get("tickSize")))
+
+    if not out.get("step"):
+        digits = row.get("quantityPrecision")
+        if digits is not None:
+            out["step"] = 10 ** -int(digits)
+    if not out.get("tick"):
+        digits = row.get("pricePrecision")
+        if digits is not None:
+            out["tick"] = 10 ** -int(digits)
+
+    if not out.get("step") and not out.get("tick"):
+        return None
+    return {
+        "step": out.get("step") or DEFAULT_FILTERS["step"],
+        "tick": out.get("tick") or DEFAULT_FILTERS["tick"],
+        "min_qty": out.get("min_qty") or out.get("step") or DEFAULT_FILTERS["min_qty"],
+    }
+
+
+def _f(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
 
 SIDES = {"BUY", "SELL"}
 POSITION_SIDES = {"LONG", "SHORT", "BOTH"}
@@ -190,6 +272,34 @@ class WeexFutures:
                 "isolatedShortLeverage": str(leverage),
             },
         )
+
+    async def symbol_filters(self, symbol: str) -> dict[str, float]:
+        """Шаг лота, шаг цены и минимальный объём инструмента.
+
+        Спрашиваем биржу, а не держим таблицу: инструментов в терминале полсотни,
+        и шаги у них меняются. Ответ кэшируется на процесс — состав меняется раз
+        в месяцы, а запрос тяжёлый.
+        """
+        sym = symbol.upper()
+        if sym in _FILTERS:
+            return _FILTERS[sym]
+
+        try:
+            data = await self._request("GET", ENDPOINTS["exchange_info"])
+        except WeexTradeError as exc:
+            logger.warning("Шаги инструментов не получены: %s", exc)
+            return DEFAULT_FILTERS
+
+        rows = data.get("symbols") if isinstance(data, dict) else data
+        for row in rows or []:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("symbol") or "").upper()
+            parsed = _parse_filters(row)
+            if name and parsed:
+                _FILTERS[name] = parsed
+
+        return _FILTERS.get(sym, DEFAULT_FILTERS)
 
     # ── ордера ──────────────────────────────────────────────────────────────
 
