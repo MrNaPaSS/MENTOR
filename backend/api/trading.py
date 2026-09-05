@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import json
 import logging
+import ssl
 from typing import Any
 
 import aiohttp
+import certifi
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -36,9 +38,18 @@ _session: aiohttp.ClientSession | None = None
 
 
 async def _get_session() -> aiohttp.ClientSession:
+    """Общая сессия с проверкой сертификата биржи.
+
+    Корневые сертификаты берём из certifi, а не из системного хранилища: на
+    Windows Python до него не достаёт, и запрос падает с «unable to get local
+    issuer certificate». Отключать проверку, как это сделано в партнёрском
+    клиенте, здесь нельзя — в этих запросах ходят ключи от денег ученика, и
+    подменённый сертификат означает, что их прочитает кто угодно по дороге.
+    """
     global _session
     if _session is None or _session.closed:
-        _session = aiohttp.ClientSession()
+        context = ssl.create_default_context(cafile=certifi.where())
+        _session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=context))
     return _session
 
 
