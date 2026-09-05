@@ -232,7 +232,7 @@ export default function PriceChart({
     // Полки живут отдельным примитивом: они приходят из стакана и меняются
     // своим темпом, а структура — из свечей и своим. Общий набор фигур
     // пересобирался бы восемь раз в секунду ради нескольких линий.
-    shelfShapesRef.current = new ShapesPrimitive();
+    shelfShapesRef.current = new ShapesPrimitive("top");
     candleRef.current.attachPrimitive(shelfShapesRef.current);
 
     chartRef.current = chart;
@@ -444,7 +444,7 @@ export default function PriceChart({
         labelAt: "end" as const,
       })),
     });
-  }, [shelfKey, cfg.shelves]);
+  }, [shelfKey, cfg.shelves, lastTimeRef.current]);
 
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.

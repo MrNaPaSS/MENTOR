@@ -129,7 +129,20 @@ class ShapesRenderer implements IPrimitivePaneRenderer {
           context.textBaseline = "bottom";
           if (segment.labelAt === "end") {
             context.textAlign = "right";
-            context.fillText(segment.label, segment.x2 * hx - LABEL_PADDING * hx, y - 2 * vy);
+            const right = segment.x2 * hx - LABEL_PADDING * hx;
+            // Подложка под текстом: подпись стоит у правого края поверх свечей,
+            // и без неё цифры сливаются с телом бара.
+            const width = context.measureText(segment.label).width;
+            const height = 12 * vy;
+            context.fillStyle = "rgba(11, 14, 17, 0.85)";
+            context.fillRect(
+              right - width - 3 * hx,
+              y - height - 2 * vy,
+              width + 6 * hx,
+              height,
+            );
+            context.fillStyle = segment.color;
+            context.fillText(segment.label, right, y - 3 * vy);
           } else {
             context.textAlign = "center";
             context.fillText(segment.label, ((segment.x1 + segment.x2) / 2) * hx, y - 2 * vy);
@@ -205,9 +218,8 @@ class ShapesPaneView implements IPrimitivePaneView {
     return new ShapesRenderer(this.ready);
   }
 
-  /** Под свечами: фигуры — это контекст, а не сами данные. */
   zOrder() {
-    return "bottom" as const;
+    return this.source.zOrderValue;
   }
 }
 
@@ -218,6 +230,13 @@ export class ShapesPrimitive implements ISeriesPrimitive<Time> {
 
   private readonly view = new ShapesPaneView(this);
   private requestUpdate?: () => void;
+
+  /**
+   * Структура и блоки идут под свечами: это контекст, а не сами данные.
+   * Полкам нужен верх — их подписи стоят у правого края, где как раз свечи, и
+   * снизу они оказывались за ними.
+   */
+  constructor(readonly zOrderValue: "bottom" | "top" = "bottom") {}
 
   attached(param: SeriesAttachedParameter<Time>) {
     this.chart = param.chart;
