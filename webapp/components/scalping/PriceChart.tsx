@@ -27,7 +27,14 @@ import {
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
 import { computeVision, DEFAULTS, type VisionSignal } from "@/lib/indicator/nmnhVision";
+import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
+import { buildShapes } from "@/lib/indicator/shapes";
 import { BandPrimitive, type BandPoint } from "./primitives/BandPrimitive";
+import {
+  EMPTY_SHAPES,
+  ShapesPrimitive,
+  type Shapes,
+} from "./primitives/ShapesPrimitive";
 import type { Wall } from "@/lib/scalping";
 
 /** Что показывает панель BM Score — те же четыре числа, что и в оригинале. */
@@ -61,8 +68,12 @@ export type Indicators = {
   vwap: boolean;
   /** NMNH VISION: трейлинг Chandelier Exit, метки BY↑/SL↓ и панель BM Score. */
   vision: boolean;
-  /** Сделки по объединённому сигналу: вход, стоп и три тейка по 1R/2R/3R. */
-  trades: boolean;
+  /** Структура рынка: BOS и CHoCH, подписи свингов. */
+  structure: boolean;
+  /** Ордер-блоки: три внутренних и два свинговых. */
+  blocks: boolean;
+  /** Разрывы справедливой цены и равные экстремумы. */
+  gaps: boolean;
 };
 
 // Текущая свеча меняется постоянно, закрытые — нет. Пять секунд держат график
@@ -147,12 +158,17 @@ export default function PriceChart({
   const markerDataRef = useRef<SeriesMarker<Time>[]>([]);
   const bandRef = useRef<BandPrimitive | null>(null);
   const bandDataRef = useRef<BandPoint[]>([]);
+  const shapesRef = useRef<ShapesPrimitive | null>(null);
+  const shapeDataRef = useRef<Shapes>(EMPTY_SHAPES);
+  // Результат структурного движка держим отдельно: переключатели меняют набор
+  // фигур, и пересчитывать структуру ради этого незачем.
+  const smcRef = useRef<SmcResult | null>(null);
+  const lastTimeRef = useRef(0);
   // Читаем настройки из ref: загрузка данных не должна зависеть от
   // переключателей, иначе включение индикатора перезапрашивало бы свечи.
   const indicatorsRef = useRef(indicators);
   indicatorsRef.current = indicators;
   const lineRef = useRef<IPriceLine | null>(null);
-  const tradeLinesRef = useRef<IPriceLine[]>([]);
   const dataRef = useRef<Candle[]>([]);
 
   // Панель BM Score рисуется поверх графика обычной разметкой: рисовать её на
@@ -166,7 +182,9 @@ export default function PriceChart({
       indicators.ema,
       indicators.vwap,
       indicators.vision,
-      indicators.trades,
+      indicators.structure,
+      indicators.blocks,
+      indicators.gaps,
     ],
   );
 
@@ -270,6 +288,11 @@ export default function PriceChart({
     bandRef.current = new BandPrimitive();
     candleRef.current.attachPrimitive(bandRef.current);
 
+    // Структура, ордер-блоки и разрывы: всё, что рисуется поверх свечей
+    // произвольными фигурами.
+    shapesRef.current = new ShapesPrimitive();
+    candleRef.current.attachPrimitive(shapesRef.current);
+
     chartRef.current = chart;
     return () => {
       chart.remove();
@@ -284,8 +307,8 @@ export default function PriceChart({
       shortStopRef.current = null;
       markersRef.current = null;
       bandRef.current = null;
+      shapesRef.current = null;
       lineRef.current = null;
-      tradeLinesRef.current = [];
     };
   }, []);
 
@@ -338,6 +361,20 @@ export default function PriceChart({
         ];
       });
       bandRef.current?.setPoints(indicatorsRef.current.vision ? bandDataRef.current : []);
+
+      // Структурная часть считается по тем же свечам одним проходом.
+      const smc = computeSmc(candles);
+      const cfgNow = indicatorsRef.current;
+      shapeDataRef.current = buildShapes(smc, candles[candles.length - 1]?.time ?? 0, {
+        structure: cfgNow.structure,
+        orderBlocks: cfgNow.blocks,
+        fvg: cfgNow.gaps,
+        equal: cfgNow.gaps,
+        zones: false,
+      });
+      shapesRef.current?.setShapes(shapeDataRef.current);
+      smcRef.current = smc;
+      lastTimeRef.current = candles[candles.length - 1]?.time ?? 0;
 
       markerDataRef.current = vision.signals.map((s) => ({
         time: s.time as UTCTimestamp,
@@ -418,42 +455,20 @@ export default function PriceChart({
     // пустой набор.
     markersRef.current?.setMarkers(cfg.vision ? markerDataRef.current : []);
     bandRef.current?.setPoints(cfg.vision ? bandDataRef.current : []);
+
+    // Фигуры пересобираем из уже посчитанной структуры: переключатель меняет
+    // только набор видимого, считать заново незачем.
+    if (smcRef.current) {
+      shapeDataRef.current = buildShapes(smcRef.current, lastTimeRef.current, {
+        structure: cfg.structure,
+        orderBlocks: cfg.blocks,
+        fvg: cfg.gaps,
+        equal: cfg.gaps,
+        zones: false,
+      });
+      shapesRef.current?.setShapes(shapeDataRef.current);
+    }
   }, [cfg]);
-
-  // Уровни последней сделки: вход, стоп от Chandelier Exit и три тейка по RR.
-  // Отдельным эффектом от данных — переключатель не должен дёргать загрузку.
-  useEffect(() => {
-    const series = candleRef.current;
-    if (!series) return;
-
-    for (const l of tradeLinesRef.current) series.removePriceLine(l);
-    tradeLinesRef.current = [];
-
-    const signal = panel?.signal;
-    if (!cfg.trades || !signal) return;
-
-    const isBuy = signal.side === "buy";
-    const levels: { price: number; color: string; title: string }[] = [
-      { price: signal.entry, color: "#EAECEF", title: isBuy ? "BUY" : "SELL" },
-      { price: signal.stop, color: CE_SHORT, title: "SL" },
-      ...signal.targets.map((price, i) => ({
-        price,
-        color: "#00C864",
-        title: `TP${i + 1} · ${DEFAULTS.rr[i]}R`,
-      })),
-    ];
-
-    tradeLinesRef.current = levels.map((l) =>
-      series.createPriceLine({
-        price: l.price,
-        color: l.color,
-        lineWidth: 1,
-        lineStyle: 2,
-        axisLabelVisible: true,
-        title: l.title,
-      }),
-    );
-  }, [cfg.trades, panel?.signal]);
 
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.

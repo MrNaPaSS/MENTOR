@@ -44,8 +44,10 @@ const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h"];
 
 const INDICATOR_LABELS: Record<keyof Indicators, string> = {
   vision: "VISION",
-  trades: "Сделки",
-  ema: "EMA 8/21/50",
+  structure: "Структура",
+  blocks: "Блоки",
+  gaps: "FVG",
+  ema: "EMA",
   volume: "Объём",
   vwap: "VWAP",
 };
@@ -82,12 +84,14 @@ export default function ScalpingPage() {
   const [agg, setAgg] = useState(10);
   const [rows, setRows] = useState(30);
   const [timeframe, setTimeframe] = useState("1m");
-  // Состояние повторяет рабочее пространство заказчика: линии Chandelier Exit
-  // и панель BM Score включены, а мастер-переключатель сделок («Показывать
-  // сигналы») у него выключен — боксы и уровни не рисуются, пока не включишь.
+  // Состояние повторяет рабочее пространство заказчика: включены коридор
+  // Chandelier Exit, структура, ордер-блоки и разрывы. VWAP в оригинале нет —
+  // он наш, поэтому по умолчанию выключен.
   const [indicators, setIndicators] = useState<Indicators>({
     vision: true,
-    trades: false,
+    structure: true,
+    blocks: true,
+    gaps: true,
     ema: true,
     volume: true,
     vwap: false,
