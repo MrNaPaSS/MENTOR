@@ -275,4 +275,26 @@ class ScalpWorkspace(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "utcnow"]
+class WeexCredential(Base):
+    """Торговые ключи ученика для WEEX.
+
+    Хранятся зашифрованными: мастер-ключ живёт в окружении сервера, в базе
+    лежит только шифротекст. Наружу ключ не отдаётся никогда — в интерфейс
+    уходит хвост из четырёх символов, чтобы ученик узнал свой ключ.
+    """
+
+    __tablename__ = "weex_credentials"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), unique=True, index=True)
+    api_key_enc: Mapped[str] = mapped_column(Text)
+    secret_enc: Mapped[str] = mapped_column(Text)
+    passphrase_enc: Mapped[str] = mapped_column(Text)
+    # Хвост ключа для показа владельцу: расшифровывать ради этого нечего.
+    key_tail: Mapped[str] = mapped_column(String(8), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "WeexCredential", "utcnow"]

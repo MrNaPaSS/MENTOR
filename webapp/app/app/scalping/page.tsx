@@ -235,6 +235,19 @@ export default function ScalpingPage() {
 
   const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort, shelf });
 
+  // Цена для графика — три раза в секунду вместо восьми. Ярлык позиции и итог
+  // сделки от этого не станут менее живыми, а перерисовку всего графика на
+  // каждом кадре стакана это снимает.
+  const [chartPrice, setChartPrice] = useState(0);
+  const midRef = useRef(0);
+  midRef.current = dom?.mid ?? 0;
+  useEffect(() => {
+    const id = setInterval(() => {
+      setChartPrice((current) => (current === midRef.current ? current : midRef.current));
+    }, 330);
+    return () => clearInterval(id);
+  }, []);
+
   // Рабочее место трейдера: ширины панелей, набор индикаторов, таймфрейм, шаг
   // и глубина стакана. Настроил один раз — и после перезагрузки всё на месте.
   //
@@ -803,7 +816,7 @@ export default function ScalpingPage() {
                   theme={theme}
                   indicators={indicators}
                   trade={trade && trade.symbol === symbol ? trade : null}
-                  livePrice={dom?.mid ?? 0}
+                  livePrice={chartPrice}
                   onCloseTrade={closeTrade}
                   showJournal={journalOpen}
                   journalKey={journalKey}

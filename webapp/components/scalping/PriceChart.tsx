@@ -10,7 +10,7 @@
 // запросов ради средней линии не делаем. Полки приходят из стакана: это
 // единственное на графике, что берётся не из истории цены, а из живой книги.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CandlestickSeries,
   ColorType,
@@ -316,7 +316,7 @@ function toLine(candles: Candle[], values: number[]) {
   return out;
 }
 
-export default function PriceChart({
+function PriceChart({
   symbol,
   interval,
   wall,
@@ -1162,3 +1162,8 @@ function LevelsStrip({
     </div>
   );
 }
+
+// Страница перерисовывается на каждом кадре стакана — восемь раз в секунду.
+// График к этому равнодушен только если его собственный рендер не запускается
+// впустую: сам холст живёт своей жизнью, а JSX вокруг него пересобирать незачем.
+export default memo(PriceChart);

@@ -75,9 +75,17 @@ export default function DomTrader({
   // Порядок колонок — от старой к свежей, поэтому свежая минута оказывается
   // вплотную к цене, а прошлое уходит влево. Пустые колонки пропускаем: пока
   // история набиралась, они съедали ширину, отведённую стакану.
+  // Кадр приходит восемь раз в секунду, и каждый раз это новые массивы. Но
+  // история объёмов меняется раз в минуту, поэтому пересобираем её только
+  // когда действительно изменился набор интервалов, а не при каждом кадре:
+  // иначе перестраивались бы все строки таблицы восемь раз в секунду.
+  const columnsKey = frame.clusters
+    .map((c) => `${c.start}:${c.cells.length}:${Math.round(c.buy + c.sell)}`)
+    .join("|");
   const columns = useMemo(
     () => frame.clusters.filter((c) => c.cells.length > 0),
-    [frame.clusters],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [columnsKey],
   );
   const cells = useMemo(() => indexCells(columns), [columns]);
 
