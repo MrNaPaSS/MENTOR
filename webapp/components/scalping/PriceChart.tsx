@@ -27,6 +27,7 @@ import {
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
 import { computeVision, DEFAULTS, type VisionSignal } from "@/lib/indicator/nmnhVision";
+import { BandPrimitive, type BandPoint } from "./primitives/BandPrimitive";
 import type { Wall } from "@/lib/scalping";
 
 /** Что показывает панель BM Score — те же четыре числа, что и в оригинале. */
@@ -144,6 +145,8 @@ export default function PriceChart({
   const shortStopRef = useRef<ISeriesApi<"Line"> | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const markerDataRef = useRef<SeriesMarker<Time>[]>([]);
+  const bandRef = useRef<BandPrimitive | null>(null);
+  const bandDataRef = useRef<BandPoint[]>([]);
   // Читаем настройки из ref: загрузка данных не должна зависеть от
   // переключателей, иначе включение индикатора перезапрашивало бы свечи.
   const indicatorsRef = useRef(indicators);
@@ -262,6 +265,11 @@ export default function PriceChart({
     // так видно, на каком баре сигнал возник.
     markersRef.current = createSeriesMarkers(candleRef.current, []);
 
+    // Заливка коридора между средней ценой бара и стопом — без неё стоп
+    // читается как ещё одна средняя, а не как граница движения.
+    bandRef.current = new BandPrimitive();
+    candleRef.current.attachPrimitive(bandRef.current);
+
     chartRef.current = chart;
     return () => {
       chart.remove();
@@ -275,6 +283,7 @@ export default function PriceChart({
       longStopRef.current = null;
       shortStopRef.current = null;
       markersRef.current = null;
+      bandRef.current = null;
       lineRef.current = null;
       tradeLinesRef.current = [];
     };
@@ -311,6 +320,24 @@ export default function PriceChart({
       shortStopRef.current?.setData(
         toStopLine(candles, vision.shortStop, vision.direction, -1),
       );
+
+      // Полоса строится от средней цены бара до активного стопа — как fill()
+      // между ohlc4 и линией стопа в оригинале.
+      bandDataRef.current = candles.flatMap((c, i) => {
+        const up = vision.direction[i] === 1;
+        const stop = up ? vision.longStop[i] : vision.shortStop[i];
+        if (!Number.isFinite(stop)) return [];
+        const mid = (c.open + c.high + c.low + c.close) / 4;
+        return [
+          {
+            time: c.time as UTCTimestamp,
+            upper: Math.max(mid, stop),
+            lower: Math.min(mid, stop),
+            up,
+          },
+        ];
+      });
+      bandRef.current?.setPoints(indicatorsRef.current.vision ? bandDataRef.current : []);
 
       markerDataRef.current = vision.signals.map((s) => ({
         time: s.time as UTCTimestamp,
@@ -387,8 +414,10 @@ export default function PriceChart({
     vwapRef.current?.applyOptions({ visible: cfg.vwap });
     longStopRef.current?.applyOptions({ visible: cfg.vision });
     shortStopRef.current?.applyOptions({ visible: cfg.vision });
-    // У плагина меток нет флага видимости — прячем, подставляя пустой набор.
+    // У плагина меток и у заливки нет флага видимости — прячем, подставляя
+    // пустой набор.
     markersRef.current?.setMarkers(cfg.vision ? markerDataRef.current : []);
+    bandRef.current?.setPoints(cfg.vision ? bandDataRef.current : []);
   }, [cfg]);
 
   // Уровни последней сделки: вход, стоп от Chandelier Exit и три тейка по RR.
