@@ -11,7 +11,6 @@
 
 import type {
   IChartApi,
-  Logical,
   IPrimitivePaneRenderer,
   IPrimitivePaneView,
   ISeriesApi,
@@ -60,18 +59,38 @@ export type ShapePoint = {
   above: boolean;
 };
 
+/** Точка ленты: у каждого бара своя верхняя и нижняя граница. */
+export type ShapeBandPoint = { time: Time; top: number; bottom: number };
+
+/**
+ * Лента: заливка между двумя линиями по барам.
+ *
+ * Прямоугольником такое не нарисовать — обе границы меняются на каждом баре.
+ * Обводится только та сторона, которая и есть уровень: у поддержки нижняя, у
+ * сопротивления верхняя. Вторая граница — средняя цена бара, линии там нет.
+ */
+export type ShapeBand = {
+  points: ShapeBandPoint[];
+  fill: string;
+  line?: string;
+  lineWidth?: number;
+  level: "top" | "bottom";
+};
+
 export type Shapes = {
+  bands: ShapeBand[];
   boxes: ShapeBox[];
   segments: ShapeSegment[];
   points: ShapePoint[];
 };
 
-export const EMPTY_SHAPES: Shapes = { boxes: [], segments: [], points: [] };
+export const EMPTY_SHAPES: Shapes = { bands: [], boxes: [], segments: [], points: [] };
 
 const FONT = "10px ui-monospace, monospace";
 const LABEL_PADDING = 4;
 
 type Ready = {
+  bands: { xs: number[]; tops: number[]; bottoms: number[]; band: ShapeBand }[];
   boxes: (ShapeBox & { x1: number; x2: number; y1: number; y2: number })[];
   segments: (ShapeSegment & { x1: number; x2: number; y: number })[];
   points: (ShapePoint & { x: number; y: number })[];
@@ -92,6 +111,29 @@ class ShapesRenderer implements IPrimitivePaneRenderer {
     target.useBitmapCoordinateSpace(({ context, horizontalPixelRatio, verticalPixelRatio }) => {
       const hx = horizontalPixelRatio;
       const vy = verticalPixelRatio;
+
+      // Лента идёт первой: она фон для всего остального.
+      for (const { xs, tops, bottoms, band } of this.ready.bands) {
+        if (xs.length < 2) continue;
+        context.beginPath();
+        context.moveTo(xs[0] * hx, tops[0] * vy);
+        for (let i = 1; i < xs.length; i++) context.lineTo(xs[i] * hx, tops[i] * vy);
+        for (let i = xs.length - 1; i >= 0; i--) context.lineTo(xs[i] * hx, bottoms[i] * vy);
+        context.closePath();
+        context.fillStyle = band.fill;
+        context.fill();
+
+        if (band.line) {
+          const edge = band.level === "top" ? tops : bottoms;
+          context.beginPath();
+          context.moveTo(xs[0] * hx, edge[0] * vy);
+          for (let i = 1; i < xs.length; i++) context.lineTo(xs[i] * hx, edge[i] * vy);
+          context.strokeStyle = band.line;
+          context.lineWidth = (band.lineWidth ?? 2) * hx;
+          context.stroke();
+          context.lineWidth = 1;
+        }
+      }
 
       for (const box of this.ready.boxes) {
         const x = box.x1 * hx;
@@ -153,7 +195,7 @@ class ShapesRenderer implements IPrimitivePaneRenderer {
 }
 
 class ShapesPaneView implements IPrimitivePaneView {
-  private ready: Ready = { boxes: [], segments: [], points: [] };
+  private ready: Ready = { bands: [], boxes: [], segments: [], points: [] };
 
   constructor(private readonly source: ShapesPrimitive) {}
 
@@ -161,17 +203,35 @@ class ShapesPaneView implements IPrimitivePaneView {
     const chart = this.source.chart;
     const series = this.source.series;
     if (!chart || !series) {
-      this.ready = { boxes: [], segments: [], points: [] };
+      this.ready = { bands: [], boxes: [], segments: [], points: [] };
       return;
     }
 
     const scale = chart.timeScale();
-    // Правый край окна: координата последней видимой позиции. Считаем один раз
-    // на перерисовку — у фигур, тянущихся вправо, он общий.
-    const range = scale.getVisibleLogicalRange();
-    const edge = range ? scale.logicalToCoordinate(range.to as Logical) : null;
+    // Правый край — это край самой области графика в пикселях, а не координата
+    // последнего бара. Считать по барам нельзя: стоит отмотать историю назад, и
+    // «последний бар» оказывается правее экрана, а фигура рисуется от него
+    // влево через весь график.
+    const edge = scale.width();
     const x = (t: ShapeEnd) => (t === "edge" ? edge : scale.timeToCoordinate(t));
     const y = (p: number) => series.priceToCoordinate(p);
+
+    const bands: Ready["bands"] = [];
+    for (const band of this.source.shapes.bands) {
+      const xs: number[] = [];
+      const tops: number[] = [];
+      const bottoms: number[] = [];
+      for (const point of band.points) {
+        const px = x(point.time);
+        const yTop = y(point.top);
+        const yBottom = y(point.bottom);
+        if (px === null || yTop === null || yBottom === null) continue;
+        xs.push(px);
+        tops.push(yTop);
+        bottoms.push(yBottom);
+      }
+      if (xs.length >= 2) bands.push({ xs, tops, bottoms, band });
+    }
 
     const boxes: Ready["boxes"] = [];
     for (const box of this.source.shapes.boxes) {
@@ -180,6 +240,10 @@ class ShapesPaneView implements IPrimitivePaneView {
       const y1 = y(box.top);
       const y2 = y(box.bottom);
       if (x1 === null || x2 === null || y1 === null || y2 === null) continue;
+      // Бокс с отрицательной шириной канва рисует зеркально — влево от начала.
+      // Это тот самый случай, когда история отмотана и левый край фигуры ушёл
+      // правее экрана: рисовать нечего.
+      if (x2 <= x1) continue;
       boxes.push({ ...box, x1, x2, y1, y2 });
     }
 
@@ -200,7 +264,7 @@ class ShapesPaneView implements IPrimitivePaneView {
       points.push({ ...p, x: xx, y: yy });
     }
 
-    this.ready = { boxes, segments, points };
+    this.ready = { bands, boxes, segments, points };
   }
 
   renderer() {

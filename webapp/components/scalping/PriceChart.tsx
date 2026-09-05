@@ -28,6 +28,7 @@ import {
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
 import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
+import { computeChandelier, type ChandelierResult } from "@/lib/indicator/chandelier";
 import { atr, ema } from "@/lib/indicator/ta";
 import type { Candle } from "@/lib/indicator/types";
 import { buildShapes, type ChartTheme } from "@/lib/indicator/shapes";
@@ -156,6 +157,8 @@ export type Indicators = {
   ema: boolean;
   /** Полки ликвидности: цены, где в стакане стоит от двух миллионов. */
   shelves: boolean;
+  /** Лента трейлинг-уровня: динамическая поддержка и сопротивление. */
+  trend: boolean;
   /** Структура рынка: BOS и CHoCH, подписи свингов. */
   structure: boolean;
   /** Ордер-блоки: три внутренних и два свинговых. */
@@ -318,6 +321,7 @@ export default function PriceChart({
   // Результат структурного движка держим отдельно: переключатели меняют набор
   // фигур, и пересчитывать структуру ради этого незачем.
   const smcRef = useRef<SmcResult | null>(null);
+  const ceRef = useRef<ChandelierResult | null>(null);
   const lastTimeRef = useRef(0);
   // Читаем настройки из ref: загрузка данных не должна зависеть от
   // переключателей, иначе включение индикатора перезапрашивало бы свечи.
@@ -352,6 +356,7 @@ export default function PriceChart({
     shapesRef.current?.setShapes(
       extra
         ? {
+            bands: [...base.bands, ...extra.bands],
             boxes: [...base.boxes, ...extra.boxes],
             segments: [...base.segments, ...extra.segments],
             points: [...base.points, ...extra.points],
@@ -388,6 +393,7 @@ export default function PriceChart({
     [
       indicators.volume,
       indicators.ema,
+      indicators.trend,
       indicators.structure,
       indicators.blocks,
       indicators.gaps,
@@ -554,11 +560,15 @@ export default function PriceChart({
 
       // Структурная часть считается по тем же свечам одним проходом.
       const smc = computeSmc(candles);
+      // Трейлинг-уровень: та самая лента, по которой видно смещение и о
+      // которую цена отбивается. В скрипте это стоп Chandelier Exit.
+      ceRef.current = computeChandelier(candles);
       const cfgNow = indicatorsRef.current;
       shapeDataRef.current = buildShapes(
         smc,
         candles[candles.length - 1]?.time ?? 0,
         {
+          trend: cfgNow.trend,
           structure: cfgNow.structure,
           orderBlocks: cfgNow.blocks,
           fvg: cfgNow.gaps,
@@ -566,6 +576,7 @@ export default function PriceChart({
           zones: cfgNow.zones,
         },
         themeRef.current,
+        ceRef.current,
       );
       pushShapes();
       smcRef.current = smc;
@@ -630,6 +641,7 @@ export default function PriceChart({
         smcRef.current,
         lastTimeRef.current,
         {
+          trend: cfg.trend,
           structure: cfg.structure,
           orderBlocks: cfg.blocks,
           fvg: cfg.gaps,
@@ -637,6 +649,7 @@ export default function PriceChart({
           zones: cfg.zones,
         },
         themeRef.current,
+        ceRef.current,
       );
       pushShapes();
     }
@@ -699,6 +712,7 @@ export default function PriceChart({
         smcRef.current,
         lastTimeRef.current,
         {
+          trend: cfg.trend,
           structure: cfg.structure,
           orderBlocks: cfg.blocks,
           fvg: cfg.gaps,
@@ -706,6 +720,7 @@ export default function PriceChart({
           zones: cfg.zones,
         },
         theme,
+        ceRef.current,
       );
       pushShapes();
     }
@@ -860,7 +875,7 @@ export default function PriceChart({
           border: palette.rewardBorder,
         });
       }
-      tradeShapesRef.current = { boxes, segments: [], points: [] };
+      tradeShapesRef.current = { bands: [], boxes, segments: [], points: [] };
     }
 
     pushShapes();
@@ -981,7 +996,10 @@ export default function PriceChart({
           ответ, и он честнее пустого места. */}
       {trade && trade.status !== "closed" && entryY !== null && (
         <div
-          className="pointer-events-auto absolute left-2 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
+          // Справа, у самой шкалы: там заканчивается линия входа и туда же
+          // подходит цена — ярлык должен стоять на конце своей линии, а не в
+          // начале графика, где под ним чужие свечи.
+          className="pointer-events-auto absolute right-16 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
           style={{
             top: entryY - 12,
             borderColor: "var(--pane-border)",
@@ -993,6 +1011,9 @@ export default function PriceChart({
             {trade.side === "long" ? "LONG" : "SHORT"}
           </span>
           <span className="text-[var(--pane-muted)]">{trade.qty.toPrecision(3)}</span>
+          {/* Цена заявки: сделка ждёт именно её, и держать эту цифру в голове
+              трейдер не обязан. */}
+          <span className="text-[var(--pane-text)]">{fmtPrice(trade.entry)}</span>
           {trade.status === "planned" ? (
             <span className="text-[var(--pane-muted)]">ждём вход</span>
           ) : (

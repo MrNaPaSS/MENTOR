@@ -93,6 +93,7 @@ const DEPTHS = [30, 60, 100];
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h"];
 
 const INDICATOR_LABELS: Record<keyof Indicators, string> = {
+  trend: "Тренд",
   structure: "Структура",
   blocks: "Блоки",
   gaps: "FVG",
@@ -137,6 +138,7 @@ const STORAGE_KEY = "nmnh.scalping.panes";
 // По умолчанию включено всё, кроме зон: они заливают половину окна сплошным
 // цветом и нужны, только когда смотришь картину крупнее минуты.
 const DEFAULT_INDICATORS: Indicators = {
+  trend: true,
   structure: true,
   shelves: true,
   blocks: true,

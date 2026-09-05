@@ -8,11 +8,14 @@
 // зелёные, продажи красные, ордер-блоки фиолетовые) сохранены.
 
 import type { Time, UTCTimestamp } from "lightweight-charts";
-import type { Shapes, ShapeBox, ShapePoint, ShapeSegment } from
+import type { Shapes, ShapeBand, ShapeBox, ShapePoint, ShapeSegment } from
   "@/components/scalping/primitives/ShapesPrimitive";
 import { BULLISH, type SmcResult } from "./smc";
+import { activeLevel, type ChandelierResult } from "./chandelier";
 
 export type ShapeToggles = {
+  /** Лента трейлинг-уровня: динамическая поддержка и сопротивление. */
+  trend: boolean;
   structure: boolean;
   orderBlocks: boolean;
   fvg: boolean;
@@ -21,6 +24,7 @@ export type ShapeToggles = {
 };
 
 export const SHAPE_DEFAULTS: ShapeToggles = {
+  trend: true,
   structure: true,
   orderBlocks: true,
   fvg: true,
@@ -45,6 +49,13 @@ const DARK = {
   bearishGap: "rgba(246, 70, 93, 0.16)",
   equal: "#F0B90B",
   boxLabel: "rgba(183, 189, 198, 0.75)",
+  // Лента тренда: рост сиреневый, падение серое — как в самом индикаторе.
+  trendUpFill: "rgba(122, 110, 240, 0.16)",
+  trendDownFill: "rgba(138, 147, 160, 0.16)",
+  trendUpLine: "#7A6EF0",
+  trendDownLine: "#8A93A0",
+  trendUpMark: "#0ECB81",
+  trendDownMark: "#F6465D",
   premium: "rgba(246, 70, 93, 0.07)",
   equilibrium: "rgba(122, 130, 144, 0.07)",
   discount: "rgba(14, 203, 129, 0.07)",
@@ -64,6 +75,12 @@ const LIGHT: typeof DARK = {
   bearishGap: "rgba(255, 26, 46, 0.11)",
   equal: "#8D6E00",
   boxLabel: "rgba(60, 60, 70, 0.75)",
+  trendUpFill: "rgba(149, 117, 205, 0.22)",
+  trendDownFill: "rgba(150, 150, 150, 0.28)",
+  trendUpLine: "#7E57C2",
+  trendDownLine: "#8A8A8A",
+  trendUpMark: "#2962FF",
+  trendDownMark: "#2962FF",
   // Зоны в оригинале не красно-зелёные, а сиреневые полосы разной плотности:
   // премия и скидка одинаковым тоном, равновесие бледнее. Смысл несёт
   // положение относительно цены, а не цвет.
@@ -85,13 +102,57 @@ export function buildShapes(
   lastTime: number,
   toggles: ShapeToggles = SHAPE_DEFAULTS,
   theme: ChartTheme = "dark",
+  ce: ChandelierResult | null = null,
 ): Shapes {
   const COLORS = PALETTES[theme];
+  const bands: ShapeBand[] = [];
   const boxes: ShapeBox[] = [];
   const segments: ShapeSegment[] = [];
   const points: ShapePoint[] = [];
 
   const at = (t: number): Time => t as UTCTimestamp;
+
+  // Лента трейлинг-уровня. Разрывается на каждом развороте: одной фигурой её
+  // рисовать нельзя — при смене направления уровень перескакивает через всю
+  // свечу, и заливка протянулась бы поперёк графика.
+  if (toggles.trend && ce && ce.bars.length > 1) {
+    let run: typeof ce.bars = [];
+    const flush = () => {
+      if (run.length < 2) {
+        run = [];
+        return;
+      }
+      const up = run[0].dir === 1;
+      bands.push({
+        points: run.map((bar) => ({
+          time: at(bar.time),
+          top: Math.max(bar.mid, activeLevel(bar)),
+          bottom: Math.min(bar.mid, activeLevel(bar)),
+        })),
+        fill: up ? COLORS.trendUpFill : COLORS.trendDownFill,
+        line: up ? COLORS.trendUpLine : COLORS.trendDownLine,
+        // Обводим ту сторону, которая и есть уровень: при росте он снизу.
+        level: up ? "bottom" : "top",
+      });
+      run = [];
+    };
+
+    for (const bar of ce.bars) {
+      if (run.length > 0 && bar.dir !== run[run.length - 1].dir) flush();
+      run.push(bar);
+    }
+    flush();
+
+    for (const signal of ce.signals) {
+      points.push({
+        time: at(signal.time),
+        price: signal.price,
+        text: signal.dir === 1 ? "BY↑" : "SL↓",
+        color: signal.dir === 1 ? COLORS.trendUpMark : COLORS.trendDownMark,
+        above: signal.dir === -1,
+      });
+    }
+  }
 
   if (toggles.zones) {
     for (const zone of smc.zones) {
@@ -183,5 +244,5 @@ export function buildShapes(
     }
   }
 
-  return { boxes, segments, points };
+  return { bands, boxes, segments, points };
 }
