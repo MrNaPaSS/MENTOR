@@ -34,6 +34,8 @@ export type ActiveTrade = {
   takesHit: number;
   /** Стоп переставлен в безубыток. */
   breakeven: boolean;
+  /** Когда сделка была рассчитана: к этому месту на графике привязан бокс. */
+  createdAt: number;
   openedAt: number | null;
   closedAt: number | null;
   exit: number | null;
@@ -54,7 +56,7 @@ export type TradeSeed = {
 };
 
 /** Новая сделка: рассчитана, но цена до уровня ещё не дошла. */
-export function createTrade(seed: TradeSeed, id: string): ActiveTrade {
+export function createTrade(seed: TradeSeed, id: string, now = Date.now()): ActiveTrade {
   return {
     id,
     symbol: seed.symbol,
@@ -69,6 +71,7 @@ export function createTrade(seed: TradeSeed, id: string): ActiveTrade {
     status: "planned",
     takesHit: 0,
     breakeven: false,
+    createdAt: now,
     openedAt: null,
     closedAt: null,
     exit: null,

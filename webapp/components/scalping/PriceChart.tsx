@@ -196,11 +196,6 @@ const SHELF_HIT_PX = 8;
 // значит показывать то, чего там не было.
 const RIGHT_BARS = 14;
 
-// Ширина бокса сделки в барах. Ровно столько, сколько пустого поля справа: бокс
-// занимает будущее целиком, но на прошлые свечи не заходит. Он привязан к
-// последней свече, поэтому едет вместе с графиком, пока сделка жива.
-const TRADE_BOX_BARS = RIGHT_BARS;
-
 /** Секунды в интервале графика: нужны таймеру закрытия свечи. */
 const INTERVAL_SECONDS: Record<string, number> = {
   "1m": 60,
@@ -237,9 +232,10 @@ function untilClose(interval: string, now = Date.now()): string {
  * закрылась в 12:03:47, а бар есть только на 12:03. За краем загруженной
  * истории метки нет вовсе — сделка была раньше, чем начинается график.
  */
-function snapToBar(candles: Candle[], iso: string | null): number | null {
-  if (!iso) return null;
-  const seconds = Math.floor(new Date(iso).getTime() / 1000);
+function snapToBar(candles: Candle[], at: string | number | null): number | null {
+  if (at === null || at === undefined || candles.length === 0) return null;
+  const ms = typeof at === "number" ? at : new Date(at).getTime();
+  const seconds = Math.floor(ms / 1000);
   if (!Number.isFinite(seconds)) return null;
   if (seconds < candles[0].time) return null;
 
@@ -264,15 +260,24 @@ function snapToBar(candles: Candle[], iso: string | null): number | null {
 function tradeBoxes(
   trade: ActiveTrade | null,
   palette: (typeof THEMES)[ChartTheme],
-  last: Candle | undefined,
+  candles: Candle[],
 ): Shapes | null {
+  const last = candles.at(-1);
   if (!trade || trade.status === "closed" || !last) return null;
+
+  // Левый край бокса стоит там, где сделка появилась, и больше не двигается:
+  // это точка отсчёта, от неё видно, сколько времени сделка уже идёт. Правый
+  // край едет вместе с графиком и заходит в пустое поле справа.
+  const step = candles.length > 1 ? candles[1].time - candles[0].time : 60;
+  const anchor = snapToBar(candles, trade.openedAt ?? trade.createdAt ?? null) ?? last.time;
+  const width = Math.round((last.time - anchor) / Math.max(1, step)) + RIGHT_BARS;
+  const span = { kind: "bars" as const, bars: Math.max(RIGHT_BARS, width) };
 
   const far = pendingTargets(trade).at(-1);
   const boxes: Shapes["boxes"] = [
     {
-      fromTime: last.time as UTCTimestamp,
-      toTime: { kind: "bars" as const, bars: TRADE_BOX_BARS },
+      fromTime: anchor as UTCTimestamp,
+      toTime: span,
       top: Math.max(trade.entry, trade.stop),
       bottom: Math.min(trade.entry, trade.stop),
       fill: palette.riskBox,
@@ -281,8 +286,8 @@ function tradeBoxes(
   ];
   if (far !== undefined) {
     boxes.push({
-      fromTime: last.time as UTCTimestamp,
-      toTime: { kind: "bars" as const, bars: TRADE_BOX_BARS },
+      fromTime: anchor as UTCTimestamp,
+      toTime: span,
       top: Math.max(trade.entry, far),
       bottom: Math.min(trade.entry, far),
       fill: palette.rewardBox,
@@ -631,11 +636,7 @@ function PriceChart({
       );
       // Бокс сделки пересобираем здесь же: он привязан к последнему бару, а
       // бары только что приехали.
-      tradeShapesRef.current = tradeBoxes(
-        tradeRef.current,
-        THEMES[themeRef.current],
-        candles[candles.length - 1],
-      );
+      tradeShapesRef.current = tradeBoxes(tradeRef.current, THEMES[themeRef.current], candles);
       pushShapes();
       smcRef.current = smc;
       lastTimeRef.current = candles[candles.length - 1]?.time ?? 0;
@@ -910,7 +911,7 @@ function PriceChart({
 
     // Бокс живёт справа от последней свечи, в пустом поле: сделка ещё не
     // случилась, и накрывать ею прошлые бары нечестно.
-    tradeShapesRef.current = tradeBoxes(trade, palette, dataRef.current.at(-1));
+    tradeShapesRef.current = tradeBoxes(trade, palette, dataRef.current);
 
     pushShapes();
   }, [trade, pushShapes]);
