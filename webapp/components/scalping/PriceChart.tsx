@@ -526,7 +526,10 @@ export default function PriceChart({
         color: shelf.side === "bid" ? CE_LONG : CE_SHORT,
         lineWidth: 1,
         lineStyle: 1,
-        axisLabelVisible: true,
+        // Плашку с ценой на ось не вешаем: каждая полка добавляла бы к шкале
+        // вторую метку, и ценовая ось превращалась в сплошную стену бейджей.
+        // Положение линии цену и так показывает, а размер виден на ней самой.
+        axisLabelVisible: false,
         title: money(shelf.notional),
       }),
     );
