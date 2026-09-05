@@ -44,6 +44,7 @@ const DARK = {
   bullishGap: "rgba(14, 203, 129, 0.16)",
   bearishGap: "rgba(246, 70, 93, 0.16)",
   equal: "#F0B90B",
+  boxLabel: "rgba(183, 189, 198, 0.75)",
   premium: "rgba(246, 70, 93, 0.07)",
   equilibrium: "rgba(122, 130, 144, 0.07)",
   discount: "rgba(14, 203, 129, 0.07)",
@@ -62,6 +63,7 @@ const LIGHT: typeof DARK = {
   bullishGap: "rgba(0, 168, 107, 0.13)",
   bearishGap: "rgba(255, 26, 46, 0.11)",
   equal: "#8D6E00",
+  boxLabel: "rgba(60, 60, 70, 0.75)",
   // Зоны в оригинале не красно-зелёные, а сиреневые полосы разной плотности:
   // премия и скидка одинаковым тоном, равновесие бледнее. Смысл несёт
   // положение относительно цены, а не цвет.
@@ -95,7 +97,10 @@ export function buildShapes(
     for (const zone of smc.zones) {
       boxes.push({
         fromTime: at(smc.trailing?.bottomTime ?? lastTime),
-        toTime: at(lastTime),
+        // До правого края окна: в оригинале зоны и блоки тянутся вправо без
+        // конца, а обрыв на последней свече читается как «здесь уровень
+        // кончился», чего в них нет.
+        toTime: "edge",
         top: zone.top,
         bottom: zone.bottom,
         // Зоны без подписей: они занимают полэкрана, и три надписи поверх
@@ -114,11 +119,15 @@ export function buildShapes(
     for (const block of smc.orderBlocks) {
       boxes.push({
         fromTime: at(block.fromTime),
-        toTime: at(lastTime),
+        toTime: "edge",
         top: block.top,
         bottom: block.bottom,
         fill: block.internal ? COLORS.internalBlock : COLORS.swingBlock,
         border: block.internal ? COLORS.internalBlockBorder : COLORS.swingBlockBorder,
+        // Подпись, чтобы блок не путался с разрывом: они рисуются рядом и
+        // одинаковыми прямоугольниками, а смысл у них разный.
+        label: block.internal ? "блок" : "БЛОК",
+        labelColor: COLORS.boxLabel,
       });
     }
   }
@@ -131,6 +140,8 @@ export function buildShapes(
         top: gap.top,
         bottom: gap.bottom,
         fill: gap.bias === BULLISH ? COLORS.bullishGap : COLORS.bearishGap,
+        label: "FVG",
+        labelColor: COLORS.boxLabel,
       });
     }
   }

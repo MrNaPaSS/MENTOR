@@ -28,6 +28,12 @@ import {
   DEFAULT_TAKES,
 } from "@/lib/trade/plan";
 import {
+  advance,
+  closeManually,
+  createTrade,
+  type ActiveTrade,
+} from "@/lib/trade/position";
+import {
   base,
   price as fmtPrice,
   type LadderRow,
@@ -157,6 +163,9 @@ export default function ScalpingPage() {
   // остаётся на графике, пока трейдер сам её не убрал.
   const [draft, setDraft] = useState<TradeDraft | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Живая сделка: пока цена не дошла до уровня — «ждём», дальше открыта и
+  // считает результат, после стопа или последней цели закрывается сама.
+  const [trade, setTrade] = useState<ActiveTrade | null>(null);
   const [margin, setMargin] = useState(DEFAULT_MARGIN);
   const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
   const [timeframe, setTimeframe] = useState("1m");
@@ -268,6 +277,16 @@ export default function ScalpingPage() {
     // Разметка сделки привязана к цене прошлой монеты — на новой она врёт.
     setDraft(null);
     setDialogOpen(false);
+    setTrade(null);
+  }
+
+  /** Убрать сделку с графика: закрытую — записать, открытую — закрыть. */
+  function closeTrade() {
+    setTrade((current) =>
+      current ? closeManually(current, dom?.mid ?? 0, Date.now()) : null,
+    );
+    setDraft(null);
+    setDialogOpen(false);
   }
 
   /**
@@ -339,6 +358,46 @@ export default function ScalpingPage() {
         takes: DEFAULT_TAKES,
       })
     : null;
+
+  // Ключ расчёта: пересобирать сделку нужно при смене чисел, а не на каждом
+  // кадре — объект расчёта создаётся заново при любой перерисовке.
+  const planKey = plan
+    ? `${plan.entry}|${plan.stop}|${plan.qty}|${plan.targets.map((t) => t.price).join(",")}`
+    : "";
+
+  // Пока сделка не открылась, она следует за вводом в окне расчёта. Как только
+  // цена дошла до уровня, параметры замораживаются: менять стоп открытой
+  // позиции задним числом — это подделка собственной статистики.
+  useEffect(() => {
+    if (!plan || !draft || !symbol) return;
+    setTrade((current) => {
+      if (current && current.status !== "planned") return current;
+      return createTrade(
+        {
+          symbol,
+          side: plan.side,
+          entry: plan.entry,
+          stop: plan.stop,
+          targets: plan.targets.map((t) => t.price),
+          qty: plan.qty,
+          margin: draft.margin,
+          leverage: draft.leverage,
+        },
+        current?.id ?? `${symbol}-${Date.now()}`,
+      );
+    });
+    // planKey намеренно вместо plan: у объекта расчёта каждый раз новая ссылка.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planKey, symbol]);
+
+  // Живой ход сделки по цене стакана: вход, взятые цели, перенос стопа в
+  // безубыток и закрытие. Функция возвращает прежнюю ссылку, когда ничего не
+  // изменилось, поэтому восемь кадров в секунду не приводят к перерисовке.
+  useEffect(() => {
+    const price = dom?.mid ?? 0;
+    if (!(price > 0)) return;
+    setTrade((current) => (current ? advance(current, price, Date.now()) : current));
+  }, [dom?.mid]);
 
   // Класс темы для рабочих панелей: стакан и график светлеют вместе.
   const pane = theme === "light" ? "pane-light" : "pane-dark";
@@ -537,13 +596,10 @@ export default function ScalpingPage() {
                     </>
                   )}
 
-                  {draft && (
+                  {trade && trade.status !== "closed" && (
                     <button
-                      onClick={() => {
-                        setDraft(null);
-                        setDialogOpen(false);
-                      }}
-                      title="Убрать разметку сделки с графика"
+                      onClick={closeTrade}
+                      title="Закрыть сделку и убрать разметку с графика"
                       className={`${CHIP} ${CHIP_ON}`}
                     >
                       сделка ✕
@@ -569,7 +625,9 @@ export default function ScalpingPage() {
                   shelves={dom?.shelves ?? []}
                   theme={theme}
                   indicators={indicators}
-                  trade={plan}
+                  trade={trade}
+                  livePrice={dom?.mid ?? 0}
+                  onCloseTrade={closeTrade}
                   onShelfClick={openTrade}
                 />
               </div>

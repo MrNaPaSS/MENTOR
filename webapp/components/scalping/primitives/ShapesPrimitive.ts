@@ -11,6 +11,7 @@
 
 import type {
   IChartApi,
+  Logical,
   IPrimitivePaneRenderer,
   IPrimitivePaneView,
   ISeriesApi,
@@ -20,9 +21,18 @@ import type {
   Time,
 } from "lightweight-charts";
 
+/**
+ * Правый край фигуры.
+ *
+ * `"edge"` — до правого края окна, включая пустое место за последней свечой.
+ * В оригинале индикатора уровни тянутся вправо бесконечно, а бокс сделки
+ * рисуется в будущем, где баров ещё нет и времени для них не существует.
+ */
+export type ShapeEnd = Time | "edge";
+
 export type ShapeBox = {
   fromTime: Time;
-  toTime: Time;
+  toTime: ShapeEnd;
   top: number;
   bottom: number;
   fill: string;
@@ -34,7 +44,7 @@ export type ShapeBox = {
 
 export type ShapeSegment = {
   fromTime: Time;
-  toTime: Time;
+  toTime: ShapeEnd;
   price: number;
   color: string;
   dashed: boolean;
@@ -156,7 +166,11 @@ class ShapesPaneView implements IPrimitivePaneView {
     }
 
     const scale = chart.timeScale();
-    const x = (t: Time) => scale.timeToCoordinate(t);
+    // Правый край окна: координата последней видимой позиции. Считаем один раз
+    // на перерисовку — у фигур, тянущихся вправо, он общий.
+    const range = scale.getVisibleLogicalRange();
+    const edge = range ? scale.logicalToCoordinate(range.to as Logical) : null;
+    const x = (t: ShapeEnd) => (t === "edge" ? edge : scale.timeToCoordinate(t));
     const y = (p: number) => series.priceToCoordinate(p);
 
     const boxes: Ready["boxes"] = [];

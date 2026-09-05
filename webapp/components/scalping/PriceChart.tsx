@@ -34,7 +34,11 @@ import {
   type Shapes,
 } from "./primitives/ShapesPrimitive";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
-import type { TradePlan } from "@/lib/trade/plan";
+import {
+  pendingTargets,
+  pnlAt,
+  type ActiveTrade,
+} from "@/lib/trade/position";
 
 // Две темы графика.
 //
@@ -67,6 +71,11 @@ const THEMES: Record<
     crosshair: string;
     /** Уровни прошлого дня, недели и месяца. */
     mtf: string;
+    /** Боксы риска и потенциала у разметки сделки. */
+    riskBox: string;
+    riskBorder: string;
+    rewardBox: string;
+    rewardBorder: string;
   }
 > = {
   dark: {
@@ -90,6 +99,10 @@ const THEMES: Record<
     emaTrend: "#7A8290",
     crosshair: "#0AFFE0",
     mtf: "#2157F3",
+    riskBox: "rgba(246,70,93,0.16)",
+    riskBorder: "rgba(246,70,93,0.45)",
+    rewardBox: "rgba(14,203,129,0.13)",
+    rewardBorder: "rgba(14,203,129,0.45)",
   },
   light: {
     background: "#FFFFFF",
@@ -117,6 +130,12 @@ const THEMES: Record<
     // Уровни старших периодов в оригинале чёрным пунктиром, не синим.
     crosshair: "#555555",
     mtf: "#333333",
+    // На белом красное и зелёное спорят с чёрно-белыми свечами: риск серым,
+    // потенциал сиреневым — так эти области размечены в самом терминале.
+    riskBox: "rgba(120,123,134,0.22)",
+    riskBorder: "rgba(120,123,134,0.45)",
+    rewardBox: "rgba(149,117,205,0.16)",
+    rewardBorder: "rgba(149,117,205,0.45)",
   },
 };
 
@@ -165,9 +184,39 @@ const VISIBLE_BARS = 150;
 // засчиталось. Линия толщиной в пиксель, попасть в неё мышью невозможно.
 const SHELF_HIT_PX = 8;
 
-// На сколько баров назад тянутся боксы сделки. Сделка ещё не открыта, точки
-// входа во времени у неё нет — бокс просто должен быть виден.
-const TRADE_BOX_BARS = 60;
+// Пустых баров справа от последней свечи. Разметка сделки — это будущее:
+// вход, стоп и цели ещё не случились, и рисовать их поверх прошлых свечей
+// значит показывать то, чего там не было.
+const RIGHT_BARS = 14;
+
+/** Секунды в интервале графика: нужны таймеру закрытия свечи. */
+const INTERVAL_SECONDS: Record<string, number> = {
+  "1m": 60,
+  "3m": 180,
+  "5m": 300,
+  "15m": 900,
+  "30m": 1800,
+  "1h": 3600,
+  "4h": 14400,
+  "1d": 86400,
+};
+
+/**
+ * Сколько осталось до закрытия текущей свечи.
+ *
+ * Интервалы биржи выровнены по началу эпохи, поэтому остаток считается
+ * остатком от деления — без запроса времени сервера.
+ */
+function untilClose(interval: string, now = Date.now()): string {
+  const step = INTERVAL_SECONDS[interval];
+  if (!step) return "";
+  const left = step - (Math.floor(now / 1000) % step);
+  const hours = Math.floor(left / 3600);
+  const minutes = Math.floor((left % 3600) / 60);
+  const seconds = left % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
+}
 
 /** ATR последних баров: по нему предлагается стоп. */
 function currentAtr(candles: Candle[]): number {
@@ -201,6 +250,8 @@ export default function PriceChart({
   indicators,
   theme,
   trade,
+  livePrice,
+  onCloseTrade,
   onShelfClick,
 }: {
   symbol: string;
@@ -209,8 +260,12 @@ export default function PriceChart({
   shelves: Wall[];
   indicators: Indicators;
   theme: ChartTheme;
-  /** Разметка сделки: вход, стоп и цели. Считается снаружи. */
-  trade: TradePlan | null;
+  /** Разметка сделки: вход, стоп и цели. Жизненный цикл считается снаружи. */
+  trade: ActiveTrade | null;
+  /** Последняя цена рынка: по ней считается плавающий результат. */
+  livePrice: number;
+  /** Закрыть сделку по нажатию на ярлык позиции. */
+  onCloseTrade?: () => void;
   /**
    * Нажатие по линии полки. Вторым аргументом идёт ATR текущего таймфрейма:
    * по нему предлагается стоп, а волатильность известна только здесь — свечи
@@ -278,6 +333,15 @@ export default function PriceChart({
   // уровни ещё и выписываются строкой с расстоянием до цены.
   const [levels, setLevels] = useState<{ title: string; price: number }[]>([]);
 
+  // Ярлык позиции и таймер свечи — это HTML поверх канвы, и им нужны пиксели.
+  // Координата цены меняется и без новых данных: от прокрутки и масштаба, — а
+  // о них библиотека не сообщает, поэтому опрашиваем по таймеру.
+  const [entryY, setEntryY] = useState<number | null>(null);
+  const [priceY, setPriceY] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState("");
+  const livePriceRef = useRef(livePrice);
+  livePriceRef.current = livePrice;
+
   // Полки перерисовываем только когда меняется сам набор цен. Стакан обновляется
   // восемь раз в секунду, и пересоздание линий на каждом кадре давало бы моргание.
   const shelfKey = shelves
@@ -322,7 +386,13 @@ export default function PriceChart({
         // занимают половину окна. Скальперу нужен размах цены, а не поля.
         scaleMargins: { top: 0.06, bottom: 0.22 },
       },
-      timeScale: { borderColor: "#2B3139", timeVisible: true, secondsVisible: false },
+      timeScale: {
+        borderColor: "#2B3139",
+        timeVisible: true,
+        secondsVisible: false,
+        // Пустое место справа: там рисуется бокс сделки и туда идёт цена.
+        rightOffset: RIGHT_BARS,
+      },
       crosshair: {
         mode: 0,
         vertLine: { color: "#0AFFE0", width: 1, style: 3, labelBackgroundColor: "#0AFFE0" },
@@ -694,8 +764,9 @@ export default function PriceChart({
   // Разметка сделки: вход, стоп и цели линиями, риск и потенциал — боксами.
   //
   // Линии дают точные цены на шкале, боксы — соотношение: видно с одного
-  // взгляда, во сколько раз зелёная область выше красной. Ради этого разметка
-  // и рисуется, цифры уже есть в окне расчёта.
+  // взгляда, во сколько раз область прибыли выше области убытка. Взятые цели с
+  // графика убираются: они уже отработали, и держать их значит показывать
+  // сделке цель, которой у неё больше нет.
   useEffect(() => {
     const series = candleRef.current;
     if (!series) return;
@@ -704,54 +775,83 @@ export default function PriceChart({
     tradeLinesRef.current = [];
     tradeShapesRef.current = null;
 
-    if (!trade) {
+    if (!trade || trade.status === "closed") {
       pushShapes();
       return;
     }
 
     const palette = THEMES[themeRef.current];
     const line = (price: number, color: string, title: string, style: 0 | 2) =>
-      series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
+      series.createPriceLine({
+        price,
+        color,
+        lineWidth: 1,
+        lineStyle: style,
+        axisLabelVisible: true,
+        title,
+      });
 
+    const targets = pendingTargets(trade);
     tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
-    tradeLinesRef.current.push(line(trade.stop, palette.askLine, "стоп", 2));
-    trade.targets.forEach((target, i) => {
-      tradeLinesRef.current.push(line(target.price, palette.bidLine, `тейк ${i + 1}`, 2));
+    tradeLinesRef.current.push(
+      // Стоп в безубытке — уже не убыток: цветом он не должен пугать.
+      line(trade.stop, trade.breakeven ? palette.mtf : palette.askLine, trade.breakeven ? "б/у" : "стоп", 2),
+    );
+    targets.forEach((price, i) => {
+      tradeLinesRef.current.push(line(price, palette.bidLine, `тейк ${trade.takesHit + i + 1}`, 2));
     });
 
-    // Боксы тянутся от края видимого окна до последнего бара: сделка ещё не
-    // открыта, точки входа во времени у неё нет, а к правому краю подходит цена.
-    const candles = dataRef.current;
-    const last = candles.at(-1);
+    // Бокс живёт справа от последней свечи, в пустом поле: сделка ещё не
+    // случилась, и накрывать ею прошлые бары нечестно.
+    const last = dataRef.current.at(-1);
+    const far = targets.at(-1);
     if (last) {
-      const from = candles[Math.max(0, candles.length - TRADE_BOX_BARS)];
-      const top = trade.targets.at(-1)?.price ?? trade.entry;
-      tradeShapesRef.current = {
-        boxes: [
-          {
-            fromTime: from.time as UTCTimestamp,
-            toTime: last.time as UTCTimestamp,
-            top: Math.max(trade.entry, trade.stop),
-            bottom: Math.min(trade.entry, trade.stop),
-            fill: "rgba(246,70,93,0.16)",
-            border: "rgba(246,70,93,0.45)",
-          },
-          {
-            fromTime: from.time as UTCTimestamp,
-            toTime: last.time as UTCTimestamp,
-            top: Math.max(trade.entry, top),
-            bottom: Math.min(trade.entry, top),
-            fill: "rgba(14,203,129,0.13)",
-            border: "rgba(14,203,129,0.45)",
-          },
-        ],
-        segments: [],
-        points: [],
-      };
+      const boxes = [
+        {
+          fromTime: last.time as UTCTimestamp,
+          toTime: "edge" as const,
+          top: Math.max(trade.entry, trade.stop),
+          bottom: Math.min(trade.entry, trade.stop),
+          fill: palette.riskBox,
+          border: palette.riskBorder,
+        },
+      ];
+      if (far !== undefined) {
+        boxes.push({
+          fromTime: last.time as UTCTimestamp,
+          toTime: "edge" as const,
+          top: Math.max(trade.entry, far),
+          bottom: Math.min(trade.entry, far),
+          fill: palette.rewardBox,
+          border: palette.rewardBorder,
+        });
+      }
+      tradeShapesRef.current = { boxes, segments: [], points: [] };
     }
 
     pushShapes();
   }, [trade, pushShapes]);
+
+  // Опрос координат для наложений. Четыре раза в секунду: таймер свечи идёт
+  // посекундно, а ярлык должен успевать за прокруткой, но не за каждым кадром.
+  useEffect(() => {
+    function tick() {
+      const series = candleRef.current;
+      if (!series) return;
+      const price = livePriceRef.current > 0 ? livePriceRef.current : dataRef.current.at(-1)?.close ?? 0;
+      const entry = trade && trade.status !== "closed" ? series.priceToCoordinate(trade.entry) : null;
+      setEntryY((prev) => (prev === entry ? prev : entry));
+      const y = price > 0 ? series.priceToCoordinate(price) : null;
+      setPriceY((prev) => (prev === y ? prev : y));
+      setCountdown((prev) => {
+        const next = untilClose(interval);
+        return prev === next ? prev : next;
+      });
+    }
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [trade, interval]);
 
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.
@@ -773,11 +873,63 @@ export default function PriceChart({
     });
   }, [wall?.price, wall?.side]);
 
+  const pnl = trade ? pnlAt(trade, livePrice) : 0;
+
   return (
     <div className="relative h-full w-full">
       <div ref={boxRef} className="h-full w-full" />
       {cfg.levels && levels.length > 0 && (
         <LevelsStrip levels={levels} price={dataRef.current.at(-1)?.close ?? 0} />
+      )}
+
+      {/* Ярлык позиции у линии входа: состояние, объём и результат в деньгах.
+          Пока цена не дошла до уровня, там ноль и слово «ждём» — это тоже
+          ответ, и он честнее пустого места. */}
+      {trade && trade.status !== "closed" && entryY !== null && (
+        <div
+          className="pointer-events-auto absolute left-2 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
+          style={{
+            top: entryY - 12,
+            borderColor: "var(--pane-border)",
+            background: "var(--pane-bg)",
+            color: "var(--pane-text)",
+          }}
+        >
+          <span className={trade.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
+            {trade.side === "long" ? "LONG" : "SHORT"}
+          </span>
+          <span className="text-[var(--pane-muted)]">{trade.qty.toPrecision(3)}</span>
+          {trade.status === "planned" ? (
+            <span className="text-[var(--pane-muted)]">ждём вход</span>
+          ) : (
+            <span className={pnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
+              {pnl >= 0 ? "+" : "−"}
+              {Math.abs(pnl).toFixed(2)} USD
+            </span>
+          )}
+          <button
+            onClick={onCloseTrade}
+            title="Закрыть сделку"
+            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Время до закрытия свечи — под ценой, у самой шкалы. Скальперу важно,
+          сколько осталось: свеча закрывается, и уровень подтверждается или нет. */}
+      {priceY !== null && (
+        <div
+          className="pointer-events-none absolute right-1 z-10 rounded px-1 py-px font-mono text-[10px] tabular-nums"
+          style={{
+            top: priceY + 10,
+            background: "var(--pane-deep)",
+            color: "var(--pane-text-2)",
+          }}
+        >
+          {countdown}
+        </div>
       )}
     </div>
   );

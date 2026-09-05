@@ -149,8 +149,6 @@ export default function DomTrader({
 
   return (
     <div className="flex h-full flex-col text-[11px] tabular-nums">
-      <Header frame={frame} />
-
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -182,40 +180,6 @@ export default function DomTrader({
           <TimeFooter columns={columns} />
         </div>
       </div>
-    </div>
-  );
-}
-
-/** Шапка: цена, спред, перевес и самая крупная заявка рядом. */
-function Header({ frame }: { frame: DomFrame }) {
-  const spreadBp = frame.mid > 0 ? ((frame.best_ask - frame.best_bid) / frame.mid) * 10_000 : 0;
-  const buy = Math.round(frame.book_ratio * 100);
-
-  return (
-    <div className="border-b border-[var(--pane-border)] px-3 py-2">
-      <div className="flex items-baseline justify-between">
-        <span className="font-mono text-lg font-semibold text-[var(--pane-text)]">
-          {fmtPrice(frame.mid, frame.tick)}
-        </span>
-        <span className="text-[11px] text-[var(--pane-muted)]">спред {spreadBp.toFixed(1)} б.п.</span>
-      </div>
-
-      <div className="mt-2 flex items-center gap-2">
-        <span className="w-7 text-right font-mono text-[10px] text-[var(--pane-down)]">{100 - buy}</span>
-        <div className="flex h-2 flex-1 overflow-hidden rounded-sm bg-[var(--pane-deep)]">
-          <div className="bg-[var(--pane-up-bar)]" style={{ width: `${buy}%` }} />
-          <div className="bg-[var(--pane-down-bar)]" style={{ width: `${100 - buy}%` }} />
-        </div>
-        <span className="w-7 font-mono text-[10px] text-[var(--pane-up)]">{buy}</span>
-      </div>
-
-      {frame.wall && (
-        <p className="mt-2 text-[11px] text-[var(--pane-gold)]">
-          Плита {money(frame.wall.notional)} на {fmtPrice(frame.wall.price, frame.tick)} —{" "}
-          {frame.wall.side === "bid" ? "поддержка" : "сопротивление"} в{" "}
-          {frame.wall.distance_bp.toFixed(1)} б.п.
-        </p>
-      )}
     </div>
   );
 }
