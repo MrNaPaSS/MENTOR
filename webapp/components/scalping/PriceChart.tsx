@@ -196,6 +196,11 @@ const SHELF_HIT_PX = 8;
 // значит показывать то, чего там не было.
 const RIGHT_BARS = 8;
 
+// Ширина бокса сделки в барах. Бокс показывает соотношение риска к прибыли, а
+// не срок сделки: растянутый до края экрана, он закрашивает полграфика и
+// перестаёт читаться.
+const TRADE_BOX_BARS = 6;
+
 /** Секунды в интервале графика: нужны таймеру закрытия свечи. */
 const INTERVAL_SECONDS: Record<string, number> = {
   "1m": 60,
@@ -858,7 +863,7 @@ export default function PriceChart({
       const boxes = [
         {
           fromTime: last.time as UTCTimestamp,
-          toTime: "edge" as const,
+          toTime: { kind: "bars" as const, bars: TRADE_BOX_BARS },
           top: Math.max(trade.entry, trade.stop),
           bottom: Math.min(trade.entry, trade.stop),
           fill: palette.riskBox,
@@ -868,7 +873,7 @@ export default function PriceChart({
       if (far !== undefined) {
         boxes.push({
           fromTime: last.time as UTCTimestamp,
-          toTime: "edge" as const,
+          toTime: { kind: "bars" as const, bars: TRADE_BOX_BARS },
           top: Math.max(trade.entry, far),
           bottom: Math.min(trade.entry, far),
           fill: palette.rewardBox,
@@ -987,6 +992,24 @@ export default function PriceChart({
   return (
     <div className="relative h-full w-full">
       <div ref={boxRef} className="h-full w-full" />
+      {/* Инструмент, цена и плита — на самом графике, а не в шапке панели.
+          Взгляд скальпера живёт на свечах, и ради ответа «что это и почём»
+          уводить его к рамке незачем. */}
+      <div className="pointer-events-none absolute left-2 top-1 flex items-baseline gap-2 font-mono text-[11px] tabular-nums">
+        <span className="text-[12px] font-semibold text-[var(--pane-text)]">
+          {symbol.replace(/USDT$/, "")}
+        </span>
+        <span className="text-[var(--pane-text-2)]">
+          {fmtPrice(livePrice > 0 ? livePrice : dataRef.current.at(-1)?.close ?? 0)}
+        </span>
+        {wall && (
+          <span className="text-[var(--pane-gold)]">
+            плита {money(wall.notional)} · {fmtPrice(wall.price)} ·{" "}
+            {wall.side === "bid" ? "поддержка" : "сопротивление"}
+          </span>
+        )}
+      </div>
+
       {cfg.levels && levels.length > 0 && (
         <LevelsStrip levels={levels} price={dataRef.current.at(-1)?.close ?? 0} />
       )}
@@ -1010,10 +1033,6 @@ export default function PriceChart({
           <span className={trade.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
             {trade.side === "long" ? "LONG" : "SHORT"}
           </span>
-          <span className="text-[var(--pane-muted)]">{trade.qty.toPrecision(3)}</span>
-          {/* Цена заявки: сделка ждёт именно её, и держать эту цифру в голове
-              трейдер не обязан. */}
-          <span className="text-[var(--pane-text)]">{fmtPrice(trade.entry)}</span>
           {trade.status === "planned" ? (
             <span className="text-[var(--pane-muted)]">ждём вход</span>
           ) : (
@@ -1070,7 +1089,7 @@ function LevelsStrip({
     .slice(0, 4);
 
   return (
-    <div className="pointer-events-none absolute left-2 top-1 flex gap-3 font-mono text-[10px] tabular-nums text-text-muted">
+    <div className="pointer-events-none absolute left-2 top-6 flex gap-3 font-mono text-[10px] tabular-nums text-[var(--pane-muted)]">
       {sorted.map((l) => (
         <span key={l.title}>
           {l.title}{" "}

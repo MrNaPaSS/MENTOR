@@ -23,11 +23,11 @@ import type {
 /**
  * Правый край фигуры.
  *
- * `"edge"` — до правого края окна, включая пустое место за последней свечой.
- * В оригинале индикатора уровни тянутся вправо бесконечно, а бокс сделки
- * рисуется в будущем, где баров ещё нет и времени для них не существует.
+ * `"edge"` — до правого края окна. `{ bars: n }` — на n баров правее начала:
+ * бокс сделки живёт в будущем, где времени для баров ещё не существует, но и
+ * растягиваться на весь экран он не должен.
  */
-export type ShapeEnd = Time | "edge";
+export type ShapeEnd = Time | "edge" | { kind: "bars"; bars: number };
 
 export type ShapeBox = {
   fromTime: Time;
@@ -231,7 +231,14 @@ class ShapesPaneView implements IPrimitivePaneView {
     // «последний бар» оказывается правее экрана, а фигура рисуется от него
     // влево через весь график.
     const edge = scale.width();
-    const x = (t: ShapeEnd) => (t === "edge" ? edge : scale.timeToCoordinate(t));
+    const perBar = scale.options().barSpacing;
+    const x = (t: ShapeEnd, from = 0) => {
+      if (t === "edge") return edge;
+      // Различаем по метке: время в библиотеке тоже бывает объектом, и без
+      // неё компилятор не может сказать, что перед ним.
+      if (typeof t === "object" && "kind" in t) return from + t.bars * perBar;
+      return scale.timeToCoordinate(t);
+    };
     const y = (p: number) => series.priceToCoordinate(p);
 
     const bands: Ready["bands"] = [];
@@ -254,7 +261,7 @@ class ShapesPaneView implements IPrimitivePaneView {
     const boxes: Ready["boxes"] = [];
     for (const box of this.source.shapes.boxes) {
       const x1 = x(box.fromTime);
-      const x2 = x(box.toTime);
+      const x2 = x1 === null ? null : x(box.toTime, x1);
       const y1 = y(box.top);
       const y2 = y(box.bottom);
       if (x1 === null || x2 === null || y1 === null || y2 === null) continue;
@@ -268,7 +275,7 @@ class ShapesPaneView implements IPrimitivePaneView {
     const segments: Ready["segments"] = [];
     for (const s of this.source.shapes.segments) {
       const x1 = x(s.fromTime);
-      const x2 = x(s.toTime);
+      const x2 = x1 === null ? null : x(s.toTime, x1);
       const yy = y(s.price);
       if (x1 === null || x2 === null || yy === null) continue;
       segments.push({ ...s, x1, x2, y: yy });

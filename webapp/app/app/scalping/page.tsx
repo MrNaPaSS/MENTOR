@@ -651,8 +651,9 @@ export default function ScalpingPage() {
               style={paneStyle}
             >
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--pane-border)] px-3 py-2">
+                {/* Название инструмента переехало на сам график: там же цена и
+                    плита, и всё это рядом с свечами, а не по краю рамки. */}
                 <div className="flex items-center gap-0.5">
-                  <span className="mr-1 text-[11px] text-[var(--pane-text-2)]">{base(symbol)}</span>
                   {TIMEFRAMES.map((tf) => (
                     <button
                       key={tf}
