@@ -11,8 +11,9 @@
 // таймфрейм и индикаторы у графика. Прошлая версия начиналась с семи
 // переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Wifi, WifiOff } from "lucide-react";
+import PaneDivider from "@/components/scalping/PaneDivider";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
 import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
@@ -59,6 +60,20 @@ const CHIP_OFF = "text-text-muted hover:text-text-primary";
 // линии — иначе под коротким из них остаётся пустота в треть экрана.
 const PANE_H = "h-[calc(100vh-190px)] min-h-[520px]";
 
+// Ширины панелей по умолчанию и границы, за которые их не утянуть.
+// Нижняя граница стакана — 111 (колонка истории) + 177 (цена) плюс поля:
+// уже этого он перестаёт быть читаемым.
+const PANE_LIMITS = {
+  screener: { def: 500, min: 360, max: 900 },
+  dom: { def: 620, min: 320, max: 1200 },
+};
+
+const STORAGE_KEY = "nmnh.scalping.panes";
+
+function clamp(value: number, { min, max }: { min: number; max: number }) {
+  return Math.max(min, Math.min(max, value));
+}
+
 export default function ScalpingPage() {
   const [symbol, setSymbol] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("walls");
@@ -71,7 +86,43 @@ export default function ScalpingPage() {
     vwap: false,
   });
 
+  const [screenerW, setScreenerW] = useState(PANE_LIMITS.screener.def);
+  const [domW, setDomW] = useState(PANE_LIMITS.dom.def);
+
   const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort });
+
+  // Ширины — личная настройка рабочего места, живут в браузере трейдера.
+  // Чтение обёрнуто в try: в приватном окне доступ к хранилищу бросает.
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      if (saved && typeof saved.screener === "number" && typeof saved.dom === "number") {
+        setScreenerW(clamp(saved.screener, PANE_LIMITS.screener));
+        setDomW(clamp(saved.dom, PANE_LIMITS.dom));
+      }
+    } catch {
+      // Хранилище недоступно — остаются ширины по умолчанию.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ screener: screenerW, dom: domW }));
+    } catch {
+      // Не сохранилось — не повод ломать экран.
+    }
+  }, [screenerW, domW]);
+
+  // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
+  function resizeScreener(delta: number) {
+    setScreenerW((w) =>
+      Number.isNaN(delta) ? PANE_LIMITS.screener.def : clamp(w + delta, PANE_LIMITS.screener),
+    );
+  }
+
+  function resizeDom(delta: number) {
+    setDomW((w) => (Number.isNaN(delta) ? PANE_LIMITS.dom.def : clamp(w + delta, PANE_LIMITS.dom)));
+  }
 
   function toggle(key: keyof Indicators) {
     setIndicators((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -98,10 +149,18 @@ export default function ScalpingPage() {
         </span>
       </header>
 
-      <div className="flex flex-col gap-3 xl:flex-row">
+      <div
+        className="flex flex-col gap-3 xl:flex-row xl:gap-0"
+        style={
+          {
+            "--screener-w": `${screenerW}px`,
+            "--dom-w": `${domW}px`,
+          } as React.CSSProperties
+        }
+      >
         {/* Скринер: ширина по своим колонкам, без растягивания. */}
         <section
-          className={`flex shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[500px] ${PANE_H}`}
+          className={`flex shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[var(--screener-w)] ${PANE_H}`}
         >
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-2">
             <span className="mr-1 text-[11px] text-text-muted">Сортировка:</span>
@@ -129,11 +188,13 @@ export default function ScalpingPage() {
           </div>
         </section>
 
+        <PaneDivider onResize={resizeScreener} title="Ширина списка · двойной клик сбрасывает" />
+
         {symbol ? (
           <>
             {/* Стакан: ширина по своим колонкам, история прокручивается влево. */}
             <section
-              className={`flex shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[620px] ${PANE_H}`}
+              className={`flex shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[var(--dom-w)] ${PANE_H}`}
             >
               <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <span className="font-semibold text-text-primary">{base(symbol)}</span>
@@ -172,6 +233,8 @@ export default function ScalpingPage() {
                 )}
               </div>
             </section>
+
+            <PaneDivider onResize={resizeDom} title="Ширина стакана · двойной клик сбрасывает" />
 
             {/* График занимает всё оставшееся место. */}
             <section

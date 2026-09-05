@@ -48,6 +48,11 @@ const EMA_SLOW = 21;
 // живым, не расходуя лимит запросов биржи впустую.
 const REFRESH_MS = 5000;
 
+// Сколько свечей показываем сразу. Четыреста грузим ради индикаторов и
+// прокрутки назад, но в окне они превращаются в щётку — видно должно быть
+// столько, сколько трейдер реально читает.
+const VISIBLE_BARS = 150;
+
 function ema(candles: Candle[], period: number) {
   if (candles.length < period) return [];
   const k = 2 / (period + 1);
@@ -212,10 +217,28 @@ export default function PriceChart({
         const body: { candles: Candle[] } = await res.json();
         if (cancelled || !candleRef.current) return;
         draw(body.candles);
-        if (fit) chartRef.current?.timeScale().fitContent();
+        if (fit) reframe(body.candles.length);
       } catch {
         // Сеть моргнула — следующая попытка через REFRESH_MS.
       }
+    }
+
+    /** Навести график на свежие свечи новой монеты.
+     *
+     * Одной подгонки шкалы времени мало: ценовая шкала запоминает диапазон
+     * прошлого инструмента, и после переключения график висел где-то за краем
+     * окна — цену приходилось искать руками. Поэтому включаем автомасштаб
+     * заново и показываем последние свечи, а не все четыреста: на всём окне
+     * они сжимаются в неразличимую щётку.
+     */
+    function reframe(total: number) {
+      const chart = chartRef.current;
+      if (!chart) return;
+      chart.priceScale("right").applyOptions({ autoScale: true });
+      chart.timeScale().setVisibleLogicalRange({
+        from: Math.max(0, total - VISIBLE_BARS),
+        to: total + 2,
+      });
     }
 
     load(true);
