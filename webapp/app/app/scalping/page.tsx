@@ -11,7 +11,7 @@
 // таймфрейм и индикаторы у графика. Прошлая версия начиналась с семи
 // переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookText,
   Moon,
@@ -562,13 +562,12 @@ export default function ScalpingPage() {
   /**
    * Закрыть окно расчёта, ничего не сделав.
    *
-   * Идущую сделку это не трогает: трейдер посмотрел новый уровень и передумал.
-   * Убирается только разметка, которую сам этот расчёт и нарисовал.
+   * Ни одной сделки это не касается — ни идущей, ни ожидающей входа. Пропадает
+   * только предпросмотр, которого и не было нигде, кроме экрана.
    */
   function cancelDialog() {
     setDialogOpen(false);
     setDraft(null);
-    setTrade((current) => (current && current.status === "planned" ? null : current));
   }
 
   function updateDraft(next: TradeDraft) {
@@ -616,30 +615,28 @@ export default function ScalpingPage() {
     ? `${plan.entry}|${plan.stop}|${plan.qty}|${plan.targets.map((t) => t.price).join(",")}`
     : "";
 
-  // Пока окно открыто, расчёт виден на графике: линии входа, стопа и целей
-  // рисуются сразу, чтобы уровень было с чем сравнить. Но только если ничего
-  // не идёт — вошедшую сделку черновик не подменяет.
-  useEffect(() => {
-    if (!plan || !draft || !symbol || !dialogOpen) return;
-    setTrade((current) => {
-      if (current && current.status !== "planned") return current;
-      return createTrade(
-        {
-          symbol,
-          side: plan.side,
-          entry: plan.entry,
-          stop: plan.stop,
-          targets: plan.targets.map((t) => t.price),
-          qty: plan.qty,
-          margin: draft.margin,
-          leverage: draft.leverage,
-        },
-        current?.id ?? `${symbol}-${Date.now()}`,
-      );
-    });
+  // Пока окно открыто, расчёт виден на графике — но только как предпросмотр и
+  // только если ничего не идёт. Ни одна кнопка окна не должна касаться уже
+  // существующей сделки: трейдер открыл расчёт посмотреть соотношение по
+  // другому уровню, а его ожидающая заявка от этого исчезала.
+  const preview = useMemo(() => {
+    if (!dialogOpen || !plan || !draft || !symbol || trade) return null;
+    return createTrade(
+      {
+        symbol,
+        side: plan.side,
+        entry: plan.entry,
+        stop: plan.stop,
+        targets: plan.targets.map((t) => t.price),
+        qty: plan.qty,
+        margin: draft.margin,
+        leverage: draft.leverage,
+      },
+      "preview",
+    );
     // planKey намеренно вместо plan: у объекта расчёта каждый раз новая ссылка.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planKey, symbol, dialogOpen]);
+  }, [dialogOpen, planKey, symbol, trade, draft?.margin, draft?.leverage]);
 
   // Живой ход сделки по цене стакана: вход, взятые цели, перенос стопа в
   // безубыток и закрытие. Функция возвращает прежнюю ссылку, когда ничего не
@@ -948,7 +945,9 @@ export default function ScalpingPage() {
                   shelves={dom?.shelves ?? []}
                   theme={theme}
                   indicators={indicators}
-                  trade={trade && trade.symbol === symbol ? trade : null}
+                  trade={
+                    trade && trade.symbol === symbol ? trade : preview
+                  }
                   livePrice={chartPrice}
                   onCloseTrade={() => setCloseOpen(true)}
                   showJournal={journalOpen}
