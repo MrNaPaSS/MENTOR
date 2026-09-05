@@ -33,8 +33,12 @@ const COLORS = {
   swingLabel: "#B7BDC6",
   // Ордер-блоки фиолетовые, как в терминале заказчика. Внутренние бледнее
   // свинговых: их втрое больше, и одинаковой насыщенностью они забивают экран.
-  internalBlock: "rgba(122, 110, 240, 0.16)",
-  swingBlock: "rgba(122, 110, 240, 0.30)",
+  // Блок — это одна свеча по высоте, узкая полоска: на прозрачности разрывов
+  // её просто не видно, поэтому заливка плотнее и добавлена рамка.
+  internalBlock: "rgba(122, 110, 240, 0.26)",
+  internalBlockBorder: "rgba(122, 110, 240, 0.55)",
+  swingBlock: "rgba(122, 110, 240, 0.40)",
+  swingBlockBorder: "rgba(122, 110, 240, 0.80)",
   bullishGap: "rgba(14, 203, 129, 0.16)",
   bearishGap: "rgba(246, 70, 93, 0.16)",
   equal: "#F0B90B",
@@ -87,6 +91,7 @@ export function buildShapes(
         top: block.top,
         bottom: block.bottom,
         fill: block.internal ? COLORS.internalBlock : COLORS.swingBlock,
+        border: block.internal ? COLORS.internalBlockBorder : COLORS.swingBlockBorder,
       });
     }
   }

@@ -123,7 +123,7 @@ export default function PriceChart({
   indicatorsRef.current = indicators;
   const lineRef = useRef<IPriceLine | null>(null);
   const mtfLinesRef = useRef<IPriceLine[]>([]);
-  const shelfLinesRef = useRef<IPriceLine[]>([]);
+  const shelfShapesRef = useRef<ShapesPrimitive | null>(null);
   const dataRef = useRef<Candle[]>([]);
 
   // Загруженные уровни старших периодов. Нужны не только для линий: на минутном
@@ -229,6 +229,12 @@ export default function PriceChart({
     shapesRef.current = new ShapesPrimitive();
     candleRef.current.attachPrimitive(shapesRef.current);
 
+    // Полки живут отдельным примитивом: они приходят из стакана и меняются
+    // своим темпом, а структура — из свечей и своим. Общий набор фигур
+    // пересобирался бы восемь раз в секунду ради нескольких линий.
+    shelfShapesRef.current = new ShapesPrimitive();
+    candleRef.current.attachPrimitive(shelfShapesRef.current);
+
     chartRef.current = chart;
     return () => {
       chart.remove();
@@ -241,7 +247,7 @@ export default function PriceChart({
       shapesRef.current = null;
       lineRef.current = null;
       mtfLinesRef.current = [];
-      shelfLinesRef.current = [];
+      shelfShapesRef.current = null;
     };
   }, []);
 
@@ -408,30 +414,36 @@ export default function PriceChart({
     };
   }, [symbol, cfg.levels]);
 
-  // Полки ликвидности: цены, где в стакане стоит от двух миллионов. Это то, чего нет
-  // ни в одном индикаторе — уровни берутся из живой книги заявок, а не из
-  // истории цены. Видно, куда цена идёт и где её встретят.
+  // Полки ликвидности: цены, где в стакане стоит от двух миллионов. Это то,
+  // чего нет ни в одном индикаторе — уровни берутся из живой книги заявок, а не
+  // из истории цены. Видно, куда цена идёт и где её встретят.
+  //
+  // Рисуем своим примитивом, а не ценовой линией: у линии подпись выводится
+  // только плашкой на оси, и десяток полок превращал шкалу в стену бейджей.
   useEffect(() => {
-    const series = candleRef.current;
-    if (!series) return;
+    const candles = dataRef.current;
+    if (!shelfShapesRef.current || candles.length === 0) return;
 
-    for (const l of shelfLinesRef.current) series.removePriceLine(l);
-    shelfLinesRef.current = [];
-    if (!cfg.shelves) return;
+    if (!cfg.shelves) {
+      shelfShapesRef.current.setShapes(EMPTY_SHAPES);
+      return;
+    }
 
-    shelfLinesRef.current = shelves.map((shelf) =>
-      series.createPriceLine({
+    const from = candles[0].time as UTCTimestamp;
+    const to = candles[candles.length - 1].time as UTCTimestamp;
+    shelfShapesRef.current.setShapes({
+      boxes: [],
+      points: [],
+      segments: shelves.map((shelf) => ({
+        fromTime: from,
+        toTime: to,
         price: shelf.price,
         color: shelf.side === "bid" ? BUY : SELL,
-        lineWidth: 1,
-        lineStyle: 1,
-        // Плашку с ценой на ось не вешаем: каждая полка добавляла бы к шкале
-        // вторую метку, и ценовая ось превращалась в сплошную стену бейджей.
-        // Положение линии цену и так показывает, а размер виден на ней самой.
-        axisLabelVisible: false,
-        title: money(shelf.notional),
-      }),
-    );
+        dashed: true,
+        label: money(shelf.notional),
+        labelAt: "end" as const,
+      })),
+    });
   }, [shelfKey, cfg.shelves]);
 
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
