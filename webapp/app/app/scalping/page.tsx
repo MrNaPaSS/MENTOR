@@ -223,10 +223,6 @@ export default function ScalpingPage() {
   // считает результат, после стопа или последней цели закрывается сама.
   const [trade, setTrade] = useState<ActiveTrade | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
-  // Боевой режим: «Войти» не только рисует разметку, но и ставит ордер на
-  // бирже. Выключен по умолчанию и всегда — после перезагрузки: включать
-  // торговлю чужими деньгами молча, «по памяти прошлой сессии», нельзя.
-  const [liveMode, setLiveMode] = useState(false);
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
   // Отчёт об ордере: текст и тон. Молчание после нажатия «Войти» — худшее из
@@ -554,18 +550,12 @@ export default function ScalpingPage() {
     setTrade(next);
     setDraft(null);
 
-    // Почему ордер не ушёл — говорим прямо. Раньше в этих случаях не
-    // происходило ничего, и разницы между «режим расчёта» и «биржа отказала»
-    // на экране не было.
+    // Вход в сделку — это торговля, а не режим. Расчёт живёт вместе со
+    // сделкой, а не вместо неё: цифры трейдер уже видел в окне, дальше заявка
+    // уходит на биржу. Единственное, что может помешать, — неподключённый счёт.
     if (!exchange?.connected) {
-      setOrderNote({ text: "Биржевой счёт не подключён — ордер не отправлен", bad: true });
-      return;
-    }
-    if (!liveMode) {
-      setOrderNote({
-        text: "Режим «расчёт»: разметка на графике, ордер на биржу не отправлен",
-        bad: false,
-      });
+      setOrderNote({ text: "Биржевой счёт не подключён — заявка не отправлена", bad: true });
+      setExchangeOpen(true);
       return;
     }
 
@@ -937,18 +927,6 @@ export default function ScalpingPage() {
                     <Radio className="h-3.5 w-3.5" />
                   </button>
 
-                  {exchange?.connected && (
-                    <button
-                      onClick={() => setLiveMode((v) => !v)}
-                      title="Боевой режим: «Войти» ставит ордер на бирже"
-                      className={`${CHIP} ${
-                        liveMode ? "bg-danger/15 text-danger" : CHIP_OFF
-                      }`}
-                    >
-                      {liveMode ? "боевой" : "расчёт"}
-                    </button>
-                  )}
-
                   <button
                     onClick={() => setJournalOpen((v) => !v)}
                     title="Журнал сделок"
@@ -1079,7 +1057,7 @@ export default function ScalpingPage() {
           onChange={updateDraft}
           onConfirm={confirmTrade}
           onCancel={cancelDialog}
-          live={liveMode && Boolean(exchange?.connected)}
+          live={Boolean(exchange?.connected)}
         />
       )}
     </div>
