@@ -1068,10 +1068,10 @@ function PriceChart({
           ответ, и он честнее пустого места. */}
       {trade && trade.status !== "closed" && entryY !== null && (
         <div
-          // Справа, у самой шкалы: там заканчивается линия входа и туда же
-          // подходит цена — ярлык должен стоять на конце своей линии, а не в
-          // начале графика, где под ним чужие свечи.
-          className="pointer-events-auto absolute right-16 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
+          // Справа, но с отступом от ценовой шкалы: ярлык стоит на конце своей
+          // линии, а не в начале графика, где под ним чужие свечи, и при этом
+          // не наезжает на плашки цен.
+          className="pointer-events-auto absolute right-28 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
           style={{
             top: entryY - 12,
             borderColor: "var(--pane-border)",
