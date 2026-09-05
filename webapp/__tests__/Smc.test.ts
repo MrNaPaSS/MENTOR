@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { computeSmc, SMC_DEFAULTS, BULLISH, BEARISH } from "@/lib/indicator/smc";
-import type { Candle } from "@/lib/indicator/nmnhVision";
+import type { Candle } from "@/lib/indicator/types";
+import { buildShapes, SHAPE_DEFAULTS } from "@/lib/indicator/shapes";
 
 // Структурная часть индикатора вся построена на памяти о прошлых барах:
 // пивоты, флаги «уровень уже пробит», накопление и погашение блоков. Ошибку
@@ -205,5 +206,44 @@ describe("устойчивость", () => {
     const result = computeSmc(peakThenBreak());
     expect([0, BULLISH, BEARISH]).toContain(result.bias.swing);
     expect([0, BULLISH, BEARISH]).toContain(result.bias.internal);
+  });
+});
+
+describe("сборка фигур для графика", () => {
+  const candles = peakThenBreak();
+  const smc = computeSmc(candles, { swingLength: 5 });
+  const lastTime = candles[candles.length - 1].time;
+
+  it("ордер-блоки превращаются в боксы", () => {
+    const shapes = buildShapes(smc, lastTime, { ...SHAPE_DEFAULTS, orderBlocks: true });
+    expect(smc.orderBlocks.length).toBeGreaterThan(0);
+    expect(shapes.boxes.length).toBeGreaterThanOrEqual(smc.orderBlocks.length);
+  });
+
+  it("выключенный переключатель убирает боксы блоков", () => {
+    const on = buildShapes(smc, lastTime, { ...SHAPE_DEFAULTS, orderBlocks: true, fvg: false, zones: false });
+    const off = buildShapes(smc, lastTime, { ...SHAPE_DEFAULTS, orderBlocks: false, fvg: false, zones: false });
+    expect(off.boxes.length).toBe(0);
+    expect(on.boxes.length).toBe(smc.orderBlocks.length);
+  });
+
+  it("бокс блока тянется вправо до последнего бара", () => {
+    const shapes = buildShapes(smc, lastTime, { ...SHAPE_DEFAULTS, fvg: false, zones: false });
+    for (const box of shapes.boxes) {
+      expect(box.toTime).toBe(lastTime);
+      expect(Number(box.fromTime)).toBeLessThanOrEqual(lastTime);
+    }
+  });
+
+  it("структура превращается в отрезки и подписи", () => {
+    const shapes = buildShapes(smc, lastTime, { ...SHAPE_DEFAULTS, structure: true });
+    expect(shapes.segments.length).toBeGreaterThan(0);
+    expect(shapes.points.length).toBe(smc.swings.length);
+  });
+
+  it("зоны рисуются без подписей", () => {
+    const shapes = buildShapes(smc, lastTime, { ...SHAPE_DEFAULTS, zones: true, orderBlocks: false, fvg: false });
+    expect(shapes.boxes.length).toBe(3);
+    for (const box of shapes.boxes) expect(box.label).toBeUndefined();
   });
 });

@@ -14,7 +14,7 @@
 // баров, а не на один.
 
 import { atr } from "./ta";
-import type { Candle } from "./nmnhVision";
+import type { Candle } from "./types";
 
 export const BULLISH = 1;
 export const BEARISH = -1;

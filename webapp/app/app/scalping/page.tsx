@@ -43,7 +43,6 @@ const DEPTHS = [30, 60, 100];
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h"];
 
 const INDICATOR_LABELS: Record<keyof Indicators, string> = {
-  vision: "VISION",
   structure: "Структура",
   blocks: "Блоки",
   gaps: "FVG",
@@ -76,8 +75,44 @@ const PANE_LIMITS = {
 
 const STORAGE_KEY = "nmnh.scalping.panes";
 
+// Набор по умолчанию собран под чтение, а не под демонстрацию возможностей.
+// Структура и полки — то, ради чего раздел и открывают: первая показывает, куда
+// рынок идёт, вторые — где его встретят. Средние дают направление. Остальное —
+// ордер-блоки, разрывы, уровни, зоны — включается под задачу: вместе они
+// закрашивают график так, что свечей не видно.
+const DEFAULT_INDICATORS: Indicators = {
+  structure: true,
+  shelves: true,
+  ema: true,
+  volume: true,
+  blocks: false,
+  gaps: false,
+  levels: false,
+  zones: false,
+};
+
 function clamp(value: number, { min, max }: { min: number; max: number }) {
   return Math.max(min, Math.min(max, value));
+}
+
+/** Настройки рабочего места, которые переживают перезагрузку страницы. */
+type Workspace = {
+  screener: number;
+  dom: number;
+  indicators: Indicators;
+  sort: SortKey;
+  timeframe: string;
+  agg: number;
+  rows: number;
+};
+
+function readWorkspace(): Partial<Workspace> | null {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+  } catch {
+    // В приватном окне доступ к хранилищу бросает исключение.
+    return null;
+  }
 }
 
 export default function ScalpingPage() {
@@ -86,49 +121,56 @@ export default function ScalpingPage() {
   const [agg, setAgg] = useState(10);
   const [rows, setRows] = useState(30);
   const [timeframe, setTimeframe] = useState("1m");
-  // Состояние повторяет рабочее пространство заказчика: включены коридор
-  // Chandelier Exit, структура, ордер-блоки и разрывы. VWAP в оригинале нет —
-  // он наш, поэтому по умолчанию выключен.
-  const [indicators, setIndicators] = useState<Indicators>({
-    vision: true,
-    structure: true,
-    blocks: true,
-    gaps: true,
-    shelves: true,
-    levels: true,
-    // Зоны закрашивают половину окна — на минутном графике это мешает, поэтому
-    // включаются вручную, когда смотришь картину крупнее.
-    zones: false,
-    ema: true,
-    volume: true,
-  });
+  const [indicators, setIndicators] = useState<Indicators>(DEFAULT_INDICATORS);
 
   const [screenerW, setScreenerW] = useState(PANE_LIMITS.screener.def);
   const [domW, setDomW] = useState(PANE_LIMITS.dom.def);
 
   const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort });
 
-  // Ширины — личная настройка рабочего места, живут в браузере трейдера.
-  // Чтение обёрнуто в try: в приватном окне доступ к хранилищу бросает.
+  // Рабочее место трейдера живёт в его браузере: ширины панелей, набор
+  // индикаторов, таймфрейм, шаг и глубина стакана. Настроил один раз — и после
+  // перезагрузки всё на месте, а не сброшено к заводскому.
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-      if (saved && typeof saved.screener === "number" && typeof saved.dom === "number") {
-        setScreenerW(clamp(saved.screener, PANE_LIMITS.screener));
-        setDomW(clamp(saved.dom, PANE_LIMITS.dom));
-      }
-    } catch {
-      // Хранилище недоступно — остаются ширины по умолчанию.
+    const saved = readWorkspace();
+    if (!saved) return;
+    if (typeof saved.screener === "number") {
+      setScreenerW(clamp(saved.screener, PANE_LIMITS.screener));
     }
+    if (typeof saved.dom === "number") setDomW(clamp(saved.dom, PANE_LIMITS.dom));
+    // Индикаторы сливаем с умолчаниями: если в новой версии появился
+    // переключатель, которого в сохранённом наборе нет, он не должен пропасть.
+    if (saved.indicators) {
+      setIndicators({ ...DEFAULT_INDICATORS, ...saved.indicators });
+    }
+    if (saved.sort && saved.sort in SORT_LABELS) setSort(saved.sort);
+    if (saved.timeframe && TIMEFRAMES.includes(saved.timeframe)) {
+      setTimeframe(saved.timeframe);
+    }
+    if (typeof saved.agg === "number" && STEPS.some((s) => s.agg === saved.agg)) {
+      setAgg(saved.agg);
+    }
+    if (typeof saved.rows === "number" && DEPTHS.includes(saved.rows)) setRows(saved.rows);
   }, []);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ screener: screenerW, dom: domW }));
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          screener: screenerW,
+          dom: domW,
+          indicators,
+          sort,
+          timeframe,
+          agg,
+          rows,
+        } satisfies Workspace),
+      );
     } catch {
       // Не сохранилось — не повод ломать экран.
     }
-  }, [screenerW, domW]);
+  }, [screenerW, domW, indicators, sort, timeframe, agg, rows]);
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
   function resizeScreener(delta: number) {

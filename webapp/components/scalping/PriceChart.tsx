@@ -6,8 +6,9 @@
 // график тянуть из другого места, трейдер увидит на нём одну цену, а в стакане
 // другую, и доверия к разделу не будет.
 //
-// Индикаторы считаются на клиенте по тем же свечам — отдельных запросов ради
-// средней линии не делаем.
+// Структура и средние считаются на клиенте по тем же свечам — отдельных
+// запросов ради средней линии не делаем. Полки приходят из стакана: это
+// единственное на графике, что берётся не из истории цены, а из живой книги.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -16,22 +17,17 @@ import {
   HistogramSeries,
   LineSeries,
   createChart,
-  createSeriesMarkers,
   type IChartApi,
   type IPriceLine,
   type ISeriesApi,
-  type ISeriesMarkersPluginApi,
-  type LineData,
-  type SeriesMarker,
   type Time,
   type UTCTimestamp,
-  type WhitespaceData,
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
-import { computeVision, DEFAULTS, type VisionSignal } from "@/lib/indicator/nmnhVision";
 import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
+import { ema } from "@/lib/indicator/ta";
+import type { Candle } from "@/lib/indicator/types";
 import { buildShapes } from "@/lib/indicator/shapes";
-import { BandPrimitive, type BandPoint } from "./primitives/BandPrimitive";
 import {
   EMPTY_SHAPES,
   ShapesPrimitive,
@@ -39,19 +35,16 @@ import {
 } from "./primitives/ShapesPrimitive";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 
-// Цвета берём из палитры проекта, а не из настроек Tiger: у нас тёмная тема,
-// и чистый зелёный с красным на ней выжигают глаз.
-const CE_LONG = "#0ECB81";
-const CE_SHORT = "#F6465D";
+// Цвета покупок и продаж из палитры проекта.
+const BUY = "#0ECB81";
+const SELL = "#F6465D";
 
-export type Candle = {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-};
+// Периоды скользящих средних индикатора.
+const EMA_FAST = 8;
+const EMA_SLOW = 21;
+const EMA_TREND = 50;
+
+export type { Candle };
 
 export type Indicators = {
   volume: boolean;
@@ -59,8 +52,6 @@ export type Indicators = {
   ema: boolean;
   /** Полки ликвидности: цены, где в стакане стоит от двух миллионов. */
   shelves: boolean;
-  /** NMNH VISION: трейлинг Chandelier Exit, метки BY↑/SL↓ и панель BM Score. */
-  vision: boolean;
   /** Структура рынка: BOS и CHoCH, подписи свингов. */
   structure: boolean;
   /** Ордер-блоки: три внутренних и два свинговых. */
@@ -100,28 +91,6 @@ function toLine(candles: Candle[], values: number[]) {
   return out;
 }
 
-/**
- * Линия трейлинг-стопа рисуется только на своей стороне.
- *
- * В оригинале это `plot.style_linebr` — линия рвётся там, где значения нет.
- * Просто пропустить бары нельзя: библиотека соединяет соседние точки, и
- * неактивный стоп протягивался через весь экран диагональю. Поэтому на
- * «чужих» барах отдаём пустую точку — только время, без значения.
- */
-function toStopLine(
-  candles: Candle[],
-  values: number[],
-  direction: number[],
-  side: 1 | -1,
-): (LineData<UTCTimestamp> | WhitespaceData<UTCTimestamp>)[] {
-  return candles.map((c, i) => {
-    const time = c.time as UTCTimestamp;
-    return direction[i] === side && Number.isFinite(values[i])
-      ? { time, value: values[i] }
-      : { time };
-  });
-}
-
 export default function PriceChart({
   symbol,
   interval,
@@ -142,12 +111,6 @@ export default function PriceChart({
   const emaFastRef = useRef<ISeriesApi<"Line"> | null>(null);
   const emaSlowRef = useRef<ISeriesApi<"Line"> | null>(null);
   const emaTrendRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const longStopRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const shortStopRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
-  const markerDataRef = useRef<SeriesMarker<Time>[]>([]);
-  const bandRef = useRef<BandPrimitive | null>(null);
-  const bandDataRef = useRef<BandPoint[]>([]);
   const shapesRef = useRef<ShapesPrimitive | null>(null);
   const shapeDataRef = useRef<Shapes>(EMPTY_SHAPES);
   // Результат структурного движка держим отдельно: переключатели меняют набор
@@ -182,7 +145,6 @@ export default function PriceChart({
     [
       indicators.volume,
       indicators.ema,
-      indicators.vision,
       indicators.structure,
       indicators.blocks,
       indicators.gaps,
@@ -261,28 +223,6 @@ export default function PriceChart({
       priceLineVisible: false,
       lastValueVisible: false,
     });
-    // Трейлинг-стоп Chandelier Exit. Толщина 2 — как в настройках заказчика.
-    longStopRef.current = chart.addSeries(LineSeries, {
-      color: CE_LONG,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-    });
-    shortStopRef.current = chart.addSeries(LineSeries, {
-      color: CE_SHORT,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-    });
-
-    // Метки разворота BY↑ и SL↓ ставятся на свечи, а не на уровни стопа:
-    // так видно, на каком баре сигнал возник.
-    markersRef.current = createSeriesMarkers(candleRef.current, []);
-
-    // Заливка коридора между средней ценой бара и стопом — без неё стоп
-    // читается как ещё одна средняя, а не как граница движения.
-    bandRef.current = new BandPrimitive();
-    candleRef.current.attachPrimitive(bandRef.current);
 
     // Структура, ордер-блоки и разрывы: всё, что рисуется поверх свечей
     // произвольными фигурами.
@@ -298,10 +238,6 @@ export default function PriceChart({
       emaFastRef.current = null;
       emaSlowRef.current = null;
       emaTrendRef.current = null;
-      longStopRef.current = null;
-      shortStopRef.current = null;
-      markersRef.current = null;
-      bandRef.current = null;
       shapesRef.current = null;
       lineRef.current = null;
       mtfLinesRef.current = [];
@@ -326,37 +262,14 @@ export default function PriceChart({
         })),
       );
 
-      // Весь индикатор считается за один проход по тем же свечам, что и стакан.
-      const vision = computeVision(candles);
+      // Средние считаются по тем же свечам, что и всё остальное.
+      const close = candles.map((c) => c.close);
 
-      emaFastRef.current?.setData(toLine(candles, vision.emaFast));
-      emaSlowRef.current?.setData(toLine(candles, vision.emaSlow));
-      emaTrendRef.current?.setData(toLine(candles, vision.emaTrend));
+      emaFastRef.current?.setData(toLine(candles, ema(close, EMA_FAST)));
+      emaSlowRef.current?.setData(toLine(candles, ema(close, EMA_SLOW)));
+      emaTrendRef.current?.setData(toLine(candles, ema(close, EMA_TREND)));
 
-      longStopRef.current?.setData(
-        toStopLine(candles, vision.longStop, vision.direction, 1),
-      );
-      shortStopRef.current?.setData(
-        toStopLine(candles, vision.shortStop, vision.direction, -1),
-      );
 
-      // Полоса строится от средней цены бара до активного стопа — как fill()
-      // между ohlc4 и линией стопа в оригинале.
-      bandDataRef.current = candles.flatMap((c, i) => {
-        const up = vision.direction[i] === 1;
-        const stop = up ? vision.longStop[i] : vision.shortStop[i];
-        if (!Number.isFinite(stop)) return [];
-        const mid = (c.open + c.high + c.low + c.close) / 4;
-        return [
-          {
-            time: c.time as UTCTimestamp,
-            upper: Math.max(mid, stop),
-            lower: Math.min(mid, stop),
-            up,
-          },
-        ];
-      });
-      bandRef.current?.setPoints(indicatorsRef.current.vision ? bandDataRef.current : []);
 
       // Структурная часть считается по тем же свечам одним проходом.
       const smc = computeSmc(candles);
@@ -372,14 +285,6 @@ export default function PriceChart({
       smcRef.current = smc;
       lastTimeRef.current = candles[candles.length - 1]?.time ?? 0;
 
-      markerDataRef.current = vision.signals.map((s) => ({
-        time: s.time as UTCTimestamp,
-        position: s.side === "buy" ? ("belowBar" as const) : ("aboveBar" as const),
-        color: s.side === "buy" ? CE_LONG : CE_SHORT,
-        shape: s.side === "buy" ? ("arrowUp" as const) : ("arrowDown" as const),
-        text: s.side === "buy" ? "BY↑" : "SL↓",
-      }));
-      markersRef.current?.setMarkers(indicatorsRef.current.vision ? markerDataRef.current : []);
 
     }
 
@@ -431,12 +336,6 @@ export default function PriceChart({
     emaFastRef.current?.applyOptions({ visible: cfg.ema });
     emaSlowRef.current?.applyOptions({ visible: cfg.ema });
     emaTrendRef.current?.applyOptions({ visible: cfg.ema });
-    longStopRef.current?.applyOptions({ visible: cfg.vision });
-    shortStopRef.current?.applyOptions({ visible: cfg.vision });
-    // У плагина меток и у заливки нет флага видимости — прячем, подставляя
-    // пустой набор.
-    markersRef.current?.setMarkers(cfg.vision ? markerDataRef.current : []);
-    bandRef.current?.setPoints(cfg.vision ? bandDataRef.current : []);
 
     // Фигуры пересобираем из уже посчитанной структуры: переключатель меняет
     // только набор видимого, считать заново незачем.
@@ -523,7 +422,7 @@ export default function PriceChart({
     shelfLinesRef.current = shelves.map((shelf) =>
       series.createPriceLine({
         price: shelf.price,
-        color: shelf.side === "bid" ? CE_LONG : CE_SHORT,
+        color: shelf.side === "bid" ? BUY : SELL,
         lineWidth: 1,
         lineStyle: 1,
         // Плашку с ценой на ось не вешаем: каждая полка добавляла бы к шкале
