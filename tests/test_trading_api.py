@@ -22,6 +22,10 @@ class FakeExchange:
 
     def __init__(self):
         self.orders: list[dict] = []
+        self.pending = []
+        self.cancelled = []
+        self.algo_cancelled = []
+        self.position = None
         self.leverage: tuple | None = None
         self.modified: list[dict] = []
 
@@ -32,8 +36,22 @@ class FakeExchange:
         # Как у BTCUSDT на бирже: шаг лота четыре знака, шаг цены десятая.
         return {"step": 0.0001, "tick": 0.1, "min_qty": 0.0001}
 
+    position: dict | None = None
+    pending: list[dict] = []
+    cancelled: list[str] = []
+    algo_cancelled: list[str] = []
+
     async def positions(self):
-        return []
+        return [self.position] if self.position else []
+
+    async def open_orders(self, symbol):
+        return list(self.pending)
+
+    async def cancel_order(self, symbol, order_id):
+        self.cancelled.append(order_id)
+
+    async def cancel_all_algo(self, symbol):
+        self.algo_cancelled.append(symbol)
 
     async def set_leverage(self, symbol, leverage, margin_coin="USDT"):
         self.leverage = (symbol, leverage)
@@ -315,3 +333,55 @@ def test_numbers_never_go_to_exchange_in_exponent_form():
     # На PEPE цена уходит в 1e-07, и биржа такой записи не понимает.
     assert trading_api._num(0.0000001) == "0.0000001"
     assert trading_api._num(80000.0) == "80000"
+
+
+def test_closing_cancels_pending_orders_when_there_is_no_position(app_and_exchange):
+    """Снятие расчёта убирает с биржи и лимитку входа, и стоп, и цели.
+
+    Осевшая заявка — это позиция, о которой трейдер не знает: рынок дойдёт до
+    её цены и откроет «отменённую» сделку.
+    """
+    client, exchange, _ = app_and_exchange
+    exchange.pending = [{"orderId": "e1"}, {"orderId": "tp1"}]
+
+    body = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "long", "share": 1},
+    ).json()
+
+    assert exchange.cancelled == ["e1", "tp1"]
+    assert exchange.algo_cancelled == ["BTCUSDT"]
+    assert body["closed"] == 0.0
+
+
+def test_full_close_removes_the_stop_and_the_takes(app_and_exchange):
+    client, exchange, _ = app_and_exchange
+    exchange.position = {"symbol": "BTCUSDT", "total": "0.5"}
+    exchange.pending = [{"orderId": "tp1"}]
+
+    body = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "long", "share": 1},
+    ).json()
+
+    assert body["closed"] == 0.5 and body["remaining"] == 0.0
+    close_order = exchange.orders[-1]
+    assert close_order["reduce_only"] is True
+    assert close_order["order_type"] == "MARKET"
+    assert close_order["side"] == "SELL"          # лонг закрывается продажей
+    assert exchange.algo_cancelled == ["BTCUSDT"]
+
+
+def test_partial_close_keeps_the_rest_and_its_orders(app_and_exchange):
+    client, exchange, _ = app_and_exchange
+    exchange.position = {"symbol": "BTCUSDT", "total": "0.5"}
+    exchange.pending = [{"orderId": "tp1"}]
+
+    body = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "long", "share": 0.5},
+    ).json()
+
+    assert body["closed"] == 0.25 and body["remaining"] == 0.25
+    # Заявки остатка не трогаем: позиция ещё жива и должна быть под защитой.
+    assert exchange.cancelled == [] and exchange.algo_cancelled == []

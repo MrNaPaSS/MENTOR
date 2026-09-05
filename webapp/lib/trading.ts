@@ -4,7 +4,7 @@
 // вкладка закрыта — стоп в безубыток переносится сам. Сюда ключ уходит один
 // раз при подключении и обратно не возвращается никогда.
 
-import { API_URL } from "./api";
+import { authReq } from "./api";
 import { getAccessToken } from "./auth";
 import type { ActiveTrade } from "./trade/position";
 
@@ -20,21 +20,10 @@ export type TradingStatus = {
 async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   const token = getAccessToken();
   if (!token) return null;
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(init?.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    // Причина отказа нужна трейдеру дословно: «биржа отклонила ордер» без
-    // текста биржи не говорит ничего.
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.detail || `Ошибка ${res.status}`);
-  }
-  return (await res.json()) as T;
+  // Через общий authReq: он обновляет протухший токен и повторяет запрос. Без
+  // этого ордер не уходил бы на биржу через четверть часа после входа в
+  // кабинет, а причина выглядела бы как отказ биржи.
+  return authReq<T>(path, token, init);
 }
 
 export function tradingStatus() {
@@ -82,4 +71,25 @@ export function openPosition(trade: ActiveTrade, entryAsLimit: boolean) {
       client_order_id: trade.id.slice(0, 64),
     }),
   });
+}
+
+/**
+ * Зафиксировать позицию на бирже: долю от того, что открыто.
+ *
+ * Объём считает сервер по факту с биржи, а не терминал: часть могла уже
+ * закрыться целями, и приказ на исходный объём биржа отклонит целиком.
+ */
+export function closePosition(trade: ActiveTrade, share: number) {
+  return request<{ closed: number; remaining: number; note?: string }>(
+    "/api/trading/close",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        symbol: trade.symbol,
+        side: trade.side,
+        share,
+        client_order_id: `${trade.id}_x${trade.partials + 1}`.slice(0, 64),
+      }),
+    },
+  );
 }

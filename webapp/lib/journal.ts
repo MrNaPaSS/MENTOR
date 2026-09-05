@@ -4,7 +4,7 @@
 // прибыли и должен открываться на любом устройстве. Без входа в кабинет журнал
 // просто выключен — писать некуда, и притворяться, что записалось, нельзя.
 
-import { API_URL } from "./api";
+import { authReq } from "./api";
 import { getAccessToken } from "./auth";
 import type { ActiveTrade } from "./trade/position";
 
@@ -48,16 +48,10 @@ export type JournalDay = {
 async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   const token = getAccessToken();
   if (!token) return null;
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(init?.headers || {}),
-    },
-  });
-  if (!res.ok) throw new Error(`Журнал: ${res.status}`);
-  return (await res.json()) as T;
+  // Через общий authReq: он обновляет протухший токен и повторяет запрос. Свой
+  // fetch означал бы, что через четверть часа сделки молча перестают
+  // записываться — ровно это и случилось на боевом счёте.
+  return authReq<T>(path, token, init);
 }
 
 /** Есть ли куда писать журнал: без входа в кабинет — нет. */

@@ -85,6 +85,15 @@ class OrderIn(BaseModel):
     client_order_id: str | None = Field(default=None, max_length=64)
 
 
+class CloseIn(BaseModel):
+    """Фиксация позиции: доля от того, что сейчас открыто."""
+
+    symbol: str = Field(min_length=1, max_length=32)
+    side: str
+    share: float = Field(gt=0, le=1)
+    client_order_id: str | None = Field(default=None, max_length=64)
+
+
 class StopIn(BaseModel):
     symbol: str = Field(min_length=1, max_length=32)
     side: str
@@ -341,6 +350,131 @@ async def open_position(
         "watched": live.client_id,
         "warning": warning,
     }
+
+
+@router.post("/close")
+async def close_position(
+    body: CloseIn,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Закрыть позицию целиком или частью — по рынку.
+
+    По рынку, а не лимитом: трейдер нажал «зафиксировать», значит он хочет выйти
+    сейчас, а не поставить заявку и ждать. Лимит на выходе означал бы, что
+    позиция осталась открытой, а человек считает, что вышел.
+
+    Объём берём с биржи, а не из терминала: часть могла уже закрыться целями, и
+    приказ на исходный объём биржа отклонит целиком.
+    """
+    if body.side not in {"long", "short"}:
+        raise HTTPException(422, "Сторона сделки: long или short")
+
+    client = _require_client(session, student)
+    symbol = body.symbol.upper()
+    long = body.side == "long"
+
+    try:
+        positions = await client.positions()
+        position = next(
+            (p for p in positions if str(p.get("symbol", "")).upper() == symbol), None
+        )
+        size = 0.0
+        for name in ("total", "size", "positionAmt", "available"):
+            try:
+                size = abs(float(position.get(name)))  # type: ignore[union-attr]
+                break
+            except (TypeError, ValueError, AttributeError):
+                continue
+
+        if size <= 0:
+            # Позиции нет — но заявки могут стоять: вход ещё не исполнился, а с
+            # ним висят стоп и цели. Снятие расчёта должно убирать всё это, иначе
+            # «отменённая» сделка откроется сама, стоило рынку дойти до уровня.
+            cancelled = await _cancel_everything(client, symbol)
+            await _forget(session, student, symbol)
+            return {
+                "closed": 0.0,
+                "remaining": 0.0,
+                "note": f"позиции нет, снято заявок: {cancelled}" if cancelled else "позиции нет",
+            }
+
+        filters = await client.symbol_filters(symbol)
+        quantity = floor_to_step(size * body.share, filters["step"])
+        if quantity < filters["min_qty"]:
+            raise HTTPException(
+                422,
+                f"Доля {body.share:.0%} — это {quantity:g}, меньше минимального "
+                f"объёма биржи. Закройте большую часть.",
+            )
+
+        await client.place_order(
+            symbol=symbol,
+            side="SELL" if long else "BUY",
+            position_side="LONG" if long else "SHORT",
+            quantity=_num(quantity),
+            order_type="MARKET",
+            reduce_only=True,
+            client_order_id=body.client_order_id,
+        )
+
+        remaining = max(0.0, size - quantity)
+        if remaining < filters["min_qty"]:
+            # Позиции больше нет: снимаем стоп и цели. Осевшие заявки на
+            # несуществующий объём откроют позицию заново, стоило бы рынку
+            # дойти до их цены.
+            await _cancel_everything(client, symbol)
+            await _forget(session, student, symbol)
+
+    except WeexTradeError as exc:
+        raise _fail(exc) from exc
+
+    return {"closed": quantity, "remaining": remaining}
+
+
+async def _cancel_everything(client: WeexFutures, symbol: str) -> int:
+    """Снять по инструменту всё: обычные заявки и условные.
+
+    Осевшая заявка на несуществующий объём — это открытая позиция, о которой
+    трейдер не знает: рынок дойдёт до её цены и исполнит.
+    """
+    removed = 0
+    try:
+        for order in await client.open_orders(symbol):
+            order_id = str(order.get("orderId") or order.get("id") or "")
+            if not order_id:
+                continue
+            try:
+                await client.cancel_order(symbol, order_id)
+                removed += 1
+            except WeexTradeError as exc:
+                logger.warning("Заявка %s не снята: %s", order_id, exc)
+    except WeexTradeError as exc:
+        logger.warning("Список заявок %s не получен: %s", symbol, exc)
+
+    try:
+        await client.cancel_all_algo(symbol)
+        removed += 1
+    except WeexTradeError as exc:
+        logger.warning("Условные заявки %s не сняты: %s", symbol, exc)
+
+    return removed
+
+
+async def _forget(session, student: Student, symbol: str) -> None:
+    """Снять сделку с ведения: позиции больше нет."""
+    rows = session.execute(
+        select(LiveTrade)
+        .where(LiveTrade.student_id == student.id)
+        .where(LiveTrade.symbol == symbol)
+        .where(LiveTrade.status.in_(("waiting", "open")))
+    ).scalars().all()
+    for row in rows:
+        row.status = "closed"
+        row.closed_at = utcnow()
+        row.updated_at = utcnow()
+    if rows:
+        session.commit()
 
 
 @router.post("/breakeven")

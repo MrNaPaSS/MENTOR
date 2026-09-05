@@ -402,6 +402,14 @@ class WeexFutures:
             "DELETE", ENDPOINTS["order"], params={"symbol": symbol, "orderId": order_id}
         )
 
+    async def cancel_all_algo(self, symbol: str) -> Any:
+        """Снять условные заявки инструмента: стоп и всё, что к нему привязано.
+
+        Нужно при полном закрытии позиции: осевшие заявки на несуществующий
+        объём открывают позицию заново, стоило рынку дойти до их цены.
+        """
+        return await self._request("DELETE", ENDPOINTS["cancel_algo"], params={"symbol": symbol})
+
     async def user_trades(self, symbol: str | None = None, limit: int = 100) -> list[dict]:
         params: dict[str, Any] = {"limit": limit}
         if symbol:

@@ -32,6 +32,7 @@ import JournalPanel from "@/components/scalping/JournalPanel";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
 import {
+  closePosition,
   openPosition,
   tradingStatus,
   type TradingStatus,
@@ -449,10 +450,35 @@ export default function ScalpingPage() {
    * своим итогом: записать её как сделку целиком значит соврать и в прибыли, и
    * в количестве сделок. Остаток продолжает жить на графике.
    */
-  function applyClose(share: number) {
+  async function applyClose(share: number) {
     setCloseOpen(false);
     const current = trade;
     if (!current) return;
+
+    // Сначала биржа, потом экран. Пометить сделку закрытой у себя, не закрыв
+    // позицию на бирже, — худшее, что может сделать терминал: трейдер уверен,
+    // что вышел, а деньги продолжают стоять в рынке.
+    // Снимаем и незашедшую сделку: с ней на бирже стоят лимитка входа, стоп и
+    // цели, и «отменённый» расчёт иначе откроется сам, стоило цене дойти.
+    if (exchange?.connected && current.status !== "closed") {
+      try {
+        const result = await closePosition(current, share);
+        setOrderNote({
+          text: result?.note
+            ? `Биржа: ${result.note}`
+            : `Закрыто ${result?.closed ?? 0} ${base(current.symbol)}` +
+              (result && result.remaining > 0 ? `, осталось ${result.remaining}` : ""),
+          bad: false,
+        });
+      } catch (err) {
+        setOrderNote({
+          text: err instanceof Error ? err.message : "Биржа не закрыла позицию",
+          bad: true,
+        });
+        // Разметку не трогаем: позиция как стояла, так и стоит.
+        return;
+      }
+    }
 
     const { remaining, recorded } = closePartially(
       current,

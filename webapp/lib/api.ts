@@ -114,7 +114,14 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function authReq<T>(path: string, token: string, init?: RequestInit): Promise<T> {
+/**
+ * Запрос от имени ученика с обновлением токена.
+ *
+ * Экспортируется, потому что этим же путём обязаны ходить журнал и торговля:
+ * свой fetch там означал бы, что через четверть часа сделки перестают
+ * записываться, а ордера — отправляться, и никто об этом не узнает.
+ */
+export function authReq<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   return req<T>(path, {
     ...init,
     headers: { Authorization: `Bearer ${token}`, ...(init?.headers || {}) },
