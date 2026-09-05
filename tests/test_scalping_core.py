@@ -254,3 +254,43 @@ def test_wall_limit_can_be_lifted():
         Level(100.0 - i / 100, 900.0 if i % 5 == 0 else 1.0) for i in range(1, 30)
     ]
     assert len(find_walls(levels, "bid", mid=100.5, min_notional=100.0, limit=None)) == 5
+
+
+# ── полки ликвидности ────────────────────────────────────────────────────────
+
+def test_shelves_are_absolute_not_relative():
+    """Полка — это крупные деньги сами по себе, а не «крупнее соседей».
+
+    На редком стакане плитой оказывается и сотня тысяч, но цену такая заявка не
+    остановит. Для линий на графике нужен абсолютный порог.
+    """
+    from backend.scalping.metrics import find_shelves
+
+    levels = [Level(100.0, 20000.0), Level(99.0, 1.0), Level(98.0, 5.0)]
+    shelves = find_shelves(levels, "bid", mid=100.5, min_notional=1_000_000)
+    assert [s.price for s in shelves] == [100.0]
+
+
+def test_shelves_ignore_surroundings():
+    """Соседи такого же размера полку не отменяют — в отличие от плиты."""
+    from backend.scalping.metrics import find_shelves
+
+    levels = [Level(100.0, 20000.0), Level(99.0, 20000.0), Level(98.0, 20000.0)]
+    assert len(find_shelves(levels, "bid", mid=100.5, min_notional=1_000_000)) == 3
+    # Плита при равных соседях не находится: медиана равна им же.
+    assert find_walls(levels, "bid", mid=100.5) == []
+
+
+def test_shelves_sorted_by_money_and_capped():
+    from backend.scalping.metrics import MAX_SHELVES, find_shelves
+
+    levels = [Level(100.0 - i / 100, 20000.0 + i) for i in range(30)]
+    shelves = find_shelves(levels, "bid", mid=100.0, min_notional=1_000_000)
+    assert len(shelves) == MAX_SHELVES
+    assert shelves == sorted(shelves, key=lambda s: s.notional, reverse=True)
+
+
+def test_no_shelves_without_price():
+    from backend.scalping.metrics import find_shelves
+
+    assert find_shelves([Level(100.0, 20000.0)], "bid", mid=0) == []

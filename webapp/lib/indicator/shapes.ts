@@ -67,14 +67,14 @@ export function buildShapes(
         toTime: at(lastTime),
         top: zone.top,
         bottom: zone.bottom,
+        // Зоны без подписей: они занимают полэкрана, и три надписи поверх
+        // свечей только мешают. Цвет и положение говорят сами за себя.
         fill:
           zone.tag === "Premium"
             ? COLORS.premium
             : zone.tag === "Discount"
               ? COLORS.discount
               : COLORS.equilibrium,
-        label: zone.tag,
-        labelColor: "#5A6270",
       });
     }
   }

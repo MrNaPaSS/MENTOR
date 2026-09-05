@@ -19,7 +19,7 @@ from dataclasses import asdict
 from backend.scalping.clusters import fit_to_rows
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.ladder import DEFAULT_ROWS, build_ladder
-from backend.scalping.state import DEFAULT_SORT, biggest_wall
+from backend.scalping.state import DEFAULT_SORT, biggest_wall, liquidity_shelves
 
 logger = logging.getLogger("nmnh.scalping.ws")
 
@@ -175,6 +175,7 @@ class ScalpingHub:
             "book_ratio": state.book_ratio,
             "rows": [asdict(r) for r in ladder],
             "wall": asdict(wall) if wall else None,
+            "shelves": [asdict(s) for s in liquidity_shelves(state)],
             "clusters": _clusters(state, ladder, step),
         }
 

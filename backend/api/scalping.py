@@ -17,7 +17,13 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from backend.scalping.clusters import fit_to_rows
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.ladder import DEFAULT_ROWS, MAX_ROWS, build_ladder
-from backend.scalping.state import BAND_BP, DEFAULT_SORT, SORT_KEYS, biggest_wall
+from backend.scalping.state import (
+    BAND_BP,
+    DEFAULT_SORT,
+    SORT_KEYS,
+    biggest_wall,
+    liquidity_shelves,
+)
 
 router = APIRouter(prefix="/api/scalping", tags=["scalping"])
 
@@ -79,6 +85,7 @@ async def dom(
         "depth": {"bids": len(state.book.bids), "asks": len(state.book.asks)},
         "rows": [asdict(r) for r in ladder],
         "wall": asdict(wall) if wall else None,
+        "shelves": [asdict(s) for s in liquidity_shelves(state)],
         "tape": asdict(tape),
         "clusters": [
             {

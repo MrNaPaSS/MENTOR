@@ -47,11 +47,11 @@ const INDICATOR_LABELS: Record<keyof Indicators, string> = {
   structure: "Структура",
   blocks: "Блоки",
   gaps: "FVG",
+  shelves: "Полки",
   levels: "Уровни",
   zones: "Зоны",
   ema: "EMA",
   volume: "Объём",
-  vwap: "VWAP",
 };
 
 // Отклик на нажатие: 150 мс ease-out и лёгкое сжатие. Кнопка должна показать,
@@ -94,13 +94,13 @@ export default function ScalpingPage() {
     structure: true,
     blocks: true,
     gaps: true,
+    shelves: true,
     levels: true,
     // Зоны закрашивают половину окна — на минутном графике это мешает, поэтому
     // включаются вручную, когда смотришь картину крупнее.
     zones: false,
     ema: true,
     volume: true,
-    vwap: false,
   });
 
   const [screenerW, setScreenerW] = useState(PANE_LIMITS.screener.def);
@@ -293,6 +293,7 @@ export default function ScalpingPage() {
                   symbol={symbol}
                   interval={timeframe}
                   wall={dom?.wall ?? null}
+                  shelves={dom?.shelves ?? []}
                   indicators={indicators}
                 />
               </div>

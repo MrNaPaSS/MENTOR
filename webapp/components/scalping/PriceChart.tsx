@@ -37,17 +37,7 @@ import {
   ShapesPrimitive,
   type Shapes,
 } from "./primitives/ShapesPrimitive";
-import type { Wall } from "@/lib/scalping";
-
-/** Что показывает панель BM Score — те же четыре числа, что и в оригинале. */
-type VisionPanel = {
-  scoreUp: number;
-  scoreDown: number;
-  vo: number;
-  voSma: number;
-  direction: number;
-  signal: VisionSignal | null;
-};
+import { money, type Wall } from "@/lib/scalping";
 
 // Цвета берём из палитры проекта, а не из настроек Tiger: у нас тёмная тема,
 // и чистый зелёный с красным на ней выжигают глаз.
@@ -67,7 +57,8 @@ export type Indicators = {
   volume: boolean;
   /** Скользящие средние индикатора: 8, 21 и трендовая 50. */
   ema: boolean;
-  vwap: boolean;
+  /** Полки ликвидности: цены, где в стакане стоит от миллиона. */
+  shelves: boolean;
   /** NMNH VISION: трейлинг Chandelier Exit, метки BY↑/SL↓ и панель BM Score. */
   vision: boolean;
   /** Структура рынка: BOS и CHoCH, подписи свингов. */
@@ -131,30 +122,17 @@ function toStopLine(
   });
 }
 
-/** VWAP от начала загруженного окна: средняя цена, взвешенная объёмом. */
-function vwap(candles: Candle[]) {
-  let pv = 0;
-  let vol = 0;
-  return candles.map((c) => {
-    const typical = (c.high + c.low + c.close) / 3;
-    pv += typical * c.volume;
-    vol += c.volume;
-    return {
-      time: c.time as UTCTimestamp,
-      value: vol > 0 ? pv / vol : c.close,
-    };
-  });
-}
-
 export default function PriceChart({
   symbol,
   interval,
   wall,
+  shelves,
   indicators,
 }: {
   symbol: string;
   interval: string;
   wall: Wall | null;
+  shelves: Wall[];
   indicators: Indicators;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -164,7 +142,6 @@ export default function PriceChart({
   const emaFastRef = useRef<ISeriesApi<"Line"> | null>(null);
   const emaSlowRef = useRef<ISeriesApi<"Line"> | null>(null);
   const emaTrendRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const vwapRef = useRef<ISeriesApi<"Line"> | null>(null);
   const longStopRef = useRef<ISeriesApi<"Line"> | null>(null);
   const shortStopRef = useRef<ISeriesApi<"Line"> | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
@@ -183,24 +160,28 @@ export default function PriceChart({
   indicatorsRef.current = indicators;
   const lineRef = useRef<IPriceLine | null>(null);
   const mtfLinesRef = useRef<IPriceLine[]>([]);
+  const shelfLinesRef = useRef<IPriceLine[]>([]);
   const dataRef = useRef<Candle[]>([]);
 
-  // Панель BM Score рисуется поверх графика обычной разметкой: рисовать её на
-  // канве значило бы вручную считать шрифты и отступы ради двух чисел.
-  const [panel, setPanel] = useState<VisionPanel | null>(null);
+  // Полки перерисовываем только когда меняется сам набор цен. Стакан обновляется
+  // восемь раз в секунду, и пересоздание линий на каждом кадре давало бы моргание.
+  const shelfKey = shelves
+    .map((s) => `${s.price}`)
+    .sort()
+    .join("|");
 
   const cfg = useMemo(
     () => indicators,
     [
       indicators.volume,
       indicators.ema,
-      indicators.vwap,
       indicators.vision,
       indicators.structure,
       indicators.blocks,
       indicators.gaps,
       indicators.levels,
       indicators.zones,
+      indicators.shelves,
     ],
   );
 
@@ -273,14 +254,6 @@ export default function PriceChart({
       priceLineVisible: false,
       lastValueVisible: false,
     });
-    vwapRef.current = chart.addSeries(LineSeries, {
-      color: "#B7BDC6",
-      lineWidth: 1,
-      lineStyle: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-    });
-
     // Трейлинг-стоп Chandelier Exit. Толщина 2 — как в настройках заказчика.
     longStopRef.current = chart.addSeries(LineSeries, {
       color: CE_LONG,
@@ -318,7 +291,6 @@ export default function PriceChart({
       emaFastRef.current = null;
       emaSlowRef.current = null;
       emaTrendRef.current = null;
-      vwapRef.current = null;
       longStopRef.current = null;
       shortStopRef.current = null;
       markersRef.current = null;
@@ -326,6 +298,7 @@ export default function PriceChart({
       shapesRef.current = null;
       lineRef.current = null;
       mtfLinesRef.current = [];
+      shelfLinesRef.current = [];
     };
   }, []);
 
@@ -352,7 +325,6 @@ export default function PriceChart({
       emaFastRef.current?.setData(toLine(candles, vision.emaFast));
       emaSlowRef.current?.setData(toLine(candles, vision.emaSlow));
       emaTrendRef.current?.setData(toLine(candles, vision.emaTrend));
-      vwapRef.current?.setData(vwap(candles));
 
       longStopRef.current?.setData(
         toStopLine(candles, vision.longStop, vision.direction, 1),
@@ -402,19 +374,6 @@ export default function PriceChart({
       }));
       markersRef.current?.setMarkers(indicatorsRef.current.vision ? markerDataRef.current : []);
 
-      const last = candles.length - 1;
-      setPanel(
-        last < 0
-          ? null
-          : {
-              scoreUp: vision.scoreUp[last],
-              scoreDown: vision.scoreDown[last],
-              vo: vision.vo[last],
-              voSma: vision.voSma[last],
-              direction: vision.direction[last],
-              signal: vision.signals.at(-1) ?? null,
-            },
-      );
     }
 
     async function load(fit: boolean) {
@@ -465,7 +424,6 @@ export default function PriceChart({
     emaFastRef.current?.applyOptions({ visible: cfg.ema });
     emaSlowRef.current?.applyOptions({ visible: cfg.ema });
     emaTrendRef.current?.applyOptions({ visible: cfg.ema });
-    vwapRef.current?.applyOptions({ visible: cfg.vwap });
     longStopRef.current?.applyOptions({ visible: cfg.vision });
     shortStopRef.current?.applyOptions({ visible: cfg.vision });
     // У плагина меток и у заливки нет флага видимости — прячем, подставляя
@@ -538,6 +496,29 @@ export default function PriceChart({
     };
   }, [symbol, cfg.levels]);
 
+  // Полки ликвидности: цены, где в стакане стоит от миллиона. Это то, чего нет
+  // ни в одном индикаторе — уровни берутся из живой книги заявок, а не из
+  // истории цены. Видно, куда цена идёт и где её встретят.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+
+    for (const l of shelfLinesRef.current) series.removePriceLine(l);
+    shelfLinesRef.current = [];
+    if (!cfg.shelves) return;
+
+    shelfLinesRef.current = shelves.map((shelf) =>
+      series.createPriceLine({
+        price: shelf.price,
+        color: shelf.side === "bid" ? CE_LONG : CE_SHORT,
+        lineWidth: 1,
+        lineStyle: 1,
+        axisLabelVisible: true,
+        title: money(shelf.notional),
+      }),
+    );
+  }, [shelfKey, cfg.shelves]);
+
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.
   useEffect(() => {
@@ -558,48 +539,5 @@ export default function PriceChart({
     });
   }, [wall?.price, wall?.side]);
 
-  return (
-    <div className="relative h-full w-full">
-      <div ref={boxRef} className="h-full w-full" />
-      {cfg.vision && panel && <ScorePanel panel={panel} />}
-    </div>
-  );
-}
-
-/**
- * Панель BM Score — те же четыре числа, что и в терминале.
- *
- * Скор набирается по четырём условиям: тренд EMA, пересечение EMA, выход RSI из
- * зоны и объёмный осциллятор. Сигнал индикатора требует трёх из четырёх,
- * поэтому порог подсвечен цветом — по нему смотрят, а не по самому числу.
- */
-function ScorePanel({ panel }: { panel: VisionPanel }) {
-  const strong = (score: number) => score >= DEFAULTS.minScore;
-
-  return (
-    <div className="pointer-events-none absolute bottom-2 right-14 rounded border border-border bg-bg-deep/90 px-2 py-1.5 font-mono text-[10px] tabular-nums">
-      <div className="flex items-center gap-2">
-        <span className="text-text-muted">BM Score</span>
-        <span className={strong(panel.scoreUp) ? "text-success" : "text-text-secondary"}>
-          L:{panel.scoreUp}
-        </span>
-        <span className={strong(panel.scoreDown) ? "text-danger" : "text-text-secondary"}>
-          S:{panel.scoreDown}
-        </span>
-      </div>
-      <div className="mt-0.5 flex items-center gap-2">
-        <span className="text-text-muted">VO / SMA</span>
-        <span className="text-text-secondary">
-          {Number.isFinite(panel.vo) ? panel.vo.toFixed(1) : "—"} /{" "}
-          {Number.isFinite(panel.voSma) ? panel.voSma.toFixed(1) : "—"}
-        </span>
-      </div>
-      <div className="mt-0.5 flex items-center gap-2">
-        <span className="text-text-muted">Тренд CE</span>
-        <span className={panel.direction === 1 ? "text-success" : "text-danger"}>
-          {panel.direction === 1 ? "вверх" : "вниз"}
-        </span>
-      </div>
-    </div>
-  );
+  return <div ref={boxRef} className="h-full w-full" />;
 }

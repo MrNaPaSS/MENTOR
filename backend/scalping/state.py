@@ -12,7 +12,13 @@ from dataclasses import dataclass, field
 
 from backend.scalping.book import OrderBook
 from backend.scalping.clusters import ClusterHistory
-from backend.scalping.metrics import Wall, book_imbalance, find_walls, spread_bp
+from backend.scalping.metrics import (
+    Wall,
+    book_imbalance,
+    find_shelves,
+    find_walls,
+    spread_bp,
+)
 from backend.scalping.tape import TapeWindow
 
 # Полоса вокруг цены, в которой считаются метрики стакана, базисные пункты.
@@ -87,6 +93,22 @@ class ScreenerRow:
     wall_price: float
     wall_distance_bp: float
     live: bool               # стакан собран и синхронизирован
+
+
+def liquidity_shelves(state: SymbolState, band_bp: float = BAND_BP) -> list[Wall]:
+    """Полки ликвидности с обеих сторон — уровни с крупными деньгами.
+
+    Полосу берём ту же, что и для остальных метрик: полка за процент от цены
+    трейдеру на скальпе не пригодится, а линий на графике добавит.
+    """
+    mid = state.book.mid
+    if mid <= 0:
+        return []
+    shelves = find_shelves(state.book.levels_in_band("bid", band_bp), "bid", mid) + find_shelves(
+        state.book.levels_in_band("ask", band_bp), "ask", mid
+    )
+    shelves.sort(key=lambda w: w.notional, reverse=True)
+    return shelves
 
 
 def biggest_wall(state: SymbolState, band_bp: float = BAND_BP) -> Wall | None:

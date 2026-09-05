@@ -104,6 +104,45 @@ def find_walls(
     return walls[:limit] if limit else walls
 
 
+# Порог полки ликвидности: уровень, на котором стоит хотя бы столько денег.
+# В отличие от плиты, это абсолютная величина, а не «крупнее соседей». Полка
+# интересна сама по себе: цена о неё тормозит независимо от того, что вокруг.
+SHELF_MIN_NOTIONAL = 1_000_000.0
+
+# Сколько полок отдаём. Больше — и график превращается в частокол.
+MAX_SHELVES = 12
+
+
+def find_shelves(
+    levels: list[Level],
+    side: str,
+    mid: float,
+    min_notional: float = SHELF_MIN_NOTIONAL,
+) -> list[Wall]:
+    """Уровни, где стоит крупная ликвидность, независимо от соседей.
+
+    Плита ищется относительно окружения: на редком стакане ею окажется и сотня
+    тысяч. Полка — абсолютная: заявка на миллион остановит цену и там, где
+    вокруг такие же крупные. Для линий на графике нужна именно она.
+    """
+    if mid <= 0:
+        return []
+    shelves = [
+        Wall(
+            price=l.price,
+            size=l.size,
+            notional=l.notional,
+            side=side,
+            distance_bp=abs(l.price - mid) / mid * 10_000,
+            ratio=l.notional / min_notional,
+        )
+        for l in levels
+        if l.notional >= min_notional
+    ]
+    shelves.sort(key=lambda w: w.notional, reverse=True)
+    return shelves[:MAX_SHELVES]
+
+
 def book_imbalance(bids: list[Level], asks: list[Level]) -> float:
     """Перевес стакана в долях 0..1: >0.5 — плотнее заявки на покупку.
 
