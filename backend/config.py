@@ -34,6 +34,10 @@ class BackendConfig:
     # Общий секрет для служебных вызовов от сервера академии (заголовок X-Service-Key).
     # Пустая строка = ручка выключена: без явно заданного ключа её открывать нельзя.
     service_api_key: str = ""
+    # Скальпинг: фоновый сбор стаканов с биржи. Выключен по умолчанию — это
+    # постоянное соединение и заметный поток данных, включать осознанно.
+    scalping_enabled: bool = False
+    scalping_top_n: int = 30
 
 
     @staticmethod
@@ -58,6 +62,8 @@ class BackendConfig:
             expose_codes=os.getenv("AUTH_EXPOSE_CODES", "false").lower() == "true",
             bot_token=os.getenv("BOT_TOKEN", ""),
             admin_tg_id=int(os.getenv("ADMIN_TG_ID", "0") or "0"),
+            scalping_enabled=os.getenv("SCALPING_ENABLED", "false").lower() == "true",
+            scalping_top_n=int(os.getenv("SCALPING_TOP_N", "30") or "30"),
             rate_limit_max=int(os.getenv("RATE_LIMIT_MAX", "10")),
             rate_limit_window=int(os.getenv("RATE_LIMIT_WINDOW", "900")),
             service_api_key=os.getenv("SERVICE_API_KEY", ""),

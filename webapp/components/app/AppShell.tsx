@@ -16,6 +16,7 @@ import {
   ImageIcon,
   Coins,
   ShoppingBag,
+  Waves,
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
@@ -29,6 +30,7 @@ const NAV = [
   { href: "/app/dashboard", label: "Дашборд", icon: LayoutDashboard, mobile: true },
   { href: "/app/analysis", label: "Анализы", icon: ImageIcon, mobile: true },
   { href: "/app/market", label: "Рынок", icon: Globe, mobile: true },
+  { href: "/app/scalping", label: "Скальпинг", icon: Waves, mobile: false },
   { href: "/app/news", label: "ТВ", icon: Tv, mobile: false },
   { href: "/app/analytics", label: "Аналитика", icon: BarChart3, mobile: false },
   { href: "/app/shop", label: "Маркет", icon: ShoppingBag, mobile: true },

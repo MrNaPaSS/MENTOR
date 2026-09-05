@@ -1,7 +1,8 @@
 """WebSocket-эндпоинты (ТЗ §9.1).
 
 ``/ws/prices`` — публичный канал цен; ``/ws`` — авторизованный канал (JWT в query) для
-персональных событий (новые сигналы, баланс, чат).
+персональных событий (новые сигналы, баланс, чат); ``/ws/scalping`` — скринер и
+стакан с подпиской на конкретный инструмент.
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from backend.security import decode_token, TokenError
 from backend.price_collector import active_symbols
+from backend.scalping.ladder import DEFAULT_ROWS, MAX_ROWS
+from backend.scalping.state import SORT_KEYS
 
 router = APIRouter()
 
@@ -52,3 +55,61 @@ async def ws_authed(websocket: WebSocket, token: str = Query(default="")):
         pass
     finally:
         await manager.disconnect(websocket)
+
+
+@router.websocket("/ws/scalping")
+async def ws_scalping(websocket: WebSocket):
+    """Скринер и стакан. Клиент сам говорит, какой инструмент открыт.
+
+    Команды приходят JSON-сообщениями:
+
+        {"action": "symbol", "symbol": "BTCUSDT", "rows": 40, "agg": 1}
+        {"action": "symbol", "symbol": null}     — закрыть стакан
+        {"action": "sort", "sort": "walls"}
+
+    Кадры уходят событиями ``screener`` и ``dom``.
+    """
+    hub = getattr(websocket.app.state, "scalping_hub", None)
+    if hub is None:
+        await websocket.close(code=4503)  # сбор данных выключен в конфигурации
+        return
+
+    await websocket.accept()
+    await hub.connect(websocket)
+    try:
+        await websocket.send_json({"event": "hello", "payload": {"sorts": sorted(SORT_KEYS)}})
+        while True:
+            message = await websocket.receive_json()
+            await _handle_scalping_command(hub, websocket, message)
+    except WebSocketDisconnect:
+        pass
+    except Exception:  # noqa: BLE001 — битый JSON или закрытое соединение
+        pass
+    finally:
+        await hub.disconnect(websocket)
+
+
+async def _handle_scalping_command(hub, websocket, message) -> None:
+    """Применить одну команду клиента. Мусор молча игнорируем."""
+    if not isinstance(message, dict):
+        return
+    action = message.get("action")
+    if action == "symbol":
+        symbol = message.get("symbol")
+        await hub.set_symbol(
+            websocket,
+            symbol if isinstance(symbol, str) and symbol else None,
+            rows=_clamp(message.get("rows"), DEFAULT_ROWS, 4, MAX_ROWS),
+            agg=_clamp(message.get("agg"), 1, 1, 100),
+        )
+    elif action == "sort":
+        sort = message.get("sort")
+        if isinstance(sort, str) and sort in SORT_KEYS:
+            await hub.set_sort(websocket, sort)
+
+
+def _clamp(value, default: int, low: int, high: int) -> int:
+    try:
+        return max(low, min(int(value), high))
+    except (TypeError, ValueError):
+        return default

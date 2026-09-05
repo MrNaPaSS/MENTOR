@@ -13,6 +13,7 @@
 | [architecture/unified-core.md](architecture/unified-core.md) | Единая архитектура: общее ядро, модель данных, контракты, roadmap |
 | [tz/signal-bot-tz.md](tz/signal-bot-tz.md) | ТЗ NMNH Signal Bot (доработанное, v1.1) |
 | [tz/webapp-tz.md](tz/webapp-tz.md) | ТЗ NMNH Platform WebApp (доработанное, v2.1) |
+| [features/scalping.md](features/scalping.md) | Скринер и стакан заявок: источник данных, метрики, лимиты биржи |
 
 ## С чего начать читать
 

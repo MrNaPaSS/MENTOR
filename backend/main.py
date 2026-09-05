@@ -17,10 +17,13 @@ from core import repo
 from core.weex import get_weex_client
 from backend.config import BackendConfig
 from backend.api import auth, market, market_data, market_extra, signals, stats, students, profile, admin_affiliate, institutional, broadcast, pnl, trades, coins, shop
+from backend.api import scalping as scalping_api
 from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
 from backend.balance_collector import BalanceCollector
+from backend.scalping.collector import ScalpingCollector
+from backend.ws.scalping_hub import ScalpingHub
 from backend.notify import get_notifier
 from backend.ratelimit import RateLimiter, AuthRateLimitMiddleware
 
@@ -41,13 +44,24 @@ def create_app(
     collector = PriceCollector(weex, manager, interval=price_interval)
     balance_collector = BalanceCollector(weex)
 
+    # Скальпинг держит постоянное соединение с биржей и заметный поток данных,
+    # поэтому включается флагом, а не сам собой.
+    scalping = ScalpingCollector(top_n=config.scalping_top_n) if config.scalping_enabled else None
+    scalping_hub = ScalpingHub(scalping) if scalping else None
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         collector.start()
         balance_collector.start()
+        if scalping:
+            scalping.start()
         try:
             yield
         finally:
+            if scalping_hub:
+                await scalping_hub.stop()
+            if scalping:
+                await scalping.stop()
             await collector.stop()
             await balance_collector.stop()
             await weex.close()
@@ -59,6 +73,8 @@ def create_app(
     app.state.notifier = notifier
     app.state.ws_manager = manager
     app.state.price_collector = collector
+    app.state.scalping = scalping
+    app.state.scalping_hub = scalping_hub
 
     # Rate limiting на /api/auth/* (ТЗ §4.3, A-08).
     limiter = RateLimiter(config.rate_limit_max, config.rate_limit_window)
@@ -89,6 +105,7 @@ def create_app(
     app.include_router(coins.router)
     app.include_router(shop.router)
     app.include_router(shop.admin_router)
+    app.include_router(scalping_api.router)
     app.include_router(ws_routes.router)
 
     # Отдача загруженных файлов (картинки товаров и т.п.). Фронт подставляет API_URL
@@ -105,7 +122,12 @@ def create_app(
 
     @app.get("/api/health", tags=["health"])
     async def health():
-        return {"status": "ok", "weex_mock": config.weex_use_mock, "ws_clients": manager.count}
+        return {
+            "status": "ok",
+            "weex_mock": config.weex_use_mock,
+            "ws_clients": manager.count,
+            "scalping": bool(scalping),
+        }
 
     return app
 
