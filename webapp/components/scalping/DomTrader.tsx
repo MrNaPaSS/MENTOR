@@ -47,7 +47,14 @@ function indexCells(columns: ClusterColumn[]): Map<number, [number, number]>[] {
   });
 }
 
-export default function DomTrader({ frame }: { frame: DomFrame }) {
+export default function DomTrader({
+  frame,
+  onZoom,
+}: {
+  frame: DomFrame;
+  /** Колесо мыши меняет масштаб: +1 крупнее шаг, −1 мельче. */
+  onZoom?: (direction: 1 | -1) => void;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const centered = useRef(false);
   // Держаться ли правого края при появлении новой минуты.
@@ -80,9 +87,29 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
     return max;
   }, [cells]);
 
+  // Смена монеты или масштаба — повод заново поставить цену в середину:
+  // после укрупнения шага строки другие, и прежняя прокрутка ни на что не
+  // указывает.
   useEffect(() => {
     centered.current = false;
-  }, [frame.symbol]);
+  }, [frame.symbol, frame.tick]);
+
+  // Колесо масштабирует стакан, как на графике. Слушатель нативный, потому что
+  // React вешает wheel пассивно и отменить прокрутку страницы через него
+  // нельзя. С Shift колесо оставляем странице — иначе не пролистать вглубь.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !onZoom) return;
+
+    function handleWheel(event: WheelEvent) {
+      if (event.shiftKey || event.ctrlKey) return;
+      event.preventDefault();
+      onZoom?.(event.deltaY > 0 ? 1 : -1);
+    }
+
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [onZoom]);
 
   // Один раз ставим спред в середину экрана. Дальше вертикальную прокрутку не
   // трогаем: трейдер мог увести взгляд на дальнюю плиту, и рывок сбил бы его.
@@ -92,7 +119,9 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
     el.scrollTop = Math.max(0, askCount * ROW_HEIGHT - el.clientHeight / 2);
     el.scrollLeft = el.scrollWidth;
     centered.current = true;
-  }, [askCount, frame.rows.length]);
+    // Шаг в зависимостях: после масштабирования строк столько же, но цены у них
+    // другие, и центрировать надо заново.
+  }, [askCount, frame.rows.length, frame.tick]);
 
   // С каждой новой минутой история уезжает влево, а свежая колонка остаётся у
   // цены. Но только пока трейдер сам смотрит на свежее: если он отмотал в
@@ -118,6 +147,7 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
+        title="Колесо — масштаб, Shift+колесо — прокрутка"
         className="relative flex-1 overflow-auto font-mono"
       >
         <div className="w-full min-w-max">

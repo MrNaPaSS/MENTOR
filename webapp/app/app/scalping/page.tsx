@@ -35,6 +35,11 @@ const STEPS = [
   { agg: 25, label: "×25" },
 ];
 
+// Ступени для колеса мыши. Мельче, чем кнопки: четыре пресета — это не
+// масштабирование, а четыре скачка. Промежуточные ступени дают плавность,
+// кнопки остаются быстрым переходом к привычным значениям.
+const ZOOM_LADDER = [1, 2, 3, 5, 8, 10, 15, 20, 25, 40, 50, 75, 100];
+
 // 30 — глубина из рабочего пространства заказчика (DomAutoscaleDepth).
 const DEPTHS = [30, 60, 100];
 
@@ -187,6 +192,28 @@ export default function ScalpingPage() {
     setIndicators((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
+  /**
+   * Масштаб стакана колесом мыши, как на графике.
+   *
+   * Вверх — мельче шаг и подробнее уровни, вниз — крупнее шаг и шире охват.
+   * Ищем ближайшую ступень к текущему значению: попасть можно и кнопкой, и
+   * колесом, и они не обязаны совпадать.
+   */
+  function zoomDom(direction: 1 | -1) {
+    setAgg((current) => {
+      let nearest = 0;
+      for (let i = 1; i < ZOOM_LADDER.length; i++) {
+        if (
+          Math.abs(ZOOM_LADDER[i] - current) < Math.abs(ZOOM_LADDER[nearest] - current)
+        ) {
+          nearest = i;
+        }
+      }
+      const next = Math.max(0, Math.min(ZOOM_LADDER.length - 1, nearest + direction));
+      return ZOOM_LADDER[next];
+    });
+  }
+
   return (
     <div className="space-y-3">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -284,7 +311,7 @@ export default function ScalpingPage() {
 
               <div className="min-h-0 flex-1">
                 {dom ? (
-                  <DomTrader frame={dom} />
+                  <DomTrader frame={dom} onZoom={zoomDom} />
                 ) : (
                   <p className="grid h-full place-items-center text-sm text-text-muted">
                     Собираем стакан {base(symbol)}…
