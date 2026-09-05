@@ -3,19 +3,19 @@
 // Скальпинг: скринер, стакан и график.
 //
 // Раскладка рабочая, а не настроечная: слева узкий список монет, справа — стакан
-// выбранной и её график, как в терминале. Ширины фиксированы: если дать колонкам
-// делить свободное место, пустая история растягивается на весь экран и оставляет
-// стакану полоску у края — на этом раздел уже один раз разваливался.
+// выбранной и её график. Ширины фиксированы, высота тянется во весь экран:
+// стакан и график должны заканчиваться на одной линии, иначе под одним из них
+// остаётся пустота в треть экрана.
 //
-// Настроек ровно две — шаг ценовой шкалы и глубина, — и обе живут в углу стакана.
-// Прошлая версия начиналась с семи переключателей и шести захардкоженных пар,
-// и пользоваться этим было нельзя.
+// Настроек минимум и все по делу: шаг ценовой шкалы и глубина у стакана,
+// таймфрейм и индикаторы у графика. Прошлая версия начиналась с семи
+// переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
 import { useState } from "react";
 import { Wifi, WifiOff } from "lucide-react";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
-import PriceChart from "@/components/scalping/PriceChart";
+import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
 import {
   base,
   useScalpingFeed,
@@ -25,7 +25,8 @@ import {
 } from "@/lib/scalping";
 
 // Укрупнение ценовой шкалы. На BTC шаг биржи — десять центов, и без укрупнения
-// сорок строк стакана укладываются в четыре доллара.
+// сорок строк стакана укладываются в четыре доллара. ×10 — из настроек
+// заказчика (PriceScaleMultiplier).
 const STEPS = [
   { agg: 1, label: "×1" },
   { agg: 5, label: "×5" },
@@ -33,23 +34,51 @@ const STEPS = [
   { agg: 25, label: "×25" },
 ];
 
-const DEPTHS = [30, 60, 100];   // 30 — глубина из настроек заказчика
+// 30 — глубина из рабочего пространства заказчика (DomAutoscaleDepth).
+const DEPTHS = [30, 60, 100];
+
+// Минута открывается по умолчанию: это рабочий масштаб скальпера. Остальные
+// нужны, чтобы посмотреть, откуда цена пришла.
+const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h"];
+
+const INDICATOR_LABELS: Record<keyof Indicators, string> = {
+  volume: "Объём",
+  ema: "EMA 9/21",
+  vwap: "VWAP",
+};
 
 // Отклик на нажатие: 150 мс ease-out и лёгкое сжатие. Кнопка должна показать,
 // что интерфейс услышал палец, не дожидаясь новых данных.
 const CHIP =
   "rounded px-1.5 py-0.5 text-[11px] transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]";
+const CHIP_ON = "bg-accent-cyan/15 text-accent-cyan";
+const CHIP_OFF = "text-text-muted hover:text-text-primary";
+
+// Высота рабочей области: всё окно за вычетом шапки приложения и заголовка
+// раздела. Стакан и график получают одинаковую высоту и заканчиваются на одной
+// линии — иначе под коротким из них остаётся пустота в треть экрана.
+const PANE_H = "h-[calc(100vh-190px)] min-h-[520px]";
 
 export default function ScalpingPage() {
   const [symbol, setSymbol] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("walls");
   const [agg, setAgg] = useState(10);
   const [rows, setRows] = useState(30);
+  const [timeframe, setTimeframe] = useState("1m");
+  const [indicators, setIndicators] = useState<Indicators>({
+    volume: true,
+    ema: true,
+    vwap: false,
+  });
 
   const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort });
 
+  function toggle(key: keyof Indicators) {
+    setIndicators((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-text-primary">Скальпинг</h1>
@@ -69,9 +98,11 @@ export default function ScalpingPage() {
         </span>
       </header>
 
-      <div className="flex flex-col gap-4 xl:flex-row">
+      <div className="flex flex-col gap-3 xl:flex-row">
         {/* Скринер: ширина по своим колонкам, без растягивания. */}
-        <section className="shrink-0 rounded-xl border border-border bg-bg-card xl:w-[500px]">
+        <section
+          className={`flex shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[500px] ${PANE_H}`}
+        >
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-2">
             <span className="mr-1 text-[11px] text-text-muted">Сортировка:</span>
             {(Object.keys(SORT_LABELS) as VisibleSortKey[]).map((key) => (
@@ -79,9 +110,7 @@ export default function ScalpingPage() {
                 key={key}
                 onClick={() => setSort(key)}
                 className={`${CHIP} ${
-                  sort === key
-                    ? "bg-accent-cyan/15 text-accent-cyan"
-                    : "text-text-secondary hover:text-text-primary"
+                  sort === key ? CHIP_ON : "text-text-secondary hover:text-text-primary"
                 }`}
               >
                 {SORT_LABELS[key]}
@@ -89,20 +118,23 @@ export default function ScalpingPage() {
             ))}
           </div>
 
-          <ScreenerTable
-            rows={screener}
-            selected={symbol}
-            sort={sort}
-            onSort={setSort}
-            onSelect={setSymbol}
-          />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ScreenerTable
+              rows={screener}
+              selected={symbol}
+              sort={sort}
+              onSort={setSort}
+              onSelect={setSymbol}
+            />
+          </div>
         </section>
 
         {symbol ? (
           <>
-            {/* Стакан: ширина по своим колонкам — восемь колонок истории плюс
-                объём и цена. */}
-            <section className="shrink-0 rounded-xl border border-border bg-bg-card xl:w-[620px]">
+            {/* Стакан: ширина по своим колонкам, история прокручивается влево. */}
+            <section
+              className={`flex shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[620px] ${PANE_H}`}
+            >
               <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <span className="font-semibold text-text-primary">{base(symbol)}</span>
                 <div className="flex items-center gap-0.5">
@@ -111,11 +143,7 @@ export default function ScalpingPage() {
                       key={step.agg}
                       onClick={() => setAgg(step.agg)}
                       title="Шаг ценовой шкалы"
-                      className={`${CHIP} ${
-                        agg === step.agg
-                          ? "bg-accent-cyan/15 text-accent-cyan"
-                          : "text-text-muted hover:text-text-primary"
-                      }`}
+                      className={`${CHIP} ${agg === step.agg ? CHIP_ON : CHIP_OFF}`}
                     >
                       {step.label}
                     </button>
@@ -126,11 +154,7 @@ export default function ScalpingPage() {
                       key={depth}
                       onClick={() => setRows(depth)}
                       title="Глубина стакана, строк"
-                      className={`${CHIP} ${
-                        rows === depth
-                          ? "bg-accent-cyan/15 text-accent-cyan"
-                          : "text-text-muted hover:text-text-primary"
-                      }`}
+                      className={`${CHIP} ${rows === depth ? CHIP_ON : CHIP_OFF}`}
                     >
                       {depth}
                     </button>
@@ -138,7 +162,7 @@ export default function ScalpingPage() {
                 </div>
               </div>
 
-              <div className="h-[620px]">
+              <div className="min-h-0 flex-1">
                 {dom ? (
                   <DomTrader frame={dom} />
                 ) : (
@@ -149,20 +173,55 @@ export default function ScalpingPage() {
               </div>
             </section>
 
-            {/* График занимает всё оставшееся место. Минута — рабочий масштаб
-                скальпера, другие интервалы здесь не нужны. */}
-            <section className="min-w-0 flex-1 rounded-xl border border-border bg-bg-card">
-              <div className="flex items-center justify-between border-b border-border px-3 py-2 text-[11px]">
-                <span className="text-text-secondary">{base(symbol)} · 1 минута</span>
-                {dom?.wall && <span className="text-accent-gold">плита отмечена на графике</span>}
+            {/* График занимает всё оставшееся место. */}
+            <section
+              className={`flex min-w-0 flex-1 flex-col rounded-xl border border-border bg-bg-card ${PANE_H}`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+                <div className="flex items-center gap-0.5">
+                  <span className="mr-1 text-[11px] text-text-secondary">{base(symbol)}</span>
+                  {TIMEFRAMES.map((tf) => (
+                    <button
+                      key={tf}
+                      onClick={() => setTimeframe(tf)}
+                      title="Таймфрейм"
+                      className={`${CHIP} ${timeframe === tf ? CHIP_ON : CHIP_OFF}`}
+                    >
+                      {tf}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-0.5">
+                  {(Object.keys(INDICATOR_LABELS) as (keyof Indicators)[]).map((key) => (
+                    <button
+                      key={key}
+                      onClick={() => toggle(key)}
+                      className={`${CHIP} ${indicators[key] ? CHIP_ON : CHIP_OFF}`}
+                    >
+                      {INDICATOR_LABELS[key]}
+                    </button>
+                  ))}
+                  {dom?.wall && (
+                    <span className="ml-2 text-[11px] text-accent-gold">плита на графике</span>
+                  )}
+                </div>
               </div>
-              <div className="h-[620px] p-1">
-                <PriceChart symbol={symbol} wall={dom?.wall ?? null} />
+
+              <div className="min-h-0 flex-1 p-1">
+                <PriceChart
+                  symbol={symbol}
+                  interval={timeframe}
+                  wall={dom?.wall ?? null}
+                  indicators={indicators}
+                />
               </div>
             </section>
           </>
         ) : (
-          <section className="grid min-h-[300px] flex-1 place-items-center rounded-xl border border-border bg-bg-card px-6 text-center text-sm text-text-muted">
+          <section
+            className={`grid flex-1 place-items-center rounded-xl border border-border bg-bg-card px-6 text-center text-sm text-text-muted ${PANE_H}`}
+          >
             Выберите монету в списке — здесь появятся её стакан и график
           </section>
         )}

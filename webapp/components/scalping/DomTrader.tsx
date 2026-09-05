@@ -9,6 +9,9 @@
 // Плита в стакане стоит внимания ровно настолько, насколько цена отбивалась от
 // этого уровня раньше, и увидеть это можно только когда они на одной линии.
 //
+// История прокручивается влево, а колонка стакана закреплена у правого края:
+// уходить взглядом вглубь истории можно, не теряя из виду текущие заявки.
+//
 // Строки не переставляются при обновлении: высота фиксирована, ключ — цена.
 // Меняются только числа. Иначе на восьми кадрах в секунду таблица дрожала бы.
 
@@ -24,15 +27,12 @@ import {
 
 const ROW_HEIGHT = 21;
 
-// Ширина колонки истории. Фиксированная, а не доля свободного места: пока
-// история не набралась, пустые колонки растягивались на всю ширину экрана и
-// оставляли стакану полоску у правого края.
-// Ширины взяты из рабочего пространства заказчика (Tiger.Trade):
-// ClusterWidth=111 для профиля bid/ask, DomWidth=177 на колонку стакана.
-// Четыре колонки истории плюс стакан дают ровно ширину панели.
-const COL_W = "w-[111px]";
-const BOOK_W = "w-[177px]";
-const MAX_VISIBLE_COLUMNS = 4;
+// Ширины из рабочего пространства заказчика (Tiger.Trade): ClusterWidth=111 для
+// профиля bid/ask, DomWidth=177 на колонку стакана.
+// shrink-0 обязателен: слева от них стоит распорка, которая забирает всё
+// свободное место и прижимает цену к правому краю.
+const COL_W = "w-[111px] shrink-0";
+const BOOK_W = "w-[177px] shrink-0";
 
 /** Ячейки истории приходят тройками — раскладываем в карту по цене строки. */
 function indexCells(columns: ClusterColumn[]): Map<number, [number, number]>[] {
@@ -49,11 +49,11 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
 
   const askCount = useMemo(() => frame.rows.filter((r) => r.ask > 0).length, [frame.rows]);
 
-  // Показываем только заполненные колонки истории, и не больше шести.
-  // Пустые занимали по 54 пикселя каждая: пока история набиралась, стакан
-  // ужимался в полоску, а слева стояло полтысячи пикселей пустоты.
+  // Порядок колонок — от старой к свежей, поэтому свежая минута оказывается
+  // вплотную к цене, а прошлое уходит влево. Пустые колонки пропускаем: пока
+  // история набиралась, они съедали ширину, отведённую стакану.
   const columns = useMemo(
-    () => frame.clusters.filter((c) => c.cells.length > 0).slice(-MAX_VISIBLE_COLUMNS),
+    () => frame.clusters.filter((c) => c.cells.length > 0),
     [frame.clusters],
   );
   const cells = useMemo(() => indexCells(columns), [columns]);
@@ -64,8 +64,8 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
     () => Math.max(1, ...frame.rows.map((r) => r.notional)),
     [frame.rows],
   );
-  // История масштабируется своей величиной: объёмы за пять минут и объём
-  // стоящей заявки — величины разного порядка, общий масштаб убил бы одну из них.
+  // История масштабируется своей величиной: объём за минуту и объём стоящей
+  // заявки — величины разного порядка, общий масштаб убил бы одну из них.
   const clusterScale = useMemo(() => {
     let max = 1;
     for (const map of cells) {
@@ -78,12 +78,14 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
     centered.current = false;
   }, [frame.symbol]);
 
-  // Один раз ставим спред в середину экрана. Дальше прокрутку не трогаем:
-  // трейдер мог увести взгляд на дальнюю плиту, и рывок сбил бы его.
+  // Один раз ставим спред в середину экрана и подводим историю к свежей
+  // колонке. Дальше прокрутку не трогаем: трейдер мог увести взгляд на дальнюю
+  // плиту, и рывок сбил бы его.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || centered.current || frame.rows.length === 0) return;
     el.scrollTop = Math.max(0, askCount * ROW_HEIGHT - el.clientHeight / 2);
+    el.scrollLeft = el.scrollWidth;
     centered.current = true;
   }, [askCount, frame.rows.length]);
 
@@ -91,46 +93,48 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
     <div className="flex h-full flex-col text-[11px] tabular-nums">
       <Header frame={frame} />
 
-      <div className="flex border-b border-border bg-bg-deep/60 text-text-muted">
-        {columns.map((column) => (
-          <div key={column.start} className={`${COL_W} py-1 text-center`}>
-            {clockLabel(column.start)}
+      <div ref={scrollRef} className="relative flex-1 overflow-auto font-mono">
+        <div className="w-full min-w-max">
+          <div className="sticky top-0 z-20 flex bg-bg-card text-text-muted shadow-[0_1px_0_#2B3139]">
+            <div className="flex-1" />
+            {columns.map((column) => (
+              <div key={column.start} className={`${COL_W} py-1 text-center`}>
+                {clockLabel(column.start)}
+              </div>
+            ))}
+            <div className={`sticky right-0 ${BOOK_W} bg-bg-card py-1 pr-2 text-right`}>
+              объём · цена
+            </div>
           </div>
-        ))}
-        <div className={`${BOOK_W} py-1 pr-2 text-right`}>объём · цена</div>
-      </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono">
-        {frame.rows.map((row, index) => {
-          const items = [];
-          if (index === askCount && askCount > 0) {
+          {frame.rows.map((row, index) => {
+            const items = [];
+            if (index === askCount && askCount > 0) {
+              items.push(<SpreadRow key="spread" frame={frame} />);
+            }
             items.push(
-              <SpreadRow key="spread" frame={frame} />,
+              <Row
+                key={row.price}
+                row={row}
+                tick={frame.tick}
+                cells={cells}
+                bookScale={bookScale}
+                clusterScale={clusterScale}
+              />,
             );
-          }
-          items.push(
-            <Row
-              key={row.price}
-              row={row}
-              tick={frame.tick}
-              cells={cells}
-              bookScale={bookScale}
-              clusterScale={clusterScale}
-            />,
-          );
-          return items;
-        })}
-      </div>
+            return items;
+          })}
 
-      <Totals columns={columns} />
+          <Totals columns={columns} />
+        </div>
+      </div>
     </div>
   );
 }
 
 /** Шапка: цена, спред, перевес и самая крупная заявка рядом. */
 function Header({ frame }: { frame: DomFrame }) {
-  const spreadBp =
-    frame.mid > 0 ? ((frame.best_ask - frame.best_bid) / frame.mid) * 10_000 : 0;
+  const spreadBp = frame.mid > 0 ? ((frame.best_ask - frame.best_bid) / frame.mid) * 10_000 : 0;
   const buy = Math.round(frame.book_ratio * 100);
 
   return (
@@ -169,7 +173,9 @@ function SpreadRow({ frame }: { frame: DomFrame }) {
       style={{ height: ROW_HEIGHT }}
     >
       <div className="flex-1" />
-      <div className={`${BOOK_W} flex items-center justify-between px-2`}>
+      <div
+        className={`sticky right-0 ${BOOK_W} flex items-center justify-between bg-bg-card px-2`}
+      >
         <span>{fmtPrice(frame.best_bid, frame.tick)}</span>
         <span>{fmtPrice(frame.best_ask, frame.tick)}</span>
       </div>
@@ -198,14 +204,17 @@ const Row = memo(function Row({
       className={`flex items-center ${isBid ? "bg-success/[0.04]" : "bg-danger/[0.04]"}`}
       style={{ height: ROW_HEIGHT }}
     >
-      {cells.map((map, i) => {
-        const cell = map.get(row.price);
-        return <ClusterCell key={i} cell={cell} scale={clusterScale} />;
-      })}
+      <div className="flex-1" />
+      {cells.map((map, i) => (
+        <ClusterCell key={i} cell={map.get(row.price)} scale={clusterScale} />
+      ))}
 
-      {/* Гистограмма внутри строки, процентами от максимума в окне: так
-          настроен стакан заказчика (DomRuler=Percents, position=inside). */}
-      <div className={`relative ${BOOK_W} flex items-center justify-between px-2`}>
+      {/* Гистограмма внутри строки, процентами от максимума в окне: так настроен
+          стакан заказчика (DomRuler=Percents, position=inside). Колонка
+          закреплена справа — история уезжает под неё при прокрутке. */}
+      <div
+        className={`sticky right-0 ${BOOK_W} relative flex items-center justify-between bg-bg-card px-2`}
+      >
         <div
           className={`absolute inset-y-[2px] left-0 ${
             row.is_wall
@@ -240,17 +249,11 @@ const Row = memo(function Row({
 });
 
 /** Ячейка истории: слева продажи, справа покупки — как в референсе. */
-function ClusterCell({
-  cell,
-  scale,
-}: {
-  cell: [number, number] | undefined;
-  scale: number;
-}) {
+function ClusterCell({ cell, scale }: { cell: [number, number] | undefined; scale: number }) {
   if (!cell) return <div className={COL_W} />;
   const [buy, sell] = cell;
   return (
-    <div className={`flex ${COL_W} items-center justify-end gap-0.5 px-1`}>
+    <div className={`flex ${COL_W} items-center justify-end gap-1.5 px-1.5`}>
       <span
         className="text-right text-danger/90"
         style={{ opacity: sell > 0 ? 0.45 + 0.55 * (sell / scale) : 0.25 }}
@@ -271,11 +274,12 @@ function ClusterCell({
 function Totals({ columns }: { columns: ClusterColumn[] }) {
   if (columns.length === 0) return null;
   return (
-    <div className="flex border-t border-border bg-bg-deep/60 font-mono text-[10px]">
+    <div className="sticky bottom-0 z-20 flex bg-bg-deep/95 font-mono text-[10px] shadow-[0_-1px_0_#2B3139]">
+      <div className="flex-1" />
       {columns.map((column) => {
         const delta = column.buy - column.sell;
         return (
-          <div key={column.start} className={`${COL_W} px-1 py-1 text-right`}>
+          <div key={column.start} className={`${COL_W} px-1.5 py-1 text-right`}>
             <div className="text-text-muted">{money(column.buy + column.sell)}</div>
             <div className={delta >= 0 ? "text-success" : "text-danger"}>
               {delta >= 0 ? "+" : "−"}
@@ -284,7 +288,7 @@ function Totals({ columns }: { columns: ClusterColumn[] }) {
           </div>
         );
       })}
-      <div className={BOOK_W} />
+      <div className={`sticky right-0 ${BOOK_W} bg-bg-deep/95`} />
     </div>
   );
 }
