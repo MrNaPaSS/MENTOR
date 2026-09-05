@@ -38,6 +38,11 @@ const BOOK_W = "w-[177px] shrink-0";
 // попасть прокруткой ровно в край невозможно.
 const EDGE_SLACK = 56;
 
+// Сколько ждать после последнего касания, прежде чем снова центрировать цену.
+// Две секунды: меньше — вырывает стакан из рук на паузе между движениями,
+// больше — трейдер успевает потерять цену из виду.
+const RECENTER_IDLE_MS = 2000;
+
 /** Ячейки истории приходят тройками — раскладываем в карту по цене строки. */
 function indexCells(columns: ClusterColumn[]): Map<number, [number, number]>[] {
   return columns.map((column) => {
@@ -59,7 +64,9 @@ export default function DomTrader({
   onPickLevel?: (row: LadderRow) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const centered = useRef(false);
+  // До какого момента считаем, что стакан листают руками. Пока трейдер смотрит
+  // дальнюю плиту, дёргать прокрутку под ним нельзя.
+  const holdUntil = useRef(0);
   // Держаться ли правого края при появлении новой минуты.
   const stickRight = useRef(true);
 
@@ -90,11 +97,11 @@ export default function DomTrader({
     return max;
   }, [cells]);
 
-  // Смена монеты или масштаба — повод заново поставить цену в середину:
+  // Смена монеты или масштаба — повод немедленно вернуть цену в середину:
   // после укрупнения шага строки другие, и прежняя прокрутка ни на что не
   // указывает.
   useEffect(() => {
-    centered.current = false;
+    holdUntil.current = 0;
   }, [frame.symbol, frame.tick]);
 
   // Масштаб — на Ctrl или Alt с колесом. Само колесо листает стакан, как и
@@ -118,17 +125,25 @@ export default function DomTrader({
     return () => el.removeEventListener("wheel", handleWheel);
   }, [onZoom]);
 
-  // Один раз ставим спред в середину экрана. Дальше вертикальную прокрутку не
-  // трогаем: трейдер мог увести взгляд на дальнюю плиту, и рывок сбил бы его.
+  // Спред держится в середине экрана сам.
+  //
+  // Цена уходит вверх и вниз, и без этого через минуту работы спред оказывается
+  // у края, а половина стакана — за экраном. Но пока стакан листают руками, его
+  // не трогаем: трейдер увёл взгляд на дальнюю плиту, и рывок собьёт его.
+  // Возвращаемся к центру через пару секунд после того, как он отпустил.
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el || centered.current || frame.rows.length === 0) return;
-    el.scrollTop = Math.max(0, askCount * ROW_HEIGHT - el.clientHeight / 2);
-    el.scrollLeft = el.scrollWidth;
-    centered.current = true;
-    // Шаг в зависимостях: после масштабирования строк столько же, но цены у них
-    // другие, и центрировать надо заново.
-  }, [askCount, frame.rows.length, frame.tick]);
+    if (!el || frame.rows.length === 0) return;
+    if (Date.now() < holdUntil.current) return;
+
+    const target = Math.max(
+      0,
+      askCount * ROW_HEIGHT + ROW_HEIGHT / 2 - el.clientHeight / 2,
+    );
+    // Порог в полстроки: без него округление координат гоняло бы прокрутку
+    // туда-обратно на каждом кадре.
+    if (Math.abs(el.scrollTop - target) > ROW_HEIGHT / 2) el.scrollTop = target;
+  });
 
   // С каждой новой минутой история уезжает влево, а свежая колонка остаётся у
   // цены. Но только пока трейдер сам смотрит на свежее: если он отмотал в
@@ -138,6 +153,11 @@ export default function DomTrader({
     if (!el || !stickRight.current) return;
     el.scrollLeft = el.scrollWidth;
   }, [columns.length]);
+
+  /** Трейдер тронул стакан — на несколько секунд оставляем прокрутку ему. */
+  function holdScroll() {
+    holdUntil.current = Date.now() + RECENTER_IDLE_MS;
+  }
 
   function handleScroll() {
     const el = scrollRef.current;
@@ -152,6 +172,9 @@ export default function DomTrader({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
+        onWheel={holdScroll}
+        onPointerDown={holdScroll}
+        onTouchStart={holdScroll}
         title="Колесо — прокрутка, Ctrl+колесо — масштаб"
         className="relative flex-1 overflow-auto font-mono"
       >
