@@ -194,12 +194,12 @@ const SHELF_HIT_PX = 8;
 // Пустых баров справа от последней свечи. Разметка сделки — это будущее:
 // вход, стоп и цели ещё не случились, и рисовать их поверх прошлых свечей
 // значит показывать то, чего там не было.
-const RIGHT_BARS = 8;
+const RIGHT_BARS = 14;
 
-// Ширина бокса сделки в барах. Бокс показывает соотношение риска к прибыли, а
-// не срок сделки: растянутый до края экрана, он закрашивает полграфика и
-// перестаёт читаться.
-const TRADE_BOX_BARS = 6;
+// Ширина бокса сделки в барах. Ровно столько, сколько пустого поля справа: бокс
+// занимает будущее целиком, но на прошлые свечи не заходит. Он привязан к
+// последней свече, поэтому едет вместе с графиком, пока сделка жива.
+const TRADE_BOX_BARS = RIGHT_BARS;
 
 /** Секунды в интервале графика: нужны таймеру закрытия свечи. */
 const INTERVAL_SECONDS: Record<string, number> = {
@@ -251,6 +251,45 @@ function snapToBar(candles: Candle[], iso: string | null): number | null {
     else high = mid - 1;
   }
   return candles[low].time;
+}
+
+/**
+ * Бокс сделки: область убытка и область прибыли справа от последней свечи.
+ *
+ * Отдельной функцией, потому что нужен в двух местах: при изменении самой
+ * сделки и при каждой загрузке свечей. Открыть сделку можно раньше, чем
+ * приедут бары — тогда строить не от чего, и бокс должен появиться сам, как
+ * только график наполнится, а не ждать следующего движения цены.
+ */
+function tradeBoxes(
+  trade: ActiveTrade | null,
+  palette: (typeof THEMES)[ChartTheme],
+  last: Candle | undefined,
+): Shapes | null {
+  if (!trade || trade.status === "closed" || !last) return null;
+
+  const far = pendingTargets(trade).at(-1);
+  const boxes: Shapes["boxes"] = [
+    {
+      fromTime: last.time as UTCTimestamp,
+      toTime: { kind: "bars" as const, bars: TRADE_BOX_BARS },
+      top: Math.max(trade.entry, trade.stop),
+      bottom: Math.min(trade.entry, trade.stop),
+      fill: palette.riskBox,
+      border: palette.riskBorder,
+    },
+  ];
+  if (far !== undefined) {
+    boxes.push({
+      fromTime: last.time as UTCTimestamp,
+      toTime: { kind: "bars" as const, bars: TRADE_BOX_BARS },
+      top: Math.max(trade.entry, far),
+      bottom: Math.min(trade.entry, far),
+      fill: palette.rewardBox,
+      border: palette.rewardBorder,
+    });
+  }
+  return { bands: [], boxes, segments: [], points: [] };
 }
 
 /** ATR последних баров: по нему предлагается стоп. */
@@ -388,6 +427,10 @@ export default function PriceChart({
   const [todayPnl, setTodayPnl] = useState<number | null>(null);
   const livePriceRef = useRef(livePrice);
   livePriceRef.current = livePrice;
+  // Сделка нужна и при загрузке свечей: бокс строится от последнего бара, а на
+  // момент открытия сделки баров может ещё не быть.
+  const tradeRef = useRef(trade);
+  tradeRef.current = trade;
 
   // Полки перерисовываем только когда меняется сам набор цен. Стакан обновляется
   // восемь раз в секунду, и пересоздание линий на каждом кадре давало бы моргание.
@@ -585,6 +628,13 @@ export default function PriceChart({
         },
         themeRef.current,
         ceRef.current,
+      );
+      // Бокс сделки пересобираем здесь же: он привязан к последнему бару, а
+      // бары только что приехали.
+      tradeShapesRef.current = tradeBoxes(
+        tradeRef.current,
+        THEMES[themeRef.current],
+        candles[candles.length - 1],
       );
       pushShapes();
       smcRef.current = smc;
@@ -860,31 +910,7 @@ export default function PriceChart({
 
     // Бокс живёт справа от последней свечи, в пустом поле: сделка ещё не
     // случилась, и накрывать ею прошлые бары нечестно.
-    const last = dataRef.current.at(-1);
-    const far = targets.at(-1);
-    if (last) {
-      const boxes = [
-        {
-          fromTime: last.time as UTCTimestamp,
-          toTime: { kind: "bars" as const, bars: TRADE_BOX_BARS },
-          top: Math.max(trade.entry, trade.stop),
-          bottom: Math.min(trade.entry, trade.stop),
-          fill: palette.riskBox,
-          border: palette.riskBorder,
-        },
-      ];
-      if (far !== undefined) {
-        boxes.push({
-          fromTime: last.time as UTCTimestamp,
-          toTime: { kind: "bars" as const, bars: TRADE_BOX_BARS },
-          top: Math.max(trade.entry, far),
-          bottom: Math.min(trade.entry, far),
-          fill: palette.rewardBox,
-          border: palette.rewardBorder,
-        });
-      }
-      tradeShapesRef.current = { bands: [], boxes, segments: [], points: [] };
-    }
+    tradeShapesRef.current = tradeBoxes(trade, palette, dataRef.current.at(-1));
 
     pushShapes();
   }, [trade, pushShapes]);
@@ -1075,7 +1101,7 @@ export default function PriceChart({
 
       {/* Итог дня: одна цифра в углу. Всё остальное — в журнале. */}
       {todayPnl !== null && (
-        <div className="pointer-events-none absolute right-16 top-1 z-10 font-mono text-[11px] tabular-nums">
+        <div className="pointer-events-none absolute right-24 top-1 z-10 font-mono text-[11px] tabular-nums">
           <span className="text-[var(--pane-muted)]">PnL сегодня </span>
           <span className={todayPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
             {todayPnl >= 0 ? "+" : "−"}

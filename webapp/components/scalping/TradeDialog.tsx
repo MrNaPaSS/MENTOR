@@ -7,13 +7,14 @@
 // продажах — сопротивление, значит шорт. Спрашивать у трейдера то, что уже
 // известно из стакана, значит давать ему возможность ошибиться.
 //
-// Трейдер вводит два числа — сумму и плечо, — а видит все, которые нужны для
-// решения: объём позиции, потери на стопе, прибыль по каждой цели и цену
-// ликвидации. Разметка на графике меняется вместе с цифрами, поэтому «Войти»
-// здесь не отправляет ордер на биржу, а закрепляет расчёт: сделка начинает
-// ждать свою цену.
+// Готовые значения стоят под полями строкой, а не выпадающим списком: список
+// перекрывал сам расчёт, ради которого окно и открыто. Цифры и кнопки видны
+// одновременно — трейдер меняет плечо и сразу видит, что стало с риском.
+//
+// «Войти» не отправляет ордер на биржу: сделка начинает ждать свою цену, а
+// разметка остаётся на графике.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 import {
@@ -33,19 +34,25 @@ export type TradeDraft = {
   stopPct: number;
 };
 
-// Готовые значения под пальцем: скальпер работает одними и теми же суммами, и
-// набирать «50» с клавиатуры двадцать раз за сессию — потерянное время. Своё
-// число вводится там же, список только предлагает частое.
-const MARGINS = [5, 10, 15, 25, 50, 100, 250, 500, 1000];
-const LEVERAGES = [5, 10, 20, 25, 50, 75, 100, 125, 200, 400];
-const STOPS = [0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1, 2];
+// Частые значения под пальцем: скальпер работает одними и теми же суммами, и
+// набирать «50» с клавиатуры двадцать раз за сессию — потерянное время.
+const MARGINS = [10, 25, 50, 100, 250, 500];
+const LEVERAGES = [10, 25, 50, 100, 200, 400];
+const STOPS = [0.05, 0.1, 0.2, 0.5, 1];
 
+// Стрелки числового поля убраны: они съедают ширину и промахиваются пальцем.
 const FIELD =
-  "w-full rounded border border-border bg-bg-deep px-2 py-1.5 text-right font-mono text-sm " +
-  "text-text-primary outline-none transition-colors duration-150 ease-out focus:border-accent-cyan";
+  "w-full rounded-md border border-border bg-bg-deep px-2.5 py-2 text-right font-mono text-[15px] " +
+  "text-text-primary outline-none transition-colors duration-150 ease-out focus:border-accent-cyan " +
+  "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none " +
+  "[&::-webkit-outer-spin-button]:appearance-none";
+
+const CHIP =
+  "rounded px-1.5 py-0.5 font-mono text-[11px] transition-[background-color,color,transform] " +
+  "duration-150 ease-out active:scale-[0.97]";
 
 const BUTTON =
-  "rounded px-3 py-1.5 text-[12px] font-semibold transition-[background-color,transform] " +
+  "rounded-md px-4 py-2 text-[12px] font-semibold transition-[background-color,transform] " +
   "duration-150 ease-out active:scale-[0.98]";
 
 export default function TradeDialog({
@@ -75,6 +82,7 @@ export default function TradeDialog({
 
   const side = sideForShelf(draft.shelf.side);
   const long = side === "long";
+  const tone = long ? "text-success" : "text-danger";
   const plan = computeTrade({
     entry: draft.shelf.price,
     side,
@@ -93,38 +101,35 @@ export default function TradeDialog({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="w-[460px] max-w-full animate-dialog-in rounded-xl border border-border bg-bg-card shadow-2xl motion-reduce:animate-none"
+        className="w-[520px] max-w-full animate-dialog-in overflow-hidden rounded-xl border border-border bg-bg-card shadow-2xl motion-reduce:animate-none"
       >
-        <div className="flex items-start justify-between border-b border-border px-4 py-3">
+        {/* Шапка: что за уровень и в какую сторону от него работаем. */}
+        <div className="flex items-start justify-between border-b border-border px-5 py-4">
           <div>
-            <p className="text-sm font-semibold text-text-primary">
-              Сделка от полки {fmtPrice(draft.shelf.price, tick)}
-            </p>
-            <p className="mt-0.5 text-[11px] text-text-muted">
+            <div className="flex items-baseline gap-2">
+              <span className={`text-[11px] font-semibold uppercase ${tone}`}>
+                {long ? "лонг" : "шорт"}
+              </span>
+              <span className="font-mono text-[19px] font-semibold text-text-primary">
+                {fmtPrice(draft.shelf.price, tick)}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-text-muted">
               {money(draft.shelf.notional)} в стакане —{" "}
-              {long ? "поддержка, вход в лонг" : "сопротивление, вход в шорт"}
+              {long ? "поддержка под ценой" : "сопротивление над ценой"}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
-                long ? "bg-success/15 text-success" : "bg-danger/15 text-danger"
-              }`}
-            >
-              {long ? "ЛОНГ" : "ШОРТ"}
-            </span>
-            <button
-              onClick={onCancel}
-              title="Отмена · Esc"
-              className="text-text-muted transition-colors duration-150 ease-out hover:text-text-primary"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          <button
+            onClick={onCancel}
+            title="Отмена · Esc"
+            className="text-text-muted transition-colors duration-150 ease-out hover:text-text-primary"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 px-4 py-3">
-          <PickerField
+        <div className="grid grid-cols-3 gap-4 px-5 py-4">
+          <Field
             label="Сумма, $"
             value={draft.margin}
             presets={MARGINS}
@@ -134,7 +139,7 @@ export default function TradeDialog({
             inputRef={firstFieldRef}
             onPick={(margin) => onChange({ ...draft, margin })}
           />
-          <PickerField
+          <Field
             label="Плечо"
             value={draft.leverage}
             presets={LEVERAGES}
@@ -144,11 +149,11 @@ export default function TradeDialog({
             step={1}
             onPick={(leverage) => onChange({ ...draft, leverage })}
           />
-          <PickerField
+          <Field
             label="Стоп, %"
             value={draft.stopPct}
             presets={STOPS}
-            format={(v) => `${v}%`}
+            format={(v) => String(v)}
             min={MIN_STOP_PCT}
             max={MAX_STOP_PCT}
             step={0.01}
@@ -157,75 +162,76 @@ export default function TradeDialog({
         </div>
 
         {plan ? (
-          <div className="border-t border-border px-4 py-3 font-mono text-[12px] tabular-nums">
-            <Line label="Вход" value={fmtPrice(plan.entry, tick)} tone="text-text-primary" />
-            <Line
+          <div className="border-t border-border bg-bg-deep/40 px-5 py-4">
+            <Row
+              label="Вход"
+              price={fmtPrice(plan.entry, tick)}
+              note={`${money(plan.notional)} · ${plan.qty.toPrecision(4)}`}
+            />
+            <Row
               label="Стоп"
-              value={`${fmtPrice(plan.stop, tick)}  −${money(plan.risk)} (${plan.riskPct.toFixed(1)}%)`}
+              price={fmtPrice(plan.stop, tick)}
+              note={`−${money(plan.risk)} · ${plan.riskPct.toFixed(1)}% от суммы`}
               tone="text-danger"
             />
             {plan.targets.map((target, i) => (
-              <Line
+              <Row
                 key={target.r}
-                label={`Тейк ${i + 1} · ${target.r}R`}
-                value={`${fmtPrice(target.price, tick)}  +${money(target.profit)}`}
+                label={`Тейк ${i + 1}`}
+                price={fmtPrice(target.price, tick)}
+                note={`+${money(target.profit)} · ${target.r}R`}
                 tone="text-success"
               />
             ))}
-
-            <div className="mt-2 border-t border-border pt-2">
-              <Line
-                label="Объём"
-                value={`${money(plan.notional)} · ${plan.qty.toPrecision(4)} монет`}
-                tone="text-text-secondary"
-              />
-              <Line
-                label="Ликвидация ≈"
-                value={fmtPrice(plan.liquidation, tick)}
-                tone={plan.liquidatedFirst ? "text-danger" : "text-text-secondary"}
-              />
-            </div>
+            <Row
+              label="Ликвидация ≈"
+              price={fmtPrice(plan.liquidation, tick)}
+              note={plan.liquidatedFirst ? "ближе стопа" : ""}
+              tone={plan.liquidatedFirst ? "text-danger" : "text-text-muted"}
+            />
 
             {plan.liquidatedFirst && (
-              <p className="mt-2 rounded bg-danger/10 px-2 py-1.5 text-[11px] leading-snug text-danger">
-                Ликвидация ближе стопа: при таком плече позицию вынесет раньше,
-                чем сработает стоп. Уменьшите плечо или подтяните стоп.
+              <p className="mt-3 rounded-md bg-danger/10 px-3 py-2 text-[11px] leading-snug text-danger">
+                При таком плече позицию вынесет раньше, чем сработает стоп.
+                Уменьшите плечо или отодвиньте стоп.
               </p>
             )}
           </div>
         ) : (
-          <p className="border-t border-border px-4 py-4 text-center text-[12px] text-text-muted">
+          <p className="border-t border-border px-5 py-6 text-center text-[12px] text-text-muted">
             Введите сумму, плечо и стоп — расчёт появится здесь
           </p>
         )}
 
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-          <button onClick={onCancel} className={`${BUTTON} text-text-muted hover:text-text-primary`}>
-            Отмена
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={!plan}
-            className={`${BUTTON} ${
-              long ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
-            } disabled:opacity-40`}
-          >
-            Войти
-          </button>
+        <div className="flex items-center justify-between border-t border-border px-5 py-3">
+          <span className="text-[11px] text-text-muted">
+            Enter — войти, Esc — отмена
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={onCancel}
+              className={`${BUTTON} text-text-muted hover:text-text-primary`}
+            >
+              Отмена
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={!plan}
+              className={`${BUTTON} ${
+                long ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+              } disabled:opacity-40`}
+            >
+              Войти
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/**
- * Поле с готовыми значениями.
- *
- * Список раскрывается по нажатию на само поле: это одно движение вместо
- * отдельной кнопки рядом. Ввести своё число можно там же — поле остаётся
- * обычным полем ввода.
- */
-function PickerField({
+/** Поле ввода с частыми значениями строкой под ним. */
+function Field({
   label,
   value,
   presets,
@@ -246,23 +252,9 @@ function PickerField({
   step?: number | "any";
   inputRef?: React.RefObject<HTMLInputElement>;
 }) {
-  const [open, setOpen] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
-
-  // Закрытие по клику мимо: список перекрывает расчёт, и оставлять его висеть,
-  // пока трейдер смотрит цифры, нельзя.
-  useEffect(() => {
-    if (!open) return;
-    function onDown(event: MouseEvent) {
-      if (!boxRef.current?.contains(event.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
-
   return (
-    <div ref={boxRef} className="relative">
-      <span className="mb-1 block text-[11px] text-text-muted">{label}</span>
+    <div>
+      <span className="mb-1.5 block text-[11px] text-text-muted">{label}</span>
       <input
         ref={inputRef}
         type="number"
@@ -270,39 +262,49 @@ function PickerField({
         max={max}
         step={step}
         value={value}
-        onFocus={() => setOpen(true)}
-        onClick={() => setOpen(true)}
         onChange={(e) => onPick(Number(e.target.value))}
         className={FIELD}
       />
-
-      {open && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-auto rounded border border-border bg-bg-panel py-1 shadow-xl">
-          {presets.map((preset) => (
-            <button
-              key={preset}
-              onClick={() => {
-                onPick(preset);
-                setOpen(false);
-              }}
-              className={`block w-full px-2 py-1 text-right font-mono text-[12px] transition-colors duration-150 ease-out hover:bg-accent-cyan/10 ${
-                preset === value ? "text-accent-cyan" : "text-text-secondary"
-              }`}
-            >
-              {format(preset)}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="mt-1.5 flex flex-wrap gap-1">
+        {presets.map((preset) => (
+          <button
+            key={preset}
+            onClick={() => onPick(preset)}
+            className={`${CHIP} ${
+              preset === value
+                ? "bg-accent-cyan/15 text-accent-cyan"
+                : "text-text-muted hover:bg-bg-panel hover:text-text-primary"
+            }`}
+          >
+            {format(preset)}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
 
-function Line({ label, value, tone }: { label: string; value: string; tone: string }) {
+/** Строка расчёта: название, цена и что она значит в деньгах. */
+function Row({
+  label,
+  price,
+  note,
+  tone = "text-text-primary",
+}: {
+  label: string;
+  price: string;
+  note: string;
+  tone?: string;
+}) {
   return (
-    <div className="flex items-baseline justify-between py-0.5">
+    <div className="flex items-baseline justify-between py-1 font-mono text-[12px] tabular-nums">
       <span className="text-text-muted">{label}</span>
-      <span className={tone}>{value}</span>
+      <span className="flex items-baseline gap-3">
+        <span className={`text-[11px] ${tone === "text-text-primary" ? "text-text-muted" : tone}`}>
+          {note}
+        </span>
+        <span className={`w-28 text-right ${tone}`}>{price}</span>
+      </span>
     </div>
   );
 }

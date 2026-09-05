@@ -217,6 +217,9 @@ export default function ScalpingPage() {
   // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
   const [journalKey, setJournalKey] = useState(0);
   const savedTradeRef = useRef<string | null>(null);
+  // Пока настройки и сделка не подняты из хранилища, писать туда нельзя:
+  // первый проход эффектов видит пустое состояние и стёр бы живую запись.
+  const hydrated = useRef(false);
   const [margin, setMargin] = useState(DEFAULT_MARGIN);
   const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
   const [timeframe, setTimeframe] = useState("1m");
@@ -269,7 +272,12 @@ export default function ScalpingPage() {
     if (typeof saved.journal === "number") {
       setJournalH(clamp(saved.journal, JOURNAL_LIMITS));
     }
-    if (typeof saved.symbol === "string" && saved.symbol) setSymbol(saved.symbol);
+    if (typeof saved.symbol === "string" && saved.symbol) {
+      setSymbol(saved.symbol);
+      // Монета уже выбрана — список для этого больше не нужен. Он открывается
+      // сам, только когда работать ещё не с чем.
+      setScreenerOpen(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -280,6 +288,7 @@ export default function ScalpingPage() {
       // «уже сохранено» здесь не ставится.
     }
     applyWorkspace(readWorkspace());
+    hydrated.current = true;
     if (!journalAvailable()) return;
     let cancelled = false;
     loadWorkspace()
@@ -297,6 +306,7 @@ export default function ScalpingPage() {
   }, [applyWorkspace]);
 
   useEffect(() => {
+    if (!hydrated.current) return;
     const snapshot = {
       theme,
       screener: screenerW,
@@ -504,6 +514,7 @@ export default function ScalpingPage() {
 
   // Разметка сделки переживает уход со страницы.
   useEffect(() => {
+    if (!hydrated.current) return;
     try {
       if (trade && trade.status !== "closed") {
         localStorage.setItem(TRADE_KEY, JSON.stringify(trade));
