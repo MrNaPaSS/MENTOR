@@ -31,6 +31,7 @@ from core.weex.futures import (
     WeexFutures,
     WeexTradeError,
     floor_to_step,
+    plan_order_id,
     round_to_tick,
 )
 
@@ -336,30 +337,22 @@ class PositionWatcher:
         placed: list[dict[str, Any]] = []
         for i, price in enumerate(prices):
             try:
-                order = await client.place_order(
+                # Условная заявка, а не сокращающий лимит: на позиции с висящей
+                # защитой биржа отвечает «cannot set reduce only» — свободного к
+                # сокращению объёма у неё нет, он весь зарезервирован стопом.
+                order = await client.place_tp_sl(
                     symbol=trade.symbol,
-                    side="SELL" if long else "BUY",
-                    position_side="LONG" if long else "SHORT",
+                    plan_type="TAKE_PROFIT",
+                    trigger_price=num(round_to_tick(price, filters["tick"])),
                     quantity=num(share),
-                    order_type="LIMIT",
-                    price=num(round_to_tick(price, filters["tick"])),
-                    reduce_only=True,
-                    time_in_force="GTC",
-                    client_order_id=f"{trade.client_id}_tp{i + 1}"[:64],
+                    position_side="LONG" if long else "SHORT",
+                    client_algo_id=f"tp{i + 1}_{trade.client_id}"[:32],
                 )
             except WeexTradeError as exc:
                 logger.warning("Цель %d %s не встала: %s", i + 1, trade.symbol, exc)
                 break
             placed.append(
-                {
-                    "price": price,
-                    "order_id": str(
-                        order.get("orderId") or order.get("id") or ""
-                        if isinstance(order, dict)
-                        else ""
-                    ),
-                    "filled": False,
-                }
+                {"price": price, "order_id": plan_order_id(order), "filled": False}
             )
 
         if not placed:

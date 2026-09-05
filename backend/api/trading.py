@@ -32,6 +32,7 @@ from core.weex.futures import (
     WeexFutures,
     WeexTradeError,
     floor_to_step,
+    plan_order_id,
     round_to_tick,
 )
 
@@ -294,18 +295,13 @@ async def open_position(
     if body.takes and not entry_price and share >= filters["min_qty"]:
         for i, price in enumerate(body.takes):
             try:
-                order = await client.place_order(
+                order = await client.place_tp_sl(
                     symbol=symbol,
-                    side="SELL" if long else "BUY",
-                    position_side=position_side,
+                    plan_type="TAKE_PROFIT",
+                    trigger_price=_num(round_to_tick(price, filters["tick"])),
                     quantity=_num(share),
-                    order_type="LIMIT",
-                    price=_num(round_to_tick(price, filters["tick"])),
-                    reduce_only=True,
-                    time_in_force="GTC",
-                    client_order_id=f"{body.client_order_id}_tp{i + 1}"
-                    if body.client_order_id
-                    else None,
+                    position_side=position_side,
+                    client_algo_id=f"tp{i + 1}_{body.client_order_id or ''}"[:32],
                 )
             except WeexTradeError as exc:
                 # Позиция уже открыта — цели доставит наблюдатель.
@@ -314,7 +310,7 @@ async def open_position(
                 break
             takes.append(order)
             placed.append(
-                {"price": price, "order_id": str(_order_id(order)), "filled": False}
+                {"price": price, "order_id": plan_order_id(order), "filled": False}
             )
 
     # Запись для фонового ведения: без неё переносить стоп в безубыток будет

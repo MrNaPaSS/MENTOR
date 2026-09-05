@@ -23,6 +23,7 @@ class FakeExchange:
     def __init__(self):
         self.orders: list[dict] = []
         self.pending = []
+        self.plans = []
         self.cancelled = []
         self.algo_cancelled = []
         self.position = None
@@ -38,6 +39,7 @@ class FakeExchange:
 
     position: dict | None = None
     pending: list[dict] = []
+    plans: list[dict] = []
     cancelled: list[str] = []
     algo_cancelled: list[str] = []
 
@@ -67,6 +69,14 @@ class FakeExchange:
             raise WeexTradeError("cannot set reduce only")
         self.orders.append(kw)
         return {"orderId": f"o{len(self.orders)}"}
+
+    async def place_tp_sl(self, **kw):
+        if self.reject_reduce_only:
+            from core.weex.futures import WeexTradeError
+
+            raise WeexTradeError("cannot set reduce only")
+        self.plans.append(kw)
+        return [{"success": True, "orderId": f"p{len(self.plans)}"}]
 
     async def modify_tp_sl(self, **kw):
         self.modified.append(kw)
@@ -235,7 +245,12 @@ def test_limit_entry_does_not_place_takes_yet(app_and_exchange):
     assert json.loads(live.targets_json) == [79500, 79000, 78500]
 
 
-def test_market_entry_places_takes_at_once(app_and_exchange):
+def test_market_entry_places_takes_as_conditional_orders(app_and_exchange):
+    """Цели ставятся условными заявками, а не сокращающими лимитами.
+
+    На позиции с висящим стопом биржа отвечает «cannot set reduce only»:
+    свободного к сокращению объёма у неё нет, он весь зарезервирован защитой.
+    """
     client, exchange, _ = app_and_exchange
     client.post(
         "/api/trading/open",
@@ -248,12 +263,12 @@ def test_market_entry_places_takes_at_once(app_and_exchange):
             "takes": [79500, 79000, 78500],
         },
     )
-    takes = exchange.orders[1:]
-    assert len(takes) == 3
-    for order in takes:
-        assert order["reduce_only"] is True
-        assert order["side"] == "BUY"           # шорт закрывается покупкой
-        assert order["quantity"] == "0.1"
+    assert len(exchange.orders) == 1            # на бирже один обычный ордер — вход
+    assert len(exchange.plans) == 3
+    for plan in exchange.plans:
+        assert plan["plan_type"] == "TAKE_PROFIT"
+        assert plan["position_side"] == "SHORT"
+        assert plan["quantity"] == "0.1"
 
 
 def test_failed_takes_do_not_report_a_failed_entry(app_and_exchange):
@@ -385,3 +400,30 @@ def test_partial_close_keeps_the_rest_and_its_orders(app_and_exchange):
     assert body["closed"] == 0.25 and body["remaining"] == 0.25
     # Заявки остатка не трогаем: позиция ещё жива и должна быть под защитой.
     assert exchange.cancelled == [] and exchange.algo_cancelled == []
+
+
+def test_conditional_take_defaults_to_market_execution():
+    """executePrice = 0 значит «после срабатывания — по рынку»."""
+    import asyncio
+
+    from core.weex.futures import Credentials, WeexFutures
+
+    sent: dict = {}
+
+    class Recording(WeexFutures):
+        async def _request(self, method, path, *, params=None, data=None):
+            sent.update(data or {})
+            return [{"success": True, "orderId": "p1"}]
+
+    client = Recording(Credentials("k", "s", "p"), lambda: None)  # type: ignore[arg-type]
+    asyncio.run(
+        client.place_tp_sl(
+            symbol="BTCUSDT",
+            plan_type="TAKE_PROFIT",
+            trigger_price="80000",
+            quantity="0.1",
+            position_side="LONG",
+        )
+    )
+    assert sent["executePrice"] == "0"
+    assert sent["triggerPriceType"] == "MARK_PRICE"

@@ -132,6 +132,28 @@ def _f(value: Any) -> float:
         return 0.0
 
 
+def plan_order_id(response: Any) -> str:
+    """Идентификатор условной заявки из ответа биржи.
+
+    Ответ приходит то списком `[{success, orderId}]`, то объектом, то тем же
+    объектом внутри `data`. Разбираем все три: пропущенный идентификатор значит,
+    что заявку потом нечем будет ни найти, ни передвинуть.
+    """
+    if response is None:
+        return ""
+    if isinstance(response, list):
+        first = response[0] if response else None
+        if isinstance(first, dict) and first.get("success") is False:
+            return ""
+        return str(first.get("orderId") or "") if isinstance(first, dict) else ""
+    if isinstance(response, dict):
+        if response.get("orderId"):
+            return str(response["orderId"])
+        if isinstance(response.get("data"), (list, dict)):
+            return plan_order_id(response["data"])
+    return ""
+
+
 SIDES = {"BUY", "SELL"}
 POSITION_SIDES = {"LONG", "SHORT", "BOTH"}
 
@@ -352,6 +374,41 @@ class WeexFutures:
 
         logger.info("WEEX ордер %s %s %s %s", symbol, side, position_side, quantity)
         return await self._request("POST", ENDPOINTS["order"], data=data)
+
+    async def place_tp_sl(
+        self,
+        *,
+        symbol: str,
+        plan_type: str,
+        trigger_price: str,
+        quantity: str,
+        position_side: str,
+        execute_price: str = "0",
+        trigger_price_type: str = "MARK_PRICE",
+        client_algo_id: str | None = None,
+    ) -> Any:
+        """Условная заявка защиты: стоп или цель.
+
+        Именно так это делает бот заказчика, и не от хорошей жизни. Обычный
+        сокращающий ордер на позицию с уже висящей защитой биржа отклоняет:
+        «cannot set reduce only, you must cancel some order» — доступный к
+        сокращению объём у неё нулевой, он весь зарезервирован. Условная заявка
+        такого резерва не требует.
+
+        `execute_price = "0"` значит исполнение по рынку после срабатывания.
+        """
+        data: dict[str, Any] = {
+            "symbol": symbol,
+            "planType": plan_type,
+            "triggerPrice": trigger_price,
+            "executePrice": execute_price,
+            "quantity": quantity,
+            "positionSide": position_side,
+            "triggerPriceType": trigger_price_type,
+        }
+        if client_algo_id:
+            data["clientAlgoId"] = client_algo_id
+        return await self._request("POST", ENDPOINTS["tp_sl"], data=data)
 
     async def modify_tp_sl(
         self,
