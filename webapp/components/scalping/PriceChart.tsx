@@ -62,7 +62,12 @@ export default function PriceChart({
         vertLines: { color: "rgba(43,49,57,0.4)" },
         horzLines: { color: "rgba(43,49,57,0.4)" },
       },
-      rightPriceScale: { borderColor: "#2B3139" },
+      rightPriceScale: {
+        borderColor: "#2B3139",
+        // По умолчанию сверху и снизу остаётся по 20% пустоты, и свечи
+        // занимают половину окна. Скальперу нужен размах цены, а не поля.
+        scaleMargins: { top: 0.06, bottom: 0.06 },
+      },
       timeScale: { borderColor: "#2B3139", timeVisible: true, secondsVisible: false },
       crosshair: { mode: 0 },
       autoSize: true,

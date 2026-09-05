@@ -32,7 +32,8 @@ export type LadderRow = {
   bid: number;
   ask: number;
   notional: number;
-  is_wall: boolean;
+  is_wall: boolean;   // крупная заявка относительно соседей по своей стороне
+  strong: boolean;    // имбаланс: сторона втрое перевешивает противоположную
   cum: number;
 };
 

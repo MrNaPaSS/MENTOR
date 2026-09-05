@@ -267,3 +267,37 @@ def test_ladder_walls_match_screener_definition():
     wall = biggest_wall(state)
     assert wall is not None
     assert wall.price in lit
+
+
+# ── имбаланс по настройкам заказчика ────────────────────────────────────────
+
+def test_imbalance_marks_dominant_side():
+    """Сравниваются уровни на одинаковом удалении от спреда, а не соседние.
+
+    Порог 300% взят из рабочего пространства заказчика: это его основной
+    визуальный сигнал, а не абсолютный размер заявки.
+    """
+    from backend.scalping.ladder import mark_imbalance
+
+    bids = [(100.0, 30.0), (99.0, 1.0)]
+    asks = [(101.0, 1.0), (102.0, 50.0)]
+    strong_bids, strong_asks = mark_imbalance(bids, asks)
+    assert strong_bids == {100.0}      # первый бид втрое тяжелее первого аска
+    assert strong_asks == {102.0}      # второй аск втрое тяжелее второго бида
+
+
+def test_imbalance_ignores_empty_opposite_side():
+    """Против пустоты перевешивает что угодно — это не сигнал."""
+    from backend.scalping.ladder import mark_imbalance
+
+    strong_bids, strong_asks = mark_imbalance([(100.0, 5.0)], [(101.0, 0.0)])
+    assert strong_bids == set() and strong_asks == set()
+
+
+def test_ladder_rows_carry_imbalance_flag():
+    from backend.scalping.book import OrderBook
+
+    b = OrderBook("X")
+    b.apply_snapshot([["99.99", "300"], ["99.98", "1"]], [["100.01", "1"], ["100.02", "1"]], 1)
+    rows, _ = build_ladder(b, rows=10, agg=1)
+    assert any(r.strong and r.bid > 0 for r in rows)

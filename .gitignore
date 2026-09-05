@@ -42,3 +42,8 @@ cloudflared.exe
 .agents/
 .claude/
 skills-lock.json
+
+# Выгрузки рабочего пространства Tiger.Trade — справочный материал.
+# В публичный репозиторий не кладём: внутри идентификаторы торговых аккаунтов.
+Trading_*_Settings.xml
+DOM_*.xml

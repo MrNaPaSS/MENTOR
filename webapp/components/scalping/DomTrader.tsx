@@ -22,12 +22,17 @@ import {
   type LadderRow,
 } from "@/lib/scalping";
 
-const ROW_HEIGHT = 20;
+const ROW_HEIGHT = 21;
 
 // Ширина колонки истории. Фиксированная, а не доля свободного места: пока
 // история не набралась, пустые колонки растягивались на всю ширину экрана и
 // оставляли стакану полоску у правого края.
-const COL_W = "w-[54px]";
+// Ширины взяты из рабочего пространства заказчика (Tiger.Trade):
+// ClusterWidth=111 для профиля bid/ask, DomWidth=177 на колонку стакана.
+// Четыре колонки истории плюс стакан дают ровно ширину панели.
+const COL_W = "w-[111px]";
+const BOOK_W = "w-[177px]";
+const MAX_VISIBLE_COLUMNS = 4;
 
 /** Ячейки истории приходят тройками — раскладываем в карту по цене строки. */
 function indexCells(columns: ClusterColumn[]): Map<number, [number, number]>[] {
@@ -43,7 +48,15 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
   const centered = useRef(false);
 
   const askCount = useMemo(() => frame.rows.filter((r) => r.ask > 0).length, [frame.rows]);
-  const cells = useMemo(() => indexCells(frame.clusters), [frame.clusters]);
+
+  // Показываем только заполненные колонки истории, и не больше шести.
+  // Пустые занимали по 54 пикселя каждая: пока история набиралась, стакан
+  // ужимался в полоску, а слева стояло полтысячи пикселей пустоты.
+  const columns = useMemo(
+    () => frame.clusters.filter((c) => c.cells.length > 0).slice(-MAX_VISIBLE_COLUMNS),
+    [frame.clusters],
+  );
+  const cells = useMemo(() => indexCells(columns), [columns]);
 
   // Масштаб полос — по самой крупной строке стакана в окне. Считаем по всему
   // окну, иначе при каждом обновлении полосы «дышали» бы.
@@ -75,17 +88,16 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
   }, [askCount, frame.rows.length]);
 
   return (
-    <div className="flex h-full flex-col text-[10px] tabular-nums">
+    <div className="flex h-full flex-col text-[11px] tabular-nums">
       <Header frame={frame} />
 
       <div className="flex border-b border-border bg-bg-deep/60 text-text-muted">
-        {frame.clusters.map((column) => (
+        {columns.map((column) => (
           <div key={column.start} className={`${COL_W} py-1 text-center`}>
             {clockLabel(column.start)}
           </div>
         ))}
-        <div className="w-[88px] py-1 text-right">объём</div>
-        <div className="w-[72px] py-1 pr-2 text-right">цена</div>
+        <div className={`${BOOK_W} py-1 pr-2 text-right`}>объём · цена</div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono">
@@ -110,7 +122,7 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
         })}
       </div>
 
-      <Totals columns={frame.clusters} />
+      <Totals columns={columns} />
     </div>
   );
 }
@@ -157,8 +169,10 @@ function SpreadRow({ frame }: { frame: DomFrame }) {
       style={{ height: ROW_HEIGHT }}
     >
       <div className="flex-1" />
-      <div className="w-[88px] pr-1 text-right">{fmtPrice(frame.best_bid, frame.tick)}</div>
-      <div className="w-[72px] pr-2 text-right">{fmtPrice(frame.best_ask, frame.tick)}</div>
+      <div className={`${BOOK_W} flex items-center justify-between px-2`}>
+        <span>{fmtPrice(frame.best_bid, frame.tick)}</span>
+        <span>{fmtPrice(frame.best_ask, frame.tick)}</span>
+      </div>
     </div>
   );
 }
@@ -189,11 +203,20 @@ const Row = memo(function Row({
         return <ClusterCell key={i} cell={cell} scale={clusterScale} />;
       })}
 
-      {/* Объём стоящей заявки: полоса под текстом растёт от левого края. */}
-      <div className="relative w-[88px] pr-1 text-right">
+      {/* Гистограмма внутри строки, процентами от максимума в окне: так
+          настроен стакан заказчика (DomRuler=Percents, position=inside). */}
+      <div className={`relative ${BOOK_W} flex items-center justify-between px-2`}>
         <div
           className={`absolute inset-y-[2px] left-0 ${
-            row.is_wall ? "bg-accent-gold/30" : isBid ? "bg-success/25" : "bg-danger/25"
+            row.is_wall
+              ? "bg-accent-gold/35"
+              : row.strong
+                ? isBid
+                  ? "bg-success/40"
+                  : "bg-danger/40"
+                : isBid
+                  ? "bg-success/20"
+                  : "bg-danger/20"
           }`}
           style={{ width: `${width}%` }}
         />
@@ -201,17 +224,16 @@ const Row = memo(function Row({
           className={`relative z-10 ${
             row.is_wall
               ? "font-semibold text-accent-gold"
-              : isBid
-                ? "text-success"
-                : "text-danger"
+              : row.strong
+                ? "font-semibold text-text-primary"
+                : isBid
+                  ? "text-success"
+                  : "text-danger"
           }`}
         >
           {money(row.notional)}
         </span>
-      </div>
-
-      <div className="w-[72px] pr-2 text-right text-text-secondary">
-        {fmtPrice(row.price, tick)}
+        <span className="relative z-10 text-text-secondary">{fmtPrice(row.price, tick)}</span>
       </div>
     </div>
   );
@@ -262,7 +284,7 @@ function Totals({ columns }: { columns: ClusterColumn[] }) {
           </div>
         );
       })}
-      <div className="w-[160px]" />
+      <div className={BOOK_W} />
     </div>
   );
 }

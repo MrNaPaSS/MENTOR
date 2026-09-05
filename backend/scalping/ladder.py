@@ -20,10 +20,16 @@ from backend.scalping.metrics import Level, Wall, find_walls
 from backend.scalping.state import BAND_BP
 
 # Сколько ценовых строк показываем с каждой стороны по умолчанию.
-DEFAULT_ROWS = 40
+# Тридцать — из рабочего пространства заказчика (DomAutoscaleDepth).
+DEFAULT_ROWS = 30
 
 # Максимум строк на сторону: выше начинается не стакан, а таблица.
 MAX_ROWS = 200
+
+# Порог имбаланса в процентах: уровень считается сильным, когда его объём
+# втрое перевешивает противоположную сторону на том же удалении от спреда.
+# Значение взято из рабочего пространства заказчика (BidAskImbalanceRatio=300).
+IMBALANCE_RATIO = 300.0
 
 
 @dataclass(frozen=True)
@@ -34,7 +40,8 @@ class LadderRow:
     bid: float          # объём в монете
     ask: float
     notional: float     # объём этой строки в деньгах
-    is_wall: bool
+    is_wall: bool       # крупная заявка: кратно выше медианы по своей стороне
+    strong: bool        # имбаланс: сторона перевешивает противоположную
     cum: float          # накопленный объём в деньгах от лучшей цены
 
 
@@ -95,11 +102,39 @@ def group(levels: list[Level], tick: float, side: str, rows: int) -> list[tuple[
     return ordered[:rows]
 
 
+def mark_imbalance(
+    bids: list[tuple[float, float]],
+    asks: list[tuple[float, float]],
+    ratio_percent: float = IMBALANCE_RATIO,
+) -> tuple[set[float], set[float]]:
+    """Цены уровней, где одна сторона перевешивает другую.
+
+    Сравниваем уровни на одинаковом удалении от спреда: первый бид против
+    первого аска, второй против второго и так далее. Так же считает кластерный
+    имбаланс в терминале заказчика — это его основной визуальный сигнал, а не
+    абсолютный размер заявки.
+
+    Сравнение в деньгах: цены соседних уровней почти равны, но объём в монете и
+    объём в деньгах на разных инструментах расходятся на порядки.
+    """
+    ratio = ratio_percent / 100.0
+    strong_bids: set[float] = set()
+    strong_asks: set[float] = set()
+    for (bp, bs), (ap, asz) in zip(bids, asks):
+        bid_money, ask_money = bp * bs, ap * asz
+        if ask_money > 0 and bid_money >= ask_money * ratio:
+            strong_bids.add(bp)
+        if bid_money > 0 and ask_money >= bid_money * ratio:
+            strong_asks.add(ap)
+    return strong_bids, strong_asks
+
+
 def build_ladder(
     book: OrderBook,
     rows: int = DEFAULT_ROWS,
     tick: float | None = None,
     agg: int = 1,
+    imbalance_ratio: float = IMBALANCE_RATIO,
 ) -> tuple[list[LadderRow], float]:
     """Собрать лестницу стакана. Возвращает строки сверху вниз и её шаг."""
     rows = max(1, min(rows, MAX_ROWS))
@@ -115,6 +150,7 @@ def build_ladder(
     asks = group(book.levels("ask"), step, "ask", rows)
 
     wall_prices = _wall_prices(book, step)
+    strong_bids, strong_asks = mark_imbalance(bids, asks, imbalance_ratio)
 
     # Накопленный объём считается от лучшей цены вглубь, а показывается стакан
     # сверху вниз — поэтому аски считаем по порядку и переворачиваем.
@@ -123,13 +159,33 @@ def build_ladder(
     cum = 0.0
     for price, size in asks:
         cum += price * size
-        ask_rows.append(LadderRow(price, 0.0, size, price * size, price in wall_prices, cum))
+        ask_rows.append(
+            LadderRow(
+                price=price,
+                bid=0.0,
+                ask=size,
+                notional=price * size,
+                is_wall=price in wall_prices,
+                strong=price in strong_asks,
+                cum=cum,
+            )
+        )
     out.extend(reversed(ask_rows))
 
     cum = 0.0
     for price, size in bids:
         cum += price * size
-        out.append(LadderRow(price, size, 0.0, price * size, price in wall_prices, cum))
+        out.append(
+            LadderRow(
+                price=price,
+                bid=size,
+                ask=0.0,
+                notional=price * size,
+                is_wall=price in wall_prices,
+                strong=price in strong_bids,
+                cum=cum,
+            )
+        )
     return out, step
 
 

@@ -33,7 +33,7 @@ const STEPS = [
   { agg: 25, label: "×25" },
 ];
 
-const DEPTHS = [30, 60, 100];
+const DEPTHS = [30, 60, 100];   // 30 — глубина из настроек заказчика
 
 // Отклик на нажатие: 150 мс ease-out и лёгкое сжатие. Кнопка должна показать,
 // что интерфейс услышал палец, не дожидаясь новых данных.
@@ -44,7 +44,7 @@ export default function ScalpingPage() {
   const [symbol, setSymbol] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("walls");
   const [agg, setAgg] = useState(10);
-  const [rows, setRows] = useState(60);
+  const [rows, setRows] = useState(30);
 
   const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort });
 
