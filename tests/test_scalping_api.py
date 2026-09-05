@@ -95,6 +95,23 @@ def test_dom_returns_ladder(app_and_collector):
     assert prices == sorted(prices, reverse=True)   # стакан идёт сверху вниз
 
 
+def test_dom_shelf_threshold_is_bounded(app_and_collector):
+    """Порог полки приходит от клиента, но в разумных границах.
+
+    Ниже ста тысяч полкой становится любой уровень, и график превращается в
+    частокол; выше пятидесяти миллионов не остаётся ни одной даже на биткойне.
+    """
+    app, _ = app_and_collector
+    with TestClient(app) as client:
+        assert client.get("/api/scalping/dom/btcusdt", params={"shelf": 1}).status_code == 422
+        assert (
+            client.get("/api/scalping/dom/btcusdt", params={"shelf": 1e12}).status_code == 422
+        )
+        assert (
+            client.get("/api/scalping/dom/btcusdt", params={"shelf": 500_000}).status_code == 200
+        )
+
+
 def test_dom_unknown_symbol_is_404(app_and_collector):
     app, _ = app_and_collector
     with TestClient(app) as client:

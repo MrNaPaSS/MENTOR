@@ -290,6 +290,29 @@ def test_shelves_sorted_by_money_and_capped():
     assert shelves == sorted(shelves, key=lambda s: s.notional, reverse=True)
 
 
+def test_shelf_threshold_comes_from_the_client():
+    """Порог полки задаётся снаружи: одного значения на все монеты нет.
+
+    На биткойне два миллиона — рядовой уровень, на монете из третьего десятка
+    таких не бывает вовсе. Поэтому порог приходит из интерфейса, а не зашит.
+    """
+    from backend.scalping.state import SymbolState, liquidity_shelves
+
+    state = SymbolState("TESTUSDT")
+    # 30000 монет по 100 — три миллиона; 10000 — один.
+    state.book.apply_snapshot(
+        [["100.00", "30000"], ["99.99", "10000"]],
+        [["100.01", "10000"]],
+        1,
+    )
+
+    strict = liquidity_shelves(state, min_notional=2_000_000)
+    assert [s.price for s in strict] == [100.0]
+
+    loose = liquidity_shelves(state, min_notional=500_000)
+    assert sorted(s.price for s in loose) == [99.99, 100.0, 100.01]
+
+
 def test_no_shelves_without_price():
     from backend.scalping.metrics import find_shelves
 

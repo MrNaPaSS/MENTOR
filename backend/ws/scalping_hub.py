@@ -19,6 +19,7 @@ from dataclasses import asdict
 from backend.scalping.clusters import fit_to_rows
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.ladder import DEFAULT_ROWS, build_ladder
+from backend.scalping.metrics import SHELF_MIN_NOTIONAL
 from backend.scalping.state import DEFAULT_SORT, biggest_wall, liquidity_shelves
 
 logger = logging.getLogger("nmnh.scalping.ws")
@@ -39,6 +40,7 @@ class Subscription:
         self.rows: int = DEFAULT_ROWS
         self.agg: int = 1
         self.sort: str = DEFAULT_SORT
+        self.shelf: float = SHELF_MIN_NOTIONAL
         self.screener: bool = True
 
 
@@ -81,7 +83,9 @@ class ScalpingHub:
         if sub and sub.symbol:
             await self.collector.unpin(sub.symbol)
 
-    async def set_symbol(self, ws, symbol: str | None, rows: int, agg: int) -> None:
+    async def set_symbol(
+        self, ws, symbol: str | None, rows: int, agg: int, shelf: float
+    ) -> None:
         """Переключить клиента на другой стакан.
 
         Прошлый инструмент отпускаем, новый удерживаем: пока хоть один клиент
@@ -93,7 +97,7 @@ class ScalpingHub:
             return
 
         old, new = sub.symbol, symbol.upper() if symbol else None
-        sub.rows, sub.agg = rows, agg
+        sub.rows, sub.agg, sub.shelf = rows, agg, shelf
         if old == new:
             return
 
@@ -175,7 +179,7 @@ class ScalpingHub:
             "book_ratio": state.book_ratio,
             "rows": [asdict(r) for r in ladder],
             "wall": asdict(wall) if wall else None,
-            "shelves": [asdict(s) for s in liquidity_shelves(state)],
+            "shelves": [asdict(s) for s in liquidity_shelves(state, min_notional=sub.shelf)],
             "clusters": _clusters(state, ladder, step),
         }
 

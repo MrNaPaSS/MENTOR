@@ -12,11 +12,12 @@
 // переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
 import { useEffect, useState } from "react";
-import { PanelLeftClose, PanelLeftOpen, Wifi, WifiOff } from "lucide-react";
+import { Moon, PanelLeftClose, PanelLeftOpen, Sun, Wifi, WifiOff } from "lucide-react";
 import PaneDivider from "@/components/scalping/PaneDivider";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
 import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
+import type { ChartTheme } from "@/lib/indicator/shapes";
 import {
   base,
   price as fmtPrice,
@@ -40,6 +41,17 @@ const STEPS = [
 // масштабирование, а четыре скачка. Промежуточные ступени дают плавность,
 // кнопки остаются быстрым переходом к привычным значениям.
 const ZOOM_LADDER = [1, 2, 3, 5, 8, 10, 15, 20, 25, 40, 50, 75, 100];
+
+// Пороги полки ликвидности. На биткойне два миллиона — рядовой уровень, на
+// монете из третьего десятка их не бывает вовсе: одного значения на все
+// инструменты не существует, поэтому порог выбирает трейдер.
+const SHELF_STEPS = [
+  { value: 500_000, label: "500K" },
+  { value: 1_000_000, label: "1M" },
+  { value: 2_000_000, label: "2M" },
+  { value: 5_000_000, label: "5M" },
+  { value: 10_000_000, label: "10M" },
+];
 
 // 30 — глубина из рабочего пространства заказчика (DomAutoscaleDepth).
 const DEPTHS = [30, 60, 100];
@@ -101,7 +113,7 @@ function clamp(value: number, { min, max }: { min: number; max: number }) {
 
 /** Настройки рабочего места, которые переживают перезагрузку страницы. */
 type Workspace = {
-  screenerOpen: boolean;
+  theme: ChartTheme;
   screener: number;
   dom: number;
   indicators: Indicators;
@@ -109,6 +121,7 @@ type Workspace = {
   timeframe: string;
   agg: number;
   rows: number;
+  shelf: number;
 };
 
 function readWorkspace(): Partial<Workspace> | null {
@@ -125,14 +138,19 @@ export default function ScalpingPage() {
   const [sort, setSort] = useState<SortKey>("walls");
   const [agg, setAgg] = useState(10);
   const [rows, setRows] = useState(30);
+  const [shelf, setShelf] = useState(2_000_000);
   const [timeframe, setTimeframe] = useState("1m");
   const [indicators, setIndicators] = useState<Indicators>(DEFAULT_INDICATORS);
+  const [theme, setTheme] = useState<ChartTheme>("dark");
 
+  // Открыт при каждой загрузке: работа начинается с выбора монеты, и свёрнутый
+  // список на старте — это лишний клик перед каждой сессией. Свернётся сам,
+  // как только монета выбрана, и сохранять это состояние незачем.
   const [screenerOpen, setScreenerOpen] = useState(true);
   const [screenerW, setScreenerW] = useState(PANE_LIMITS.screener.def);
   const [domW, setDomW] = useState(PANE_LIMITS.dom.def);
 
-  const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort });
+  const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort, shelf });
 
   // Рабочее место трейдера живёт в его браузере: ширины панелей, набор
   // индикаторов, таймфрейм, шаг и глубина стакана. Настроил один раз — и после
@@ -140,7 +158,7 @@ export default function ScalpingPage() {
   useEffect(() => {
     const saved = readWorkspace();
     if (!saved) return;
-    if (typeof saved.screenerOpen === "boolean") setScreenerOpen(saved.screenerOpen);
+    if (saved.theme === "light" || saved.theme === "dark") setTheme(saved.theme);
     if (typeof saved.screener === "number") {
       setScreenerW(clamp(saved.screener, PANE_LIMITS.screener));
     }
@@ -158,6 +176,9 @@ export default function ScalpingPage() {
       setAgg(saved.agg);
     }
     if (typeof saved.rows === "number" && DEPTHS.includes(saved.rows)) setRows(saved.rows);
+    if (typeof saved.shelf === "number" && SHELF_STEPS.some((s) => s.value === saved.shelf)) {
+      setShelf(saved.shelf);
+    }
   }, []);
 
   useEffect(() => {
@@ -165,7 +186,7 @@ export default function ScalpingPage() {
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
-          screenerOpen,
+          theme,
           screener: screenerW,
           dom: domW,
           indicators,
@@ -173,12 +194,13 @@ export default function ScalpingPage() {
           timeframe,
           agg,
           rows,
+          shelf,
         } satisfies Workspace),
       );
     } catch {
       // Не сохранилось — не повод ломать экран.
     }
-  }, [screenerOpen, screenerW, domW, indicators, sort, timeframe, agg, rows]);
+  }, [theme, screenerW, domW, indicators, sort, timeframe, agg, rows, shelf]);
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
   function resizeScreener(delta: number) {
@@ -328,11 +350,11 @@ export default function ScalpingPage() {
             >
               <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <span className="font-semibold text-text-primary">{base(symbol)}</span>
-                {/* Подписи обязательны: «×10» и «60» сами по себе ничего не
-                    говорят. Рядом с множителем показан получившийся шаг в
+                {/* Без словесных подписей: множители и глубина разделены
+                    чертой, а что делает кнопка — говорит подсказка при
+                    наведении. Рядом с множителем стоит получившийся шаг в
                     деньгах — по нему и ориентируются, а не по кратности. */}
                 <div className="flex items-center gap-0.5">
-                  <span className="mr-1 text-[10px] text-text-muted">Шаг</span>
                   {STEPS.map((step) => (
                     <button
                       key={step.agg}
@@ -350,8 +372,6 @@ export default function ScalpingPage() {
                   )}
 
                   <span className="mx-2 h-3 w-px bg-border" />
-
-                  <span className="mr-1 text-[10px] text-text-muted">Строк</span>
                   {DEPTHS.map((depth) => (
                     <button
                       key={depth}
@@ -407,9 +427,32 @@ export default function ScalpingPage() {
                       {INDICATOR_LABELS[key]}
                     </button>
                   ))}
-                  {dom?.wall && (
-                    <span className="ml-2 text-[11px] text-accent-gold">плита на графике</span>
+                  {/* Порог полок стоит рядом с их переключателем: цифра без
+                      контекста непонятна, а так видно, к чему она. */}
+                  {indicators.shelves && (
+                    <>
+                      <span className="mx-1 h-3 w-px bg-border" />
+                      {SHELF_STEPS.map((step) => (
+                        <button
+                          key={step.value}
+                          onClick={() => setShelf(step.value)}
+                          title={`Показывать полки от ${step.label} в стакане`}
+                          className={`${CHIP} ${shelf === step.value ? CHIP_ON : CHIP_OFF}`}
+                        >
+                          {step.label}
+                        </button>
+                      ))}
+                    </>
                   )}
+
+                  <span className="mx-1 h-3 w-px bg-border" />
+                  <button
+                    onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                    title="Тема графика"
+                    className={`${CHIP} ${CHIP_OFF}`}
+                  >
+                    {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
               </div>
 
@@ -419,6 +462,7 @@ export default function ScalpingPage() {
                   interval={timeframe}
                   wall={dom?.wall ?? null}
                   shelves={dom?.shelves ?? []}
+                  theme={theme}
                   indicators={indicators}
                 />
               </div>

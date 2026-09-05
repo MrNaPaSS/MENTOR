@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from backend.scalping.clusters import fit_to_rows
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.ladder import DEFAULT_ROWS, MAX_ROWS, build_ladder
+from backend.scalping.metrics import SHELF_MAX_LIMIT, SHELF_MIN_LIMIT, SHELF_MIN_NOTIONAL
 from backend.scalping.state import (
     BAND_BP,
     DEFAULT_SORT,
@@ -59,6 +60,12 @@ async def dom(
     rows: int = Query(DEFAULT_ROWS, ge=4, le=MAX_ROWS),
     tick: float | None = Query(None, gt=0, description="Шаг ценовой шкалы"),
     agg: int = Query(1, ge=1, le=100, description="Укрупнение шага биржи, разы"),
+    shelf: float = Query(
+        SHELF_MIN_NOTIONAL,
+        ge=SHELF_MIN_LIMIT,
+        le=SHELF_MAX_LIMIT,
+        description="Порог полки ликвидности в деньгах",
+    ),
 ) -> dict[str, Any]:
     """Лестница стакана с плитами и метриками по одному инструменту."""
     collector = get_collector(request)
@@ -85,7 +92,7 @@ async def dom(
         "depth": {"bids": len(state.book.bids), "asks": len(state.book.asks)},
         "rows": [asdict(r) for r in ladder],
         "wall": asdict(wall) if wall else None,
-        "shelves": [asdict(s) for s in liquidity_shelves(state)],
+        "shelves": [asdict(s) for s in liquidity_shelves(state, min_notional=shelf)],
         "tape": asdict(tape),
         "clusters": [
             {

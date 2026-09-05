@@ -28,7 +28,9 @@ export const SHAPE_DEFAULTS: ShapeToggles = {
   zones: false,
 };
 
-const COLORS = {
+export type ChartTheme = "dark" | "light";
+
+const DARK = {
   structure: "#8A93A0",
   swingLabel: "#B7BDC6",
   // Ордер-блоки фиолетовые, как в терминале заказчика. Внутренние бледнее
@@ -47,6 +49,26 @@ const COLORS = {
   discount: "rgba(14, 203, 129, 0.07)",
 };
 
+// Светлая палитра — по оформлению самого индикатора: структура и подписи
+// чёрные, ордер-блоки сиреневые, разрывы бледно-фиолетовые. Прозрачности
+// плотнее, чем на тёмной: на белом фоне слабая заливка исчезает вовсе.
+const LIGHT: typeof DARK = {
+  structure: "#000000",
+  swingLabel: "#000000",
+  internalBlock: "rgba(149, 117, 205, 0.22)",
+  internalBlockBorder: "rgba(103, 58, 183, 0.45)",
+  swingBlock: "rgba(149, 117, 205, 0.42)",
+  swingBlockBorder: "rgba(103, 58, 183, 0.70)",
+  bullishGap: "rgba(0, 168, 107, 0.13)",
+  bearishGap: "rgba(255, 26, 46, 0.11)",
+  equal: "#8D6E00",
+  premium: "rgba(255, 26, 46, 0.05)",
+  equilibrium: "rgba(120, 123, 134, 0.06)",
+  discount: "rgba(0, 168, 107, 0.05)",
+};
+
+const PALETTES = { dark: DARK, light: LIGHT };
+
 /**
  * Собрать фигуры для графика.
  *
@@ -57,7 +79,9 @@ export function buildShapes(
   smc: SmcResult,
   lastTime: number,
   toggles: ShapeToggles = SHAPE_DEFAULTS,
+  theme: ChartTheme = "dark",
 ): Shapes {
+  const COLORS = PALETTES[theme];
   const boxes: ShapeBox[] = [];
   const segments: ShapeSegment[] = [];
   const points: ShapePoint[] = [];

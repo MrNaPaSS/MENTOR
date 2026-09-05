@@ -15,6 +15,7 @@ from backend.scalping.clusters import ClusterHistory
 from backend.scalping.metrics import (
     Wall,
     book_imbalance,
+    SHELF_MIN_NOTIONAL,
     find_shelves,
     find_walls,
     spread_bp,
@@ -95,18 +96,26 @@ class ScreenerRow:
     live: bool               # стакан собран и синхронизирован
 
 
-def liquidity_shelves(state: SymbolState, band_bp: float = BAND_BP) -> list[Wall]:
+def liquidity_shelves(
+    state: SymbolState,
+    band_bp: float = BAND_BP,
+    min_notional: float = SHELF_MIN_NOTIONAL,
+) -> list[Wall]:
     """Полки ликвидности с обеих сторон — уровни с крупными деньгами.
 
     Полосу берём ту же, что и для остальных метрик: полка за процент от цены
     трейдеру на скальпе не пригодится, а линий на графике добавит.
+
+    Порог задаёт клиент: на биткойне два миллиона — рядовой уровень, на монете
+    из третьего десятка их не бывает вовсе. Одного значения на все инструменты
+    не существует, поэтому оно вынесено в интерфейс.
     """
     mid = state.book.mid
     if mid <= 0:
         return []
-    shelves = find_shelves(state.book.levels_in_band("bid", band_bp), "bid", mid) + find_shelves(
-        state.book.levels_in_band("ask", band_bp), "ask", mid
-    )
+    shelves = find_shelves(
+        state.book.levels_in_band("bid", band_bp), "bid", mid, min_notional
+    ) + find_shelves(state.book.levels_in_band("ask", band_bp), "ask", mid, min_notional)
     shelves.sort(key=lambda w: w.notional, reverse=True)
     return shelves
 

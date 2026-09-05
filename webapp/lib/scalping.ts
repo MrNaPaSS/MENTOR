@@ -63,7 +63,7 @@ export type DomFrame = {
   book_ratio: number;
   rows: LadderRow[];
   wall: Wall | null;
-  /** Полки ликвидности: уровни, где в стакане стоит от двух миллионов. */
+  /** Полки ликвидности: уровни с деньгами от выбранного трейдером порога. */
   shelves: Wall[];
   clusters: ClusterColumn[];
 };
@@ -109,9 +109,11 @@ type Options = {
   rows: number;
   agg: number;
   sort: SortKey;
+  /** Порог полки ликвидности в деньгах — считает его сервер. */
+  shelf: number;
 };
 
-export function useScalpingFeed({ symbol, rows, agg, sort }: Options) {
+export function useScalpingFeed({ symbol, rows, agg, sort, shelf }: Options) {
   const [screener, setScreener] = useState<ScreenerRow[]>([]);
   const [dom, setDom] = useState<DomFrame | null>(null);
   const [connected, setConnected] = useState(false);
@@ -121,8 +123,8 @@ export function useScalpingFeed({ symbol, rows, agg, sort }: Options) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Настройки читаем из ref: пересоздавать соединение при смене шага сетки
   // незачем, достаточно отправить команду.
-  const optsRef = useRef({ symbol, rows, agg, sort });
-  optsRef.current = { symbol, rows, agg, sort };
+  const optsRef = useRef({ symbol, rows, agg, sort, shelf });
+  optsRef.current = { symbol, rows, agg, sort, shelf };
 
   const send = useCallback((message: object) => {
     const ws = socketRef.current;
@@ -145,7 +147,13 @@ export function useScalpingFeed({ symbol, rows, agg, sort }: Options) {
         ws.send(JSON.stringify({ action: "sort", sort: o.sort }));
         if (o.symbol) {
           ws.send(
-            JSON.stringify({ action: "symbol", symbol: o.symbol, rows: o.rows, agg: o.agg }),
+            JSON.stringify({
+              action: "symbol",
+              symbol: o.symbol,
+              rows: o.rows,
+              agg: o.agg,
+              shelf: o.shelf,
+            }),
           );
         }
       };
@@ -188,8 +196,8 @@ export function useScalpingFeed({ symbol, rows, agg, sort }: Options) {
   // секунды останутся цены прошлой монеты.
   useEffect(() => {
     setDom(null);
-    send({ action: "symbol", symbol, rows, agg });
-  }, [symbol, rows, agg, send]);
+    send({ action: "symbol", symbol, rows, agg, shelf });
+  }, [symbol, rows, agg, shelf, send]);
 
   useEffect(() => {
     send({ action: "sort", sort });

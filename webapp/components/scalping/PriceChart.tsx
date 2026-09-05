@@ -27,7 +27,7 @@ import { API_URL } from "@/lib/api";
 import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
 import { ema } from "@/lib/indicator/ta";
 import type { Candle } from "@/lib/indicator/types";
-import { buildShapes } from "@/lib/indicator/shapes";
+import { buildShapes, type ChartTheme } from "@/lib/indicator/shapes";
 import {
   EMPTY_SHAPES,
   ShapesPrimitive,
@@ -35,9 +35,83 @@ import {
 } from "./primitives/ShapesPrimitive";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 
-// Цвета покупок и продаж из палитры проекта.
-const BUY = "#0ECB81";
-const SELL = "#F6465D";
+// Две темы графика.
+//
+// Тёмная — биржевая: зелёные и красные свечи на тёмном фоне. Светлая собрана по
+// оформлению самого индикатора: белый фон без сетки, свечи чёрно-белые с чёрной
+// обводкой (рост — пустая, падение — залитая), структура чёрным пунктиром.
+// Зелёный с красным на ней остаются только там, где цвет несёт смысл, — на
+// линиях полок покупателя и продавца.
+const THEMES: Record<
+  ChartTheme,
+  {
+    background: string;
+    text: string;
+    grid: string;
+    border: string;
+    up: string;
+    down: string;
+    upBorder: string;
+    downBorder: string;
+    upWick: string;
+    downWick: string;
+    candleBorders: boolean;
+    upVolume: string;
+    downVolume: string;
+    bidLine: string;
+    askLine: string;
+    emaFast: string;
+    emaSlow: string;
+    emaTrend: string;
+    crosshair: string;
+  }
+> = {
+  dark: {
+    background: "transparent",
+    text: "#7A8290",
+    grid: "rgba(43,49,57,0.35)",
+    border: "#2B3139",
+    up: "#0ECB81",
+    down: "#F6465D",
+    upBorder: "#0ECB81",
+    downBorder: "#F6465D",
+    upWick: "#0ECB81",
+    downWick: "#F6465D",
+    candleBorders: false,
+    upVolume: "rgba(14,203,129,0.4)",
+    downVolume: "rgba(246,70,93,0.4)",
+    bidLine: "#0ECB81",
+    askLine: "#F6465D",
+    emaFast: "#0AFFE0",
+    emaSlow: "#F0B90B",
+    emaTrend: "#7A8290",
+    crosshair: "#0AFFE0",
+  },
+  light: {
+    background: "#FFFFFF",
+    text: "#333333",
+    // Сетки в оригинале нет вовсе: на белом она спорит с пунктиром структуры.
+    grid: "rgba(0,0,0,0)",
+    border: "#B0B0B0",
+    up: "#FFFFFF",
+    down: "#000000",
+    upBorder: "#000000",
+    downBorder: "#000000",
+    upWick: "#000000",
+    downWick: "#000000",
+    candleBorders: true,
+    // Объём серый: чёрно-белым свечам цветные столбики не пара.
+    upVolume: "rgba(120,123,134,0.28)",
+    downVolume: "rgba(0,0,0,0.35)",
+    // Зелёное и красное индикатора: GREEN = #00A86B, RED = #FF1A2E.
+    bidLine: "#00A86B",
+    askLine: "#FF1A2E",
+    emaFast: "#26A69A",
+    emaSlow: "#FFA726",
+    emaTrend: "#9E9E9E",
+    crosshair: "#555555",
+  },
+};
 
 // Периоды скользящих средних индикатора.
 const EMA_FAST = 8;
@@ -97,12 +171,14 @@ export default function PriceChart({
   wall,
   shelves,
   indicators,
+  theme,
 }: {
   symbol: string;
   interval: string;
   wall: Wall | null;
   shelves: Wall[];
   indicators: Indicators;
+  theme: ChartTheme;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -121,6 +197,8 @@ export default function PriceChart({
   // переключателей, иначе включение индикатора перезапрашивало бы свечи.
   const indicatorsRef = useRef(indicators);
   indicatorsRef.current = indicators;
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
   const lineRef = useRef<IPriceLine | null>(null);
   const mtfLinesRef = useRef<IPriceLine[]>([]);
   const shelfLinesRef = useRef<IPriceLine[]>([]);
@@ -187,11 +265,13 @@ export default function PriceChart({
     });
 
     candleRef.current = chart.addSeries(CandlestickSeries, {
-      upColor: "#0ECB81",
-      downColor: "#F6465D",
-      borderVisible: false,
-      wickUpColor: "#0ECB81",
-      wickDownColor: "#F6465D",
+      upColor: THEMES[theme].up,
+      downColor: THEMES[theme].down,
+      borderVisible: THEMES[theme].candleBorders,
+      borderUpColor: THEMES[theme].upBorder,
+      borderDownColor: THEMES[theme].downBorder,
+      wickUpColor: THEMES[theme].upWick,
+      wickDownColor: THEMES[theme].downWick,
     });
 
     // Объём живёт на своей шкале в нижней пятой части окна, иначе он
@@ -258,7 +338,10 @@ export default function PriceChart({
         candles.map((c) => ({
           time: c.time as UTCTimestamp,
           value: c.volume,
-          color: c.close >= c.open ? "rgba(14,203,129,0.4)" : "rgba(246,70,93,0.4)",
+          color:
+            c.close >= c.open
+              ? THEMES[themeRef.current].upVolume
+              : THEMES[themeRef.current].downVolume,
         })),
       );
 
@@ -274,13 +357,18 @@ export default function PriceChart({
       // Структурная часть считается по тем же свечам одним проходом.
       const smc = computeSmc(candles);
       const cfgNow = indicatorsRef.current;
-      shapeDataRef.current = buildShapes(smc, candles[candles.length - 1]?.time ?? 0, {
-        structure: cfgNow.structure,
-        orderBlocks: cfgNow.blocks,
-        fvg: cfgNow.gaps,
-        equal: cfgNow.gaps,
-        zones: cfgNow.zones,
-      });
+      shapeDataRef.current = buildShapes(
+        smc,
+        candles[candles.length - 1]?.time ?? 0,
+        {
+          structure: cfgNow.structure,
+          orderBlocks: cfgNow.blocks,
+          fvg: cfgNow.gaps,
+          equal: cfgNow.gaps,
+          zones: cfgNow.zones,
+        },
+        themeRef.current,
+      );
       shapesRef.current?.setShapes(shapeDataRef.current);
       smcRef.current = smc;
       lastTimeRef.current = candles[candles.length - 1]?.time ?? 0;
@@ -340,16 +428,89 @@ export default function PriceChart({
     // Фигуры пересобираем из уже посчитанной структуры: переключатель меняет
     // только набор видимого, считать заново незачем.
     if (smcRef.current) {
-      shapeDataRef.current = buildShapes(smcRef.current, lastTimeRef.current, {
-        structure: cfg.structure,
-        orderBlocks: cfg.blocks,
-        fvg: cfg.gaps,
-        equal: cfg.gaps,
-        zones: cfg.zones,
-      });
+      shapeDataRef.current = buildShapes(
+        smcRef.current,
+        lastTimeRef.current,
+        {
+          structure: cfg.structure,
+          orderBlocks: cfg.blocks,
+          fvg: cfg.gaps,
+          equal: cfg.gaps,
+          zones: cfg.zones,
+        },
+        themeRef.current,
+      );
       shapesRef.current?.setShapes(shapeDataRef.current);
     }
   }, [cfg]);
+
+  // Смена темы: перекрашиваем график на месте. Пересоздавать его нельзя —
+  // потеряется масштаб и положение, которые трейдер выставил руками.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const palette = THEMES[theme];
+    if (!chart) return;
+
+    chart.applyOptions({
+      layout: {
+        background: { type: ColorType.Solid, color: palette.background },
+        textColor: palette.text,
+      },
+      grid: {
+        vertLines: { color: palette.grid },
+        horzLines: { color: palette.grid },
+      },
+      rightPriceScale: { borderColor: palette.border },
+      timeScale: { borderColor: palette.border },
+      crosshair: {
+        vertLine: { color: palette.crosshair, labelBackgroundColor: palette.crosshair },
+        horzLine: { color: palette.crosshair, labelBackgroundColor: palette.crosshair },
+      },
+    });
+
+    candleRef.current?.applyOptions({
+      upColor: palette.up,
+      downColor: palette.down,
+      borderVisible: palette.candleBorders,
+      borderUpColor: palette.upBorder,
+      borderDownColor: palette.downBorder,
+      wickUpColor: palette.upWick,
+      wickDownColor: palette.downWick,
+    });
+    emaFastRef.current?.applyOptions({ color: palette.emaFast });
+    emaSlowRef.current?.applyOptions({ color: palette.emaSlow });
+    emaTrendRef.current?.applyOptions({ color: palette.emaTrend });
+
+    // Объём красится по каждой свече, поэтому его набор пересобираем.
+    const candles = dataRef.current;
+    if (candles.length > 0) {
+      volumeRef.current?.setData(
+        candles.map((c) => ({
+          time: c.time as UTCTimestamp,
+          value: c.volume,
+          color: c.close >= c.open ? palette.upVolume : palette.downVolume,
+        })),
+      );
+    }
+
+    // Фигуры индикатора тоже зависят от темы: на белом светло-серые подписи
+    // и прозрачные заливки исчезают.
+    if (smcRef.current) {
+      shapeDataRef.current = buildShapes(
+        smcRef.current,
+        lastTimeRef.current,
+        {
+          structure: cfg.structure,
+          orderBlocks: cfg.blocks,
+          fvg: cfg.gaps,
+          equal: cfg.gaps,
+          zones: cfg.zones,
+        },
+        theme,
+      );
+      shapesRef.current?.setShapes(shapeDataRef.current);
+    }
+  }, [theme, cfg]);
 
   // Уровни прошлого дня, недели и месяца. Грузятся отдельно от свечей графика:
   // это другие интервалы, и меняются они раз в сутки, а не каждые пять секунд.
@@ -426,7 +587,7 @@ export default function PriceChart({
     shelfLinesRef.current = shelves.map((shelf) =>
       series.createPriceLine({
         price: shelf.price,
-        color: shelf.side === "bid" ? BUY : SELL,
+        color: shelf.side === "bid" ? THEMES[theme].bidLine : THEMES[theme].askLine,
         lineWidth: 1,
         lineStyle: 1,
         axisLabelVisible: true,

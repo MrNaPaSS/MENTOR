@@ -12,6 +12,7 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from backend.security import decode_token, TokenError
 from backend.price_collector import active_symbols
 from backend.scalping.ladder import DEFAULT_ROWS, MAX_ROWS
+from backend.scalping.metrics import SHELF_MAX_LIMIT, SHELF_MIN_LIMIT, SHELF_MIN_NOTIONAL
 from backend.scalping.state import SORT_KEYS
 
 router = APIRouter()
@@ -101,6 +102,9 @@ async def _handle_scalping_command(hub, websocket, message) -> None:
             symbol if isinstance(symbol, str) and symbol else None,
             rows=_clamp(message.get("rows"), DEFAULT_ROWS, 4, MAX_ROWS),
             agg=_clamp(message.get("agg"), 1, 1, 100),
+            shelf=_clamp_float(
+                message.get("shelf"), SHELF_MIN_NOTIONAL, SHELF_MIN_LIMIT, SHELF_MAX_LIMIT
+            ),
         )
     elif action == "sort":
         sort = message.get("sort")
@@ -111,5 +115,12 @@ async def _handle_scalping_command(hub, websocket, message) -> None:
 def _clamp(value, default: int, low: int, high: int) -> int:
     try:
         return max(low, min(int(value), high))
+    except (TypeError, ValueError):
+        return default
+
+
+def _clamp_float(value, default: float, low: float, high: float) -> float:
+    try:
+        return max(low, min(float(value), high))
     except (TypeError, ValueError):
         return default

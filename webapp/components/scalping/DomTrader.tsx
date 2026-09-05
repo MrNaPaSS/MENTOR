@@ -155,17 +155,7 @@ export default function DomTrader({
         className="relative flex-1 overflow-auto font-mono"
       >
         <div className="w-full min-w-max">
-          <div className="sticky top-0 z-20 flex bg-bg-card text-text-muted shadow-[0_1px_0_#2B3139]">
-            <div className="flex-1" />
-            {columns.map((column) => (
-              <div key={column.start} className={`${COL_W} py-1 text-center`}>
-                {clockLabel(column.start)}
-              </div>
-            ))}
-            <div className={`sticky right-0 ${BOOK_W} bg-bg-card py-1 pr-2 text-right`}>
-              объём · цена
-            </div>
-          </div>
+          <VolumeHeader columns={columns} />
 
           {frame.rows.map((row, index) => {
             const items = [];
@@ -185,7 +175,7 @@ export default function DomTrader({
             return items;
           })}
 
-          <Totals columns={columns} />
+          <TimeFooter columns={columns} />
         </div>
       </div>
     </div>
@@ -330,11 +320,16 @@ function ClusterCell({ cell, scale }: { cell: [number, number] | undefined; scal
   );
 }
 
-/** Итоги по интервалам: сколько всего прошло и куда перевесило. */
-function Totals({ columns }: { columns: ClusterColumn[] }) {
-  if (columns.length === 0) return null;
+/**
+ * Шапка истории: сколько прошло за интервал и куда перевесило.
+ *
+ * Итоги стоят сверху, а время — под колонками: сумма свечи важнее её метки, и
+ * читать её удобнее там, куда взгляд попадает первым. Время внизу работает
+ * подписью оси, как на графике.
+ */
+function VolumeHeader({ columns }: { columns: ClusterColumn[] }) {
   return (
-    <div className="sticky bottom-0 z-20 flex bg-bg-deep/95 font-mono text-[10px] shadow-[0_-1px_0_#2B3139]">
+    <div className="sticky top-0 z-20 flex bg-bg-card font-mono text-[10px] shadow-[0_1px_0_#2B3139]">
       <div className="flex-1" />
       {columns.map((column) => {
         const delta = column.buy - column.sell;
@@ -348,6 +343,26 @@ function Totals({ columns }: { columns: ClusterColumn[] }) {
           </div>
         );
       })}
+      <div
+        className={`sticky right-0 ${BOOK_W} flex items-end justify-end bg-bg-card py-1 pr-2 text-text-muted`}
+      >
+        объём · цена
+      </div>
+    </div>
+  );
+}
+
+/** Подвал истории: время интервалов. */
+function TimeFooter({ columns }: { columns: ClusterColumn[] }) {
+  if (columns.length === 0) return null;
+  return (
+    <div className="sticky bottom-0 z-20 flex bg-bg-deep/95 font-mono text-[10px] text-text-muted shadow-[0_-1px_0_#2B3139]">
+      <div className="flex-1" />
+      {columns.map((column) => (
+        <div key={column.start} className={`${COL_W} py-1 text-center`}>
+          {clockLabel(column.start)}
+        </div>
+      ))}
       <div className={`sticky right-0 ${BOOK_W} bg-bg-deep/95`} />
     </div>
   );
