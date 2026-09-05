@@ -19,6 +19,7 @@ import DomTrader from "@/components/scalping/DomTrader";
 import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
 import {
   base,
+  price as fmtPrice,
   useScalpingFeed,
   SORT_LABELS,
   type SortKey,
@@ -327,23 +328,35 @@ export default function ScalpingPage() {
             >
               <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <span className="font-semibold text-text-primary">{base(symbol)}</span>
+                {/* Подписи обязательны: «×10» и «60» сами по себе ничего не
+                    говорят. Рядом с множителем показан получившийся шаг в
+                    деньгах — по нему и ориентируются, а не по кратности. */}
                 <div className="flex items-center gap-0.5">
+                  <span className="mr-1 text-[10px] text-text-muted">Шаг</span>
                   {STEPS.map((step) => (
                     <button
                       key={step.agg}
                       onClick={() => setAgg(step.agg)}
-                      title="Шаг ценовой шкалы"
+                      title={`Укрупнить шаг биржи в ${step.agg} раз: чем крупнее, тем шире охват и меньше подробностей`}
                       className={`${CHIP} ${agg === step.agg ? CHIP_ON : CHIP_OFF}`}
                     >
                       {step.label}
                     </button>
                   ))}
-                  <span className="mx-1 h-3 w-px bg-border" />
+                  {dom && dom.tick > 0 && (
+                    <span className="ml-1 font-mono text-[10px] text-text-secondary">
+                      = {fmtPrice(dom.tick, dom.tick)}
+                    </span>
+                  )}
+
+                  <span className="mx-2 h-3 w-px bg-border" />
+
+                  <span className="mr-1 text-[10px] text-text-muted">Строк</span>
                   {DEPTHS.map((depth) => (
                     <button
                       key={depth}
                       onClick={() => setRows(depth)}
-                      title="Глубина стакана, строк"
+                      title={`Показывать ${depth} строк в каждую сторону от цены`}
                       className={`${CHIP} ${rows === depth ? CHIP_ON : CHIP_OFF}`}
                     >
                       {depth}
