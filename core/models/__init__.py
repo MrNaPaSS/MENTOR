@@ -297,4 +297,46 @@ class WeexCredential(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "WeexCredential", "utcnow"]
+class LiveTrade(Base):
+    """Сделка, которую сервер ведёт сам.
+
+    Появляется, когда терминал отправил ордер на биржу, и живёт, пока позиция
+    открыта. Нужна ровно затем, чтобы стоп переезжал в безубыток и когда вкладка
+    закрыта: без записи на сервере вести нечего — браузер выключили, и сделка
+    осталась без сопровождения.
+
+    Цели хранятся строкой JSON: их три, они не ищутся отдельно и меняются
+    целиком. Заводить под них таблицу — три джойна ради списка чисел.
+    """
+
+    __tablename__ = "live_trades"
+    __table_args__ = (UniqueConstraint("student_id", "client_id", name="uq_live_trade_client"),)
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    client_id: Mapped[str] = mapped_column(String(64))
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    side: Mapped[str] = mapped_column(String(8))               # long | short
+    entry: Mapped[float] = mapped_column(Numeric(24, 10))
+    initial_stop: Mapped[float] = mapped_column(Numeric(24, 10))
+    current_stop: Mapped[float] = mapped_column(Numeric(24, 10))
+    targets_json: Mapped[str] = mapped_column(Text, default="[]")
+    qty: Mapped[float] = mapped_column(Numeric(24, 10))
+    leverage: Mapped[int] = mapped_column(Integer, default=1)
+    margin: Mapped[float] = mapped_column(Numeric(20, 8), default=0)
+    takes_hit: Mapped[int] = mapped_column(Integer, default=0)
+    # waiting — заявка стоит, позиции ещё нет; open — позиция набрана;
+    # closed — вышли, запись отработала и осталась для истории.
+    status: Mapped[str] = mapped_column(String(8), default="waiting", index=True)
+    sl_order_id: Mapped[str] = mapped_column(String(64), default="")
+    # Ордера целей: [{"price":..., "order_id":"...", "filled":false}, ...].
+    # Исполнение узнаём опросом самих ордеров, а не по остатку позиции: биржа
+    # знает исполненный объём точно, а остаток врёт на частичном исполнении.
+    tp_orders_json: Mapped[str] = mapped_column(Text, default="[]")
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "WeexCredential", "LiveTrade", "utcnow"]

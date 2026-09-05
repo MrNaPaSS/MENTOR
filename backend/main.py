@@ -16,6 +16,8 @@ from core.db import init_engine, create_all, SessionLocal
 from core import repo
 from core.weex import get_weex_client
 from backend.config import BackendConfig
+from backend.trading.watcher import PositionWatcher
+from backend.api import trading as trading_api
 from backend.api import auth, market, market_data, market_extra, signals, stats, students, profile, admin_affiliate, institutional, broadcast, pnl, trades, journal, trading, coins, shop
 from backend.api import scalping as scalping_api
 from backend.ws import ConnectionManager
@@ -49,15 +51,22 @@ def create_app(
     scalping = ScalpingCollector(top_n=config.scalping_top_n) if config.scalping_enabled else None
     scalping_hub = ScalpingHub(scalping) if scalping else None
 
+    # Ведение позиций: стоп в безубыток после первой цели переносится сервером,
+    # иначе закрытая вкладка означала бы сделку без сопровождения.
+    watcher = PositionWatcher(SessionLocal, trading_api._get_session)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         collector.start()
         balance_collector.start()
         if scalping:
             scalping.start()
+        watcher.start()
         try:
             yield
         finally:
+            await watcher.stop()
+            await trading_api.close_session()
             if scalping_hub:
                 await scalping_hub.stop()
             if scalping:

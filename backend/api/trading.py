@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -21,7 +22,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.deps import get_current_student, get_session
-from core.models import Student, WeexCredential, utcnow
+from core.models import LiveTrade, Student, WeexCredential, utcnow
 from core.trading.position import Position, breakeven_price, should_move_stop
 from core.weex import keys as keystore
 from core.weex.futures import Credentials, WeexFutures, WeexTradeError
@@ -228,30 +229,65 @@ async def open_position(
         )
 
         # Цели — отдельными сокращающими ордерами, равными долями. Ставятся
-        # после входа: пока позиции нет, сокращать нечего.
+        # сразу за входом: стоп и цели должны стоять на бирже с первой секунды
+        # позиции, а не появляться, когда до них дойдут руки.
         takes: list[Any] = []
+        placed: list[dict[str, Any]] = []
         if body.takes:
             share = body.quantity / len(body.takes)
             for i, price in enumerate(body.takes):
-                takes.append(
-                    await client.place_order(
-                        symbol=symbol,
-                        side="SELL" if long else "BUY",
-                        position_side=position_side,
-                        quantity=_num(share),
-                        order_type="LIMIT",
-                        price=_num(price),
-                        reduce_only=True,
-                        time_in_force="GTC",
-                        client_order_id=f"{body.client_order_id}_tp{i + 1}"
-                        if body.client_order_id
-                        else None,
-                    )
+                order = await client.place_order(
+                    symbol=symbol,
+                    side="SELL" if long else "BUY",
+                    position_side=position_side,
+                    quantity=_num(share),
+                    order_type="LIMIT",
+                    price=_num(price),
+                    reduce_only=True,
+                    time_in_force="GTC",
+                    client_order_id=f"{body.client_order_id}_tp{i + 1}"
+                    if body.client_order_id
+                    else None,
+                )
+                takes.append(order)
+                placed.append(
+                    {
+                        "price": price,
+                        "order_id": str(_order_id(order)),
+                        "filled": False,
+                    }
                 )
     except WeexTradeError as exc:
         raise _fail(exc) from exc
 
-    return {"entry": entry_order, "takes": takes}
+    # Запись для фонового ведения: без неё переносить стоп в безубыток будет
+    # некому, как только трейдер закроет вкладку.
+    client_id = body.client_order_id or f"{symbol}-{int(utcnow().timestamp() * 1000)}"
+    live = session.execute(
+        select(LiveTrade)
+        .where(LiveTrade.student_id == student.id)
+        .where(LiveTrade.client_id == client_id)
+    ).scalar_one_or_none()
+    if live is None:
+        live = LiveTrade(student_id=student.id, client_id=client_id)
+        session.add(live)
+    live.symbol = symbol
+    live.side = body.side
+    live.entry = body.entry or 0.0
+    live.initial_stop = body.stop
+    live.current_stop = body.stop
+    live.targets_json = json.dumps(body.takes)
+    live.tp_orders_json = json.dumps(placed, ensure_ascii=False)
+    live.qty = body.quantity
+    live.leverage = body.leverage
+    live.margin = body.quantity * (body.entry or 0.0) / max(1, body.leverage)
+    live.takes_hit = 0
+    live.status = "waiting"
+    live.sl_order_id = ""
+    live.updated_at = utcnow()
+    session.commit()
+
+    return {"entry": entry_order, "takes": takes, "watched": live.client_id}
 
 
 @router.post("/breakeven")
@@ -287,6 +323,15 @@ async def move_to_breakeven(
     except WeexTradeError as exc:
         raise _fail(exc) from exc
     return {"moved": True, "stop": target}
+
+
+def _order_id(order: Any) -> str:
+    """Идентификатор ордера: биржа кладёт его в разные поля."""
+    if isinstance(order, dict):
+        for name in ("orderId", "order_id", "id", "clientOrderId"):
+            if order.get(name):
+                return str(order[name])
+    return ""
 
 
 def _num(value: float) -> str:

@@ -264,6 +264,17 @@ class WeexFutures:
             data["triggerPriceType"] = trigger_price_type
         return await self._request("POST", ENDPOINTS["modify_tp_sl"], data=data)
 
+    async def get_order(self, symbol: str, order_id: str) -> dict:
+        """Состояние ордера. По нему и узнаём, что цель исполнилась.
+
+        Спрашиваем именно ордер, а не остаток позиции: биржа знает исполненный
+        объём точно, а остаток врёт при частичном исполнении и округлении лота.
+        """
+        data = await self._request(
+            "GET", ENDPOINTS["order"], params={"symbol": symbol, "orderId": order_id}
+        )
+        return data if isinstance(data, dict) else {}
+
     async def open_orders(self, symbol: str) -> list[dict]:
         data = await self._request("GET", ENDPOINTS["open_orders"], params={"symbol": symbol})
         return data if isinstance(data, list) else []
