@@ -9,20 +9,40 @@
 // Индикаторы считаются на клиенте по тем же свечам — отдельных запросов ради
 // средней линии не делаем.
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CandlestickSeries,
   ColorType,
   HistogramSeries,
   LineSeries,
   createChart,
+  createSeriesMarkers,
   type IChartApi,
   type IPriceLine,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
+  type SeriesMarker,
+  type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
+import { computeVision, DEFAULTS, type VisionSignal } from "@/lib/indicator/nmnhVision";
 import type { Wall } from "@/lib/scalping";
+
+/** Что показывает панель BM Score — те же четыре числа, что и в оригинале. */
+type VisionPanel = {
+  scoreUp: number;
+  scoreDown: number;
+  vo: number;
+  voSma: number;
+  direction: number;
+  signal: VisionSignal | null;
+};
+
+// Цвета берём из палитры проекта, а не из настроек Tiger: у нас тёмная тема,
+// и чистый зелёный с красным на ней выжигают глаз.
+const CE_LONG = "#0ECB81";
+const CE_SHORT = "#F6465D";
 
 export type Candle = {
   time: number;
@@ -35,14 +55,14 @@ export type Candle = {
 
 export type Indicators = {
   volume: boolean;
+  /** Скользящие средние индикатора: 8, 21 и трендовая 50. */
   ema: boolean;
   vwap: boolean;
+  /** NMNH VISION: трейлинг Chandelier Exit, метки BY↑/SL↓ и панель BM Score. */
+  vision: boolean;
+  /** Сделки по объединённому сигналу: вход, стоп и три тейка по 1R/2R/3R. */
+  trades: boolean;
 };
-
-// Периоды скользящих средних. Девять и двадцать один — стандартная пара для
-// внутридневной торговли: быстрая показывает импульс, медленная — направление.
-const EMA_FAST = 9;
-const EMA_SLOW = 21;
 
 // Текущая свеча меняется постоянно, закрытые — нет. Пять секунд держат график
 // живым, не расходуя лимит запросов биржи впустую.
@@ -53,15 +73,35 @@ const REFRESH_MS = 5000;
 // столько, сколько трейдер реально читает.
 const VISIBLE_BARS = 150;
 
-function ema(candles: Candle[], period: number) {
-  if (candles.length < period) return [];
-  const k = 2 / (period + 1);
+/** Ряд для графика: бары, где значение ещё не определено, пропускаем. */
+function toLine(candles: Candle[], values: number[]) {
   const out: { time: UTCTimestamp; value: number }[] = [];
-  let prev = candles.slice(0, period).reduce((s, c) => s + c.close, 0) / period;
-  out.push({ time: candles[period - 1].time as UTCTimestamp, value: prev });
-  for (let i = period; i < candles.length; i++) {
-    prev = candles[i].close * k + prev * (1 - k);
-    out.push({ time: candles[i].time as UTCTimestamp, value: prev });
+  for (let i = 0; i < candles.length; i++) {
+    if (Number.isFinite(values[i])) {
+      out.push({ time: candles[i].time as UTCTimestamp, value: values[i] });
+    }
+  }
+  return out;
+}
+
+/**
+ * Линия трейлинг-стопа рисуется только на своей стороне.
+ *
+ * В оригинале это `plot.style_linebr`: длинный стоп виден, пока направление
+ * вверх, короткий — пока вниз. Если рисовать обе линии подряд, они сойдутся в
+ * одну ломаную и смысл уровня пропадёт.
+ */
+function toStopLine(
+  candles: Candle[],
+  values: number[],
+  direction: number[],
+  side: 1 | -1,
+) {
+  const out: { time: UTCTimestamp; value: number }[] = [];
+  for (let i = 0; i < candles.length; i++) {
+    if (direction[i] === side && Number.isFinite(values[i])) {
+      out.push({ time: candles[i].time as UTCTimestamp, value: values[i] });
+    }
   }
   return out;
 }
@@ -98,11 +138,34 @@ export default function PriceChart({
   const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const emaFastRef = useRef<ISeriesApi<"Line"> | null>(null);
   const emaSlowRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const emaTrendRef = useRef<ISeriesApi<"Line"> | null>(null);
   const vwapRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const longStopRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const shortStopRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const markerDataRef = useRef<SeriesMarker<Time>[]>([]);
+  // Читаем настройки из ref: загрузка данных не должна зависеть от
+  // переключателей, иначе включение индикатора перезапрашивало бы свечи.
+  const indicatorsRef = useRef(indicators);
+  indicatorsRef.current = indicators;
   const lineRef = useRef<IPriceLine | null>(null);
+  const tradeLinesRef = useRef<IPriceLine[]>([]);
   const dataRef = useRef<Candle[]>([]);
 
-  const cfg = useMemo(() => indicators, [indicators.volume, indicators.ema, indicators.vwap]);
+  // Панель BM Score рисуется поверх графика обычной разметкой: рисовать её на
+  // канве значило бы вручную считать шрифты и отступы ради двух чисел.
+  const [panel, setPanel] = useState<VisionPanel | null>(null);
+
+  const cfg = useMemo(
+    () => indicators,
+    [
+      indicators.volume,
+      indicators.ema,
+      indicators.vwap,
+      indicators.vision,
+      indicators.trades,
+    ],
+  );
 
   // График создаётся один раз. Пересоздание на каждой смене монеты давало бы
   // мигание и сбрасывало масштаб, который трейдер выставил руками.
@@ -166,6 +229,13 @@ export default function PriceChart({
       priceLineVisible: false,
       lastValueVisible: false,
     });
+    // Трендовая: по ней индикатор фильтрует направление сигнала.
+    emaTrendRef.current = chart.addSeries(LineSeries, {
+      color: "#7A8290",
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
     vwapRef.current = chart.addSeries(LineSeries, {
       color: "#B7BDC6",
       lineWidth: 1,
@@ -173,6 +243,24 @@ export default function PriceChart({
       priceLineVisible: false,
       lastValueVisible: false,
     });
+
+    // Трейлинг-стоп Chandelier Exit. Толщина 2 — как в настройках заказчика.
+    longStopRef.current = chart.addSeries(LineSeries, {
+      color: CE_LONG,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+    shortStopRef.current = chart.addSeries(LineSeries, {
+      color: CE_SHORT,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+
+    // Метки разворота BY↑ и SL↓ ставятся на свечи, а не на уровни стопа:
+    // так видно, на каком баре сигнал возник.
+    markersRef.current = createSeriesMarkers(candleRef.current, []);
 
     chartRef.current = chart;
     return () => {
@@ -182,8 +270,13 @@ export default function PriceChart({
       volumeRef.current = null;
       emaFastRef.current = null;
       emaSlowRef.current = null;
+      emaTrendRef.current = null;
       vwapRef.current = null;
+      longStopRef.current = null;
+      shortStopRef.current = null;
+      markersRef.current = null;
       lineRef.current = null;
+      tradeLinesRef.current = [];
     };
   }, []);
 
@@ -203,9 +296,44 @@ export default function PriceChart({
           color: c.close >= c.open ? "rgba(14,203,129,0.4)" : "rgba(246,70,93,0.4)",
         })),
       );
-      emaFastRef.current?.setData(ema(candles, EMA_FAST));
-      emaSlowRef.current?.setData(ema(candles, EMA_SLOW));
+
+      // Весь индикатор считается за один проход по тем же свечам, что и стакан.
+      const vision = computeVision(candles);
+
+      emaFastRef.current?.setData(toLine(candles, vision.emaFast));
+      emaSlowRef.current?.setData(toLine(candles, vision.emaSlow));
+      emaTrendRef.current?.setData(toLine(candles, vision.emaTrend));
       vwapRef.current?.setData(vwap(candles));
+
+      longStopRef.current?.setData(
+        toStopLine(candles, vision.longStop, vision.direction, 1),
+      );
+      shortStopRef.current?.setData(
+        toStopLine(candles, vision.shortStop, vision.direction, -1),
+      );
+
+      markerDataRef.current = vision.signals.map((s) => ({
+        time: s.time as UTCTimestamp,
+        position: s.side === "buy" ? ("belowBar" as const) : ("aboveBar" as const),
+        color: s.side === "buy" ? CE_LONG : CE_SHORT,
+        shape: s.side === "buy" ? ("arrowUp" as const) : ("arrowDown" as const),
+        text: s.side === "buy" ? "BY↑" : "SL↓",
+      }));
+      markersRef.current?.setMarkers(indicatorsRef.current.vision ? markerDataRef.current : []);
+
+      const last = candles.length - 1;
+      setPanel(
+        last < 0
+          ? null
+          : {
+              scoreUp: vision.scoreUp[last],
+              scoreDown: vision.scoreDown[last],
+              vo: vision.vo[last],
+              voSma: vision.voSma[last],
+              direction: vision.direction[last],
+              signal: vision.signals.at(-1) ?? null,
+            },
+      );
     }
 
     async function load(fit: boolean) {
@@ -255,8 +383,48 @@ export default function PriceChart({
     volumeRef.current?.applyOptions({ visible: cfg.volume });
     emaFastRef.current?.applyOptions({ visible: cfg.ema });
     emaSlowRef.current?.applyOptions({ visible: cfg.ema });
+    emaTrendRef.current?.applyOptions({ visible: cfg.ema });
     vwapRef.current?.applyOptions({ visible: cfg.vwap });
+    longStopRef.current?.applyOptions({ visible: cfg.vision });
+    shortStopRef.current?.applyOptions({ visible: cfg.vision });
+    // У плагина меток нет флага видимости — прячем, подставляя пустой набор.
+    markersRef.current?.setMarkers(cfg.vision ? markerDataRef.current : []);
   }, [cfg]);
+
+  // Уровни последней сделки: вход, стоп от Chandelier Exit и три тейка по RR.
+  // Отдельным эффектом от данных — переключатель не должен дёргать загрузку.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+
+    for (const l of tradeLinesRef.current) series.removePriceLine(l);
+    tradeLinesRef.current = [];
+
+    const signal = panel?.signal;
+    if (!cfg.trades || !signal) return;
+
+    const isBuy = signal.side === "buy";
+    const levels: { price: number; color: string; title: string }[] = [
+      { price: signal.entry, color: "#EAECEF", title: isBuy ? "BUY" : "SELL" },
+      { price: signal.stop, color: CE_SHORT, title: "SL" },
+      ...signal.targets.map((price, i) => ({
+        price,
+        color: "#00C864",
+        title: `TP${i + 1} · ${DEFAULTS.rr[i]}R`,
+      })),
+    ];
+
+    tradeLinesRef.current = levels.map((l) =>
+      series.createPriceLine({
+        price: l.price,
+        color: l.color,
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: l.title,
+      }),
+    );
+  }, [cfg.trades, panel?.signal]);
 
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.
@@ -278,5 +446,48 @@ export default function PriceChart({
     });
   }, [wall?.price, wall?.side]);
 
-  return <div ref={boxRef} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={boxRef} className="h-full w-full" />
+      {cfg.vision && panel && <ScorePanel panel={panel} />}
+    </div>
+  );
+}
+
+/**
+ * Панель BM Score — те же четыре числа, что и в терминале.
+ *
+ * Скор набирается по четырём условиям: тренд EMA, пересечение EMA, выход RSI из
+ * зоны и объёмный осциллятор. Сигнал индикатора требует трёх из четырёх,
+ * поэтому порог подсвечен цветом — по нему смотрят, а не по самому числу.
+ */
+function ScorePanel({ panel }: { panel: VisionPanel }) {
+  const strong = (score: number) => score >= DEFAULTS.minScore;
+
+  return (
+    <div className="pointer-events-none absolute bottom-2 right-14 rounded border border-border bg-bg-deep/90 px-2 py-1.5 font-mono text-[10px] tabular-nums">
+      <div className="flex items-center gap-2">
+        <span className="text-text-muted">BM Score</span>
+        <span className={strong(panel.scoreUp) ? "text-success" : "text-text-secondary"}>
+          L:{panel.scoreUp}
+        </span>
+        <span className={strong(panel.scoreDown) ? "text-danger" : "text-text-secondary"}>
+          S:{panel.scoreDown}
+        </span>
+      </div>
+      <div className="mt-0.5 flex items-center gap-2">
+        <span className="text-text-muted">VO / SMA</span>
+        <span className="text-text-secondary">
+          {Number.isFinite(panel.vo) ? panel.vo.toFixed(1) : "—"} /{" "}
+          {Number.isFinite(panel.voSma) ? panel.voSma.toFixed(1) : "—"}
+        </span>
+      </div>
+      <div className="mt-0.5 flex items-center gap-2">
+        <span className="text-text-muted">Тренд CE</span>
+        <span className={panel.direction === 1 ? "text-success" : "text-danger"}>
+          {panel.direction === 1 ? "вверх" : "вниз"}
+        </span>
+      </div>
+    </div>
+  );
 }
