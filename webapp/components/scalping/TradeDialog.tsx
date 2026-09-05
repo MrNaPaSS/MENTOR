@@ -60,6 +60,7 @@ export default function TradeDialog({
   onChange,
   onConfirm,
   onCancel,
+  live = false,
 }: {
   draft: TradeDraft;
   onChange: (next: TradeDraft) => void;
@@ -67,6 +68,8 @@ export default function TradeDialog({
   onConfirm: () => void;
   /** Отказ: сделка снимается с графика целиком. */
   onCancel: () => void;
+  /** Боевой режим: подтверждение отправит ордер на биржу. */
+  live?: boolean;
 }) {
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
@@ -205,7 +208,11 @@ export default function TradeDialog({
 
         <div className="flex items-center justify-between border-t border-border px-5 py-3">
           <span className="text-[11px] text-text-muted">
-            Enter — войти, Esc — отмена
+            {live ? (
+              <span className="text-danger">Ордер уйдёт на биржу</span>
+            ) : (
+              "Enter — войти, Esc — отмена"
+            )}
           </span>
           <div className="flex gap-2">
             <button

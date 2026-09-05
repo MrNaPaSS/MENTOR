@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookText,
   Moon,
+  Radio,
   PanelLeftClose,
   PanelLeftOpen,
   Sun,
@@ -28,6 +29,12 @@ import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
 import type { ChartTheme } from "@/lib/indicator/shapes";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
+import ExchangeDialog from "@/components/scalping/ExchangeDialog";
+import {
+  openPosition,
+  tradingStatus,
+  type TradingStatus,
+} from "@/lib/trading";
 import {
   journalAvailable,
   loadWorkspace,
@@ -213,6 +220,13 @@ export default function ScalpingPage() {
   // считает результат, после стопа или последней цели закрывается сама.
   const [trade, setTrade] = useState<ActiveTrade | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
+  // Боевой режим: «Войти» не только рисует разметку, но и ставит ордер на
+  // бирже. Выключен по умолчанию и всегда — после перезагрузки: включать
+  // торговлю чужими деньгами молча, «по памяти прошлой сессии», нельзя.
+  const [liveMode, setLiveMode] = useState(false);
+  const [exchange, setExchange] = useState<TradingStatus | null>(null);
+  const [exchangeOpen, setExchangeOpen] = useState(false);
+  const [orderNote, setOrderNote] = useState<string | null>(null);
   const [journalH, setJournalH] = useState(JOURNAL_LIMITS.def);
   // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
   const [journalKey, setJournalKey] = useState(0);
@@ -292,6 +306,25 @@ export default function ScalpingPage() {
       setScreenerOpen(false);
     }
   }, []);
+
+  // Состояние биржевого счёта: подключены ли ключи и включено ли хранилище.
+  const loadExchange = useCallback(() => {
+    tradingStatus()
+      .then((body) => setExchange(body))
+      .catch(() => setExchange(null));
+  }, []);
+
+  useEffect(() => {
+    loadExchange();
+  }, [loadExchange]);
+
+  // Сообщение об ордере живёт несколько секунд: это отчёт о действии, а не
+  // состояние экрана.
+  useEffect(() => {
+    if (!orderNote) return;
+    const id = setTimeout(() => setOrderNote(null), 6000);
+    return () => clearTimeout(id);
+  }, [orderNote]);
 
   useEffect(() => {
     const restored = readTrade();
@@ -461,6 +494,24 @@ export default function ScalpingPage() {
       distance_bp: mid > 0 ? (Math.abs(row.price - mid) / mid) * 10_000 : 0,
       ratio: 1,
     });
+  }
+
+  /**
+   * Подтвердить расчёт.
+   *
+   * В обычном режиме это просто закрывает окно: сделка начинает ждать свою
+   * цену на графике. В боевом — уходит на биржу лимитным ордером по цене
+   * полки, вместе со стопом и целями, тем же расчётом, что показан в окне.
+   */
+  async function confirmTrade() {
+    setDialogOpen(false);
+    if (!liveMode || !exchange?.connected || !trade) return;
+    try {
+      await openPosition(trade, true);
+      setOrderNote(`Ордер отправлен: ${trade.side === "long" ? "лонг" : "шорт"} ${base(trade.symbol)}`);
+    } catch (err) {
+      setOrderNote(err instanceof Error ? err.message : "Биржа не приняла ордер");
+    }
   }
 
   function updateDraft(next: TradeDraft) {
@@ -789,6 +840,30 @@ export default function ScalpingPage() {
                   )}
 
                   <button
+                    onClick={() => setExchangeOpen(true)}
+                    title={
+                      exchange?.connected
+                        ? `Биржа подключена (${exchange.key_tail})`
+                        : "Подключить биржевой счёт"
+                    }
+                    className={`${CHIP} ${exchange?.connected ? CHIP_ON : CHIP_OFF}`}
+                  >
+                    <Radio className="h-3.5 w-3.5" />
+                  </button>
+
+                  {exchange?.connected && (
+                    <button
+                      onClick={() => setLiveMode((v) => !v)}
+                      title="Боевой режим: «Войти» ставит ордер на бирже"
+                      className={`${CHIP} ${
+                        liveMode ? "bg-danger/15 text-danger" : CHIP_OFF
+                      }`}
+                    >
+                      {liveMode ? "боевой" : "расчёт"}
+                    </button>
+                  )}
+
+                  <button
                     onClick={() => setJournalOpen((v) => !v)}
                     title="Журнал сделок"
                     className={`${CHIP} ${journalOpen ? CHIP_ON : CHIP_OFF}`}
@@ -835,6 +910,17 @@ export default function ScalpingPage() {
         )}
       </div>
 
+      {exchangeOpen && exchange && (
+        <ExchangeDialog
+          status={exchange}
+          onClose={() => setExchangeOpen(false)}
+          onSaved={() => {
+            loadExchange();
+            setExchangeOpen(false);
+          }}
+        />
+      )}
+
       {journalOpen && (
         <>
           <PaneDivider
@@ -859,8 +945,9 @@ export default function ScalpingPage() {
         <TradeDialog
           draft={draft}
           onChange={updateDraft}
-          onConfirm={() => setDialogOpen(false)}
+          onConfirm={confirmTrade}
           onCancel={closeTrade}
+          live={liveMode && Boolean(exchange?.connected)}
         />
       )}
     </div>
