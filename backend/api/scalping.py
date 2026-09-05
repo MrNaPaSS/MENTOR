@@ -106,8 +106,10 @@ _klines_cache: dict[str, tuple[float, list]] = {}
 async def klines(
     request: Request,
     symbol: str,
-    interval: str = Query("1m", pattern=r"^(1m|3m|5m|15m|30m|1h|4h)$"),
-    limit: int = Query(240, ge=20, le=500),
+    # Дневные, недельные и месячные нужны не для отрисовки свечей, а ради
+    # уровней прошлого периода: индикатор рисует их на любом таймфрейме.
+    interval: str = Query("1m", pattern=r"^(1m|3m|5m|15m|30m|1h|4h|1d|1w|1M)$"),
+    limit: int = Query(240, ge=2, le=500),
 ) -> dict[str, Any]:
     """Свечи для графика рядом со стаканом — из того же источника, что и книга."""
     collector = get_collector(request)

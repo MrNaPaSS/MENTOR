@@ -47,6 +47,8 @@ const INDICATOR_LABELS: Record<keyof Indicators, string> = {
   structure: "Структура",
   blocks: "Блоки",
   gaps: "FVG",
+  levels: "Уровни",
+  zones: "Зоны",
   ema: "EMA",
   volume: "Объём",
   vwap: "VWAP",
@@ -92,6 +94,10 @@ export default function ScalpingPage() {
     structure: true,
     blocks: true,
     gaps: true,
+    levels: true,
+    // Зоны закрашивают половину окна — на минутном графике это мешает, поэтому
+    // включаются вручную, когда смотришь картину крупнее.
+    zones: false,
     ema: true,
     volume: true,
     vwap: false,

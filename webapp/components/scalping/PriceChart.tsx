@@ -21,9 +21,11 @@ import {
   type IPriceLine,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
+  type LineData,
   type SeriesMarker,
   type Time,
   type UTCTimestamp,
+  type WhitespaceData,
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
 import { computeVision, DEFAULTS, type VisionSignal } from "@/lib/indicator/nmnhVision";
@@ -74,7 +76,18 @@ export type Indicators = {
   blocks: boolean;
   /** Разрывы справедливой цены и равные экстремумы. */
   gaps: boolean;
+  /** Максимумы и минимумы прошлого дня, недели и месяца. */
+  levels: boolean;
+  /** Зоны премии, равновесия и скидки. */
+  zones: boolean;
 };
+
+/** Периоды старших уровней: код интервала биржи и подпись на графике. */
+const MTF_PERIODS: { interval: string; high: string; low: string; color: string }[] = [
+  { interval: "1d", high: "PDH", low: "PDL", color: "#2157F3" },
+  { interval: "1w", high: "PWH", low: "PWL", color: "#2157F3" },
+  { interval: "1M", high: "PMH", low: "PML", color: "#2157F3" },
+];
 
 // Текущая свеча меняется постоянно, закрытые — нет. Пять секунд держат график
 // живым, не расходуя лимит запросов биржи впустую.
@@ -99,23 +112,23 @@ function toLine(candles: Candle[], values: number[]) {
 /**
  * Линия трейлинг-стопа рисуется только на своей стороне.
  *
- * В оригинале это `plot.style_linebr`: длинный стоп виден, пока направление
- * вверх, короткий — пока вниз. Если рисовать обе линии подряд, они сойдутся в
- * одну ломаную и смысл уровня пропадёт.
+ * В оригинале это `plot.style_linebr` — линия рвётся там, где значения нет.
+ * Просто пропустить бары нельзя: библиотека соединяет соседние точки, и
+ * неактивный стоп протягивался через весь экран диагональю. Поэтому на
+ * «чужих» барах отдаём пустую точку — только время, без значения.
  */
 function toStopLine(
   candles: Candle[],
   values: number[],
   direction: number[],
   side: 1 | -1,
-) {
-  const out: { time: UTCTimestamp; value: number }[] = [];
-  for (let i = 0; i < candles.length; i++) {
-    if (direction[i] === side && Number.isFinite(values[i])) {
-      out.push({ time: candles[i].time as UTCTimestamp, value: values[i] });
-    }
-  }
-  return out;
+): (LineData<UTCTimestamp> | WhitespaceData<UTCTimestamp>)[] {
+  return candles.map((c, i) => {
+    const time = c.time as UTCTimestamp;
+    return direction[i] === side && Number.isFinite(values[i])
+      ? { time, value: values[i] }
+      : { time };
+  });
 }
 
 /** VWAP от начала загруженного окна: средняя цена, взвешенная объёмом. */
@@ -169,6 +182,7 @@ export default function PriceChart({
   const indicatorsRef = useRef(indicators);
   indicatorsRef.current = indicators;
   const lineRef = useRef<IPriceLine | null>(null);
+  const mtfLinesRef = useRef<IPriceLine[]>([]);
   const dataRef = useRef<Candle[]>([]);
 
   // Панель BM Score рисуется поверх графика обычной разметкой: рисовать её на
@@ -185,6 +199,8 @@ export default function PriceChart({
       indicators.structure,
       indicators.blocks,
       indicators.gaps,
+      indicators.levels,
+      indicators.zones,
     ],
   );
 
@@ -309,6 +325,7 @@ export default function PriceChart({
       bandRef.current = null;
       shapesRef.current = null;
       lineRef.current = null;
+      mtfLinesRef.current = [];
     };
   }, []);
 
@@ -370,7 +387,7 @@ export default function PriceChart({
         orderBlocks: cfgNow.blocks,
         fvg: cfgNow.gaps,
         equal: cfgNow.gaps,
-        zones: false,
+        zones: cfgNow.zones,
       });
       shapesRef.current?.setShapes(shapeDataRef.current);
       smcRef.current = smc;
@@ -464,11 +481,62 @@ export default function PriceChart({
         orderBlocks: cfg.blocks,
         fvg: cfg.gaps,
         equal: cfg.gaps,
-        zones: false,
+        zones: cfg.zones,
       });
       shapesRef.current?.setShapes(shapeDataRef.current);
     }
   }, [cfg]);
+
+  // Уровни прошлого дня, недели и месяца. Грузятся отдельно от свечей графика:
+  // это другие интервалы, и меняются они раз в сутки, а не каждые пять секунд.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+
+    let cancelled = false;
+    for (const l of mtfLinesRef.current) series.removePriceLine(l);
+    mtfLinesRef.current = [];
+    if (!cfg.levels) return;
+
+    async function load() {
+      for (const period of MTF_PERIODS) {
+        try {
+          const res = await fetch(
+            `${API_URL}/api/scalping/klines/${symbol}?interval=${period.interval}&limit=3`,
+          );
+          if (!res.ok) continue;
+          const body: { candles: Candle[] } = await res.json();
+          // Берём предпоследнюю свечу: последняя — текущий незакрытый период,
+          // а уровень интересен именно завершённый.
+          const previous = body.candles.at(-2);
+          if (cancelled || !previous || !candleRef.current) continue;
+
+          for (const [price, title] of [
+            [previous.high, period.high],
+            [previous.low, period.low],
+          ] as const) {
+            mtfLinesRef.current.push(
+              candleRef.current.createPriceLine({
+                price,
+                color: period.color,
+                lineWidth: 1,
+                lineStyle: 2,
+                axisLabelVisible: true,
+                title,
+              }),
+            );
+          }
+        } catch {
+          // Уровень не загрузился — график от этого не ломается.
+        }
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol, cfg.levels]);
 
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.
