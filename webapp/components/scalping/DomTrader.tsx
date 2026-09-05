@@ -34,6 +34,10 @@ const ROW_HEIGHT = 21;
 const COL_W = "w-[111px] shrink-0";
 const BOOK_W = "w-[177px] shrink-0";
 
+// Насколько близко к правому краю считается «смотрю на свежее». Полколонки:
+// попасть прокруткой ровно в край невозможно.
+const EDGE_SLACK = 56;
+
 /** Ячейки истории приходят тройками — раскладываем в карту по цене строки. */
 function indexCells(columns: ClusterColumn[]): Map<number, [number, number]>[] {
   return columns.map((column) => {
@@ -46,6 +50,8 @@ function indexCells(columns: ClusterColumn[]): Map<number, [number, number]>[] {
 export default function DomTrader({ frame }: { frame: DomFrame }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const centered = useRef(false);
+  // Держаться ли правого края при появлении новой минуты.
+  const stickRight = useRef(true);
 
   const askCount = useMemo(() => frame.rows.filter((r) => r.ask > 0).length, [frame.rows]);
 
@@ -78,9 +84,8 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
     centered.current = false;
   }, [frame.symbol]);
 
-  // Один раз ставим спред в середину экрана и подводим историю к свежей
-  // колонке. Дальше прокрутку не трогаем: трейдер мог увести взгляд на дальнюю
-  // плиту, и рывок сбил бы его.
+  // Один раз ставим спред в середину экрана. Дальше вертикальную прокрутку не
+  // трогаем: трейдер мог увести взгляд на дальнюю плиту, и рывок сбил бы его.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || centered.current || frame.rows.length === 0) return;
@@ -89,11 +94,32 @@ export default function DomTrader({ frame }: { frame: DomFrame }) {
     centered.current = true;
   }, [askCount, frame.rows.length]);
 
+  // С каждой новой минутой история уезжает влево, а свежая колонка остаётся у
+  // цены. Но только пока трейдер сам смотрит на свежее: если он отмотал в
+  // прошлое, дёргать его нельзя — он там что-то разглядывает.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !stickRight.current) return;
+    el.scrollLeft = el.scrollWidth;
+  }, [columns.length]);
+
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    // Запас в полколонки: попасть мышью ровно в край невозможно.
+    const edge = el.scrollWidth - el.clientWidth - EDGE_SLACK;
+    stickRight.current = el.scrollLeft >= edge;
+  }
+
   return (
     <div className="flex h-full flex-col text-[11px] tabular-nums">
       <Header frame={frame} />
 
-      <div ref={scrollRef} className="relative flex-1 overflow-auto font-mono">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="relative flex-1 overflow-auto font-mono"
+      >
         <div className="w-full min-w-max">
           <div className="sticky top-0 z-20 flex bg-bg-card text-text-muted shadow-[0_1px_0_#2B3139]">
             <div className="flex-1" />

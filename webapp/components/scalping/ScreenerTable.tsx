@@ -28,46 +28,48 @@ const COLUMNS: {
   align: string;
   hint?: string;
 }[] = [
-  { key: null, label: "Монета", width: "w-[112px]", align: "text-left" },
+  // Монете отведено больше всех: в неё не влезали цены вроде 79 694.50 и
+  // 0.026513, они обрезались многоточием и читать список было нельзя.
+  { key: null, label: "Монета", width: "w-[164px]", align: "text-left" },
   {
     key: "walls",
     label: "Плита",
-    width: "w-[104px]",
+    width: "w-[96px]",
     align: "text-right",
     hint: "Крупная заявка рядом с ценой и её удаление в базисных пунктах",
   },
   {
     key: "imbalance",
     label: "Перевес",
-    width: "w-[52px]",
+    width: "w-[44px]",
     align: "text-center",
     hint: "Чья сторона стакана плотнее",
   },
   {
     key: "delta",
     label: "Дельта",
-    width: "w-[62px]",
+    width: "w-[58px]",
     align: "text-right",
     hint: "Покупки минус продажи по рынку за минуту",
   },
   {
     key: "range",
     label: "Ход",
-    width: "w-[40px]",
+    width: "w-[36px]",
     align: "text-right",
     hint: "Размах цены за минуту, базисные пункты",
   },
   {
     key: "spread",
     label: "Спред",
-    width: "w-[40px]",
+    width: "w-[36px]",
     align: "text-right",
     hint: "Стоимость входа по рынку, базисные пункты",
   },
   {
     key: "volume",
     label: "Оборот",
-    width: "w-[56px]",
+    width: "w-[52px]",
     align: "text-right",
     hint: "За сутки",
   },
@@ -84,9 +86,11 @@ type Props = {
 export default function ScreenerTable({ rows, selected, sort, onSort, onSelect }: Props) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full table-fixed border-collapse text-[11px] tabular-nums">
+      <table className="w-full table-fixed border-collapse whitespace-nowrap text-[11px] tabular-nums">
         <thead>
-          <tr className="border-b border-border text-text-muted">
+          {/* Шапка держится при прокрутке списка: тридцать строк не помещаются
+              в панель, и без неё непонятно, что за колонка перед тобой. */}
+          <tr className="text-text-muted">
             {COLUMNS.map((col) => {
               const active = col.key && col.key === sort;
               return (
@@ -94,7 +98,7 @@ export default function ScreenerTable({ rows, selected, sort, onSort, onSelect }
                   key={col.label}
                   title={col.hint}
                   onClick={() => col.key && onSort(col.key)}
-                  className={`px-1.5 py-2 font-medium ${col.width} ${col.align} ${
+                  className={`sticky top-0 z-10 bg-bg-card px-1.5 py-2 font-medium shadow-[0_1px_0_#2B3139] ${col.width} ${col.align} ${
                     col.key
                       ? "cursor-pointer select-none transition-colors duration-150 ease-out hover:text-text-primary"
                       : ""
@@ -143,22 +147,28 @@ const Row = memo(function Row({
       // момент, когда палец коснулся строки.
       onPointerDown={() => onSelect(row.symbol)}
       className={`cursor-pointer border-b border-border/40 transition-colors duration-150 ease-out ${
-        selected ? "bg-accent-cyan/10" : "hover:bg-bg-panel/60 active:bg-bg-panel"
+        selected
+          ? "bg-accent-cyan/10 shadow-[inset_2px_0_0_#0AFFE0]"
+          : "hover:bg-bg-panel/60 active:bg-bg-panel"
       }`}
     >
+      {/* Тикер фиксированной ширины, цена и изменение — по своим местам:
+          иначе длинные имена вроде MARSCOIN распирают строку на две. */}
       <td className="px-1.5 py-1.5">
-        <div className="flex items-baseline gap-1">
-          <span className="font-semibold text-text-primary">{base(row.symbol)}</span>
-          <span className="truncate font-mono text-[10px] text-text-secondary">
+        <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+          <span className="w-[62px] shrink-0 overflow-hidden text-ellipsis font-semibold text-text-primary">
+            {base(row.symbol)}
+          </span>
+          <span className="flex-1 text-right font-mono text-[10px] text-text-secondary">
             {fmtPrice(row.price)}
           </span>
           <span
-            className={`font-mono text-[10px] ${
+            className={`w-[40px] shrink-0 text-right font-mono text-[10px] ${
               row.change_pct >= 0 ? "text-success" : "text-danger"
             }`}
           >
             {row.change_pct >= 0 ? "+" : ""}
-            {row.change_pct.toFixed(1)}
+            {row.change_pct.toFixed(1)}%
           </span>
         </div>
       </td>
