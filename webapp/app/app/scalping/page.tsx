@@ -229,7 +229,9 @@ export default function ScalpingPage() {
   const [liveMode, setLiveMode] = useState(false);
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
-  const [orderNote, setOrderNote] = useState<string | null>(null);
+  // Отчёт об ордере: текст и тон. Молчание после нажатия «Войти» — худшее из
+  // возможных поведений: трейдер не знает, ушла заявка или нет.
+  const [orderNote, setOrderNote] = useState<{ text: string; bad: boolean } | null>(null);
   const [closeOpen, setCloseOpen] = useState(false);
   const [journalH, setJournalH] = useState(JOURNAL_LIMITS.def);
   // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
@@ -326,7 +328,8 @@ export default function ScalpingPage() {
   // состояние экрана.
   useEffect(() => {
     if (!orderNote) return;
-    const id = setTimeout(() => setOrderNote(null), 6000);
+    // Ошибку держим дольше удачи: её надо успеть прочитать.
+    const id = setTimeout(() => setOrderNote(null), orderNote.bad ? 20000 : 8000);
     return () => clearTimeout(id);
   }, [orderNote]);
 
@@ -551,12 +554,39 @@ export default function ScalpingPage() {
     setTrade(next);
     setDraft(null);
 
-    if (!liveMode || !exchange?.connected) return;
+    // Почему ордер не ушёл — говорим прямо. Раньше в этих случаях не
+    // происходило ничего, и разницы между «режим расчёта» и «биржа отказала»
+    // на экране не было.
+    if (!exchange?.connected) {
+      setOrderNote({ text: "Биржевой счёт не подключён — ордер не отправлен", bad: true });
+      return;
+    }
+    if (!liveMode) {
+      setOrderNote({
+        text: "Режим «расчёт»: разметка на графике, ордер на биржу не отправлен",
+        bad: false,
+      });
+      return;
+    }
+
+    setOrderNote({ text: "Отправляем ордер…", bad: false });
     try {
-      await openPosition(next, true);
-      setOrderNote(`Ордер отправлен: ${next.side === "long" ? "лонг" : "шорт"} ${base(next.symbol)}`);
+      const result = await openPosition(next, true);
+      const id =
+        result && typeof result.entry === "object" && result.entry
+          ? String((result.entry as Record<string, unknown>).orderId ?? "")
+          : "";
+      setOrderNote({
+        text: `Ордер на бирже: ${next.side === "long" ? "лонг" : "шорт"} ${base(next.symbol)}${
+          id ? ` · №${id}` : ""
+        }`,
+        bad: false,
+      });
     } catch (err) {
-      setOrderNote(err instanceof Error ? err.message : "Биржа не приняла ордер");
+      setOrderNote({
+        text: err instanceof Error ? err.message : "Биржа не приняла ордер",
+        bad: true,
+      });
     }
   }
 
@@ -956,7 +986,13 @@ export default function ScalpingPage() {
                   </span>
                 )}
                 {orderNote && (
-                  <span className="ml-auto text-[var(--pane-accent)]">{orderNote}</span>
+                  <span
+                    className={`ml-auto ${
+                      orderNote.bad ? "text-[var(--pane-down)]" : "text-[var(--pane-accent)]"
+                    }`}
+                  >
+                    {orderNote.text}
+                  </span>
                 )}
               </div>
 
