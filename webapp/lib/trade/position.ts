@@ -42,6 +42,8 @@ export type ActiveTrade = {
   outcome: TradeOutcome;
   /** Итог в деньгах. У незакрытой сделки — ноль. */
   pnl: number;
+  /** Сколько раз позицию уже частично фиксировали. */
+  partials: number;
 };
 
 export type TradeSeed = {
@@ -77,6 +79,7 @@ export function createTrade(seed: TradeSeed, id: string, now = Date.now()): Acti
     exit: null,
     outcome: null,
     pnl: 0,
+    partials: 0,
   };
 }
 
@@ -181,6 +184,66 @@ export function advanceQuote(
         : quote.ask;
   if (!(price > 0)) return trade;
   return advance(trade, price, now);
+}
+
+/**
+ * Зафиксировать часть позиции.
+ *
+ * Возвращает две вещи: что осталось на графике и что уходит в журнал. Частичная
+ * фиксация — это отдельная закрытая сделка со своим объёмом и своим итогом:
+ * записать её как одну сделку целиком значит соврать и в прибыли, и в
+ * количестве сделок.
+ *
+ * Доля считается от текущего остатка, а не от исходного объёма: трейдер видит
+ * на экране то, что у него есть сейчас, и «половина» для него — половина этого.
+ */
+export function closePartially(
+  trade: ActiveTrade,
+  share: number,
+  price: number,
+  now: number,
+): { remaining: ActiveTrade; recorded: ActiveTrade | null } {
+  if (trade.status === "closed" || !(share > 0)) {
+    return { remaining: trade, recorded: null };
+  }
+
+  // Незашедшая сделка — это отменённый расчёт, а не сделка: фиксировать нечего.
+  if (trade.status === "planned") {
+    return { remaining: closeManually(trade, price, now), recorded: null };
+  }
+
+  const part = Math.min(1, share);
+  const exit = price > 0 ? price : trade.entry;
+  const long = trade.side === "long";
+  const closedQty = trade.qty * part;
+  const pnl = (long ? exit - trade.entry : trade.entry - exit) * closedQty;
+
+  const recorded: ActiveTrade = {
+    ...trade,
+    // Своя запись в журнале: у части свой объём и свой результат.
+    id: `${trade.id}#${trade.partials + 1}`,
+    qty: closedQty,
+    margin: trade.margin * part,
+    status: "closed",
+    closedAt: now,
+    exit,
+    outcome: "manual",
+    pnl,
+  };
+
+  if (part >= 1) {
+    return { remaining: recorded, recorded };
+  }
+
+  return {
+    remaining: {
+      ...trade,
+      qty: trade.qty - closedQty,
+      margin: trade.margin * (1 - part),
+      partials: trade.partials + 1,
+    },
+    recorded,
+  };
 }
 
 /** Закрыть руками по текущей цене. */

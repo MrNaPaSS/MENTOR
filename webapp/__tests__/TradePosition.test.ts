@@ -3,6 +3,7 @@ import {
   advance,
   advanceQuote,
   closeManually,
+  closePartially,
   createTrade,
   pendingTargets,
   pnlAt,
@@ -190,5 +191,50 @@ describe("исполнение по стакану", () => {
   it("пустой стакан ничего не меняет", () => {
     const planned = long();
     expect(advanceQuote(planned, { bid: 0, ask: 0 }, T0)).toBe(planned);
+  });
+});
+
+describe("частичная фиксация", () => {
+  it("половина позиции уходит в журнал отдельной записью", () => {
+    const opened = advance(long(), 100, T0);
+    const { remaining, recorded } = closePartially(opened, 0.5, 100.5, T0 + 1);
+
+    expect(recorded).not.toBeNull();
+    expect(recorded!.qty).toBeCloseTo(5, 10);
+    expect(recorded!.pnl).toBeCloseTo(2.5, 10);
+    expect(recorded!.id).not.toBe(opened.id);      // своя запись, не дубликат
+
+    expect(remaining.status).toBe("open");
+    expect(remaining.qty).toBeCloseTo(5, 10);
+    expect(remaining.partials).toBe(1);
+  });
+
+  it("доля считается от остатка, а не от исходного объёма", () => {
+    let trade = advance(long(), 100, T0);
+    trade = closePartially(trade, 0.5, 100.5, T0 + 1).remaining;
+    const { remaining } = closePartially(trade, 0.5, 100.5, T0 + 2);
+    expect(remaining.qty).toBeCloseTo(2.5, 10);
+    expect(remaining.partials).toBe(2);
+  });
+
+  it("сто процентов закрывают сделку целиком", () => {
+    const opened = advance(long(), 100, T0);
+    const { remaining, recorded } = closePartially(opened, 1, 100.5, T0 + 1);
+    expect(remaining.status).toBe("closed");
+    expect(remaining.pnl).toBeCloseTo(5, 10);
+    expect(recorded!.id).toBe(remaining.id);       // одна запись, не две
+  });
+
+  it("невошедшая сделка просто снимается, в журнал не идёт", () => {
+    const { remaining, recorded } = closePartially(long(), 1, 100.5, T0);
+    expect(remaining.status).toBe("closed");
+    expect(remaining.pnl).toBe(0);
+    expect(recorded).toBeNull();
+  });
+
+  it("закрытая сделка не фиксируется повторно", () => {
+    let trade = advance(long(), 100, T0);
+    trade = closePartially(trade, 1, 100.5, T0 + 1).remaining;
+    expect(closePartially(trade, 1, 101, T0 + 2).recorded).toBeNull();
   });
 });

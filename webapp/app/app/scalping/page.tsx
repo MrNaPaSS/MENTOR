@@ -30,6 +30,7 @@ import type { ChartTheme } from "@/lib/indicator/shapes";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
+import CloseDialog from "@/components/scalping/CloseDialog";
 import {
   openPosition,
   tradingStatus,
@@ -52,6 +53,7 @@ import {
 import {
   advanceQuote,
   closeManually,
+  closePartially,
   createTrade,
   type ActiveTrade,
 } from "@/lib/trade/position";
@@ -227,6 +229,7 @@ export default function ScalpingPage() {
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
   const [orderNote, setOrderNote] = useState<string | null>(null);
+  const [closeOpen, setCloseOpen] = useState(false);
   const [journalH, setJournalH] = useState(JOURNAL_LIMITS.def);
   // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
   const [journalKey, setJournalKey] = useState(0);
@@ -439,13 +442,39 @@ export default function ScalpingPage() {
     setTrade(null);
   }
 
-  /** Убрать сделку с графика: закрытую — записать, открытую — закрыть. */
-  function closeTrade() {
-    setTrade((current) =>
-      current ? closeManually(current, dom?.mid ?? 0, Date.now()) : null,
+  /**
+   * Зафиксировать часть позиции или всю.
+   *
+   * Частичная фиксация уходит в журнал отдельной записью со своим объёмом и
+   * своим итогом: записать её как сделку целиком значит соврать и в прибыли, и
+   * в количестве сделок. Остаток продолжает жить на графике.
+   */
+  function applyClose(share: number) {
+    setCloseOpen(false);
+    const current = trade;
+    if (!current) return;
+
+    const { remaining, recorded } = closePartially(
+      current,
+      share,
+      dom?.mid ?? 0,
+      Date.now(),
     );
-    setDraft(null);
-    setDialogOpen(false);
+
+    if (recorded && recorded.id !== remaining.id) {
+      // Частичную запись эффект журнала не увидит: у него на руках останется
+      // живая сделка, а не закрытая. Пишем сами.
+      saveTrade(recorded)
+        .then((saved) => {
+          if (saved) setJournalKey((k) => k + 1);
+        })
+        .catch(() => {
+          // Не записалось — позиция всё равно сокращена.
+        });
+    }
+
+    setTrade(remaining.status === "closed" ? remaining : remaining);
+    if (remaining.status === "closed") setDraft(null);
   }
 
   /**
@@ -860,8 +889,8 @@ export default function ScalpingPage() {
 
                   {trade && trade.status !== "closed" && (
                     <button
-                      onClick={closeTrade}
-                      title="Закрыть сделку и убрать разметку с графика"
+                      onClick={() => setCloseOpen(true)}
+                      title="Зафиксировать позицию"
                       className={`${CHIP} ${CHIP_ON}`}
                     >
                       сделка ✕
@@ -921,7 +950,7 @@ export default function ScalpingPage() {
                   indicators={indicators}
                   trade={trade && trade.symbol === symbol ? trade : null}
                   livePrice={chartPrice}
-                  onCloseTrade={closeTrade}
+                  onCloseTrade={() => setCloseOpen(true)}
                   showJournal={journalOpen}
                   journalKey={journalKey}
                   onShelfClick={openTrade}
@@ -938,6 +967,16 @@ export default function ScalpingPage() {
           </section>
         )}
       </div>
+
+      {closeOpen && trade && (
+        <CloseDialog
+          trade={trade}
+          price={dom?.mid ?? 0}
+          tick={dom?.tick ?? 0}
+          onConfirm={applyClose}
+          onCancel={() => setCloseOpen(false)}
+        />
+      )}
 
       {exchangeOpen && exchange && (
         <ExchangeDialog
