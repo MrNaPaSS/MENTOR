@@ -9,7 +9,27 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { dropKeys, saveKeys, type TradingStatus } from "@/lib/trading";
+import { balance as loadBalance, dropKeys, saveKeys, type TradingStatus } from "@/lib/trading";
+
+/**
+ * Доступный остаток из ответа биржи.
+ *
+ * Поля называются по-разному и приходят то массивом монет, то одним объектом.
+ * Не разобрали — не беда: подключение подтверждается самим фактом ответа.
+ */
+function availableUsdt(payload: unknown): string | null {
+  const rows = Array.isArray(payload) ? payload : [payload];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const item = row as Record<string, unknown>;
+    const coin = String(item.asset ?? item.marginCoin ?? item.coin ?? "USDT").toUpperCase();
+    if (coin !== "USDT") continue;
+    const value = item.availableBalance ?? item.available ?? item.balance;
+    const amount = Number(value);
+    if (Number.isFinite(amount)) return amount.toFixed(2);
+  }
+  return null;
+}
 
 const FIELD =
   "w-full rounded-md border border-border bg-bg-deep px-2.5 py-2 font-mono text-[13px] " +
@@ -36,6 +56,11 @@ export default function ExchangeDialog({
   const [passphrase, setPassphrase] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Подключённый счёт показываем как подключённый. Пустые поля ввода на месте
+  // готового подключения выглядят так, будто его нет.
+  const [replacing, setReplacing] = useState(false);
+  const [funds, setFunds] = useState<string | null>(null);
+  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -45,6 +70,25 @@ export default function ExchangeDialog({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Остаток на счёте — самое честное подтверждение, что ключи работают: он
+  // приходит с биржи, а не из нашей базы.
+  useEffect(() => {
+    if (!status.connected || !reachable) return;
+    let cancelled = false;
+    loadBalance()
+      .then((body) => {
+        if (cancelled) return;
+        setFunds(availableUsdt(body?.balance));
+        setChecked(true);
+      })
+      .catch(() => {
+        if (!cancelled) setChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [status.connected, reachable]);
+
   async function submit() {
     setBusy(true);
     setError(null);
@@ -53,6 +97,7 @@ export default function ExchangeDialog({
       setApiKey("");
       setSecret("");
       setPassphrase("");
+      setReplacing(false);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось подключить");
@@ -87,7 +132,7 @@ export default function ExchangeDialog({
             <p className="text-sm font-semibold text-text-primary">Биржевой счёт WEEX</p>
             <p className="mt-0.5 text-[11px] text-text-muted">
               {status.connected
-                ? `Подключён ключ ${status.key_tail}`
+                ? `Ключ ${status.key_tail}`
                 : "Терминал сможет ставить ордера с вашего счёта"}
             </p>
           </div>
@@ -110,6 +155,53 @@ export default function ExchangeDialog({
             На сервере не задан ключ шифрования, и торговля выключена целиком.
             Хранить ваши ключи открытым текстом мы не будем.
           </p>
+        ) : status.connected && !replacing ? (
+          <div className="space-y-3 px-5 py-5">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-success" />
+              <span className="text-[13px] font-semibold text-text-primary">
+                Счёт подключён
+              </span>
+            </div>
+
+            <div className="space-y-1 font-mono text-[12px] tabular-nums">
+              <div className="flex justify-between">
+                <span className="text-text-muted">Ключ</span>
+                <span className="text-text-secondary">{status.key_tail}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-muted">Доступно</span>
+                <span className="text-text-secondary">
+                  {funds !== null ? `${funds} USDT` : checked ? "—" : "запрашиваем…"}
+                </span>
+              </div>
+              {status.updated_at && (
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Подключён</span>
+                  <span className="text-text-secondary">
+                    {new Date(status.updated_at).toLocaleString("ru", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] leading-snug text-text-muted">
+              Терминал ставит ордера с этого счёта, когда включён боевой режим.
+              Ключ хранится зашифрованным и наружу не отдаётся.
+            </p>
+
+            <button
+              onClick={() => setReplacing(true)}
+              className="text-[11px] text-accent-cyan transition-colors duration-150 ease-out hover:text-text-primary"
+            >
+              Заменить ключи
+            </button>
+          </div>
         ) : (
           <div className="space-y-3 px-5 py-4">
             <label className="block">
@@ -169,13 +261,15 @@ export default function ExchangeDialog({
             <button onClick={onClose} className={`${BUTTON} text-text-muted hover:text-text-primary`}>
               Закрыть
             </button>
-            <button
-              onClick={submit}
-              disabled={busy || !reachable || !status.enabled || !apiKey || !secret || !passphrase}
-              className={`${BUTTON} bg-accent-cyan/20 text-accent-cyan disabled:opacity-40`}
-            >
-              {busy ? "Проверяем…" : "Подключить"}
-            </button>
+            {(!status.connected || replacing) && (
+              <button
+                onClick={submit}
+                disabled={busy || !reachable || !status.enabled || !apiKey || !secret || !passphrase}
+                className={`${BUTTON} bg-accent-cyan/20 text-accent-cyan disabled:opacity-40`}
+              >
+                {busy ? "Проверяем…" : "Подключить"}
+              </button>
+            )}
           </div>
         </div>
       </div>
