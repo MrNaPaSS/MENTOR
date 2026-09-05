@@ -1044,7 +1044,7 @@ function PriceChart({
       {/* Инструмент, цена и плита — на самом графике, а не в шапке панели.
           Взгляд скальпера живёт на свечах, и ради ответа «что это и почём»
           уводить его к рамке незачем. */}
-      <div className="pointer-events-none absolute left-2 top-1 flex items-baseline gap-2 font-mono text-[11px] tabular-nums">
+      <div className="pointer-events-none absolute left-2 top-1 z-10 flex items-baseline gap-2 font-mono text-[11px] tabular-nums">
         <span className="text-[12px] font-semibold text-[var(--pane-text)]">
           {symbol.replace(/USDT$/, "")}
         </span>
@@ -1149,7 +1149,7 @@ function LevelsStrip({
     .slice(0, 4);
 
   return (
-    <div className="pointer-events-none absolute left-2 top-6 flex gap-3 font-mono text-[10px] tabular-nums text-[var(--pane-muted)]">
+    <div className="pointer-events-none absolute left-2 top-6 z-10 flex gap-3 font-mono text-[10px] tabular-nums text-[var(--pane-muted)]">
       {sorted.map((l) => (
         <span key={l.title}>
           {l.title}{" "}
