@@ -63,7 +63,13 @@ export function balance() {
  * экране, и тем, что ушло на биржу, — самая дорогая ошибка из возможных.
  */
 export function openPosition(trade: ActiveTrade, entryAsLimit: boolean) {
-  return request<{ entry: unknown; takes: unknown[] }>("/api/trading/open", {
+  return request<{
+    entry: unknown;
+    takes: unknown[];
+    watched: string;
+    /** Позиция открыта, но что-то из сопровождения не встало сразу. */
+    warning: string;
+  }>("/api/trading/open", {
     method: "POST",
     body: JSON.stringify({
       symbol: trade.symbol,

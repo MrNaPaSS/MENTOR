@@ -250,6 +250,11 @@ async def open_position(
     entry_price = round_to_tick(body.entry, filters["tick"]) if body.entry else None
     stop_price = round_to_tick(body.stop, filters["tick"])
 
+    # Вход и цели — два разных шага с разной ценой ошибки.
+    #
+    # Сорвался вход — не открылось ничего, и об этом надо сказать отказом.
+    # Сорвались цели при уже открытой позиции — сделка есть, и объявлять её
+    # неудачей нельзя: трейдер решит, что позиции нет, а она стоит на бирже.
     try:
         await client.set_leverage(symbol, body.leverage)
 
@@ -263,17 +268,23 @@ async def open_position(
             sl_trigger=_num(stop_price),
             client_order_id=body.client_order_id,
         )
+    except WeexTradeError as exc:
+        raise _fail(exc) from exc
 
-        # Цели — отдельными сокращающими ордерами, равными долями. Ставятся
-        # сразу за входом: стоп и цели должны стоять на бирже с первой секунды
-        # позиции, а не появляться, когда до них дойдут руки.
-        takes: list[Any] = []
-        placed: list[dict[str, Any]] = []
-        if body.takes:
-            # Доля цели тоже кратна шагу лота, иначе биржа отклонит уже её. Если
-            # доля не набирает даже одного шага, цели не ставим: дробить нечего.
-            share = floor_to_step(quantity / len(body.takes), filters["step"])
-            for i, price in enumerate(body.takes if share >= filters["min_qty"] else []):
+    # Цели ставятся только когда позиция уже есть.
+    #
+    # Сокращающий ордер нечего сокращать, пока вход висит лимиткой, и биржа
+    # отвечает «cannot set reduce only, you must cancel some order». Поэтому
+    # при входе по рынку лестницу ставим сразу, а при лимитном входе её выставит
+    # наблюдатель — в тот момент, когда позиция появится.
+    takes: list[Any] = []
+    placed: list[dict[str, Any]] = []
+    warning = ""
+    share = floor_to_step(quantity / max(1, len(body.takes)), filters["step"])
+
+    if body.takes and not entry_price and share >= filters["min_qty"]:
+        for i, price in enumerate(body.takes):
+            try:
                 order = await client.place_order(
                     symbol=symbol,
                     side="SELL" if long else "BUY",
@@ -287,16 +298,15 @@ async def open_position(
                     if body.client_order_id
                     else None,
                 )
-                takes.append(order)
-                placed.append(
-                    {
-                        "price": price,
-                        "order_id": str(_order_id(order)),
-                        "filled": False,
-                    }
-                )
-    except WeexTradeError as exc:
-        raise _fail(exc) from exc
+            except WeexTradeError as exc:
+                # Позиция уже открыта — цели доставит наблюдатель.
+                logger.warning("Цель %d для %s не встала: %s", i + 1, symbol, exc)
+                warning = f"Цели поставит сопровождение: {exc}"
+                break
+            takes.append(order)
+            placed.append(
+                {"price": price, "order_id": str(_order_id(order)), "filled": False}
+            )
 
     # Запись для фонового ведения: без неё переносить стоп в безубыток будет
     # некому, как только трейдер закроет вкладку.
@@ -325,7 +335,12 @@ async def open_position(
     live.updated_at = utcnow()
     session.commit()
 
-    return {"entry": entry_order, "takes": takes, "watched": live.client_id}
+    return {
+        "entry": entry_order,
+        "takes": takes,
+        "watched": live.client_id,
+        "warning": warning,
+    }
 
 
 @router.post("/breakeven")

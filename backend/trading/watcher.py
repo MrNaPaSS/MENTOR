@@ -26,7 +26,13 @@ from sqlalchemy import select
 from core.models import LiveTrade, ScalpTrade, WeexCredential, utcnow
 from core.trading.position import Position, should_move_stop, stop_after_take
 from core.weex import keys as keystore
-from core.weex.futures import Credentials, WeexFutures, WeexTradeError
+from core.weex.futures import (
+    Credentials,
+    WeexFutures,
+    WeexTradeError,
+    floor_to_step,
+    round_to_tick,
+)
 
 logger = logging.getLogger("nmnh.trading.watcher")
 
@@ -256,6 +262,13 @@ class PositionWatcher:
             changed = True
             logger.info("Позиция набрана: %s (%s)", trade.symbol, trade.client_id)
 
+        # Цели ставим, когда позиция есть, а их ещё нет. До набора позиции биржа
+        # сокращающий ордер не принимает — «cannot set reduce only», — поэтому
+        # при лимитном входе лестница доезжает сюда, а не выставляется сразу.
+        if trade.status == "open" and not json.loads(trade.tp_orders_json or "[]"):
+            if await self._place_takes(client, trade):
+                changed = True
+
         if decision.filled_orders:
             takes = json.loads(trade.tp_orders_json or "[]")
             for take in takes:
@@ -302,6 +315,58 @@ class PositionWatcher:
 
         if changed:
             trade.updated_at = utcnow()
+
+    async def _place_takes(self, client: WeexFutures, trade: LiveTrade) -> bool:
+        """Выставить лестницу целей на уже открытой позиции."""
+        prices: list[float] = json.loads(trade.targets_json or "[]")
+        if not prices:
+            return False
+
+        filters = await client.symbol_filters(trade.symbol)
+        share = floor_to_step(float(trade.qty) / len(prices), filters["step"])
+        if share < filters["min_qty"]:
+            # Объём не делится на цели — закрывать позицию будет стоп или сам
+            # трейдер. Молча оставить сделку без целей честнее, чем поставить
+            # одну на весь объём: расчёт был не такой.
+            logger.info("Объём %s не делится на цели, лестница не ставится", trade.symbol)
+            trade.targets_json = "[]"
+            return True
+
+        long = trade.side == "long"
+        placed: list[dict[str, Any]] = []
+        for i, price in enumerate(prices):
+            try:
+                order = await client.place_order(
+                    symbol=trade.symbol,
+                    side="SELL" if long else "BUY",
+                    position_side="LONG" if long else "SHORT",
+                    quantity=num(share),
+                    order_type="LIMIT",
+                    price=num(round_to_tick(price, filters["tick"])),
+                    reduce_only=True,
+                    time_in_force="GTC",
+                    client_order_id=f"{trade.client_id}_tp{i + 1}"[:64],
+                )
+            except WeexTradeError as exc:
+                logger.warning("Цель %d %s не встала: %s", i + 1, trade.symbol, exc)
+                break
+            placed.append(
+                {
+                    "price": price,
+                    "order_id": str(
+                        order.get("orderId") or order.get("id") or ""
+                        if isinstance(order, dict)
+                        else ""
+                    ),
+                    "filled": False,
+                }
+            )
+
+        if not placed:
+            return False
+        trade.tp_orders_json = json.dumps(placed, ensure_ascii=False)
+        logger.info("Цели выставлены: %s, %d шт.", trade.symbol, len(placed))
+        return True
 
     async def _find_stop_order(self, client: WeexFutures, trade: LiveTrade) -> str:
         """Найти стоп этой позиции среди условных заявок.

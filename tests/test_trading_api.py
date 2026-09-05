@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -36,7 +38,15 @@ class FakeExchange:
     async def set_leverage(self, symbol, leverage, margin_coin="USDT"):
         self.leverage = (symbol, leverage)
 
+    # Биржа может отказать на сокращающих ордерах: пока позиции нет, сокращать
+    # нечего. Флаг включает это поведение в тестах.
+    reject_reduce_only = False
+
     async def place_order(self, **kw):
+        if self.reject_reduce_only and kw.get("reduce_only"):
+            from core.weex.futures import WeexTradeError
+
+            raise WeexTradeError("cannot set reduce only")
         self.orders.append(kw)
         return {"orderId": f"o{len(self.orders)}"}
 
@@ -176,9 +186,14 @@ def test_too_small_order_is_rejected_before_the_exchange(app_and_exchange):
     assert exchange.orders == []          # на биржу ничего не ушло
 
 
-def test_takes_are_reduce_only_and_split_the_volume(app_and_exchange):
-    client, exchange, _ = app_and_exchange
-    client.post(
+def test_limit_entry_does_not_place_takes_yet(app_and_exchange):
+    """Пока вход висит лимиткой, позиции нет — сокращать нечего.
+
+    Биржа на такой ордер отвечает «cannot set reduce only». Лестницу выставит
+    сопровождение, когда позиция появится.
+    """
+    client, exchange, session = app_and_exchange
+    body = client.post(
         "/api/trading/open",
         json={
             "symbol": "BTCUSDT",
@@ -189,6 +204,31 @@ def test_takes_are_reduce_only_and_split_the_volume(app_and_exchange):
             "stop": 80500,
             "takes": [79500, 79000, 78500],
         },
+    ).json()
+
+    assert len(exchange.orders) == 1                  # только вход
+    assert exchange.orders[0]["order_type"] == "LIMIT"
+    assert body["watched"]                            # сделка взята под ведение
+
+    from core.models import LiveTrade
+
+    live = session.query(LiveTrade).one()
+    assert live.status == "waiting"
+    assert json.loads(live.targets_json) == [79500, 79000, 78500]
+
+
+def test_market_entry_places_takes_at_once(app_and_exchange):
+    client, exchange, _ = app_and_exchange
+    client.post(
+        "/api/trading/open",
+        json={
+            "symbol": "BTCUSDT",
+            "side": "short",
+            "quantity": 0.3,
+            "leverage": 5,
+            "stop": 80500,
+            "takes": [79500, 79000, 78500],
+        },
     )
     takes = exchange.orders[1:]
     assert len(takes) == 3
@@ -196,7 +236,35 @@ def test_takes_are_reduce_only_and_split_the_volume(app_and_exchange):
         assert order["reduce_only"] is True
         assert order["side"] == "BUY"           # шорт закрывается покупкой
         assert order["quantity"] == "0.1"
-    assert exchange.orders[0]["order_type"] == "LIMIT"
+
+
+def test_failed_takes_do_not_report_a_failed_entry(app_and_exchange):
+    """Позиция открыта — значит сделка есть, чем бы ни кончились цели.
+
+    Отдать отказ значит сказать трейдеру, что позиции нет, пока она стоит на
+    бирже. Это дороже любой недоставленной цели.
+    """
+    client, exchange, session = app_and_exchange
+    exchange.reject_reduce_only = True
+
+    res = client.post(
+        "/api/trading/open",
+        json={
+            "symbol": "BTCUSDT",
+            "side": "long",
+            "quantity": 0.3,
+            "leverage": 5,
+            "stop": 79000,
+            "takes": [80000, 80500, 81000],
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["warning"]
+    assert len(exchange.orders) == 1                  # вход прошёл
+
+    from core.models import LiveTrade
+
+    assert session.query(LiveTrade).one().status == "waiting"
 
 
 def test_broken_side_is_rejected(app_and_exchange):

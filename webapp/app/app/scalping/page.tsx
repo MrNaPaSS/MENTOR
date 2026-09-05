@@ -567,9 +567,11 @@ export default function ScalpingPage() {
           ? String((result.entry as Record<string, unknown>).orderId ?? "")
           : "";
       setOrderNote({
-        text: `Ордер на бирже: ${next.side === "long" ? "лонг" : "шорт"} ${base(next.symbol)}${
-          id ? ` · №${id}` : ""
-        }`,
+        text: result?.warning
+          ? `Заявка на бирже · ${result.warning}`
+          : `Заявка на бирже: ${next.side === "long" ? "лонг" : "шорт"} ${base(next.symbol)}${
+              id ? ` · №${id}` : ""
+            }`,
         bad: false,
       });
     } catch (err) {
