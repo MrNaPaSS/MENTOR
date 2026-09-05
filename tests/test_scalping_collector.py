@@ -99,9 +99,11 @@ async def test_rotate_subscribes_top_and_drops_rest():
     c = make_collector(SNAPSHOT, TICKERS)
     await c._rotate(TICKERS)
     assert c.tracked == {"BTCUSDT", "ETHUSDT"}
+    # Списочные инструменты идут на медленном стакане: десять обновлений в
+    # секунду с каждого — это нагрузка ради колонки «плита» в списке.
     assert c.stream.subscribed == {
-        "btcusdt@depth@100ms", "btcusdt@trade",
-        "ethusdt@depth@100ms", "ethusdt@trade",
+        "btcusdt@depth@500ms", "btcusdt@trade",
+        "ethusdt@depth@500ms", "ethusdt@trade",
     }
 
     # Обороты изменились — DOGE вытеснил ETH.
@@ -112,6 +114,38 @@ async def test_rotate_subscribes_top_and_drops_rest():
     assert c.tracked == {"BTCUSDT", "DOGEUSDT"}
     assert "ethusdt@trade" not in c.stream.subscribed
     assert c.state.get("ETHUSDT") is None
+
+
+async def test_open_dom_switches_symbol_to_fast_depth():
+    """Открытый стакан переводится на быстрый поток, закрытый — обратно.
+
+    В списке хватает двух обновлений в секунду, но в самом стакане на скальпе
+    видно, как снимают заявку, — там нужны все десять.
+    """
+    c = make_collector(SNAPSHOT, TICKERS)
+    await c._rotate(TICKERS)
+    assert "btcusdt@depth@500ms" in c.stream.subscribed
+
+    await c.pin("BTCUSDT")
+    assert "btcusdt@depth@100ms" in c.stream.subscribed
+    assert "btcusdt@depth@500ms" not in c.stream.subscribed
+
+    await c.unpin("BTCUSDT")
+    assert "btcusdt@depth@500ms" in c.stream.subscribed
+    assert "btcusdt@depth@100ms" not in c.stream.subscribed
+
+
+async def test_untrack_drops_both_depth_rates():
+    """Снятие с наблюдения убирает поток любой скорости.
+
+    Какая скорость подписана сейчас, знать неоткуда: инструмент мог быть открыт
+    в стакане. Оставленный поток продолжал бы идти в никуда.
+    """
+    c = make_collector(SNAPSHOT, TICKERS)
+    await c._rotate(TICKERS)
+    await c.pin("BTCUSDT")
+    await c._untrack("BTCUSDT")
+    assert not [s for s in c.stream.subscribed if s.startswith("btcusdt")]
 
 
 async def test_rotate_keeps_pinned_symbol_outside_top():

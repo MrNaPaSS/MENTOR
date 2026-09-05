@@ -32,10 +32,19 @@ logger = logging.getLogger("nmnh.scalping")
 
 # Сколько инструментов держим под наблюдением.
 #
-# Потолок здесь не наш, а биржи: одно соединение тянет до двухсот потоков, а на
-# каждый инструмент их уходит два — стакан и лента. Восемьдесят монет это сто
-# шестьдесят потоков, с запасом на переподключение при ротации состава.
-DEFAULT_TOP_N = 80
+# Ограничение здесь не в числе потоков — их биржа разрешает до двухсот, — а в
+# том, сколько сообщений в секунду разбирает один процесс. Стакан на скорости
+# 100 мс это десять сообщений в секунду с инструмента, и на восьмидесяти
+# монетах разбор JSON съедал весь цикл событий: вместе со сбором ложился и
+# сам интерфейс. Поэтому монет больше, но поток для списка медленнее — см.
+# DEPTH_SLOW ниже.
+DEFAULT_TOP_N = 50
+
+# Скорость потока стакана. Открытому в терминале инструменту нужны все десять
+# обновлений в секунду: на скальпе видно, как заявку снимают. Остальным хватает
+# двух — в списке от них нужны плита и перевес, а не каждое движение.
+DEPTH_FAST = "100ms"
+DEPTH_SLOW = "500ms"
 TICKER_INTERVAL = 10.0      # обновление суточной сводки, секунды
 ROTATE_INTERVAL = 300.0     # пересмотр состава топа, секунды
 PRUNE_INTERVAL = 30.0       # чистка книг от далёких уровней, секунды
@@ -185,7 +194,7 @@ class ScalpingCollector:
 
     async def _untrack(self, symbol: str) -> None:
         self._tracked.discard(symbol)
-        await self.stream.unsubscribe(self._streams(symbol))
+        await self.stream.unsubscribe(self._all_streams(symbol))
         self.state.drop(symbol)
 
     def _apply_tickers(self, tickers: list[dict]) -> None:
@@ -199,19 +208,50 @@ class ScalpingCollector:
             state.quote_volume = _f(t.get("quoteVolume"))
             state.trade_count = int(_f(t.get("count")))
 
-    @staticmethod
-    def _streams(symbol: str) -> set[str]:
+    def _streams(self, symbol: str) -> set[str]:
+        """Потоки инструмента: стакан на своей скорости и лента сделок."""
         s = symbol.lower()
-        return {f"{s}@depth@100ms", f"{s}@trade"}
+        rate = DEPTH_FAST if self._pinned.get(symbol.upper()) else DEPTH_SLOW
+        return {f"{s}@depth@{rate}", f"{s}@trade"}
+
+    @staticmethod
+    def _all_streams(symbol: str) -> set[str]:
+        """Все потоки инструмента, включая обе скорости стакана.
+
+        Нужны при снятии с наблюдения: какая скорость сейчас подписана, знать
+        неоткуда, а оставленный поток продолжал бы идти в никуда.
+        """
+        s = symbol.lower()
+        return {f"{s}@depth@{DEPTH_FAST}", f"{s}@depth@{DEPTH_SLOW}", f"{s}@trade"}
+
+    async def _set_depth_rate(self, symbol: str, fast: bool) -> None:
+        """Переключить скорость стакана и пересобрать книгу.
+
+        Пересборка обязательна: события каждого потока нумеруются своей
+        цепочкой, и после смены скорости следующее событие не сойдётся с тем,
+        что уже лежит в книге.
+        """
+        if symbol not in self._tracked:
+            return
+        low = symbol.lower()
+        old, new = (DEPTH_SLOW, DEPTH_FAST) if fast else (DEPTH_FAST, DEPTH_SLOW)
+        await self.stream.unsubscribe({f"{low}@depth@{old}"})
+        await self.stream.subscribe({f"{low}@depth@{new}"})
+        await self._resync(symbol)
 
     # ── инструмент, открытый в стакане ──────────────────────────────────────
 
     async def pin(self, symbol: str) -> None:
         """Удержать инструмент под наблюдением и начать копить историю сделок."""
         sym = symbol.upper()
+        was_pinned = bool(self._pinned.get(sym))
         self._pinned[sym] = self._pinned.get(sym, 0) + 1
         if sym not in self._tracked:
             await self._track(sym)
+        elif not was_pinned:
+            # Инструмент уже был в списке, но на медленном потоке — открытому
+            # стакану этого мало.
+            await self._set_depth_rate(sym, fast=True)
 
         state = self.state.ensure(sym)
         if state.clusters is None:
@@ -232,6 +272,7 @@ class ScalpingCollector:
         state = self.state.get(sym)
         if state:
             state.clusters = None
+        await self._set_depth_rate(sym, fast=False)
 
     # ── синхронизация книги ─────────────────────────────────────────────────
 
