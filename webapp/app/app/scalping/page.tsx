@@ -65,10 +65,11 @@ const CHIP =
 const CHIP_ON = "bg-accent-cyan/15 text-accent-cyan";
 const CHIP_OFF = "text-text-muted hover:text-text-primary";
 
-// Высота рабочей области: всё окно за вычетом шапки приложения и заголовка
-// раздела. Стакан и график получают одинаковую высоту и заканчиваются на одной
-// линии — иначе под коротким из них остаётся пустота в треть экрана.
-const PANE_H = "h-[calc(100vh-190px)] min-h-[520px]";
+// Высота рабочей области: всё окно за вычетом шапки приложения. Заголовок
+// раздела убран — он занимал полсотни пикселей и не нёс ничего, чего не видно
+// по самим панелям. Стакан и график получают одинаковую высоту и заканчиваются
+// на одной линии, иначе под коротким из них остаётся пустота.
+const PANE_H = "h-[calc(100vh-124px)] min-h-[520px]";
 
 // Ширины панелей по умолчанию и границы, за которые их не утянуть.
 // Нижняя граница стакана — 111 (колонка истории) + 177 (цена) плюс поля:
@@ -194,6 +195,18 @@ export default function ScalpingPage() {
   }
 
   /**
+   * Монета выбрана — список сворачивается.
+   *
+   * Скринер нужен, чтобы найти инструмент; дальше он только занимает место,
+   * которое стакану и графику куда полезнее. Вернуть список — один клик по
+   * свёрнутой полосе слева.
+   */
+  function selectSymbol(next: string) {
+    setSymbol(next);
+    setScreenerOpen(false);
+  }
+
+  /**
    * Масштаб стакана колесом мыши, как на графике.
    *
    * Вверх — мельче шаг и подробнее уровни, вниз — крупнее шаг и шире охват.
@@ -216,26 +229,7 @@ export default function ScalpingPage() {
   }
 
   return (
-    <div className="space-y-3">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">Скальпинг</h1>
-          <p className="text-sm text-text-muted">
-            Крупные заявки в стаканах топовых монет — обновление живьём
-          </p>
-        </div>
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${
-            connected
-              ? "border-success/40 bg-success/10 text-success"
-              : "border-danger/40 bg-danger/10 text-danger"
-          }`}
-        >
-          {connected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-          {connected ? "поток биржи" : "нет связи"}
-        </span>
-      </header>
-
+    <div>
       <div
         className="flex flex-col gap-3 xl:flex-row xl:gap-0"
         style={
@@ -255,6 +249,10 @@ export default function ScalpingPage() {
             className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-border bg-bg-card py-3 text-text-muted transition-colors duration-150 ease-out hover:text-text-primary xl:flex ${PANE_H}`}
           >
             <PanelLeftOpen className="h-4 w-4" />
+            <span
+              title={connected ? "Поток биржи идёт" : "Нет связи с потоком биржи"}
+              className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-success" : "bg-danger"}`}
+            />
             <span className="text-[11px]" style={{ writingMode: "vertical-rl" }}>
               Скринер
             </span>
@@ -267,13 +265,27 @@ export default function ScalpingPage() {
         >
           <div className="flex items-center justify-between border-b border-border px-2 py-1.5">
             <span className="text-xs font-semibold text-text-primary">Скринер</span>
-            <button
-              onClick={() => setScreenerOpen(false)}
-              title="Свернуть скринер"
-              className={`${CHIP} ${CHIP_OFF}`}
-            >
-              <PanelLeftClose className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Связь переехала сюда из заголовка страницы: строка заголовка
+                  съедала полсотни пикселей высоты, а знать о разрыве потока
+                  нужно постоянно. */}
+              <span
+                title={connected ? "Поток биржи идёт" : "Нет связи с потоком биржи"}
+                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${
+                  connected ? "text-success" : "bg-danger/15 text-danger"
+                }`}
+              >
+                {connected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                {connected ? "поток" : "нет связи"}
+              </span>
+              <button
+                onClick={() => setScreenerOpen(false)}
+                title="Свернуть скринер"
+                className={`${CHIP} ${CHIP_OFF}`}
+              >
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-2">
@@ -297,7 +309,7 @@ export default function ScalpingPage() {
               selected={symbol}
               sort={sort}
               onSort={setSort}
-              onSelect={setSymbol}
+              onSelect={selectSymbol}
             />
           </div>
         </section>
