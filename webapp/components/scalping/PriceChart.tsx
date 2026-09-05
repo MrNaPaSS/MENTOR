@@ -37,7 +37,7 @@ import {
   ShapesPrimitive,
   type Shapes,
 } from "./primitives/ShapesPrimitive";
-import { money, type Wall } from "@/lib/scalping";
+import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 
 // Цвета берём из палитры проекта, а не из настроек Tiger: у нас тёмная тема,
 // и чистый зелёный с красным на ней выжигают глаз.
@@ -162,6 +162,13 @@ export default function PriceChart({
   const mtfLinesRef = useRef<IPriceLine[]>([]);
   const shelfLinesRef = useRef<IPriceLine[]>([]);
   const dataRef = useRef<Candle[]>([]);
+
+  // Загруженные уровни старших периодов. Нужны не только для линий: на минутном
+  // графике сто пятьдесят баров укладываются в двести долларов, а вчерашние
+  // максимум и минимум разнесены на три тысячи — линия оказывается далеко за
+  // краем окна, и нажатие кнопки выглядит как «ничего не произошло». Поэтому
+  // уровни ещё и выписываются строкой с расстоянием до цены.
+  const [levels, setLevels] = useState<{ title: string; price: number }[]>([]);
 
   // Полки перерисовываем только когда меняется сам набор цен. Стакан обновляется
   // восемь раз в секунду, и пересоздание линий на каждом кадре давало бы моргание.
@@ -454,9 +461,12 @@ export default function PriceChart({
     let cancelled = false;
     for (const l of mtfLinesRef.current) series.removePriceLine(l);
     mtfLinesRef.current = [];
+    setLevels([]);
     if (!cfg.levels) return;
 
     async function load() {
+      const collected: { title: string; price: number }[] = [];
+
       for (const period of MTF_PERIODS) {
         try {
           const res = await fetch(
@@ -473,6 +483,7 @@ export default function PriceChart({
             [previous.high, period.high],
             [previous.low, period.low],
           ] as const) {
+            collected.push({ title, price });
             mtfLinesRef.current.push(
               candleRef.current.createPriceLine({
                 price,
@@ -488,6 +499,8 @@ export default function PriceChart({
           // Уровень не загрузился — график от этого не ломается.
         }
       }
+
+      if (!cancelled) setLevels(collected);
     }
 
     load();
@@ -539,5 +552,47 @@ export default function PriceChart({
     });
   }, [wall?.price, wall?.side]);
 
-  return <div ref={boxRef} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={boxRef} className="h-full w-full" />
+      {cfg.levels && levels.length > 0 && (
+        <LevelsStrip levels={levels} price={dataRef.current.at(-1)?.close ?? 0} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Уровни старших периодов строкой, с расстоянием до текущей цены.
+ *
+ * Ближние — первыми: на скальпе важно, что рядом, а не что было в прошлом
+ * месяце. Строка нужна потому, что сама линия почти всегда за краем окна.
+ */
+function LevelsStrip({
+  levels,
+  price,
+}: {
+  levels: { title: string; price: number }[];
+  price: number;
+}) {
+  if (price <= 0) return null;
+  const sorted = [...levels]
+    .map((l) => ({ ...l, distance: ((l.price - price) / price) * 100 }))
+    .sort((a, b) => Math.abs(a.distance) - Math.abs(b.distance))
+    .slice(0, 4);
+
+  return (
+    <div className="pointer-events-none absolute left-2 top-1 flex gap-3 font-mono text-[10px] tabular-nums text-text-muted">
+      {sorted.map((l) => (
+        <span key={l.title}>
+          {l.title}{" "}
+          <span className="text-text-secondary">{fmtPrice(l.price)}</span>{" "}
+          <span className={l.distance >= 0 ? "text-success" : "text-danger"}>
+            {l.distance >= 0 ? "+" : ""}
+            {l.distance.toFixed(1)}%
+          </span>
+        </span>
+      ))}
+    </div>
+  );
 }
