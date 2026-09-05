@@ -37,7 +37,7 @@ class BackendConfig:
     # Скальпинг: фоновый сбор стаканов с биржи. Выключен по умолчанию — это
     # постоянное соединение и заметный поток данных, включать осознанно.
     scalping_enabled: bool = False
-    scalping_top_n: int = 30
+    scalping_top_n: int = 80
 
 
     @staticmethod
@@ -63,7 +63,7 @@ class BackendConfig:
             bot_token=os.getenv("BOT_TOKEN", ""),
             admin_tg_id=int(os.getenv("ADMIN_TG_ID", "0") or "0"),
             scalping_enabled=os.getenv("SCALPING_ENABLED", "false").lower() == "true",
-            scalping_top_n=int(os.getenv("SCALPING_TOP_N", "30") or "30"),
+            scalping_top_n=int(os.getenv("SCALPING_TOP_N", "80") or "80"),
             rate_limit_max=int(os.getenv("RATE_LIMIT_MAX", "10")),
             rate_limit_window=int(os.getenv("RATE_LIMIT_WINDOW", "900")),
             service_api_key=os.getenv("SERVICE_API_KEY", ""),

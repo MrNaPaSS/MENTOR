@@ -19,6 +19,62 @@
   --border: #2b3139;
 }
 
+/* ── Тема рабочих панелей скальпинга ──────────────────────────────────────
+   Цвета Tailwind в проекте заданы константами, а стакан и график должны
+   уметь становиться светлыми вместе с темой графика. Поэтому панели красятся
+   переменными, а класс на секции решает, какой набор подставить. */
+.pane-dark {
+  --pane-bg: #181a20;
+  --pane-deep: #0b0e11;
+  --pane-border: #2b3139;
+  --pane-text: #eaecef;
+  --pane-text-2: #b7bdc6;
+  --pane-muted: #7a8290;
+  --pane-up: #0ecb81;
+  --pane-down: #f6465d;
+  --pane-up-faint: rgba(14, 203, 129, 0.05);
+  --pane-down-faint: rgba(246, 70, 93, 0.05);
+  --pane-up-soft: rgba(14, 203, 129, 0.2);
+  --pane-down-soft: rgba(246, 70, 93, 0.2);
+  --pane-up-strong: rgba(14, 203, 129, 0.4);
+  --pane-down-strong: rgba(246, 70, 93, 0.4);
+  --pane-up-bar: rgba(14, 203, 129, 0.7);
+  --pane-down-bar: rgba(246, 70, 93, 0.7);
+  --pane-gold: #f0b90b;
+  --pane-gold-soft: rgba(240, 185, 11, 0.35);
+  --pane-accent: #0affe0;
+  --pane-accent-soft: rgba(10, 255, 224, 0.3);
+  --pane-accent-faint: rgba(10, 255, 224, 0.07);
+  --pane-hover: rgba(255, 255, 255, 0.05);
+}
+
+.pane-light {
+  --pane-bg: #ffffff;
+  --pane-deep: #f2f3f5;
+  --pane-border: #d6dcde;
+  /* Текущая цена чёрным: на белом фоне светло-серая шапка не читается. */
+  --pane-text: #111418;
+  --pane-text-2: #4a5058;
+  --pane-muted: #787b86;
+  /* Зелёный и красный самого индикатора: GREEN = #00A86B, RED = #FF1A2E. */
+  --pane-up: #00a86b;
+  --pane-down: #ff1a2e;
+  --pane-up-faint: rgba(0, 168, 107, 0.06);
+  --pane-down-faint: rgba(255, 26, 46, 0.05);
+  --pane-up-soft: rgba(0, 168, 107, 0.18);
+  --pane-down-soft: rgba(255, 26, 46, 0.16);
+  --pane-up-strong: rgba(0, 168, 107, 0.35);
+  --pane-down-strong: rgba(255, 26, 46, 0.32);
+  --pane-up-bar: rgba(0, 168, 107, 0.75);
+  --pane-down-bar: rgba(255, 26, 46, 0.7);
+  --pane-gold: #a97400;
+  --pane-gold-soft: rgba(169, 116, 0, 0.28);
+  --pane-accent: #2962ff;
+  --pane-accent-soft: rgba(41, 98, 255, 0.35);
+  --pane-accent-faint: rgba(41, 98, 255, 0.06);
+  --pane-hover: rgba(0, 0, 0, 0.05);
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;

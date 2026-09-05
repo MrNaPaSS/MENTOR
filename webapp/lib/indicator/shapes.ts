@@ -62,9 +62,12 @@ const LIGHT: typeof DARK = {
   bullishGap: "rgba(0, 168, 107, 0.13)",
   bearishGap: "rgba(255, 26, 46, 0.11)",
   equal: "#8D6E00",
-  premium: "rgba(255, 26, 46, 0.05)",
-  equilibrium: "rgba(120, 123, 134, 0.06)",
-  discount: "rgba(0, 168, 107, 0.05)",
+  // Зоны в оригинале не красно-зелёные, а сиреневые полосы разной плотности:
+  // премия и скидка одинаковым тоном, равновесие бледнее. Смысл несёт
+  // положение относительно цены, а не цвет.
+  premium: "rgba(149, 117, 205, 0.16)",
+  equilibrium: "rgba(149, 117, 205, 0.07)",
+  discount: "rgba(149, 117, 205, 0.16)",
 };
 
 const PALETTES = { dark: DARK, light: LIGHT };

@@ -43,6 +43,14 @@ const config: Config = {
           "radial-gradient(60% 60% at 50% 0%, rgba(10,255,224,0.12) 0%, transparent 70%)",
       },
       keyframes: {
+        "fade-in": {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+        "dialog-in": {
+          "0%": { opacity: "0", transform: "translateY(6px) scale(0.98)" },
+          "100%": { opacity: "1", transform: "none" },
+        },
         "fade-up": {
           "0%": { opacity: "0", transform: "translateY(24px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
@@ -76,6 +84,11 @@ const config: Config = {
         },
       },
       animation: {
+        // Появление окна: ease-out и меньше двухсот миллисекунд. Диалог
+        // перекрывает рабочий экран, и мгновенная подмена читается как сбой,
+        // а долгая — как задержка интерфейса.
+        "fade-in": "fade-in 0.12s ease-out both",
+        "dialog-in": "dialog-in 0.18s cubic-bezier(0.22,1,0.36,1) both",
         "fade-up": "fade-up 0.6s cubic-bezier(0.22,1,0.36,1) both",
         "slide-down": "slide-down 0.5s cubic-bezier(0.22,1,0.36,1) both",
         shimmer: "shimmer 1.6s linear infinite",

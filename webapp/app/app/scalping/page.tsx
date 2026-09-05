@@ -18,9 +18,20 @@ import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
 import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
 import type { ChartTheme } from "@/lib/indicator/shapes";
+import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
+import {
+  computeTrade,
+  sideForShelf,
+  suggestStopPct,
+  DEFAULT_LEVERAGE,
+  DEFAULT_MARGIN,
+  DEFAULT_TAKES,
+} from "@/lib/trade/plan";
 import {
   base,
   price as fmtPrice,
+  type LadderRow,
+  type Wall,
   useScalpingFeed,
   SORT_LABELS,
   type SortKey,
@@ -75,8 +86,8 @@ const INDICATOR_LABELS: Record<keyof Indicators, string> = {
 // что интерфейс услышал палец, не дожидаясь новых данных.
 const CHIP =
   "rounded px-1.5 py-0.5 text-[11px] transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]";
-const CHIP_ON = "bg-accent-cyan/15 text-accent-cyan";
-const CHIP_OFF = "text-text-muted hover:text-text-primary";
+const CHIP_ON = "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]";
+const CHIP_OFF = "text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
 
 // Высота рабочей области: всё окно за вычетом шапки приложения. Заголовок
 // раздела убран — он занимал полсотни пикселей и не нёс ничего, чего не видно
@@ -122,6 +133,8 @@ type Workspace = {
   agg: number;
   rows: number;
   shelf: number;
+  margin: number;
+  leverage: number;
 };
 
 function readWorkspace(): Partial<Workspace> | null {
@@ -139,6 +152,13 @@ export default function ScalpingPage() {
   const [agg, setAgg] = useState(10);
   const [rows, setRows] = useState(30);
   const [shelf, setShelf] = useState(2_000_000);
+
+  // Расчёт сделки от уровня. Черновик живёт и после закрытия окна: разметка
+  // остаётся на графике, пока трейдер сам её не убрал.
+  const [draft, setDraft] = useState<TradeDraft | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [margin, setMargin] = useState(DEFAULT_MARGIN);
+  const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
   const [timeframe, setTimeframe] = useState("1m");
   const [indicators, setIndicators] = useState<Indicators>(DEFAULT_INDICATORS);
   const [theme, setTheme] = useState<ChartTheme>("dark");
@@ -179,6 +199,10 @@ export default function ScalpingPage() {
     if (typeof saved.shelf === "number" && SHELF_STEPS.some((s) => s.value === saved.shelf)) {
       setShelf(saved.shelf);
     }
+    // Сумма и плечо у трейдера из раза в раз одни и те же — вводить их заново
+    // в каждой сделке незачем.
+    if (typeof saved.margin === "number" && saved.margin > 0) setMargin(saved.margin);
+    if (typeof saved.leverage === "number" && saved.leverage >= 1) setLeverage(saved.leverage);
   }, []);
 
   useEffect(() => {
@@ -195,12 +219,26 @@ export default function ScalpingPage() {
           agg,
           rows,
           shelf,
+          margin,
+          leverage,
         } satisfies Workspace),
       );
     } catch {
       // Не сохранилось — не повод ломать экран.
     }
-  }, [theme, screenerW, domW, indicators, sort, timeframe, agg, rows, shelf]);
+  }, [
+    theme,
+    screenerW,
+    domW,
+    indicators,
+    sort,
+    timeframe,
+    agg,
+    rows,
+    shelf,
+    margin,
+    leverage,
+  ]);
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
   function resizeScreener(delta: number) {
@@ -227,6 +265,46 @@ export default function ScalpingPage() {
   function selectSymbol(next: string) {
     setSymbol(next);
     setScreenerOpen(false);
+    // Разметка сделки привязана к цене прошлой монеты — на новой она врёт.
+    setDraft(null);
+    setDialogOpen(false);
+  }
+
+  /**
+   * Открыть расчёт сделки от уровня.
+   *
+   * Сумму и плечо берём прошлые, стоп предлагаем по волатильности: график
+   * знает ATR своего таймфрейма, стакан — нет, и тогда остаётся значение по
+   * умолчанию. Все три поля трейдер всё равно правит в самом окне.
+   */
+  function openTrade(level: Wall, atr = 0) {
+    setDraft({
+      shelf: level,
+      tick: dom?.tick ?? 0,
+      margin,
+      leverage,
+      stopPct: suggestStopPct(atr, level.price),
+    });
+    setDialogOpen(true);
+  }
+
+  /** Строка стакана как уровень: сторона по тому, чьи заявки в ней стоят. */
+  function openTradeFromRow(row: LadderRow) {
+    const mid = dom?.mid ?? row.price;
+    openTrade({
+      price: row.price,
+      size: row.bid > 0 ? row.bid : row.ask,
+      notional: row.notional,
+      side: row.bid > 0 ? "bid" : "ask",
+      distance_bp: mid > 0 ? (Math.abs(row.price - mid) / mid) * 10_000 : 0,
+      ratio: 1,
+    });
+  }
+
+  function updateDraft(next: TradeDraft) {
+    setDraft(next);
+    setMargin(next.margin);
+    setLeverage(next.leverage);
   }
 
   /**
@@ -250,6 +328,20 @@ export default function ScalpingPage() {
       return ZOOM_LADDER[next];
     });
   }
+
+  const plan = draft
+    ? computeTrade({
+        entry: draft.shelf.price,
+        side: sideForShelf(draft.shelf.side),
+        stopPct: draft.stopPct,
+        margin: draft.margin,
+        leverage: draft.leverage,
+        takes: DEFAULT_TAKES,
+      })
+    : null;
+
+  // Класс темы для рабочих панелей: стакан и график светлеют вместе.
+  const pane = theme === "light" ? "pane-light" : "pane-dark";
 
   return (
     <div>
@@ -346,10 +438,10 @@ export default function ScalpingPage() {
           <>
             {/* Стакан: ширина по своим колонкам, история прокручивается влево. */}
             <section
-              className={`flex shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[var(--dom-w)] ${PANE_H}`}
+              className={`${pane} flex shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] xl:w-[var(--dom-w)] ${PANE_H}`}
             >
-              <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <span className="font-semibold text-text-primary">{base(symbol)}</span>
+              <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-3 py-2">
+                <span className="font-semibold text-[var(--pane-text)]">{base(symbol)}</span>
                 {/* Без словесных подписей: множители и глубина разделены
                     чертой, а что делает кнопка — говорит подсказка при
                     наведении. Рядом с множителем стоит получившийся шаг в
@@ -366,12 +458,12 @@ export default function ScalpingPage() {
                     </button>
                   ))}
                   {dom && dom.tick > 0 && (
-                    <span className="ml-1 font-mono text-[10px] text-text-secondary">
+                    <span className="ml-1 font-mono text-[10px] text-[var(--pane-text-2)]">
                       = {fmtPrice(dom.tick, dom.tick)}
                     </span>
                   )}
 
-                  <span className="mx-2 h-3 w-px bg-border" />
+                  <span className="mx-2 h-3 w-px bg-[var(--pane-border)]" />
                   {DEPTHS.map((depth) => (
                     <button
                       key={depth}
@@ -387,9 +479,9 @@ export default function ScalpingPage() {
 
               <div className="min-h-0 flex-1">
                 {dom ? (
-                  <DomTrader frame={dom} onZoom={zoomDom} />
+                  <DomTrader frame={dom} onZoom={zoomDom} onPickLevel={openTradeFromRow} />
                 ) : (
-                  <p className="grid h-full place-items-center text-sm text-text-muted">
+                  <p className="grid h-full place-items-center text-sm text-[var(--pane-muted)]">
                     Собираем стакан {base(symbol)}…
                   </p>
                 )}
@@ -400,11 +492,11 @@ export default function ScalpingPage() {
 
             {/* График занимает всё оставшееся место. */}
             <section
-              className={`flex min-w-0 flex-1 flex-col rounded-xl border border-border bg-bg-card ${PANE_H}`}
+              className={`${pane} flex min-w-0 flex-1 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] ${PANE_H}`}
             >
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--pane-border)] px-3 py-2">
                 <div className="flex items-center gap-0.5">
-                  <span className="mr-1 text-[11px] text-text-secondary">{base(symbol)}</span>
+                  <span className="mr-1 text-[11px] text-[var(--pane-text-2)]">{base(symbol)}</span>
                   {TIMEFRAMES.map((tf) => (
                     <button
                       key={tf}
@@ -431,7 +523,7 @@ export default function ScalpingPage() {
                       контекста непонятна, а так видно, к чему она. */}
                   {indicators.shelves && (
                     <>
-                      <span className="mx-1 h-3 w-px bg-border" />
+                      <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
                       {SHELF_STEPS.map((step) => (
                         <button
                           key={step.value}
@@ -445,7 +537,20 @@ export default function ScalpingPage() {
                     </>
                   )}
 
-                  <span className="mx-1 h-3 w-px bg-border" />
+                  {draft && (
+                    <button
+                      onClick={() => {
+                        setDraft(null);
+                        setDialogOpen(false);
+                      }}
+                      title="Убрать разметку сделки с графика"
+                      className={`${CHIP} ${CHIP_ON}`}
+                    >
+                      сделка ✕
+                    </button>
+                  )}
+
+                  <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
                   <button
                     onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
                     title="Тема графика"
@@ -464,6 +569,8 @@ export default function ScalpingPage() {
                   shelves={dom?.shelves ?? []}
                   theme={theme}
                   indicators={indicators}
+                  trade={plan}
+                  onShelfClick={openTrade}
                 />
               </div>
             </section>
@@ -476,6 +583,10 @@ export default function ScalpingPage() {
           </section>
         )}
       </div>
+
+      {dialogOpen && draft && (
+        <TradeDialog draft={draft} onChange={updateDraft} onClose={() => setDialogOpen(false)} />
+      )}
     </div>
   );
 }

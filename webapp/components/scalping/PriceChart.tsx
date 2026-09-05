@@ -10,7 +10,7 @@
 // запросов ради средней линии не делаем. Полки приходят из стакана: это
 // единственное на графике, что берётся не из истории цены, а из живой книги.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CandlestickSeries,
   ColorType,
@@ -25,7 +25,7 @@ import {
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
 import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
-import { ema } from "@/lib/indicator/ta";
+import { atr, ema } from "@/lib/indicator/ta";
 import type { Candle } from "@/lib/indicator/types";
 import { buildShapes, type ChartTheme } from "@/lib/indicator/shapes";
 import {
@@ -34,6 +34,7 @@ import {
   type Shapes,
 } from "./primitives/ShapesPrimitive";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
+import type { TradePlan } from "@/lib/trade/plan";
 
 // Две темы графика.
 //
@@ -64,6 +65,8 @@ const THEMES: Record<
     emaSlow: string;
     emaTrend: string;
     crosshair: string;
+    /** Уровни прошлого дня, недели и месяца. */
+    mtf: string;
   }
 > = {
   dark: {
@@ -86,12 +89,14 @@ const THEMES: Record<
     emaSlow: "#F0B90B",
     emaTrend: "#7A8290",
     crosshair: "#0AFFE0",
+    mtf: "#2157F3",
   },
   light: {
     background: "#FFFFFF",
     text: "#333333",
-    // Сетки в оригинале нет вовсе: на белом она спорит с пунктиром структуры.
-    grid: "rgba(0,0,0,0)",
+    // Сетка бледная: на белом она нужна для отсчёта, но спорить с чёрным
+    // пунктиром структуры не должна.
+    grid: "rgba(0,0,0,0.06)",
     border: "#B0B0B0",
     up: "#FFFFFF",
     down: "#000000",
@@ -109,7 +114,9 @@ const THEMES: Record<
     emaFast: "#26A69A",
     emaSlow: "#FFA726",
     emaTrend: "#9E9E9E",
+    // Уровни старших периодов в оригинале чёрным пунктиром, не синим.
     crosshair: "#555555",
+    mtf: "#333333",
   },
 };
 
@@ -139,10 +146,10 @@ export type Indicators = {
 };
 
 /** Периоды старших уровней: код интервала биржи и подпись на графике. */
-const MTF_PERIODS: { interval: string; high: string; low: string; color: string }[] = [
-  { interval: "1d", high: "PDH", low: "PDL", color: "#2157F3" },
-  { interval: "1w", high: "PWH", low: "PWL", color: "#2157F3" },
-  { interval: "1M", high: "PMH", low: "PML", color: "#2157F3" },
+const MTF_PERIODS: { interval: string; high: string; low: string }[] = [
+  { interval: "1d", high: "PDH", low: "PDL" },
+  { interval: "1w", high: "PWH", low: "PWL" },
+  { interval: "1M", high: "PMH", low: "PML" },
 ];
 
 // Текущая свеча меняется постоянно, закрытые — нет. Пять секунд держат график
@@ -153,6 +160,27 @@ const REFRESH_MS = 5000;
 // прокрутки назад, но в окне они превращаются в щётку — видно должно быть
 // столько, сколько трейдер реально читает.
 const VISIBLE_BARS = 150;
+
+// Насколько близко к линии полки должен попасть курсор, чтобы нажатие
+// засчиталось. Линия толщиной в пиксель, попасть в неё мышью невозможно.
+const SHELF_HIT_PX = 8;
+
+// На сколько баров назад тянутся боксы сделки. Сделка ещё не открыта, точки
+// входа во времени у неё нет — бокс просто должен быть виден.
+const TRADE_BOX_BARS = 60;
+
+/** ATR последних баров: по нему предлагается стоп. */
+function currentAtr(candles: Candle[]): number {
+  if (candles.length < 15) return 0;
+  const series = atr(
+    candles.map((c) => c.high),
+    candles.map((c) => c.low),
+    candles.map((c) => c.close),
+    14,
+  );
+  const last = series[series.length - 1];
+  return Number.isFinite(last) ? last : 0;
+}
 
 /** Ряд для графика: бары, где значение ещё не определено, пропускаем. */
 function toLine(candles: Candle[], values: number[]) {
@@ -172,6 +200,8 @@ export default function PriceChart({
   shelves,
   indicators,
   theme,
+  trade,
+  onShelfClick,
 }: {
   symbol: string;
   interval: string;
@@ -179,6 +209,14 @@ export default function PriceChart({
   shelves: Wall[];
   indicators: Indicators;
   theme: ChartTheme;
+  /** Разметка сделки: вход, стоп и цели. Считается снаружи. */
+  trade: TradePlan | null;
+  /**
+   * Нажатие по линии полки. Вторым аргументом идёт ATR текущего таймфрейма:
+   * по нему предлагается стоп, а волатильность известна только здесь — свечи
+   * загружает график.
+   */
+  onShelfClick?: (shelf: Wall, atr: number) => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -202,7 +240,36 @@ export default function PriceChart({
   const lineRef = useRef<IPriceLine | null>(null);
   const mtfLinesRef = useRef<IPriceLine[]>([]);
   const shelfLinesRef = useRef<IPriceLine[]>([]);
+  const tradeLinesRef = useRef<IPriceLine[]>([]);
+  const tradeShapesRef = useRef<Shapes | null>(null);
   const dataRef = useRef<Candle[]>([]);
+  // Нажатие по полке ищет ближайшую линию к точке клика, а слушатель графика
+  // ставится один раз — значит и полки, и обработчик читаются из ref.
+  const shelvesRef = useRef<Wall[]>(shelves);
+  shelvesRef.current = shelves;
+  const shelfClickRef = useRef(onShelfClick);
+  shelfClickRef.current = onShelfClick;
+
+  /**
+   * Отдать примитиву фигуры индикатора вместе с разметкой сделки.
+   *
+   * Примитив один на все фигуры, а источников два, и живут они порознь:
+   * структура пересчитывается при новых свечах, разметка — при вводе в окне
+   * сделки. Поэтому наборы хранятся отдельно и склеиваются здесь.
+   */
+  const pushShapes = useCallback(() => {
+    const base = shapeDataRef.current;
+    const extra = tradeShapesRef.current;
+    shapesRef.current?.setShapes(
+      extra
+        ? {
+            boxes: [...base.boxes, ...extra.boxes],
+            segments: [...base.segments, ...extra.segments],
+            points: [...base.points, ...extra.points],
+          }
+        : base,
+    );
+  }, []);
 
   // Загруженные уровни старших периодов. Нужны не только для линий: на минутном
   // графике сто пятьдесят баров укладываются в двести долларов, а вчерашние
@@ -272,6 +339,9 @@ export default function PriceChart({
       borderDownColor: THEMES[theme].downBorder,
       wickUpColor: THEMES[theme].upWick,
       wickDownColor: THEMES[theme].downWick,
+      // Линия текущей цены цветом текста темы: на светлой она чёрная, иначе
+      // белая свеча роста рисовала бы белую линию на белом фоне.
+      priceLineColor: THEMES[theme].text,
     });
 
     // Объём живёт на своей шкале в нижней пятой части окна, иначе он
@@ -309,6 +379,29 @@ export default function PriceChart({
     shapesRef.current = new ShapesPrimitive();
     candleRef.current.attachPrimitive(shapesRef.current);
 
+    // Нажатие по полке: библиотека не знает о ценовых линиях в момент клика,
+    // поэтому ищем ближайшую сами — по расстоянию в пикселях, а не в цене. На
+    // минутном графике цена шага и цена в двадцати пикселях различаются на
+    // порядки в зависимости от монеты, и порог в деньгах работать не может.
+    chart.subscribeClick((param) => {
+      const handler = shelfClickRef.current;
+      const series = candleRef.current;
+      if (!handler || !series || !param.point) return;
+
+      let nearest: Wall | null = null;
+      let best = SHELF_HIT_PX;
+      for (const shelf of shelvesRef.current) {
+        const y = series.priceToCoordinate(shelf.price);
+        if (y === null) continue;
+        const distance = Math.abs(y - param.point.y);
+        if (distance < best) {
+          best = distance;
+          nearest = shelf;
+        }
+      }
+      if (nearest) handler(nearest, currentAtr(dataRef.current));
+    });
+
     chartRef.current = chart;
     return () => {
       chart.remove();
@@ -320,6 +413,7 @@ export default function PriceChart({
       emaTrendRef.current = null;
       shapesRef.current = null;
       lineRef.current = null;
+      tradeLinesRef.current = [];
       mtfLinesRef.current = [];
       shelfLinesRef.current = [];
     };
@@ -369,7 +463,7 @@ export default function PriceChart({
         },
         themeRef.current,
       );
-      shapesRef.current?.setShapes(shapeDataRef.current);
+      pushShapes();
       smcRef.current = smc;
       lastTimeRef.current = candles[candles.length - 1]?.time ?? 0;
 
@@ -440,7 +534,7 @@ export default function PriceChart({
         },
         themeRef.current,
       );
-      shapesRef.current?.setShapes(shapeDataRef.current);
+      pushShapes();
     }
   }, [cfg]);
 
@@ -476,6 +570,7 @@ export default function PriceChart({
       borderDownColor: palette.downBorder,
       wickUpColor: palette.upWick,
       wickDownColor: palette.downWick,
+      priceLineColor: palette.text,
     });
     emaFastRef.current?.applyOptions({ color: palette.emaFast });
     emaSlowRef.current?.applyOptions({ color: palette.emaSlow });
@@ -508,7 +603,7 @@ export default function PriceChart({
         },
         theme,
       );
-      shapesRef.current?.setShapes(shapeDataRef.current);
+      pushShapes();
     }
   }, [theme, cfg]);
 
@@ -547,7 +642,7 @@ export default function PriceChart({
             mtfLinesRef.current.push(
               candleRef.current.createPriceLine({
                 price,
-                color: period.color,
+                color: THEMES[themeRef.current].mtf,
                 lineWidth: 1,
                 lineStyle: 2,
                 axisLabelVisible: true,
@@ -594,7 +689,69 @@ export default function PriceChart({
         title: money(shelf.notional),
       }),
     );
-  }, [shelfKey, cfg.shelves]);
+  }, [shelfKey, cfg.shelves, theme]);
+
+  // Разметка сделки: вход, стоп и цели линиями, риск и потенциал — боксами.
+  //
+  // Линии дают точные цены на шкале, боксы — соотношение: видно с одного
+  // взгляда, во сколько раз зелёная область выше красной. Ради этого разметка
+  // и рисуется, цифры уже есть в окне расчёта.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+
+    for (const l of tradeLinesRef.current) series.removePriceLine(l);
+    tradeLinesRef.current = [];
+    tradeShapesRef.current = null;
+
+    if (!trade) {
+      pushShapes();
+      return;
+    }
+
+    const palette = THEMES[themeRef.current];
+    const line = (price: number, color: string, title: string, style: 0 | 2) =>
+      series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
+
+    tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
+    tradeLinesRef.current.push(line(trade.stop, palette.askLine, "стоп", 2));
+    trade.targets.forEach((target, i) => {
+      tradeLinesRef.current.push(line(target.price, palette.bidLine, `тейк ${i + 1}`, 2));
+    });
+
+    // Боксы тянутся от края видимого окна до последнего бара: сделка ещё не
+    // открыта, точки входа во времени у неё нет, а к правому краю подходит цена.
+    const candles = dataRef.current;
+    const last = candles.at(-1);
+    if (last) {
+      const from = candles[Math.max(0, candles.length - TRADE_BOX_BARS)];
+      const top = trade.targets.at(-1)?.price ?? trade.entry;
+      tradeShapesRef.current = {
+        boxes: [
+          {
+            fromTime: from.time as UTCTimestamp,
+            toTime: last.time as UTCTimestamp,
+            top: Math.max(trade.entry, trade.stop),
+            bottom: Math.min(trade.entry, trade.stop),
+            fill: "rgba(246,70,93,0.16)",
+            border: "rgba(246,70,93,0.45)",
+          },
+          {
+            fromTime: from.time as UTCTimestamp,
+            toTime: last.time as UTCTimestamp,
+            top: Math.max(trade.entry, top),
+            bottom: Math.min(trade.entry, top),
+            fill: "rgba(14,203,129,0.13)",
+            border: "rgba(14,203,129,0.45)",
+          },
+        ],
+        segments: [],
+        points: [],
+      };
+    }
+
+    pushShapes();
+  }, [trade, pushShapes]);
 
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.

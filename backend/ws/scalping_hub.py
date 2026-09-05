@@ -29,7 +29,9 @@ logger = logging.getLogger("nmnh.scalping.ws")
 DOM_FPS = 8.0
 SCREENER_INTERVAL = 1.0
 
-SCREENER_LIMIT = 50
+# Строк списка в кадре. Сборщик держит восемьдесят инструментов, и обрезать их
+# вдвое по дороге к экрану смысла нет: строка весит около двухсот байт.
+SCREENER_LIMIT = 100
 
 
 class Subscription:
