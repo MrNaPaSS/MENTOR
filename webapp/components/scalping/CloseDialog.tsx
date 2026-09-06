@@ -140,23 +140,23 @@ export default function CloseDialog({
               {trade.realized !== 0 && (
                 <Line
                   label="Уже забрано"
-                  value={`${trade.realized >= 0 ? "+" : "−"}${Math.abs(trade.realized).toFixed(2)} $`}
+                  value={`${trade.realized >= 0 ? "+" : "-"}${Math.abs(trade.realized).toFixed(2)} $`}
                   tone="text-[var(--pane-muted)]"
                 />
               )}
               <Line
                 label="Результат"
-                value={`${part >= 0 ? "+" : "−"}${Math.abs(part).toFixed(2)} $`}
+                value={`${part >= 0 ? "+" : "-"}${Math.abs(part).toFixed(2)} $`}
                 tone={part >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
               />
               <Line
                 label="Комиссия ≈"
-                value={`−${fee.toFixed(2)} $`}
+                value={`-${fee.toFixed(2)} $`}
                 tone="text-[var(--pane-muted)]"
               />
               <Line
                 label="На счёт ≈"
-                value={`${part - fee >= 0 ? "+" : "−"}${Math.abs(part - fee).toFixed(2)} $`}
+                value={`${part - fee >= 0 ? "+" : "-"}${Math.abs(part - fee).toFixed(2)} $`}
                 tone={part - fee >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
               />
             </div>

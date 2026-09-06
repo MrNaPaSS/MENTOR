@@ -172,7 +172,7 @@ export default function TradeDialog({
             <Row
               label="Стоп"
               price={fmtPrice(plan.stop, tick)}
-              note={`−${money(plan.risk)} · ${plan.riskPct.toFixed(1)}% от суммы`}
+              note={`-${money(plan.risk)} · ${plan.riskPct.toFixed(1)}% от суммы`}
               tone="text-[var(--pane-down)]"
             />
             {plan.targets.map((target, i) => (

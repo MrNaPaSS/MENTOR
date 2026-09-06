@@ -186,7 +186,7 @@ const Row = memo(function Row({
           row.delta_notional >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
         }`}
       >
-        {row.delta_notional >= 0 ? "+" : "−"}
+        {row.delta_notional >= 0 ? "+" : "-"}
         {money(Math.abs(row.delta_notional))}
       </td>
 

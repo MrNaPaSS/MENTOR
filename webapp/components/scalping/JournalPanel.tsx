@@ -31,7 +31,7 @@ const OUTCOMES: Record<JournalTrade["outcome"], string> = {
 };
 
 function money(value: number): string {
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
   return `${sign}${Math.abs(value).toFixed(2)}`;
 }
 

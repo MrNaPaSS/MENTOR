@@ -389,22 +389,29 @@ function ClusterCell({ cell, scale }: { cell: [number, number] | undefined; scal
  */
 function VolumeHeader({ columns }: { columns: ClusterColumn[] }) {
   return (
-    <div className="sticky top-0 z-20 flex bg-[var(--pane-bg)] font-mono text-[10px] shadow-[0_1px_0_var(--pane-border)]">
+    // Высота фиксирована и равна строке тикера на графике: обе полосы идут
+    // сразу под своими кнопками, и глаз читает их как одну линию.
+    <div className="sticky top-0 z-20 flex h-6 items-center bg-[var(--pane-bg)] font-mono text-[10px] shadow-[0_1px_0_var(--pane-border)]">
       <div className="flex-1" />
       {columns.map((column) => {
         const delta = column.buy - column.sell;
         return (
-          <div key={column.start} className={`${COL_W} px-1.5 py-1 text-right`}>
-            <div className="text-[var(--pane-muted)]">{money(column.buy + column.sell)}</div>
-            <div className={delta >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
-              {delta >= 0 ? "+" : "−"}
+          // Объём и дельта в строку, а не столбиком: полоса заголовка
+          // становится в одну строку и встаёт вровень с тикером графика.
+          <div
+            key={column.start}
+            className={`${COL_W} flex items-baseline justify-end gap-1.5 px-1.5`}
+          >
+            <span className="text-[var(--pane-muted)]">{money(column.buy + column.sell)}</span>
+            <span className={delta >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
+              {delta >= 0 ? "+" : "-"}
               {money(Math.abs(delta))}
-            </div>
+            </span>
           </div>
         );
       })}
       <div
-        className={`sticky right-0 ${BOOK_W} flex items-end justify-end bg-[var(--pane-bg)] py-1 pr-2 text-[var(--pane-muted)]`}
+        className={`sticky right-0 ${BOOK_W} flex h-full items-center justify-end bg-[var(--pane-bg)] pr-2 text-[var(--pane-muted)]`}
       >
         объём · цена
       </div>

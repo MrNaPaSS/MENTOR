@@ -242,7 +242,7 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
             <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]">
               <div className="grid grid-cols-3 divide-x divide-white/[0.05]">
                 <Metric label="Маржа" value={`$${calc.margin.toFixed(0)}`} tone="text-white/80" />
-                <Metric label="Риск" value={`−$${calc.risk.toFixed(0)}`} tone="text-danger" />
+                <Metric label="Риск" value={`-$${calc.risk.toFixed(0)}`} tone="text-danger" />
                 <Metric
                   label={calc.tp3_profit > 0 ? "Профит TP3" : calc.tp2_profit > 0 ? "Профит TP2" : "Профит TP1"}
                   value={`+$${bestProfit.toFixed(0)}`}

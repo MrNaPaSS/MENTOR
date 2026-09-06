@@ -549,7 +549,7 @@ export default function ScalpingPage() {
             ? `Биржа: ${result.note}`
             : `Закрыто ${result?.closed ?? 0} ${base(current.symbol)}` +
               (settled !== null
-                ? ` · ${settled >= 0 ? "+" : "−"}${Math.abs(settled).toFixed(2)} USD`
+                ? ` · ${settled >= 0 ? "+" : "-"}${Math.abs(settled).toFixed(2)} USD`
                 : "") +
               (result?.fee ? `, комиссия ${result.fee.toFixed(2)}` : "") +
               (result && result.remaining > 0 ? `, осталось ${result.remaining}` : ""),
@@ -1291,7 +1291,7 @@ export default function ScalpingPage() {
                   Наложением поверх холста эта строка терялась: библиотека
                   графика рисует своим слоем, и спорить с ним ради трёх слов
                   незачем. */}
-              <div className="flex items-baseline gap-3 border-b border-[var(--pane-border)] px-3 py-1 font-mono text-[11px] tabular-nums">
+              <div className="flex h-6 items-center gap-3 border-b border-[var(--pane-border)] px-3 font-mono text-[11px] tabular-nums">
                 <span className="text-[12px] font-semibold text-[var(--pane-text)]">
                   {base(symbol)}
                 </span>

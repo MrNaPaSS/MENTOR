@@ -1285,7 +1285,7 @@ function PriceChart({
                 bottom: Math.min(ghost.entry, far),
                 fill: palette.rewardBox,
                 border: palette.rewardBorder,
-                label: `${ghost.pnl >= 0 ? "+" : "−"}${Math.abs(ghost.pnl).toFixed(2)}`,
+                label: `${ghost.pnl >= 0 ? "+" : "-"}${Math.abs(ghost.pnl).toFixed(2)}`,
                 labelColor: palette.text,
               },
             ]
@@ -1374,7 +1374,7 @@ function PriceChart({
               position: t.side === "long" ? "aboveBar" : "belowBar",
               shape: "circle",
               color: win ? THEMES[themeRef.current].bidLine : THEMES[themeRef.current].askLine,
-              text: `${win ? "+" : "−"}${Math.abs(t.pnl).toFixed(2)}`,
+              text: `${win ? "+" : "-"}${Math.abs(t.pnl).toFixed(2)}`,
             });
           }
         }
@@ -1490,14 +1490,14 @@ function PriceChart({
                   title={
                     taken !== 0
                       ? `По открытой позиции, как на бирже. Забрано по целям ${
-                          taken >= 0 ? "+" : "−"
+                          taken >= 0 ? "+" : "-"
                         }${Math.abs(taken).toFixed(2)}, всего по сделке ${
-                          total >= 0 ? "+" : "−"
+                          total >= 0 ? "+" : "-"
                         }${Math.abs(total).toFixed(2)}`
                       : "По открытой позиции - как на бирже"
                   }
                 >
-                  {floating >= 0 ? "+" : "−"}
+                  {floating >= 0 ? "+" : "-"}
                   {Math.abs(floating).toFixed(2)} USD
                 </span>
               )}
@@ -1556,7 +1556,7 @@ function PriceChart({
         <div className="pointer-events-none absolute right-24 top-1 z-10 font-mono text-[11px] tabular-nums">
           <span className="text-[var(--pane-muted)]">PnL сегодня </span>
           <span className={todayPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
-            {todayPnl >= 0 ? "+" : "−"}
+            {todayPnl >= 0 ? "+" : "-"}
             {Math.abs(todayPnl).toFixed(2)} $
           </span>
         </div>
