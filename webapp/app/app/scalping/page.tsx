@@ -1018,7 +1018,9 @@ export default function ScalpingPage() {
           <button
             onClick={() => setScreenerOpen(true)}
             title="Развернуть скринер"
-            className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:flex`}
+            // Отступ справа — тот же, что даёт разделитель у открытого
+            // скринера: свёрнутая полоса не должна прилипать к стакану.
+            className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:mr-2 xl:flex`}
             style={paneStyle}
           >
             <PanelLeftOpen className="h-4 w-4" />
