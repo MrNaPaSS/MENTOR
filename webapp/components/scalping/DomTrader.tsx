@@ -56,12 +56,19 @@ export default function DomTrader({
   frame,
   onZoom,
   onPickLevel,
+  onHoverLevel,
 }: {
   frame: DomFrame;
   /** Колесо мыши меняет масштаб: +1 крупнее шаг, −1 мельче. */
   onZoom?: (direction: 1 | -1) => void;
   /** Нажатие по строке с заявками — расчёт сделки от этого уровня. */
   onPickLevel?: (row: LadderRow) => void;
+  /**
+   * Строка под курсором. График проводит по этой цене линию: плита в стакане
+   * и уровень на графике — одно и то же место, и переводить его взглядом из
+   * колонки в ценовую шкалу трейдеру незачем.
+   */
+  onHoverLevel?: (row: LadderRow | null) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // До какого момента считаем, что стакан листают руками. Пока трейдер смотрит
@@ -203,6 +210,7 @@ export default function DomTrader({
                 bookScale={bookScale}
                 clusterScale={clusterScale}
                 onPick={onPickLevel}
+                onHover={onHoverLevel}
               />,
             );
             return items;
@@ -239,6 +247,7 @@ const Row = memo(function Row({
   bookScale,
   clusterScale,
   onPick,
+  onHover,
 }: {
   row: LadderRow;
   tick: number;
@@ -246,6 +255,7 @@ const Row = memo(function Row({
   bookScale: number;
   clusterScale: number;
   onPick?: (row: LadderRow) => void;
+  onHover?: (row: LadderRow | null) => void;
 }) {
   const isBid = row.bid > 0;
   const width = Math.min(100, (row.notional / bookScale) * 100);
@@ -256,6 +266,8 @@ const Row = memo(function Row({
   return (
     <div
       onClick={pickable ? () => onPick?.(row) : undefined}
+      onMouseEnter={row.notional > 0 ? () => onHover?.(row) : undefined}
+      onMouseLeave={row.notional > 0 ? () => onHover?.(null) : undefined}
       title={
         row.whale
           ? "Крупная заявка от вашего порога — нажмите, чтобы посчитать сделку"

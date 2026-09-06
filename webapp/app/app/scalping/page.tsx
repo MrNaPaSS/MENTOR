@@ -244,6 +244,25 @@ export default function ScalpingPage() {
   const [journalKey, setJournalKey] = useState(0);
   // Сделка из журнала под курсором: её разметка показывается на графике.
   const [hovered, setHovered] = useState<JournalTrade | null>(null);
+  // Строка стакана под курсором: график проводит по ней линию. Держим только
+  // цену, сторону и подпись — сама строка меняется восемь раз в секунду, и
+  // хранить её значило бы перерисовывать график с той же частотой.
+  const [levelHint, setLevelHint] = useState<
+    { price: number; label: string; side: "bid" | "ask" } | null
+  >(null);
+  const hoverLevel = useCallback((row: LadderRow | null) => {
+    setLevelHint((current) => {
+      if (!row) return null;
+      const next = {
+        price: row.price,
+        label: money(row.notional),
+        side: row.bid > 0 ? ("bid" as const) : ("ask" as const),
+      };
+      return current && current.price === next.price && current.label === next.label
+        ? current
+        : next;
+    });
+  }, []);
   const savedTradeRef = useRef<string | null>(null);
   // Пока настройки и сделка не подняты из хранилища, писать туда нельзя:
   // первый проход эффектов видит пустое состояние и стёр бы живую запись.
@@ -1011,7 +1030,12 @@ export default function ScalpingPage() {
 
               <div className="min-h-0 flex-1">
                 {dom ? (
-                  <DomTrader frame={dom} onZoom={zoomDom} onPickLevel={openTradeFromRow} />
+                  <DomTrader
+                    frame={dom}
+                    onZoom={zoomDom}
+                    onPickLevel={openTradeFromRow}
+                    onHoverLevel={hoverLevel}
+                  />
                 ) : (
                   <p className="grid h-full place-items-center text-sm text-[var(--pane-muted)]">
                     Собираем стакан {base(symbol)}…
@@ -1172,6 +1196,7 @@ export default function ScalpingPage() {
                   showJournal={journalOpen}
                   journalKey={journalKey}
                   ghost={hovered && hovered.symbol === symbol ? hovered : null}
+                  hoverLevel={levelHint}
                   onShelfClick={openTrade}
                 />
               </div>

@@ -240,12 +240,25 @@ function untilClose(interval: string, now = Date.now()): string {
  * закрылась в 12:03:47, а бар есть только на 12:03. За краем загруженной
  * истории метки нет вовсе — сделка была раньше, чем начинается график.
  */
-function snapToBar(candles: Candle[], at: string | number | null): number | null {
+function snapToBar(
+  candles: Candle[],
+  at: string | number | null,
+  /**
+   * Что делать со временем левее загруженной истории.
+   *
+   * Сделка живёт часами, а на графике четыреста баров: на минутке это семь
+   * часов, на пятисекундках — полчаса. Вернувшись к терминалу через час,
+   * трейдер видел бокс, уехавший к правому краю: бар входа не находился, и
+   * привязка падала на последнюю свечу. Прижимаем к первому бару — сделка
+   * началась раньше окна, но начало у неё слева, а не справа.
+   */
+  clampToStart = false,
+): number | null {
   if (at === null || at === undefined || candles.length === 0) return null;
   const ms = typeof at === "number" ? at : new Date(at).getTime();
   const seconds = Math.floor(ms / 1000);
   if (!Number.isFinite(seconds)) return null;
-  if (seconds < candles[0].time) return null;
+  if (seconds < candles[0].time) return clampToStart ? candles[0].time : null;
 
   let low = 0;
   let high = candles.length - 1;
@@ -277,7 +290,7 @@ function tradeBoxes(
   // это точка отсчёта, от неё видно, сколько времени сделка уже идёт. Правый
   // край едет вместе с графиком и заходит в пустое поле справа.
   const step = candles.length > 1 ? candles[1].time - candles[0].time : 60;
-  const anchor = snapToBar(candles, trade.openedAt ?? trade.createdAt ?? null) ?? last.time;
+  const anchor = snapToBar(candles, trade.openedAt ?? trade.createdAt ?? null, true) ?? last.time;
   const width = Math.round((last.time - anchor) / Math.max(1, step)) + RIGHT_BARS;
   const span = { kind: "bars" as const, bars: Math.max(RIGHT_BARS, width) };
 
@@ -369,6 +382,7 @@ function PriceChart({
   showJournal,
   journalKey,
   ghost,
+  hoverLevel,
   onShelfClick,
 }: {
   symbol: string;
@@ -396,6 +410,14 @@ function PriceChart({
   journalKey?: number;
   /** Сделка из журнала под курсором: показываем, как она шла. */
   ghost?: JournalTrade | null;
+  /**
+   * Уровень из стакана под курсором: цена и деньги, стоящие на ней.
+   *
+   * Плита в стакане и уровень на графике — одно и то же место. Пока линии
+   * нет, трейдер переводит цену глазами из колонки в шкалу и теряет то
+   * самое мгновение, ради которого стакан и открыт.
+   */
+  hoverLevel?: { price: number; label: string; side: "bid" | "ask" } | null;
   /**
    * Нажатие по линии полки. Вторым аргументом идёт ATR текущего таймфрейма:
    * по нему предлагается стоп, а волатильность известна только здесь — свечи
@@ -429,6 +451,7 @@ function PriceChart({
   const tradeLinesRef = useRef<IPriceLine[]>([]);
   const tradeShapesRef = useRef<Shapes | null>(null);
   const ghostShapesRef = useRef<Shapes | null>(null);
+  const hoverLineRef = useRef<IPriceLine | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const dataRef = useRef<Candle[]>([]);
   // Нажатие по полке ищет ближайшую линию к точке клика, а слушатель графика
@@ -1067,6 +1090,33 @@ function PriceChart({
     else bars.push(liveCandle);
   }, [liveCandle, cfg.volume]);
 
+  // Уровень из стакана под курсором — линией через весь график.
+  //
+  // Живёт ровно пока курсор на строке: это подсказка, а не разметка, и
+  // оставаться на графике после того, как трейдер увёл мышь, она не должна.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+
+    if (hoverLineRef.current) {
+      series.removePriceLine(hoverLineRef.current);
+      hoverLineRef.current = null;
+    }
+    if (!hoverLevel || !(hoverLevel.price > 0)) return;
+
+    hoverLineRef.current = series.createPriceLine({
+      price: hoverLevel.price,
+      color:
+        hoverLevel.side === "bid"
+          ? THEMES[themeRef.current].bidLine
+          : THEMES[themeRef.current].askLine,
+      lineWidth: 2,
+      lineStyle: 0,
+      axisLabelVisible: true,
+      title: hoverLevel.label,
+    });
+  }, [hoverLevel, theme]);
+
   // Сделка из журнала под курсором: как она шла и чем кончилась.
   //
   // Рисуется на своём отрезке времени — от входа до выхода, — а не в будущем:
@@ -1080,7 +1130,7 @@ function PriceChart({
     }
 
     const candles = dataRef.current;
-    const from = snapToBar(candles, ghost.opened_at ?? ghost.closed_at);
+    const from = snapToBar(candles, ghost.opened_at ?? ghost.closed_at, true);
     const to = snapToBar(candles, ghost.closed_at);
     if (from === null || to === null) {
       // Сделка старше загруженной истории — рисовать не на чем.
