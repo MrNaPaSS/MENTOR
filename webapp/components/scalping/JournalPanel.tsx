@@ -35,10 +35,30 @@ function money(value: number): string {
   return `${sign}${Math.abs(value).toFixed(2)}`;
 }
 
-/** Взятые цели: сколько из скольких. Пусто — целей не было вовсе. */
-function takes(trade: JournalTrade): string {
-  if (trade.targets.length === 0) return trade.takes_hit > 0 ? String(trade.takes_hit) : "—";
-  return `${trade.takes_hit}/${trade.targets.length}`;
+/**
+ * Взятые цели точками: зелёная — сработала, пустая — нет.
+ *
+ * Одной строкой «1/3» это не показать: цвет достаётся всей ячейке, и сделка с
+ * одной взятой целью читается как сделка, отработавшая все три.
+ */
+function Takes({ trade }: { trade: JournalTrade }) {
+  if (trade.targets.length === 0) {
+    return <span className="text-[var(--pane-muted)]">—</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {trade.targets.map((_, i) => (
+        <span
+          key={i}
+          className={
+            i < trade.takes_hit ? "text-[var(--pane-up)]" : "text-[var(--pane-muted)] opacity-50"
+          }
+        >
+          {i < trade.takes_hit ? "●" : "○"}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /** Полный список целей с отметкой взятых — в подсказке, чтобы не растить таблицу. */
@@ -283,11 +303,8 @@ export default function JournalPanel({
                     </td>
                     <td className="text-[var(--pane-text-2)]">{t.entry}</td>
                     <td className="text-[var(--pane-text-2)]">{t.exit_price ?? "—"}</td>
-                    <td
-                      title={takesHint(t)}
-                      className={t.takes_hit > 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-muted)]"}
-                    >
-                      {takes(t)}
+                    <td title={takesHint(t)}>
+                      <Takes trade={t} />
                     </td>
                     <td className={`text-right ${tone(t.pnl)}`}>{money(t.pnl)}</td>
                     <td className="pl-2 text-right">
