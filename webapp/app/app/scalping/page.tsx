@@ -130,6 +130,7 @@ const INDICATOR_LABELS: Record<keyof Indicators, string> = {
   zones: "Зоны",
   ema: "EMA",
   volume: "Объём",
+  heavy: "Объёмные",
 };
 
 // Отклик на нажатие: 150 мс ease-out и лёгкое сжатие. Кнопка должна показать,
@@ -208,6 +209,8 @@ const DEFAULT_INDICATORS: Indicators = {
   levels: true,
   ema: true,
   volume: true,
+  // Выключен по умолчанию: непривычный вид свечей стоит включать осознанно.
+  heavy: false,
   zones: false,
 };
 

@@ -38,6 +38,7 @@ import {
   ShapesPrimitive,
   type Shapes,
 } from "./primitives/ShapesPrimitive";
+import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 import { loadCalendar, loadTrades, type JournalTrade } from "@/lib/journal";
 import {
@@ -166,6 +167,13 @@ export type { Candle };
 
 export type Indicators = {
   volume: boolean;
+  /**
+   * Объёмные свечи: толщина тела по объёму.
+   *
+   * Обычный график равняет все свечи, и рывок на пустом рынке выглядит так
+   * же, как движение, в которое влили миллионы. Здесь это видно сразу.
+   */
+  heavy: boolean;
   /** Скользящие средние индикатора: 8, 21 и трендовая 50. */
   ema: boolean;
   /** Полки ликвидности: цены, где в стакане стоит от двух миллионов. */
@@ -487,6 +495,7 @@ function PriceChart({
   const emaSlowRef = useRef<ISeriesApi<"Line"> | null>(null);
   const emaTrendRef = useRef<ISeriesApi<"Line"> | null>(null);
   const shapesRef = useRef<ShapesPrimitive | null>(null);
+  const heavyRef = useRef<VolumeCandlesPrimitive | null>(null);
   const shapeDataRef = useRef<Shapes>(EMPTY_SHAPES);
   // Результат структурного движка держим отдельно: переключатели меняют набор
   // фигур, и пересчитывать структуру ради этого незачем.
@@ -529,6 +538,50 @@ function PriceChart({
    * структура пересчитывается при новых свечах, разметка — при вводе в окне
    * сделки. Поэтому наборы хранятся отдельно и склеиваются здесь.
    */
+  /**
+   * Перерисовать свечи в нужном виде.
+   *
+   * В объёмном режиме встроенная серия становится прозрачной, а свечи рисует
+   * примитив. Серию не прячем: на ней держатся автомасштаб, перекрестие и
+   * подпись последней цены - без неё пришлось бы всё это подменять.
+   */
+  const paintCandles = useCallback(() => {
+    const series = candleRef.current;
+    const heavy = heavyRef.current;
+    if (!series || !heavy) return;
+
+    const palette = THEMES[themeRef.current];
+    if (!indicatorsRef.current.heavy) {
+      heavy.clear();
+      series.applyOptions({
+        upColor: palette.up,
+        downColor: palette.down,
+        borderVisible: palette.candleBorders,
+        borderUpColor: palette.upBorder,
+        borderDownColor: palette.downBorder,
+        wickUpColor: palette.upWick,
+        wickDownColor: palette.downWick,
+      });
+      return;
+    }
+
+    series.applyOptions({
+      upColor: "transparent",
+      downColor: "transparent",
+      borderVisible: false,
+      borderUpColor: "transparent",
+      borderDownColor: "transparent",
+      wickUpColor: "transparent",
+      wickDownColor: "transparent",
+    });
+    heavy.setData(dataRef.current, {
+      up: palette.up,
+      down: palette.down,
+      upWick: palette.upWick,
+      downWick: palette.downWick,
+    });
+  }, []);
+
   const pushShapes = useCallback(() => {
     const parts = [shapeDataRef.current, tradeShapesRef.current, ghostShapesRef.current];
     const alive = parts.filter((p): p is Shapes => Boolean(p));
@@ -688,6 +741,8 @@ function PriceChart({
     // произвольными фигурами.
     shapesRef.current = new ShapesPrimitive();
     candleRef.current.attachPrimitive(shapesRef.current);
+    heavyRef.current = new VolumeCandlesPrimitive();
+    candleRef.current.attachPrimitive(heavyRef.current);
 
     // Нажатие по полке: библиотека не знает о ценовых линиях в момент клика,
     // поэтому ищем ближайшую сами — по расстоянию в пикселях, а не в цене. На
@@ -722,6 +777,7 @@ function PriceChart({
       emaSlowRef.current = null;
       emaTrendRef.current = null;
       shapesRef.current = null;
+      heavyRef.current = null;
       lineRef.current = null;
       tradeLinesRef.current = [];
       mtfLinesRef.current = [];
@@ -778,6 +834,7 @@ function PriceChart({
         themeRef.current,
         ceRef.current,
       );
+      paintCandles();
       // Бокс сделки пересобираем здесь же: он привязан к последнему бару, а
       // бары только что приехали.
       tradeShapesRef.current = tradeShapes(
@@ -879,7 +936,8 @@ function PriceChart({
       );
       pushShapes();
     }
-  }, [cfg]);
+    paintCandles();
+  }, [cfg, paintCandles]);
 
   // Смена темы: перекрашиваем график на месте. Пересоздавать его нельзя —
   // потеряется масштаб и положение, которые трейдер выставил руками.
@@ -905,16 +963,9 @@ function PriceChart({
       },
     });
 
-    candleRef.current?.applyOptions({
-      upColor: palette.up,
-      downColor: palette.down,
-      borderVisible: palette.candleBorders,
-      borderUpColor: palette.upBorder,
-      borderDownColor: palette.downBorder,
-      wickUpColor: palette.upWick,
-      wickDownColor: palette.downWick,
-      priceLineColor: palette.text,
-    });
+    candleRef.current?.applyOptions({ priceLineColor: palette.text });
+    // Цвета самих свечей зависят ещё и от режима: в объёмном серия прозрачна.
+    paintCandles();
     emaFastRef.current?.applyOptions({ color: palette.emaFast });
     emaSlowRef.current?.applyOptions({ color: palette.emaSlow });
     emaTrendRef.current?.applyOptions({ color: palette.emaTrend });
@@ -1187,7 +1238,11 @@ function PriceChart({
     // этого они отставали бы от нарисованной свечи.
     if (liveCandle.time === last.time) bars[bars.length - 1] = liveCandle;
     else bars.push(liveCandle);
-  }, [liveCandle, cfg.volume]);
+
+    // Объёмная свеча толстеет прямо на глазах: объём в ней растёт с каждой
+    // сделкой, и рисовать её прежней шириной значит отставать от рынка.
+    if (cfg.heavy) paintCandles();
+  }, [liveCandle, cfg.volume, cfg.heavy, paintCandles]);
 
   // Отметки на ценах — пунктиром через график.
   //
