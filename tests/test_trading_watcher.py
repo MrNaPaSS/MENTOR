@@ -206,11 +206,33 @@ def test_a_hair_of_drift_does_not_reshuffle_the_stop():
     assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to is None
 
 
-def test_breakeven_is_not_followed_backwards():
+def test_stop_follows_the_exchange_breakeven_down_too():
+    """Стоп дальше биржевого нуля - это не защита, а ранний выход.
+
+    Наша формула не знает ни цены исполнения, ни комиссии этого счёта и
+    промахивалась на десятки пунктов вверх. Держаться за такую цифру только
+    потому, что она «лучше», значит выбивать сделку раньше времени: на бирже
+    ноль в 79841, а стоп стоял на 79876.
+    """
     row = trade(takes_hit=1, current_stop=100.5, qty=0.7)
     where = dict(position("0.7"))
     where["breakEvenPrice"] = "100.1"
+    assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to == 100.1
+
+
+def test_breakeven_below_entry_is_refused():
+    """Ноль не бывает хуже входа: туда переставлять нельзя, это уже убыток."""
+    row = trade(takes_hit=1, current_stop=100.08, qty=0.7)
+    where = dict(position("0.7"))
+    where["breakEvenPrice"] = "99.5"
     assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to is None
+
+
+def test_short_breakeven_above_entry_is_refused():
+    row = trade(side="short", takes_hit=1, entry=100.0, current_stop=99.9, qty=0.7)
+    where = dict(position("0.7"))
+    where["breakEvenPrice"] = "100.6"
+    assert decide(row, where, {"tp2", "tp3"}, 98.5, 0).move_stop_to is None
 
 
 def test_after_the_second_take_the_stop_hides_behind_the_target():

@@ -140,15 +140,21 @@ def decide(
     if hit <= trade.takes_hit:
         # Новых целей нет, но безубыток мог сдвинуться: биржа пересчитывает его
         # после каждого частичного закрытия и списания фандинга. Пока стоп
-        # стоит именно в безубытке — следуем за биржей, а не за своей цифрой.
+        # стоит именно в безубытке - следуем за биржей, а не за своей цифрой.
+        #
+        # В обе стороны: наша формула не знает ни реальной цены исполнения, ни
+        # комиссии этого счёта, и промахивалась на десятки пунктов. Стоп,
+        # стоящий дальше биржевого нуля, - это не защита, а ранний выход, и
+        # держаться за него только потому, что он «лучше», значит выбивать
+        # сделку раньше времени.
         if trade.takes_hit == 1:
             fresh = exchange_breakeven(position)
-            if (
-                fresh is not None
-                and abs(fresh - state.stop) > state.entry * BE_DRIFT
-                and should_move_stop(state, fresh)
-            ):
-                return Decision(trade.takes_hit, move_stop_to=fresh)
+            if fresh is not None and abs(fresh - state.stop) > state.entry * BE_DRIFT:
+                # Хуже входа безубыток не бывает: туда переставлять нельзя, это
+                # уже убыток, а не ноль.
+                losing = fresh < state.entry if trade.side == "long" else fresh > state.entry
+                if not losing:
+                    return Decision(trade.takes_hit, move_stop_to=fresh)
         return Decision(trade.takes_hit)
 
     # Отмечаем сработавшими те цели, которых уже нет среди висящих заявок, — по
@@ -568,6 +574,13 @@ class PositionWatcher:
         )
 
 
+# Один раз сообщаем в лог, какие поля вообще есть у позиции, если безубытка
+# среди них не нашлось. Названия у бирж разные, а промах здесь стоит денег:
+# без биржевой цифры стоп встаёт по нашей формуле, а она не знает ни цены
+# исполнения, ни комиссии счёта.
+_be_fields_logged = False
+
+
 def exchange_breakeven(position: dict[str, Any] | None) -> float | None:
     """Цена безубытка, посчитанная самой биржей.
 
@@ -577,13 +590,29 @@ def exchange_breakeven(position: dict[str, Any] | None) -> float | None:
     """
     if not position:
         return None
-    for name in ("breakEvenPrice", "breakevenPrice", "breakEven", "bePrice"):
+    for name in (
+        "breakEvenPrice",
+        "breakevenPrice",
+        "breakEvenPoint",
+        "breakevenPoint",
+        "break_even_price",
+        "breakEven",
+        "bePrice",
+    ):
         try:
             price = float(position.get(name))  # type: ignore[arg-type]
         except (TypeError, ValueError):
             continue
         if price > 0:
             return price
+
+    global _be_fields_logged
+    if not _be_fields_logged:
+        _be_fields_logged = True
+        logger.warning(
+            "Безубыток биржи не найден среди полей позиции: %s",
+            ", ".join(sorted(str(k) for k in position)),
+        )
     return None
 
 
