@@ -24,11 +24,22 @@ describe("объёмные свечи", () => {
     expect(candleWidth(25, 100, spacing)).toBeLessThan(normal);
   });
 
-  it("рост не пропорционален объёму: в полтора раза больше - не в полтора толще", () => {
+  it("рост не пропорционален объёму", () => {
     const spacing = 100;
     const normal = candleWidth(100, 100, spacing);
-    // Корень отношения: объём в 1.44 раза больше даёт ширину в 1.2 раза.
-    expect(candleWidth(144, 100, spacing) / normal).toBeCloseTo(1.2, 5);
+    // Степень 0.65: вдвое больший объём даёт ширину примерно в полтора раза.
+    const ratio = candleWidth(200, 100, spacing) / normal;
+    expect(ratio).toBeGreaterThan(1.4);
+    expect(ratio).toBeLessThan(1.6);
+  });
+
+  it("пустая свеча заметно тоньше обычной - в этом весь смысл режима", () => {
+    const spacing = 100;
+    const normal = candleWidth(100, 100, spacing);
+    // Четверть обычного объёма - меньше половины ширины.
+    expect(candleWidth(25, 100, spacing) / normal).toBeLessThan(0.5);
+    // Совсем пустая - тонкая нить рядом с соседями.
+    expect(candleWidth(2, 100, spacing) / normal).toBeLessThan(0.25);
   });
 
   it("самая жирная свеча всё равно знает край", () => {
