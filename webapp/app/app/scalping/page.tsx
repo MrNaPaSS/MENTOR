@@ -1573,6 +1573,9 @@ export default function ScalpingPage() {
                   journalKey={journalKey}
                   ghost={hovered && hovered.symbol === symbol ? hovered : null}
                   hoverLevel={levelHint}
+                  // Шаг сетки лестницы делим на укрупнение: биржевой шаг от
+                  // него не зависит, а точность шкалы должна быть по бирже.
+                  tick={dom && dom.tick > 0 ? dom.tick / Math.max(1, agg) : undefined}
                   alerts={myAlerts}
                   onRemoveAlert={(id) => setAlerts((list) => list.filter((a) => a.id !== id))}
                   onShelfClick={openTrade}

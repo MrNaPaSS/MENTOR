@@ -283,6 +283,27 @@ export function price(value: number, tick = 0): string {
   });
 }
 
+/**
+ * Формат цены для графика: шаг сетки и число знаков.
+ *
+ * По умолчанию библиотека рисует шкалу с шагом в один цент. На дешёвых монетах
+ * весь видимый диапазон меньше этого шага: подписи выходят одинаковыми, а
+ * одинаковые библиотека не показывает - на DOGE ценовая шкала оказывалась
+ * пустой. Шаг берём биржевой, а когда он неизвестен - по величине самой цены.
+ */
+export function priceFormat(tick: number, value = 0): { precision: number; minMove: number } {
+  let step = tick;
+  if (!(step > 0)) {
+    if (value >= 1000) step = 0.1;
+    else if (value >= 100) step = 0.01;
+    else if (value >= 1) step = 0.0001;
+    else if (value >= 0.01) step = 0.000001;
+    else step = 0.00000001;
+  }
+  const precision = Math.max(0, Math.min(8, Math.ceil(-Math.log10(step) - 1e-9)));
+  return { precision, minMove: step };
+}
+
 /** Время начала интервала в виде ЧЧ:ММ. */
 export function clockLabel(startSeconds: number): string {
   const d = new Date(startSeconds * 1000);

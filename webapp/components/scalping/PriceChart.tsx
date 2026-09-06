@@ -39,7 +39,7 @@ import {
   type Shapes,
 } from "./primitives/ShapesPrimitive";
 import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
-import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
+import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
 import { loadCalendar, loadTrades, type JournalTrade } from "@/lib/journal";
 import {
   floatingAt,
@@ -426,6 +426,7 @@ function PriceChart({
   journalKey,
   ghost,
   hoverLevel,
+  tick,
   alerts,
   onRemoveAlert,
   onShelfClick,
@@ -476,6 +477,14 @@ function PriceChart({
    * самое мгновение, ради которого стакан и открыт.
    */
   hoverLevel?: { price: number; label: string; side: "bid" | "ask" } | null;
+  /**
+   * Шаг цены инструмента.
+   *
+   * Без него библиотека рисует шкалу с точностью до цента, и на дешёвых
+   * монетах она оказывается пустой: весь видимый диапазон меньше шага, все
+   * подписи одинаковы, а одинаковые она не показывает.
+   */
+  tick?: number;
   /** Отметки на ценах: терминал скажет, когда их пересекут. */
   alerts?: { id: string; price: number }[];
   /** Снять отметку по крестику у её будильника. */
@@ -1306,6 +1315,14 @@ function PriceChart({
     // сделкой, и рисовать её прежней шириной значит отставать от рынка.
     if (cfg.heavy) paintCandles();
   }, [liveCandle, cfg.volume, cfg.heavy, paintCandles]);
+
+  // Точность ценовой шкалы - по шагу инструмента, а не по умолчанию в цент.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+    const last = dataRef.current.at(-1)?.close ?? livePrice;
+    series.applyOptions({ priceFormat: { type: "price", ...priceFormat(tick ?? 0, last) } });
+  }, [tick, symbol, livePrice]);
 
   // Отметки на ценах — пунктиром через график.
   //

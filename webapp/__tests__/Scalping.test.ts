@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { base, money, price } from "@/lib/scalping";
+import { base, money, price,
+  priceFormat,
+} from "@/lib/scalping";
 
 describe("money", () => {
   it("сокращает крупные суммы - в таблице длинные числа не читаются", () => {
@@ -37,5 +39,28 @@ describe("base", () => {
   it("убирает котируемую валюту: в списке важен тикер монеты", () => {
     expect(base("BTCUSDT")).toBe("BTC");
     expect(base("MARSCOINUSDT")).toBe("MARSCOIN");
+  });
+});
+
+describe("точность ценовой шкалы", () => {
+  // По умолчанию библиотека рисует шкалу с шагом в цент. На DOGE весь видимый
+  // диапазон меньше этого шага: подписи выходят одинаковыми, а одинаковые она
+  // не показывает - шкала справа оказывалась пустой при живых ценах в стакане.
+
+  it("берёт биржевой шаг, когда он известен", () => {
+    expect(priceFormat(0.00001)).toEqual({ precision: 5, minMove: 0.00001 });
+    expect(priceFormat(0.1)).toEqual({ precision: 1, minMove: 0.1 });
+    expect(priceFormat(1)).toEqual({ precision: 0, minMove: 1 });
+  });
+
+  it("без шага смотрит на саму цену", () => {
+    // Биткойн: центы не нужны, десятая доллара - в самый раз.
+    expect(priceFormat(0, 80000).precision).toBe(1);
+    // DOGE: без знаков после третьего вся шкала схлопнется в одно число.
+    expect(priceFormat(0, 0.15).precision).toBeGreaterThanOrEqual(4);
+  });
+
+  it("глубже восьми знаков не уходит: дальше это уже не цена", () => {
+    expect(priceFormat(0.0000000001).precision).toBe(8);
   });
 });
