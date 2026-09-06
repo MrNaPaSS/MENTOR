@@ -46,6 +46,7 @@ ENDPOINTS = {
     "modify_tp_sl": "/capi/v3/modifyTpSlOrder",
     "algo_orders": "/capi/v3/openAlgoOrders",
     "cancel_algo": "/capi/v3/algoOpenOrders",
+    "algo_order": "/capi/v3/algoOrder",
     "user_trades": "/capi/v3/userTrades",
     "exchange_info": "/capi/v3/market/exchangeInfo",
     "time": "/capi/v3/market/time",
@@ -457,6 +458,16 @@ class WeexFutures:
     async def cancel_order(self, symbol: str, order_id: str) -> Any:
         return await self._request(
             "DELETE", ENDPOINTS["order"], params={"symbol": symbol, "orderId": order_id}
+        )
+
+    async def cancel_algo_order(self, symbol: str, order_id: str) -> Any:
+        """Снять одну условную заявку.
+
+        Условные заявки снимаются своей ручкой: обычная про них не знает и
+        отвечает «ордер не найден», оставляя стоп висеть.
+        """
+        return await self._request(
+            "DELETE", ENDPOINTS["algo_order"], params={"symbol": symbol, "orderId": str(order_id)}
         )
 
     async def cancel_all_algo(self, symbol: str) -> Any:

@@ -24,6 +24,7 @@ class FakeExchange:
         self.orders: list[dict] = []
         self.pending = []
         self.plans = []
+        self.plans_open = []
         self.cancelled = []
         self.algo_cancelled = []
         self.position = None
@@ -40,6 +41,7 @@ class FakeExchange:
     position: dict | None = None
     pending: list[dict] = []
     plans: list[dict] = []
+    plans_open: list[dict] = []
     cancelled: list[str] = []
     algo_cancelled: list[str] = []
 
@@ -51,6 +53,12 @@ class FakeExchange:
 
     async def cancel_order(self, symbol, order_id):
         self.cancelled.append(order_id)
+
+    async def algo_orders(self, symbol):
+        return list(self.plans_open)
+
+    async def cancel_algo_order(self, symbol, order_id):
+        self.algo_cancelled.append(order_id)
 
     async def cancel_all_algo(self, symbol):
         self.algo_cancelled.append(symbol)
@@ -357,15 +365,18 @@ def test_closing_cancels_pending_orders_when_there_is_no_position(app_and_exchan
     её цены и откроет «отменённую» сделку.
     """
     client, exchange, _ = app_and_exchange
-    exchange.pending = [{"orderId": "e1"}, {"orderId": "tp1"}]
+    exchange.pending = [{"orderId": "e1"}]
+    exchange.plans_open = [{"orderId": "sl1"}, {"orderId": "tp1"}]
 
     body = client.post(
         "/api/trading/close",
         json={"symbol": "BTCUSDT", "side": "long", "share": 1},
     ).json()
 
-    assert exchange.cancelled == ["e1", "tp1"]
-    assert exchange.algo_cancelled == ["BTCUSDT"]
+    # Обычные и условные снимаются разными ручками: обычная про условные не
+    # знает и оставила бы стоп висеть.
+    assert exchange.cancelled == ["e1"]
+    assert exchange.algo_cancelled == ["sl1", "tp1"]
     assert body["closed"] == 0.0
 
 
@@ -381,10 +392,12 @@ def test_full_close_removes_the_stop_and_the_takes(app_and_exchange):
 
     assert body["closed"] == 0.5 and body["remaining"] == 0.0
     close_order = exchange.orders[-1]
-    assert close_order["reduce_only"] is True
+    # Без reduce_only: сторону позиции биржа знает из positionSide, а
+    # сокращающий ордер на защищённой позиции она отклоняет.
+    assert "reduce_only" not in close_order or close_order["reduce_only"] is None
     assert close_order["order_type"] == "MARKET"
     assert close_order["side"] == "SELL"          # лонг закрывается продажей
-    assert exchange.algo_cancelled == ["BTCUSDT"]
+    assert close_order["position_side"] == "LONG"
 
 
 def test_partial_close_keeps_the_rest_and_its_orders(app_and_exchange):

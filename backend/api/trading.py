@@ -404,13 +404,16 @@ async def close_position(
                 f"объёма биржи. Закройте большую часть.",
             )
 
+        # Без reduce_only: сторону позиции биржа и так знает из positionSide, а
+        # сокращающий ордер она на защищённой позиции отклоняет — «cannot set
+        # reduce only». В боте заказчика закрытие идёт ровно так же, обычным
+        # рыночным ордером в противоположную сторону.
         await client.place_order(
             symbol=symbol,
             side="SELL" if long else "BUY",
             position_side="LONG" if long else "SHORT",
             quantity=_num(quantity),
             order_type="MARKET",
-            reduce_only=True,
             client_order_id=body.client_order_id,
         )
 
@@ -429,12 +432,15 @@ async def close_position(
 
 
 async def _cancel_everything(client: WeexFutures, symbol: str) -> int:
-    """Снять по инструменту всё: обычные заявки и условные.
+    """Снять по инструменту всё: и обычные заявки, и условные.
 
-    Осевшая заявка на несуществующий объём — это открытая позиция, о которой
-    трейдер не знает: рынок дойдёт до её цены и исполнит.
+    Двумя ручками, а не одной: условные заявки обычная не видит и отвечает
+    «ордер не найден», оставляя стоп висеть. Осевшая заявка на несуществующий
+    объём — это открытая позиция, о которой трейдер не знает: рынок дойдёт до её
+    цены и исполнит.
     """
     removed = 0
+
     try:
         for order in await client.open_orders(symbol):
             order_id = str(order.get("orderId") or order.get("id") or "")
@@ -449,11 +455,19 @@ async def _cancel_everything(client: WeexFutures, symbol: str) -> int:
         logger.warning("Список заявок %s не получен: %s", symbol, exc)
 
     try:
-        await client.cancel_all_algo(symbol)
-        removed += 1
+        for order in await client.algo_orders(symbol):
+            order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
+            if not order_id:
+                continue
+            try:
+                await client.cancel_algo_order(symbol, order_id)
+                removed += 1
+            except WeexTradeError as exc:
+                logger.warning("Условная заявка %s не снята: %s", order_id, exc)
     except WeexTradeError as exc:
-        logger.warning("Условные заявки %s не сняты: %s", symbol, exc)
+        logger.warning("Условные заявки %s не получены: %s", symbol, exc)
 
+    logger.info("Снято заявок по %s: %d", symbol, removed)
     return removed
 
 
