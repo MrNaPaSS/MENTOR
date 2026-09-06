@@ -769,10 +769,20 @@ export default function ScalpingPage() {
             if (current.status === "planned") {
               return { ...current, status: "open", openedAt: Date.now() };
             }
-            // Объём берём биржевой: по нему считается результат на экране.
-            return Math.abs(current.qty - position.size) > position.size * 0.01
-              ? { ...current, qty: position.size }
-              : current;
+            // Объём и безубыток берём биржевые: по ним считается результат на
+            // экране и туда же сопровождение переставляет стоп. Наша формула не
+            // знает ни реальной цены исполнения, ни комиссии, ни фандинга.
+            const qty =
+              Math.abs(current.qty - position.size) > position.size * 0.01
+                ? position.size
+                : current.qty;
+            const stop =
+              current.breakeven && position.breakeven && position.breakeven > 0
+                ? position.breakeven
+                : current.stop;
+            return qty === current.qty && stop === current.stop
+              ? current
+              : { ...current, qty, stop };
           }
 
           if (current.status === "open") {

@@ -145,3 +145,34 @@ def test_missing_position_closes_the_trade_only_after_a_pause():
 def test_waiting_trade_is_not_closed_by_an_empty_book():
     row = trade(status="waiting")
     assert decide(row, None, set(), None, 5).closed is False
+
+
+def test_exchange_breakeven_wins_over_our_formula():
+    """Биржа знает реальную цену исполнения, комиссию и фандинг — мы нет.
+
+    После частичного закрытия она сама сдвигает безубыток, и спорить с ней
+    нашей формулой значит поставить стоп не туда.
+    """
+    row = trade()
+    where = dict(position("2.1"))
+    where["breakEvenPrice"] = "100.42"
+
+    decision = decide(row, where, {"tp2", "tp3"}, 101.5, 0)
+    assert decision.takes_hit == 1
+    assert decision.move_stop_to == 100.42
+
+
+def test_our_formula_covers_a_silent_exchange():
+    row = trade()
+    decision = decide(row, position("2.1"), {"tp2", "tp3"}, 101.5, 0)
+    # Своя формула: вход плюс комиссия обеих ног.
+    assert decision.move_stop_to is not None
+    assert 100.0 < decision.move_stop_to < 100.2
+
+
+def test_exchange_breakeven_is_still_checked_for_direction():
+    """Даже биржевую цену не ставим, если она хуже текущего стопа."""
+    row = trade(takes_hit=0, current_stop=100.9)
+    where = dict(position("2.1"))
+    where["breakEvenPrice"] = "100.42"
+    assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to is None

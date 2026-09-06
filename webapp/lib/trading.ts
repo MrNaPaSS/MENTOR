@@ -107,6 +107,8 @@ export type ExchangePosition = {
   size: number;
   entry: number | null;
   unrealized: number | null;
+  /** Цена безубытка по расчёту биржи: с комиссией, фандингом и реальным входом. */
+  breakeven: number | null;
 };
 
 /**
@@ -124,7 +126,7 @@ export async function positionOf(symbol: string): Promise<ExchangePosition | nul
   const row = body.positions.find(
     (p) => String(p.symbol ?? "").toUpperCase() === symbol.toUpperCase(),
   );
-  if (!row) return { size: 0, entry: null, unrealized: null };
+  if (!row) return { size: 0, entry: null, unrealized: null, breakeven: null };
 
   const numeric = (...names: string[]) => {
     for (const name of names) {
@@ -138,5 +140,6 @@ export async function positionOf(symbol: string): Promise<ExchangePosition | nul
     size: Math.abs(numeric("total", "size", "positionAmt", "available") ?? 0),
     entry: numeric("averageOpenPrice", "entryPrice", "avgPrice"),
     unrealized: numeric("unrealizedPnl", "unrealizedProfit", "unrealisedPnl"),
+    breakeven: numeric("breakEvenPrice", "breakevenPrice", "breakEven", "bePrice"),
   };
 }

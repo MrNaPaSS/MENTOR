@@ -142,7 +142,15 @@ def decide(
         stop=float(trade.current_stop),
     )
     prices = [float(t.get("price") or 0) for t in takes]
-    target = stop_after_take(state, hit, prices, mark_price)
+
+    # После первой цели предпочитаем безубыток самой биржи: он учитывает
+    # реальную цену исполнения, комиссию и фандинг, а после частичного закрытия
+    # ещё и смещается. Своей формулой пользуемся, только если биржа молчит.
+    target = None
+    if hit == 1:
+        target = exchange_breakeven(position)
+    if target is None:
+        target = stop_after_take(state, hit, prices, mark_price)
     if target is not None and not should_move_stop(state, target):
         target = None
 
@@ -462,6 +470,25 @@ class PositionWatcher:
                 note="биржа",
             )
         )
+
+
+def exchange_breakeven(position: dict[str, Any] | None) -> float | None:
+    """Цена безубытка, посчитанная самой биржей.
+
+    Она знает то, чего не знаем мы: по какой цене реально исполнился вход,
+    сколько удержано комиссии и фандинга, и как всё это сдвинулось после
+    частичного закрытия. Наша формула — запасной вариант, а не основной.
+    """
+    if not position:
+        return None
+    for name in ("breakEvenPrice", "breakevenPrice", "breakEven", "bePrice"):
+        try:
+            price = float(position.get(name))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if price > 0:
+            return price
+    return None
 
 
 def mark_price(position: dict[str, Any] | None) -> float | None:
