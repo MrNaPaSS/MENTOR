@@ -161,12 +161,15 @@ def decide(
         # сделку раньше времени.
         if trade.takes_hit == 1:
             fresh = exchange_breakeven(position)
-            if fresh is not None and abs(fresh - state.stop) > state.entry * BE_DRIFT:
-                # Хуже входа безубыток не бывает: туда переставлять нельзя, это
-                # уже убыток, а не ноль.
-                losing = fresh < state.entry if trade.side == "long" else fresh > state.entry
-                if not losing:
-                    return Decision(trade.takes_hit, move_stop_to=fresh, size=size)
+            if (
+                fresh is not None
+                and abs(fresh - state.stop) > state.entry * BE_DRIFT
+                # Только вперёд. Забранная прибыль опускает ноль ниже входа -
+                # это правда, но опускать за ней уже поставленный стоп значит
+                # увеличивать риск задним числом.
+                and should_move_stop(state, fresh)
+            ):
+                return Decision(trade.takes_hit, move_stop_to=fresh, size=size)
         return Decision(trade.takes_hit, size=size)
 
     # Отмечаем сработавшими те цели, которых уже нет среди висящих заявок, — по
@@ -181,12 +184,14 @@ def decide(
 
     prices = [float(t.get('price') or 0) for t in takes]
 
-    # После первой цели предпочитаем безубыток самой биржи: он учитывает
-    # реальную цену исполнения, комиссию и фандинг, а после частичного закрытия
-    # ещё и смещается. Своей формулой пользуемся, только если биржа молчит.
-    target = None
-    if hit == 1:
-        target = exchange_breakeven(position)
+    # После каждой цели стоп идёт в безубыток - тот, что считает биржа по своим
+    # цифрам. Так это сделано и в боте заказчика: частичное закрытие меняет
+    # стоимость позиции, и ноль после второй цели уже не тот, что после первой.
+    #
+    # Только вперёд: стоп, уже спрятанный за первой целью, не опускаем обратно
+    # к нулю - это увеличение риска задним числом. Своя формула и правило «за
+    # предыдущей целью» остаются запасными, на случай молчания биржи.
+    target = exchange_breakeven(position)
     if target is None:
         target = stop_after_take(state, hit, prices, mark_price)
     if target is not None and not should_move_stop(state, target):
@@ -870,11 +875,12 @@ def exchange_breakeven(
     # Если биржа однажды начнёт отдавать готовое число - берём его.
     for name in (
         "breakEvenPrice",
+        "breakEvenPx",
+        "bkePx",
+        "costPrice",
         "breakevenPrice",
         "breakEvenPoint",
-        "breakevenPoint",
         "break_even_price",
-        "breakEven",
         "bePrice",
     ):
         try:

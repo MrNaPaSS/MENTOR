@@ -206,29 +206,32 @@ def test_a_hair_of_drift_does_not_reshuffle_the_stop():
     assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to is None
 
 
-def test_stop_follows_the_exchange_breakeven_down_too():
-    """Стоп дальше биржевого нуля - это не защита, а ранний выход.
+def test_stop_follows_the_exchange_breakeven_forward():
+    """Стоп идёт за биржевым нулём, пока это движение вперёд.
 
-    Наша формула не знает ни цены исполнения, ни комиссии этого счёта и
-    промахивалась на десятки пунктов вверх. Держаться за такую цифру только
-    потому, что она «лучше», значит выбивать сделку раньше времени: на бирже
-    ноль в 79841, а стоп стоял на 79876.
+    Ноль биржа пересчитывает после каждого частичного закрытия, и наша формула
+    за ним не поспевает: на бирже 79841, а стоп по нашему расчёту вставал на
+    79876. Берём биржевое число.
+    """
+    row = trade(takes_hit=1, current_stop=100.02, qty=0.7)
+    where = dict(position("0.7"))
+    where["breakEvenPrice"] = "100.3"
+    assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to == 100.3
+
+
+def test_breakeven_behind_the_current_stop_is_refused():
+    """Назад стоп не ходит.
+
+    Забранная прибыль опускает ноль ниже входа - это правда, но опускать за
+    ним уже поставленный стоп значит увеличивать риск задним числом.
     """
     row = trade(takes_hit=1, current_stop=100.5, qty=0.7)
     where = dict(position("0.7"))
     where["breakEvenPrice"] = "100.1"
-    assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to == 100.1
-
-
-def test_breakeven_below_entry_is_refused():
-    """Ноль не бывает хуже входа: туда переставлять нельзя, это уже убыток."""
-    row = trade(takes_hit=1, current_stop=100.08, qty=0.7)
-    where = dict(position("0.7"))
-    where["breakEvenPrice"] = "99.5"
     assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to is None
 
 
-def test_short_breakeven_above_entry_is_refused():
+def test_short_stop_moves_only_downwards():
     row = trade(side="short", takes_hit=1, entry=100.0, current_stop=99.9, qty=0.7)
     where = dict(position("0.7"))
     where["breakEvenPrice"] = "100.6"
@@ -608,3 +611,34 @@ def test_growing_position_is_a_top_up_not_a_target():
     decision = decide(row, position("8"), ALL_PLANS, 101.5, 0)
     assert decision.takes_hit == 0
     assert decision.size == 8.0
+
+
+def test_stop_goes_to_the_exchange_breakeven_after_every_take():
+    """После каждой цели стоп идёт в ноль, посчитанный биржей.
+
+    Так это сделано и в боте заказчика: частичное закрытие меняет стоимость
+    позиции, и ноль после второй цели уже не тот, что после первой. Правило
+    «за предыдущей целью» остаётся запасным - на случай, если биржа молчит.
+    """
+    row = trade(takes_hit=1, current_stop=100.05, qty=3.0)
+    where = weex_position(size="0.6", cumOpenSize="3", cumOpenValue="300", cumOpenFee="0.24")
+    where["cumCloseSize"] = "2.4"
+    where["cumCloseValue"] = "247"     # закрыто выгодно, ноль уехал вниз
+    where["cumCloseFee"] = "0.2"
+
+    decision = decide(row, where, {"tp3"}, 102.5, 0)
+    assert decision.takes_hit == 2
+    # Ноль биржи ниже текущего стопа - назад не двигаем.
+    assert decision.move_stop_to is None
+
+
+def test_forward_move_to_a_better_breakeven_happens():
+    row = trade(takes_hit=1, current_stop=99.5, qty=3.0)
+    where = weex_position(size="2.1", cumOpenSize="3", cumOpenValue="300", cumOpenFee="0.24")
+    where["cumCloseSize"] = "0.9"
+    where["cumCloseValue"] = "91"
+    where["cumCloseFee"] = "0.07"
+
+    decision = decide(row, where, {"tp2", "tp3"}, 101.5, 0)
+    assert decision.move_stop_to is not None
+    assert decision.move_stop_to > 99.5
