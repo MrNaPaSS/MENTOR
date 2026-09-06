@@ -38,7 +38,6 @@ import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
 import LevelMenu from "@/components/scalping/LevelMenu";
-import LightningFlash from "@/components/scalping/LightningFlash";
 import Logo from "@/components/ui/Logo";
 import { api } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
@@ -278,7 +277,6 @@ export default function ScalpingPage() {
   // на скальпе это две трети стакана. В этом режиме их нет, а баланс и монеты
   // переезжают в строку с ценой: они нужны и там, но места занимают строку.
   const [full, setFull] = useState(false);
-  const [flash, setFlash] = useState(false);
   const { coins } = useCoins(full ? "full" : "windowed");
   const [balance, setBalance] = useState<string | null>(null);
 
@@ -305,7 +303,6 @@ export default function ScalpingPage() {
   const toggleFull = useCallback(() => {
     setFull((current) => {
       const next = !current;
-      if (next) setFlash(true);
       try {
         if (next && !document.fullscreenElement) {
           void document.documentElement.requestFullscreen?.().catch(() => {});
@@ -1101,7 +1098,6 @@ export default function ScalpingPage() {
           : pane
       }
     >
-      {flash && <LightningFlash onDone={() => setFlash(false)} />}
       <div
         className="flex flex-col gap-3 xl:flex-row xl:gap-0"
         style={
@@ -1396,6 +1392,7 @@ export default function ScalpingPage() {
                 {full && (
                   <Logo
                     href="/app/analysis"
+                    tone={theme === "light" ? "text-[var(--pane-text)]" : "text-white"}
                     className="pointer-events-auto absolute left-1/2 -translate-x-1/2 text-base"
                   />
                 )}
