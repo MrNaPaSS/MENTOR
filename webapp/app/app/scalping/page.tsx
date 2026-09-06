@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookText,
+  CandlestickChart,
   Maximize2,
   Minimize2,
   Moon,
@@ -120,7 +121,9 @@ const DEPTHS = [30, 60, 100];
 // стороне. Трейдеру это безразлично: границы совпадают, свечи те же.
 const TIMEFRAMES = ["1m", "5m", "10m", "15m", "1h", "4h"];
 
-const INDICATOR_LABELS: Record<keyof Indicators, string> = {
+// Объёмных свечей здесь нет: это не слой поверх графика, а вид самих свечей,
+// и место ему рядом с выбором таймфрейма - там, где выбирают, как смотреть.
+const INDICATOR_LABELS: Record<Exclude<keyof Indicators, "heavy">, string> = {
   trend: "Тренд",
   structure: "Структура",
   blocks: "Блоки",
@@ -130,7 +133,6 @@ const INDICATOR_LABELS: Record<keyof Indicators, string> = {
   zones: "Зоны",
   ema: "EMA",
   volume: "Объём",
-  heavy: "Объёмные",
 };
 
 // Отклик на нажатие: 150 мс ease-out и лёгкое сжатие. Кнопка должна показать,
@@ -1276,10 +1278,21 @@ export default function ScalpingPage() {
                       {tf}
                     </button>
                   ))}
+
+                  {/* Вид свечей - продолжение выбора таймфрейма: и то и другое
+                      отвечает на «как смотреть», а не «что нарисовать поверх». */}
+                  <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
+                  <button
+                    onClick={() => toggle("heavy")}
+                    title="Объёмные свечи: толщина тела зависит от объёма - движение без денег видно сразу"
+                    className={`${CHIP} ${indicators.heavy ? CHIP_ON : CHIP_OFF}`}
+                  >
+                    <CandlestickChart className="h-3.5 w-3.5" />
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-0.5">
-                  {(Object.keys(INDICATOR_LABELS) as (keyof Indicators)[]).map((key) => (
+                  {(Object.keys(INDICATOR_LABELS) as (keyof typeof INDICATOR_LABELS)[]).map((key) => (
                     <button
                       key={key}
                       onClick={() => toggle(key)}
