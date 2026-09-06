@@ -97,6 +97,9 @@ export function closePosition(trade: ActiveTrade, share: number) {
         side: trade.side,
         share,
         client_order_id: `${trade.id}_x${trade.partials + 1}`.slice(0, 64),
+        // Какую сделку снимаем: по инструменту их может идти несколько, и
+        // снятие одной не должно уносить защиту соседней.
+        trade_id: trade.id.slice(0, 64),
       }),
     },
   );

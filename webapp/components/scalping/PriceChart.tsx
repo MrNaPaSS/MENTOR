@@ -322,9 +322,9 @@ function tradeBoxes(
       bottom: Math.min(trade.entry, risk),
       fill: trade.breakeven ? palette.spentBox : palette.riskBox,
       border: trade.breakeven ? palette.spentBorder : palette.riskBorder,
-      // На самом боксе — что он теперь значит. Цену безубытка подписывает
-      // линия: она стоит ровно там, где стоп.
-      label: trade.breakeven ? "риск снят" : undefined,
+      // Без надписи: бледная заливка и метка BE у края и так говорят, что
+      // риска в этом боксе больше нет, а слова поверх свечей мешают читать
+      // цену - ради неё график и открыт.
       labelColor: palette.text,
     },
   ];

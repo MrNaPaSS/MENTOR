@@ -100,6 +100,10 @@ class CloseIn(BaseModel):
     side: str
     share: float = Field(gt=0, le=1)
     client_order_id: str | None = Field(default=None, max_length=64)
+    # Какую именно сделку снимаем. По одному инструменту их может идти
+    # несколько - в том числе встречных, - и снятие одной не должно уносить
+    # защиту остальных.
+    trade_id: str | None = Field(default=None, max_length=64)
 
 
 class StopIn(BaseModel):
@@ -393,13 +397,18 @@ async def close_position(
         )
         # Момент входа нужен, чтобы собрать все исполнения этой сделки, а не
         # только последний ордер.
-        live = session.execute(
+        rows = session.execute(
             select(LiveTrade)
             .where(LiveTrade.student_id == student.id)
             .where(LiveTrade.symbol == symbol)
             .where(LiveTrade.status.in_(("waiting", "open")))
             .order_by(LiveTrade.id.desc())
-        ).scalars().first()
+        ).scalars().all()
+        # Сделку ищем по её идентификатору, а не берём последнюю: терминал
+        # умеет вести несколько сразу, и «последняя» - это чужая.
+        live = next((r for r in rows if r.client_id == body.trade_id), None)
+        if live is None and body.trade_id is None:
+            live = rows[0] if rows else None
         # Если позиция ещё не отмечена набранной, берём момент отправки входа:
         # сопровождение проставляет opened_at раз в пятнадцать секунд, а закрыть
         # руками можно и раньше. Без этого в итог попадал бы только последний
@@ -418,8 +427,8 @@ async def close_position(
             # Позиции нет — но заявки могут стоять: вход ещё не исполнился, а с
             # ним висят стоп и цели. Снятие расчёта должно убирать всё это, иначе
             # «отменённая» сделка откроется сама, стоило рынку дойти до уровня.
-            cancelled = await _cancel_everything(client, symbol)
-            await _forget(session, student, symbol)
+            cancelled = await _cancel_trade(client, symbol, live)
+            await _forget(session, student, symbol, live)
             return {
                 "closed": 0.0,
                 "remaining": 0.0,
@@ -454,8 +463,8 @@ async def close_position(
             # Позиции больше нет: снимаем стоп и цели. Осевшие заявки на
             # несуществующий объём откроют позицию заново, стоило бы рынку
             # дойти до их цены.
-            await _cancel_everything(client, symbol)
-            await _forget(session, student, symbol)
+            await _cancel_trade(client, symbol, live)
+            await _forget(session, student, symbol, live)
 
     except WeexTradeError as exc:
         raise _fail(exc) from exc
@@ -564,6 +573,58 @@ async def _settled(
     return None, None, None
 
 
+async def _cancel_trade(client: WeexFutures, symbol: str, live: LiveTrade | None) -> int:
+    """Снять заявки одной сделки, не трогая соседние.
+
+    Раньше снималось всё по инструменту. Пока сделка была одна, это и значило
+    «её заявки». С появлением встречных позиций та же строка кода снимала стоп
+    и цели соседней сделки - то есть оставляла её без защиты, ничего об этом
+    не сказав.
+
+    Свои заявки узнаём по идентификаторам: цели и стоп записаны в сделке, а
+    вход помечен нашим клиентским идентификатором - им же он и отправлялся.
+    Если сделки на руках нет, снимаем всё: одиночную заявку без владельца
+    оставлять опаснее, чем снять лишнее.
+    """
+    if live is None:
+        return await _cancel_everything(client, symbol)
+
+    mine = {str(live.sl_order_id or "")}
+    for take in json.loads(live.tp_orders_json or "[]"):
+        mine.add(str(take.get("order_id") or ""))
+    mine.discard("")
+
+    removed = 0
+    try:
+        for order in await client.open_orders(symbol):
+            order_id = str(order.get("orderId") or order.get("id") or "")
+            client_id = str(order.get("clientOrderId") or order.get("clientOid") or "")
+            if order_id not in mine and client_id != live.client_id:
+                continue
+            try:
+                await client.cancel_order(symbol, order_id)
+                removed += 1
+            except WeexTradeError as exc:
+                logger.warning("Заявка %s не снята: %s", order_id, exc)
+    except WeexTradeError as exc:
+        logger.warning("Список заявок %s не получен: %s", symbol, exc)
+
+    try:
+        for order in await client.algo_orders(symbol):
+            order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
+            if order_id not in mine:
+                continue
+            try:
+                await client.cancel_algo_order(symbol, order_id)
+                removed += 1
+            except WeexTradeError as exc:
+                logger.warning("Условная заявка %s не снята: %s", order_id, exc)
+    except WeexTradeError as exc:
+        logger.warning("Условные заявки %s не получены: %s", symbol, exc)
+
+    return removed
+
+
 async def _cancel_everything(client: WeexFutures, symbol: str) -> int:
     """Снять по инструменту всё: и обычные заявки, и условные.
 
@@ -604,14 +665,23 @@ async def _cancel_everything(client: WeexFutures, symbol: str) -> int:
     return removed
 
 
-async def _forget(session, student: Student, symbol: str) -> None:
-    """Снять сделку с ведения: позиции больше нет."""
-    rows = session.execute(
-        select(LiveTrade)
-        .where(LiveTrade.student_id == student.id)
-        .where(LiveTrade.symbol == symbol)
-        .where(LiveTrade.status.in_(("waiting", "open")))
-    ).scalars().all()
+async def _forget(
+    session, student: Student, symbol: str, live: LiveTrade | None = None
+) -> None:
+    """Снять сделку с ведения: позиции больше нет.
+
+    Когда сделка известна - только её: соседняя по тому же инструменту живёт
+    своей жизнью, и закрывать её записью значит потерять её из виду.
+    """
+    if live is not None:
+        rows = [live]
+    else:
+        rows = session.execute(
+            select(LiveTrade)
+            .where(LiveTrade.student_id == student.id)
+            .where(LiveTrade.symbol == symbol)
+            .where(LiveTrade.status.in_(("waiting", "open")))
+        ).scalars().all()
     for row in rows:
         row.status = "closed"
         row.closed_at = utcnow()
