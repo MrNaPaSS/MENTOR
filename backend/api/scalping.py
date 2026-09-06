@@ -132,7 +132,10 @@ async def klines(
 
     cached = _klines_cache.get(key)
     now = time.monotonic()
-    if cached and now - cached[0] < _KLINE_TTL:
+    # Пока биржа держит нас закрытыми, отдаём последнее, что есть, любой
+    # давности: устаревшие на минуту свечи полезнее пустого графика, а сходить
+    # за свежими всё равно нельзя — запрос во время бана продлевает бан.
+    if cached and (now - cached[0] < _KLINE_TTL or collector.rest.blocked):
         rows = cached[1]
     else:
         raw = await collector.rest.klines(sym, interval, limit)
@@ -155,6 +158,12 @@ async def klines(
         _klines_cache[key] = (now, rows)
 
     if not rows:
+        if collector.rest.blocked:
+            raise HTTPException(
+                503,
+                f"Биржа ограничила запросы, свечи появятся через "
+                f"{collector.rest.blocked_for:.0f} с",
+            )
         raise HTTPException(502, f"Свечи {sym} недоступны")
     return {"symbol": sym, "interval": interval, "candles": rows}
 

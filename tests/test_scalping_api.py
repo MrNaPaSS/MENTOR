@@ -35,6 +35,9 @@ class StubRest:
     blocked = False
     blocked_for = 0.0
 
+    async def klines(self, symbol, interval="1m", limit=240):
+        return []
+
 
 class StubCollector:
     """Сборщик с готовым состоянием и без сети."""
@@ -326,3 +329,16 @@ def test_ladder_rows_carry_imbalance_flag():
     b.apply_snapshot([["99.99", "300"], ["99.98", "1"]], [["100.01", "1"], ["100.02", "1"]], 1)
     rows, _ = build_ladder(b, rows=10, agg=1)
     assert any(r.strong and r.bid > 0 for r in rows)
+
+
+def test_candles_say_when_the_exchange_throttles_us(app_and_collector):
+    """Пустой график с 502 выглядит как поломка. Причину надо назвать."""
+    app, collector = app_and_collector
+    collector.rest.blocked = True
+    collector.rest.blocked_for = 900.0
+
+    with TestClient(app) as client:
+        res = client.get("/api/scalping/klines/BTCUSDT")
+
+    assert res.status_code == 503
+    assert "Биржа ограничила запросы" in res.json()["detail"]
