@@ -219,3 +219,45 @@ def test_new_field_is_added_to_an_existing_table(tmp_path):
     columns = {row[1] for row in con.execute("PRAGMA table_info(scalp_workspaces)")}
     con.close()
     assert {"payload", "updated_at"} <= columns
+
+
+# ── доступ к разделу ─────────────────────────────────────────────────────────
+
+def test_mentor_gets_the_terminal_without_any_list():
+    """Ментор не должен прописывать себя в список, чтобы попасть в свой раздел."""
+    from backend.config import BackendConfig
+    from backend.deps import scalping_allowed
+    from core.models import Student
+
+    config = BackendConfig(
+        jwt_secret="s",
+        access_ttl_seconds=1,
+        refresh_ttl_seconds=1,
+        weex_use_mock=True,
+        code_ttl_seconds=1,
+        max_code_attempts=1,
+        expose_codes=False,
+        mentor_uid="6613031308",
+    )
+    assert scalping_allowed(Student(weex_uid="6613031308"), config) is True
+    assert scalping_allowed(Student(weex_uid="1"), config) is False
+
+
+def test_allowed_list_opens_the_terminal_to_a_student():
+    from backend.config import BackendConfig
+    from backend.deps import scalping_allowed
+    from core.models import Student
+
+    config = BackendConfig(
+        jwt_secret="s",
+        access_ttl_seconds=1,
+        refresh_ttl_seconds=1,
+        weex_use_mock=True,
+        code_ttl_seconds=1,
+        max_code_attempts=1,
+        expose_codes=False,
+        scalping_allowed=("777", "9000"),
+    )
+    assert scalping_allowed(Student(weex_uid="9000"), config) is True
+    assert scalping_allowed(Student(tg_id=777), config) is True
+    assert scalping_allowed(Student(weex_uid="1"), config) is False

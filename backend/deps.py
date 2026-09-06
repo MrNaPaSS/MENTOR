@@ -80,13 +80,17 @@ def get_current_mentor(payload: dict = Depends(get_token_payload)) -> dict:
 def scalping_allowed(student: Student, config: BackendConfig) -> bool:
     """Открыт ли ученику скальпинг-терминал.
 
-    Раздел работает с живыми деньгами, поэтому по умолчанию он закрыт для всех:
-    список допущенных задаётся в окружении, ментору открыт всегда.
+    Раздел работает с живыми деньгами, поэтому по умолчанию он закрыт для всех.
+    Ментору открыт всегда: его UID платформа знает и так, и заставлять его
+    прописывать себя же в список — верный способ закрыть раздел самому себе.
+    Остальным доступ выдаётся списком в окружении.
     """
+    uid = str(student.weex_uid or "")
+    if config.mentor_uid and uid == config.mentor_uid:
+        return True
+
     allowed = set(config.scalping_allowed)
-    if not allowed:
-        return False
-    return str(student.tg_id or "") in allowed or str(student.weex_uid or "") in allowed
+    return bool(allowed) and (str(student.tg_id or "") in allowed or uid in allowed)
 
 
 def require_scalping(
