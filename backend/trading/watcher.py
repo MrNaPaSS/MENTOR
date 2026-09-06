@@ -99,6 +99,12 @@ def takes_filled(planned_qty: float, current_qty: float, targets: int) -> int:
     closed = max(0.0, planned_qty - current_qty)
     return takes_covered(closed / planned_qty, targets)
 
+# Насколько должен разойтись биржевой безубыток с нашим стопом, чтобы его
+# стоило переставлять: 0.02% цены входа. Мельче — это шум от фандинга, а
+# каждая перестановка стопа стоит двух запросов и мгновения без защиты.
+BE_DRIFT = 0.0002
+
+
 
 def decide(
     trade: LiveTrade,
@@ -122,7 +128,27 @@ def decide(
 
     takes: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
     hit = max(trade.takes_hit, takes_filled(float(trade.qty), size, len(takes)))
+
+    state = Position(
+        symbol=trade.symbol,
+        side=trade.side,
+        entry=float(trade.entry),
+        quantity=size,
+        stop=float(trade.current_stop),
+    )
+
     if hit <= trade.takes_hit:
+        # Новых целей нет, но безубыток мог сдвинуться: биржа пересчитывает его
+        # после каждого частичного закрытия и списания фандинга. Пока стоп
+        # стоит именно в безубытке — следуем за биржей, а не за своей цифрой.
+        if trade.takes_hit == 1:
+            fresh = exchange_breakeven(position)
+            if (
+                fresh is not None
+                and abs(fresh - state.stop) > state.entry * BE_DRIFT
+                and should_move_stop(state, fresh)
+            ):
+                return Decision(trade.takes_hit, move_stop_to=fresh)
         return Decision(trade.takes_hit)
 
     # Отмечаем сработавшими те цели, которых уже нет среди висящих заявок, — по
@@ -135,14 +161,7 @@ def decide(
         if order_id and order_id not in open_plans:
             filled.append(order_id)
 
-    state = Position(
-        symbol=trade.symbol,
-        side=trade.side,
-        entry=float(trade.entry),
-        quantity=size,
-        stop=float(trade.current_stop),
-    )
-    prices = [float(t.get("price") or 0) for t in takes]
+    prices = [float(t.get('price') or 0) for t in takes]
 
     # После первой цели предпочитаем безубыток самой биржи: он учитывает
     # реальную цену исполнения, комиссию и фандинг, а после частичного закрытия

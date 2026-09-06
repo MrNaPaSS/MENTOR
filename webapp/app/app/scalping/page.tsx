@@ -873,7 +873,7 @@ export default function ScalpingPage() {
   const paneStyle = paneHeight(journalOpen, journalH);
 
   return (
-    <div>
+    <div className={pane}>
       <div
         className="flex flex-col gap-3 xl:flex-row xl:gap-0"
         style={
@@ -890,13 +890,13 @@ export default function ScalpingPage() {
           <button
             onClick={() => setScreenerOpen(true)}
             title="Развернуть скринер"
-            className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-border bg-bg-card py-3 text-text-muted transition-colors duration-150 ease-out hover:text-text-primary xl:flex`}
+            className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:flex`}
             style={paneStyle}
           >
             <PanelLeftOpen className="h-4 w-4" />
             <span
               title={connected ? "Поток биржи идёт" : "Нет связи с потоком биржи"}
-              className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-success" : "bg-danger"}`}
+              className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-[var(--pane-up)]" : "bg-[var(--pane-down)]"}`}
             />
             <span className="text-[11px]" style={{ writingMode: "vertical-rl" }}>
               Скринер
@@ -906,11 +906,11 @@ export default function ScalpingPage() {
 
         {/* Скринер: ширина по своим колонкам, без растягивания. */}
         <section
-          className={`${screenerOpen ? "flex" : "hidden"} shrink-0 flex-col rounded-xl border border-border bg-bg-card xl:w-[var(--screener-w)]`}
+          className={`${screenerOpen ? "flex" : "hidden"} shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] xl:w-[var(--screener-w)]`}
           style={paneStyle}
         >
-          <div className="flex items-center justify-between border-b border-border px-2 py-1.5">
-            <span className="text-xs font-semibold text-text-primary">Скринер</span>
+          <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-2 py-1.5">
+            <span className="text-xs font-semibold text-[var(--pane-text)]">Скринер</span>
             <div className="flex items-center gap-1">
               {/* Связь переехала сюда из заголовка страницы: строка заголовка
                   съедала полсотни пикселей высоты, а знать о разрыве потока
@@ -918,7 +918,7 @@ export default function ScalpingPage() {
               <span
                 title={connected ? "Поток биржи идёт" : "Нет связи с потоком биржи"}
                 className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${
-                  connected ? "text-success" : "bg-danger/15 text-danger"
+                  connected ? "text-[var(--pane-up)]" : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
                 }`}
               >
                 {connected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
@@ -934,14 +934,14 @@ export default function ScalpingPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-2">
-            <span className="mr-1 text-[11px] text-text-muted">Сортировка:</span>
+          <div className="flex flex-wrap items-center gap-1 border-b border-[var(--pane-border)] px-2 py-2">
+            <span className="mr-1 text-[11px] text-[var(--pane-muted)]">Сортировка:</span>
             {(Object.keys(SORT_LABELS) as VisibleSortKey[]).map((key) => (
               <button
                 key={key}
                 onClick={() => setSort(key)}
                 className={`${CHIP} ${
-                  sort === key ? CHIP_ON : "text-text-secondary hover:text-text-primary"
+                  sort === key ? CHIP_ON : "text-[var(--pane-text-2)] hover:text-[var(--pane-text)]"
                 }`}
               >
                 {SORT_LABELS[key]}
@@ -1179,7 +1179,7 @@ export default function ScalpingPage() {
           </>
         ) : (
           <section
-            className={`grid flex-1 place-items-center rounded-xl border border-border bg-bg-card px-6 text-center text-sm text-text-muted`}
+            className={`grid flex-1 place-items-center rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-6 text-center text-sm text-[var(--pane-muted)]`}
             style={paneStyle}
           >
             Выберите монету в списке — здесь появятся её стакан и график

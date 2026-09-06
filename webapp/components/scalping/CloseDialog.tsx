@@ -10,13 +10,12 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { price as fmtPrice } from "@/lib/scalping";
-import { floatingAt, type ActiveTrade } from "@/lib/trade/position";
+import { floatingAt, TAKER_FEE, type ActiveTrade } from "@/lib/trade/position";
 
 const SHARES = [25, 50, 75, 100];
 
 // Комиссия тейкера на бирже. Платится и на входе, и на выходе, поэтому в
 // оценке она удваивается.
-const TAKER_FEE = 0.0004;
 
 const BUTTON =
   "rounded-md px-4 py-2 text-[12px] font-semibold transition-[background-color,transform] " +
@@ -67,23 +66,23 @@ export default function CloseDialog({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="w-[420px] max-w-full animate-dialog-in rounded-xl border border-border bg-bg-card shadow-2xl motion-reduce:animate-none"
+        className="w-[420px] max-w-full animate-dialog-in rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
       >
-        <div className="flex items-start justify-between border-b border-border px-5 py-4">
+        <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
           <div>
             <div className="flex items-baseline gap-2">
               <span
                 className={`text-[11px] font-semibold uppercase ${
-                  long ? "text-success" : "text-danger"
+                  long ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
                 }`}
               >
                 {long ? "лонг" : "шорт"}
               </span>
-              <span className="font-mono text-[17px] font-semibold text-text-primary">
+              <span className="font-mono text-[17px] font-semibold text-[var(--pane-text)]">
                 {fmtPrice(trade.entry, tick)}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-text-muted">
+            <p className="mt-1 text-[11px] text-[var(--pane-muted)]">
               {waiting
                 ? "Сделка ещё не вошла — фиксировать нечего, расчёт просто снимется"
                 : `В позиции ${trade.qty.toPrecision(4)} · сейчас ${fmtPrice(price, tick)}`}
@@ -91,7 +90,7 @@ export default function CloseDialog({
           </div>
           <button
             onClick={onCancel}
-            className="text-text-muted transition-colors duration-150 ease-out hover:text-text-primary"
+            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -100,8 +99,8 @@ export default function CloseDialog({
         {!waiting && (
           <div className="px-5 py-4">
             <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-[11px] text-text-muted">Закрыть долю позиции</span>
-              <span className="font-mono text-[17px] font-semibold text-text-primary">
+              <span className="text-[11px] text-[var(--pane-muted)]">Закрыть долю позиции</span>
+              <span className="font-mono text-[17px] font-semibold text-[var(--pane-text)]">
                 {percent}%
               </span>
             </div>
@@ -113,7 +112,7 @@ export default function CloseDialog({
               step={1}
               value={percent}
               onChange={(e) => setPercent(Number(e.target.value))}
-              className="w-full accent-accent-cyan"
+              className="w-full accent-[var(--pane-accent)]"
             />
 
             <div className="mt-2 flex gap-1">
@@ -123,8 +122,8 @@ export default function CloseDialog({
                   onClick={() => setPercent(value)}
                   className={`rounded px-2 py-0.5 font-mono text-[11px] transition-colors duration-150 ease-out ${
                     percent === value
-                      ? "bg-accent-cyan/15 text-accent-cyan"
-                      : "text-text-muted hover:bg-bg-panel hover:text-text-primary"
+                      ? "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]"
+                      : "text-[var(--pane-muted)] hover:bg-[var(--pane-bg)] hover:text-[var(--pane-text)]"
                   }`}
                 >
                   {value}%
@@ -132,7 +131,7 @@ export default function CloseDialog({
               ))}
             </div>
 
-            <div className="mt-4 space-y-1 border-t border-border pt-3 font-mono text-[12px] tabular-nums">
+            <div className="mt-4 space-y-1 border-t border-[var(--pane-border)] pt-3 font-mono text-[12px] tabular-nums">
               <Line label="Закрываем" value={qty.toPrecision(4)} />
               <Line
                 label="Останется"
@@ -142,27 +141,27 @@ export default function CloseDialog({
                 <Line
                   label="Уже забрано"
                   value={`${trade.realized >= 0 ? "+" : "−"}${Math.abs(trade.realized).toFixed(2)} $`}
-                  tone="text-text-muted"
+                  tone="text-[var(--pane-muted)]"
                 />
               )}
               <Line
                 label="Результат"
                 value={`${part >= 0 ? "+" : "−"}${Math.abs(part).toFixed(2)} $`}
-                tone={part >= 0 ? "text-success" : "text-danger"}
+                tone={part >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
               />
               <Line
                 label="Комиссия ≈"
                 value={`−${fee.toFixed(2)} $`}
-                tone="text-text-muted"
+                tone="text-[var(--pane-muted)]"
               />
               <Line
                 label="На счёт ≈"
                 value={`${part - fee >= 0 ? "+" : "−"}${Math.abs(part - fee).toFixed(2)} $`}
-                tone={part - fee >= 0 ? "text-success" : "text-danger"}
+                tone={part - fee >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
               />
             </div>
 
-            <p className="mt-3 text-[11px] leading-snug text-text-muted">
+            <p className="mt-3 text-[11px] leading-snug text-[var(--pane-muted)]">
               Результат посчитан по цене маркировки. Выход по рынку идёт по
               встречной стороне стакана, поэтому на счёт придёт немного меньше
               даже этой оценки.
@@ -170,13 +169,13 @@ export default function CloseDialog({
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
-          <button onClick={onCancel} className={`${BUTTON} text-text-muted hover:text-text-primary`}>
+        <div className="flex items-center justify-end gap-2 border-t border-[var(--pane-border)] px-5 py-3">
+          <button onClick={onCancel} className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}>
             Отмена
           </button>
           <button
             onClick={() => onConfirm(share)}
-            className={`${BUTTON} bg-accent-cyan/20 text-accent-cyan`}
+            className={`${BUTTON} bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]`}
           >
             {waiting ? "Снять расчёт" : "Зафиксировать"}
           </button>
@@ -189,8 +188,8 @@ export default function CloseDialog({
 function Line({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
     <div className="flex items-baseline justify-between">
-      <span className="text-text-muted">{label}</span>
-      <span className={tone ?? "text-text-primary"}>{value}</span>
+      <span className="text-[var(--pane-muted)]">{label}</span>
+      <span className={tone ?? "text-[var(--pane-text)]"}>{value}</span>
     </div>
   );
 }

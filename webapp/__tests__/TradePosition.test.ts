@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   advance,
   advanceQuote,
+  breakevenPrice,
   closeManually,
   closePartially,
   createTrade,
@@ -110,16 +111,21 @@ describe("цели", () => {
     let trade = advance(long(), 100, T0);
     trade = advance(trade, 101, T0 + 1);
     expect(trade.breakeven).toBe(true);
-    expect(trade.stop).toBe(100);
+    // Безубыток чуть выше входа: комиссия уплачена на входе и будет уплачена
+    // на выходе. Стоп ровно на входе — это гарантированный маленький минус.
+    expect(trade.stop).toBeGreaterThan(100);
+    expect(trade.stop).toBeCloseTo(breakevenPrice(100, true), 6);
 
     // Первая цель забирает 30% объёма по своей цене.
     expect(trade.qty).toBeCloseTo(7, 6);
     expect(trade.realized).toBeCloseTo(3, 6);
 
-    // Возврат к входу закрывает остаток в ноль, но взятая цель остаётся с нами.
+    // Возврат к входу закрывает остаток: взятая цель остаётся с нами, а
+    // надбавка над входом уходит бирже комиссией.
     trade = advance(trade, 100, T0 + 2);
     expect(trade.status).toBe("closed");
-    expect(trade.pnl).toBeCloseTo(3, 6);
+    expect(trade.pnl).toBeGreaterThan(3);
+    expect(trade.pnl).toBeCloseTo(3 + (breakevenPrice(100, true) - 100) * 7, 6);
   });
 
   it("рывок через несколько целей засчитывает их все", () => {

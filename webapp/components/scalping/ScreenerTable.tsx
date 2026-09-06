@@ -90,7 +90,7 @@ export default function ScreenerTable({ rows, selected, sort, onSort, onSelect }
         <thead>
           {/* Шапка держится при прокрутке списка: тридцать строк не помещаются
               в панель, и без неё непонятно, что за колонка перед тобой. */}
-          <tr className="text-text-muted">
+          <tr className="text-[var(--pane-muted)]">
             {COLUMNS.map((col) => {
               const active = col.key && col.key === sort;
               return (
@@ -98,11 +98,11 @@ export default function ScreenerTable({ rows, selected, sort, onSort, onSelect }
                   key={col.label}
                   title={col.hint}
                   onClick={() => col.key && onSort(col.key)}
-                  className={`sticky top-0 z-10 bg-bg-card px-1.5 py-2 font-medium shadow-[0_1px_0_#2B3139] ${col.width} ${col.align} ${
+                  className={`sticky top-0 z-10 bg-[var(--pane-bg)] px-1.5 py-2 font-medium shadow-[0_1px_0_#2B3139] ${col.width} ${col.align} ${
                     col.key
-                      ? "cursor-pointer select-none transition-colors duration-150 ease-out hover:text-text-primary"
+                      ? "cursor-pointer select-none transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
                       : ""
-                  } ${active ? "text-accent-cyan" : ""}`}
+                  } ${active ? "text-[var(--pane-accent)]" : ""}`}
                 >
                   <span className="inline-flex items-center gap-0.5">
                     {col.label}
@@ -126,7 +126,7 @@ export default function ScreenerTable({ rows, selected, sort, onSort, onSelect }
       </table>
 
       {rows.length === 0 && (
-        <p className="py-10 text-center text-sm text-text-muted">Собираем стаканы с биржи…</p>
+        <p className="py-10 text-center text-sm text-[var(--pane-muted)]">Собираем стаканы с биржи…</p>
       )}
     </div>
   );
@@ -146,25 +146,25 @@ const Row = memo(function Row({
       // Реакция на нажатие, а не на отпускание: подсветка должна появиться в тот
       // момент, когда палец коснулся строки.
       onPointerDown={() => onSelect(row.symbol)}
-      className={`cursor-pointer border-b border-border/40 transition-colors duration-150 ease-out ${
+      className={`cursor-pointer border-b border-[var(--pane-border)]/40 transition-colors duration-150 ease-out ${
         selected
-          ? "bg-accent-cyan/10 shadow-[inset_2px_0_0_#0AFFE0]"
-          : "hover:bg-bg-panel/60 active:bg-bg-panel"
+          ? "bg-[var(--pane-accent-faint)] shadow-[inset_2px_0_0_#0AFFE0]"
+          : "hover:bg-[var(--pane-bg)]/60 active:bg-[var(--pane-bg)]"
       }`}
     >
       {/* Тикер фиксированной ширины, цена и изменение — по своим местам:
           иначе длинные имена вроде MARSCOIN распирают строку на две. */}
       <td className="px-1.5 py-1.5">
         <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-          <span className="w-[62px] shrink-0 overflow-hidden text-ellipsis font-semibold text-text-primary">
+          <span className="w-[62px] shrink-0 overflow-hidden text-ellipsis font-semibold text-[var(--pane-text)]">
             {base(row.symbol)}
           </span>
-          <span className="flex-1 text-right font-mono text-[10px] text-text-secondary">
+          <span className="flex-1 text-right font-mono text-[10px] text-[var(--pane-text-2)]">
             {fmtPrice(row.price)}
           </span>
           <span
             className={`w-[40px] shrink-0 text-right font-mono text-[10px] ${
-              row.change_pct >= 0 ? "text-success" : "text-danger"
+              row.change_pct >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
             }`}
           >
             {row.change_pct >= 0 ? "+" : ""}
@@ -183,22 +183,22 @@ const Row = memo(function Row({
 
       <td
         className={`px-1.5 py-1.5 text-right font-mono ${
-          row.delta_notional >= 0 ? "text-success" : "text-danger"
+          row.delta_notional >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
         }`}
       >
         {row.delta_notional >= 0 ? "+" : "−"}
         {money(Math.abs(row.delta_notional))}
       </td>
 
-      <td className="px-1.5 py-1.5 text-right font-mono text-text-secondary">
+      <td className="px-1.5 py-1.5 text-right font-mono text-[var(--pane-text-2)]">
         {row.range_bp.toFixed(0)}
       </td>
 
-      <td className="px-1.5 py-1.5 text-right font-mono text-text-secondary">
+      <td className="px-1.5 py-1.5 text-right font-mono text-[var(--pane-text-2)]">
         {row.spread_bp.toFixed(1)}
       </td>
 
-      <td className="px-1.5 py-1.5 text-right font-mono text-text-muted">
+      <td className="px-1.5 py-1.5 text-right font-mono text-[var(--pane-muted)]">
         {money(row.volume_24h)}
       </td>
     </tr>
@@ -207,13 +207,13 @@ const Row = memo(function Row({
 
 /** Плита: сторона стрелкой, размер в деньгах и удаление от цены. */
 function WallCell({ row }: { row: ScreenerRow }) {
-  if (!row.wall_notional) return <span className="text-text-muted">—</span>;
+  if (!row.wall_notional) return <span className="text-[var(--pane-muted)]">—</span>;
   const isBid = row.wall_side === "bid";
   return (
     <span className="inline-flex items-baseline gap-1 font-mono">
-      <span className={isBid ? "text-success" : "text-danger"}>{isBid ? "▲" : "▼"}</span>
-      <span className="font-semibold text-text-primary">{money(row.wall_notional)}</span>
-      <span className="text-[10px] text-text-muted">{row.wall_distance_bp.toFixed(0)}</span>
+      <span className={isBid ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>{isBid ? "▲" : "▼"}</span>
+      <span className="font-semibold text-[var(--pane-text)]">{money(row.wall_notional)}</span>
+      <span className="text-[10px] text-[var(--pane-muted)]">{row.wall_distance_bp.toFixed(0)}</span>
     </span>
   );
 }
@@ -225,11 +225,11 @@ function ImbalanceBar({ ratio }: { ratio: number }) {
     <div
       // Полоса меняется несколько раз в секунду — анимировать её нельзя:
       // трейдер видел бы вчерашнее значение, догоняющее сегодняшнее.
-      className="mx-auto flex h-2.5 w-11 overflow-hidden rounded-sm bg-bg-deep"
+      className="mx-auto flex h-2.5 w-11 overflow-hidden rounded-sm bg-[var(--pane-deep)]"
       title={`${buy}% покупок`}
     >
-      <div className="bg-success/70" style={{ width: `${buy}%` }} />
-      <div className="bg-danger/70" style={{ width: `${100 - buy}%` }} />
+      <div className="bg-[var(--pane-up)]" style={{ width: `${buy}%` }} />
+      <div className="bg-[var(--pane-down)]" style={{ width: `${100 - buy}%` }} />
     </div>
   );
 }

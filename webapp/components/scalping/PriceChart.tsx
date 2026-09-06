@@ -301,6 +301,23 @@ function tradeBoxes(
       labelColor: palette.text,
     },
   ];
+  // Безубыток подписан у правого края бокса, на той цене, где стоп стоит на
+  // самом деле. Ярлык на линии входа врал бы дважды: и местом, и ценой —
+  // биржа считает безубыток с комиссией, это заметно выше входа.
+  const segments: Shapes["segments"] = trade.breakeven
+    ? [
+        {
+          fromTime: anchor as UTCTimestamp,
+          toTime: span,
+          price: trade.stop,
+          color: palette.mtf,
+          dashed: true,
+          label: "BE",
+          labelAt: "end",
+        },
+      ]
+    : [];
+
   if (far !== undefined) {
     boxes.push({
       fromTime: anchor as UTCTimestamp,
@@ -311,7 +328,7 @@ function tradeBoxes(
       border: palette.rewardBorder,
     });
   }
-  return { bands: [], boxes, segments: [], points: [] };
+  return { bands: [], boxes, segments, points: [] };
 }
 
 /** ATR последних баров: по нему предлагается стоп. */
@@ -957,7 +974,7 @@ function PriceChart({
     tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
     tradeLinesRef.current.push(
       trade.breakeven
-        ? line(trade.stop, palette.mtf, "BE", 2)   // breakeven, как принято в терминалах
+        ? line(trade.stop, palette.mtf, "", 2)   // подпись BE стоит у бокса
         : line(trade.stop, palette.askLine, "стоп", 2),
     );
     targets.forEach((price, i) => {

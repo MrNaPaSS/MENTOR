@@ -22,6 +22,23 @@ export type TradeStatus = "planned" | "open" | "closed";
  */
 export const TAKE_SHARES = [0.3, 0.5, 0.2];
 
+/**
+ * Комиссия тейкера. Платится на обеих ногах позиции, поэтому в безубытке
+ * учитывается дважды.
+ */
+export const TAKER_FEE = 0.0004;
+
+/**
+ * Цена, при которой позиция закрывается в настоящий ноль.
+ *
+ *   лонг:  (P − вход)·объём = комиссия·вход·объём + комиссия·P·объём
+ *          → P = вход · (1 + комиссия) / (1 − комиссия)
+ *   шорт:  P = вход · (1 − комиссия) / (1 + комиссия)
+ */
+export function breakevenPrice(entry: number, long: boolean, fee = TAKER_FEE): number {
+  return long ? (entry * (1 + fee)) / (1 - fee) : (entry * (1 - fee)) / (1 + fee);
+}
+
 export function takeShare(index: number, count: number): number {
   if (count <= 0 || index < 0 || index >= count) return 0;
   return count === TAKE_SHARES.length ? TAKE_SHARES[index] : 1 / count;
@@ -211,13 +228,16 @@ export function advance(trade: ActiveTrade, price: number, now: number): ActiveT
   }
 
   // После первой цели стоп в безубыток: сделка больше не может стать убыточной.
+  // Ровно цена входа безубытком не является — комиссия уже уплачена на входе и
+  // будет уплачена на выходе. Биржа пришлёт свою цену на следующем опросе,
+  // до тех пор считаем сами, чтобы подпись не стояла на линии входа.
   return {
     ...trade,
     takesHit: hit,
     qty: left,
     realized,
     breakeven: true,
-    stop: trade.entry,
+    stop: breakevenPrice(trade.entry, long),
   };
 }
 

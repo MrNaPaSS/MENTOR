@@ -36,8 +36,8 @@ function availableUsdt(payload: unknown): string | null {
 const BUILD = "trade-2026-09-06";
 
 const FIELD =
-  "w-full rounded-md border border-border bg-bg-deep px-2.5 py-2 font-mono text-[13px] " +
-  "text-text-primary outline-none transition-colors duration-150 ease-out focus:border-accent-cyan";
+  "w-full rounded-md border border-[var(--pane-border)] bg-[var(--pane-deep)] px-2.5 py-2 font-mono text-[13px] " +
+  "text-[var(--pane-text)] outline-none transition-colors duration-150 ease-out focus:border-[var(--pane-accent-soft)]";
 
 const BUTTON =
   "rounded-md px-4 py-2 text-[12px] font-semibold transition-[background-color,transform] " +
@@ -129,15 +129,15 @@ export default function ExchangeDialog({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="w-[440px] max-w-full animate-dialog-in rounded-xl border border-border bg-bg-card shadow-2xl motion-reduce:animate-none"
+        className="w-[440px] max-w-full animate-dialog-in rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
       >
-        <div className="flex items-start justify-between border-b border-border px-5 py-4">
+        <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
           <div>
-            <p className="text-sm font-semibold text-text-primary">
+            <p className="text-sm font-semibold text-[var(--pane-text)]">
               Биржевой счёт WEEX{" "}
-              <span className="font-mono text-[10px] font-normal text-text-muted">{BUILD}</span>
+              <span className="font-mono text-[10px] font-normal text-[var(--pane-muted)]">{BUILD}</span>
             </p>
-            <p className="mt-0.5 text-[11px] text-text-muted">
+            <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
               {status.connected
                 ? `Ключ ${status.key_tail}`
                 : "Терминал сможет ставить ордера с вашего счёта"}
@@ -145,47 +145,47 @@ export default function ExchangeDialog({
           </div>
           <button
             onClick={onClose}
-            className="text-text-muted transition-colors duration-150 ease-out hover:text-text-primary"
+            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {!reachable ? (
-          <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-text-muted">
+          <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
             Состояние счёта получить не удалось. Войдите в кабинет — торговый
             раздел привязан к ученику; если вход выполнен, значит сервер сейчас
             недоступен.
           </p>
         ) : !status.enabled ? (
-          <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-text-muted">
+          <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
             На сервере не задан ключ шифрования, и торговля выключена целиком.
             Хранить ваши ключи открытым текстом мы не будем.
           </p>
         ) : status.connected && !replacing ? (
           <div className="space-y-3 px-5 py-5">
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-success" />
-              <span className="text-[13px] font-semibold text-text-primary">
+              <span className="h-2 w-2 rounded-full bg-[var(--pane-up)]" />
+              <span className="text-[13px] font-semibold text-[var(--pane-text)]">
                 Счёт подключён
               </span>
             </div>
 
             <div className="space-y-1 font-mono text-[12px] tabular-nums">
               <div className="flex justify-between">
-                <span className="text-text-muted">Ключ</span>
-                <span className="text-text-secondary">{status.key_tail}</span>
+                <span className="text-[var(--pane-muted)]">Ключ</span>
+                <span className="text-[var(--pane-text-2)]">{status.key_tail}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-text-muted">Доступно</span>
-                <span className="text-text-secondary">
+                <span className="text-[var(--pane-muted)]">Доступно</span>
+                <span className="text-[var(--pane-text-2)]">
                   {funds !== null ? `${funds} USDT` : checked ? "—" : "запрашиваем…"}
                 </span>
               </div>
               {status.updated_at && (
                 <div className="flex justify-between">
-                  <span className="text-text-muted">Подключён</span>
-                  <span className="text-text-secondary">
+                  <span className="text-[var(--pane-muted)]">Подключён</span>
+                  <span className="text-[var(--pane-text-2)]">
                     {new Date(status.updated_at).toLocaleString("ru", {
                       day: "2-digit",
                       month: "2-digit",
@@ -197,14 +197,14 @@ export default function ExchangeDialog({
               )}
             </div>
 
-            <p className="text-[11px] leading-snug text-text-muted">
+            <p className="text-[11px] leading-snug text-[var(--pane-muted)]">
               Терминал ставит ордера с этого счёта, когда включён боевой режим.
               Ключ хранится зашифрованным и наружу не отдаётся.
             </p>
 
             <button
               onClick={() => setReplacing(true)}
-              className="text-[11px] text-accent-cyan transition-colors duration-150 ease-out hover:text-text-primary"
+              className="text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
             >
               Заменить ключи
             </button>
@@ -212,7 +212,7 @@ export default function ExchangeDialog({
         ) : (
           <div className="space-y-3 px-5 py-4">
             <label className="block">
-              <span className="mb-1 block text-[11px] text-text-muted">API Key</span>
+              <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">API Key</span>
               <input
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
@@ -221,7 +221,7 @@ export default function ExchangeDialog({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] text-text-muted">Secret Key</span>
+              <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">Secret Key</span>
               <input
                 type="password"
                 value={secret}
@@ -231,7 +231,7 @@ export default function ExchangeDialog({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] text-text-muted">Passphrase</span>
+              <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">Passphrase</span>
               <input
                 type="password"
                 value={passphrase}
@@ -241,23 +241,23 @@ export default function ExchangeDialog({
               />
             </label>
 
-            <p className="text-[11px] leading-snug text-text-muted">
+            <p className="text-[11px] leading-snug text-[var(--pane-muted)]">
               Ключи хранятся зашифрованными и наружу не отдаются. Заводите ключ
               только с правом торговли — вывод средств терминалу не нужен.
             </p>
 
             {error && (
-              <p className="rounded-md bg-danger/10 px-3 py-2 text-[11px] text-danger">{error}</p>
+              <p className="rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] text-[var(--pane-down)]">{error}</p>
             )}
           </div>
         )}
 
-        <div className="flex items-center justify-between border-t border-border px-5 py-3">
+        <div className="flex items-center justify-between border-t border-[var(--pane-border)] px-5 py-3">
           {status.connected ? (
             <button
               onClick={disconnect}
               disabled={busy}
-              className={`${BUTTON} text-danger hover:bg-danger/10 disabled:opacity-40`}
+              className={`${BUTTON} text-[var(--pane-down)] hover:bg-[var(--pane-down-faint)] disabled:opacity-40`}
             >
               Отключить
             </button>
@@ -265,14 +265,14 @@ export default function ExchangeDialog({
             <span />
           )}
           <div className="flex gap-2">
-            <button onClick={onClose} className={`${BUTTON} text-text-muted hover:text-text-primary`}>
+            <button onClick={onClose} className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}>
               Закрыть
             </button>
             {(!status.connected || replacing) && (
               <button
                 onClick={submit}
                 disabled={busy || !reachable || !status.enabled || !apiKey || !secret || !passphrase}
-                className={`${BUTTON} bg-accent-cyan/20 text-accent-cyan disabled:opacity-40`}
+                className={`${BUTTON} bg-[var(--pane-accent-faint)] text-[var(--pane-accent)] disabled:opacity-40`}
               >
                 {busy ? "Проверяем…" : "Подключить"}
               </button>

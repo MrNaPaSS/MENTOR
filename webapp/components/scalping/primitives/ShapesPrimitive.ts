@@ -48,6 +48,13 @@ export type ShapeSegment = {
   color: string;
   dashed: boolean;
   label?: string;
+  /**
+   * Где стоит подпись: по центру отрезка или у правого конца.
+   *
+   * У бокса сделки конец — это его правый край, и подпись там читается как
+   * ярлык самого бокса, а не как надпись поперёк графика.
+   */
+  labelAt?: "center" | "end";
 };
 
 export type ShapePoint = {
@@ -185,9 +192,16 @@ class ShapesRenderer implements IPrimitivePaneRenderer {
           context.fillStyle = segment.color;
           context.font = FONT;
           context.textBaseline = "bottom";
-          context.textAlign = "center";
-          // Подпись по центру линии: так её видно и когда линия короткая.
-          context.fillText(segment.label, ((segment.x1 + segment.x2) / 2) * hx, y - 2 * vy);
+          if (segment.labelAt === "end") {
+            // У правого конца, с отступом внутрь: подпись принадлежит боксу и
+            // не должна уезжать за его край к ценовой шкале.
+            context.textAlign = "right";
+            context.fillText(segment.label, (segment.x2 - 4) * hx, y - 2 * vy);
+          } else {
+            // По центру линии: так подпись видно и когда линия короткая.
+            context.textAlign = "center";
+            context.fillText(segment.label, ((segment.x1 + segment.x2) / 2) * hx, y - 2 * vy);
+          }
           context.textAlign = "left";
         }
       }

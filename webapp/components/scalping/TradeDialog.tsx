@@ -34,8 +34,8 @@ const LEVERAGES = [10, 25, 50, 100, 200, 400];
 const STOPS = [0.05, 0.1, 0.2, 0.5, 1];
 
 const FIELD =
-  "w-full rounded-md border border-border bg-bg-deep px-2.5 py-2 text-right font-mono text-[15px] " +
-  "text-text-primary outline-none transition-colors duration-150 ease-out focus:border-accent-cyan";
+  "w-full rounded-md border border-[var(--pane-border)] bg-[var(--pane-deep)] px-2.5 py-2 text-right font-mono text-[15px] " +
+  "text-[var(--pane-text)] outline-none transition-colors duration-150 ease-out focus:border-[var(--pane-accent-soft)]";
 
 const CHIP =
   "rounded px-1.5 py-0.5 font-mono text-[11px] transition-[background-color,color,transform] " +
@@ -75,7 +75,7 @@ export default function TradeDialog({
 
   const side = sideForShelf(draft.shelf.side);
   const long = side === "long";
-  const tone = long ? "text-success" : "text-danger";
+  const tone = long ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]";
   const plan = computeTrade({
     entry: draft.shelf.price,
     side,
@@ -94,20 +94,20 @@ export default function TradeDialog({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="w-[520px] max-w-full animate-dialog-in overflow-hidden rounded-xl border border-border bg-bg-card shadow-2xl motion-reduce:animate-none"
+        className="w-[520px] max-w-full animate-dialog-in overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
       >
         {/* Шапка: что за уровень и в какую сторону от него работаем. */}
-        <div className="flex items-start justify-between border-b border-border px-5 py-4">
+        <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
           <div>
             <div className="flex items-baseline gap-2">
               <span className={`text-[11px] font-semibold uppercase ${tone}`}>
                 {long ? "лонг" : "шорт"}
               </span>
-              <span className="font-mono text-[19px] font-semibold text-text-primary">
+              <span className="font-mono text-[19px] font-semibold text-[var(--pane-text)]">
                 {fmtPrice(draft.shelf.price, tick)}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-text-muted">
+            <p className="mt-1 text-[11px] text-[var(--pane-muted)]">
               {money(draft.shelf.notional)} в стакане —{" "}
               {long ? "поддержка под ценой" : "сопротивление над ценой"}
             </p>
@@ -115,7 +115,7 @@ export default function TradeDialog({
           <button
             onClick={onCancel}
             title="Отмена · Esc"
-            className="text-text-muted transition-colors duration-150 ease-out hover:text-text-primary"
+            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -147,7 +147,7 @@ export default function TradeDialog({
         </div>
 
         {plan ? (
-          <div className="border-t border-border bg-bg-deep/40 px-5 py-4">
+          <div className="border-t border-[var(--pane-border)] bg-[var(--pane-deep)]/40 px-5 py-4">
             <Row
               label="Вход"
               price={fmtPrice(plan.entry, tick)}
@@ -157,7 +157,7 @@ export default function TradeDialog({
               label="Стоп"
               price={fmtPrice(plan.stop, tick)}
               note={`−${money(plan.risk)} · ${plan.riskPct.toFixed(1)}% от суммы`}
-              tone="text-danger"
+              tone="text-[var(--pane-down)]"
             />
             {plan.targets.map((target, i) => (
               <Row
@@ -165,31 +165,31 @@ export default function TradeDialog({
                 label={`Тейк ${i + 1}`}
                 price={fmtPrice(target.price, tick)}
                 note={`+${money(target.profit)} · ${target.r}R`}
-                tone="text-success"
+                tone="text-[var(--pane-up)]"
               />
             ))}
             <Row
               label="Ликвидация ≈"
               price={fmtPrice(plan.liquidation, tick)}
               note={plan.liquidatedFirst ? "ближе стопа" : ""}
-              tone={plan.liquidatedFirst ? "text-danger" : "text-text-muted"}
+              tone={plan.liquidatedFirst ? "text-[var(--pane-down)]" : "text-[var(--pane-muted)]"}
             />
 
             {plan.liquidatedFirst && (
-              <p className="mt-3 rounded-md bg-danger/10 px-3 py-2 text-[11px] leading-snug text-danger">
+              <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
                 При таком плече позицию вынесет раньше, чем сработает стоп.
                 Уменьшите плечо или отодвиньте стоп.
               </p>
             )}
           </div>
         ) : (
-          <p className="border-t border-border px-5 py-6 text-center text-[12px] text-text-muted">
+          <p className="border-t border-[var(--pane-border)] px-5 py-6 text-center text-[12px] text-[var(--pane-muted)]">
             Введите сумму, плечо и стоп — расчёт появится здесь
           </p>
         )}
 
-        <div className="flex items-center justify-between border-t border-border px-5 py-3">
-          <span className="text-[11px] text-text-muted">
+        <div className="flex items-center justify-between border-t border-[var(--pane-border)] px-5 py-3">
+          <span className="text-[11px] text-[var(--pane-muted)]">
             {live ? (
               <span className="text-warning">Заявка уйдёт на биржу</span>
             ) : (
@@ -199,7 +199,7 @@ export default function TradeDialog({
           <div className="flex gap-2">
             <button
               onClick={onCancel}
-              className={`${BUTTON} text-text-muted hover:text-text-primary`}
+              className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}
             >
               Отмена
             </button>
@@ -207,7 +207,7 @@ export default function TradeDialog({
               onClick={onConfirm}
               disabled={!plan}
               className={`${BUTTON} ${
-                long ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                long ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]" : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
               } disabled:opacity-40`}
             >
               Войти
@@ -253,7 +253,7 @@ function Field({
 
   return (
     <div>
-      <span className="mb-1.5 block text-[11px] text-text-muted">{label}</span>
+      <span className="mb-1.5 block text-[11px] text-[var(--pane-muted)]">{label}</span>
       <input
         ref={inputRef}
         type="text"
@@ -282,8 +282,8 @@ function Field({
             }}
             className={`${CHIP} ${
               preset === value
-                ? "bg-accent-cyan/15 text-accent-cyan"
-                : "text-text-muted hover:bg-bg-panel hover:text-text-primary"
+                ? "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]"
+                : "text-[var(--pane-muted)] hover:bg-[var(--pane-bg)] hover:text-[var(--pane-text)]"
             }`}
           >
             {format(preset)}
@@ -299,7 +299,7 @@ function Row({
   label,
   price,
   note,
-  tone = "text-text-primary",
+  tone = "text-[var(--pane-text)]",
 }: {
   label: string;
   price: string;
@@ -308,9 +308,9 @@ function Row({
 }) {
   return (
     <div className="flex items-baseline justify-between py-1 font-mono text-[12px] tabular-nums">
-      <span className="text-text-muted">{label}</span>
+      <span className="text-[var(--pane-muted)]">{label}</span>
       <span className="flex items-baseline gap-3">
-        <span className={`text-[11px] ${tone === "text-text-primary" ? "text-text-muted" : tone}`}>
+        <span className={`text-[11px] ${tone === "text-[var(--pane-text)]" ? "text-[var(--pane-muted)]" : tone}`}>
           {note}
         </span>
         <span className={`w-28 text-right ${tone}`}>{price}</span>

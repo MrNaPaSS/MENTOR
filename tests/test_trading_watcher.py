@@ -176,3 +176,44 @@ def test_exchange_breakeven_is_still_checked_for_direction():
     where = dict(position("2.1"))
     where["breakEvenPrice"] = "100.42"
     assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to is None
+
+
+# ── безубыток биржи после цели ───────────────────────────────────────────────
+
+def test_exchange_moves_breakeven_later_and_we_follow():
+    """Биржа пересчитывает безубыток и после того, как цель уже взята.
+
+    Её цифра приходит не мгновенно и потом ещё ползёт от фандинга. Раньше стоп
+    ставился один раз в момент цели и оставался там навсегда — на бирже он
+    оказывался не в безубытке.
+    """
+    row = trade(takes_hit=1, current_stop=100.08, qty=0.7)
+    where = dict(position("0.7"))
+    where["breakEvenPrice"] = "100.35"
+
+    decision = decide(row, where, {"tp2", "tp3"}, 101.5, 0)
+    assert decision.takes_hit == 1
+    assert decision.move_stop_to == 100.35
+
+
+def test_a_hair_of_drift_does_not_reshuffle_the_stop():
+    """Каждая перестановка — два запроса и миг без защиты. Ради копейки не стоит."""
+    row = trade(takes_hit=1, current_stop=100.08, qty=0.7)
+    where = dict(position("0.7"))
+    where["breakEvenPrice"] = "100.081"
+    assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to is None
+
+
+def test_breakeven_is_not_followed_backwards():
+    row = trade(takes_hit=1, current_stop=100.5, qty=0.7)
+    where = dict(position("0.7"))
+    where["breakEvenPrice"] = "100.1"
+    assert decide(row, where, {"tp2", "tp3"}, 101.5, 0).move_stop_to is None
+
+
+def test_after_the_second_take_the_stop_hides_behind_the_target():
+    """Дальше первой цели безубыток уже не главный: стоп прячется за целью."""
+    row = trade(takes_hit=2, current_stop=101.0, qty=0.2)
+    where = dict(position("0.2"))
+    where["breakEvenPrice"] = "100.35"
+    assert decide(row, where, {"tp3"}, 102.5, 0).move_stop_to is None
