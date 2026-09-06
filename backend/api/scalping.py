@@ -118,6 +118,34 @@ async def dom(
 _KLINE_TTL = 2.0
 _klines_cache: dict[str, tuple[float, list]] = {}
 
+# Длительности интервалов биржи в секундах: нужны, чтобы собрать из них те,
+# которых у биржи нет.
+_INTERVAL_SECONDS = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600}
+
+
+def fold_candles(rows: list[dict], seconds: int) -> list[dict]:
+    """Склеить свечи в корзины по `seconds`.
+
+    Открытие берём у первой свечи корзины, закрытие у последней, край - по
+    краям, объём складываем. Незакрытую корзину оставляем: на графике это
+    текущая свеча, и обрезать её значило бы прятать движение, которое уже идёт.
+    """
+    if seconds <= 0 or not rows:
+        return rows
+
+    out: list[dict] = []
+    for row in rows:
+        start = row["time"] - row["time"] % seconds
+        if out and out[-1]["time"] == start:
+            last = out[-1]
+            last["high"] = max(last["high"], row["high"])
+            last["low"] = min(last["low"], row["low"])
+            last["close"] = row["close"]
+            last["volume"] += row["volume"]
+        else:
+            out.append({**row, "time": start})
+    return out
+
 # Запросы в полёте: ключ → ожидание. Нужно, чтобы одновременные обращения к
 # одной монете складывались в один поход на биржу, а не в десять.
 _klines_inflight: dict[str, Any] = {}
@@ -129,7 +157,7 @@ async def klines(
     symbol: str,
     # Дневные, недельные и месячные нужны не для отрисовки свечей, а ради
     # уровней прошлого периода: индикатор рисует их на любом таймфрейме.
-    interval: str = Query("1m", pattern=r"^(1m|3m|5m|15m|30m|1h|4h|1d|1w|1M)$"),
+    interval: str = Query("1m", pattern=r"^(1m|3m|5m|10m|15m|30m|1h|4h|1d|1w|1M)$"),
     limit: int = Query(240, ge=2, le=500),
 ) -> dict[str, Any]:
     """Свечи для графика рядом со стаканом — из того же источника, что и книга."""
@@ -155,8 +183,12 @@ async def klines(
     else:
         done = asyncio.get_running_loop().create_future()
         _klines_inflight[key] = done
+        # Десятиминуток у биржи нет: просим пятиминутки и складываем парами.
+        # Границы совпадают - десять минут это ровно две пятиминутки от той же
+        # эпохи, - поэтому свечи получаются те же, что были бы у биржи.
+        source, factor = ("5m", 2) if interval == "10m" else (interval, 1)
         try:
-            raw = await collector.rest.klines(sym, interval, limit)
+            raw = await collector.rest.klines(sym, source, limit * factor)
         finally:
             _klines_inflight.pop(key, None)
             if not done.done():
@@ -177,6 +209,9 @@ async def klines(
                 )
             except (TypeError, ValueError, IndexError):
                 continue
+
+        if factor > 1:
+            rows = fold_candles(rows, factor * _INTERVAL_SECONDS[source])
         # Пустой ответ не кэшируем: иначе секундный сбой биржи замирает на
         # экране кэшем и прячет восстановление.
         if rows:

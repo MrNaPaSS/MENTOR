@@ -392,3 +392,36 @@ def test_simultaneous_candle_requests_hit_the_exchange_once(app_and_collector):
     codes = [r.status_code for r in responses]
     assert codes == [200] * 10, f"коды ответов: {codes}, тело: {responses[0].text[:200]}"
     assert len(calls) == 1
+
+
+def test_ten_minute_candles_are_folded_from_five():
+    """Десятиминуток у биржи нет - складываем их сами.
+
+    Границы совпадают: десять минут это ровно две пятиминутки от той же эпохи.
+    Открытие берём у первой свечи корзины, закрытие у последней, край по краям,
+    объём складываем - иначе это уже не та свеча.
+    """
+    from backend.api.scalping import fold_candles
+
+    rows = [
+        {"time": 600, "open": 10.0, "high": 12.0, "low": 9.0, "close": 11.0, "volume": 5.0},
+        {"time": 900, "open": 11.0, "high": 15.0, "low": 10.5, "close": 14.0, "volume": 7.0},
+        {"time": 1200, "open": 14.0, "high": 14.5, "low": 13.0, "close": 13.5, "volume": 3.0},
+    ]
+    folded = fold_candles(rows, 600)
+
+    assert [c["time"] for c in folded] == [600, 1200]
+    first = folded[0]
+    assert (first["open"], first["close"]) == (10.0, 14.0)
+    assert (first["high"], first["low"]) == (15.0, 9.0)
+    assert first["volume"] == 12.0
+    # Незакрытая корзина остаётся: на графике это текущая свеча.
+    assert folded[1]["volume"] == 3.0
+
+
+def test_folding_leaves_untouched_what_it_cannot_group():
+    from backend.api.scalping import fold_candles
+
+    rows = [{"time": 600, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}]
+    assert fold_candles(rows, 0) == rows
+    assert fold_candles([], 600) == []
