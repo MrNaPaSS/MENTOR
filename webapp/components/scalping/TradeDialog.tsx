@@ -54,6 +54,7 @@ export default function TradeDialog({
   live = false,
   maxLeverage,
   takerFee,
+  opposing = 0,
 }: {
   draft: TradeDraft;
   onChange: (next: TradeDraft) => void;
@@ -73,6 +74,14 @@ export default function TradeDialog({
   maxLeverage?: number;
   /** Комиссия тейкера этой монеты: по ней считаются подсказки в окне. */
   takerFee?: number;
+  /**
+   * Объём встречной позиции по этой монете.
+   *
+   * На одностороннем счёте ордер против открытой позиции уменьшает её, а не
+   * заводит вторую сделку: трейдер думает, что открыл шорт, а на деле закрыл
+   * свой лонг. Знать это нужно до нажатия.
+   */
+  opposing?: number;
 }) {
   // Сумму не выделяем и не забираем на неё курсор: она приходит из прошлой
   // сделки и чаще всего верна. Выделенное число исчезает от первого же
@@ -214,6 +223,14 @@ export default function TradeDialog({
               note={plan.liquidatedFirst ? "ближе стопа" : ""}
               tone={plan.liquidatedFirst ? "text-[var(--pane-down)]" : "text-[var(--pane-muted)]"}
             />
+
+            {opposing > 0 && (
+              <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
+                По этой монете открыта встречная позиция {opposing}. Если счёт в
+                одностороннем режиме, эта заявка уменьшит её, а не создаст новую
+                сделку.
+              </p>
+            )}
 
             {overLimit && (
               <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">

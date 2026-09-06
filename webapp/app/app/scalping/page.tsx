@@ -280,6 +280,11 @@ export default function ScalpingPage() {
   const [closing, setClosing] = useState<ActiveTrade | null>(null);
   const tradesRef = useRef<ActiveTrade[]>([]);
   tradesRef.current = trades;
+  // Встречная позиция на бирже: на одностороннем счёте ордер против неё её же
+  // и уменьшает, а не создаёт вторую сделку. Трейдер должен знать это до
+  // нажатия, а не по факту закрытия своего лонга.
+  const [opposing, setOpposing] = useState(0);
+
   // Что из защиты реально стоит на бирже. График рисует цели по замыслу
   // сделки, и когда биржа их не приняла, картинка успокаивает вместо того,
   // чтобы предупредить.
@@ -889,6 +894,26 @@ export default function ScalpingPage() {
     // planKey намеренно вместо plan: у объекта расчёта каждый раз новая ссылка.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dialogOpen, planKey, symbol, draft?.margin, draft?.leverage]);
+
+  // Спрашиваем про встречную позицию, когда открыто окно расчёта.
+  useEffect(() => {
+    if (!dialogOpen || !plan || !symbol || !exchange?.connected) {
+      setOpposing(0);
+      return;
+    }
+    let cancelled = false;
+    positionOf(symbol, plan.side === "long" ? "short" : "long")
+      .then((body) => {
+        if (!cancelled) setOpposing(body?.size ?? 0);
+      })
+      .catch(() => {
+        // Биржа не ответила - предупреждать не о чем, а мешать не будем.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialogOpen, symbol, plan?.side, exchange?.connected]);
 
   // Сделка идёт на бирже: тогда её состоянием распоряжается биржа, а не мы.
   const live = Boolean(exchange?.connected);
@@ -1723,6 +1748,7 @@ export default function ScalpingPage() {
           onConfirm={confirmTrade}
           onCancel={cancelDialog}
           live={Boolean(exchange?.connected)}
+          opposing={opposing}
           maxLeverage={limits?.max_leverage}
           takerFee={limits?.taker_fee}
         />
