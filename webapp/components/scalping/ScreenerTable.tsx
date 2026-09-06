@@ -78,12 +78,14 @@ const COLUMNS: {
 type Props = {
   rows: ScreenerRow[];
   selected: string | null;
+  /** Монеты с идущими сделками: они стоят наверху и помечены. */
+  active?: Set<string>;
   sort: SortKey;
   onSort: (key: SortKey) => void;
   onSelect: (symbol: string) => void;
 };
 
-export default function ScreenerTable({ rows, selected, sort, onSort, onSelect }: Props) {
+export default function ScreenerTable({ rows, selected, active, sort, onSort, onSelect }: Props) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-fixed border-collapse whitespace-nowrap text-[11px] tabular-nums">
@@ -119,6 +121,7 @@ export default function ScreenerTable({ rows, selected, sort, onSort, onSelect }
               key={row.symbol}
               row={row}
               selected={row.symbol === selected}
+              mine={Boolean(active?.has(row.symbol))}
               onSelect={onSelect}
             />
           ))}
@@ -135,10 +138,13 @@ export default function ScreenerTable({ rows, selected, sort, onSort, onSelect }
 const Row = memo(function Row({
   row,
   selected,
+  mine,
   onSelect,
 }: {
   row: ScreenerRow;
   selected: boolean;
+  /** По этой монете идёт сделка. */
+  mine: boolean;
   onSelect: (symbol: string) => void;
 }) {
   return (
@@ -156,7 +162,13 @@ const Row = memo(function Row({
           иначе длинные имена вроде MARSCOIN распирают строку на две. */}
       <td className="px-1.5 py-1.5">
         <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-          <span className="w-[62px] shrink-0 overflow-hidden text-ellipsis font-semibold text-[var(--pane-text)]">
+          <span
+            className={`w-[62px] shrink-0 overflow-hidden text-ellipsis font-semibold ${
+              mine ? "text-[var(--pane-accent)]" : "text-[var(--pane-text)]"
+            }`}
+            title={mine ? "По этой монете идёт сделка" : undefined}
+          >
+            {mine && "• "}
             {base(row.symbol)}
           </span>
           <span className="flex-1 text-right font-mono text-[10px] text-[var(--pane-text-2)]">

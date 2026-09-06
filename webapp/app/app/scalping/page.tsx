@@ -1114,6 +1114,27 @@ export default function ScalpingPage() {
   const myAlerts = alerts.filter((a) => a.symbol === symbol);
   const alertPrices = myAlerts.map((a) => a.price);
 
+  /**
+   * Список для скринера: монеты с идущими сделками наверху.
+   *
+   * За позицией следят, а не ищут её в полусотне строк, и уж тем более не
+   * после того, как монета уехала вниз по обороту. Внутри групп порядок
+   * прежний - тот, что задан выбранной сортировкой.
+   *
+   * Монету, выпавшую из состава наблюдения, поднять неоткуда: её строки в
+   * потоке просто нет. Разметка сделки при этом никуда не девается - она на
+   * графике, стоит открыть монету.
+   */
+  const traded = useMemo(
+    () => new Set(trades.filter((t) => t.status !== "closed").map((t) => t.symbol)),
+    [trades],
+  );
+  const screenerRows = useMemo(() => {
+    if (traded.size === 0) return screener;
+    const mine = screener.filter((r) => traded.has(r.symbol));
+    return mine.length === 0 ? screener : [...mine, ...screener.filter((r) => !traded.has(r.symbol))];
+  }, [screener, traded]);
+
   // Сделки по открытой монете: их рисует график, остальные ждут своей.
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
 
@@ -1211,8 +1232,9 @@ export default function ScalpingPage() {
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ScreenerTable
-              rows={screener}
+              rows={screenerRows}
               selected={symbol}
+              active={traded}
               sort={sort}
               onSort={setSort}
               onSelect={selectSymbol}
