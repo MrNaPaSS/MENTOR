@@ -63,15 +63,31 @@ export default function TradeDialog({
 }) {
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
+  // Выделяем сумму один раз, при открытии окна.
+  //
+  // Раньше это стояло в подписке на клавиши, а она пересоздавалась на каждом
+  // рендере — стакан приходит восемь раз в секунду, и поле выделялось заново
+  // столько же. Набранное затиралось следующим же кадром: ввести своё число
+  // было невозможно, а сумма выглядела вечно подсвеченной.
+  useEffect(() => {
+    firstFieldRef.current?.focus();
+    firstFieldRef.current?.select();
+  }, []);
+
+  // Горячие клавиши: обработчики держим в ref, чтобы подписка не зависела от
+  // того, как часто перерисовывается страница под окном.
+  const keys = useRef({ onCancel, onConfirm });
+  keys.current = { onCancel, onConfirm };
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onCancel();
-      if (event.key === "Enter") onConfirm();
+      if (event.key === "Escape") keys.current.onCancel();
+      // Enter подтверждает, но не когда трейдер правит число: там он ждёт
+      // конца ввода, а не входа в сделку.
+      if (event.key === "Enter") keys.current.onConfirm();
     }
     document.addEventListener("keydown", onKey);
-    firstFieldRef.current?.select();
     return () => document.removeEventListener("keydown", onKey);
-  }, [onCancel, onConfirm]);
+  }, []);
 
   const side = sideForShelf(draft.shelf.side);
   const long = side === "long";
