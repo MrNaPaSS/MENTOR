@@ -16,6 +16,8 @@ import {
   BookText,
   Moon,
   Radio,
+  Volume2,
+  VolumeX,
   PanelLeftClose,
   PanelLeftOpen,
   Sun,
@@ -29,6 +31,7 @@ import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
 import type { ChartTheme } from "@/lib/indicator/shapes";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
+import { play, setMuted } from "@/lib/sound";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
 import {
@@ -196,6 +199,7 @@ type Workspace = {
   margin: number;
   leverage: number;
   journal: number;
+  sound: boolean;
   /** Последняя открытая монета: возврат в раздел не должен начинаться с нуля. */
   symbol: string | null;
 };
@@ -230,6 +234,9 @@ export default function ScalpingPage() {
   // возможных поведений: трейдер не знает, ушла заявка или нет.
   const [orderNote, setOrderNote] = useState<{ text: string; bad: boolean } | null>(null);
   const [closeOpen, setCloseOpen] = useState(false);
+  // Звук событий сделки. Скальпер смотрит в стакан, а не в ярлык позиции:
+  // цель может взяться, пока он разглядывает другую монету.
+  const [sound, setSound] = useState(true);
   const [journalH, setJournalH] = useState(JOURNAL_LIMITS.def);
   // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
   const [journalKey, setJournalKey] = useState(0);
@@ -302,6 +309,10 @@ export default function ScalpingPage() {
     if (typeof saved.journal === "number") {
       setJournalH(clamp(saved.journal, JOURNAL_LIMITS));
     }
+    if (typeof saved.sound === "boolean") {
+      setSound(saved.sound);
+      setMuted(!saved.sound);
+    }
     if (typeof saved.symbol === "string" && saved.symbol) {
       setSymbol(saved.symbol);
       // Монета уже выбрана — список для этого больше не нужен. Он открывается
@@ -325,6 +336,7 @@ export default function ScalpingPage() {
   // состояние экрана.
   useEffect(() => {
     if (!orderNote) return;
+    play(orderNote.bad ? "error" : "order");
     // Ошибку держим дольше удачи: её надо успеть прочитать.
     const id = setTimeout(() => setOrderNote(null), orderNote.bad ? 20000 : 8000);
     return () => clearTimeout(id);
@@ -371,6 +383,7 @@ export default function ScalpingPage() {
       leverage,
       journal: journalH,
       symbol,
+      sound,
     } satisfies Workspace;
 
     try {
@@ -402,6 +415,7 @@ export default function ScalpingPage() {
     leverage,
     journalH,
     symbol,
+    sound,
   ]);
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
@@ -718,6 +732,32 @@ export default function ScalpingPage() {
     }
   }, [trade]);
 
+  // Звук на переходах сделки: вход, взятая цель, стоп, закрытие. Следим за
+  // состоянием, а не за нажатиями, — цель берётся сама, без участия трейдера.
+  const heard = useRef<string>("");
+  useEffect(() => {
+    if (!trade) {
+      heard.current = "";
+      return;
+    }
+    const stamp = `${trade.id}:${trade.status}:${trade.takesHit}:${trade.outcome ?? ""}`;
+    if (heard.current === stamp) return;
+    const previous = heard.current;
+    heard.current = stamp;
+    if (!previous) return; // первое появление сделки — это не событие
+
+    const [, status, takes, outcome] = stamp.split(":");
+    const wasTakes = Number(previous.split(":")[2] || 0);
+
+    if (status === "open" && Number(takes) > wasTakes) play("take");
+    else if (status === "open") play("entry");
+    else if (status === "closed") {
+      if (outcome === "take") play("profit");
+      else if (outcome === "stop") play("stop");
+      else play("close");
+    }
+  }, [trade]);
+
   // Закрытая сделка уходит в журнал ровно один раз. Идентификатор сделки
   // сохраняется на клиенте, поэтому повтор после обрыва связи не создаст
   // вторую запись — сервер обновит существующую.
@@ -947,6 +987,21 @@ export default function ScalpingPage() {
                       сделка ✕
                     </button>
                   )}
+
+                  <button
+                    onClick={() => {
+                      const next = !sound;
+                      setSound(next);
+                      setMuted(!next);
+                      // Первое нажатие ещё и разрешает браузеру звук: до
+                      // действия пользователя он играть не даёт.
+                      if (next) play("order");
+                    }}
+                    title={sound ? "Звук событий включён" : "Звук выключен"}
+                    className={`${CHIP} ${sound ? CHIP_ON : CHIP_OFF}`}
+                  >
+                    {sound ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                  </button>
 
                   <button
                     onClick={() => setExchangeOpen(true)}
