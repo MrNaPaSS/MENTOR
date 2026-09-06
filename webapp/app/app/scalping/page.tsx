@@ -47,8 +47,10 @@ import { fmtUsd } from "@/lib/format";
 import {
   closePosition,
   openPosition,
+  limitsOf,
   positionOf,
   tradingStatus,
+  type SymbolLimits,
   type TradingStatus,
 } from "@/lib/trading";
 import {
@@ -271,6 +273,11 @@ export default function ScalpingPage() {
   const [closing, setClosing] = useState<ActiveTrade | null>(null);
   const tradesRef = useRef<ActiveTrade[]>([]);
   tradesRef.current = trades;
+  // Пределы монеты: потолок плеча и комиссия. У большинства монет биржи
+  // плечо упирается в ×20 или ×50, а кнопки предлагают до ×400 - без этого
+  // отказ приходил уже после нажатия «Войти».
+  const [limits, setLimits] = useState<SymbolLimits | null>(null);
+
   // Отметки на ценах: терминал скажет, когда уровень пересекут.
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   // Уровень, по которому нажали в стакане: спрашиваем, что с ним делать.
@@ -1081,6 +1088,28 @@ export default function ScalpingPage() {
     setAlerts((list) => list.filter((a) => !done.has(a.id)));
   }, [dom?.mid, dom?.tick, alerts, symbol]);
 
+  // Пределы спрашиваем на смену монеты: они не меняются месяцами и лежат в
+  // кэше сервера, но у каждой монеты свои.
+  useEffect(() => {
+    if (!symbol) {
+      setLimits(null);
+      return;
+    }
+    let cancelled = false;
+    setLimits(null);
+    limitsOf(symbol)
+      .then((body) => {
+        if (!cancelled) setLimits(body);
+      })
+      .catch(() => {
+        // Не ответил справочник - окно расчёта покажет полный набор плеч, а
+        // предел, если что, назовёт сама биржа отказом.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol]);
+
   // Отметки открытой монеты: их рисует график и подсвечивает стакан.
   const myAlerts = alerts.filter((a) => a.symbol === symbol);
   const alertPrices = myAlerts.map((a) => a.price);
@@ -1575,6 +1604,8 @@ export default function ScalpingPage() {
           onConfirm={confirmTrade}
           onCancel={cancelDialog}
           live={Boolean(exchange?.connected)}
+          maxLeverage={limits?.max_leverage}
+          takerFee={limits?.taker_fee}
         />
       )}
     </div>

@@ -35,6 +35,7 @@ from core.trading.position import (
 )
 from core.weex import keys as keystore
 from core.weex.futures import (
+    public_filters,
     Credentials,
     WeexFutures,
     WeexTradeError,
@@ -152,6 +153,28 @@ def _fail(exc: WeexTradeError) -> HTTPException:
     logger.warning("WEEX отказал: %s (код %s)", exc, exc.code)
     status = 502 if exc.retryable else 400
     return HTTPException(status, f"Биржа: {exc}")
+
+
+@router.get("/limits/{symbol}")
+async def limits(symbol: str, student: Student = Depends(get_current_student)):
+    """Пределы инструмента: плечо, комиссия, шаги.
+
+    Нужны до отправки ордера, а не после: у большинства монет биржи потолок
+    плеча ×20 или ×50, а кнопки в окне расчёта предлагают до ×400. Раньше это
+    выяснялось отказом биржи после нажатия «Войти».
+
+    Ключей не требует - справочник биржи открыт, и знать предел вправе и тот,
+    кто счёт ещё не подключил.
+    """
+    filters = await public_filters(await _get_session(), symbol.upper())
+    return {
+        "symbol": symbol.upper(),
+        "max_leverage": int(filters.get("max_leverage") or 20),
+        "taker_fee": float(filters.get("taker_fee") or 0.0008),
+        "step": float(filters.get("step") or 0.001),
+        "tick": float(filters.get("tick") or 0.01),
+        "min_qty": float(filters.get("min_qty") or 0.001),
+    }
 
 
 @router.get("/status")

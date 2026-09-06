@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -55,7 +56,16 @@ ENDPOINTS = {
 # Шаги инструмента, если биржа их не отдала. Не догадка: столько же стоит в
 # боте заказчика как DEFAULT. Но живые шаги всегда важнее — они меняются, и на
 # BTC биржа уже отвечает 0.0001 там, где в таблице записано 0.001.
-DEFAULT_FILTERS = {"step": 0.001, "tick": 0.01, "min_qty": 0.001}
+# Предельное плечо и комиссия тейкера - тоже свойства инструмента, и знать их
+# нужно до отправки ордера: у большинства монет биржи потолок ×20 или ×50, а
+# наши кнопки предлагают до ×400. Отказ приходил уже после нажатия «Войти».
+DEFAULT_FILTERS = {
+    "step": 0.001,
+    "tick": 0.01,
+    "min_qty": 0.001,
+    "max_leverage": 20.0,
+    "taker_fee": 0.0008,
+}
 
 # Кэш на процесс: состав инструментов меняется раз в месяцы, а запрос тяжёлый.
 _FILTERS: dict[str, dict[str, float]] = {}
@@ -93,6 +103,41 @@ def _decimals(step: float) -> int:
     return len(text.split(".")[1]) if "." in text else 0
 
 
+async def public_filters(session, symbol: str) -> dict[str, float]:
+    """Свойства инструмента без ключей: шаги, потолок плеча, комиссия.
+
+    Справочник биржи открыт для всех, а знать предел плеча нужно и тому, кто
+    ещё не подключил счёт: кнопка ×100 на монете с потолком ×50 - это отказ
+    после нажатия «Войти», а не до него.
+
+    Кэш общий с клиентом: состав инструментов меняется раз в месяцы.
+    """
+    sym = symbol.upper()
+    if sym in _FILTERS:
+        return _FILTERS[sym]
+
+    url = f"{BASE_URL}{ENDPOINTS['exchange_info']}"
+    try:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status != 200:
+                return DEFAULT_FILTERS
+            data = await resp.json(content_type=None)
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+        logger.warning("Справочник инструментов не получен: %s", exc)
+        return DEFAULT_FILTERS
+
+    rows = data.get("symbols") if isinstance(data, dict) else data
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("symbol") or "").upper()
+        parsed = _parse_filters(row)
+        if name and parsed:
+            _FILTERS[name] = parsed
+
+    return _FILTERS.get(sym, DEFAULT_FILTERS)
+
+
 def _parse_filters(row: dict[str, Any]) -> dict[str, float] | None:
     """Шаги инструмента из ответа биржи.
 
@@ -123,6 +168,8 @@ def _parse_filters(row: dict[str, Any]) -> dict[str, float] | None:
         "step": out.get("step") or DEFAULT_FILTERS["step"],
         "tick": out.get("tick") or DEFAULT_FILTERS["tick"],
         "min_qty": out.get("min_qty") or out.get("step") or DEFAULT_FILTERS["min_qty"],
+        "max_leverage": _f(row.get("maxLeverage")) or DEFAULT_FILTERS["max_leverage"],
+        "taker_fee": _f(row.get("takerFeeRate")) or DEFAULT_FILTERS["taker_fee"],
     }
 
 

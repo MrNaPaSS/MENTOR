@@ -105,6 +105,27 @@ export function closePosition(trade: ActiveTrade, share: number) {
   );
 }
 
+/** Пределы инструмента: их задаёт биржа, и знать их нужно до ордера. */
+export type SymbolLimits = {
+  /** Потолок плеча по этой монете: у большинства он ×20 или ×50. */
+  max_leverage: number;
+  /** Комиссия тейкера: платится на входе и на выходе. */
+  taker_fee: number;
+  step: number;
+  tick: number;
+  min_qty: number;
+};
+
+/**
+ * Спросить пределы инструмента.
+ *
+ * Кнопка ×100 на монете с потолком ×50 - это отказ биржи после нажатия
+ * «Войти». Дешевле узнать заранее: справочник открыт и кэшируется на сервере.
+ */
+export function limitsOf(symbol: string) {
+  return request<SymbolLimits>(`/api/trading/limits/${symbol.toUpperCase()}`);
+}
+
 /** Открытая позиция по инструменту глазами биржи. */
 export type ExchangePosition = {
   size: number;

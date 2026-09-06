@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 import { computeTrade, sideForShelf, DEFAULT_TAKES } from "@/lib/trade/plan";
+import { TAKER_FEE } from "@/lib/trade/position";
 
 export type TradeDraft = {
   shelf: Wall;
@@ -51,6 +52,8 @@ export default function TradeDialog({
   onConfirm,
   onCancel,
   live = false,
+  maxLeverage,
+  takerFee,
 }: {
   draft: TradeDraft;
   onChange: (next: TradeDraft) => void;
@@ -60,6 +63,16 @@ export default function TradeDialog({
   onCancel: () => void;
   /** Счёт подключён: подтверждение отправит заявку на биржу. */
   live?: boolean;
+  /**
+   * Потолок плеча по этой монете.
+   *
+   * У большинства монет биржи он ×20 или ×50, а готовые значения доходят до
+   * ×400. Кнопка, которая гарантированно приведёт к отказу биржи, - это не
+   * выбор, а ловушка: такие мы не показываем.
+   */
+  maxLeverage?: number;
+  /** Комиссия тейкера этой монеты: по ней считаются подсказки в окне. */
+  takerFee?: number;
 }) {
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
@@ -88,6 +101,14 @@ export default function TradeDialog({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
+
+  // Готовые плечи выше потолка монеты не показываем, а сам потолок добавляем:
+  // трейдер должен видеть, куда упирается, и уметь встать ровно туда.
+  const cap = maxLeverage && maxLeverage > 0 ? maxLeverage : null;
+  const leverages = cap
+    ? [...LEVERAGES.filter((l) => l < cap), cap].filter((l, i, all) => all.indexOf(l) === i)
+    : LEVERAGES;
+  const overLimit = cap !== null && draft.leverage > cap;
 
   const side = sideForShelf(draft.shelf.side);
   const long = side === "long";
@@ -147,9 +168,9 @@ export default function TradeDialog({
             onPick={(margin) => onChange({ ...draft, margin })}
           />
           <Field
-            label="Плечо"
+            label={cap ? `Плечо (макс x${cap})` : "Плечо"}
             value={draft.leverage}
-            presets={LEVERAGES}
+            presets={leverages}
             format={(v) => `x${v}`}
             onPick={(leverage) => onChange({ ...draft, leverage })}
           />
@@ -185,11 +206,24 @@ export default function TradeDialog({
               />
             ))}
             <Row
+              label="Комиссия ≈"
+              price={money(plan.notional * (takerFee ?? TAKER_FEE) * 2)}
+              note="вход и выход"
+              tone="text-[var(--pane-muted)]"
+            />
+            <Row
               label="Ликвидация ≈"
               price={fmtPrice(plan.liquidation, tick)}
               note={plan.liquidatedFirst ? "ближе стопа" : ""}
               tone={plan.liquidatedFirst ? "text-[var(--pane-down)]" : "text-[var(--pane-muted)]"}
             />
+
+            {overLimit && (
+              <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
+                По этой монете биржа держит максимум x{cap}. С плечом x{draft.leverage}
+                {" "}заявку она отклонит.
+              </p>
+            )}
 
             {plan.liquidatedFirst && (
               <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
@@ -221,7 +255,7 @@ export default function TradeDialog({
             </button>
             <button
               onClick={onConfirm}
-              disabled={!plan}
+              disabled={!plan || overLimit}
               className={`${BUTTON} ${
                 long ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]" : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
               } disabled:opacity-40`}

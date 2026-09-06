@@ -544,3 +544,28 @@ def test_result_counts_every_fill_of_the_trade_minus_fees(app_and_exchange):
     # 20 − 10 = 10 по бирже, минус 4.57 комиссии.
     assert body["realized"] == 5.43
     assert body["fee"] == 4.57
+
+
+def test_limits_name_the_ceiling_of_the_instrument(app_and_exchange, monkeypatch):
+    """Потолок плеча у каждой монеты свой, и знать его нужно до ордера.
+
+    У большинства инструментов биржи он ×20 или ×50, а кнопки в окне расчёта
+    доходят до ×400: без этой ручки отказ приходил уже после «Войти».
+    """
+    client, _, _ = app_and_exchange
+
+    async def fake(session, symbol):
+        assert symbol == "SKHYNIXUSDT"
+        return {
+            "step": 0.001,
+            "tick": 0.01,
+            "min_qty": 0.001,
+            "max_leverage": 50.0,
+            "taker_fee": 0.0008,
+        }
+
+    monkeypatch.setattr(trading_api, "public_filters", fake)
+
+    body = client.get("/api/trading/limits/skhynixusdt").json()
+    assert body["max_leverage"] == 50
+    assert body["taker_fee"] == 0.0008
