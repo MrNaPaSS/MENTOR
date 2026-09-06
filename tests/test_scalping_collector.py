@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import pytest
 
@@ -268,3 +269,39 @@ async def test_missing_snapshot_leaves_book_unready():
 async def test_stop_is_safe_without_start():
     c = make_collector(SNAPSHOT, TICKERS)
     await c.stop()
+
+
+# ── бережность к бирже ───────────────────────────────────────────────────────
+
+async def test_failed_snapshot_puts_the_symbol_on_pause():
+    """Без паузы каждое событие потока запускает новый запрос.
+
+    На полусотне монет это сотни запросов в секунду: биржа банит адрес, а бан
+    продлевается каждой новой попыткой. Так мы и получили 418.
+    """
+    c = make_collector(None, TICKERS)          # снимок не отдаётся
+    await c._resync("BTCUSDT")
+    assert "BTCUSDT" in c._cooldown
+
+    # Пока пауза не вышла, новая пересборка не планируется.
+    before = len(asyncio.all_tasks())
+    c._schedule_resync("BTCUSDT")
+    assert len(asyncio.all_tasks()) == before
+
+
+async def test_successful_snapshot_lifts_the_pause():
+    c = make_collector(SNAPSHOT, TICKERS)
+    c._cooldown["BTCUSDT"] = time.monotonic() + 999
+    await c._resync("BTCUSDT")
+    assert "BTCUSDT" not in c._cooldown
+
+
+def test_rest_stops_calling_the_exchange_while_banned():
+    """418 — это бан адреса. Ходить туда во время бана значит продлевать его."""
+    from backend.scalping.binance import BAN_BACKOFF_MIN, BinanceRest
+
+    rest = BinanceRest(lambda: None)           # type: ignore[arg-type]
+    assert rest.blocked is False
+    rest._block(BAN_BACKOFF_MIN)
+    assert rest.blocked is True
+    assert rest.blocked_for > 0

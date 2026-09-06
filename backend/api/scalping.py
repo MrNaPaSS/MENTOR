@@ -169,4 +169,7 @@ async def status(request: Request) -> dict[str, Any]:
         "tracked": sorted(collector.tracked),
         "books_ready": ready,
         "streams": len(collector.stream.streams),
+        # Сколько секунд биржа держит нас закрытыми. Ноль — всё в порядке;
+        # больше нуля значит 418 или 429, и до конца паузы книги не соберутся.
+        "throttled_for": round(collector.rest.blocked_for, 1),
     }

@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import json
 import logging
 from typing import Any, Awaitable, Callable
@@ -35,20 +36,63 @@ RECONNECT_MAX = 30.0
 # Управляющих сообщений биржа принимает не больше 10 в секунду.
 CONTROL_RATE_DELAY = 0.15
 
+# Пауза после отказа по лимиту. Растёт вдвое, пока биржа не ответит нормально:
+# 418 — это бан адреса, и каждый запрос во время бана продлевает его.
+BAN_BACKOFF_MIN = 30.0
+BAN_BACKOFF_MAX = 600.0
+
 
 class BinanceRest:
-    """REST-запросы к публичному API фьючерсов."""
+    """REST-запросы к публичному API фьючерсов.
+
+    С одной оговоркой, которая здесь важнее всего остального: биржа отвечает
+    418, когда адрес забанен за превышение лимита. Бан продлевается каждым
+    новым запросом, поэтому во время бана мы не ходим на биржу вовсе — иначе
+    минутный запрет превращается в суточный.
+    """
 
     def __init__(self, session_factory: Callable[[], Awaitable[aiohttp.ClientSession]]):
         self._session_factory = session_factory
+        # До какого момента запросы не отправляются.
+        self._blocked_until = 0.0
+        self._penalty = BAN_BACKOFF_MIN
+
+    @property
+    def blocked(self) -> bool:
+        return time.monotonic() < self._blocked_until
+
+    @property
+    def blocked_for(self) -> float:
+        return max(0.0, self._blocked_until - time.monotonic())
+
+    def _block(self, seconds: float) -> None:
+        self._blocked_until = time.monotonic() + seconds
+        logger.warning("Биржа закрыта для запросов на %.0f с", seconds)
 
     async def _get(self, path: str, params: dict | None = None) -> Any:
+        if self.blocked:
+            return None
+
         session = await self._session_factory()
         try:
             async with session.get(f"{REST_BASE}{path}", params=params) as r:
+                if r.status in (418, 429):
+                    # 429 — предупреждение, 418 — уже бан. И то, и другое значит
+                    # «замолчи»: пауза берётся из ответа, а если её там нет —
+                    # растёт сама, вдвое с каждым разом.
+                    after = r.headers.get("Retry-After")
+                    try:
+                        pause = float(after) if after else self._penalty
+                    except ValueError:
+                        pause = self._penalty
+                    self._penalty = min(self._penalty * 2, BAN_BACKOFF_MAX)
+                    self._block(max(pause, BAN_BACKOFF_MIN))
+                    return None
                 if r.status != 200:
                     logger.warning("Binance %s вернул %s", path, r.status)
                     return None
+                # Ответили нормально — счётчик наказания сбрасываем.
+                self._penalty = BAN_BACKOFF_MIN
                 return await r.json(content_type=None)
         except Exception as exc:  # noqa: BLE001 — сеть; вызывающий решает, что делать
             logger.warning("Binance %s недоступен: %s", path, exc)

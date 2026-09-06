@@ -38,7 +38,7 @@ logger = logging.getLogger("nmnh.scalping")
 # монетах разбор JSON съедал весь цикл событий: вместе со сбором ложился и
 # сам интерфейс. Поэтому монет больше, но поток для списка медленнее — см.
 # DEPTH_SLOW ниже.
-DEFAULT_TOP_N = 50
+DEFAULT_TOP_N = 30
 
 # Скорость потока стакана. Открытому в терминале инструменту нужны все десять
 # обновлений в секунду: на скальпе видно, как заявку снимают. Остальным хватает
@@ -48,6 +48,16 @@ DEPTH_SLOW = "500ms"
 TICKER_INTERVAL = 10.0      # обновление суточной сводки, секунды
 ROTATE_INTERVAL = 300.0     # пересмотр состава топа, секунды
 PRUNE_INTERVAL = 30.0       # чистка книг от далёких уровней, секунды
+
+# Пауза перед повторной попыткой собрать книгу после неудачи. Без неё каждое
+# событие потока запускает новый запрос: на полусотне монет это сотни запросов
+# в секунду и бан адреса, который продлевается сам собой.
+RESYNC_COOLDOWN = 20.0
+
+# Пауза между первичными снимками при наборе состава. Снимок стоит десять
+# единиц веса, минутный лимит биржи — 2400: полсекунды между запросами держат
+# нас в пределах даже при полной пересборке списка.
+SNAPSHOT_DELAY = 0.5
 
 SNAPSHOT_LIMIT = 500        # уровней в снимке инструмента из списка
 SNAPSHOT_LIMIT_PINNED = 1000  # для инструмента, открытого в стакане
@@ -104,6 +114,8 @@ class ScalpingCollector:
         self._pinned: dict[str, int] = {}           # символ → сколько клиентов смотрят стакан
         self._buffers: dict[str, list[dict]] = {}   # события во время пересборки книги
         self._resyncing: set[str] = set()
+        # До какого момента не пробуем пересобрать книгу инструмента.
+        self._cooldown: dict[str, float] = {}
         self._task: asyncio.Task | None = None
 
     @property
@@ -182,7 +194,11 @@ class ScalpingCollector:
             await self._untrack(symbol)
 
     async def _track(self, symbol: str) -> None:
-        """Взять инструмент под наблюдение: подписка и первичный снимок."""
+        """Взять инструмент под наблюдение: подписка и первичный снимок.
+
+        Снимки берутся по одному с паузой: пятьдесят подряд — это пятьсот
+        единиц веса за секунду, и биржа отвечает баном адреса.
+        """
         self._tracked.add(symbol)
         self.state.ensure(symbol)
         # Буфер заводим до подписки: события приходят раньше, чем ответит REST,
@@ -191,6 +207,7 @@ class ScalpingCollector:
         self._buffers[symbol] = []
         await self.stream.subscribe(self._streams(symbol))
         await self._resync(symbol)
+        await asyncio.sleep(SNAPSHOT_DELAY)
 
     async def _untrack(self, symbol: str) -> None:
         self._tracked.discard(symbol)
@@ -286,8 +303,18 @@ class ScalpingCollector:
             limit = SNAPSHOT_LIMIT_PINNED if symbol in self._pinned else SNAPSHOT_LIMIT
             snapshot = await self.rest.depth(symbol, limit)
             if not snapshot:
-                logger.warning("Снимок стакана %s не получен", symbol)
+                # Не получилось — придерживаем этот инструмент. Без паузы
+                # следующее же событие потока запустит новый запрос, и на
+                # полусотне монет это сотни запросов в секунду: биржа банит
+                # адрес, а бан продлевается каждой новой попыткой.
+                self._cooldown[symbol] = time.monotonic() + RESYNC_COOLDOWN
+                logger.warning(
+                    "Снимок стакана %s не получен, следующая попытка через %.0f с",
+                    symbol,
+                    RESYNC_COOLDOWN,
+                )
                 return
+            self._cooldown.pop(symbol, None)
             state.book.apply_snapshot(
                 snapshot.get("bids") or [],
                 snapshot.get("asks") or [],
@@ -304,6 +331,9 @@ class ScalpingCollector:
 
     def _schedule_resync(self, symbol: str) -> None:
         if symbol in self._resyncing:
+            return
+        # Инструмент под паузой после неудачи — ждём, не трогаем биржу.
+        if time.monotonic() < self._cooldown.get(symbol, 0.0):
             return
         logger.info("Стакан %s рассинхронизирован — пересобираем", symbol)
         self._resyncing.add(symbol)   # помечаем сразу, чтобы события буферизовались
