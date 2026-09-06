@@ -34,7 +34,7 @@ from core.trading.position import (
     take_share,
 )
 from core.weex import keys as keystore
-from backend.trading.watcher import position_for
+from backend.trading.watcher import fill_time, position_for, settle
 from core.weex.futures import (
     public_filters,
     Credentials,
@@ -501,7 +501,17 @@ async def close_position(
     # биржа показывает по открытой позиции, но не с тем, что приходит на счёт.
     # Выход по рынку идёт по встречной стороне книги, и обе ноги платят
     # комиссию. Разница видна сразу: было +37, пришло +5.
-    realized, fee, fill = await _settled(client, symbol, order_id, opened_at)
+    # Цену входа и сторону передаём затем, чтобы итог можно было посчитать и
+    # тогда, когда биржа не назвала его сама: в её отчёте об исполнениях поля с
+    # результатом может не быть вовсе - как не было поля с безубытком.
+    realized, fee, fill = await _settled(
+        client,
+        symbol,
+        order_id,
+        opened_at,
+        float(live.entry) if live else 0.0,
+        body.side,
+    )
 
     return {
         "closed": quantity,
@@ -533,6 +543,8 @@ async def _settled(
     symbol: str,
     order_id: str,
     since: datetime | None,
+    entry: float = 0.0,
+    side: str = "long",
 ) -> tuple[float | None, float | None, float | None]:
     """Итог сделки по исполнениям с биржи: результат за вычетом комиссии.
 
@@ -557,12 +569,8 @@ async def _settled(
 
         mine = []
         for f in fills:
-            try:
-                stamp = int(f.get("time") or 0)
-            except (TypeError, ValueError):
-                stamp = 0
             same_order = order_id and str(f.get("orderId") or "") == str(order_id)
-            if same_order or (opened_ms and stamp >= opened_ms):
+            if same_order or (opened_ms and fill_time(f) >= opened_ms):
                 mine.append(f)
 
         # Пока в отчёте нет закрывающего ордера, итог считать рано: он и есть
@@ -572,19 +580,7 @@ async def _settled(
         if not mine:
             continue
 
-        gross = 0.0
-        fee = 0.0
-        price = None
-        for f in mine:
-            try:
-                gross += float(f.get("realizedPnl") or 0)
-                fee += abs(float(f.get("commission") or 0))
-                value = float(f.get("price") or 0)
-                if value > 0:
-                    price = value
-            except (TypeError, ValueError):
-                continue
-
+        gross, fee, price = settle(mine, entry, side)
         net = gross - fee
         logger.info(
             "Сделка %s закрыта: по бирже %.4f, комиссия %.4f, на счёт %.4f",

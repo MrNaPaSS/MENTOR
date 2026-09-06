@@ -566,17 +566,12 @@ class PositionWatcher:
                 since if since is None or since.tzinfo else since.replace(tzinfo=timezone.utc)
             )
             opened_ms = int(aware.timestamp() * 1000) if aware else 0
-            for fill in await client.user_trades(trade.symbol, limit=100):
-                try:
-                    if int(fill.get("time", 0)) < opened_ms:
-                        continue
-                    gross += float(fill.get("realizedPnl") or 0)
-                    fee += abs(float(fill.get("commission") or 0))
-                    price = float(fill.get("price") or 0)
-                    if price > 0:
-                        exit_price = price
-                except (TypeError, ValueError):
-                    continue
+            fills = [
+                f
+                for f in await client.user_trades(trade.symbol, limit=100)
+                if not opened_ms or fill_time(f) >= opened_ms
+            ]
+            gross, fee, exit_price = settle(fills, float(trade.entry), trade.side)
         except WeexTradeError as exc:
             logger.warning("Исполнения %s не получены: %s", trade.symbol, exc)
 
@@ -608,6 +603,92 @@ class PositionWatcher:
                 note="биржа",
             )
         )
+
+
+# Имена полей в отчёте об исполнениях. У каждой биржи свои, а по этим числам
+# считается то, что попадает в журнал: соврать здесь значит испортить всю
+# статистику трейдера.
+_PNL_FIELDS = ("realizedPnl", "realizePnl", "realisedPnl", "profit", "pnl", "income")
+_FEE_FIELDS = ("commission", "fee", "tradeFee", "totalFee", "feeAmount")
+_TIME_FIELDS = ("time", "createdTime", "timestamp", "tradeTime", "cTime", "ts")
+_PRICE_FIELDS = ("price", "fillPrice", "dealPrice", "avgPrice")
+_SIZE_FIELDS = ("qty", "size", "amount", "dealSize", "fillSize", "volume")
+_SIDE_FIELDS = ("side", "orderSide", "direction", "tradeSide")
+
+_fills_warned = False
+
+
+def _first(row: dict[str, Any], names: tuple[str, ...]) -> float | None:
+    """Первое читаемое число из перечисленных полей. Нет - None."""
+    for name in names:
+        if name not in row:
+            continue
+        try:
+            return float(row[name])
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def fill_time(row: dict[str, Any]) -> int:
+    value = _first(row, _TIME_FIELDS)
+    return int(value) if value else 0
+
+
+def settle(
+    fills: list[dict[str, Any]], entry: float, side: str
+) -> tuple[float, float, float | None]:
+    """Итог по исполнениям: результат до комиссии, комиссия и цена выхода.
+
+    Результат берём тот, что посчитала биржа. Если поля с ним в отчёте нет -
+    считаем сами по ценам закрывающих исполнений: у сделки известны цена входа
+    и сторона, а в исполнении есть цена, объём и направление. Промолчать здесь
+    нельзя: в журнал уйдёт ноль, и трейдер увидит +2 вместо +64.
+    """
+    reported = 0.0
+    derived = 0.0
+    fee = 0.0
+    price: float | None = None
+    has_reported = False
+    long = side == "long"
+
+    for row in fills:
+        value = _first(row, _PNL_FIELDS)
+        if value is not None:
+            has_reported = True
+            reported += value
+
+        paid = _first(row, _FEE_FIELDS)
+        if paid is not None:
+            fee += abs(paid)
+
+        at = _first(row, _PRICE_FIELDS) or 0.0
+        size = abs(_first(row, _SIZE_FIELDS) or 0.0)
+        if at > 0:
+            price = at
+
+        # Закрывающее исполнение идёт против стороны сделки: лонг закрывают
+        # продажей. Открывающие в результат не входят - они его создали.
+        direction = str(
+            next((row[name] for name in _SIDE_FIELDS if name in row), "")
+        ).lower()
+        closing = ("sell" in direction or "short" in direction) if long else (
+            "buy" in direction or "long" in direction
+        )
+        if closing and at > 0 and size > 0 and entry > 0:
+            derived += (at - entry) * size if long else (entry - at) * size
+
+    if not has_reported and fills:
+        global _fills_warned
+        if not _fills_warned:
+            _fills_warned = True
+            logger.warning(
+                "Результат в отчёте об исполнениях не найден, поля: %s",
+                ", ".join(sorted(str(k) for k in fills[0])),
+            )
+        return derived, fee, price
+
+    return reported, fee, price
 
 
 def position_side(row: dict[str, Any] | None) -> str:

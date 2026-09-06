@@ -404,3 +404,65 @@ def test_average_entry_comes_from_value_over_size():
 
     assert average_entry(weex_position()) == pytest.approx(80000)
     assert average_entry({}) is None
+
+
+# ── итог по исполнениям ──────────────────────────────────────────────────────
+
+def test_settle_takes_the_number_the_exchange_named():
+    from backend.trading.watcher import settle
+
+    fills = [
+        {"realizedPnl": "40", "commission": "3", "price": "81000", "qty": "0.5", "side": "sell"},
+        {"realizedPnl": "24", "commission": "2", "price": "81200", "qty": "0.5", "side": "sell"},
+    ]
+    gross, fee, price = settle(fills, entry=80000.0, side="long")
+    assert gross == 64.0
+    assert fee == 5.0
+    assert price == 81200.0
+
+
+def test_settle_counts_it_itself_when_the_field_is_missing():
+    """Поля с результатом в отчёте может не быть - как не было безубытка.
+
+    Молчать нельзя: в журнал уходил ноль, и трейдер видел +2 вместо +64.
+    Считаем по ценам закрывающих исполнений от цены входа.
+    """
+    from backend.trading.watcher import settle
+
+    fills = [
+        {"price": "81000", "size": "0.5", "side": "sell", "fee": "3"},
+        {"price": "81200", "size": "0.5", "side": "sell", "fee": "2"},
+    ]
+    gross, fee, _ = settle(fills, entry=80000.0, side="long")
+    # 0.5 * 1000 + 0.5 * 1200
+    assert gross == pytest.approx(1100.0)
+    assert fee == 5.0
+
+
+def test_settle_ignores_the_entry_fill():
+    """Открывающее исполнение результат не создаёт - оно его начало."""
+    from backend.trading.watcher import settle
+
+    fills = [
+        {"price": "80000", "size": "1", "side": "buy", "fee": "6.4"},
+        {"price": "80500", "size": "1", "side": "sell", "fee": "6.4"},
+    ]
+    gross, fee, _ = settle(fills, entry=80000.0, side="long")
+    assert gross == pytest.approx(500.0)
+    assert fee == pytest.approx(12.8)
+
+
+def test_settle_of_a_short_counts_the_other_way():
+    from backend.trading.watcher import settle
+
+    fills = [{"price": "79000", "size": "1", "side": "buy", "fee": "6"}]
+    gross, _, _ = settle(fills, entry=80000.0, side="short")
+    assert gross == pytest.approx(1000.0)
+
+
+def test_fill_time_reads_any_of_the_names():
+    from backend.trading.watcher import fill_time
+
+    assert fill_time({"time": 1700000000000}) == 1700000000000
+    assert fill_time({"createdTime": "1700000000000"}) == 1700000000000
+    assert fill_time({"unknown": 1}) == 0
