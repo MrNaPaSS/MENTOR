@@ -117,15 +117,30 @@ export type ExchangePosition = {
  * Терминал обязан быть зеркалом биржи, а не жить своей арифметикой: он уже
  * закрывал сделку у себя, пока позиция оставалась открытой.
  */
-export async function positionOf(symbol: string): Promise<ExchangePosition | null> {
+export async function positionOf(
+  symbol: string,
+  /**
+   * Сторона позиции. В хедже по одному инструменту их две — лонг и шорт, — и
+   * без стороны зеркало показывало бы обеим сделкам одну и ту же чужую.
+   */
+  side?: "long" | "short",
+): Promise<ExchangePosition | null> {
   const body = await request<{ positions: Record<string, unknown>[] }>(
     "/api/trading/positions",
   );
   if (!body) return null;
 
-  const row = body.positions.find(
+  const mine = body.positions.filter(
     (p) => String(p.symbol ?? "").toUpperCase() === symbol.toUpperCase(),
   );
+  const sideOf = (p: Record<string, unknown>) =>
+    String(p.positionSide ?? p.holdSide ?? p.side ?? "").toLowerCase();
+  // Сторону сверяем, только если биржа её назвала: в одностороннем режиме поля
+  // может не быть вовсе, и тогда позиция по инструменту ровно одна.
+  const row = side
+    ? mine.find((p) => sideOf(p).includes(side)) ??
+      (mine.length === 1 && !sideOf(mine[0]) ? mine[0] : undefined)
+    : mine[0];
   if (!row) return { size: 0, entry: null, unrealized: null, breakeven: null };
 
   const numeric = (...names: string[]) => {

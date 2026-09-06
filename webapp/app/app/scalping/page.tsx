@@ -157,15 +157,23 @@ const STORAGE_KEY = "nmnh.scalping.panes";
 // Уйти со страницы и вернуться — обычное дело, а позиция на рынке от этого не
 // закрывается, значит и разметка её пропадать не должна.
 const TRADE_KEY = "nmnh.scalping.trade";
+const TRADES_KEY = "nmnh.scalping.trades";
 
-function readTrade(): ActiveTrade | null {
+function readTrades(): ActiveTrade[] {
   try {
-    const raw = localStorage.getItem(TRADE_KEY);
-    const trade = raw ? (JSON.parse(raw) as ActiveTrade) : null;
-    // Закрытая сделка уже в журнале — на графике ей делать нечего.
-    return trade && trade.status !== "closed" ? trade : null;
+    const raw = localStorage.getItem(TRADES_KEY);
+    if (raw) {
+      const list = JSON.parse(raw) as ActiveTrade[];
+      return Array.isArray(list) ? list.filter((t) => t && t.status !== "closed") : [];
+    }
+    // Переезд со старого ключа: у трейдера могла остаться идущая сделка,
+    // записанная прежней версией, и терять её из-за обновления нельзя.
+    const single = localStorage.getItem(TRADE_KEY);
+    const trade = single ? (JSON.parse(single) as ActiveTrade) : null;
+    return trade && trade.status !== "closed" ? [trade] : [];
   } catch {
-    return null;
+    // В приватном окне доступ к хранилищу бросает исключение.
+    return [];
   }
 }
 
@@ -228,7 +236,14 @@ export default function ScalpingPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   // Живая сделка: пока цена не дошла до уровня — «ждём», дальше открыта и
   // считает результат, после стопа или последней цели закрывается сама.
-  const [trade, setTrade] = useState<ActiveTrade | null>(null);
+  // Сделок может идти несколько сразу, в том числе встречных: открыть шорт,
+  // не закрывая лонг, — обычное дело, и стирать за это разметку идущей сделки
+  // терминал не вправе.
+  const [trades, setTrades] = useState<ActiveTrade[]>([]);
+  // Какую сделку фиксируем в окне закрытия.
+  const [closing, setClosing] = useState<ActiveTrade | null>(null);
+  const tradesRef = useRef<ActiveTrade[]>([]);
+  tradesRef.current = trades;
   const [journalOpen, setJournalOpen] = useState(false);
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
@@ -263,7 +278,9 @@ export default function ScalpingPage() {
         : next;
     });
   }, []);
-  const savedTradeRef = useRef<string | null>(null);
+  // Какие сделки уже ушли в журнал: их может закрыться несколько подряд, и
+  // одной ячейки на всех не хватает.
+  const savedTradesRef = useRef(new Set<string>());
   // Пока настройки и сделка не подняты из хранилища, писать туда нельзя:
   // первый проход эффектов видит пустое состояние и стёр бы живую запись.
   const hydrated = useRef(false);
@@ -366,12 +383,9 @@ export default function ScalpingPage() {
   }, [orderNote]);
 
   useEffect(() => {
-    const restored = readTrade();
-    if (restored) {
-      setTrade(restored);
-      // Сделка уже записана в журнал только после закрытия, поэтому метка
-      // «уже сохранено» здесь не ставится.
-    }
+    // Сделки записываются в журнал только после закрытия, поэтому метка
+    // «уже сохранено» здесь не ставится.
+    setTrades(readTrades());
     applyWorkspace(readWorkspace());
     hydrated.current = true;
     if (!journalAvailable()) return;
@@ -474,10 +488,11 @@ export default function ScalpingPage() {
   function selectSymbol(next: string) {
     setSymbol(next);
     setScreenerOpen(false);
-    // Разметка сделки привязана к цене прошлой монеты — на новой она врёт.
+    // Расчёт привязан к цене прошлой монеты — на новой он врёт. Идущие сделки
+    // при этом остаются: они живут на бирже, а не на экране, и вернувшись к
+    // своей монете, трейдер должен найти их на месте.
     setDraft(null);
     setDialogOpen(false);
-    setTrade(null);
   }
 
   /**
@@ -489,7 +504,8 @@ export default function ScalpingPage() {
    */
   async function applyClose(share: number) {
     setCloseOpen(false);
-    const current = trade;
+    const current = closing;
+    setClosing(null);
     if (!current) return;
 
     // Сначала биржа, потом экран. Пометить сделку закрытой у себя, не закрыв
@@ -556,11 +572,11 @@ export default function ScalpingPage() {
         });
     }
 
-    setTrade(
+    const finished =
       settled !== null && remaining.status === "closed"
         ? { ...remaining, pnl: settled }
-        : remaining,
-    );
+        : remaining;
+    setTrades((list) => list.map((t) => (t.id === current.id ? finished : t)));
     if (remaining.status === "closed") setDraft(null);
   }
 
@@ -609,18 +625,6 @@ export default function ScalpingPage() {
     setDialogOpen(false);
     if (!plan || !draft || !symbol) return;
 
-    if (trade && trade.status === "open") {
-      const done = closeManually(trade, dom?.mid ?? 0, Date.now());
-      savedTradeRef.current = done.id;
-      saveTrade(done)
-        .then((saved) => {
-          if (saved) setJournalKey((k) => k + 1);
-        })
-        .catch(() => {
-          savedTradeRef.current = null;
-        });
-    }
-
     const next = createTrade(
       {
         symbol,
@@ -634,7 +638,7 @@ export default function ScalpingPage() {
       },
       `${symbol}-${Date.now()}`,
     );
-    setTrade(next);
+    setTrades((list) => [...list, next]);
     setDraft(null);
 
     // Вход в сделку — это торговля, а не режим. Расчёт живёт вместе со
@@ -730,7 +734,7 @@ export default function ScalpingPage() {
   // существующей сделки: трейдер открыл расчёт посмотреть соотношение по
   // другому уровню, а его ожидающая заявка от этого исчезала.
   const preview = useMemo(() => {
-    if (!dialogOpen || !plan || !draft || !symbol || trade) return null;
+    if (!dialogOpen || !plan || !draft || !symbol) return null;
     return createTrade(
       {
         symbol,
@@ -746,7 +750,7 @@ export default function ScalpingPage() {
     );
     // planKey намеренно вместо plan: у объекта расчёта каждый раз новая ссылка.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dialogOpen, planKey, symbol, trade, draft?.margin, draft?.leverage]);
+  }, [dialogOpen, planKey, symbol, draft?.margin, draft?.leverage]);
 
   // Сделка идёт на бирже: тогда её состоянием распоряжается биржа, а не мы.
   const live = Boolean(exchange?.connected);
@@ -758,66 +762,88 @@ export default function ScalpingPage() {
     const bid = dom?.best_bid ?? 0;
     const ask = dom?.best_ask ?? 0;
     if (!(bid > 0) || !(ask > 0)) return;
-    setTrade((current) => {
-      if (!current) return current;
-      const next = advanceQuote(current, { bid, ask }, Date.now());
-      // Когда сделка живёт на бирже, закрывать её нашей арифметикой нельзя:
-      // терминал уже показывал «закрыто», пока позиция оставалась открытой.
-      // Цели и безубыток по цене считаем — это разметка, а закрытие приходит
-      // от самой биржи.
-      if (live && next.status === "closed" && current.status !== "closed") {
-        return current;
-      }
-      return next;
+    setTrades((list) => {
+      let changed = false;
+      const now = Date.now();
+      const updated = list.map((current) => {
+        const next = advanceQuote(current, { bid, ask }, now);
+        // Когда сделка живёт на бирже, закрывать её нашей арифметикой нельзя:
+        // терминал уже показывал «закрыто», пока позиция оставалась открытой.
+        // Цели и безубыток по цене считаем — это разметка, а закрытие приходит
+        // от самой биржи.
+        const kept = live && next.status === "closed" && current.status !== "closed"
+          ? current
+          : next;
+        if (kept !== current) changed = true;
+        return kept;
+      });
+      return changed ? updated : list;
     });
   }, [dom?.best_bid, dom?.best_ask, live]);
 
   // Позиция глазами биржи. Терминал обязан быть её зеркалом: своё состояние он
   // может держать сколько угодно, но правда о том, открыта ли позиция, — там.
+  //
+  // Спрашиваем по каждой идущей сделке отдельно и со стороной: в хедже по
+  // одному инструменту стоят две позиции, и без стороны лонг увидел бы объём
+  // шорта.
+  const watchKey = trades
+    .filter((t) => t.symbol === symbol && t.status !== "closed")
+    .map((t) => `${t.id}:${t.status}`)
+    .join("|");
+
   useEffect(() => {
-    if (!live || !trade || trade.status === "closed" || !symbol) return;
+    if (!live || !symbol || !watchKey) return;
     let cancelled = false;
 
     async function check() {
-      try {
-        const position = await positionOf(symbol!);
-        if (cancelled || !position) return;
+      const watching = tradesRef.current.filter(
+        (t) => t.symbol === symbol && t.status !== "closed",
+      );
+      for (const watched of watching) {
+        try {
+          const position = await positionOf(symbol!, watched.side);
+          if (cancelled || !position) continue;
 
-        setTrade((current) => {
-          if (!current || current.status === "closed") return current;
+          setTrades((list) =>
+            list.map((current) => {
+              if (current.id !== watched.id || current.status === "closed") return current;
 
-          if (position.size > 0) {
-            // Позиция набрана: у нас она могла ещё ждать входа.
-            if (current.status === "planned") {
-              return { ...current, status: "open", openedAt: Date.now() };
-            }
-            // Объём и безубыток берём биржевые: по ним считается результат на
-            // экране и туда же сопровождение переставляет стоп. Наша формула не
-            // знает ни реальной цены исполнения, ни комиссии, ни фандинга.
-            const qty =
-              Math.abs(current.qty - position.size) > position.size * 0.01
-                ? position.size
-                : current.qty;
-            const stop =
-              current.breakeven && position.breakeven && position.breakeven > 0
-                ? position.breakeven
-                : current.stop;
-            return qty === current.qty && stop === current.stop
-              ? current
-              : { ...current, qty, stop };
-          }
+              if (position.size > 0) {
+                // Позиция набрана: у нас она могла ещё ждать входа.
+                if (current.status === "planned") {
+                  return { ...current, status: "open", openedAt: Date.now() };
+                }
+                // Объём и безубыток берём биржевые: по ним считается результат
+                // на экране и туда же сопровождение переставляет стоп. Наша
+                // формула не знает ни реальной цены исполнения, ни комиссии,
+                // ни фандинга.
+                const qty =
+                  Math.abs(current.qty - position.size) > position.size * 0.01
+                    ? position.size
+                    : current.qty;
+                const stop =
+                  current.breakeven && position.breakeven && position.breakeven > 0
+                    ? position.breakeven
+                    : current.stop;
+                return qty === current.qty && stop === current.stop
+                  ? current
+                  : { ...current, qty, stop };
+              }
 
-          if (current.status === "open") {
-            // Позиции больше нет. Запись в журнал делает сопровождение на
-            // сервере — по настоящим исполнениям, поэтому здесь только снимаем
-            // разметку и помечаем сделку записанной.
-            savedTradeRef.current = current.id;
-            return closeManually(current, dom?.mid ?? 0, Date.now());
-          }
-          return current;
-        });
-      } catch {
-        // Биржа не ответила — разметку не трогаем.
+              if (current.status === "open") {
+                // Позиции больше нет. Запись в журнал делает сопровождение на
+                // сервере — по настоящим исполнениям, поэтому здесь только
+                // снимаем разметку и помечаем сделку записанной.
+                savedTradesRef.current.add(current.id);
+                return closeManually(current, dom?.mid ?? 0, Date.now());
+              }
+              return current;
+            }),
+          );
+        } catch {
+          // Биржа не ответила — разметку не трогаем.
+        }
       }
     }
 
@@ -828,64 +854,79 @@ export default function ScalpingPage() {
       clearInterval(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, symbol, trade?.id, trade?.status]);
+  }, [live, symbol, watchKey]);
 
   // Разметка сделки переживает уход со страницы.
   useEffect(() => {
     if (!hydrated.current) return;
     try {
-      if (trade && trade.status !== "closed") {
-        localStorage.setItem(TRADE_KEY, JSON.stringify(trade));
-      } else {
-        localStorage.removeItem(TRADE_KEY);
-      }
+      const alive = trades.filter((t) => t.status !== "closed");
+      if (alive.length > 0) localStorage.setItem(TRADES_KEY, JSON.stringify(alive));
+      else localStorage.removeItem(TRADES_KEY);
+      // Старый ключ больше не читается никем, кроме переезда, — чистим, чтобы
+      // он не воскресил закрытую сделку.
+      localStorage.removeItem(TRADE_KEY);
     } catch {
-      // Не сохранилось — сделка всё равно на экране.
+      // Не сохранилось — сделки всё равно на экране.
     }
-  }, [trade]);
+  }, [trades]);
 
   // Звук на переходах сделки: вход, взятая цель, стоп, закрытие. Следим за
   // состоянием, а не за нажатиями, — цель берётся сама, без участия трейдера.
-  const heard = useRef<string>("");
+  // Отпечаток на каждую сделку: их несколько, и одна общая строка молчала бы
+  // о событиях второй.
+  const heard = useRef(new Map<string, string>());
   useEffect(() => {
-    if (!trade) {
-      heard.current = "";
-      return;
+    for (const t of trades) {
+      const stamp = `${t.status}:${t.takesHit}:${t.outcome ?? ""}`;
+      const previous = heard.current.get(t.id);
+      if (previous === stamp) continue;
+      heard.current.set(t.id, stamp);
+      if (previous === undefined) continue; // появление сделки — это не событие
+
+      const wasTakes = Number(previous.split(":")[1] || 0);
+      if (t.status === "open" && t.takesHit > wasTakes) play("take");
+      else if (t.status === "open") play("entry");
+      else if (t.status === "closed") {
+        if (t.outcome === "take") play("profit");
+        else if (t.outcome === "stop") play("stop");
+        else play("close");
+      }
     }
-    const stamp = `${trade.id}:${trade.status}:${trade.takesHit}:${trade.outcome ?? ""}`;
-    if (heard.current === stamp) return;
-    const previous = heard.current;
-    heard.current = stamp;
-    if (!previous) return; // первое появление сделки — это не событие
-
-    const [, status, takes, outcome] = stamp.split(":");
-    const wasTakes = Number(previous.split(":")[2] || 0);
-
-    if (status === "open" && Number(takes) > wasTakes) play("take");
-    else if (status === "open") play("entry");
-    else if (status === "closed") {
-      if (outcome === "take") play("profit");
-      else if (outcome === "stop") play("stop");
-      else play("close");
+    // Забываем ушедшие: карта не должна расти вместе с историей за день.
+    const alive = new Set(trades.map((t) => t.id));
+    for (const id of heard.current.keys()) {
+      if (!alive.has(id)) heard.current.delete(id);
     }
-  }, [trade]);
+  }, [trades]);
 
-  // Закрытая сделка уходит в журнал ровно один раз. Идентификатор сделки
-  // сохраняется на клиенте, поэтому повтор после обрыва связи не создаст
-  // вторую запись — сервер обновит существующую.
+  // Закрытая сделка уходит в журнал ровно один раз и после этого пропадает с
+  // экрана. Идентификатор сделки сохраняется на клиенте, поэтому повтор после
+  // обрыва связи не создаст вторую запись — сервер обновит существующую.
   useEffect(() => {
-    if (!trade || trade.status !== "closed") return;
-    if (savedTradeRef.current === trade.id) return;
-    savedTradeRef.current = trade.id;
-    saveTrade(trade)
-      .then((saved) => {
-        if (saved) setJournalKey((k) => k + 1);
-      })
-      .catch(() => {
-        // Не записалось — сделка всё равно закрыта, ломать экран незачем.
-        savedTradeRef.current = null;
-      });
-  }, [trade]);
+    const done = trades.filter(
+      (t) => t.status === "closed" && !savedTradesRef.current.has(t.id),
+    );
+    for (const t of done) {
+      savedTradesRef.current.add(t.id);
+      saveTrade(t)
+        .then((saved) => {
+          if (saved) setJournalKey((k) => k + 1);
+        })
+        .catch(() => {
+          // Не записалось — сделка всё равно закрыта, ломать экран незачем.
+          savedTradesRef.current.delete(t.id);
+        });
+    }
+    // Закрытые с графика убираем: они уже в журнале, и держать их в состоянии
+    // значит копить за день список, который никто не читает.
+    if (trades.some((t) => t.status === "closed")) {
+      setTrades((list) => list.filter((t) => t.status !== "closed"));
+    }
+  }, [trades]);
+
+  // Сделки по открытой монете: их рисует график, остальные ждут своей.
+  const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
 
   // Класс темы для рабочих панелей: стакан и график светлеют вместе.
   const pane = theme === "light" ? "pane-light" : "pane-dark";
@@ -1095,13 +1136,18 @@ export default function ScalpingPage() {
                     </>
                   )}
 
-                  {trade && trade.status !== "closed" && (
+                  {mine.length > 0 && (
                     <button
-                      onClick={() => setCloseOpen(true)}
+                      onClick={() => {
+                        // Последняя открытая по этой монете: остальные
+                        // закрываются со своего ярлыка на графике.
+                        setClosing(mine[mine.length - 1]);
+                        setCloseOpen(true);
+                      }}
                       title="Зафиксировать позицию"
                       className={`${CHIP} ${CHIP_ON}`}
                     >
-                      сделка ✕
+                      сделка ✕{mine.length > 1 ? ` (${mine.length})` : ""}
                     </button>
                   )}
 
@@ -1187,12 +1233,14 @@ export default function ScalpingPage() {
                   shelves={dom?.shelves ?? []}
                   theme={theme}
                   indicators={indicators}
-                  trade={
-                    trade && trade.symbol === symbol ? trade : preview
-                  }
+                  trades={mine}
+                  preview={preview}
                   livePrice={chartPrice}
                   liveCandle={dom?.candle ?? null}
-                  onCloseTrade={() => setCloseOpen(true)}
+                  onCloseTrade={(t) => {
+                    setClosing(t);
+                    setCloseOpen(true);
+                  }}
                   showJournal={journalOpen}
                   journalKey={journalKey}
                   ghost={hovered && hovered.symbol === symbol ? hovered : null}
@@ -1212,13 +1260,16 @@ export default function ScalpingPage() {
         )}
       </div>
 
-      {closeOpen && trade && (
+      {closeOpen && closing && (
         <CloseDialog
-          trade={trade}
+          trade={closing}
           price={dom?.mid ?? 0}
           tick={dom?.tick ?? 0}
           onConfirm={applyClose}
-          onCancel={() => setCloseOpen(false)}
+          onCancel={() => {
+            setCloseOpen(false);
+            setClosing(null);
+          }}
         />
       )}
 

@@ -344,6 +344,38 @@ function tradeBoxes(
   return { bands: [], boxes, segments, points: [] };
 }
 
+/**
+ * Боксы всех идущих сделок и расчёта из окна — одним набором фигур.
+ *
+ * Сделка, ждущая лимитку, боксов не рисует: риска и потенциала у неё ещё нет,
+ * а нарисованные они спорят с разметкой той сделки, которая действительно
+ * идёт. Расчёт из открытого окна — исключение: его показывают целиком.
+ */
+function tradeShapes(
+  trades: ActiveTrade[],
+  preview: ActiveTrade | null | undefined,
+  palette: (typeof THEMES)[ChartTheme],
+  candles: Candle[],
+): Shapes | null {
+  const parts: Shapes[] = [];
+  for (const trade of trades) {
+    if (trade.status !== "open") continue;
+    const shapes = tradeBoxes(trade, palette, candles);
+    if (shapes) parts.push(shapes);
+  }
+  if (preview) {
+    const shapes = tradeBoxes(preview, palette, candles);
+    if (shapes) parts.push(shapes);
+  }
+  if (parts.length === 0) return null;
+  return {
+    bands: parts.flatMap((p) => p.bands),
+    boxes: parts.flatMap((p) => p.boxes),
+    segments: parts.flatMap((p) => p.segments),
+    points: parts.flatMap((p) => p.points),
+  };
+}
+
 /** ATR последних баров: по нему предлагается стоп. */
 function currentAtr(candles: Candle[]): number {
   if (candles.length < 15) return 0;
@@ -375,7 +407,8 @@ function PriceChart({
   shelves,
   indicators,
   theme,
-  trade,
+  trades,
+  preview,
   livePrice,
   liveCandle,
   onCloseTrade,
@@ -391,8 +424,21 @@ function PriceChart({
   shelves: Wall[];
   indicators: Indicators;
   theme: ChartTheme;
-  /** Разметка сделки: вход, стоп и цели. Жизненный цикл считается снаружи. */
-  trade: ActiveTrade | null;
+  /**
+   * Идущие сделки: вход, стоп и цели. Жизненный цикл считается снаружи.
+   *
+   * Их может быть несколько сразу, в том числе в разные стороны: открыть
+   * встречную позицию, не закрыв текущую, — обычное дело, и стирать за это
+   * разметку идущей сделки терминал не вправе.
+   */
+  trades: ActiveTrade[];
+  /**
+   * Расчёт из открытого окна: показывается целиком, пока трейдер смотрит.
+   *
+   * Отдельно от идущих сделок, потому что живёт по другим правилам — исчезает
+   * с закрытием окна и в журнал не попадает.
+   */
+  preview?: ActiveTrade | null;
   /** Последняя цена рынка: по ней считается плавающий результат. */
   livePrice: number;
   /**
@@ -402,8 +448,8 @@ function PriceChart({
    * отставала от биржи ровно на это время — на скальпе это вечность.
    */
   liveCandle: Candle | null;
-  /** Закрыть сделку по нажатию на ярлык позиции. */
-  onCloseTrade?: () => void;
+  /** Закрыть сделку по нажатию на ярлык её позиции. */
+  onCloseTrade?: (trade: ActiveTrade) => void;
   /** Показывать отработанные сетапы из журнала прямо на графике. */
   showJournal?: boolean;
   /** Растёт после каждой записи в журнал — повод перечитать метки. */
@@ -497,7 +543,8 @@ function PriceChart({
   // на них при любом движении графика. Поэтому их положение пишется прямо в
   // узел на каждом кадре: состояние React перерисовывается позже отрисовки
   // холста, и плашка отставала бы от линии на всё время перетаскивания.
-  const labelRef = useRef<HTMLDivElement>(null);
+  // Ярлыки позиций: по одному на сделку, поэтому не ref, а карта по её id.
+  const labelsRef = useRef(new Map<string, HTMLDivElement | null>());
   const clockRef = useRef<HTMLDivElement>(null);
   // Результат за сегодня по журналу. null — журнал недоступен: ученик не вошёл
   // в кабинет, и показывать ему чужой ноль незачем.
@@ -510,8 +557,10 @@ function PriceChart({
   livePriceRef.current = livePrice;
   // Сделка нужна и при загрузке свечей: бокс строится от последнего бара, а на
   // момент открытия сделки баров может ещё не быть.
-  const tradeRef = useRef(trade);
-  tradeRef.current = trade;
+  const tradeRef = useRef(trades);
+  tradeRef.current = trades;
+  const previewRef = useRef(preview);
+  previewRef.current = preview;
 
   // Полки перерисовываем только когда меняется сам набор цен. Стакан обновляется
   // восемь раз в секунду, и пересоздание линий на каждом кадре давало бы моргание.
@@ -712,7 +761,12 @@ function PriceChart({
       );
       // Бокс сделки пересобираем здесь же: он привязан к последнему бару, а
       // бары только что приехали.
-      tradeShapesRef.current = tradeBoxes(tradeRef.current, THEMES[themeRef.current], candles);
+      tradeShapesRef.current = tradeShapes(
+        tradeRef.current,
+        previewRef.current,
+        THEMES[themeRef.current],
+        candles,
+      );
       pushShapes();
       smcRef.current = smc;
       lastTimeRef.current = candles[candles.length - 1]?.time ?? 0;
@@ -930,7 +984,7 @@ function PriceChart({
     return () => {
       cancelled = true;
     };
-  }, [symbol, cfg.levels]);
+  }, [symbol, cfg.levels, theme]);
 
   // Полки ликвидности: цены, где в стакане стоит от двух миллионов. Это то,
   // чего нет ни в одном индикаторе — уровни берутся из живой книги заявок, а не
@@ -973,11 +1027,6 @@ function PriceChart({
     tradeLinesRef.current = [];
     tradeShapesRef.current = null;
 
-    if (!trade || trade.status === "closed") {
-      pushShapes();
-      return;
-    }
-
     const palette = THEMES[themeRef.current];
     const line = (price: number, color: string, title: string, style: 0 | 2) =>
       series.createPriceLine({
@@ -989,27 +1038,41 @@ function PriceChart({
         title,
       });
 
-    const targets = pendingTargets(trade);
+    for (const trade of [...trades, ...(preview ? [preview] : [])]) {
+      if (trade.status === "closed") continue;
 
-    // Вход и стоп — разные цены даже в безубытке: биржа считает его с учётом
-    // комиссии и реального исполнения, и это на десятки пунктов от входа.
-    // Подпись «б/у» должна стоять там, где стоп стоит на самом деле.
-    tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
-    tradeLinesRef.current.push(
-      trade.breakeven
-        ? line(trade.stop, palette.mtf, "", 2)   // подпись BE стоит у бокса
-        : line(trade.stop, palette.askLine, "стоп", 2),
-    );
-    targets.forEach((price, i) => {
-      tradeLinesRef.current.push(line(price, palette.bidLine, `тейк ${trade.takesHit + i + 1}`, 2));
-    });
+      // Сделка ждёт свою лимитку — на графике от неё только сама лимитка.
+      // Бокс и цели появляются, когда цена дошла до уровня и позиция набрана:
+      // до этого момента ни риска, ни потенциала ещё нет, а нарисованные они
+      // спорят с разметкой той сделки, которая действительно идёт. Расчёт из
+      // открытого окна — исключение: его показывают именно целиком.
+      if (trade.status === "planned" && trade !== preview) {
+        tradeLinesRef.current.push(
+          line(trade.entry, palette.mtf, `лимит ${trade.side === "long" ? "↑" : "↓"}`, 2),
+        );
+        continue;
+      }
 
-    // Бокс живёт справа от последней свечи, в пустом поле: сделка ещё не
-    // случилась, и накрывать ею прошлые бары нечестно.
-    tradeShapesRef.current = tradeBoxes(trade, palette, dataRef.current);
+      // Вход и стоп — разные цены даже в безубытке: биржа считает его с учётом
+      // комиссии и реального исполнения, и это на десятки пунктов от входа.
+      // Подпись «б/у» должна стоять там, где стоп стоит на самом деле.
+      tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
+      tradeLinesRef.current.push(
+        trade.breakeven
+          ? line(trade.stop, palette.mtf, "", 2)   // подпись BE стоит у бокса
+          : line(trade.stop, palette.askLine, "стоп", 2),
+      );
+      pendingTargets(trade).forEach((price, i) => {
+        tradeLinesRef.current.push(
+          line(price, palette.bidLine, `тейк ${trade.takesHit + i + 1}`, 2),
+        );
+      });
 
+    }
+
+    tradeShapesRef.current = tradeShapes(trades, preview, palette, dataRef.current);
     pushShapes();
-  }, [trade, pushShapes]);
+  }, [trades, preview, theme, pushShapes]);
 
   // Положение наложений — покадрово, вместе с самим графиком.
   //
@@ -1036,12 +1099,13 @@ function PriceChart({
       const series = candleRef.current;
       if (!series) return;
 
-      const active = tradeRef.current;
-      place(
-        labelRef.current,
-        active && active.status !== "closed" ? series.priceToCoordinate(active.entry) : null,
-        -12,
-      );
+      for (const active of tradeRef.current) {
+        place(
+          labelsRef.current.get(active.id) ?? null,
+          active.status !== "closed" ? series.priceToCoordinate(active.entry) : null,
+          -12,
+        );
+      }
 
       const price =
         livePriceRef.current > 0 ? livePriceRef.current : dataRef.current.at(-1)?.close ?? 0;
@@ -1210,7 +1274,7 @@ function PriceChart({
       points: [],
     };
     pushShapes();
-  }, [ghost, pushShapes]);
+  }, [ghost, theme, pushShapes]);
 
   // Отработанные сетапы из журнала прямо на графике.
   //
@@ -1311,13 +1375,6 @@ function PriceChart({
     });
   }, [wall?.price, wall?.side]);
 
-  // Главная цифра — по открытой позиции: ровно её показывает биржа, и с ней
-  // трейдер сверяется глазами. Забранное по целям стоит рядом отдельно: смешать
-  // их значит показать 219 там, где на счёт пришло 148.
-  const floating = trade ? floatingAt(trade, livePrice) : 0;
-  const taken = trade ? trade.realized : 0;
-  const total = trade ? pnlAt(trade, livePrice) : 0;
-
   return (
     <div className="relative h-full w-full">
       <div ref={boxRef} className="h-full w-full" />
@@ -1326,53 +1383,69 @@ function PriceChart({
       )}
 
       {/* Ярлык позиции у линии входа: состояние, объём и результат в деньгах.
-          Пока цена не дошла до уровня, там ноль и слово «ждём» — это тоже
-          ответ, и он честнее пустого места. */}
-      {trade && trade.status !== "closed" && (
-        <div
-          ref={labelRef}
-          // Справа, но с отступом от ценовой шкалы: плашка стоит на конце своей
-          // линии, а не в начале графика, где под ней чужие свечи, и при этом
-          // не наезжает на плашки цен. Вертикаль задаётся покадрово.
-          className="pointer-events-auto absolute right-28 top-0 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
-          style={{
-            visibility: "hidden",
-            borderColor: "var(--pane-border)",
-            background: "var(--pane-bg)",
-            color: "var(--pane-text)",
-          }}
-        >
-          <span className={trade.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
-            {trade.side === "long" ? "LONG" : "SHORT"}
-          </span>
-          {trade.status === "planned" ? (
-            <span className="text-[var(--pane-muted)]">ждём вход</span>
-          ) : (
-            <span
-              className={floating >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
-              title={
-                taken !== 0
-                  ? `По открытой позиции, как на бирже. Забрано по целям ${
-                      taken >= 0 ? "+" : "−"
-                    }${Math.abs(taken).toFixed(2)}, всего по сделке ${
-                      total >= 0 ? "+" : "−"
-                    }${Math.abs(total).toFixed(2)}`
-                  : "По открытой позиции — как на бирже"
-              }
+          По ярлыку на сделку — их может идти несколько сразу, и общий на всех
+          сказал бы неправду о каждой. Пока цена не дошла до уровня, там слово
+          «ждём»: это тоже ответ, и он честнее пустого места. */}
+      {trades
+        .filter((t) => t.status !== "closed")
+        .map((t) => {
+          // Главная цифра — по открытой позиции: ровно её показывает биржа, и с
+          // ней трейдер сверяется глазами. Забранное по целям стоит рядом
+          // отдельно: смешать их значит показать 219 там, где на счёт пришло 148.
+          const floating = floatingAt(t, livePrice);
+          const taken = t.realized;
+          const total = pnlAt(t, livePrice);
+          return (
+            <div
+              key={t.id}
+              ref={(node) => {
+                labelsRef.current.set(t.id, node);
+              }}
+              // Справа, но с отступом от ценовой шкалы: плашка стоит на конце
+              // своей линии, а не в начале графика, где под ней чужие свечи, и
+              // при этом не наезжает на плашки цен. Вертикаль задаётся покадрово.
+              className="pointer-events-auto absolute right-28 top-0 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
+              style={{
+                visibility: "hidden",
+                borderColor: "var(--pane-border)",
+                background: "var(--pane-bg)",
+                color: "var(--pane-text)",
+              }}
             >
-              {floating >= 0 ? "+" : "−"}
-              {Math.abs(floating).toFixed(2)} USD
-            </span>
-          )}
-          <button
-            onClick={onCloseTrade}
-            title="Закрыть сделку"
-            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+              <span
+                className={t.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
+              >
+                {t.side === "long" ? "LONG" : "SHORT"}
+              </span>
+              {t.status === "planned" ? (
+                <span className="text-[var(--pane-muted)]">ждём вход</span>
+              ) : (
+                <span
+                  className={floating >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
+                  title={
+                    taken !== 0
+                      ? `По открытой позиции, как на бирже. Забрано по целям ${
+                          taken >= 0 ? "+" : "−"
+                        }${Math.abs(taken).toFixed(2)}, всего по сделке ${
+                          total >= 0 ? "+" : "−"
+                        }${Math.abs(total).toFixed(2)}`
+                      : "По открытой позиции — как на бирже"
+                  }
+                >
+                  {floating >= 0 ? "+" : "−"}
+                  {Math.abs(floating).toFixed(2)} USD
+                </span>
+              )}
+              <button
+                onClick={() => onCloseTrade?.(t)}
+                title="Закрыть сделку"
+                className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+              >
+                ✕
+              </button>
+            </div>
+          );
+        })}
 
       {/* Данных нет — говорим, почему, и не рисуем ничего вместо них.
           Устаревшая свеча в скальпинге хуже пустого экрана: по ней принимают
