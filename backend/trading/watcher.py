@@ -24,7 +24,13 @@ from typing import Any, Iterable
 from sqlalchemy import select
 
 from core.models import LiveTrade, ScalpTrade, WeexCredential, utcnow
-from core.trading.position import Position, should_move_stop, stop_after_take
+from core.trading.position import (
+    Position,
+    should_move_stop,
+    stop_after_take,
+    take_share,
+    takes_covered,
+)
 from core.weex import keys as keystore
 from core.weex.futures import (
     Credentials,
@@ -77,32 +83,32 @@ def position_size(position: dict[str, Any] | None) -> float:
     return 0.0
 
 
-def order_filled(order: dict[str, Any] | None) -> bool:
-    """Исполнен ли ордер целиком."""
-    if not order:
-        return False
-    state = str(order.get("status") or order.get("state") or "").upper()
-    if state in FILLED_STATES:
-        return True
-    # Некоторые ответы не несут статуса вовсе — тогда смотрим на объём.
-    try:
-        executed = float(order.get("executedQty") or order.get("executedQuantity") or 0)
-        total = float(order.get("origQty") or order.get("quantity") or 0)
-    except (TypeError, ValueError):
-        return False
-    return total > 0 and executed >= total * 0.999
+def takes_filled(planned_qty: float, current_qty: float, targets: int) -> int:
+    """Сколько целей исполнено, судя по остатку позиции.
+
+    Считаем по объёму, а не по статусу ордера: цели у нас условные заявки, и
+    обычная ручка состояния ордера про них не знает — она отвечала «не найдено»,
+    из-за чего исполнение целей не замечалось вовсе, а стоп так и не переезжал
+    в безубыток.
+
+    Доли неравные — 30%, 50%, остаток, — поэтому делением не обойтись.
+    """
+    if targets <= 0 or planned_qty <= 0:
+        return 0
+    closed = max(0.0, planned_qty - current_qty)
+    return takes_covered(closed / planned_qty, targets)
 
 
 def decide(
     trade: LiveTrade,
     position: dict[str, Any] | None,
-    orders: dict[str, dict[str, Any]],
+    open_plans: set[str],
     mark_price: float | None,
     missing_streak: int,
 ) -> Decision:
     """Решение по одной сделке. Только числа, никаких обращений наружу.
 
-    `orders` — состояние ордеров целей по их идентификаторам.
+    `open_plans` — идентификаторы условных заявок, которые ещё висят на бирже.
     """
     size = position_size(position)
 
@@ -114,24 +120,25 @@ def decide(
         return Decision(trade.takes_hit, closed=True)
 
     takes: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
+    hit = max(trade.takes_hit, takes_filled(float(trade.qty), size, len(takes)))
+    if hit <= trade.takes_hit:
+        return Decision(trade.takes_hit)
+
+    # Отмечаем сработавшими те цели, которых уже нет среди висящих заявок, — по
+    # порядку и не больше, чем показал остаток позиции.
     filled: list[str] = []
-    hit = trade.takes_hit
     for take in takes:
-        if take.get("filled"):
+        if take.get("filled") or len(filled) >= hit - trade.takes_hit:
             continue
         order_id = str(take.get("order_id") or "")
-        if order_id and order_filled(orders.get(order_id)):
+        if order_id and order_id not in open_plans:
             filled.append(order_id)
-            hit += 1
-
-    if hit == trade.takes_hit:
-        return Decision(trade.takes_hit)
 
     state = Position(
         symbol=trade.symbol,
         side=trade.side,
         entry=float(trade.entry),
-        quantity=size or float(trade.qty),
+        quantity=size,
         stop=float(trade.current_stop),
     )
     prices = [float(t.get("price") or 0) for t in takes]
@@ -229,28 +236,36 @@ class PositionWatcher:
             streak = self._missing.get(trade.id, 0)
             self._missing[trade.id] = streak + 1 if position_size(position) <= 0 else 0
 
-            orders = await self._take_orders(client, trade)
+            plans = await self._open_plans(client, trade)
             decision = decide(
-                trade, position, orders, mark_price(position), self._missing[trade.id]
+                trade, position, plans, mark_price(position), self._missing[trade.id]
             )
             await self._apply(session, client, trade, decision)
 
-    async def _take_orders(self, client: WeexFutures, trade: LiveTrade) -> dict[str, dict]:
-        """Состояние ещё не исполненных целей."""
-        out: dict[str, dict] = {}
+    async def _open_plans(self, client: WeexFutures, trade: LiveTrade) -> set[str]:
+        """Условные заявки, которые ещё висят на бирже.
+
+        Сработавшая заявка со списка уходит — по её отсутствию и понятно, что
+        цель взята. Спрашивать состояние каждой по отдельности нечем: обычная
+        ручка ордера про условные не знает.
+        """
         if trade.status != "open":
-            return out
-        for take in json.loads(trade.tp_orders_json or "[]"):
-            if take.get("filled"):
-                continue
-            order_id = str(take.get("order_id") or "")
-            if not order_id:
-                continue
-            try:
-                out[order_id] = await client.get_order(trade.symbol, order_id)
-            except WeexTradeError as exc:
-                logger.debug("Ордер %s не опрошен: %s", order_id, exc)
-        return out
+            return set()
+        try:
+            orders = await client.algo_orders(trade.symbol)
+        except WeexTradeError as exc:
+            logger.debug("Условные заявки %s не получены: %s", trade.symbol, exc)
+            # Пустой ответ означал бы «все цели сработали» — при сбое связи это
+            # неправда, поэтому возвращаем то, что записано у нас.
+            return {
+                str(t.get("order_id") or "")
+                for t in json.loads(trade.tp_orders_json or "[]")
+                if not t.get("filled")
+            }
+        return {
+            str(o.get("orderId") or o.get("algoId") or o.get("id") or "")
+            for o in orders
+        }
 
     async def _apply(
         self, session, client: WeexFutures, trade: LiveTrade, decision: Decision
@@ -324,7 +339,10 @@ class PositionWatcher:
             return False
 
         filters = await client.symbol_filters(trade.symbol)
-        share = floor_to_step(float(trade.qty) / len(prices), filters["step"])
+        # Наименьшая из долей: если даже она не набирает шага лота, лестницу
+        # ставить нечем.
+        smallest = min(take_share(i, len(prices)) for i in range(len(prices)))
+        share = floor_to_step(float(trade.qty) * smallest, filters["step"])
         if share < filters["min_qty"]:
             # Объём не делится на цели — закрывать позицию будет стоп или сам
             # трейдер. Молча оставить сделку без целей честнее, чем поставить
@@ -344,7 +362,11 @@ class PositionWatcher:
                     symbol=trade.symbol,
                     plan_type="TAKE_PROFIT",
                     trigger_price=num(round_to_tick(price, filters["tick"])),
-                    quantity=num(share),
+                    quantity=num(
+                        floor_to_step(
+                            float(trade.qty) * take_share(i, len(prices)), filters["step"]
+                        )
+                    ),
                     position_side="LONG" if long else "SHORT",
                     client_algo_id=f"tp{i + 1}_{trade.client_id}"[:32],
                 )
@@ -371,10 +393,20 @@ class PositionWatcher:
             orders = await client.algo_orders(trade.symbol)
         except WeexTradeError:
             return ""
+
+        # Цели — тоже условные заявки, и перепутать их со стопом нельзя:
+        # передвинутая «в безубыток» цель закрыла бы позицию по цене входа.
+        ours = {
+            str(t.get("order_id") or "")
+            for t in json.loads(trade.tp_orders_json or "[]")
+        }
         for order in orders:
+            order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
+            if order_id in ours:
+                continue
             kind = str(order.get("planType") or order.get("type") or "").lower()
             if "sl" in kind or "stop" in kind or "loss" in kind:
-                return str(order.get("orderId") or order.get("id") or "")
+                return order_id
         return ""
 
     async def _record(self, session, client: WeexFutures, trade: LiveTrade) -> None:

@@ -12,6 +12,21 @@ import type { TradeSide } from "./plan";
 
 export type TradeStatus = "planned" | "open" | "closed";
 
+/**
+ * Доли позиции, которые забирает каждая цель.
+ *
+ * Первая снимает треть риска, вторая выводит половину, остаток едет до
+ * последней. Целей другого числа делим поровну — правило написано для лестницы
+ * из трёх. Те же числа стоят на сервере: расхождение здесь означало бы, что на
+ * экране одна сделка, а на бирже другая.
+ */
+export const TAKE_SHARES = [0.3, 0.5, 0.2];
+
+export function takeShare(index: number, count: number): number {
+  if (count <= 0 || index < 0 || index >= count) return 0;
+  return count === TAKE_SHARES.length ? TAKE_SHARES[index] : 1 / count;
+}
+
 /** Чем закончилась сделка. */
 export type TradeOutcome = "stop" | "take" | "manual" | null;
 
@@ -170,13 +185,15 @@ export function advance(trade: ActiveTrade, price: number, now: number): ActiveT
   // Каждая цель закрывает свою долю исходного объёма по своей цене. Забранное
   // складываем, оставшийся объём уменьшаем: закрытая часть в рынке больше не
   // участвует, и считать её по текущей цене — врать себе.
-  const share = trade.initialQty / trade.targets.length;
   let realized = trade.realized;
+  let closed = 0;
   for (let i = trade.takesHit; i < hit; i++) {
+    const part = trade.initialQty * takeShare(i, trade.targets.length);
     const target = trade.targets[i];
-    realized += (long ? target - trade.entry : trade.entry - target) * share;
+    realized += (long ? target - trade.entry : trade.entry - target) * part;
+    closed += part;
   }
-  const left = Math.max(0, trade.qty - share * (hit - trade.takesHit));
+  const left = Math.max(0, trade.qty - closed);
 
   // Последняя цель взята — сделка отработана полностью.
   if (hit >= trade.targets.length) {

@@ -242,3 +242,33 @@ def test_filters_are_read_from_either_shape_of_answer():
     assert by_precision["step"] == 0.001 and by_precision["tick"] == 0.01
 
     assert _parse_filters({"symbol": "X"}) is None
+
+
+# ── доли целей ───────────────────────────────────────────────────────────────
+
+def test_take_ladder_is_thirty_fifty_and_the_rest():
+    """Правило заказчика: 30%, 50%, остаток."""
+    from core.trading.position import take_share
+
+    assert [take_share(i, 3) for i in range(3)] == [0.3, 0.5, 0.2]
+    # Лестница другого размера делится поровну — правило написано для трёх.
+    assert take_share(0, 2) == 0.5
+    assert take_share(5, 3) == 0.0
+
+
+def test_closed_fraction_tells_how_many_takes_worked():
+    """Доли неравные, поэтому делением не обойтись: 30%, потом 80%, потом всё."""
+    from core.trading.position import takes_covered
+
+    assert takes_covered(0.0, 3) == 0
+    assert takes_covered(0.20, 3) == 0
+    assert takes_covered(0.30, 3) == 1
+    assert takes_covered(0.70, 3) == 1
+    assert takes_covered(0.80, 3) == 2
+    assert takes_covered(1.0, 3) == 3
+
+    # Допуск в два процента: биржа режет объём по шагу лота, и цель закрывает
+    # чуть меньше своей доли. Считать такую цель несработавшей значит не
+    # передвинуть стоп там, где он уже должен стоять в безубытке.
+    assert takes_covered(0.29, 3) == 1
+    assert takes_covered(0.79, 3) == 2

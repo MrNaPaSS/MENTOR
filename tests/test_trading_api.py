@@ -282,7 +282,8 @@ def test_market_entry_places_takes_as_conditional_orders(app_and_exchange):
     for plan in exchange.plans:
         assert plan["plan_type"] == "TAKE_PROFIT"
         assert plan["position_side"] == "SHORT"
-        assert plan["quantity"] == "0.1"
+    # Доли 30 / 50 / 20 процентов от 0.3 монеты, округлённые вниз до шага лота.
+    assert [p["quantity"] for p in exchange.plans] == ["0.09", "0.15", "0.06"]
 
 
 def test_failed_takes_do_not_report_a_failed_entry(app_and_exchange):

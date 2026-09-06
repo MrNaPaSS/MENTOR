@@ -26,7 +26,12 @@ from sqlalchemy import select
 
 from backend.deps import get_current_student, get_session
 from core.models import LiveTrade, Student, WeexCredential, utcnow
-from core.trading.position import Position, breakeven_price, should_move_stop
+from core.trading.position import (
+    Position,
+    breakeven_price,
+    should_move_stop,
+    take_share,
+)
 from core.weex import keys as keystore
 from core.weex.futures import (
     Credentials,
@@ -291,7 +296,12 @@ async def open_position(
     takes: list[Any] = []
     placed: list[dict[str, Any]] = []
     warning = ""
-    share = floor_to_step(quantity / max(1, len(body.takes)), filters["step"])
+    # Доли целей неравные: первая снимает 30%, вторая 50%, последняя остаток.
+    # Проверяем наименьшую — если и она меньше шага лота, лестницу не ставим.
+    smallest = min(
+        (take_share(i, len(body.takes)) for i in range(len(body.takes))), default=0.0
+    )
+    share = floor_to_step(quantity * smallest, filters["step"])
 
     if body.takes and not entry_price and share >= filters["min_qty"]:
         for i, price in enumerate(body.takes):
@@ -300,7 +310,11 @@ async def open_position(
                     symbol=symbol,
                     plan_type="TAKE_PROFIT",
                     trigger_price=_num(round_to_tick(price, filters["tick"])),
-                    quantity=_num(share),
+                    quantity=_num(
+                        floor_to_step(
+                            quantity * take_share(i, len(body.takes)), filters["step"]
+                        )
+                    ),
                     position_side=position_side,
                     client_algo_id=f"tp{i + 1}_{body.client_order_id or ''}"[:32],
                 )

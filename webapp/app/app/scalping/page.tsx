@@ -37,6 +37,7 @@ import CloseDialog from "@/components/scalping/CloseDialog";
 import {
   closePosition,
   openPosition,
+  positionOf,
   tradingStatus,
   type TradingStatus,
 } from "@/lib/trading";
@@ -725,6 +726,9 @@ export default function ScalpingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dialogOpen, planKey, symbol, trade, draft?.margin, draft?.leverage]);
 
+  // Сделка идёт на бирже: тогда её состоянием распоряжается биржа, а не мы.
+  const live = Boolean(exchange?.connected);
+
   // Живой ход сделки по цене стакана: вход, взятые цели, перенос стопа в
   // безубыток и закрытие. Функция возвращает прежнюю ссылку, когда ничего не
   // изменилось, поэтому восемь кадров в секунду не приводят к перерисовке.
@@ -732,10 +736,67 @@ export default function ScalpingPage() {
     const bid = dom?.best_bid ?? 0;
     const ask = dom?.best_ask ?? 0;
     if (!(bid > 0) || !(ask > 0)) return;
-    setTrade((current) =>
-      current ? advanceQuote(current, { bid, ask }, Date.now()) : current,
-    );
-  }, [dom?.best_bid, dom?.best_ask]);
+    setTrade((current) => {
+      if (!current) return current;
+      const next = advanceQuote(current, { bid, ask }, Date.now());
+      // Когда сделка живёт на бирже, закрывать её нашей арифметикой нельзя:
+      // терминал уже показывал «закрыто», пока позиция оставалась открытой.
+      // Цели и безубыток по цене считаем — это разметка, а закрытие приходит
+      // от самой биржи.
+      if (live && next.status === "closed" && current.status !== "closed") {
+        return current;
+      }
+      return next;
+    });
+  }, [dom?.best_bid, dom?.best_ask, live]);
+
+  // Позиция глазами биржи. Терминал обязан быть её зеркалом: своё состояние он
+  // может держать сколько угодно, но правда о том, открыта ли позиция, — там.
+  useEffect(() => {
+    if (!live || !trade || trade.status === "closed" || !symbol) return;
+    let cancelled = false;
+
+    async function check() {
+      try {
+        const position = await positionOf(symbol!);
+        if (cancelled || !position) return;
+
+        setTrade((current) => {
+          if (!current || current.status === "closed") return current;
+
+          if (position.size > 0) {
+            // Позиция набрана: у нас она могла ещё ждать входа.
+            if (current.status === "planned") {
+              return { ...current, status: "open", openedAt: Date.now() };
+            }
+            // Объём берём биржевой: по нему считается результат на экране.
+            return Math.abs(current.qty - position.size) > position.size * 0.01
+              ? { ...current, qty: position.size }
+              : current;
+          }
+
+          if (current.status === "open") {
+            // Позиции больше нет. Запись в журнал делает сопровождение на
+            // сервере — по настоящим исполнениям, поэтому здесь только снимаем
+            // разметку и помечаем сделку записанной.
+            savedTradeRef.current = current.id;
+            return closeManually(current, dom?.mid ?? 0, Date.now());
+          }
+          return current;
+        });
+      } catch {
+        // Биржа не ответила — разметку не трогаем.
+      }
+    }
+
+    check();
+    const id = setInterval(check, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, symbol, trade?.id, trade?.status]);
 
   // Разметка сделки переживает уход со страницы.
   useEffect(() => {

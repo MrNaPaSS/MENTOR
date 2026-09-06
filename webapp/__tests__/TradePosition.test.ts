@@ -76,12 +76,13 @@ describe("вход", () => {
 describe("прибыль и убыток", () => {
   it("взятая цель не участвует в плавающем результате", () => {
     // Главная ошибка прежней модели: она оценивала весь исходный объём по
-    // текущей цене, хотя часть уже закрылась целью. На экране висело вдвое
-    // больше, чем приходило на счёт.
+    // текущей цене, хотя часть уже закрылась целью. На экране висело больше,
+    // чем приходило на счёт.
     let trade = advance(long(), 100, T0);
-    trade = advance(trade, 101, T0 + 1);      // взята первая цель
-    // Забрано 10/3, в рынке осталось 20/3 монет с движением +0.5.
-    expect(pnlAt(trade, 100.5)).toBeCloseTo(10 / 3 + 0.5 * (20 / 3), 6);
+    trade = advance(trade, 101, T0 + 1);      // первая цель забрала 30%
+    // Забрано 1 × 3 монеты, в рынке осталось 7 монет с движением +0.5.
+    expect(trade.qty).toBeCloseTo(7, 6);
+    expect(pnlAt(trade, 100.5)).toBeCloseTo(3 + 0.5 * 7, 6);
   });
 
   it("плавающий результат считается по объёму", () => {
@@ -111,14 +112,14 @@ describe("цели", () => {
     expect(trade.breakeven).toBe(true);
     expect(trade.stop).toBe(100);
 
-    // Цель закрыла свою треть по своей цене: объём уменьшился, прибыль забрана.
-    expect(trade.qty).toBeCloseTo(20 / 3, 6);
-    expect(trade.realized).toBeCloseTo(10 / 3, 6);
+    // Первая цель забирает 30% объёма по своей цене.
+    expect(trade.qty).toBeCloseTo(7, 6);
+    expect(trade.realized).toBeCloseTo(3, 6);
 
     // Возврат к входу закрывает остаток в ноль, но взятая цель остаётся с нами.
     trade = advance(trade, 100, T0 + 2);
     expect(trade.status).toBe("closed");
-    expect(trade.pnl).toBeCloseTo(10 / 3, 6);
+    expect(trade.pnl).toBeCloseTo(3, 6);
   });
 
   it("рывок через несколько целей засчитывает их все", () => {
@@ -129,14 +130,13 @@ describe("цели", () => {
   });
 
   it("последняя цель закрывает сделку по сумме взятых частей", () => {
-    // Рывок через все три цели: каждая забрала свою треть по своей цене, а не
-    // весь объём по последней. Раньше здесь считалось 30 — столько получилось
-    // бы, закройся вся позиция на 103, чего лестница целей не делает.
+    // Рывок через все три цели: каждая забрала свою долю по своей цене, а не
+    // весь объём по последней. Доли 30 / 50 / 20 процентов от десяти монет.
     let trade = advance(long(), 100, T0);
     trade = advance(trade, 103, T0 + 1);
     expect(trade.status).toBe("closed");
     expect(trade.outcome).toBe("take");
-    expect(trade.pnl).toBeCloseTo((1 + 2 + 3) * (10 / 3), 6);
+    expect(trade.pnl).toBeCloseTo(1 * 3 + 2 * 5 + 3 * 2, 6);
   });
 });
 
@@ -227,6 +227,16 @@ describe("частичная фиксация", () => {
     expect(remaining.partials).toBe(1);
   });
 
+  it("лестница забирает 30, 50 и остаток", () => {
+    // Правило заказчика: первая цель снимает треть риска, вторая выводит
+    // половину, до последней едет остаток.
+    let trade = advance(long(), 100, T0);
+    trade = advance(trade, 101, T0 + 1);
+    expect(trade.qty).toBeCloseTo(7, 6);
+    trade = advance(trade, 102, T0 + 2);
+    expect(trade.qty).toBeCloseTo(2, 6);
+  });
+
   it("доля считается от остатка, а не от исходного объёма", () => {
     let trade = advance(long(), 100, T0);
     trade = closePartially(trade, 0.5, 100.5, T0 + 1).remaining;
@@ -264,11 +274,11 @@ describe("что показывать на экране", () => {
     let trade = advance(long(), 100, T0);
     trade = advance(trade, 101, T0 + 1);            // взята первая цель
 
-    expect(floatingAt(trade, 102)).toBeCloseTo(2 * (20 / 3), 6);
+    expect(floatingAt(trade, 102)).toBeCloseTo(2 * 7, 6);
     // Забранное лежит отдельно и в эту цифру не входит.
-    expect(trade.realized).toBeCloseTo(10 / 3, 6);
+    expect(trade.realized).toBeCloseTo(3, 6);
     // Итог по сделке — сумма того и другого.
-    expect(pnlAt(trade, 102)).toBeCloseTo(10 / 3 + 2 * (20 / 3), 6);
+    expect(pnlAt(trade, 102)).toBeCloseTo(3 + 2 * 7, 6);
   });
 
   it("до входа и после закрытия плавающего результата нет", () => {

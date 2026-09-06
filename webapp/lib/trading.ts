@@ -101,3 +101,42 @@ export function closePosition(trade: ActiveTrade, share: number) {
     },
   );
 }
+
+/** Открытая позиция по инструменту глазами биржи. */
+export type ExchangePosition = {
+  size: number;
+  entry: number | null;
+  unrealized: number | null;
+};
+
+/**
+ * Спросить биржу, что там с позицией.
+ *
+ * Терминал обязан быть зеркалом биржи, а не жить своей арифметикой: он уже
+ * закрывал сделку у себя, пока позиция оставалась открытой.
+ */
+export async function positionOf(symbol: string): Promise<ExchangePosition | null> {
+  const body = await request<{ positions: Record<string, unknown>[] }>(
+    "/api/trading/positions",
+  );
+  if (!body) return null;
+
+  const row = body.positions.find(
+    (p) => String(p.symbol ?? "").toUpperCase() === symbol.toUpperCase(),
+  );
+  if (!row) return { size: 0, entry: null, unrealized: null };
+
+  const numeric = (...names: string[]) => {
+    for (const name of names) {
+      const value = Number(row[name]);
+      if (Number.isFinite(value) && value !== 0) return value;
+    }
+    return null;
+  };
+
+  return {
+    size: Math.abs(numeric("total", "size", "positionAmt", "available") ?? 0),
+    entry: numeric("averageOpenPrice", "entryPrice", "avgPrice"),
+    unrealized: numeric("unrealizedPnl", "unrealizedProfit", "unrealisedPnl"),
+  };
+}

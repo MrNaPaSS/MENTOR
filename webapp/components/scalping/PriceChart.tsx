@@ -295,6 +295,10 @@ function tradeBoxes(
       bottom: Math.min(trade.entry, risk),
       fill: trade.breakeven ? palette.spentBox : palette.riskBox,
       border: trade.breakeven ? palette.spentBorder : palette.riskBorder,
+      // Подпись стоит на самом боксе, а не в плашке результата: в плашке
+      // должна быть только сумма, её читают на бегу.
+      label: trade.breakeven ? "б/у" : undefined,
+      labelColor: palette.text,
     },
   ];
   if (far !== undefined) {
@@ -1178,24 +1182,21 @@ function PriceChart({
           {trade.status === "planned" ? (
             <span className="text-[var(--pane-muted)]">ждём вход</span>
           ) : (
-            <>
-              <span
-                className={floating >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
-                title="По открытой позиции — как на бирже"
-              >
-                {floating >= 0 ? "+" : "−"}
-                {Math.abs(floating).toFixed(2)} USD
-              </span>
-              {taken !== 0 && (
-                <span
-                  className="text-[var(--pane-muted)]"
-                  title={`Забрано по целям, всего по сделке ${total >= 0 ? "+" : "−"}${Math.abs(total).toFixed(2)}`}
-                >
-                  забрано {taken >= 0 ? "+" : "−"}
-                  {Math.abs(taken).toFixed(2)}
-                </span>
-              )}
-            </>
+            <span
+              className={floating >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
+              title={
+                taken !== 0
+                  ? `По открытой позиции, как на бирже. Забрано по целям ${
+                      taken >= 0 ? "+" : "−"
+                    }${Math.abs(taken).toFixed(2)}, всего по сделке ${
+                      total >= 0 ? "+" : "−"
+                    }${Math.abs(total).toFixed(2)}`
+                  : "По открытой позиции — как на бирже"
+              }
+            >
+              {floating >= 0 ? "+" : "−"}
+              {Math.abs(floating).toFixed(2)} USD
+            </span>
           )}
           <button
             onClick={onCloseTrade}
