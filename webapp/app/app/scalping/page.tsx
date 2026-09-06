@@ -460,7 +460,11 @@ export default function ScalpingPage() {
     // что вышел, а деньги продолжают стоять в рынке.
     // Снимаем и незашедшую сделку: с ней на бирже стоят лимитка входа, стоп и
     // цели, и «отменённый» расчёт иначе откроется сам, стоило цене дойти.
-    if (exchange?.connected && current.status !== "closed") {
+    // Идём на биржу всегда, не спрашивая, подключён ли счёт по нашим данным:
+    // состояние счёта могло не успеть загрузиться, а заявка на бирже при этом
+    // стоит. Сервер сам ответит, что ключей нет, — это дешевле, чем оставить
+    // висеть лимитку, которую трейдер считает снятой.
+    if (current.status !== "closed") {
       try {
         const result = await closePosition(current, share);
         setOrderNote({
@@ -471,12 +475,13 @@ export default function ScalpingPage() {
           bad: false,
         });
       } catch (err) {
-        setOrderNote({
-          text: err instanceof Error ? err.message : "Биржа не закрыла позицию",
-          bad: true,
-        });
-        // Разметку не трогаем: позиция как стояла, так и стоит.
-        return;
+        const text = err instanceof Error ? err.message : "Биржа не закрыла позицию";
+        // 428 — ключи не подключены: закрывать нечего, это не сбой.
+        if (!text.includes("подключите") && !text.includes("428")) {
+          setOrderNote({ text, bad: true });
+          // Разметку не трогаем: позиция как стояла, так и стоит.
+          return;
+        }
       }
     }
 

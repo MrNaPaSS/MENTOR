@@ -31,6 +31,10 @@ function availableUsdt(payload: unknown): string | null {
   return null;
 }
 
+// Метка сборки: единственный способ отличить «не работает» от «развёрнута
+// старая версия». Меняется вместе с торговой частью.
+const BUILD = "trade-2026-09-06";
+
 const FIELD =
   "w-full rounded-md border border-border bg-bg-deep px-2.5 py-2 font-mono text-[13px] " +
   "text-text-primary outline-none transition-colors duration-150 ease-out focus:border-accent-cyan";
@@ -129,7 +133,10 @@ export default function ExchangeDialog({
       >
         <div className="flex items-start justify-between border-b border-border px-5 py-4">
           <div>
-            <p className="text-sm font-semibold text-text-primary">Биржевой счёт WEEX</p>
+            <p className="text-sm font-semibold text-text-primary">
+              Биржевой счёт WEEX{" "}
+              <span className="font-mono text-[10px] font-normal text-text-muted">{BUILD}</span>
+            </p>
             <p className="mt-0.5 text-[11px] text-text-muted">
               {status.connected
                 ? `Ключ ${status.key_tail}`
