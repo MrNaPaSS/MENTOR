@@ -766,16 +766,11 @@ export default function ScalpingPage() {
       let changed = false;
       const now = Date.now();
       const updated = list.map((current) => {
-        const next = advanceQuote(current, { bid, ask }, now);
-        // Когда сделка живёт на бирже, закрывать её нашей арифметикой нельзя:
-        // терминал уже показывал «закрыто», пока позиция оставалась открытой.
-        // Цели и безубыток по цене считаем — это разметка, а закрытие приходит
-        // от самой биржи.
-        const kept = live && next.status === "closed" && current.status !== "closed"
-          ? current
-          : next;
-        if (kept !== current) changed = true;
-        return kept;
+        // При подключённом счёте вход и выход подтверждает биржа: наша
+        // арифметика ведёт только разметку идущей позиции.
+        const next = advanceQuote(current, { bid, ask }, now, live);
+        if (next !== current) changed = true;
+        return next;
       });
       return changed ? updated : list;
     });

@@ -293,3 +293,42 @@ describe("что показывать на экране", () => {
     expect(floatingAt(closed, 97)).toBe(0);
   });
 });
+
+describe("сделка на бирже", () => {
+  // Терминал обязан быть зеркалом биржи. Цена может коснуться уровня, а
+  // лимитка не исполниться — очередь в стакане длиннее одного касания.
+  const waiting = (): ActiveTrade =>
+    createTrade(
+      {
+        symbol: "BTCUSDT",
+        side: "long",
+        entry: 100,
+        stop: 99,
+        targets: [101, 102, 103],
+        qty: 10,
+        margin: 100,
+        leverage: 10,
+      },
+      "live-1",
+    );
+
+  it("вход не засчитывается по касанию цены, пока биржа молчит", () => {
+    const trade = advanceQuote(waiting(), { bid: 99.9, ask: 100 }, 1, true);
+    expect(trade.status).toBe("planned");
+    // Без биржи — считаем сами, иначе разметки не будет вовсе.
+    expect(advanceQuote(waiting(), { bid: 99.9, ask: 100 }, 1).status).toBe("open");
+  });
+
+  it("открытую позицию ведём сами: цели и безубыток — это разметка", () => {
+    const open = advanceQuote(waiting(), { bid: 99.9, ask: 100 }, 1);
+    const after = advanceQuote(open, { bid: 101, ask: 101.1 }, 2, true);
+    expect(after.takesHit).toBe(1);
+    expect(after.breakeven).toBe(true);
+  });
+
+  it("закрытие тоже за биржей", () => {
+    const open = advanceQuote(waiting(), { bid: 99.9, ask: 100 }, 1);
+    const stopped = advanceQuote(open, { bid: 98, ask: 98.1 }, 2, true);
+    expect(stopped.status).toBe("open");
+  });
+});

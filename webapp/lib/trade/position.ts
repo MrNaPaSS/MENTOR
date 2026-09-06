@@ -256,7 +256,20 @@ export function advanceQuote(
   trade: ActiveTrade,
   quote: { bid: number; ask: number },
   now: number,
+  /**
+   * Сделка живёт на бирже: вход и выход подтверждает она, а не наша
+   * арифметика.
+   *
+   * Цена может коснуться уровня, а лимитка при этом не исполниться — очередь в
+   * стакане длиннее одного касания. Пока мы считали вход сами, разметка
+   * набранной позиции появлялась раньше самой позиции: бокс, стоп и цели
+   * стояли на графике у сделки, которой на бирже ещё нет. Цели и безубыток по
+   * цене считаем и здесь — это разметка идущей позиции, а не её судьба.
+   */
+  live = false,
 ): ActiveTrade {
+  if (live && trade.status === "planned") return trade;
+
   const long = trade.side === "long";
   const price =
     trade.status === "planned"
@@ -267,7 +280,11 @@ export function advanceQuote(
         ? quote.bid
         : quote.ask;
   if (!(price > 0)) return trade;
-  return advance(trade, price, now);
+
+  const next = advance(trade, price, now);
+  // Закрытие тоже за биржей: терминал уже показывал «закрыто», пока позиция
+  // оставалась открытой.
+  return live && next.status === "closed" && trade.status !== "closed" ? trade : next;
 }
 
 /**
