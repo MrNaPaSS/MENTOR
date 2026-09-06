@@ -25,7 +25,9 @@ export type SoundKind =
   /** Позиция зафиксирована руками. */
   | "close"
   /** Биржа отказала. */
-  | "error";
+  | "error"
+  /** Цена пересекла отмеченный уровень. */
+  | "alert";
 
 type Tone = {
   /** Частоты по порядку: одна нота или короткая последовательность. */
@@ -46,6 +48,9 @@ const TONES: Record<SoundKind, Tone> = {
   stop: { notes: [440, 330], step: 0.1, type: "sine", gain: 0.07 },
   close: { notes: [587, 440], step: 0.08, type: "triangle", gain: 0.06 },
   error: { notes: [220, 220], step: 0.12, type: "square", gain: 0.05 },
+  // Две одинаковые ноты повыше: ни на что не похоже в этом наборе, и трейдер
+  // не спутает пересечение уровня со взятой целью.
+  alert: { notes: [1046, 1046], step: 0.1, type: "sine", gain: 0.06 },
 };
 
 let context: AudioContext | null = null;

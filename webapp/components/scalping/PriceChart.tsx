@@ -77,6 +77,8 @@ const THEMES: Record<
     crosshair: string;
     /** Уровни прошлого дня, недели и месяца. */
     mtf: string;
+    /** Отметки трейдера на ценах — тот же жёлтый, что у плиты в стакане. */
+    gold: string;
     /** Боксы риска и потенциала у разметки сделки. */
     riskBox: string;
     riskBorder: string;
@@ -108,6 +110,7 @@ const THEMES: Record<
     emaTrend: "#7A8290",
     crosshair: "#0AFFE0",
     mtf: "#2157F3",
+    gold: "#F0B90B",
     riskBox: "rgba(246,70,93,0.16)",
     riskBorder: "rgba(246,70,93,0.45)",
     spentBox: "rgba(122,130,144,0.10)",
@@ -141,6 +144,7 @@ const THEMES: Record<
     // Уровни старших периодов в оригинале чёрным пунктиром, не синим.
     crosshair: "#555555",
     mtf: "#333333",
+    gold: "#A97400",
     // На белом красное и зелёное спорят с чёрно-белыми свечами: риск серым,
     // потенциал сиреневым — так эти области размечены в самом терминале.
     riskBox: "rgba(120,123,134,0.22)",
@@ -345,26 +349,22 @@ function tradeBoxes(
 }
 
 /**
- * Боксы всех идущих сделок и расчёта из окна — одним набором фигур.
+ * Боксы перечисленных сделок — одним набором фигур.
  *
- * Сделка, ждущая лимитку, боксов не рисует: риска и потенциала у неё ещё нет,
- * а нарисованные они спорят с разметкой той сделки, которая действительно
- * идёт. Расчёт из открытого окна — исключение: его показывают целиком.
+ * Что рисовать, решает вызывающий: у идущей сделки бокс есть всегда, у
+ * ждущей — только пока трейдер смотрит на её ярлык или держит открытым окно
+ * расчёта. Риска и потенциала у ненабранной позиции ещё нет, и постоянные
+ * боксы спорили бы с разметкой той сделки, которая действительно идёт.
  */
 function tradeShapes(
-  trades: ActiveTrade[],
-  preview: ActiveTrade | null | undefined,
+  items: (ActiveTrade | null | undefined)[],
   palette: (typeof THEMES)[ChartTheme],
   candles: Candle[],
 ): Shapes | null {
   const parts: Shapes[] = [];
-  for (const trade of trades) {
-    if (trade.status !== "open") continue;
+  for (const trade of items) {
+    if (!trade || trade.status === "closed") continue;
     const shapes = tradeBoxes(trade, palette, candles);
-    if (shapes) parts.push(shapes);
-  }
-  if (preview) {
-    const shapes = tradeBoxes(preview, palette, candles);
     if (shapes) parts.push(shapes);
   }
   if (parts.length === 0) return null;
@@ -416,6 +416,7 @@ function PriceChart({
   journalKey,
   ghost,
   hoverLevel,
+  alerts,
   onShelfClick,
 }: {
   symbol: string;
@@ -464,6 +465,8 @@ function PriceChart({
    * самое мгновение, ради которого стакан и открыт.
    */
   hoverLevel?: { price: number; label: string; side: "bid" | "ask" } | null;
+  /** Отметки на ценах: терминал скажет, когда их пересекут. */
+  alerts?: number[];
   /**
    * Нажатие по линии полки. Вторым аргументом идёт ATR текущего таймфрейма:
    * по нему предлагается стоп, а волатильность известна только здесь — свечи
@@ -498,6 +501,9 @@ function PriceChart({
   const tradeShapesRef = useRef<Shapes | null>(null);
   const ghostShapesRef = useRef<Shapes | null>(null);
   const hoverLineRef = useRef<IPriceLine | null>(null);
+  const alertLinesRef = useRef<IPriceLine[]>([]);
+  // Ключом по значениям: массив приходит новый на каждом кадре стакана.
+  const alertKey = (alerts ?? []).join(",");
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const dataRef = useRef<Candle[]>([]);
   // Нажатие по полке ищет ближайшую линию к точке клика, а слушатель графика
@@ -561,6 +567,10 @@ function PriceChart({
   tradeRef.current = trades;
   const previewRef = useRef(preview);
   previewRef.current = preview;
+  // Ярлык ждущей сделки под курсором: показываем, что её ждёт, — бокс и цели.
+  const [peeked, setPeeked] = useState<string | null>(null);
+  const peekedRef = useRef<string | null>(null);
+  peekedRef.current = peeked;
 
   // Полки перерисовываем только когда меняется сам набор цен. Стакан обновляется
   // восемь раз в секунду, и пересоздание линий на каждом кадре давало бы моргание.
@@ -762,8 +772,12 @@ function PriceChart({
       // Бокс сделки пересобираем здесь же: он привязан к последнему бару, а
       // бары только что приехали.
       tradeShapesRef.current = tradeShapes(
-        tradeRef.current,
-        previewRef.current,
+        [
+          ...tradeRef.current.filter(
+            (t) => t.status === "open" || t.id === peekedRef.current,
+          ),
+          previewRef.current,
+        ],
         THEMES[themeRef.current],
         candles,
       );
@@ -1046,7 +1060,7 @@ function PriceChart({
       // до этого момента ни риска, ни потенциала ещё нет, а нарисованные они
       // спорят с разметкой той сделки, которая действительно идёт. Расчёт из
       // открытого окна — исключение: его показывают именно целиком.
-      if (trade.status === "planned" && trade !== preview) {
+      if (trade.status === "planned" && trade !== preview && trade.id !== peeked) {
         tradeLinesRef.current.push(
           line(trade.entry, palette.mtf, `лимит ${trade.side === "long" ? "↑" : "↓"}`, 2),
         );
@@ -1070,9 +1084,13 @@ function PriceChart({
 
     }
 
-    tradeShapesRef.current = tradeShapes(trades, preview, palette, dataRef.current);
+    tradeShapesRef.current = tradeShapes(
+      [...trades.filter((t) => t.status === "open" || t.id === peeked), preview],
+      palette,
+      dataRef.current,
+    );
     pushShapes();
-  }, [trades, preview, theme, pushShapes]);
+  }, [trades, preview, peeked, theme, pushShapes]);
 
   // Положение наложений — покадрово, вместе с самим графиком.
   //
@@ -1153,6 +1171,27 @@ function PriceChart({
     if (liveCandle.time === last.time) bars[bars.length - 1] = liveCandle;
     else bars.push(liveCandle);
   }, [liveCandle, cfg.volume]);
+
+  // Отметки на ценах — пунктиром через график.
+  //
+  // Отметка не уровень рынка, а напоминание трейдера, поэтому цвет у неё свой
+  // и подпись говорит, что это его метка, а не что-то из стакана.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+
+    for (const l of alertLinesRef.current) series.removePriceLine(l);
+    alertLinesRef.current = (alerts ?? []).map((price) =>
+      series.createPriceLine({
+        price,
+        color: THEMES[theme].gold,
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: "отметка",
+      }),
+    );
+  }, [alertKey, theme]);
 
   // Уровень из стакана под курсором — линией через весь график.
   //
@@ -1401,6 +1440,11 @@ function PriceChart({
               ref={(node) => {
                 labelsRef.current.set(t.id, node);
               }}
+              // Наведение на «ждём вход» показывает, что именно ждёт трейдер:
+              // бокс риска, цели и стоп. Постоянно они не рисуются — позиции
+              // ещё нет, — но посмотреть на них он вправе в любую секунду.
+              onMouseEnter={t.status === "planned" ? () => setPeeked(t.id) : undefined}
+              onMouseLeave={t.status === "planned" ? () => setPeeked(null) : undefined}
               // Справа, но с отступом от ценовой шкалы: плашка стоит на конце
               // своей линии, а не в начале графика, где под ней чужие свечи, и
               // при этом не наезжает на плашки цен. Вертикаль задаётся покадрово.
@@ -1418,7 +1462,12 @@ function PriceChart({
                 {t.side === "long" ? "LONG" : "SHORT"}
               </span>
               {t.status === "planned" ? (
-                <span className="text-[var(--pane-muted)]">ждём вход</span>
+                <span
+                  className="cursor-help text-[var(--pane-muted)]"
+                  title="Наведите — покажем бокс, стоп и цели этой заявки"
+                >
+                  ждём вход
+                </span>
               ) : (
                 <span
                   className={floating >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}

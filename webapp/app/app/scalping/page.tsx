@@ -32,6 +32,7 @@ import type { ChartTheme } from "@/lib/indicator/shapes";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
 import { play, setMuted } from "@/lib/sound";
+import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
 import {
@@ -212,6 +213,8 @@ type Workspace = {
   sound: boolean;
   /** Последняя открытая монета: возврат в раздел не должен начинаться с нуля. */
   symbol: string | null;
+  /** Отметки на ценах: пережидают перезагрузку вместе с остальными настройками. */
+  alerts: PriceAlert[];
 };
 
 function readWorkspace(): Partial<Workspace> | null {
@@ -244,6 +247,8 @@ export default function ScalpingPage() {
   const [closing, setClosing] = useState<ActiveTrade | null>(null);
   const tradesRef = useRef<ActiveTrade[]>([]);
   tradesRef.current = trades;
+  // Отметки на ценах: терминал скажет, когда уровень пересекут.
+  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [journalOpen, setJournalOpen] = useState(false);
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
@@ -353,6 +358,14 @@ export default function ScalpingPage() {
       setSound(saved.sound);
       setMuted(!saved.sound);
     }
+    if (Array.isArray(saved.alerts)) {
+      setAlerts(
+        saved.alerts.filter(
+          (a): a is PriceAlert =>
+            Boolean(a) && typeof a.price === "number" && a.price > 0 && Boolean(a.symbol),
+        ),
+      );
+    }
     if (typeof saved.symbol === "string" && saved.symbol) {
       setSymbol(saved.symbol);
       // Монета уже выбрана — список для этого больше не нужен. Он открывается
@@ -421,6 +434,7 @@ export default function ScalpingPage() {
       journal: journalH,
       symbol,
       sound,
+      alerts,
     } satisfies Workspace;
 
     try {
@@ -453,6 +467,7 @@ export default function ScalpingPage() {
     journalH,
     symbol,
     sound,
+    alerts,
   ]);
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
@@ -920,6 +935,64 @@ export default function ScalpingPage() {
     }
   }, [trades]);
 
+  /**
+   * Поставить или снять отметку на цене.
+   *
+   * Повторное нажатие по той же цене снимает её: отдельная кнопка «удалить» на
+   * строку стакана не влезет, а жест «нажал ещё раз — передумал» понятен без
+   * объяснений.
+   */
+  const toggleAlert = useCallback(
+    (price: number) => {
+      if (!symbol || !(price > 0)) return;
+      setAlerts((list) => {
+        const same = list.find((a) => a.symbol === symbol && a.price === price);
+        if (same) return list.filter((a) => a.id !== same.id);
+        // Разрешение на уведомления спрашиваем в ответ на действие трейдера —
+        // браузер только так его и даёт.
+        if (typeof Notification !== "undefined" && Notification.permission === "default") {
+          void Notification.requestPermission().catch(() => {});
+        }
+        return [...list, { id: `${symbol}-${price}-${Date.now()}`, symbol, price }];
+      });
+    },
+    [symbol],
+  );
+
+  // Пересечение отметки. Сравниваем с ценой прошлого кадра: «цена выше уровня»
+  // само по себе не событие — событие в том, что она была по другую сторону.
+  const lastMid = useRef(0);
+  useEffect(() => {
+    const mid = dom?.mid ?? 0;
+    const previous = lastMid.current;
+    lastMid.current = mid;
+    if (!(mid > 0) || !(previous > 0) || !symbol) return;
+
+    const crossed = crossedAlerts(alerts, symbol, previous, mid);
+    if (crossed.length === 0) return;
+
+    for (const hit of crossed) {
+      const text = `${base(hit.symbol)} пересёк ${fmtPrice(hit.price, dom?.tick ?? 0)}`;
+      play("alert");
+      setOrderNote({ text, bad: false });
+      // Вкладка может быть свёрнута — ради этого отметку и ставят.
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        try {
+          new Notification("Уровень пересечён", { body: text, tag: hit.id });
+        } catch {
+          // Уведомление не показалось — звук и плашка уже сработали.
+        }
+      }
+    }
+    // Отметка одноразовая: уровень пробит, и напоминать о нём второй раз
+    // значит звенеть на каждом колебании вокруг него.
+    const done = new Set(crossed.map((a) => a.id));
+    setAlerts((list) => list.filter((a) => !done.has(a.id)));
+  }, [dom?.mid, dom?.tick, alerts, symbol]);
+
+  // Отметки открытой монеты: их рисует график и подсвечивает стакан.
+  const alertPrices = alerts.filter((a) => a.symbol === symbol).map((a) => a.price);
+
   // Сделки по открытой монете: их рисует график, остальные ждут своей.
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
 
@@ -1071,6 +1144,8 @@ export default function ScalpingPage() {
                     onZoom={zoomDom}
                     onPickLevel={openTradeFromRow}
                     onHoverLevel={hoverLevel}
+                    onAlertLevel={(row) => toggleAlert(row.price)}
+                    alerts={alertPrices}
                   />
                 ) : (
                   <p className="grid h-full place-items-center text-sm text-[var(--pane-muted)]">
@@ -1129,6 +1204,18 @@ export default function ScalpingPage() {
                         </button>
                       ))}
                     </>
+                  )}
+
+                  {alertPrices.length > 0 && (
+                    <button
+                      onClick={() =>
+                        setAlerts((list) => list.filter((a) => a.symbol !== symbol))
+                      }
+                      title="Снять все отметки по этой монете"
+                      className={`${CHIP} text-[var(--pane-gold)] hover:bg-[var(--pane-bg)]`}
+                    >
+                      отметки {alertPrices.length} ✕
+                    </button>
                   )}
 
                   {mine.length > 0 && (
@@ -1240,6 +1327,7 @@ export default function ScalpingPage() {
                   journalKey={journalKey}
                   ghost={hovered && hovered.symbol === symbol ? hovered : null}
                   hoverLevel={levelHint}
+                  alerts={alertPrices}
                   onShelfClick={openTrade}
                 />
               </div>

@@ -16,6 +16,7 @@
 // Меняются только числа. Иначе на восьми кадрах в секунду таблица дрожала бы.
 
 import { memo, useEffect, useMemo, useRef } from "react";
+import { Bell } from "lucide-react";
 import {
   clockLabel,
   money,
@@ -57,6 +58,8 @@ export default function DomTrader({
   onZoom,
   onPickLevel,
   onHoverLevel,
+  onAlertLevel,
+  alerts,
 }: {
   frame: DomFrame;
   /** Колесо мыши меняет масштаб: +1 крупнее шаг, −1 мельче. */
@@ -69,6 +72,10 @@ export default function DomTrader({
    * колонки в ценовую шкалу трейдеру незачем.
    */
   onHoverLevel?: (row: LadderRow | null) => void;
+  /** Двойное нажатие: поставить или снять отметку на этой цене. */
+  onAlertLevel?: (row: LadderRow) => void;
+  /** Цены с отметками — их видно прямо в стакане. */
+  alerts?: number[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // До какого момента считаем, что стакан листают руками. Пока трейдер смотрит
@@ -76,8 +83,17 @@ export default function DomTrader({
   const holdUntil = useRef(0);
   // Держаться ли правого края при появлении новой минуты.
   const stickRight = useRef(true);
+  // Курсор над стаканом. Пока он здесь, прокрутка принадлежит трейдеру: он
+  // разглядывает конкретную плиту и сверяется с графиком, а рывок к спреду в
+  // этот момент уводит из-под курсора именно ту строку, на которую он смотрит.
+  const hovering = useRef(false);
 
   const askCount = useMemo(() => frame.rows.filter((r) => r.ask > 0).length, [frame.rows]);
+
+  // Ключом по значениям, а не по ссылке: массив приходит новый на каждом кадре.
+  const alertKey = (alerts ?? []).join(",");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const alerted = useMemo(() => new Set(alerts ?? []), [alertKey]);
 
   // Порядок колонок — от старой к свежей, поэтому свежая минута оказывается
   // вплотную к цене, а прошлое уходит влево. Пустые колонки пропускаем: пока
@@ -143,13 +159,13 @@ export default function DomTrader({
   // Спред держится в середине экрана сам.
   //
   // Цена уходит вверх и вниз, и без этого через минуту работы спред оказывается
-  // у края, а половина стакана — за экраном. Но пока стакан листают руками, его
-  // не трогаем: трейдер увёл взгляд на дальнюю плиту, и рывок собьёт его.
-  // Возвращаемся к центру через пару секунд после того, как он отпустил.
+  // у края, а половина стакана — за экраном. Но пока курсор над стаканом или
+  // его только что листали руками, центровку не трогаем: трейдер разглядывает
+  // дальнюю плиту, и рывок собьёт его. Мышь ушла со стакана — центруем сразу.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || frame.rows.length === 0) return;
-    if (Date.now() < holdUntil.current) return;
+    if (hovering.current || Date.now() < holdUntil.current) return;
 
     const target = Math.max(
       0,
@@ -190,7 +206,17 @@ export default function DomTrader({
         onWheel={holdScroll}
         onPointerDown={holdScroll}
         onTouchStart={holdScroll}
-        title="Колесо — прокрутка, Ctrl+колесо — масштаб"
+        onMouseEnter={() => {
+          hovering.current = true;
+        }}
+        onMouseLeave={() => {
+          hovering.current = false;
+          // Отсчёт «руками не трогали» начинаем заново: уводя мышь, трейдер
+          // закончил разглядывать, а не только что дёрнул прокрутку.
+          holdUntil.current = 0;
+          onHoverLevel?.(null);
+        }}
+        title="Колесо — прокрутка, Ctrl+колесо — масштаб, двойное нажатие по строке — отметка на цене"
         className="relative flex-1 overflow-auto font-mono"
       >
         <div className="w-full min-w-max">
@@ -211,6 +237,8 @@ export default function DomTrader({
                 clusterScale={clusterScale}
                 onPick={onPickLevel}
                 onHover={onHoverLevel}
+                onAlert={onAlertLevel}
+                alerted={alerted.has(row.price)}
               />,
             );
             return items;
@@ -248,6 +276,8 @@ const Row = memo(function Row({
   clusterScale,
   onPick,
   onHover,
+  onAlert,
+  alerted,
 }: {
   row: LadderRow;
   tick: number;
@@ -256,6 +286,8 @@ const Row = memo(function Row({
   clusterScale: number;
   onPick?: (row: LadderRow) => void;
   onHover?: (row: LadderRow | null) => void;
+  onAlert?: (row: LadderRow) => void;
+  alerted?: boolean;
 }) {
   const isBid = row.bid > 0;
   const width = Math.min(100, (row.notional / bookScale) * 100);
@@ -266,14 +298,18 @@ const Row = memo(function Row({
   return (
     <div
       onClick={pickable ? () => onPick?.(row) : undefined}
+      onDoubleClick={onAlert ? () => onAlert(row) : undefined}
       onMouseEnter={row.notional > 0 ? () => onHover?.(row) : undefined}
       onMouseLeave={row.notional > 0 ? () => onHover?.(null) : undefined}
       title={
-        row.whale
+        (row.whale
           ? "Крупная заявка от вашего порога — нажмите, чтобы посчитать сделку"
           : pickable
             ? "Расчёт сделки от этого уровня"
-            : undefined
+            : "") +
+        (alerted
+          ? "\nОтметка стоит: терминал скажет, когда цену пересекут. Двойное нажатие — снять"
+          : "\nДвойное нажатие — отметка на этой цене")
       }
       className={`flex items-center ${isBid ? "bg-[var(--pane-up-faint)]" : "bg-[var(--pane-down-faint)]"} ${
         pickable
@@ -324,7 +360,12 @@ const Row = memo(function Row({
         >
           {money(row.notional)}
         </span>
-        <span className="relative z-10 text-[var(--pane-text-2)]">{fmtPrice(row.price, tick)}</span>
+        <span className="relative z-10 flex items-center gap-1 text-[var(--pane-text-2)]">
+          {alerted && (
+            <Bell className="h-2.5 w-2.5 shrink-0 text-[var(--pane-gold)]" strokeWidth={2.5} />
+          )}
+          {fmtPrice(row.price, tick)}
+        </span>
       </div>
     </div>
   );
