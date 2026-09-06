@@ -26,21 +26,53 @@ function fields() {
 }
 
 describe("окно расчёта сделки", () => {
-  it("выделяет сумму один раз, а не на каждом кадре", () => {
+  it("не выделяет сумму и не забирает на неё курсор", () => {
+    // Сумма приходит из прошлой сделки и чаще всего верна. Выделенное число
+    // исчезает от первого же нажатия, и правивший плечо терял сумму, которую
+    // не трогал.
     const view = render(
       <TradeDialog draft={draft} onChange={() => {}} onConfirm={() => {}} onCancel={() => {}} />,
     );
     const field = fields().margin;
-    // При открытии — выделена: заменить готовую сумму своей одним набором.
-    expect(field.selectionEnd).toBe(2);
+    expect(document.activeElement).not.toBe(field);
 
-    // Трейдер поставил курсор в конец и дописывает.
-    field.setSelectionRange(2, 2);
+    // И перерисовка страницы под окном ничего в поле не трогает.
+    field.setSelectionRange(1, 1);
     view.rerender(
       <TradeDialog draft={draft} onChange={() => {}} onConfirm={() => {}} onCancel={() => {}} />,
     );
-    expect(field.selectionStart).toBe(2);
-    expect(field.selectionEnd).toBe(2);
+    expect(field.selectionStart).toBe(1);
+    expect(field.selectionEnd).toBe(1);
+  });
+
+  it("плечо выше потолка монеты подводится к потолку", () => {
+    const onChange = vi.fn();
+    render(
+      <TradeDialog
+        draft={{ ...draft, leverage: 200 }}
+        onChange={onChange}
+        onConfirm={() => {}}
+        onCancel={() => {}}
+        maxLeverage={50}
+      />,
+    );
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ leverage: 50 }));
+  });
+
+  it("плечи выше потолка не предлагаются вовсе", () => {
+    render(
+      <TradeDialog
+        draft={draft}
+        onChange={() => {}}
+        onConfirm={() => {}}
+        onCancel={() => {}}
+        maxLeverage={50}
+      />,
+    );
+    // Кнопка, которая гарантированно приведёт к отказу биржи, - это ловушка.
+    expect(screen.queryByText("x100")).toBeNull();
+    expect(screen.queryByText("x400")).toBeNull();
+    expect(screen.getByText("x50")).toBeInTheDocument();
   });
 
   it("принимает набранное число, в том числе через запятую", () => {

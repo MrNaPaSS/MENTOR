@@ -74,18 +74,9 @@ export default function TradeDialog({
   /** Комиссия тейкера этой монеты: по ней считаются подсказки в окне. */
   takerFee?: number;
 }) {
-  const firstFieldRef = useRef<HTMLInputElement>(null);
-
-  // Выделяем сумму один раз, при открытии окна.
-  //
-  // Раньше это стояло в подписке на клавиши, а она пересоздавалась на каждом
-  // рендере — стакан приходит восемь раз в секунду, и поле выделялось заново
-  // столько же. Набранное затиралось следующим же кадром: ввести своё число
-  // было невозможно, а сумма выглядела вечно подсвеченной.
-  useEffect(() => {
-    firstFieldRef.current?.focus();
-    firstFieldRef.current?.select();
-  }, []);
+  // Сумму не выделяем и не забираем на неё курсор: она приходит из прошлой
+  // сделки и чаще всего верна. Выделенное число исчезает от первого же
+  // нажатия, и трейдер, поправлявший плечо, терял сумму, которую не трогал.
 
   // Горячие клавиши: обработчики держим в ref, чтобы подписка не зависела от
   // того, как часто перерисовывается страница под окном.
@@ -109,6 +100,13 @@ export default function TradeDialog({
     ? [...LEVERAGES.filter((l) => l < cap), cap].filter((l, i, all) => all.indexOf(l) === i)
     : LEVERAGES;
   const overLimit = cap !== null && draft.leverage > cap;
+
+  // Плечо выше потолка монеты подводим к потолку, как только его узнали.
+  // Вниз и только вниз: поднимать плечо за трейдера нельзя, это его риск.
+  useEffect(() => {
+    if (cap !== null && draft.leverage > cap) onChange({ ...draft, leverage: cap });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cap, draft.leverage]);
 
   const side = sideForShelf(draft.shelf.side);
   const long = side === "long";
@@ -164,7 +162,6 @@ export default function TradeDialog({
             value={draft.margin}
             presets={MARGINS}
             format={(v) => String(v)}
-            inputRef={firstFieldRef}
             onPick={(margin) => onChange({ ...draft, margin })}
           />
           <Field
