@@ -85,6 +85,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  // Скальпинг открыт не всем: он работает с живыми деньгами, и пока раздел
+  // доводится, в меню его видят только допущенные. Сервер проверяет то же
+  // самое на каждом запросе — прятать кнопку одной этой строкой было бы
+  // защитой от честных людей.
+  const visible = NAV.filter((n) => n.href !== "/app/scalping" || profile?.scalping);
+
   const balance = parseFloat(profile?.balance_usdt || "0");
   const mode = profile?.mode || "moderate";
 
@@ -103,7 +109,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Навигация - десктоп */}
           <nav className="hidden items-center gap-0.5 lg:flex">
-            {NAV.map((n) => {
+            {visible.map((n) => {
               const Icon = n.icon;
               const active = isActive(n.href);
               return (

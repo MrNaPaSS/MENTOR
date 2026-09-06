@@ -203,6 +203,8 @@ export interface Profile {
   turbo_leverage: number | null;
   balance_usdt: string | null;
   balance_source: string;
+  /** Открыт ли скальпинг-терминал: раздел работает с живыми деньгами. */
+  scalping?: boolean;
 }
 
 export interface AnalyticsMe {

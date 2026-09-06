@@ -957,7 +957,7 @@ function PriceChart({
     tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
     tradeLinesRef.current.push(
       trade.breakeven
-        ? line(trade.stop, palette.mtf, "б/у", 2)
+        ? line(trade.stop, palette.mtf, "BE", 2)   // breakeven, как принято в терминалах
         : line(trade.stop, palette.askLine, "стоп", 2),
     );
     targets.forEach((price, i) => {
