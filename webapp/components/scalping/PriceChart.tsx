@@ -430,6 +430,8 @@ function PriceChart({
   // Результат за сегодня по журналу. null — журнал недоступен: ученик не вошёл
   // в кабинет, и показывать ему чужой ноль незачем.
   const [todayPnl, setTodayPnl] = useState<number | null>(null);
+  // Почему на графике нет свежих свечей. Пусто — всё в порядке.
+  const [dataError, setDataError] = useState<string | null>(null);
   const livePriceRef = useRef(livePrice);
   livePriceRef.current = livePrice;
   // Сделка нужна и при загрузке свечей: бокс строится от последнего бара, а на
@@ -649,13 +651,22 @@ function PriceChart({
         const res = await fetch(
           `${API_URL}/api/scalping/klines/${symbol}?interval=${interval}&limit=400`,
         );
-        if (!res.ok) return;
+        if (!res.ok) {
+          // Причину называем словами. Пустой график молча — это то же самое,
+          // что показать неверные данные: трейдер не знает, чему верить.
+          const detail = await res.json().catch(() => null);
+          if (!cancelled) {
+            setDataError(detail?.detail || `Свечи недоступны (${res.status})`);
+          }
+          return;
+        }
         const body: { candles: Candle[] } = await res.json();
         if (cancelled || !candleRef.current) return;
+        setDataError(null);
         draw(body.candles);
         if (fit) reframe(body.candles.length);
       } catch {
-        // Сеть моргнула — следующая попытка через REFRESH_MS.
+        if (!cancelled) setDataError("Нет связи с сервером");
       }
     }
 
@@ -1079,6 +1090,17 @@ function PriceChart({
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* Данных нет — говорим, почему, и не рисуем ничего вместо них.
+          Устаревшая свеча в скальпинге хуже пустого экрана: по ней принимают
+          решение, считая её текущей. */}
+      {dataError && (
+        <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center">
+          <p className="rounded-md border border-[var(--pane-border)] bg-[var(--pane-bg)] px-4 py-2 text-center text-[12px] text-[var(--pane-down)] shadow">
+            {dataError}
+          </p>
         </div>
       )}
 

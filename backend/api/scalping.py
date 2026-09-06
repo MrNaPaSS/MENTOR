@@ -132,10 +132,9 @@ async def klines(
 
     cached = _klines_cache.get(key)
     now = time.monotonic()
-    # Пока биржа держит нас закрытыми, отдаём последнее, что есть, любой
-    # давности: устаревшие на минуту свечи полезнее пустого графика, а сходить
-    # за свежими всё равно нельзя — запрос во время бана продлевает бан.
-    if cached and (now - cached[0] < _KLINE_TTL or collector.rest.blocked):
+    # Только свежие данные. Устаревшая свеча в скальпинге хуже пустого экрана:
+    # по ней принимают решение, считая её текущей. Нет свежих — так и говорим.
+    if cached and now - cached[0] < _KLINE_TTL:
         rows = cached[1]
     else:
         raw = await collector.rest.klines(sym, interval, limit)

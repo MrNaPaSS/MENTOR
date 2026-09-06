@@ -305,3 +305,33 @@ def test_rest_stops_calling_the_exchange_while_banned():
     rest._block(BAN_BACKOFF_MIN)
     assert rest.blocked is True
     assert rest.blocked_for > 0
+
+
+def test_weight_budget_stops_us_before_the_exchange_does():
+    """Реагировать на 429 поздно: следом приходит 418 — бан адреса.
+
+    Поэтому лимит держим сами: половина минутного бюджета биржи.
+    """
+    from backend.scalping.binance import WEIGHT_BUDGET, WEIGHTS, BinanceRest
+
+    rest = BinanceRest(lambda: None)           # type: ignore[arg-type]
+    depth_weight = WEIGHTS["/fapi/v1/depth"]
+    allowed = WEIGHT_BUDGET // depth_weight
+
+    async def spend():
+        taken = 0
+        for _ in range(allowed + 5):
+            if await rest._reserve("/fapi/v1/depth"):
+                taken += 1
+        return taken
+
+    assert asyncio.run(spend()) == allowed
+
+
+def test_spent_weight_forgets_the_previous_minute():
+    from backend.scalping.binance import BinanceRest, WEIGHT_WINDOW
+
+    rest = BinanceRest(lambda: None)           # type: ignore[arg-type]
+    now = time.monotonic()
+    rest._spent.append((now - WEIGHT_WINDOW - 1, 1000))
+    assert rest._spent_weight(now) == 0

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import deque
 import json
 import logging
 from typing import Any, Awaitable, Callable
@@ -41,6 +42,20 @@ CONTROL_RATE_DELAY = 0.15
 BAN_BACKOFF_MIN = 30.0
 BAN_BACKOFF_MAX = 600.0
 
+# Бюджет веса запросов. Биржа даёт 2400 единиц в минуту на адрес; берём
+# половину и держимся её сами, не дожидаясь предупреждения. Реагировать на 429
+# поздно: за ним приходит 418, а это уже бан адреса на десятки минут.
+WEIGHT_BUDGET = 1200
+WEIGHT_WINDOW = 60.0
+
+# Вес известных запросов по документации биржи.
+WEIGHTS = {
+    "/fapi/v1/depth": 10,       # при лимите до 500 уровней
+    "/fapi/v1/klines": 2,
+    "/fapi/v1/ticker/24hr": 40,  # сводка по всем инструментам
+}
+DEFAULT_WEIGHT = 5
+
 
 class BinanceRest:
     """REST-запросы к публичному API фьючерсов.
@@ -56,6 +71,8 @@ class BinanceRest:
         # До какого момента запросы не отправляются.
         self._blocked_until = 0.0
         self._penalty = BAN_BACKOFF_MIN
+        # Потраченный вес: (когда, сколько). Старше минуты выбрасывается.
+        self._spent: deque[tuple[float, int]] = deque()
 
     @property
     def blocked(self) -> bool:
@@ -69,8 +86,33 @@ class BinanceRest:
         self._blocked_until = time.monotonic() + seconds
         logger.warning("Биржа закрыта для запросов на %.0f с", seconds)
 
+    def _spent_weight(self, now: float) -> int:
+        """Сколько веса потрачено за последнюю минуту."""
+        while self._spent and now - self._spent[0][0] > WEIGHT_WINDOW:
+            self._spent.popleft()
+        return sum(w for _, w in self._spent)
+
+    async def _reserve(self, path: str) -> bool:
+        """Занять вес под запрос. False — бюджет исчерпан, запрос не пойдёт."""
+        weight = WEIGHTS.get(path, DEFAULT_WEIGHT)
+        now = time.monotonic()
+        if self._spent_weight(now) + weight > WEIGHT_BUDGET:
+            logger.warning(
+                "Бюджет запросов исчерпан (%d из %d за минуту), %s отложен",
+                self._spent_weight(now),
+                WEIGHT_BUDGET,
+                path,
+            )
+            return False
+        self._spent.append((now, weight))
+        return True
+
     async def _get(self, path: str, params: dict | None = None) -> Any:
         if self.blocked:
+            return None
+        # Держим себя в лимите сами. Дожидаться предупреждения от биржи поздно:
+        # за 429 приходит 418, а это бан адреса на десятки минут.
+        if not await self._reserve(path):
             return None
 
         session = await self._session_factory()
