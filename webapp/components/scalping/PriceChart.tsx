@@ -79,6 +79,9 @@ const THEMES: Record<
     /** Боксы риска и потенциала у разметки сделки. */
     riskBox: string;
     riskBorder: string;
+    /** Тот же бокс, когда риска уже нет: стоп переехал в безубыток. */
+    spentBox: string;
+    spentBorder: string;
     rewardBox: string;
     rewardBorder: string;
   }
@@ -106,6 +109,8 @@ const THEMES: Record<
     mtf: "#2157F3",
     riskBox: "rgba(246,70,93,0.16)",
     riskBorder: "rgba(246,70,93,0.45)",
+    spentBox: "rgba(122,130,144,0.10)",
+    spentBorder: "rgba(122,130,144,0.35)",
     rewardBox: "rgba(14,203,129,0.13)",
     rewardBorder: "rgba(14,203,129,0.45)",
   },
@@ -139,6 +144,8 @@ const THEMES: Record<
     // потенциал сиреневым — так эти области размечены в самом терминале.
     riskBox: "rgba(120,123,134,0.22)",
     riskBorder: "rgba(120,123,134,0.45)",
+    spentBox: "rgba(120,123,134,0.08)",
+    spentBorder: "rgba(120,123,134,0.28)",
     rewardBox: "rgba(149,117,205,0.16)",
     rewardBorder: "rgba(149,117,205,0.45)",
   },
@@ -274,14 +281,19 @@ function tradeBoxes(
   const span = { kind: "bars" as const, bars: Math.max(RIGHT_BARS, width) };
 
   const far = pendingTargets(trade).at(-1);
+
+  // Бокс риска остаётся и после переноса стопа в безубыток: он показывает, чем
+  // сделка рисковала. Живого риска в нём уже нет, поэтому рисуется бледнее —
+  // иначе картинка врёт, будто убыток всё ещё возможен.
+  const risk = trade.breakeven ? trade.initialStop : trade.stop;
   const boxes: Shapes["boxes"] = [
     {
       fromTime: anchor as UTCTimestamp,
       toTime: span,
-      top: Math.max(trade.entry, trade.stop),
-      bottom: Math.min(trade.entry, trade.stop),
-      fill: palette.riskBox,
-      border: palette.riskBorder,
+      top: Math.max(trade.entry, risk),
+      bottom: Math.min(trade.entry, risk),
+      fill: trade.breakeven ? palette.spentBox : palette.riskBox,
+      border: trade.breakeven ? palette.spentBorder : palette.riskBorder,
     },
   ];
   if (far !== undefined) {
@@ -929,11 +941,16 @@ function PriceChart({
       });
 
     const targets = pendingTargets(trade);
-    tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
-    tradeLinesRef.current.push(
-      // Стоп в безубытке — уже не убыток: цветом он не должен пугать.
-      line(trade.stop, trade.breakeven ? palette.mtf : palette.askLine, trade.breakeven ? "б/у" : "стоп", 2),
-    );
+
+    // После первой цели стоп стоит ровно на входе, и две линии совпадают.
+    // Рисуем одну и подписываем её безубытком: две плашки на одной цене
+    // перекрывают друг друга и читаются как сбой.
+    if (trade.breakeven) {
+      tradeLinesRef.current.push(line(trade.entry, palette.mtf, "вход · б/у", 0));
+    } else {
+      tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
+      tradeLinesRef.current.push(line(trade.stop, palette.askLine, "стоп", 2));
+    }
     targets.forEach((price, i) => {
       tradeLinesRef.current.push(line(price, palette.bidLine, `тейк ${trade.takesHit + i + 1}`, 2));
     });
