@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from statistics import median
 
@@ -120,6 +121,41 @@ SHELF_MAX_LIMIT = 50_000_000.0
 
 # Сколько полок отдаём. Больше — и картина снова замусоривается.
 MAX_SHELVES = 8
+
+
+def tick_decimals(tick: float) -> int:
+    """Сколько знаков после запятой имеет шаг."""
+    if tick <= 0:
+        return 0
+    text = f"{tick:.10f}".rstrip("0")
+    return len(text.partition(".")[2])
+
+
+def snap(price: float, tick: float, side: str) -> float:
+    """Положить цену на сетку шага. Бид вниз, аск вверх."""
+    if tick <= 0:
+        return price
+    steps = price / tick
+    k = math.floor(steps + 1e-9) if side == "bid" else math.ceil(steps - 1e-9)
+    return round(k * tick, tick_decimals(tick))
+
+
+def bucket_levels(levels: list[Level], step: float, side: str) -> list[Level]:
+    """Схлопнуть уровни в корзины шагом `step` — как это делает лестница.
+
+    Без этого стакан и график живут по разным правилам: в лестнице строка — это
+    сумма всех заявок в её корзине, а полка искалась по одному сырому уровню.
+    На монетах с мелким шагом цены (SOL, ETH) заявки размазаны по десяткам
+    соседних цен, и строка на пять миллионов не давала на графике ни одной
+    линии — трейдер видел плиту в стакане и пустой график рядом.
+    """
+    if step <= 0:
+        return levels
+    buckets: dict[float, float] = {}
+    for level in levels:
+        price = snap(level.price, step, side)
+        buckets[price] = buckets.get(price, 0.0) + level.size
+    return [Level(price=price, size=size) for price, size in buckets.items()]
 
 
 def find_shelves(

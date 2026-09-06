@@ -18,10 +18,15 @@ import logging
 from dataclasses import asdict
 
 from backend.scalping.clusters import fit_to_rows
-from backend.scalping.collector import ScalpingCollector
 from backend.scalping.ladder import DEFAULT_ROWS, build_ladder
 from backend.scalping.metrics import SHELF_MIN_NOTIONAL
-from backend.scalping.state import DEFAULT_SORT, biggest_wall, liquidity_shelves
+from backend.scalping.collector import KEEP_BAND_BP, ScalpingCollector
+from backend.scalping.state import (
+    BAND_BP,
+    DEFAULT_SORT,
+    biggest_wall,
+    liquidity_shelves,
+)
 
 logger = logging.getLogger("nmnh.scalping.ws")
 
@@ -202,12 +207,32 @@ class ScalpingHub:
             "book_ratio": state.book_ratio,
             "rows": [asdict(r) for r in ladder],
             "wall": asdict(wall) if wall else None,
-            "shelves": [asdict(s) for s in liquidity_shelves(state, min_notional=sub.shelf)],
+            "shelves": [
+                asdict(s)
+                for s in liquidity_shelves(
+                    state, band_bp=_shelf_band(state, sub.rows, step), min_notional=sub.shelf, step=step
+                )
+            ],
             "clusters": _clusters(state, ladder, step),
             # Живая свеча из ленты сделок: график рисует её сразу, не дожидаясь
             # следующего опроса истории.
             "candle": _live_candle(state, sub.interval),
         }
+
+
+def _shelf_band(state, rows: int, step: float) -> float:
+    """Полоса поиска полок — та, что трейдер видит в стакане.
+
+    Постоянные двадцать пять базисных пунктов годились, пока стакан показывал
+    столько же. Но глубину и шаг задаёт сам трейдер: сорок строк по крупному
+    шагу уходят заметно дальше, и линия к плите, до которой он смотрит,
+    не появлялась. Дальше сохранённой книги не заглядываем — там пусто.
+    """
+    mid = state.book.mid
+    if mid <= 0 or step <= 0:
+        return BAND_BP
+    visible_bp = (rows * step) / mid * 10_000
+    return max(BAND_BP, min(visible_bp, KEEP_BAND_BP))
 
 
 # Секунды в таймфрейме графика.

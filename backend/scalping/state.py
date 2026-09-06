@@ -16,6 +16,7 @@ from backend.scalping.clusters import ClusterHistory
 from backend.scalping.metrics import (
     Wall,
     book_imbalance,
+    bucket_levels,
     SHELF_MIN_NOTIONAL,
     find_shelves,
     find_walls,
@@ -105,11 +106,15 @@ def liquidity_shelves(
     state: SymbolState,
     band_bp: float = BAND_BP,
     min_notional: float = SHELF_MIN_NOTIONAL,
+    step: float = 0.0,
 ) -> list[Wall]:
     """Полки ликвидности с обеих сторон — уровни с крупными деньгами.
 
-    Полосу берём ту же, что и для остальных метрик: полка за процент от цены
-    трейдеру на скальпе не пригодится, а линий на графике добавит.
+    Считаем по тем же корзинам, что и лестница стакана: строка на экране — это
+    сумма всех заявок в её шаге цены, и полка обязана означать ровно то же.
+    По сырым уровням выходило расхождение, которое видно глазами: на монетах с
+    мелким шагом (SOL, ETH) заявки размазаны по десяткам соседних цен, строка
+    стакана горит на пять миллионов, а на графике ни одной линии.
 
     Порог задаёт клиент: на биткойне два миллиона — рядовой уровень, на монете
     из третьего десятка их не бывает вовсе. Одного значения на все инструменты
@@ -118,9 +123,14 @@ def liquidity_shelves(
     mid = state.book.mid
     if mid <= 0:
         return []
-    shelves = find_shelves(
-        state.book.levels_in_band("bid", band_bp), "bid", mid, min_notional
-    ) + find_shelves(state.book.levels_in_band("ask", band_bp), "ask", mid, min_notional)
+    bids = state.book.levels_in_band("bid", band_bp)
+    asks = state.book.levels_in_band("ask", band_bp)
+    if step > 0:
+        bids = bucket_levels(bids, step, "bid")
+        asks = bucket_levels(asks, step, "ask")
+    shelves = find_shelves(bids, "bid", mid, min_notional) + find_shelves(
+        asks, "ask", mid, min_notional
+    )
     shelves.sort(key=lambda w: w.notional, reverse=True)
     return shelves
 

@@ -12,11 +12,10 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 from backend.scalping.book import OrderBook
-from backend.scalping.metrics import Level, Wall, find_walls
+from backend.scalping.metrics import Level, Wall, find_walls, snap, tick_decimals
 from backend.scalping.state import BAND_BP
 
 # Сколько ценовых строк показываем с каждой стороны по умолчанию.
@@ -69,23 +68,6 @@ def detect_tick(book: OrderBook, sample: int = 40) -> float:
     if not gaps:
         return 0.0
     return float(f"{min(gaps):.6g}")
-
-
-def tick_decimals(tick: float) -> int:
-    """Сколько знаков после запятой у шага — по ним округляются цены сетки."""
-    if tick <= 0:
-        return 8
-    text = f"{tick:.10f}".rstrip("0")
-    return len(text.partition(".")[2])
-
-
-def snap(price: float, tick: float, side: str) -> float:
-    """Положить цену на сетку шага. Бид вниз, аск вверх."""
-    if tick <= 0:
-        return price
-    steps = price / tick
-    k = math.floor(steps + 1e-9) if side == "bid" else math.ceil(steps - 1e-9)
-    return round(k * tick, tick_decimals(tick))
 
 
 def group(levels: list[Level], tick: float, side: str, rows: int) -> list[tuple[float, float]]:

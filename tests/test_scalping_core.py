@@ -313,6 +313,47 @@ def test_shelf_threshold_comes_from_the_client():
     assert sorted(s.price for s in loose) == [99.99, 100.0, 100.01]
 
 
+def test_shelf_counts_the_whole_row_of_the_ladder():
+    """Полка и строка стакана обязаны означать одно и то же.
+
+    На монетах с мелким шагом цены заявки размазаны по десяткам соседних
+    уровней: в стакане с укрупнением строка горит на пять миллионов, а полка
+    искалась по одному сырому уровню и не находила ничего. Трейдер видел плиту
+    в стакане и пустой график рядом — это и есть та жалоба.
+    """
+    from backend.scalping.state import SymbolState, liquidity_shelves
+
+    state = SymbolState("SOLUSDT")
+    # Десять уровней по 300 тысяч подряд: поодиночке ни один не полка, вместе
+    # в одной строке стакана шагом 0.1 — три миллиона.
+    bids = [[f"{100.00 - i * 0.01:.2f}", "3000"] for i in range(10)]
+    state.book.apply_snapshot(bids, [["100.20", "100"]], 1)
+
+    assert liquidity_shelves(state, min_notional=2_000_000) == []
+
+    grouped = liquidity_shelves(state, min_notional=2_000_000, step=0.1)
+    assert [round(s.price, 2) for s in grouped] == [99.9]
+    assert grouped[0].notional > 2_000_000
+
+
+def test_shelf_band_follows_the_visible_ladder():
+    """Полосу поиска задаёт глубина стакана, а не постоянная величина.
+
+    Сорок строк крупным шагом уходят дальше четверти процента, и линия к плите,
+    до которой трейдер смотрит, не появлялась вовсе.
+    """
+    from backend.ws.scalping_hub import _shelf_band
+    from backend.scalping.state import BAND_BP, SymbolState
+
+    state = SymbolState("TESTUSDT")
+    state.book.apply_snapshot([["100.00", "1"]], [["100.01", "1"]], 1)
+
+    # Тесная лестница: полосу не сужаем ниже общей для метрик.
+    assert _shelf_band(state, rows=10, step=0.01) == BAND_BP
+    # Широкая: полоса растёт вместе с ней.
+    assert _shelf_band(state, rows=40, step=0.1) > BAND_BP
+
+
 def test_no_shelves_without_price():
     from backend.scalping.metrics import find_shelves
 
