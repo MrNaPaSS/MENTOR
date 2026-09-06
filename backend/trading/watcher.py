@@ -69,6 +69,10 @@ class Decision:
     opened: bool = False
     closed: bool = False
     filled_orders: list[str] = field(default_factory=list)
+    # Объём позиции на бирже. По нему считаются взятые цели, и он же
+    # записывается сделке: лимитка исполняется и частями, а планируемый объём
+    # тогда врёт - терминал видел «взята цель» сразу после входа.
+    size: float = 0.0
 
 
 def position_size(position: dict[str, Any] | None) -> float:
@@ -122,11 +126,17 @@ def decide(
     size = position_size(position)
 
     if trade.status == "waiting":
-        # Позиция появилась — заявка входа исполнилась.
-        return Decision(trade.takes_hit, opened=size > 0)
+        # Позиция появилась - заявка входа исполнилась.
+        return Decision(trade.takes_hit, opened=size > 0, size=size)
 
     if size <= 0 and missing_streak >= MISSING_TOLERANCE:
         return Decision(trade.takes_hit, closed=True)
+
+    # Позиция больше запомненной - лимитка дозаполнилась. Это не взятая цель, а
+    # добор объёма: считать цели от старого числа значит увидеть их там, где их
+    # нет.
+    if size > float(trade.qty):
+        return Decision(trade.takes_hit, size=size)
 
     takes: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
     hit = max(trade.takes_hit, takes_filled(float(trade.qty), size, len(takes)))
@@ -156,8 +166,8 @@ def decide(
                 # уже убыток, а не ноль.
                 losing = fresh < state.entry if trade.side == "long" else fresh > state.entry
                 if not losing:
-                    return Decision(trade.takes_hit, move_stop_to=fresh)
-        return Decision(trade.takes_hit)
+                    return Decision(trade.takes_hit, move_stop_to=fresh, size=size)
+        return Decision(trade.takes_hit, size=size)
 
     # Отмечаем сработавшими те цели, которых уже нет среди висящих заявок, — по
     # порядку и не больше, чем показал остаток позиции.
@@ -182,7 +192,7 @@ def decide(
     if target is not None and not should_move_stop(state, target):
         target = None
 
-    return Decision(hit, move_stop_to=target, filled_orders=filled)
+    return Decision(hit, move_stop_to=target, filled_orders=filled, size=size)
 
 
 class PositionWatcher:
@@ -328,6 +338,10 @@ class PositionWatcher:
         if decision.opened:
             trade.status = "open"
             trade.opened_at = utcnow()
+            # Объём берём биржевой: лимитка могла исполниться частью, и цели
+            # считаются от того, что действительно набрано.
+            if decision.size > 0:
+                trade.qty = decision.size
             changed = True
             logger.info("Позиция набрана: %s (%s)", trade.symbol, trade.client_id)
 
@@ -337,6 +351,11 @@ class PositionWatcher:
         if trade.status == "open" and not json.loads(trade.tp_orders_json or "[]"):
             if await self._place_takes(client, trade):
                 changed = True
+
+        # Позиция подросла - лимитка дозаполнилась.
+        if decision.size > float(trade.qty):
+            trade.qty = decision.size
+            changed = True
 
         if decision.filled_orders:
             takes = json.loads(trade.tp_orders_json or "[]")
@@ -509,10 +528,20 @@ class PositionWatcher:
             order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
             if not order_id or order_id == keep or order_id in takes:
                 continue
+
+            # Снимаем только то, что уверенно опознали как стоп. Раньше здесь
+            # было наоборот: пропускались цели, а всё остальное снималось - и
+            # заявка с незнакомым названием вида уходила под нож. Так и пропали
+            # цели через несколько секунд после входа: терминал снял их сам,
+            # приняв за чужие стопы.
             kind = str(order.get("planType") or order.get("type") or "").lower()
-            # Заявку неизвестного вида не трогаем: снять чужую цель дороже, чем
-            # оставить лишний стоп.
-            if "profit" in kind or "tp" in kind:
+            stop_like = "stop" in kind or "loss" in kind or kind.endswith("sl")
+            if not stop_like:
+                logger.info(
+                    "Условная заявка %s (%s) оставлена: не опознана как стоп",
+                    order_id,
+                    kind or "без вида",
+                )
                 continue
             try:
                 await client.cancel_algo_order(trade.symbol, order_id)

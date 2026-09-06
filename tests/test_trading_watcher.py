@@ -558,3 +558,53 @@ def test_watcher_awaits_the_session_factory():
     source = inspect.getsource(PositionWatcher._handle_student)
     assert "await self._http()" in source
     assert "public_price(self._http()" not in source
+
+
+def test_only_recognized_stops_are_cancelled():
+    """Заявка незнакомого вида остаётся жить.
+
+    Раньше снималось всё, кроме опознанных целей: цель с непривычным названием
+    вида уходила под нож через несколько секунд после входа - трейдер видел,
+    как его тейки исчезают сами.
+    """
+    import inspect
+
+    from backend.trading.watcher import PositionWatcher
+
+    source = inspect.getsource(PositionWatcher._drop_old_stops)
+    assert "stop_like" in source
+    assert "if not stop_like:" in source
+
+
+def test_partial_fill_is_not_a_taken_target():
+    """Лимитка исполнилась частью - это не взятая цель.
+
+    Цели считались от планируемого объёма: набрали 70% - значит «первая
+    взята». Следом терминал двигал стоп в безубыток и снимал заявки, которые
+    считал лишними, - цели пропадали через несколько секунд после входа.
+    Объём сделки теперь берётся с биржи в момент, когда позиция появилась.
+    """
+    row = trade(status="waiting", qty=10.0)
+    opened = decide(row, position("7"), ALL_PLANS, 101.5, 0)
+    assert opened.opened is True
+    assert opened.size == 7.0
+    assert opened.takes_hit == 0
+
+    # Дальше цели считаются уже от набранного, а не от задуманного.
+    row = trade(status="open", qty=opened.size)
+    assert decide(row, position("7"), ALL_PLANS, 101.5, 0).takes_hit == 0
+    assert decide(row, position("4.9"), {"tp2", "tp3"}, 101.5, 0).takes_hit == 1
+
+
+def test_opened_trade_remembers_the_real_size():
+    row = trade(status="waiting", qty=10.0)
+    decision = decide(row, position("6.5"), ALL_PLANS, 101.5, 0)
+    assert decision.opened is True
+    assert decision.size == 6.5
+
+
+def test_growing_position_is_a_top_up_not_a_target():
+    row = trade(status="open", qty=5.0)
+    decision = decide(row, position("8"), ALL_PLANS, 101.5, 0)
+    assert decision.takes_hit == 0
+    assert decision.size == 8.0
