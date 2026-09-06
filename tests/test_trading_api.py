@@ -25,6 +25,7 @@ class FakeExchange:
         self.pending = []
         self.plans = []
         self.plans_open = []
+        self.fills = []
         self.cancelled = []
         self.algo_cancelled = []
         self.position = None
@@ -42,6 +43,7 @@ class FakeExchange:
     pending: list[dict] = []
     plans: list[dict] = []
     plans_open: list[dict] = []
+    fills: list[dict] = []
     cancelled: list[str] = []
     algo_cancelled: list[str] = []
 
@@ -62,6 +64,10 @@ class FakeExchange:
 
     async def cancel_all_algo(self, symbol):
         self.algo_cancelled.append(symbol)
+
+    async def user_trades(self, symbol, limit=100):
+        # Биржа сообщает, что вышло на самом деле: результат и комиссия.
+        return list(self.fills)
 
     async def set_leverage(self, symbol, leverage, margin_coin="USDT"):
         self.leverage = (symbol, leverage)
@@ -440,3 +446,39 @@ def test_conditional_take_defaults_to_market_execution():
     )
     assert sent["executePrice"] == "0"
     assert sent["triggerPriceType"] == "MARK_PRICE"
+
+
+def test_journal_gets_the_exchange_result_not_our_estimate(app_and_exchange):
+    """На экране было +209, на счёт пришло 75.
+
+    Наша цифра считается по цене маркировки и без комиссий. Правду знает
+    только биржа, и в отчёт должна идти она.
+    """
+    client, exchange, _ = app_and_exchange
+    exchange.position = {"symbol": "BTCUSDT", "total": "0.5"}
+    exchange.fills = [
+        {"orderId": "o1", "realizedPnl": "75.4", "commission": "8.2", "price": "79500"},
+    ]
+
+    body = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "long", "share": 1},
+    ).json()
+
+    assert body["realized"] == 75.4
+    assert body["fee"] == 8.2
+    assert body["fill_price"] == 79500.0
+
+
+def test_missing_fills_do_not_invent_a_result(app_and_exchange):
+    """Биржа промолчала — возвращаем пустоту, а не придуманное число."""
+    client, exchange, _ = app_and_exchange
+    exchange.position = {"symbol": "BTCUSDT", "total": "0.5"}
+    exchange.fills = []
+
+    body = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "long", "share": 1},
+    ).json()
+
+    assert body["realized"] is None and body["fee"] is None
