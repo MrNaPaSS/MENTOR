@@ -84,10 +84,10 @@ export default function TradeDialog({
   keys.current = { onCancel, onConfirm };
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      // Только Esc. Enter раньше отправлял заявку на биржу - и отправлял её
+      // в тот момент, когда трейдер заканчивал набор числа в поле. Ордер на
+      // деньги должен уходить по нажатию на кнопку, названную словом.
       if (event.key === "Escape") keys.current.onCancel();
-      // Enter подтверждает, но не когда трейдер правит число: там он ждёт
-      // конца ввода, а не входа в сделку.
-      if (event.key === "Enter") keys.current.onConfirm();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);

@@ -280,7 +280,10 @@ class PositionWatcher:
             if price is None:
                 sym = trade.symbol.upper()
                 if sym not in prices:
-                    prices[sym] = await public_price(self._http(), sym)
+                    # Фабрика сессии асинхронная: без ожидания в запрос уходил
+                    # не сеанс, а корутина - и обход сделок падал целиком,
+                    # оставляя позиции без сопровождения.
+                    prices[sym] = await public_price(await self._http(), sym)
                 price = prices[sym]
 
             plans = await self._open_plans(client, trade)

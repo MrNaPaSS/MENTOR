@@ -542,3 +542,19 @@ def test_short_counts_downwards():
 
     fills = [{"price": "98.5", "side": "buy"}]
     assert takes_reached(fills, [99.0, 98.0, 97.0], "short") == 1
+
+
+def test_watcher_awaits_the_session_factory():
+    """Фабрика сессии асинхронная, и забытое ожидание валит весь обход.
+
+    В запрос уходила корутина вместо сеанса: «'coroutine' object has no
+    attribute 'get'» на каждом проходе - позиции оставались без сопровождения,
+    стоп не переезжал, цели не выставлялись, журнал не писался.
+    """
+    import inspect
+
+    from backend.trading.watcher import PositionWatcher
+
+    source = inspect.getsource(PositionWatcher._handle_student)
+    assert "await self._http()" in source
+    assert "public_price(self._http()" not in source
