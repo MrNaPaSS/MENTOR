@@ -140,8 +140,11 @@ class ScalpingHub:
         if not targets:
             return
 
-        # Список одинаков для всех с одной сортировкой — считаем по разу.
+        # Кадр одинаков для всех, кто смотрит одно и то же, — считаем по разу.
+        # Десять человек на биткойне с одинаковыми настройками это один расчёт
+        # лестницы за такт, а не десять: собрать стакан дороже, чем отправить.
         screener_cache: dict[str, dict] = {}
+        dom_cache: dict[tuple[str, int, int, float], dict | None] = {}
         dead: list[object] = []
 
         for ws, sub in targets:
@@ -153,7 +156,12 @@ class ScalpingHub:
                         screener_cache[sub.sort] = frame
                     await ws.send_json({"event": "screener", "payload": frame})
                 if sub.symbol:
-                    dom = self._dom_frame(sub)
+                    key = (sub.symbol, sub.rows, sub.agg, sub.shelf)
+                    if key in dom_cache:
+                        dom = dom_cache[key]
+                    else:
+                        dom = self._dom_frame(sub)
+                        dom_cache[key] = dom
                     if dom:
                         await ws.send_json({"event": "dom", "payload": dom})
             except Exception:  # noqa: BLE001 — соединение закрыто или битое

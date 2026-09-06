@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import asdict
 from typing import Any
@@ -115,6 +116,10 @@ async def dom(
 _KLINE_TTL = 2.0
 _klines_cache: dict[str, tuple[float, list]] = {}
 
+# Запросы в полёте: ключ → ожидание. Нужно, чтобы одновременные обращения к
+# одной монете складывались в один поход на биржу, а не в десять.
+_klines_inflight: dict[str, Any] = {}
+
 
 @router.get("/klines/{symbol}")
 async def klines(
@@ -132,12 +137,28 @@ async def klines(
 
     cached = _klines_cache.get(key)
     now = time.monotonic()
+
+    # Десять человек на одной монете просят свечи почти одновременно. Без
+    # общего ожидания это десять одинаковых запросов на биржу вместо одного —
+    # ровно так и набирается лишний вес.
+    pending = _klines_inflight.get(key)
+    if pending is not None and not (cached and now - cached[0] < _KLINE_TTL):
+        await pending
+        cached = _klines_cache.get(key)
+        now = time.monotonic()
     # Только свежие данные. Устаревшая свеча в скальпинге хуже пустого экрана:
     # по ней принимают решение, считая её текущей. Нет свежих — так и говорим.
     if cached and now - cached[0] < _KLINE_TTL:
         rows = cached[1]
     else:
-        raw = await collector.rest.klines(sym, interval, limit)
+        done = asyncio.get_running_loop().create_future()
+        _klines_inflight[key] = done
+        try:
+            raw = await collector.rest.klines(sym, interval, limit)
+        finally:
+            _klines_inflight.pop(key, None)
+            if not done.done():
+                done.set_result(None)
         rows = []
         for r in raw:
             try:
@@ -154,7 +175,10 @@ async def klines(
                 )
             except (TypeError, ValueError, IndexError):
                 continue
-        _klines_cache[key] = (now, rows)
+        # Пустой ответ не кэшируем: иначе секундный сбой биржи замирает на
+        # экране кэшем и прячет восстановление.
+        if rows:
+            _klines_cache[key] = (now, rows)
 
     if not rows:
         if collector.rest.blocked:

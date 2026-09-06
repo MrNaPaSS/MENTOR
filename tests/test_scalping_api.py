@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import asyncio
+
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -342,3 +345,31 @@ def test_candles_say_when_the_exchange_throttles_us(app_and_collector):
 
     assert res.status_code == 503
     assert "Биржа ограничила запросы" in res.json()["detail"]
+
+
+def test_simultaneous_candle_requests_hit_the_exchange_once(app_and_collector):
+    """Десять человек на одной монете — один поход на биржу, а не десять.
+
+    Иначе лишний вес набирается ровно там, где его проще всего не тратить.
+    """
+    app, collector = app_and_collector
+    calls: list[str] = []
+
+    async def counting(symbol, interval="1m", limit=240):
+        calls.append(symbol)
+        await asyncio.sleep(0.05)          # биржа отвечает не мгновенно
+        return [[1700000000000, "1", "2", "0.5", "1.5", "10"]]
+
+    collector.rest.klines = counting       # type: ignore[assignment]
+
+    async def hammer():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            return await asyncio.gather(
+                *[client.get("/api/scalping/klines/BTCUSDT") for _ in range(10)]
+            )
+
+    responses = asyncio.run(hammer())
+    codes = [r.status_code for r in responses]
+    assert codes == [200] * 10, f"коды ответов: {codes}, тело: {responses[0].text[:200]}"
+    assert len(calls) == 1
