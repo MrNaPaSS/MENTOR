@@ -1074,7 +1074,12 @@ function PriceChart({
 
     const palette = THEMES[themeRef.current];
     const span = { fromTime: from as UTCTimestamp, toTime: (to === from ? to + 1 : to) as UTCTimestamp };
-    const far = ghost.targets.at(-1);
+
+    // Дальняя граница прибыли: последняя цель, а если целей не записано —
+    // цена выхода. Она есть у любой сделки и это настоящее число, а не
+    // достроенное: сделки, закрытые до появления целей в журнале, рисовались
+    // одним серым боксом стопа.
+    const far = ghost.targets.at(-1) ?? ghost.exit_price ?? undefined;
 
     ghostShapesRef.current = {
       bands: [],
@@ -1122,6 +1127,18 @@ function PriceChart({
           dashed: true,
           label: "стоп",
         },
+        // Цена выхода: чем сделка кончилась на самом деле.
+        ...(ghost.exit_price
+          ? [
+              {
+                ...span,
+                price: ghost.exit_price,
+                color: ghost.pnl >= 0 ? palette.bidLine : palette.askLine,
+                dashed: false,
+                label: "выход",
+              },
+            ]
+          : []),
       ],
       points: [],
     };
