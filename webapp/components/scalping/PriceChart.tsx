@@ -1152,6 +1152,59 @@ function PriceChart({
     pushShapes();
   }, [trades, preview, peeked, theme, pushShapes]);
 
+  // Вертикальное перетаскивание прямо по свечам.
+  //
+  // Пока ценовая шкала на автомасштабе, библиотека держит цену сама и тянуть
+  // график вверх-вниз мышью не даёт: нужно сначала потянуть саму шкалу справа,
+  // и только после этого работает. Трейдер об этом знать не обязан. Замечаем
+  // вертикальное движение с зажатой кнопкой по холсту и снимаем автомасштаб
+  // сами — дальше библиотека тянет как обычно.
+  //
+  // Порог в шесть пикселей: горизонтальная прокрутка истории почти всегда
+  // немного гуляет по вертикали, и снимать из-за этого автомасштаб нельзя.
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+
+    let startY: number | null = null;
+
+    function onDown(event: PointerEvent) {
+      if (event.button !== 0) return;
+      startY = event.clientY;
+    }
+
+    function onMove(event: PointerEvent) {
+      if (startY === null || event.buttons === 0) return;
+      if (Math.abs(event.clientY - startY) < 6) return;
+      startY = null;
+      chartRef.current?.priceScale("right").applyOptions({ autoScale: false });
+    }
+
+    function onUp() {
+      startY = null;
+    }
+
+    // Двойное нажатие возвращает автомасштаб. У ценовой шкалы такой жест есть
+    // и у самой библиотеки, но идти за ним к правому краю - лишний шаг: цену
+    // упустили здесь, вернуть её должно быть можно здесь же.
+    function onDouble() {
+      chartRef.current?.priceScale("right").applyOptions({ autoScale: true });
+    }
+
+    box.addEventListener("pointerdown", onDown);
+    box.addEventListener("pointermove", onMove);
+    box.addEventListener("pointerup", onUp);
+    box.addEventListener("pointerleave", onUp);
+    box.addEventListener("dblclick", onDouble);
+    return () => {
+      box.removeEventListener("pointerdown", onDown);
+      box.removeEventListener("pointermove", onMove);
+      box.removeEventListener("pointerup", onUp);
+      box.removeEventListener("pointerleave", onUp);
+      box.removeEventListener("dblclick", onDouble);
+    };
+  }, []);
+
   // Положение наложений — покадрово, вместе с самим графиком.
   //
   // Раз в четверть секунды было мало: при перетаскивании и масштабировании
