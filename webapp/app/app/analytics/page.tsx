@@ -793,13 +793,13 @@ export default function AnalyticsPage() {
                 </div>
                 <div>
                   <p className="font-mono text-base font-extrabold text-success">
-                    {bestDay ? `+${bestDay.pnl_pct!.toFixed(1)}%` : "—"}
+                    {bestDay ? `+${bestDay.pnl_pct!.toFixed(1)}%` : "-"}
                   </p>
                   <p className="text-[10px] text-white/30">лучший день</p>
                 </div>
                 <div>
                   <p className="font-mono text-base font-extrabold text-danger">
-                    {worstDay && worstDay.pnl_pct! < 0 ? `${worstDay.pnl_pct!.toFixed(1)}%` : "—"}
+                    {worstDay && worstDay.pnl_pct! < 0 ? `${worstDay.pnl_pct!.toFixed(1)}%` : "-"}
                   </p>
                   <p className="text-[10px] text-white/30">худший день</p>
                 </div>

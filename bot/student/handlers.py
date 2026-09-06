@@ -46,14 +46,14 @@ def build_student_router(admin_id: int, referral_link: str = "https://www.weex.c
             try:
                 await message.bot.send_message(
                     admin_id,
-                    f"🟡 Новый пользователь: @{user.username or user.id} (id {user.id}) — начал регистрацию",
+                    f"🟡 Новый пользователь: @{user.username or user.id} (id {user.id}) - начал регистрацию",
                 )
             except Exception:
                 pass
             await message.answer(
-                "👋 Добро пожаловать в NMNH — торговые сигналы по WEEX!\n\n"
+                "👋 Добро пожаловать в NMNH - торговые сигналы по WEEX!\n\n"
                 "Для доступа к сигналам нужен аккаунт WEEX.\n"
-                "Если ещё не зарегистрирован — создай аккаунт по ссылке:\n"
+                "Если ещё не зарегистрирован - создай аккаунт по ссылке:\n"
                 f"👉 {referral_link}\n\n"
                 "Уже есть аккаунт? Продолжаем 👇"
             )
@@ -75,7 +75,7 @@ def build_student_router(admin_id: int, referral_link: str = "https://www.weex.c
         await state.update_data(mode=mode)
         if mode == "moderate":
             await state.set_state(Onboarding.risk)
-            await callback.message.edit_text("Введите риск % (1–5):")
+            await callback.message.edit_text("Введите риск % (1-5):")
         else:
             await state.set_state(Onboarding.weex_uid)
             await callback.message.edit_text("Введите ваш WEEX UID:")
@@ -201,11 +201,11 @@ def build_student_router(admin_id: int, referral_link: str = "https://www.weex.c
     async def cmd_help(message: Message):
         await message.answer(
             "ℹ️ Команды:\n"
-            "/start — регистрация\n"
-            "/balance — текущий баланс\n"
-            "/active — активные сигналы\n"
-            "/settings — режим, язык, риск, UID\n"
-            "/help — справка"
+            "/start - регистрация\n"
+            "/balance - текущий баланс\n"
+            "/active - активные сигналы\n"
+            "/settings - режим, язык, риск, UID\n"
+            "/help - справка"
         )
 
     @router.message(Command("settings"))
@@ -215,7 +215,7 @@ def build_student_router(admin_id: int, referral_link: str = "https://www.weex.c
             mode, lang, risk = student.mode, student.language, student.risk_percent
         await message.answer(
             f"⚙️ Ваши настройки:\n"
-            f"• Режим: {mode}\n• Язык: {lang}\n• Риск %: {risk or '—'}\n\n"
+            f"• Режим: {mode}\n• Язык: {lang}\n• Риск %: {risk or '-'}\n\n"
             f"Изменение настроек появится в ближайшем обновлении."
         )
 

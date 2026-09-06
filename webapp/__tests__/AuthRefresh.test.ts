@@ -20,7 +20,7 @@ describe("хранение токенов", () => {
     expect(getRefreshToken()).toBe("r1");
   });
 
-  it("хранит refresh ментора — иначе админку выбрасывает через 15 минут", () => {
+  it("хранит refresh ментора - иначе админку выбрасывает через 15 минут", () => {
     setMentorToken("ma", "mr");
     expect(getMentorToken()).toBe("ma");
     expect(getMentorRefreshToken()).toBe("mr");
@@ -133,7 +133,7 @@ describe("обновление токена вместо разлогина", ()
 describe("форматирование времени входа", () => {
   const now = Date.parse("2026-07-28T12:00:00Z");
 
-  it("пустое значение — «никогда», это и есть «не заходил»", () => {
+  it("пустое значение - «никогда», это и есть «не заходил»", () => {
     expect(fmtAgo(null, now)).toBe("никогда");
     expect(fmtAgo(undefined, now)).toBe("никогда");
   });
@@ -152,8 +152,8 @@ describe("форматирование времени входа", () => {
 
   it("мусор не роняет таблицу", () => {
     expect(fmtAgo("не дата", now)).toBe("-");
-    expect(fmtDateTime("не дата")).toBe("—");
-    expect(fmtDateTime(null)).toBe("—");
+    expect(fmtDateTime("не дата")).toBe("-");
+    expect(fmtDateTime(null)).toBe("-");
   });
 
   it("подписывает источник записи по-русски", () => {

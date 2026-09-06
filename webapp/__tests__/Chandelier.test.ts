@@ -35,7 +35,7 @@ describe("настройки", () => {
 describe("уровень", () => {
   const { bars } = computeChandelier(upThenDown());
 
-  it("считается не с первого бара — ATR нужен разгон", () => {
+  it("считается не с первого бара - ATR нужен разгон", () => {
     expect(bars.length).toBeGreaterThan(0);
     expect(bars.length).toBeLessThan(upThenDown().length);
   });
@@ -93,7 +93,7 @@ describe("устойчивость", () => {
     expect(computeChandelier([])).toEqual({ bars: [], signals: [] });
   });
 
-  it("истории меньше окна ATR — просто нет уровня", () => {
+  it("истории меньше окна ATR - просто нет уровня", () => {
     const short = upThenDown().slice(0, 3);
     expect(computeChandelier(short).bars.length).toBe(0);
   });

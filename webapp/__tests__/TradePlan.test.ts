@@ -11,11 +11,11 @@ import {
 // денег напрямую. Проверяем не «функция что-то вернула», а сами числа.
 
 describe("сторона сделки", () => {
-  it("полка в покупках — это поддержка, значит лонг", () => {
+  it("полка в покупках - это поддержка, значит лонг", () => {
     expect(sideForShelf("bid")).toBe("long");
   });
 
-  it("полка в продажах — сопротивление, значит шорт", () => {
+  it("полка в продажах - сопротивление, значит шорт", () => {
     expect(sideForShelf("ask")).toBe("short");
   });
 });
@@ -34,7 +34,7 @@ describe("расчёт лонга", () => {
     expect(plan.stop).toBeCloseTo(99, 10);
   });
 
-  it("объём позиции — маржа на плечо", () => {
+  it("объём позиции - маржа на плечо", () => {
     expect(plan.notional).toBe(2000);
     expect(plan.qty).toBeCloseTo(20, 10);
   });
@@ -50,7 +50,7 @@ describe("расчёт лонга", () => {
     expect(plan.targets.map((t) => Math.round(t.profit))).toEqual([20, 40, 60]);
   });
 
-  it("ликвидация — на расстоянии одной маржи", () => {
+  it("ликвидация - на расстоянии одной маржи", () => {
     expect(plan.liquidation).toBeCloseTo(90, 10);
     expect(plan.liquidatedFirst).toBe(false);
   });

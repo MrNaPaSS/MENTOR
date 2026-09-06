@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { base, money, price } from "@/lib/scalping";
 
 describe("money", () => {
-  it("сокращает крупные суммы — в таблице длинные числа не читаются", () => {
+  it("сокращает крупные суммы - в таблице длинные числа не читаются", () => {
     expect(money(10_800_000)).toBe("10.8M");
     expect(money(342_000)).toBe("342K");
     expect(money(1_250_000_000)).toBe("1.25B");
@@ -29,7 +29,7 @@ describe("price", () => {
   });
 
   it("пустую цену показывает прочерком, а не нулём", () => {
-    expect(price(0)).toBe("—");
+    expect(price(0)).toBe("-");
   });
 });
 

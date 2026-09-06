@@ -58,7 +58,6 @@ export default function DomTrader({
   onZoom,
   onPickLevel,
   onHoverLevel,
-  onAlertLevel,
   alerts,
 }: {
   frame: DomFrame;
@@ -72,8 +71,6 @@ export default function DomTrader({
    * колонки в ценовую шкалу трейдеру незачем.
    */
   onHoverLevel?: (row: LadderRow | null) => void;
-  /** Двойное нажатие: поставить или снять отметку на этой цене. */
-  onAlertLevel?: (row: LadderRow) => void;
   /** Цены с отметками — их видно прямо в стакане. */
   alerts?: number[];
 }) {
@@ -216,7 +213,7 @@ export default function DomTrader({
           holdUntil.current = 0;
           onHoverLevel?.(null);
         }}
-        title="Колесо — прокрутка, Ctrl+колесо — масштаб, двойное нажатие по строке — отметка на цене"
+        title="Колесо - прокрутка, Ctrl+колесо - масштаб"
         className="relative flex-1 overflow-auto font-mono"
       >
         <div className="w-full min-w-max">
@@ -237,7 +234,6 @@ export default function DomTrader({
                 clusterScale={clusterScale}
                 onPick={onPickLevel}
                 onHover={onHoverLevel}
-                onAlert={onAlertLevel}
                 alerted={alerted.has(row.price)}
               />,
             );
@@ -276,7 +272,6 @@ const Row = memo(function Row({
   clusterScale,
   onPick,
   onHover,
-  onAlert,
   alerted,
 }: {
   row: LadderRow;
@@ -286,7 +281,6 @@ const Row = memo(function Row({
   clusterScale: number;
   onPick?: (row: LadderRow) => void;
   onHover?: (row: LadderRow | null) => void;
-  onAlert?: (row: LadderRow) => void;
   alerted?: boolean;
 }) {
   const isBid = row.bid > 0;
@@ -298,18 +292,11 @@ const Row = memo(function Row({
   return (
     <div
       onClick={pickable ? () => onPick?.(row) : undefined}
-      onDoubleClick={onAlert ? () => onAlert(row) : undefined}
       onMouseEnter={row.notional > 0 ? () => onHover?.(row) : undefined}
       onMouseLeave={row.notional > 0 ? () => onHover?.(null) : undefined}
       title={
-        (row.whale
-          ? "Крупная заявка от вашего порога — нажмите, чтобы посчитать сделку"
-          : pickable
-            ? "Расчёт сделки от этого уровня"
-            : "") +
-        (alerted
-          ? "\nОтметка стоит: терминал скажет, когда цену пересекут. Двойное нажатие — снять"
-          : "\nДвойное нажатие — отметка на этой цене")
+        (pickable ? "Нажмите: расчёт сделки или уведомление на этой цене" : "") +
+        (alerted ? "\nОтметка стоит: скажем, когда эту цену пересекут" : "")
       }
       className={`flex items-center ${isBid ? "bg-[var(--pane-up-faint)]" : "bg-[var(--pane-down-faint)]"} ${
         pickable
@@ -325,7 +312,7 @@ const Row = memo(function Row({
 
       {/* Гистограмма внутри строки, процентами от максимума в окне: так настроен
           стакан заказчика (DomRuler=Percents, position=inside). Колонка
-          закреплена справа — история уезжает под неё при прокрутке. */}
+          закреплена справа - история уезжает под неё при прокрутке. */}
       <div
         className={`sticky right-0 ${BOOK_W} relative flex items-center justify-between bg-[var(--pane-bg)] px-2`}
       >

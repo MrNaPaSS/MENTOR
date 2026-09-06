@@ -11,6 +11,7 @@
 // единственное на графике, что берётся не из истории цены, а из живой книги.
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bell } from "lucide-react";
 import {
   CandlestickSeries,
   ColorType,
@@ -417,6 +418,7 @@ function PriceChart({
   ghost,
   hoverLevel,
   alerts,
+  onRemoveAlert,
   onShelfClick,
 }: {
   symbol: string;
@@ -466,7 +468,9 @@ function PriceChart({
    */
   hoverLevel?: { price: number; label: string; side: "bid" | "ask" } | null;
   /** Отметки на ценах: терминал скажет, когда их пересекут. */
-  alerts?: number[];
+  alerts?: { id: string; price: number }[];
+  /** Снять отметку по крестику у её будильника. */
+  onRemoveAlert?: (id: string) => void;
   /**
    * Нажатие по линии полки. Вторым аргументом идёт ATR текущего таймфрейма:
    * по нему предлагается стоп, а волатильность известна только здесь — свечи
@@ -503,7 +507,11 @@ function PriceChart({
   const hoverLineRef = useRef<IPriceLine | null>(null);
   const alertLinesRef = useRef<IPriceLine[]>([]);
   // Ключом по значениям: массив приходит новый на каждом кадре стакана.
-  const alertKey = (alerts ?? []).join(",");
+  const alertKey = (alerts ?? []).map((a) => `${a.id}:${a.price}`).join(",");
+  // Будильники у цены: по ярлыку на отметку, как у ждущей заявки.
+  const alertLabelsRef = useRef(new Map<string, HTMLDivElement | null>());
+  const alertsRef = useRef(alerts);
+  alertsRef.current = alerts;
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const dataRef = useRef<Candle[]>([]);
   // Нажатие по полке ищет ближайшую линию к точке клика, а слушатель графика
@@ -1125,6 +1133,14 @@ function PriceChart({
         );
       }
 
+      for (const alert of alertsRef.current ?? []) {
+        place(
+          alertLabelsRef.current.get(alert.id) ?? null,
+          series.priceToCoordinate(alert.price),
+          -10,
+        );
+      }
+
       const price =
         livePriceRef.current > 0 ? livePriceRef.current : dataRef.current.at(-1)?.close ?? 0;
       place(clockRef.current, price > 0 ? series.priceToCoordinate(price) : null, 10);
@@ -1181,14 +1197,14 @@ function PriceChart({
     if (!series) return;
 
     for (const l of alertLinesRef.current) series.removePriceLine(l);
-    alertLinesRef.current = (alerts ?? []).map((price) =>
+    alertLinesRef.current = (alerts ?? []).map((alert) =>
       series.createPriceLine({
-        price,
+        price: alert.price,
         color: THEMES[theme].gold,
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,
-        title: "отметка",
+        title: "",
       }),
     );
   }, [alertKey, theme]);
@@ -1287,7 +1303,7 @@ function PriceChart({
           ...span,
           price,
           color: palette.bidLine,
-          dashed: i >= ghost.takes_hit,     // невзятая цель — пунктиром
+          dashed: i >= ghost.takes_hit,     // невзятая цель - пунктиром
           label: `тейк ${i + 1}`,
         })),
         {
@@ -1422,7 +1438,7 @@ function PriceChart({
       )}
 
       {/* Ярлык позиции у линии входа: состояние, объём и результат в деньгах.
-          По ярлыку на сделку — их может идти несколько сразу, и общий на всех
+          По ярлыку на сделку - их может идти несколько сразу, и общий на всех
           сказал бы неправду о каждой. Пока цена не дошла до уровня, там слово
           «ждём»: это тоже ответ, и он честнее пустого места. */}
       {trades
@@ -1464,7 +1480,7 @@ function PriceChart({
               {t.status === "planned" ? (
                 <span
                   className="cursor-help text-[var(--pane-muted)]"
-                  title="Наведите — покажем бокс, стоп и цели этой заявки"
+                  title="Наведите - покажем бокс, стоп и цели этой заявки"
                 >
                   ждём вход
                 </span>
@@ -1478,7 +1494,7 @@ function PriceChart({
                         }${Math.abs(taken).toFixed(2)}, всего по сделке ${
                           total >= 0 ? "+" : "−"
                         }${Math.abs(total).toFixed(2)}`
-                      : "По открытой позиции — как на бирже"
+                      : "По открытой позиции - как на бирже"
                   }
                 >
                   {floating >= 0 ? "+" : "−"}
@@ -1495,6 +1511,34 @@ function PriceChart({
             </div>
           );
         })}
+
+      {/* Будильник у цены отметки: маленький ярлык с крестиком — снять её
+          можно там же, где она стоит, как и ждущую заявку. Вертикаль
+          задаётся покадрово, вместе с самим графиком. */}
+      {(alerts ?? []).map((alert) => (
+        <div
+          key={alert.id}
+          ref={(node) => {
+            alertLabelsRef.current.set(alert.id, node);
+          }}
+          className="pointer-events-auto absolute right-28 top-0 z-10 flex items-center gap-1.5 rounded border px-1.5 py-0.5 font-mono text-[10px] tabular-nums shadow"
+          style={{
+            visibility: "hidden",
+            borderColor: THEMES[theme].gold,
+            background: "var(--pane-bg)",
+            color: THEMES[theme].gold,
+          }}
+        >
+          <Bell className="h-3 w-3" />
+          <button
+            onClick={() => onRemoveAlert?.(alert.id)}
+            title="Убрать уведомление"
+            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
 
       {/* Данных нет — говорим, почему, и не рисуем ничего вместо них.
           Устаревшая свеча в скальпинге хуже пустого экрана: по ней принимают

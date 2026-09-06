@@ -34,13 +34,13 @@ describe("позиция глазами биржи", () => {
     expect((await positionOf("BTCUSDT", "short"))?.size).toBe(0.2);
   });
 
-  it("в одностороннем режиме стороны в ответе нет — берём единственную позицию", async () => {
+  it("в одностороннем режиме стороны в ответе нет - берём единственную позицию", async () => {
     vi.stubGlobal("fetch", answer([{ symbol: "BTCUSDT", total: "1.5" }]));
     expect((await positionOf("BTCUSDT", "long"))?.size).toBe(1.5);
     expect((await positionOf("BTCUSDT", "short"))?.size).toBe(1.5);
   });
 
-  it("своей стороны нет — позиция пустая, а не чужая", async () => {
+  it("своей стороны нет - позиция пустая, а не чужая", async () => {
     vi.stubGlobal(
       "fetch",
       answer([{ symbol: "BTCUSDT", holdSide: "long", total: "0.5" }]),

@@ -350,6 +350,17 @@ export function closePartially(
 }
 
 /** Закрыть руками по текущей цене. */
+/**
+ * Была ли сделка на самом деле.
+ *
+ * Снятая лимитка — это отменённый расчёт, а не сделка: позиции не было,
+ * денег не двигалось, и в журнале ей делать нечего. Журнал — это факт, а
+ * несостоявшиеся намерения засоряют и список, и статистику.
+ */
+export function wasEntered(trade: ActiveTrade): boolean {
+  return Boolean(trade.openedAt) || trade.status === "open";
+}
+
 export function closeManually(trade: ActiveTrade, price: number, now: number): ActiveTrade {
   if (trade.status === "closed") return trade;
   const long = trade.side === "long";

@@ -124,7 +124,7 @@ def calculate(
     # ── Валидация плеча ──
     max_lev = MAX_LEVERAGE[mode]
     if leverage > max_lev:
-        warnings.append(f"Плечо {leverage}x превышает лимит {max_lev}x для режима — ограничено.")
+        warnings.append(f"Плечо {leverage}x превышает лимит {max_lev}x для режима - ограничено.")
         leverage = max_lev
     if leverage < 1:
         leverage = 1
@@ -157,7 +157,7 @@ def calculate(
         liq = formulas.liquidation_distance_percent(leverage)
         if sl_percent >= liq:
             warnings.append(
-                f"⚠️ Ручной стоп ({sl_percent:.2f}%) за ценой ликвидации (~{liq:.2f}%) — "
+                f"⚠️ Ручной стоп ({sl_percent:.2f}%) за ценой ликвидации (~{liq:.2f}%) - "
                 f"позиция ликвидируется раньше срабатывания стопа."
             )
     else:
@@ -186,7 +186,7 @@ def calculate(
     if risk_pct_balance > settings.risk_warn_percent_of_balance:
         warnings.append(
             f"⚠️ Риск {risk_pct_balance:.1f}% от баланса превышает порог "
-            f"{settings.risk_warn_percent_of_balance}% — повышенный риск."
+            f"{settings.risk_warn_percent_of_balance}% - повышенный риск."
         )
     if mode == Mode.TURBO and leverage >= 150:
         warnings.append(

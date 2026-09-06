@@ -96,7 +96,7 @@ export default function ProfilePage() {
             )}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-lg font-bold text-white">@{p.username || "—"}</div>
+            <div className="truncate text-lg font-bold text-white">@{p.username || "-"}</div>
             <div className="mt-0.5 font-mono text-xs text-text-muted">WEEX UID: {maskUid(p.weex_uid)}</div>
           </div>
         </div>

@@ -56,7 +56,7 @@ def _parsed_preview(parsed) -> str:
     lines = ["🔍 Разобранный сигнал:"]
     lines.append(f"• Тикер: {parsed.symbol} [{tag('symbol')}]")
     lines.append(f"• Направление: {parsed.direction} [{tag('direction')}]")
-    lines.append(f"• Плечо: {parsed.leverage or '—'} [{tag('leverage')}]")
+    lines.append(f"• Плечо: {parsed.leverage or '-'} [{tag('leverage')}]")
     lines.append(f"• Вход: {parsed.entry_price or 'с WEEX'} [{tag('entry_price')}]")
     lines.append(f"• Стоп: {parsed.stop_loss or 'авто'} [{tag('stop_loss')}]")
     if parsed.take_profits:
@@ -165,11 +165,11 @@ def build_mentor_router(admin_id: int) -> Router:
 
         out = [f"✅ Сигнал #{signal.id} отправлен. Доставлено: {len(report.sent)}/{report.total}"]
         for u, b in report.sent:
-            out.append(f"✅ @{u} — {fmt_money(b or 0, 0)}$")
+            out.append(f"✅ @{u} - {fmt_money(b or 0, 0)}$")
         for u, r in report.skipped:
-            out.append(f"⏭ @{u} — пропуск")
+            out.append(f"⏭ @{u} - пропуск")
         for u, e in report.failed:
-            out.append(f"❌ @{u} — {e}")
+            out.append(f"❌ @{u} - {e}")
         await state.clear()
         await callback.message.edit_text("\n".join(out))
         await callback.answer()
@@ -224,7 +224,7 @@ def build_mentor_router(admin_id: int) -> Router:
         for s in signals:
             lines.append(
                 f"#{s.id} {s.symbol} {s.direction} x{s.leverage} "
-                f"[{s.target_audience}] — {s.status}"
+                f"[{s.target_audience}] - {s.status}"
             )
         await message.answer("\n".join(lines))
 

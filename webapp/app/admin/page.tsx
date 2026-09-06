@@ -812,7 +812,7 @@ export default function AdminDashboard() {
                           {Number(r.withdrawal) > 0 ? (
                             <span className="text-danger">-${fmtUsd(r.withdrawal)}</span>
                           ) : (
-                            <span className="text-white/20">—</span>
+                            <span className="text-white/20">-</span>
                           )}
                         </td>
 

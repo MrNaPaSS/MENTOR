@@ -45,7 +45,7 @@ describe("useCoins", () => {
     expect(f).toHaveBeenCalledTimes(2);
   });
 
-  it("обновляется при возврате на вкладку — монеты мог начислить бот академии", async () => {
+  it("обновляется при возврате на вкладку - монеты мог начислить бот академии", async () => {
     const f = mockCoins([195, 255]);
     const { result } = renderHook(() => useCoins());
     await waitFor(() => expect(result.current.coins).toBe(195));

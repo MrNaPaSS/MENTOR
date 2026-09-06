@@ -59,9 +59,9 @@ export function fmtAgo(iso: string | null | undefined, now = Date.now()): string
 
 /** Дата и время для подсказки: 26.07.2026, 17:08. */
 export function fmtDateTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const ts = Date.parse(iso);
-  if (Number.isNaN(ts)) return "—";
+  if (Number.isNaN(ts)) return "-";
   return new Date(ts).toLocaleString("ru-RU", {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit",

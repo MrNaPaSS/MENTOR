@@ -222,7 +222,7 @@ export default function ShopPage() {
               Монеты спишутся сразу, ментор выдаст доступ вручную.
             </p>
             <label className="mt-4 block text-xs font-semibold text-text-muted">
-              {buying.requires_tv ? "Ваш ник TradingView (обязательно для выдачи доступа)" : "Контакт для связи (Telegram / email) — необязательно"}
+              {buying.requires_tv ? "Ваш ник TradingView (обязательно для выдачи доступа)" : "Контакт для связи (Telegram / email) - необязательно"}
             </label>
             <input
               value={contact}

@@ -342,7 +342,7 @@ class ScalpingCollector:
         # Инструмент под паузой после неудачи — ждём, не трогаем биржу.
         if time.monotonic() < self._cooldown.get(symbol, 0.0):
             return
-        logger.info("Стакан %s рассинхронизирован — пересобираем", symbol)
+        logger.info("Стакан %s рассинхронизирован - пересобираем", symbol)
         self._resyncing.add(symbol)   # помечаем сразу, чтобы события буферизовались
         self._buffers[symbol] = []
         asyncio.create_task(self._resync(symbol), name=f"resync-{symbol}")

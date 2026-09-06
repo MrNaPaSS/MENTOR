@@ -234,7 +234,7 @@ function OrdersTab({ orders, token, onChange }: { orders: ShopOrder[]; token: st
                 <span className={badge[o.status] || "badge-muted"}>{stLabel[o.status] || o.status}</span>
               </div>
               <p className="mt-1 text-xs text-text-muted">
-                {o.student_username || "—"} · UID {o.student_uid || "—"} · {new Date(o.created_at).toLocaleString("ru")}
+                {o.student_username || "-"} · UID {o.student_uid || "-"} · {new Date(o.created_at).toLocaleString("ru")}
               </p>
               {o.contact && <p className="mt-0.5 text-xs text-accent-cyan">Контакт: {o.contact}</p>}
               {o.mentor_note && <p className="mt-0.5 text-xs text-text-secondary">Заметка: {o.mentor_note}</p>}
@@ -303,7 +303,7 @@ function ItemEditor({ token, item, onClose, onSaved }: {
     try {
       const r = await api.shopLinkPreview(token, link);
       if (r.image) { setForm((f) => ({ ...f, image_url: r.image! })); setPullMsg(null); }
-      else setPullMsg("Картинку из ссылки вытащить не удалось — вставьте URL картинки вручную.");
+      else setPullMsg("Картинку из ссылки вытащить не удалось - вставьте URL картинки вручную.");
     } catch {
       setPullMsg("Не удалось получить превью.");
     } finally { setPulling(false); }
@@ -327,7 +327,7 @@ function ItemEditor({ token, item, onClose, onSaved }: {
 
         <div className="mt-4 space-y-3">
           <Field label="Название">
-            <input value={form.title} onChange={(e) => set("title", e.target.value)} className="input" placeholder="Подписка на индикатор — 1 месяц" />
+            <input value={form.title} onChange={(e) => set("title", e.target.value)} className="input" placeholder="Подписка на индикатор - 1 месяц" />
           </Field>
           <Field label="Описание">
             <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} className="input resize-none" placeholder="Что входит" />
@@ -385,7 +385,7 @@ function ItemEditor({ token, item, onClose, onSaved }: {
               </button>
             </div>
             <p className="mt-1 text-[11px] text-text-muted">
-              Загрузите файл (надёжнее всего), вставьте прямой URL картинки, либо «Из ссылки» — для снапшота TradingView / og:image.
+              Загрузите файл (надёжнее всего), вставьте прямой URL картинки, либо «Из ссылки» - для снапшота TradingView / og:image.
             </p>
             {pullMsg && <p className="mt-1 text-[11px] text-accent-gold">{pullMsg}</p>}
           </Field>

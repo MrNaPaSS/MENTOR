@@ -91,7 +91,7 @@ export default function BroadcastPage() {
             onChange={(e) => setSymbol(e.target.value.toUpperCase())}
           />
           <span className="mt-1 block text-[11px] text-text-muted">
-            Если указать — на карточке анализа появится кнопка «Открыть график» с этой парой и стаканом.
+            Если указать - на карточке анализа появится кнопка «Открыть график» с этой парой и стаканом.
           </span>
         </label>
 

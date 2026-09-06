@@ -207,7 +207,7 @@ const Row = memo(function Row({
 
 /** Плита: сторона стрелкой, размер в деньгах и удаление от цены. */
 function WallCell({ row }: { row: ScreenerRow }) {
-  if (!row.wall_notional) return <span className="text-[var(--pane-muted)]">—</span>;
+  if (!row.wall_notional) return <span className="text-[var(--pane-muted)]">-</span>;
   const isBid = row.wall_side === "bid";
   return (
     <span className="inline-flex items-baseline gap-1 font-mono">

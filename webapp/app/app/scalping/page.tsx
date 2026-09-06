@@ -35,6 +35,7 @@ import { play, setMuted } from "@/lib/sound";
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
+import LevelMenu from "@/components/scalping/LevelMenu";
 import {
   closePosition,
   openPosition,
@@ -62,6 +63,7 @@ import {
   closeManually,
   closePartially,
   createTrade,
+  wasEntered,
   type ActiveTrade,
 } from "@/lib/trade/position";
 import {
@@ -249,6 +251,8 @@ export default function ScalpingPage() {
   tradesRef.current = trades;
   // Отметки на ценах: терминал скажет, когда уровень пересекут.
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  // Уровень, по которому нажали в стакане: спрашиваем, что с ним делать.
+  const [level, setLevel] = useState<LadderRow | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
@@ -660,7 +664,7 @@ export default function ScalpingPage() {
     // сделкой, а не вместо неё: цифры трейдер уже видел в окне, дальше заявка
     // уходит на биржу. Единственное, что может помешать, — неподключённый счёт.
     if (!exchange?.connected) {
-      setOrderNote({ text: "Биржевой счёт не подключён — заявка не отправлена", bad: true });
+      setOrderNote({ text: "Биржевой счёт не подключён - заявка не отправлена", bad: true });
       setExchangeOpen(true);
       return;
     }
@@ -892,7 +896,7 @@ export default function ScalpingPage() {
       const previous = heard.current.get(t.id);
       if (previous === stamp) continue;
       heard.current.set(t.id, stamp);
-      if (previous === undefined) continue; // появление сделки — это не событие
+      if (previous === undefined) continue; // появление сделки - это не событие
 
       const wasTakes = Number(previous.split(":")[1] || 0);
       if (t.status === "open" && t.takesHit > wasTakes) play("take");
@@ -914,8 +918,10 @@ export default function ScalpingPage() {
   // экрана. Идентификатор сделки сохраняется на клиенте, поэтому повтор после
   // обрыва связи не создаст вторую запись — сервер обновит существующую.
   useEffect(() => {
+    // Снятая лимитка в журнал не идёт: позиции не было, и запись о ней
+    // засоряет и список, и статистику.
     const done = trades.filter(
-      (t) => t.status === "closed" && !savedTradesRef.current.has(t.id),
+      (t) => t.status === "closed" && wasEntered(t) && !savedTradesRef.current.has(t.id),
     );
     for (const t of done) {
       savedTradesRef.current.add(t.id);
@@ -991,7 +997,8 @@ export default function ScalpingPage() {
   }, [dom?.mid, dom?.tick, alerts, symbol]);
 
   // Отметки открытой монеты: их рисует график и подсвечивает стакан.
-  const alertPrices = alerts.filter((a) => a.symbol === symbol).map((a) => a.price);
+  const myAlerts = alerts.filter((a) => a.symbol === symbol);
+  const alertPrices = myAlerts.map((a) => a.price);
 
   // Сделки по открытой монете: их рисует график, остальные ждут своей.
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
@@ -1012,7 +1019,7 @@ export default function ScalpingPage() {
         }
       >
         {/* Свёрнутый скринер: узкая полоса, по которой его видно и можно
-            вернуть. Прятать совсем нельзя — трейдер не должен вспоминать, где
+            вернуть. Прятать совсем нельзя - трейдер не должен вспоминать, где
             была панель. */}
         {!screenerOpen && (
           <button
@@ -1105,9 +1112,9 @@ export default function ScalpingPage() {
               <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-3 py-2">
                 <span className="font-semibold text-[var(--pane-text)]">{base(symbol)}</span>
                 {/* Без словесных подписей: множители и глубина разделены
-                    чертой, а что делает кнопка — говорит подсказка при
+                    чертой, а что делает кнопка - говорит подсказка при
                     наведении. Рядом с множителем стоит получившийся шаг в
-                    деньгах — по нему и ориентируются, а не по кратности. */}
+                    деньгах - по нему и ориентируются, а не по кратности. */}
                 <div className="flex items-center gap-0.5">
                   {STEPS.map((step) => (
                     <button
@@ -1144,9 +1151,8 @@ export default function ScalpingPage() {
                   <DomTrader
                     frame={dom}
                     onZoom={zoomDom}
-                    onPickLevel={openTradeFromRow}
+                    onPickLevel={setLevel}
                     onHoverLevel={hoverLevel}
-                    onAlertLevel={(row) => toggleAlert(row.price)}
                     alerts={alertPrices}
                   />
                 ) : (
@@ -1290,7 +1296,7 @@ export default function ScalpingPage() {
                   {base(symbol)}
                 </span>
                 <span className="text-[var(--pane-text-2)]">
-                  {dom ? fmtPrice(dom.mid, dom.tick) : "—"}
+                  {dom ? fmtPrice(dom.mid, dom.tick) : "-"}
                 </span>
                 {dom?.wall && (
                   <span className="text-[var(--pane-gold)]">
@@ -1329,7 +1335,8 @@ export default function ScalpingPage() {
                   journalKey={journalKey}
                   ghost={hovered && hovered.symbol === symbol ? hovered : null}
                   hoverLevel={levelHint}
-                  alerts={alertPrices}
+                  alerts={myAlerts}
+                  onRemoveAlert={(id) => setAlerts((list) => list.filter((a) => a.id !== id))}
                   onShelfClick={openTrade}
                 />
               </div>
@@ -1340,10 +1347,28 @@ export default function ScalpingPage() {
             className={`grid flex-1 place-items-center rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-6 text-center text-sm text-[var(--pane-muted)]`}
             style={paneStyle}
           >
-            Выберите монету в списке — здесь появятся её стакан и график
+            Выберите монету в списке - здесь появятся её стакан и график
           </section>
         )}
       </div>
+
+      {/* Развилка по уровню из стакана: расчёт сделки или уведомление. */}
+      {level && (
+        <LevelMenu
+          row={level}
+          tick={dom?.tick ?? 0}
+          alerted={alertPrices.includes(level.price)}
+          onTrade={() => {
+            openTradeFromRow(level);
+            setLevel(null);
+          }}
+          onAlert={() => {
+            toggleAlert(level.price);
+            setLevel(null);
+          }}
+          onCancel={() => setLevel(null)}
+        />
+      )}
 
       {closeOpen && closing && (
         <CloseDialog

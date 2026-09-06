@@ -197,7 +197,7 @@ describe("устойчивость", () => {
     expect(result.trailing).toBeNull();
   });
 
-  it("истории меньше окна пивота — просто нет структуры", () => {
+  it("истории меньше окна пивота - просто нет структуры", () => {
     const result = computeSmc(peakThenBreak().slice(0, 3));
     expect(result.structures).toEqual([]);
   });
@@ -237,7 +237,7 @@ describe("сборка фигур для графика", () => {
     }
   });
 
-  it("блоки и разрывы подписаны — их не отличить по форме", () => {
+  it("блоки и разрывы подписаны - их не отличить по форме", () => {
     const shapes = buildShapes(smc, lastTime, { ...SHAPE_DEFAULTS, zones: false });
     const labels = new Set(shapes.boxes.map((b) => b.label));
     // Ордер-блок подписан OB, разрыв — FVG; роль блока читается по цвету.

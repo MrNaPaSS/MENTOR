@@ -84,7 +84,7 @@ export default function CloseDialog({
             </div>
             <p className="mt-1 text-[11px] text-[var(--pane-muted)]">
               {waiting
-                ? "Сделка ещё не вошла — фиксировать нечего, расчёт просто снимется"
+                ? "Сделка ещё не вошла - фиксировать нечего, расчёт просто снимется"
                 : `В позиции ${trade.qty.toPrecision(4)} · сейчас ${fmtPrice(price, tick)}`}
             </p>
           </div>

@@ -23,7 +23,7 @@ describe("отметки на ценах", () => {
     expect(crossedAlerts(alerts, "BTCUSDT", 99, 98)).toEqual([]);
   });
 
-  it("касание уровня — это и есть событие", () => {
+  it("касание уровня - это и есть событие", () => {
     expect(crossedAlerts([at(100)], "BTCUSDT", 99.5, 100)).toHaveLength(1);
   });
 

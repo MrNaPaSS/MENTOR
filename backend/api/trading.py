@@ -431,7 +431,7 @@ async def close_position(
         if quantity < filters["min_qty"]:
             raise HTTPException(
                 422,
-                f"Доля {body.share:.0%} — это {quantity:g}, меньше минимального "
+                f"Доля {body.share:.0%} - это {quantity:g}, меньше минимального "
                 f"объёма биржи. Закройте большую часть.",
             )
 

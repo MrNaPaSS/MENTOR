@@ -271,7 +271,7 @@ export function money(value: number): string {
 
 /** Цена с числом знаков по её порядку: у DOGE и BTC он разный. */
 export function price(value: number, tick = 0): string {
-  if (!value) return "—";
+  if (!value) return "-";
   let digits = 2;
   if (tick > 0) {
     digits = Math.max(0, Math.min(8, Math.ceil(-Math.log10(tick))));

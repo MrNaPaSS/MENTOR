@@ -241,7 +241,7 @@ async def _notify_mentor(config: BackendConfig, notifier, student: Student, item
     if order.contact:
         label = "TradingView" if item.requires_tv else "Контакт"
         lines.append(f"{label}: {order.contact}")
-    lines.append(f"Заказ #{order.id} — выдайте доступ в админке.")
+    lines.append(f"Заказ #{order.id} - выдайте доступ в админке.")
     try:
         await notifier.send_message(config.admin_tg_id, "\n".join(lines))
     except Exception as exc:  # pragma: no cover

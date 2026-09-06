@@ -124,7 +124,7 @@ export default function TradeDialog({
               </span>
             </div>
             <p className="mt-1 text-[11px] text-[var(--pane-muted)]">
-              {money(draft.shelf.notional)} в стакане —{" "}
+              {money(draft.shelf.notional)} в стакане -{" "}
               {long ? "поддержка под ценой" : "сопротивление над ценой"}
             </p>
           </div>
@@ -200,7 +200,7 @@ export default function TradeDialog({
           </div>
         ) : (
           <p className="border-t border-[var(--pane-border)] px-5 py-6 text-center text-[12px] text-[var(--pane-muted)]">
-            Введите сумму, плечо и стоп — расчёт появится здесь
+            Введите сумму, плечо и стоп - расчёт появится здесь
           </p>
         )}
 
@@ -209,7 +209,7 @@ export default function TradeDialog({
             {live ? (
               <span className="text-warning">Заявка уйдёт на биржу</span>
             ) : (
-              <span>Счёт не подключён — будет только разметка</span>
+              <span>Счёт не подключён - будет только разметка</span>
             )}
           </span>
           <div className="flex gap-2">

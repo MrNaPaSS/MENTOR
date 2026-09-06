@@ -74,7 +74,7 @@ async def dom(
 
     state = collector.state.get(sym)
     if state is None:
-        raise HTTPException(404, f"{sym} не под наблюдением — откройте его через WebSocket")
+        raise HTTPException(404, f"{sym} не под наблюдением - откройте его через WebSocket")
     if not state.book.ready:
         raise HTTPException(503, f"Стакан {sym} ещё собирается")
 

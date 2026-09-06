@@ -265,7 +265,7 @@ function CotSection() {
 
   return (
     <Section icon={<Building2 className="h-4 w-4 text-accent-gold"/>}
-      title="COT — Позиции институционалов" accent="gold" delay={0}
+      title="COT - Позиции институционалов" accent="gold" delay={0}
       badge={isDemo ? <DemoBadge/> : undefined}
       sub={isDemo ? "CFTC · ориентировочные" : "CFTC CME · актуально"}>
 
@@ -291,7 +291,7 @@ function CotSection() {
         {isDemo && (
           <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-accent-gold/20 bg-accent-gold/[0.05] px-4 py-2.5 text-[11px] text-accent-gold">
             <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 opacity-70"/>
-            CFTC API недоступен — ориентировочные данные на основе реальной структуры отчётов
+            CFTC API недоступен - ориентировочные данные на основе реальной структуры отчётов
           </div>
         )}
 
@@ -344,7 +344,7 @@ function CotSection() {
           <div>
             <div className="mb-3 flex items-center justify-between">
               <div className="text-[9px] uppercase tracking-widest text-white/25">
-                Нетто позиция хедж-фондов — {cot.length} недель
+                Нетто позиция хедж-фондов - {cot.length} недель
               </div>
               <div className="flex items-center gap-3 text-[8px] text-white/20">
                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-success/50"/>бычий</span>
@@ -375,10 +375,10 @@ function CotSection() {
 
           {/* Insight box */}
           <div className="rounded-xl border border-accent-gold/15 bg-accent-gold/[0.04] p-3.5 text-[10px] leading-relaxed text-white/35">
-            <span className="font-semibold text-accent-gold">Leveraged Money нетто &gt; 0</span> — хедж-фонды в лонге, бычий сигнал.{" "}
-            <span className="font-semibold text-accent-gold">Asset Manager</span> — институциональные, часто контртрендовые.
+            <span className="font-semibold text-accent-gold">Leveraged Money нетто &gt; 0</span> - хедж-фонды в лонге, бычий сигнал.{" "}
+            <span className="font-semibold text-accent-gold">Asset Manager</span> - институциональные, часто контртрендовые.
             {prev && (<>{" "}Нед. изм.: <span className={signColor(cur.nc_net-prev.nc_net)}>{cur.nc_net>=prev.nc_net?"▲":"▼"} {Math.abs(cur.nc_net-prev.nc_net).toLocaleString()}</span>.</>)}
-            {" "}<span className="text-white/20">CFTC публикует каждую пятницу — данные за предыдущий вторник.</span>
+            {" "}<span className="text-white/20">CFTC публикует каждую пятницу - данные за предыдущий вторник.</span>
           </div>
 
         </div>
@@ -424,7 +424,7 @@ function MacroSection() {
         {isDemo && (
           <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-accent-gold/20 bg-accent-gold/[0.05] px-4 py-2.5 text-[11px] text-accent-gold">
             <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 opacity-70"/>
-            Yahoo Finance недоступен — ориентировочные данные
+            Yahoo Finance недоступен - ориентировочные данные
           </div>
         )}
 
@@ -495,7 +495,7 @@ function EtfSection() {
 
   return (
     <Section icon={<DollarSign className="h-4 w-4 text-success"/>}
-      title="Bitcoin Spot ETF — Институциональные холдинги" accent="green" delay={0.3}
+      title="Bitcoin Spot ETF - Институциональные холдинги" accent="green" delay={0.3}
       badge={isDemo ? <DemoBadge/> : <LiveBadge/>}
       sub={isDemo ? "оценочные данные" : "Nasdaq · CoinGecko · live"}>
 
@@ -574,16 +574,16 @@ function EtfSection() {
                   </div>
 
                   <div className="text-right font-mono text-[11px] text-white/70">
-                    {etf.btc>0 ? `${(etf.btc/1000).toFixed(0)}K` : "—"}
+                    {etf.btc>0 ? `${(etf.btc/1000).toFixed(0)}K` : "-"}
                   </div>
                   <div className="text-right font-mono text-[10px] text-white/35">
-                    {etf.aum_usd&&etf.aum_usd>0 ? `$${(etf.aum_usd/1e9).toFixed(1)}B` : "—"}
+                    {etf.aum_usd&&etf.aum_usd>0 ? `$${(etf.aum_usd/1e9).toFixed(1)}B` : "-"}
                   </div>
                   <div className="text-right font-mono text-[12px] font-bold text-success">
                     {etf.sharePct}%
                   </div>
                   <div className="text-right">
-                    <div className="font-mono text-[11px] text-white">{etf.price>0?`$${etf.price}`:"—"}</div>
+                    <div className="font-mono text-[11px] text-white">{etf.price>0?`$${etf.price}`:"-"}</div>
                     {etf.price>0 && (
                       <div className="font-mono text-[9px]" style={{color:pos?"#0ecb81":"#f6465d"}}>
                         {pos?"+":""}{etf.changePct.toFixed(2)}%
@@ -601,7 +601,7 @@ function EtfSection() {
           })}
         </div>
 
-        <p className="text-[9px] text-white/15">AUM и BTC холдинги — Nasdaq API. Цены ETF — Yahoo Finance. BTC/USD — CoinGecko.</p>
+        <p className="text-[9px] text-white/15">AUM и BTC холдинги - Nasdaq API. Цены ETF - Yahoo Finance. BTC/USD - CoinGecko.</p>
       </div>}
     </Section>
   );
@@ -645,7 +645,7 @@ function DerivativesSection() {
 
   return (
     <Section icon={<Activity className="h-4 w-4 text-accent-cyan"/>}
-      title="Деривативы — открытый интерес" accent="cyan" delay={0.2}
+      title="Деривативы - открытый интерес" accent="cyan" delay={0.2}
       badge={<LiveBadge/>}
       sub={updatedAt ? `WEEX · ${updatedAt}` : "загрузка…"}>
 
@@ -659,7 +659,7 @@ function DerivativesSection() {
             color="#0affe0" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.05}/>
           <KpiCard
             label="Топ по OI"
-            value={rows[0]?.sym??"—"}
+            value={rows[0]?.sym??"-"}
             sub={rows[0]?.oi>0 ? fmtB(rows[0].oi) : undefined}
             color="#f0b90b" bg="rgba(240,185,11,0.07)" border="rgba(240,185,11,0.18)" delay={0.1}/>
         </div>
@@ -697,7 +697,7 @@ function DerivativesSection() {
                   </div>
 
                   <div className="text-right font-mono text-[12px] text-white/70">
-                    {r.oi>0 ? fmtB(r.oi) : "—"}
+                    {r.oi>0 ? fmtB(r.oi) : "-"}
                   </div>
 
                   <div className="text-right">
@@ -720,7 +720,7 @@ function DerivativesSection() {
         </div>
 
         <p className="mt-3 text-[8.5px] text-white/15">
-          Funding {">"} 0% — лонги переплачивают (перегрев) · Funding {"<"} 0% — шорты платят лонгам (бычий сигнал)
+          Funding {">"} 0% - лонги переплачивают (перегрев) · Funding {"<"} 0% - шорты платят лонгам (бычий сигнал)
         </p>
       </>}
     </Section>
@@ -782,7 +782,7 @@ function OnchainSection() {
       if(!fg&&!cg) return;
       const pct = cg?.market_cap_percentage??{};
       setData({
-        fearGreed:{value:fg?parseInt(fg.value):50, label:FG_LABEL_RU[fg?.value_classification??""]??fg?.value_classification??"—"},
+        fearGreed:{value:fg?parseInt(fg.value):50, label:FG_LABEL_RU[fg?.value_classification??""]??fg?.value_classification??"-"},
         btcDom:pct.btc??0, ethDom:pct.eth??0, stableDom:(pct.usdt??0)+(pct.usdc??0),
         totalMcap:cg?.total_market_cap?.usd??0,
         mcapChg24h:cg?.market_cap_change_percentage_24h_usd??0,
@@ -1016,7 +1016,7 @@ function FundingHeatmapSection() {
         </div>
 
         <p className="mt-3 text-[8.5px] text-white/15">
-          FR {"<"} 0% — шорты платят лонгам (бычий) · FR {">"} 0.01% — лонги перегреты
+          FR {"<"} 0% - шорты платят лонгам (бычий) · FR {">"} 0.01% - лонги перегреты
         </p>
 
       </>}

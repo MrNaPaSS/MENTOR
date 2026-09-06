@@ -43,7 +43,7 @@ function money(value: number): string {
  */
 function Takes({ trade }: { trade: JournalTrade }) {
   if (trade.targets.length === 0) {
-    return <span className="text-[var(--pane-muted)]">—</span>;
+    return <span className="text-[var(--pane-muted)]">-</span>;
   }
   return (
     <span className="inline-flex items-center gap-0.5">
@@ -203,12 +203,12 @@ export default function JournalPanel({
               <Stat label="Прибыльных" value={`${summary.win_rate}%`} />
               <Stat
                 label="Лучшая"
-                value={summary.wins > 0 ? money(summary.best) : "—"}
+                value={summary.wins > 0 ? money(summary.best) : "-"}
                 tone={summary.wins > 0 ? tone(summary.best) : undefined}
               />
               <Stat
                 label="Худшая"
-                value={summary.losses > 0 ? money(summary.worst) : "—"}
+                value={summary.losses > 0 ? money(summary.worst) : "-"}
                 tone={summary.losses > 0 ? tone(summary.worst) : undefined}
               />
             </div>
@@ -302,7 +302,7 @@ export default function JournalPanel({
                       </span>
                     </td>
                     <td className="text-[var(--pane-text-2)]">{t.entry}</td>
-                    <td className="text-[var(--pane-text-2)]">{t.exit_price ?? "—"}</td>
+                    <td className="text-[var(--pane-text-2)]">{t.exit_price ?? "-"}</td>
                     <td title={takesHint(t)}>
                       <Takes trade={t} />
                     </td>

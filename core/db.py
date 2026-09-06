@@ -54,6 +54,7 @@ def create_all() -> None:
     Base.metadata.create_all(engine)
     _migrate_add_columns(engine)
     _seed_shop_items(engine)
+    _normalize_shop_dashes(engine)
     _apply_shop_catalog_v2(engine)
 
 
@@ -144,15 +145,15 @@ def _add_missing_columns(conn, inspector, engine) -> None:
 # Цены: 1 NMNH = $0.10 (индикатор/мес = $100 = 1000 NMNH, менторство = $1000 = 10000 NMNH).
 _DEFAULT_SHOP_ITEMS = [
     # ── Покупка за NMNH (подписки на индикатор требуют ник TradingView) ──
-    ("Подписка на индикатор — 7 дней", "Доступ к приватному индикатору NMNH на TradingView на 7 дней.", 300, "indicator", "shop", "TrendingUp", "", True, 10),
-    ("Подписка на индикатор — 14 дней", "Доступ к приватному индикатору NMNH на 14 дней.", 550, "indicator", "shop", "TrendingUp", "", True, 20),
-    ("Подписка на индикатор — 1 месяц", "Доступ к приватному индикатору NMNH на 30 дней. Максимальная выгода.", 1000, "indicator", "shop", "TrendingUp", "", True, 30),
+    ("Подписка на индикатор - 7 дней", "Доступ к приватному индикатору NMNH на TradingView на 7 дней.", 300, "indicator", "shop", "TrendingUp", "", True, 10),
+    ("Подписка на индикатор - 14 дней", "Доступ к приватному индикатору NMNH на 14 дней.", 550, "indicator", "shop", "TrendingUp", "", True, 20),
+    ("Подписка на индикатор - 1 месяц", "Доступ к приватному индикатору NMNH на 30 дней. Максимальная выгода.", 1000, "indicator", "shop", "TrendingUp", "", True, 30),
     ("Индивидуальное менторство", "Персональный разбор, стратегия и сопровождение 1-на-1 с ментором.", 10000, "mentorship", "shop", "GraduationCap", "", False, 40),
 
     # ── Наш софт (витрина, ссылки добавляются из админки) ──
-    ("Индикатор #1 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 100),
-    ("Индикатор #2 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 110),
-    ("Индикатор #3 — TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 120),
+    ("Индикатор #1 - TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 100),
+    ("Индикатор #2 - TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 110),
+    ("Индикатор #3 - TradingView", "Приватный индикатор NMNH на TradingView.", 0, "indicator", "software", "TrendingUp", "", False, 120),
     ("Академия NMNH", "Обучение, торговые стратегии, AI-агент и библиотека трейдера в одной платформе.", 0, "academy", "software", "GraduationCap", "", False, 130),
     ("Алерты на TradingView", "Готовые алерты на TradingView от NMNH.", 0, "alerts", "software", "BellRing", "", False, 150),
     ("AI-агент по форексу", "AI-агент для анализа форекс-рынка.", 0, "ai", "software", "Bot", "", False, 160),
@@ -183,6 +184,29 @@ def _seed_shop_items(engine) -> None:
         session.commit()
 
 
+def _normalize_shop_dashes(engine) -> None:
+    """Привести тире в названиях товаров к дефису.
+
+    Название товара — ключ, по которому каталог находит уже существующую
+    строку. Заменить длинное тире только в коде значит порвать это
+    сопоставление: обновления цен молча перестали бы находить свои товары.
+    """
+    from sqlalchemy import func, inspect, update
+    from sqlalchemy.orm import Session
+    from core.models import ShopItem
+
+    if "shop_items" not in inspect(engine).get_table_names():
+        return
+
+    with Session(engine) as session:
+        session.execute(
+            update(ShopItem)
+            .where(ShopItem.title.like("%—%"))
+            .values(title=func.replace(ShopItem.title, "—", "-"))
+        )
+        session.commit()
+
+
 def _apply_shop_catalog_v2(engine) -> None:
     """Одноразовая коррекция уже засеянного каталога (цены 1 NMNH = $0.10, библиотека → в академию).
 
@@ -205,9 +229,9 @@ def _apply_shop_catalog_v2(engine) -> None:
 
         # Новые цены (1 NMNH = $0.10)
         new_prices = {
-            "Подписка на индикатор — 7 дней": 300,
-            "Подписка на индикатор — 14 дней": 550,
-            "Подписка на индикатор — 1 месяц": 1000,
+            "Подписка на индикатор - 7 дней": 300,
+            "Подписка на индикатор - 14 дней": 550,
+            "Подписка на индикатор - 1 месяц": 1000,
             "Индивидуальное менторство": 10000,
         }
         for title, price in new_prices.items():

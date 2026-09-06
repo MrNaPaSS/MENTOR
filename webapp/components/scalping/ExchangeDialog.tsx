@@ -153,7 +153,7 @@ export default function ExchangeDialog({
 
         {!reachable ? (
           <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
-            Состояние счёта получить не удалось. Войдите в кабинет — торговый
+            Состояние счёта получить не удалось. Войдите в кабинет - торговый
             раздел привязан к ученику; если вход выполнен, значит сервер сейчас
             недоступен.
           </p>
@@ -179,7 +179,7 @@ export default function ExchangeDialog({
               <div className="flex justify-between">
                 <span className="text-[var(--pane-muted)]">Доступно</span>
                 <span className="text-[var(--pane-text-2)]">
-                  {funds !== null ? `${funds} USDT` : checked ? "—" : "запрашиваем…"}
+                  {funds !== null ? `${funds} USDT` : checked ? "-" : "запрашиваем…"}
                 </span>
               </div>
               {status.updated_at && (
@@ -243,7 +243,7 @@ export default function ExchangeDialog({
 
             <p className="text-[11px] leading-snug text-[var(--pane-muted)]">
               Ключи хранятся зашифрованными и наружу не отдаются. Заводите ключ
-              только с правом торговли — вывод средств терминалу не нужен.
+              только с правом торговли - вывод средств терминалу не нужен.
             </p>
 
             {error && (

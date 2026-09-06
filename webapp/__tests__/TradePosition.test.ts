@@ -9,6 +9,7 @@ import {
   floatingAt,
   pendingTargets,
   pnlAt,
+  wasEntered,
   type ActiveTrade,
 } from "@/lib/trade/position";
 
@@ -274,7 +275,7 @@ describe("частичная фиксация", () => {
 });
 
 describe("что показывать на экране", () => {
-  it("плавающий результат — только по остатку, как на бирже", () => {
+  it("плавающий результат - только по остатку, как на бирже", () => {
     // После взятой цели биржа показывает результат по тому, что осталось в
     // позиции. Наша цифра должна совпадать с ней: трейдер сверяет глазами.
     let trade = advance(long(), 100, T0);
@@ -319,7 +320,7 @@ describe("сделка на бирже", () => {
     expect(advanceQuote(waiting(), { bid: 99.9, ask: 100 }, 1).status).toBe("open");
   });
 
-  it("открытую позицию ведём сами: цели и безубыток — это разметка", () => {
+  it("открытую позицию ведём сами: цели и безубыток - это разметка", () => {
     const open = advanceQuote(waiting(), { bid: 99.9, ask: 100 }, 1);
     const after = advanceQuote(open, { bid: 101, ask: 101.1 }, 2, true);
     expect(after.takesHit).toBe(1);
@@ -330,5 +331,35 @@ describe("сделка на бирже", () => {
     const open = advanceQuote(waiting(), { bid: 99.9, ask: 100 }, 1);
     const stopped = advanceQuote(open, { bid: 98, ask: 98.1 }, 2, true);
     expect(stopped.status).toBe("open");
+  });
+});
+
+describe("что попадает в журнал", () => {
+  const planned = (): ActiveTrade =>
+    createTrade(
+      {
+        symbol: "BTCUSDT",
+        side: "long",
+        entry: 100,
+        stop: 99,
+        targets: [101, 102, 103],
+        qty: 10,
+        margin: 100,
+        leverage: 10,
+      },
+      "cancel-1",
+    );
+
+  it("снятая лимитка сделкой не была", () => {
+    // Позиции не было, денег не двигалось: такая запись только засоряет
+    // список и портит статистику.
+    const cancelled = closeManually(planned(), 100, 5);
+    expect(cancelled.status).toBe("closed");
+    expect(wasEntered(cancelled)).toBe(false);
+  });
+
+  it("зашедшая и закрытая руками — была", () => {
+    const open = advanceQuote(planned(), { bid: 99.9, ask: 100 }, 1);
+    expect(wasEntered(closeManually(open, 100.5, 2))).toBe(true);
   });
 });
