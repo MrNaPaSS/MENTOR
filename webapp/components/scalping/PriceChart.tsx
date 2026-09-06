@@ -432,6 +432,8 @@ function PriceChart({
   const [todayPnl, setTodayPnl] = useState<number | null>(null);
   // Почему на графике нет свежих свечей. Пусто — всё в порядке.
   const [dataError, setDataError] = useState<string | null>(null);
+  // До какого момента не спрашивать свечи: биржа назвала срок сама.
+  const retryAfter = useRef(0);
   const livePriceRef = useRef(livePrice);
   livePriceRef.current = livePrice;
   // Сделка нужна и при загрузке свечей: бокс строится от последнего бара, а на
@@ -647,6 +649,9 @@ function PriceChart({
     }
 
     async function load(fit: boolean) {
+      // Биржа сказала, когда вернётся, — до этого срока не спрашиваем. Долбить
+      // сервер раз в пять секунд ради того же отказа незачем.
+      if (Date.now() < retryAfter.current) return;
       try {
         const res = await fetch(
           `${API_URL}/api/scalping/klines/${symbol}?interval=${interval}&limit=400`,
@@ -655,13 +660,15 @@ function PriceChart({
           // Причину называем словами. Пустой график молча — это то же самое,
           // что показать неверные данные: трейдер не знает, чему верить.
           const detail = await res.json().catch(() => null);
-          if (!cancelled) {
-            setDataError(detail?.detail || `Свечи недоступны (${res.status})`);
-          }
+          const text = String(detail?.detail || `Свечи недоступны (${res.status})`);
+          const seconds = Number(text.match(/через\s+(\d+)\s*с/)?.[1] ?? 0);
+          if (seconds > 0) retryAfter.current = Date.now() + seconds * 1000;
+          if (!cancelled) setDataError(text);
           return;
         }
         const body: { candles: Candle[] } = await res.json();
         if (cancelled || !candleRef.current) return;
+        retryAfter.current = 0;
         setDataError(null);
         draw(body.candles);
         if (fit) reframe(body.candles.length);

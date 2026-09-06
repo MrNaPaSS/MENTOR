@@ -307,11 +307,14 @@ class ScalpingCollector:
                 # следующее же событие потока запустит новый запрос, и на
                 # полусотне монет это сотни запросов в секунду: биржа банит
                 # адрес, а бан продлевается каждой новой попыткой.
-                self._cooldown[symbol] = time.monotonic() + RESYNC_COOLDOWN
+                # Если биржа закрыта, ждём ровно до её срока: пробовать раньше
+                # бессмысленно, а каждая попытка во время бана продлевает его.
+                pause = max(RESYNC_COOLDOWN, self.rest.blocked_for)
+                self._cooldown[symbol] = time.monotonic() + pause
                 logger.warning(
                     "Снимок стакана %s не получен, следующая попытка через %.0f с",
                     symbol,
-                    RESYNC_COOLDOWN,
+                    pause,
                 )
                 return
             self._cooldown.pop(symbol, None)
