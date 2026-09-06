@@ -26,6 +26,7 @@ from sqlalchemy import select
 
 from core.models import LiveTrade, ScalpTrade, WeexCredential, utcnow
 from core.trading.position import (
+    DEFAULT_TAKER_FEE,
     Position,
     should_move_stop,
     stop_after_take,
@@ -35,6 +36,7 @@ from core.trading.position import (
 from core.weex import keys as keystore
 from core.weex.futures import (
     Credentials,
+    public_price,
     WeexFutures,
     WeexTradeError,
     floor_to_step,
@@ -264,16 +266,26 @@ class PositionWatcher:
         )
         positions = await client.positions()
 
+        # Цену спрашиваем отдельно и по одному разу на инструмент: в ответе по
+        # позиции её нет вовсе, а без неё стоп уезжает не на ту сторону рынка -
+        # биржа такой отклоняет, и позиция остаётся со старым.
+        prices: dict[str, float | None] = {}
+
         for trade in trades:
             position = position_for(positions, trade.symbol, trade.side)
             streak = self._missing.get(trade.id, 0)
             self._missing[trade.id] = streak + 1 if position_size(position) <= 0 else 0
 
+            price = mark_price(position)
+            if price is None:
+                sym = trade.symbol.upper()
+                if sym not in prices:
+                    prices[sym] = await public_price(self._http(), sym)
+                price = prices[sym]
+
             plans = await self._open_plans(client, trade)
-            decision = decide(
-                trade, position, plans, mark_price(position), self._missing[trade.id]
-            )
-            await self._apply(session, client, trade, decision)
+            decision = decide(trade, position, plans, price, self._missing[trade.id])
+            await self._apply(session, client, trade, decision, price)
 
     async def _open_plans(self, client: WeexFutures, trade: LiveTrade) -> set[str]:
         """Условные заявки, которые ещё висят на бирже.
@@ -301,7 +313,12 @@ class PositionWatcher:
         }
 
     async def _apply(
-        self, session, client: WeexFutures, trade: LiveTrade, decision: Decision
+        self,
+        session,
+        client: WeexFutures,
+        trade: LiveTrade,
+        decision: Decision,
+        price: float | None = None,
     ) -> None:
         changed = False
 
@@ -329,7 +346,7 @@ class PositionWatcher:
             logger.info("Цель взята: %s, всего %d", trade.symbol, trade.takes_hit)
 
         if decision.move_stop_to is not None:
-            if await self._set_stop(client, trade, decision.move_stop_to):
+            if await self._set_stop(client, trade, decision.move_stop_to, price):
                 trade.current_stop = decision.move_stop_to
                 changed = True
 
@@ -395,7 +412,13 @@ class PositionWatcher:
         logger.info("Цели выставлены: %s, %d шт.", trade.symbol, len(placed))
         return True
 
-    async def _set_stop(self, client: WeexFutures, trade: LiveTrade, price: float) -> bool:
+    async def _set_stop(
+        self,
+        client: WeexFutures,
+        trade: LiveTrade,
+        stop: float,
+        market: float | None = None,
+    ) -> bool:
         """Поставить стоп на новую цену: снять старый и выставить новый.
 
         Не «передвинуть»: стоп, приехавший вместе со входом, биржа заводит сама,
@@ -420,11 +443,28 @@ class PositionWatcher:
             return False
 
         long = trade.side == "long"
+
+        # Стоп по ту сторону рынка биржа не примет: у лонга он обязан стоять
+        # ниже цены, у шорта выше. Так и вышло на взятой цели - безубыток
+        # оказался выше рынка, заявку отклонили, и позиция осталась со старым
+        # стопом. Отступаем на шаг от цены: ровно в цену тоже не пускают.
+        if market and market > 0:
+            edge = market - filters["tick"] if long else market + filters["tick"]
+            wrong = stop > edge if long else stop < edge
+            if wrong:
+                logger.info(
+                    "Стоп %s подведён к рынку: %s не по ту сторону от %s",
+                    trade.symbol,
+                    stop,
+                    market,
+                )
+                stop = edge
+
         try:
             placed = await client.place_tp_sl(
                 symbol=trade.symbol,
                 plan_type="STOP_LOSS",
-                trigger_price=num(round_to_tick(price, filters["tick"])),
+                trigger_price=num(round_to_tick(stop, filters["tick"])),
                 quantity=num(quantity),
                 position_side="LONG" if long else "SHORT",
                 client_algo_id=f"sl{trade.takes_hit}_{trade.client_id}"[:32],
@@ -439,7 +479,7 @@ class PositionWatcher:
         await self._drop_old_stops(client, trade, keep=fresh)
         trade.sl_order_id = fresh
         logger.info(
-            "Стоп %s переставлен на %s после %d целей", trade.symbol, price, trade.takes_hit
+            "Стоп %s переставлен на %s после %d целей", trade.symbol, stop, trade.takes_hit
         )
         return True
 
@@ -570,13 +610,6 @@ class PositionWatcher:
         )
 
 
-# Один раз сообщаем в лог, какие поля вообще есть у позиции, если безубытка
-# среди них не нашлось. Названия у бирж разные, а промах здесь стоит денег:
-# без биржевой цифры стоп встаёт по нашей формуле, а она не знает ни цены
-# исполнения, ни комиссии счёта.
-_be_fields_logged = False
-
-
 def position_side(row: dict[str, Any] | None) -> str:
     """Сторона позиции: long, short или пусто, если биржа не сказала.
 
@@ -622,15 +655,38 @@ def position_for(
     return None
 
 
-def exchange_breakeven(position: dict[str, Any] | None) -> float | None:
-    """Цена безубытка, посчитанная самой биржей.
+def _f(row: dict[str, Any], *names: str) -> float:
+    """Первое читаемое число из перечисленных полей. Нет - ноль."""
+    for name in names:
+        try:
+            return float(row.get(name))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+    return 0.0
 
-    Она знает то, чего не знаем мы: по какой цене реально исполнился вход,
-    сколько удержано комиссии и фандинга, и как всё это сдвинулось после
-    частичного закрытия. Наша формула — запасной вариант, а не основной.
+
+def exchange_breakeven(
+    position: dict[str, Any] | None, taker_fee: float = DEFAULT_TAKER_FEE
+) -> float | None:
+    """Цена, при которой позиция закрывается в настоящий ноль.
+
+    Готового поля с безубытком WEEX не отдаёт - в ответе по позиции его нет
+    вовсе. Зато есть всё, из чего он складывается: сколько денег зашло в
+    позицию, сколько вышло, сколько удержано комиссии и фандинга. По ним
+    считаем точно, а не по формуле «вход плюс две комиссии»: та не знает ни
+    реальной цены исполнения, ни частичных закрытий, ни фандинга и промахивалась
+    на десятки пунктов.
+
+        лонг:  P = (зашло - вышло + удержано) / (остаток * (1 - комиссия))
+        шорт:  P = (зашло - вышло - удержано) / (остаток * (1 + комиссия))
+
+    «Зашло» и «вышло» - это цена на объём по всем исполнениям, поэтому средняя
+    цена входа и доли закрытий учтены сами собой.
     """
     if not position:
         return None
+
+    # Если биржа однажды начнёт отдавать готовое число - берём его.
     for name in (
         "breakEvenPrice",
         "breakevenPrice",
@@ -647,14 +703,52 @@ def exchange_breakeven(position: dict[str, Any] | None) -> float | None:
         if price > 0:
             return price
 
-    global _be_fields_logged
-    if not _be_fields_logged:
-        _be_fields_logged = True
-        logger.warning(
-            "Безубыток биржи не найден среди полей позиции: %s",
-            ", ".join(sorted(str(k) for k in position)),
-        )
-    return None
+    size = position_size(position)
+    opened = _f(position, "cumOpenValue", "openValue")
+    if size <= 0 or opened <= 0 or not (0 <= taker_fee < 1):
+        _log_missing_fields(position)
+        return None
+
+    closed = _f(position, "cumCloseValue")
+    held = (
+        abs(_f(position, "cumOpenFee", "openFee"))
+        + abs(_f(position, "cumCloseFee", "closeFee"))
+        + _f(position, "cumFundingFee", "fundingFee")
+    )
+
+    if position_side(position) == "short":
+        price = (opened - closed - held) / (size * (1 + taker_fee))
+    else:
+        price = (opened - closed + held) / (size * (1 - taker_fee))
+    return price if price > 0 else None
+
+
+_be_warned = False
+
+
+def _log_missing_fields(position: dict[str, Any]) -> None:
+    """Один раз сказать, чего не хватило: имена полей у бирж разные."""
+    global _be_warned
+    if _be_warned:
+        return
+    _be_warned = True
+    logger.warning(
+        "Безубыток не посчитать, поля позиции: %s",
+        ", ".join(sorted(str(k) for k in position)),
+    )
+
+
+def average_entry(position: dict[str, Any] | None) -> float | None:
+    """Средняя цена входа: стоимость входов на их объём.
+
+    Готового поля с ценой входа в ответе нет - есть только «сколько денег
+    зашло» и «на какой объём». Отношение и есть средняя.
+    """
+    if not position:
+        return None
+    value = _f(position, "cumOpenValue", "openValue")
+    size = _f(position, "cumOpenSize") or position_size(position)
+    return value / size if value > 0 and size > 0 else None
 
 
 def mark_price(position: dict[str, Any] | None) -> float | None:

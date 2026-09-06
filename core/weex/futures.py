@@ -103,6 +103,30 @@ def _decimals(step: float) -> int:
     return len(text.split(".")[1]) if "." in text else 0
 
 
+async def public_price(session, symbol: str) -> float | None:
+    """Текущая цена инструмента без ключей.
+
+    Нужна, чтобы не отправлять биржe заведомо невозможный стоп: у лонга он
+    обязан стоять ниже цены, у шорта выше. В ответе по позиции цены нет вовсе -
+    там только объёмы, стоимости и комиссии, - а без неё стоп после цели
+    отклонялся и позиция оставалась со старым.
+    """
+    url = f"{BASE_URL}/capi/v3/market/symbolPrice"
+    try:
+        async with session.get(
+            url, params={"symbol": symbol.upper()}, timeout=aiohttp.ClientTimeout(total=10)
+        ) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.json(content_type=None)
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+        logger.warning("Цена %s не получена: %s", symbol, exc)
+        return None
+
+    price = _f((data or {}).get("price"))
+    return price if price > 0 else None
+
+
 async def public_filters(session, symbol: str) -> dict[str, float]:
     """Свойства инструмента без ключей: шаги, потолок плеча, комиссия.
 

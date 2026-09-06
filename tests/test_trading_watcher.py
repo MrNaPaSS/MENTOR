@@ -331,3 +331,76 @@ def test_one_way_position_belongs_to_its_own_side():
     rows = [{"symbol": "BTCUSDT", "total": "-0.5"}]
     assert position_for(rows, "BTCUSDT", "short") is not None
     assert position_for(rows, "BTCUSDT", "long") is None
+
+
+# ── безубыток по цифрам самой биржи ─────────────────────────────────────────
+
+def weex_position(**over) -> dict:
+    """Позиция в том виде, в каком её отдаёт WEEX: без цены и без безубытка.
+
+    Полей `breakEvenPrice` и `markPrice` в ответе нет вовсе - есть только
+    объёмы, стоимости и удержанные комиссии.
+    """
+    row = {
+        "symbol": "BTCUSDT",
+        "side": "long",
+        "size": "1",
+        "cumOpenSize": "1",
+        "cumOpenValue": "80000",
+        "cumOpenFee": "64",
+        "cumCloseSize": "0",
+        "cumCloseValue": "0",
+        "cumCloseFee": "0",
+        "cumFundingFee": "0",
+    }
+    row.update(over)
+    return row
+
+
+def test_breakeven_is_computed_from_money_in_and_out():
+    """Готового поля с безубытком WEEX не отдаёт - считаем сами и точно.
+
+    Вход на 80000 с комиссией 64 (0.08%): чтобы выйти в ноль, цена должна
+    покрыть и комиссию входа, и комиссию выхода.
+    """
+    from backend.trading.watcher import exchange_breakeven
+
+    price = exchange_breakeven(weex_position(), taker_fee=0.0008)
+    assert price is not None
+    # (80000 + 64) / (1 * (1 - 0.0008)) = 80128.1
+    assert price == pytest.approx(80128.1, abs=0.5)
+    assert price > 80000  # ноль всегда выше входа для лонга
+
+
+def test_breakeven_of_a_short_lies_below_the_entry():
+    from backend.trading.watcher import exchange_breakeven
+
+    price = exchange_breakeven(
+        weex_position(side="short", size="-1"), taker_fee=0.0008
+    )
+    assert price is not None and price < 80000
+
+
+def test_partial_close_moves_the_breakeven():
+    """Забранная цель сдвигает ноль: часть прибыли уже на счёте."""
+    from backend.trading.watcher import exchange_breakeven
+
+    whole = exchange_breakeven(weex_position(), taker_fee=0.0008)
+    after = exchange_breakeven(
+        weex_position(
+            size="0.7",
+            cumCloseSize="0.3",
+            cumCloseValue="24300",   # 0.3 по 81000
+            cumCloseFee="19.4",
+        ),
+        taker_fee=0.0008,
+    )
+    assert whole is not None and after is not None
+    assert after < whole
+
+
+def test_average_entry_comes_from_value_over_size():
+    from backend.trading.watcher import average_entry
+
+    assert average_entry(weex_position()) == pytest.approx(80000)
+    assert average_entry({}) is None
