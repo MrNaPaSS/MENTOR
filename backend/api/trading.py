@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import ssl
@@ -408,7 +409,7 @@ async def close_position(
         # сокращающий ордер она на защищённой позиции отклоняет — «cannot set
         # reduce only». В боте заказчика закрытие идёт ровно так же, обычным
         # рыночным ордером в противоположную сторону.
-        await client.place_order(
+        order = await client.place_order(
             symbol=symbol,
             side="SELL" if long else "BUY",
             position_side="LONG" if long else "SHORT",
@@ -416,6 +417,7 @@ async def close_position(
             order_type="MARKET",
             client_order_id=body.client_order_id,
         )
+        order_id = _order_id(order)
 
         remaining = max(0.0, size - quantity)
         if remaining < filters["min_qty"]:
@@ -428,7 +430,66 @@ async def close_position(
     except WeexTradeError as exc:
         raise _fail(exc) from exc
 
-    return {"closed": quantity, "remaining": remaining}
+    # Настоящий результат берём у биржи, а не считаем сами.
+    #
+    # Наша цифра — это цена маркировки без комиссий: она совпадает с тем, что
+    # биржа показывает по открытой позиции, но не с тем, что приходит на счёт.
+    # Выход по рынку идёт по встречной стороне книги, и обе ноги платят
+    # комиссию. Разница видна сразу: было +209, пришло +75.
+    realized, fee, fill = await _settled(client, symbol, order_id)
+
+    return {
+        "closed": quantity,
+        "remaining": remaining,
+        "realized": realized,
+        "fee": fee,
+        "fill_price": fill,
+    }
+
+
+async def _settled(
+    client: WeexFutures, symbol: str, order_id: str
+) -> tuple[float | None, float | None, float | None]:
+    """Что на самом деле дала сделка: результат, комиссия и цена исполнения.
+
+    Исполнения появляются в отчёте не мгновенно, поэтому спрашиваем трижды с
+    нарастающей паузой — так же сделано в боте заказчика. Не дождались — честно
+    возвращаем пустоту вместо выдуманного числа.
+    """
+    if not order_id:
+        return None, None, None
+
+    for pause in (0.0, 0.25, 0.6):
+        if pause:
+            await asyncio.sleep(pause)
+        try:
+            fills = await client.user_trades(symbol, limit=50)
+        except WeexTradeError as exc:
+            logger.warning("Исполнения %s не получены: %s", symbol, exc)
+            return None, None, None
+
+        mine = [f for f in fills if str(f.get("orderId") or "") == str(order_id)]
+        if not mine:
+            continue
+
+        realized = 0.0
+        fee = 0.0
+        price = None
+        for f in mine:
+            try:
+                realized += float(f.get("realizedPnl") or 0)
+                fee += abs(float(f.get("commission") or 0))
+                value = float(f.get("price") or 0)
+                if value > 0:
+                    price = value
+            except (TypeError, ValueError):
+                continue
+        logger.info(
+            "Закрыто %s: результат %.4f, комиссия %.4f", symbol, realized, fee
+        )
+        return round(realized, 8), round(fee, 8), price
+
+    return None, None, None
 
 
 async def _cancel_everything(client: WeexFutures, symbol: str) -> int:

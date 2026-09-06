@@ -26,7 +26,12 @@ export type ActiveTrade = {
   /** Стоп, с которым сделка задумывалась. Нужен журналу: по нему считался риск. */
   initialStop: number;
   targets: number[];
+  /** Сколько монет осталось в позиции: цели закрывают её по частям. */
   qty: number;
+  /** Объём, с которым сделка открывалась. По нему считаются доли целей. */
+  initialQty: number;
+  /** Уже забранная прибыль по взятым целям. */
+  realized: number;
   margin: number;
   leverage: number;
   status: TradeStatus;
@@ -68,6 +73,8 @@ export function createTrade(seed: TradeSeed, id: string, now = Date.now()): Acti
     initialStop: seed.stop,
     targets: [...seed.targets],
     qty: seed.qty,
+    initialQty: seed.qty,
+    realized: 0,
     margin: seed.margin,
     leverage: seed.leverage,
     status: "planned",
@@ -83,12 +90,18 @@ export function createTrade(seed: TradeSeed, id: string, now = Date.now()): Acti
   };
 }
 
-/** Прибыль или убыток по текущей цене. У незакрытой сделки — плавающий. */
+/**
+ * Результат сделки по текущей цене: забранное плюс плавающее.
+ *
+ * Считать плавающий результат на весь исходный объём нельзя: взятая цель уже
+ * закрыла свою часть по своей цене, и она в рынке больше не участвует. Именно
+ * так и получалось, что на экране висело вдвое больше, чем пришло на счёт.
+ */
 export function pnlAt(trade: ActiveTrade, price: number): number {
   if (trade.status === "planned") return 0;
   if (trade.status === "closed") return trade.pnl;
   const move = trade.side === "long" ? price - trade.entry : trade.entry - price;
-  return move * trade.qty;
+  return trade.realized + move * trade.qty;
 }
 
 /** Цели, которые ещё не взяты: взятую с графика убираем. */
@@ -127,7 +140,9 @@ export function advance(trade: ActiveTrade, price: number, now: number): ActiveT
       // Безубыток — это тоже стоп, но по деньгам ноль, и в журнале он должен
       // отличаться от сделки, вынесенной в минус.
       outcome: "stop",
-      pnl: (long ? trade.stop - trade.entry : trade.entry - trade.stop) * trade.qty,
+      pnl:
+        trade.realized +
+        (long ? trade.stop - trade.entry : trade.entry - trade.stop) * trade.qty,
     };
   }
 
@@ -139,22 +154,41 @@ export function advance(trade: ActiveTrade, price: number, now: number): ActiveT
   }
   if (hit === trade.takesHit) return trade;
 
+  // Каждая цель закрывает свою долю исходного объёма по своей цене. Забранное
+  // складываем, оставшийся объём уменьшаем: закрытая часть в рынке больше не
+  // участвует, и считать её по текущей цене — врать себе.
+  const share = trade.initialQty / trade.targets.length;
+  let realized = trade.realized;
+  for (let i = trade.takesHit; i < hit; i++) {
+    const target = trade.targets[i];
+    realized += (long ? target - trade.entry : trade.entry - target) * share;
+  }
+  const left = Math.max(0, trade.qty - share * (hit - trade.takesHit));
+
   // Последняя цель взята — сделка отработана полностью.
   if (hit >= trade.targets.length) {
-    const exit = trade.targets[trade.targets.length - 1];
     return {
       ...trade,
       takesHit: hit,
+      qty: 0,
+      realized,
       status: "closed",
       closedAt: now,
-      exit,
+      exit: trade.targets[trade.targets.length - 1],
       outcome: "take",
-      pnl: (long ? exit - trade.entry : trade.entry - exit) * trade.qty,
+      pnl: realized,
     };
   }
 
   // После первой цели стоп в безубыток: сделка больше не может стать убыточной.
-  return { ...trade, takesHit: hit, breakeven: true, stop: trade.entry };
+  return {
+    ...trade,
+    takesHit: hit,
+    qty: left,
+    realized,
+    breakeven: true,
+    stop: trade.entry,
+  };
 }
 
 /**
@@ -220,9 +254,11 @@ export function closePartially(
 
   const recorded: ActiveTrade = {
     ...trade,
-    // Своя запись в журнале: у части свой объём и свой результат.
+    // Своя запись в журнале: у части свой объём и свой результат. Забранное по
+    // целям сюда не приплюсовываем — оно уже записано своими строками.
     id: `${trade.id}#${trade.partials + 1}`,
     qty: closedQty,
+    realized: 0,
     margin: trade.margin * part,
     status: "closed",
     closedAt: now,
@@ -257,6 +293,9 @@ export function closeManually(trade: ActiveTrade, price: number, now: number): A
     closedAt: now,
     exit,
     outcome: "manual",
-    pnl: trade.status === "open" ? (long ? exit - trade.entry : trade.entry - exit) * trade.qty : 0,
+    pnl:
+      trade.status === "open"
+        ? trade.realized + (long ? exit - trade.entry : trade.entry - exit) * trade.qty
+        : 0,
   };
 }

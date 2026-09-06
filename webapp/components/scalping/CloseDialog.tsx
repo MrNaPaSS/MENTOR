@@ -14,6 +14,10 @@ import { pnlAt, type ActiveTrade } from "@/lib/trade/position";
 
 const SHARES = [25, 50, 75, 100];
 
+// Комиссия тейкера на бирже. Платится и на входе, и на выходе, поэтому в
+// оценке она удваивается.
+const TAKER_FEE = 0.0004;
+
 const BUTTON =
   "rounded-md px-4 py-2 text-[12px] font-semibold transition-[background-color,transform] " +
   "duration-150 ease-out active:scale-[0.98]";
@@ -50,6 +54,9 @@ export default function CloseDialog({
   const part = floating * share;
   const qty = trade.qty * share;
   const waiting = trade.status === "planned";
+  // Комиссия тейкера на обеих ногах — вход уже уплачен, выход предстоит.
+  // Ровно из-за неё «плюс 209» превращается в «пришло 75» на большом плече.
+  const fee = qty * trade.entry * TAKER_FEE * 2;
 
   return (
     <div
@@ -134,7 +141,23 @@ export default function CloseDialog({
                 value={`${part >= 0 ? "+" : "−"}${Math.abs(part).toFixed(2)} $`}
                 tone={part >= 0 ? "text-success" : "text-danger"}
               />
+              <Line
+                label="Комиссия ≈"
+                value={`−${fee.toFixed(2)} $`}
+                tone="text-text-muted"
+              />
+              <Line
+                label="На счёт ≈"
+                value={`${part - fee >= 0 ? "+" : "−"}${Math.abs(part - fee).toFixed(2)} $`}
+                tone={part - fee >= 0 ? "text-success" : "text-danger"}
+              />
             </div>
+
+            <p className="mt-3 text-[11px] leading-snug text-text-muted">
+              Результат посчитан по цене маркировки. Выход по рынку идёт по
+              встречной стороне стакана, поэтому на счёт придёт немного меньше
+              даже этой оценки.
+            </p>
           </div>
         )}
 

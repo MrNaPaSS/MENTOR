@@ -80,7 +80,15 @@ export function openPosition(trade: ActiveTrade, entryAsLimit: boolean) {
  * закрыться целями, и приказ на исходный объём биржа отклонит целиком.
  */
 export function closePosition(trade: ActiveTrade, share: number) {
-  return request<{ closed: number; remaining: number; note?: string }>(
+  return request<{
+    closed: number;
+    remaining: number;
+    note?: string;
+    /** Что на самом деле пришло на счёт: результат с биржи, а не наша оценка. */
+    realized?: number | null;
+    fee?: number | null;
+    fill_price?: number | null;
+  }>(
     "/api/trading/close",
     {
       method: "POST",

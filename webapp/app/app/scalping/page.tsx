@@ -478,13 +478,22 @@ export default function ScalpingPage() {
     // состояние счёта могло не успеть загрузиться, а заявка на бирже при этом
     // стоит. Сервер сам ответит, что ключей нет, — это дешевле, чем оставить
     // висеть лимитку, которую трейдер считает снятой.
+    // Результат с биржи, если она успела его сообщить: наша оценка считается по
+    // цене маркировки и без комиссий, а на счёт приходит другое.
+    let settled: number | null = null;
+
     if (current.status !== "closed") {
       try {
         const result = await closePosition(current, share);
+        if (result && typeof result.realized === "number") settled = result.realized;
         setOrderNote({
           text: result?.note
             ? `Биржа: ${result.note}`
             : `Закрыто ${result?.closed ?? 0} ${base(current.symbol)}` +
+              (settled !== null
+                ? ` · ${settled >= 0 ? "+" : "−"}${Math.abs(settled).toFixed(2)} USD`
+                : "") +
+              (result?.fee ? `, комиссия ${result.fee.toFixed(2)}` : "") +
               (result && result.remaining > 0 ? `, осталось ${result.remaining}` : ""),
           bad: false,
         });
@@ -506,10 +515,16 @@ export default function ScalpingPage() {
       Date.now(),
     );
 
-    if (recorded && recorded.id !== remaining.id) {
+    // В журнал идёт то, что пришло на счёт. Наша оценка годится только когда
+    // биржа промолчала: записать её вместо реальной значит завести себе
+    // статистику красивее, чем на самом деле.
+    const truthful =
+      settled !== null && recorded ? { ...recorded, pnl: settled } : recorded;
+
+    if (truthful && truthful.id !== remaining.id) {
       // Частичную запись эффект журнала не увидит: у него на руках останется
       // живая сделка, а не закрытая. Пишем сами.
-      saveTrade(recorded)
+      saveTrade(truthful)
         .then((saved) => {
           if (saved) setJournalKey((k) => k + 1);
         })
@@ -518,7 +533,11 @@ export default function ScalpingPage() {
         });
     }
 
-    setTrade(remaining.status === "closed" ? remaining : remaining);
+    setTrade(
+      settled !== null && remaining.status === "closed"
+        ? { ...remaining, pnl: settled }
+        : remaining,
+    );
     if (remaining.status === "closed") setDraft(null);
   }
 
