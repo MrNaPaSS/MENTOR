@@ -29,10 +29,18 @@ class StubStream:
         pass
 
 
+class StubRest:
+    """REST без сети: делает вид, что биржа нас не ограничивает."""
+
+    blocked = False
+    blocked_for = 0.0
+
+
 class StubCollector:
     """Сборщик с готовым состоянием и без сети."""
 
     def __init__(self) -> None:
+        self.rest = StubRest()
         self.state = MarketState()
         self.stream = StubStream()
         self.tracked = frozenset({"BTCUSDT"})
