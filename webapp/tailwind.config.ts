@@ -82,6 +82,19 @@ const config: Config = {
         "dash-move": {
           to: { strokeDashoffset: "-1000" },
         },
+        // Молния прочерчивается от края и гаснет: линия рисуется смещением
+        // штриха, а не появлением целиком - так видно направление удара.
+        bolt: {
+          "0%": { strokeDasharray: "0 60", opacity: "0" },
+          "18%": { opacity: "1" },
+          "55%": { strokeDasharray: "60 0", opacity: "1" },
+          "100%": { strokeDasharray: "60 0", opacity: "0" },
+        },
+        "flash-glow": {
+          "0%": { opacity: "0" },
+          "25%": { opacity: "1" },
+          "100%": { opacity: "0" },
+        },
       },
       animation: {
         // Появление окна: ease-out и меньше двухсот миллисекунд. Диалог
@@ -97,6 +110,8 @@ const config: Config = {
         "price-flash": "price-flash 0.6s ease-out",
         float: "float 6s ease-in-out infinite",
         "dash-move": "dash-move 18s linear infinite",
+        bolt: "bolt 0.5s ease-out both",
+        "flash-glow": "flash-glow 0.45s ease-out both",
       },
     },
   },

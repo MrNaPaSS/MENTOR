@@ -14,6 +14,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookText,
+  Maximize2,
+  Minimize2,
   Moon,
   Radio,
   Volume2,
@@ -36,6 +38,12 @@ import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
 import LevelMenu from "@/components/scalping/LevelMenu";
+import LightningFlash from "@/components/scalping/LightningFlash";
+import Logo from "@/components/ui/Logo";
+import { api } from "@/lib/api";
+import { getAccessToken } from "@/lib/auth";
+import { useCoins } from "@/lib/useCoins";
+import { fmtUsd } from "@/lib/format";
 import {
   closePosition,
   openPosition,
@@ -139,10 +147,18 @@ const CHIP_OFF = "text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
 // месяц сделок в трёхстах пикселях невозможно, поэтому высота тянется.
 const JOURNAL_LIMITS = { def: 300, min: 180, max: 900 };
 
-function paneHeight(journalOpen: boolean, journalH: number): React.CSSProperties {
+function paneHeight(
+  journalOpen: boolean,
+  journalH: number,
+  full: boolean,
+): React.CSSProperties {
+  // Сколько высоты забирает всё, что вокруг: шапка сайта, отступы страницы и
+  // нижняя навигация. В полном экране их нет - остаются только поля слоя, и
+  // эти сто пикселей достаются стакану.
+  const around = full ? 16 : 124;
   return journalOpen
-    ? { height: `calc(100vh - ${124 + journalH + 20}px)`, minHeight: 220 }
-    : { height: "calc(100vh - 124px)", minHeight: 520 };
+    ? { height: `calc(100vh - ${around + journalH + 20}px)`, minHeight: 220 }
+    : { height: `calc(100vh - ${around}px)`, minHeight: full ? 320 : 520 };
 }
 
 // Ширины панелей по умолчанию и границы, за которые их не утянуть.
@@ -253,6 +269,71 @@ export default function ScalpingPage() {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   // Уровень, по которому нажали в стакане: спрашиваем, что с ним делать.
   const [level, setLevel] = useState<LadderRow | null>(null);
+
+  // Полный экран: терминал остаётся один на всём стекле.
+  //
+  // Навигация, шапка сайта и отступы съедают полторы сотни пикселей высоты -
+  // на скальпе это две трети стакана. В этом режиме их нет, а баланс и монеты
+  // переезжают в строку с ценой: они нужны и там, но места занимают строку.
+  const [full, setFull] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const { coins } = useCoins(full ? "full" : "windowed");
+  const [balance, setBalance] = useState<string | null>(null);
+
+  // Баланс счёта: в полном экране он единственное место, где его видно.
+  useEffect(() => {
+    if (!full || balance !== null) return;
+    const token = getAccessToken();
+    if (!token) return;
+    api
+      .profile(token)
+      .then((body) => setBalance(body.balance_usdt ?? "0"))
+      .catch(() => {
+        // Не ответил профиль - строка просто останется без баланса.
+      });
+  }, [full, balance]);
+
+  /**
+   * Полный экран.
+   *
+   * Просим у браузера настоящий полноэкранный режим, но не полагаемся на
+   * него: он может быть запрещён политикой страницы, и тогда терминал всё
+   * равно раскрывается на всё окно своим слоем.
+   */
+  const toggleFull = useCallback(() => {
+    setFull((current) => {
+      const next = !current;
+      if (next) setFlash(true);
+      try {
+        if (next && !document.fullscreenElement) {
+          void document.documentElement.requestFullscreen?.().catch(() => {});
+        } else if (!next && document.fullscreenElement) {
+          void document.exitFullscreen?.().catch(() => {});
+        }
+      } catch {
+        // Браузер отказал - остаёмся со своим слоем на всё окно.
+      }
+      return next;
+    });
+  }, []);
+
+  // Выход по Esc и по кнопке браузера: режим не должен пережить окно, из
+  // которого в него вошли.
+  useEffect(() => {
+    if (!full) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setFull(false);
+    }
+    function onChange() {
+      if (!document.fullscreenElement) setFull(false);
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("fullscreenchange", onChange);
+    };
+  }, [full]);
   const [journalOpen, setJournalOpen] = useState(false);
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
@@ -1005,10 +1086,20 @@ export default function ScalpingPage() {
 
   // Класс темы для рабочих панелей: стакан и график светлеют вместе.
   const pane = theme === "light" ? "pane-light" : "pane-dark";
-  const paneStyle = paneHeight(journalOpen, journalH);
+  const paneStyle = paneHeight(journalOpen, journalH, full);
 
   return (
-    <div className={pane}>
+    <div
+      className={
+        full
+          ? // Слой поверх всего: навигация сайта и его отступы остаются под
+            // ним. Просить у браузера полный экран мало - без этого слоя
+            // терминал всё равно сидел бы в шапке и нижней панели.
+            `${pane} fixed inset-0 z-[70] overflow-auto bg-bg-deep p-2`
+          : pane
+      }
+    >
+      {flash && <LightningFlash onDone={() => setFlash(false)} />}
       <div
         className="flex flex-col gap-3 xl:flex-row xl:gap-0"
         style={
@@ -1170,7 +1261,7 @@ export default function ScalpingPage() {
               className={`${pane} flex min-w-0 flex-1 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]`}
               style={paneStyle}
             >
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--pane-border)] px-3 py-2">
+              <div className="relative flex flex-wrap items-center justify-between gap-2 border-b border-[var(--pane-border)] px-3 py-2">
                 {/* Название инструмента переехало на сам график: там же цена и
                     плита, и всё это рядом с свечами, а не по краю рамки. */}
                 <div className="flex items-center gap-0.5">
@@ -1284,7 +1375,28 @@ export default function ScalpingPage() {
                   >
                     {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
                   </button>
+
+                  <button
+                    onClick={toggleFull}
+                    title={full ? "Свернуть - Esc" : "Во весь экран"}
+                    className={`${CHIP} ${full ? CHIP_ON : CHIP_OFF}`}
+                  >
+                    {full ? (
+                      <Minimize2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <Maximize2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
                 </div>
+
+                {/* В полном экране шапки сайта нет, а знак нужен: он же и
+                    дорога назад - нажатие уводит на главную. */}
+                {full && (
+                  <Logo
+                    href="/app/analysis"
+                    className="pointer-events-auto absolute left-1/2 -translate-x-1/2 text-base"
+                  />
+                )}
               </div>
 
               {/* Инструмент, цена и плита — отдельной строкой под таймфреймами.
@@ -1311,6 +1423,20 @@ export default function ScalpingPage() {
                     }`}
                   >
                     {orderNote.text}
+                  </span>
+                )}
+
+                {/* Баланс и монеты - из шапки сайта, которой в этом режиме
+                    нет. Прижаты к правому краю: слева живёт рынок, справа
+                    счёт, и путать их нельзя. */}
+                {full && (
+                  <span className={`flex items-center gap-3 ${orderNote ? "" : "ml-auto"}`}>
+                    {coins !== null && (
+                      <span className="text-[var(--pane-gold)]">{coins.toLocaleString("ru")} NMNH</span>
+                    )}
+                    {balance !== null && (
+                      <span className="text-[var(--pane-text)]">{fmtUsd(balance)}</span>
+                    )}
                   </span>
                 )}
               </div>
