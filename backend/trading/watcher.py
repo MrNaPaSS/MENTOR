@@ -561,6 +561,7 @@ class PositionWatcher:
         gross = 0.0
         fee = 0.0
         exit_price: float | None = None
+        hit = trade.takes_hit
         try:
             since = trade.opened_at or trade.created_at
             # Наивную дату из базы считаем UTC: `timestamp()` у неё считает по
@@ -574,7 +575,12 @@ class PositionWatcher:
                 for f in await client.user_trades(trade.symbol, limit=100)
                 if not opened_ms or fill_time(f) >= opened_ms
             ]
+            hit = trade.takes_hit
             gross, fee, exit_price = settle(fills, float(trade.entry), trade.side)
+            hit = max(
+                trade.takes_hit,
+                takes_reached(fills, json.loads(trade.targets_json or "[]"), trade.side),
+            )
         except WeexTradeError as exc:
             logger.warning("Исполнения %s не получены: %s", trade.symbol, exc)
 
@@ -594,13 +600,14 @@ class PositionWatcher:
                 qty=float(trade.qty),
                 margin=float(trade.margin or 0) or 1.0,
                 leverage=trade.leverage,
-                takes_hit=trade.takes_hit,
+                takes_hit=hit,
                 # Цели переносим целиком: без них журнал знает, сколько целей
                 # взято, но не знает, каких именно, и отрисовать сделку задним
                 # числом уже нечем.
                 targets_json=trade.targets_json or "[]",
                 outcome="take" if pnl > 0 else "stop",
                 pnl=pnl,
+                fee=fee,
                 opened_at=trade.opened_at,
                 closed_at=trade.closed_at or utcnow(),
                 note="биржа",
@@ -692,6 +699,32 @@ def settle(
         return derived, fee, price
 
     return reported, fee, price
+
+
+def takes_reached(
+    fills: list[dict[str, Any]], targets: list[float], side: str
+) -> int:
+    """Сколько целей сделка действительно прошла.
+
+    Считать по остатку позиции можно, только пока позиция есть. Последняя цель
+    закрывает её целиком - и в тот момент считать уже нечего: в журнал уходило
+    «взято две» там, где взяли все три.
+
+    Смотрим на исполнения: цель пройдена, если закрывающая сделка прошла по её
+    цене или дальше. Это и есть факт, а не намерение.
+    """
+    if not targets or not fills:
+        return 0
+    long = side == "long"
+    prices = [
+        value
+        for value in (_first(row, _PRICE_FIELDS) for row in fills)
+        if value and value > 0
+    ]
+    if not prices:
+        return 0
+    reach = max(prices) if long else min(prices)
+    return sum(1 for target in targets if (reach >= target if long else reach <= target))
 
 
 def split_ladder(

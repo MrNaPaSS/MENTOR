@@ -75,6 +75,8 @@ export type ActiveTrade = {
   takesHit: number;
   /** Стоп переставлен в безубыток. */
   breakeven: boolean;
+  /** Комиссия сделки по данным биржи: обе ноги вместе. */
+  fee?: number;
   /** Когда сделка была рассчитана: к этому месту на графике привязан бокс. */
   createdAt: number;
   openedAt: number | null;

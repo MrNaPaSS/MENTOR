@@ -20,6 +20,8 @@ export type JournalTrade = {
   margin: number;
   leverage: number;
   takes_hit: number;
+  /** Комиссия обеих ног: по ней видно, почему на счёт пришло меньше. */
+  fee: number;
   /** Цели, с которыми сделка задумывалась: по ним она рисуется на графике. */
   targets: number[];
   outcome: "stop" | "take" | "manual";
@@ -102,6 +104,7 @@ export function saveTrade(trade: ActiveTrade) {
       margin: trade.margin,
       leverage: trade.leverage,
       takes_hit: trade.takesHit,
+      fee: trade.fee ?? 0,
       targets: trade.targets,
       outcome: trade.outcome ?? "manual",
       pnl: trade.pnl,

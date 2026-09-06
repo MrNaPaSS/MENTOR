@@ -49,6 +49,8 @@ class TradeIn(BaseModel):
     margin: float = Field(gt=0)
     leverage: int = Field(ge=1, le=400)
     takes_hit: int = Field(default=0, ge=0, le=10)
+    # Комиссия обеих ног: по ней видно, почему на счёт пришло меньше.
+    fee: float = Field(default=0, ge=0)
     targets: list[float] = Field(default_factory=list, max_length=10)
     outcome: str
     pnl: float
@@ -96,6 +98,7 @@ def _row(trade: ScalpTrade) -> dict[str, Any]:
         "margin": float(trade.margin),
         "leverage": trade.leverage,
         "takes_hit": trade.takes_hit,
+        "fee": float(trade.fee or 0),
         "targets": json.loads(trade.targets_json or "[]"),
         "outcome": trade.outcome,
         "pnl": float(trade.pnl),
@@ -173,6 +176,7 @@ async def add_trade(
     trade.margin = body.margin
     trade.leverage = body.leverage
     trade.takes_hit = body.takes_hit
+    trade.fee = body.fee
     trade.targets_json = json.dumps(body.targets)
     trade.outcome = body.outcome
     trade.pnl = body.pnl

@@ -654,11 +654,15 @@ export default function ScalpingPage() {
     // Результат с биржи, если она успела его сообщить: наша оценка считается по
     // цене маркировки и без комиссий, а на счёт приходит другое.
     let settled: number | null = null;
+    // Комиссия обеих ног по данным биржи: без неё «плюс 519 там, плюс 487
+    // здесь» выглядит расхождением, а это она и есть.
+    let charged: number | null = null;
 
     if (current.status !== "closed") {
       try {
         const result = await closePosition(current, share);
         if (result && typeof result.realized === "number") settled = result.realized;
+        if (result && typeof result.fee === "number") charged = result.fee;
         setOrderNote({
           text: result?.note
             ? `Биржа: ${result.note}`
@@ -708,7 +712,7 @@ export default function ScalpingPage() {
 
     const finished =
       settled !== null && remaining.status === "closed"
-        ? { ...remaining, pnl: settled }
+        ? { ...remaining, pnl: settled, fee: charged ?? undefined }
         : remaining;
     setTrades((list) => list.map((t) => (t.id === current.id ? finished : t)));
     if (remaining.status === "closed") setDraft(null);

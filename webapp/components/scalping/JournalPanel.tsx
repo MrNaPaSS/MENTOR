@@ -306,7 +306,22 @@ export default function JournalPanel({
                     <td title={takesHint(t)}>
                       <Takes trade={t} />
                     </td>
-                    <td className={`text-right ${tone(t.pnl)}`}>{money(t.pnl)}</td>
+                    <td
+                      className={`text-right ${tone(t.pnl)}`}
+                      title={
+                        t.fee
+                          ? `На счёт ${money(t.pnl)}. Биржа показывает результат до комиссии: ` +
+                            `${money(t.pnl + t.fee)}, комиссия ${t.fee.toFixed(2)}`
+                          : "Результат за вычетом комиссии - то, что пришло на счёт"
+                      }
+                    >
+                      {money(t.pnl)}
+                      {t.fee > 0 && (
+                        <span className="ml-1 text-[10px] text-[var(--pane-muted)]">
+                          -{t.fee.toFixed(2)}
+                        </span>
+                      )}
+                    </td>
                     <td className="pl-2 text-right">
                       <button
                         onClick={() => drop(t.id)}

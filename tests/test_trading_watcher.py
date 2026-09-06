@@ -508,3 +508,37 @@ def test_leftover_goes_to_the_last_target():
 
     plan = split_ladder(0.0007, [101.0, 102.0, 103.0], step=0.0001, min_qty=0.0001)
     assert sum(size for _, size in plan) == pytest.approx(0.0007)
+
+
+# ── сколько целей взято на самом деле ───────────────────────────────────────
+
+def test_last_take_is_counted_even_though_it_closed_the_position():
+    """Третью цель журнал терял: позиции уже нет, считать по остатку нечем.
+
+    Смотрим на исполнения: цель пройдена, если сделка прошла по её цене или
+    дальше.
+    """
+    from backend.trading.watcher import takes_reached
+
+    fills = [
+        {"price": "101", "side": "sell"},
+        {"price": "102", "side": "sell"},
+        {"price": "103", "side": "sell"},
+    ]
+    assert takes_reached(fills, [101.0, 102.0, 103.0], "long") == 3
+
+
+def test_only_the_targets_the_market_reached_are_counted():
+    from backend.trading.watcher import takes_reached
+
+    fills = [{"price": "101.5", "side": "sell"}]
+    assert takes_reached(fills, [101.0, 102.0, 103.0], "long") == 1
+    assert takes_reached([], [101.0], "long") == 0
+    assert takes_reached(fills, [], "long") == 0
+
+
+def test_short_counts_downwards():
+    from backend.trading.watcher import takes_reached
+
+    fills = [{"price": "98.5", "side": "buy"}]
+    assert takes_reached(fills, [99.0, 98.0, 97.0], "short") == 1

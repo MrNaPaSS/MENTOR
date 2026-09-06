@@ -253,6 +253,9 @@ class ScalpTrade(Base):
     targets_json: Mapped[str] = mapped_column(Text, default="[]")
     outcome: Mapped[str] = mapped_column(String(8))            # stop | take | manual
     pnl: Mapped[float] = mapped_column(Numeric(20, 8), default=0)
+    # Комиссия сделки: обе ноги вместе. Без неё «плюс 519 на бирже, плюс 487 в
+    # журнале» выглядит расхождением данных, а это она и есть.
+    fee: Mapped[float] = mapped_column(Numeric(20, 8), default=0)
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     note: Mapped[str] = mapped_column(String(255), default="")
