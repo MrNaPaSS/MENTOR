@@ -371,10 +371,12 @@ async def open_position(
                     client_algo_id=f"tp{i + 1}_{body.client_order_id or ''}"[:32],
                 )
             except WeexTradeError as exc:
-                # Позиция уже открыта — цели доставит наблюдатель.
+                # Дальше по лестнице, а не наружу: отказ по одной цели не повод
+                # остаться без остальных. Цена могла уйти за первую - биржа
+                # такую заявку не примет, а вторая и третья ещё впереди.
                 logger.warning("Цель %d для %s не встала: %s", i + 1, symbol, exc)
-                warning = f"Цели поставит сопровождение: {exc}"
-                break
+                warning = f"Цель {i + 1} не встала: {exc}"
+                continue
             takes.append(order)
             placed.append(
                 {"price": price, "order_id": plan_order_id(order), "filled": False}

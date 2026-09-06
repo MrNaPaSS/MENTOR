@@ -396,8 +396,11 @@ class PositionWatcher:
                     client_algo_id=f"tp{i + 1}_{trade.client_id}"[:32],
                 )
             except WeexTradeError as exc:
+                # Дальше по лестнице, а не наружу: отказ по одной цели не повод
+                # оставлять сделку без остальных. Цена могла уйти за первую -
+                # биржа такую заявку не примет, а вторая и третья ещё впереди.
                 logger.warning("Цель %d %s не встала: %s", i + 1, trade.symbol, exc)
-                break
+                continue
             placed.append(
                 {"price": price, "order_id": plan_order_id(order), "filled": False}
             )
