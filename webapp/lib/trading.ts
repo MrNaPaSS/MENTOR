@@ -105,8 +105,14 @@ export function closePosition(trade: ActiveTrade, share: number) {
   );
 }
 
-/** Что из защиты реально стоит на бирже. */
-export type ExchangePlans = { stops: number; takes: number };
+/** Что из защиты реально стоит на бирже и по каким ценам. */
+export type ExchangePlans = {
+  stops: number;
+  takes: number;
+  /** Цена стопа с биржи. Своя цифра расходилась с ней на сотню пунктов. */
+  stop_price: number | null;
+  take_prices: number[];
+};
 
 /**
  * Спросить биржу, стоят ли стоп и цели.

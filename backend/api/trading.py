@@ -194,27 +194,66 @@ async def plans(
 
     stops = 0
     takes = 0
+    stop_price: float | None = None
+    take_prices: list[float] = []
     unknown: list[str] = []
     for order in orders:
         order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
         kind = str(order.get("planType") or order.get("type") or "").lower()
+        trigger = _trigger_price(order)
+
         if order_id and order_id in mine_takes:
             takes += 1
+            if trigger:
+                take_prices.append(trigger)
         elif order_id and order_id in mine_stops:
             stops += 1
+            stop_price = trigger or stop_price
         elif "profit" in kind or kind.endswith("tp"):
             takes += 1
+            if trigger:
+                take_prices.append(trigger)
         elif "stop" in kind or "loss" in kind or kind.endswith("sl"):
             stops += 1
+            stop_price = trigger or stop_price
         else:
             # Незнакомую заявку записываем в стопы: она чем-то да защищает, а
             # ложная тревога «целей нет» дороже незамеченной цели.
             unknown.append(kind or "без вида")
             stops += 1
+            stop_price = trigger or stop_price
 
     if unknown:
         logger.info("Условные заявки %s неизвестного вида: %s", sym, ", ".join(unknown))
-    return {"symbol": sym, "stops": stops, "takes": takes}
+    return {
+        "symbol": sym,
+        "stops": stops,
+        "takes": takes,
+        # Цены, по которым защита реально стоит. Терминал рисует их вместо
+        # собственных: своя цифра безубытка расходилась с биржевой на сотню
+        # пунктов, а стоп к тому времени уже стоял в третьем месте.
+        "stop_price": stop_price,
+        "take_prices": sorted(take_prices),
+    }
+
+
+def _trigger_price(order: dict[str, Any]) -> float | None:
+    """Цена срабатывания условной заявки. Имя поля у биржи своё."""
+    for name in (
+        "triggerPrice",
+        "stopPrice",
+        "triggerPx",
+        "executePrice",
+        "planPrice",
+        "price",
+    ):
+        try:
+            value = float(order.get(name))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            return value
+    return None
 
 
 @router.get("/limits/{symbol}")

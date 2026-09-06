@@ -264,6 +264,28 @@ class ScalpTrade(Base):
     student: Mapped["Student"] = relationship()
 
 
+class ChartShot(Base):
+    """Снимок графика, которым делятся ссылкой.
+
+    Картинка лежит файлом, здесь только то, что нужно странице: чей снимок, по
+    какому инструменту и когда сделан. Ссылку открывают посторонние - имени
+    ученика и монеты им достаточно, остального они знать не должны.
+    """
+
+    __tablename__ = "chart_shots"
+
+    # Идентификатор в ссылке: короткий и непредсказуемый. По порядковому номеру
+    # чужие снимки перебирались бы один за другим.
+    id: Mapped[str] = mapped_column(String(22), primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    symbol: Mapped[str] = mapped_column(String(32))
+    interval: Mapped[str] = mapped_column(String(8), default="1m")
+    note: Mapped[str] = mapped_column(String(140), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    student: Mapped["Student"] = relationship()
+
+
 class ScalpWorkspace(Base):
     """Сохранённый шаблон рабочего места скальпера.
 
@@ -345,4 +367,4 @@ class LiveTrade(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "WeexCredential", "LiveTrade", "utcnow"]
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "utcnow"]

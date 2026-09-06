@@ -53,6 +53,7 @@ import {
   plansOf,
   positionOf,
   tradingStatus,
+  type ExchangePlans,
   type SymbolLimits,
   type TradingStatus,
 } from "@/lib/trading";
@@ -288,7 +289,7 @@ export default function ScalpingPage() {
   // Что из защиты реально стоит на бирже. График рисует цели по замыслу
   // сделки, и когда биржа их не приняла, картинка успокаивает вместо того,
   // чтобы предупредить.
-  const [plans, setPlans] = useState<{ stops: number; takes: number } | null>(null);
+  const [plans, setPlans] = useState<ExchangePlans | null>(null);
 
   // Пределы монеты: потолок плеча и комиссия. У большинства монет биржи
   // плечо упирается в ×20 или ×50, а кнопки предлагают до ×400 - без этого
@@ -1015,7 +1016,22 @@ export default function ScalpingPage() {
       }
       try {
         const body = await plansOf(symbol!);
-        if (!cancelled) setPlans(body);
+        if (cancelled || !body) return;
+        setPlans(body);
+
+        // Стоп на графике - тот, что стоит на бирже. Свой мы считали формулой,
+        // и после второй цели он оказывался в третьем месте: на графике одно,
+        // в заявке другое, а в голове у трейдера третье.
+        const at = body.stop_price;
+        if (at && at > 0) {
+          setTrades((list) =>
+            list.map((t) =>
+              t.symbol === symbol && t.status === "open" && Math.abs(t.stop - at) > at * 0.0001
+                ? { ...t, stop: at }
+                : t,
+            ),
+          );
+        }
       } catch {
         // Биржа не ответила - молчим, а не пугаем понапрасну.
       }
