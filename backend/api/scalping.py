@@ -13,7 +13,9 @@ import time
 from dataclasses import asdict
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+
+from backend.deps import require_scalping
 
 from backend.scalping.clusters import fit_to_rows
 from backend.scalping.collector import ScalpingCollector
@@ -27,7 +29,14 @@ from backend.scalping.state import (
     liquidity_shelves,
 )
 
-router = APIRouter(prefix="/api/scalping", tags=["scalping"])
+# Весь раздел закрыт: он работает с живыми деньгами, и до готовности открыт
+# только ментору и тем, кого он допустил. Проверка на каждом запросе, а не
+# только в интерфейсе — спрятанная кнопка не мешает открыть адрес руками.
+router = APIRouter(
+    prefix="/api/scalping",
+    tags=["scalping"],
+    dependencies=[Depends(require_scalping)],
+)
 
 
 def get_collector(request: Request) -> ScalpingCollector:

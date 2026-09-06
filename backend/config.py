@@ -38,6 +38,10 @@ class BackendConfig:
     # постоянное соединение и заметный поток данных, включать осознанно.
     scalping_enabled: bool = False
     scalping_top_n: int = 30
+    # Кому открыт скальпинг-терминал: список tg_id или weex_uid через запятую.
+    # Пусто — только ментор. Раздел работает с живыми деньгами, и открывать его
+    # всем подряд до готовности нельзя.
+    scalping_allowed: tuple[str, ...] = ()
 
 
     @staticmethod
@@ -64,6 +68,11 @@ class BackendConfig:
             admin_tg_id=int(os.getenv("ADMIN_TG_ID", "0") or "0"),
             scalping_enabled=os.getenv("SCALPING_ENABLED", "false").lower() == "true",
             scalping_top_n=int(os.getenv("SCALPING_TOP_N", "30") or "30"),
+            scalping_allowed=tuple(
+                part.strip()
+                for part in (os.getenv("SCALPING_ALLOWED", "") or "").split(",")
+                if part.strip()
+            ),
             rate_limit_max=int(os.getenv("RATE_LIMIT_MAX", "10")),
             rate_limit_window=int(os.getenv("RATE_LIMIT_WINDOW", "900")),
             service_api_key=os.getenv("SERVICE_API_KEY", ""),

@@ -9,23 +9,34 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
 from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student
-from backend.deps import get_session, get_current_student, get_weex
+from backend.config import BackendConfig
+from backend.deps import (
+    get_config,
+    get_current_student,
+    get_session,
+    get_weex,
+    scalping_allowed,
+)
 from backend.schemas import ProfileOut, ProfilePatch, AnalyticsMe
 
 router = APIRouter(prefix="/api", tags=["profile"])
 
 
-def _profile(s: Student) -> ProfileOut:
+def _profile(s: Student, config: BackendConfig | None = None) -> ProfileOut:
     return ProfileOut(
         id=s.id, username=s.username, weex_uid=s.weex_uid, mode=s.mode,
         language=s.language, risk_percent=s.risk_percent, turbo_leverage=s.turbo_leverage,
         balance_usdt=s.balance_usdt, balance_source=s.balance_source,
+        scalping=scalping_allowed(s, config) if config else False,
     )
 
 
 @router.get("/profile", response_model=ProfileOut)
-def get_profile(student: Student = Depends(get_current_student)):
-    return _profile(student)
+def get_profile(
+    student: Student = Depends(get_current_student),
+    config: BackendConfig = Depends(get_config),
+):
+    return _profile(student, config)
 
 
 @router.patch("/profile", response_model=ProfileOut)

@@ -305,30 +305,9 @@ class PositionWatcher:
             logger.info("Цель взята: %s, всего %d", trade.symbol, trade.takes_hit)
 
         if decision.move_stop_to is not None:
-            order_id = trade.sl_order_id or await self._find_stop_order(client, trade)
-            if not order_id:
-                logger.warning("Стоп-ордер %s не найден на бирже", trade.symbol)
-            else:
-                try:
-                    await client.modify_tp_sl(
-                        symbol=trade.symbol,
-                        order_id=order_id,
-                        trigger_price=num(decision.move_stop_to),
-                    )
-                    trade.sl_order_id = order_id
-                    trade.current_stop = decision.move_stop_to
-                    changed = True
-                    logger.info(
-                        "Стоп %s переставлен на %s после %d целей",
-                        trade.symbol,
-                        decision.move_stop_to,
-                        trade.takes_hit,
-                    )
-                except WeexTradeError as exc:
-                    # Не переставился — сделка остаётся с прежним стопом. Записать
-                    # в базу перенос, которого не было, значит соврать себе же на
-                    # следующем обходе.
-                    logger.warning("Стоп %s не переставлен: %s", trade.symbol, exc)
+            if await self._set_stop(client, trade, decision.move_stop_to):
+                trade.current_stop = decision.move_stop_to
+                changed = True
 
         if decision.closed:
             trade.status = "closed"
@@ -391,6 +370,88 @@ class PositionWatcher:
         trade.tp_orders_json = json.dumps(placed, ensure_ascii=False)
         logger.info("Цели выставлены: %s, %d шт.", trade.symbol, len(placed))
         return True
+
+    async def _set_stop(self, client: WeexFutures, trade: LiveTrade, price: float) -> bool:
+        """Поставить стоп на новую цену: снять старый и выставить новый.
+
+        Не «передвинуть»: стоп, приехавший вместе со входом, биржа заводит сама,
+        и его идентификатор в ответе на ордер не приходит. Угадывать его по
+        названию типа заявки — та самая ошибка, из-за которой стоп оставался на
+        прежней цене после взятой цели.
+
+        Порядок именно такой: сначала новый, потом снятие старого. Наоборот —
+        это окно, в котором позиция стоит вообще без защиты.
+        """
+        filters = await client.symbol_filters(trade.symbol)
+        size = float(trade.qty)
+        try:
+            positions = await client.positions()
+            for row in positions:
+                if str(row.get("symbol", "")).upper() == trade.symbol.upper():
+                    size = position_size(row) or size
+                    break
+        except WeexTradeError:
+            pass
+
+        quantity = floor_to_step(size, filters["step"])
+        if quantity < filters["min_qty"]:
+            logger.warning("Стоп %s не поставлен: нечего защищать", trade.symbol)
+            return False
+
+        long = trade.side == "long"
+        try:
+            placed = await client.place_tp_sl(
+                symbol=trade.symbol,
+                plan_type="STOP_LOSS",
+                trigger_price=num(round_to_tick(price, filters["tick"])),
+                quantity=num(quantity),
+                position_side="LONG" if long else "SHORT",
+                client_algo_id=f"sl{trade.takes_hit}_{trade.client_id}"[:32],
+            )
+        except WeexTradeError as exc:
+            # Не встал — старый остаётся на месте. Это хуже, чем хотелось, но
+            # честнее, чем снять защиту и не поставить новую.
+            logger.warning("Стоп %s не поставлен: %s", trade.symbol, exc)
+            return False
+
+        fresh = plan_order_id(placed)
+        await self._drop_old_stops(client, trade, keep=fresh)
+        trade.sl_order_id = fresh
+        logger.info(
+            "Стоп %s переставлен на %s после %d целей", trade.symbol, price, trade.takes_hit
+        )
+        return True
+
+    async def _drop_old_stops(self, client: WeexFutures, trade: LiveTrade, keep: str) -> None:
+        """Снять прежние стопы, оставив только что поставленный.
+
+        Цели не трогаем: они тоже условные заявки, и снять их значит остаться
+        без лестницы.
+        """
+        takes = {
+            str(t.get("order_id") or "")
+            for t in json.loads(trade.tp_orders_json or "[]")
+        }
+        try:
+            orders = await client.algo_orders(trade.symbol)
+        except WeexTradeError as exc:
+            logger.warning("Старые стопы %s не сняты: %s", trade.symbol, exc)
+            return
+
+        for order in orders:
+            order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
+            if not order_id or order_id == keep or order_id in takes:
+                continue
+            kind = str(order.get("planType") or order.get("type") or "").lower()
+            # Заявку неизвестного вида не трогаем: снять чужую цель дороже, чем
+            # оставить лишний стоп.
+            if "profit" in kind or "tp" in kind:
+                continue
+            try:
+                await client.cancel_algo_order(trade.symbol, order_id)
+                logger.info("Снят прежний стоп %s по %s", order_id, trade.symbol)
+            except WeexTradeError as exc:
+                logger.warning("Прежний стоп %s не снят: %s", order_id, exc)
 
     async def _find_stop_order(self, client: WeexFutures, trade: LiveTrade) -> str:
         """Найти стоп этой позиции среди условных заявок.

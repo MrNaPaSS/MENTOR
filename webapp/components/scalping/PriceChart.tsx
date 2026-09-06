@@ -295,9 +295,9 @@ function tradeBoxes(
       bottom: Math.min(trade.entry, risk),
       fill: trade.breakeven ? palette.spentBox : palette.riskBox,
       border: trade.breakeven ? palette.spentBorder : palette.riskBorder,
-      // Подпись стоит на самом боксе, а не в плашке результата: в плашке
-      // должна быть только сумма, её читают на бегу.
-      label: trade.breakeven ? "б/у" : undefined,
+      // На самом боксе — что он теперь значит. Цену безубытка подписывает
+      // линия: она стоит ровно там, где стоп.
+      label: trade.breakeven ? "риск снят" : undefined,
       labelColor: palette.text,
     },
   ];
@@ -951,15 +951,15 @@ function PriceChart({
 
     const targets = pendingTargets(trade);
 
-    // После первой цели стоп стоит ровно на входе, и две линии совпадают.
-    // Рисуем одну и подписываем её безубытком: две плашки на одной цене
-    // перекрывают друг друга и читаются как сбой.
-    if (trade.breakeven) {
-      tradeLinesRef.current.push(line(trade.entry, palette.mtf, "вход · б/у", 0));
-    } else {
-      tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
-      tradeLinesRef.current.push(line(trade.stop, palette.askLine, "стоп", 2));
-    }
+    // Вход и стоп — разные цены даже в безубытке: биржа считает его с учётом
+    // комиссии и реального исполнения, и это на десятки пунктов от входа.
+    // Подпись «б/у» должна стоять там, где стоп стоит на самом деле.
+    tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
+    tradeLinesRef.current.push(
+      trade.breakeven
+        ? line(trade.stop, palette.mtf, "б/у", 2)
+        : line(trade.stop, palette.askLine, "стоп", 2),
+    );
     targets.forEach((price, i) => {
       tradeLinesRef.current.push(line(price, palette.bidLine, `тейк ${trade.takesHit + i + 1}`, 2));
     });

@@ -14,6 +14,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import scalping as scalping_api
+from backend.config import BackendConfig
+from backend.deps import require_scalping
+from backend.security import create_access_token
+
+# Раздел закрыт для всех, кроме ментора и допущенных: сокет проверяет токен из
+# адреса, поэтому в тестах он настоящий.
+TEST_SECRET = "секрет-для-тестов"
+MENTOR_TOKEN = create_access_token("1", "mentor", TEST_SECRET, 3600)
 from backend.scalping.ladder import build_ladder, detect_tick, group
 from backend.scalping.metrics import Level
 from backend.scalping.state import MarketState
@@ -77,6 +85,19 @@ def app_and_collector():
     app.include_router(ws_routes.router)
     app.state.scalping = collector
     app.state.scalping_hub = ScalpingHub(collector)  # type: ignore[arg-type]
+    # Доступ к разделу проверяется отдельно — здесь он не предмет теста.
+    app.dependency_overrides[require_scalping] = lambda: None
+    # Сокету зависимости не подменить: он читает настройки приложения и токен
+    # из адреса, поэтому здесь настоящие и то, и другое.
+    app.state.config = BackendConfig(
+        jwt_secret=TEST_SECRET,
+        access_ttl_seconds=3600,
+        refresh_ttl_seconds=3600,
+        weex_use_mock=True,
+        code_ttl_seconds=300,
+        max_code_attempts=3,
+        expose_codes=False,
+    )
     return app, collector
 
 
@@ -150,6 +171,7 @@ def test_endpoints_are_503_without_collector():
     """Если сбор выключен, эндпоинты честно говорят об этом, а не падают."""
     app = FastAPI()
     app.include_router(scalping_api.router)
+    app.dependency_overrides[require_scalping] = lambda: None
     app.state.scalping = None
     with TestClient(app) as client:
         assert client.get("/api/scalping/screener").status_code == 503
@@ -160,7 +182,7 @@ def test_endpoints_are_503_without_collector():
 def test_ws_sends_frames_and_pins_symbol(app_and_collector):
     app, collector = app_and_collector
     with TestClient(app) as client:
-        with client.websocket_connect("/ws/scalping") as ws:
+        with client.websocket_connect(f"/ws/scalping?token={MENTOR_TOKEN}") as ws:
             assert ws.receive_json()["event"] == "hello"
             ws.send_json({"action": "symbol", "symbol": "BTCUSDT", "rows": 10, "agg": 1})
 
@@ -173,7 +195,7 @@ def test_ws_unpins_on_disconnect(app_and_collector):
     """Клиент ушёл — инструмент отпускается, иначе он копится в наблюдении."""
     app, collector = app_and_collector
     with TestClient(app) as client:
-        with client.websocket_connect("/ws/scalping") as ws:
+        with client.websocket_connect(f"/ws/scalping?token={MENTOR_TOKEN}") as ws:
             ws.receive_json()
             ws.send_json({"action": "symbol", "symbol": "BTCUSDT"})
             ws.receive_json()
@@ -186,7 +208,7 @@ def test_ws_closes_when_scalping_disabled():
     app.state.scalping_hub = None
     with TestClient(app) as client:
         with pytest.raises(Exception):
-            with client.websocket_connect("/ws/scalping") as ws:
+            with client.websocket_connect(f"/ws/scalping?token={MENTOR_TOKEN}") as ws:
                 ws.receive_json()
 
 

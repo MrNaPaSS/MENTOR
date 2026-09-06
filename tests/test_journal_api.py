@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import journal as journal_api
-from backend.deps import get_current_student, get_session
+from backend.deps import get_current_student, get_session, require_scalping
 from core.db import Base
 from core.models import Student
 
@@ -42,6 +42,8 @@ def client():
     app.include_router(journal_api.router)
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_current_student] = lambda: student
+    # Доступ к разделу проверяется отдельно — здесь он не предмет теста.
+    app.dependency_overrides[require_scalping] = lambda: student
 
     with TestClient(app) as c:
         yield c

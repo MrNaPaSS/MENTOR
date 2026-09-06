@@ -20,9 +20,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from core.models import ScalpTrade, ScalpWorkspace, Student, utcnow
-from backend.deps import get_current_student, get_session
+from backend.deps import get_current_student, get_session, require_scalping
 
-router = APIRouter(prefix="/api/journal", tags=["journal"])
+router = APIRouter(
+    prefix="/api/journal",
+    tags=["journal"],
+    dependencies=[Depends(require_scalping)],
+)
 
 # Сколько сделок отдаём за раз. Скальпер делает десятки сделок в день, и без
 # потолка ответ вырастет до мегабайтов на длинной истории.
