@@ -43,7 +43,7 @@ export default function LoginPage() {
       const tokens = await api.loginByUid(uid.trim());
       setStudentTokens(tokens.access_token, tokens.refresh_token);
       setSuccess(true);
-      setTimeout(() => window.location.href = "/app/dashboard", 700);
+      setTimeout(() => window.location.href = "/app/analysis", 700);
       return;
     } catch {
       // UID не зарегистрирован или другая ошибка - пробуем OTP-путь.
@@ -67,7 +67,7 @@ export default function LoginPage() {
       const tokens = await api.verify(uid.trim(), fullCode);
       setStudentTokens(tokens.access_token, tokens.refresh_token);
       setSuccess(true);
-      setTimeout(() => window.location.href = "/app/dashboard", 700);
+      setTimeout(() => window.location.href = "/app/analysis", 700);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Неверный код");
       setLoading(false);

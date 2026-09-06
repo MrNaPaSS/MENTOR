@@ -228,7 +228,7 @@ python migrate_academy_link.py
 |---|---|
 | Магазин (баланс монет в шапке) | `https://www.nmnh.trade/app/shop` |
 | Профиль | `https://www.nmnh.trade/app/profile` |
-| Дашборд | `https://www.nmnh.trade/app/dashboard` |
+| Анализы (главная кабинета) | `https://www.nmnh.trade/app/analysis` |
 
 Вход в кабинет — по WEEX UID на `https://www.nmnh.trade`. Ученик, заведённый
 из академии, войдёт по тому же UID и увидит накопленные монеты.

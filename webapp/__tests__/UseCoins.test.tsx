@@ -36,7 +36,7 @@ describe("useCoins", () => {
   it("перезапрашивает при смене раздела", async () => {
     const f = mockCoins([195, 255]);
     const { result, rerender } = renderHook(({ k }) => useCoins(k), {
-      initialProps: { k: "/app/dashboard" },
+      initialProps: { k: "/app/analysis" },
     });
     await waitFor(() => expect(result.current.coins).toBe(195));
 

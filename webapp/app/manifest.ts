@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "NMNH",
     description: "Персональные торговые сигналы под твой депозит. Реальный расчёт, риск под контролем.",
     lang: "ru",
-    start_url: "/app/dashboard",
+    start_url: "/app/analysis",
     scope: "/",
     display: "standalone",
     orientation: "portrait",

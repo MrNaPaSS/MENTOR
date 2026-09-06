@@ -39,7 +39,7 @@ export default function DevBar() {
         window.location.href = "/admin";
       } else {
         setStudentTokens(res.student.access_token, res.student.refresh_token);
-        window.location.href = "/app/dashboard";
+        window.location.href = "/app/analysis";
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Dev-вход недоступен");

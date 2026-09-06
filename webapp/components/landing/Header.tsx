@@ -55,7 +55,7 @@ export default function Header() {
         {/* Действия справа */}
         <div className="hidden items-center gap-2 md:flex">
           {authed ? (
-            <Link href="/app/dashboard" className="btn-primary">
+            <Link href="/app/analysis" className="btn-primary">
               Кабинет <ArrowRight className="h-4 w-4" />
             </Link>
           ) : (
@@ -113,7 +113,7 @@ export default function Header() {
           ))}
           <div className="mt-auto">
             {authed ? (
-              <Link href="/app/dashboard" className="btn-primary w-full">
+              <Link href="/app/analysis" className="btn-primary w-full">
                 Кабинет <ArrowRight className="h-4 w-4" />
               </Link>
             ) : (

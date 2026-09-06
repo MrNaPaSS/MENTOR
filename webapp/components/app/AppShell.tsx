@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
   BarChart3,
   Globe,
   Tv,
@@ -27,7 +26,8 @@ import { fmtUsd, modeLabel } from "@/lib/format";
 import MarketTicker from "@/components/market/MarketTicker";
 
 const NAV = [
-  { href: "/app/dashboard", label: "Дашборд", icon: LayoutDashboard, mobile: true },
+  // Анализы — главный раздел: с них начинается работа ученика. Дашборд убран,
+  // его содержимое дублировало то, что и так видно в аналитике и профиле.
   { href: "/app/analysis", label: "Анализы", icon: ImageIcon, mobile: true },
   { href: "/app/market", label: "Рынок", icon: Globe, mobile: true },
   { href: "/app/scalping", label: "Скальпинг", icon: Waves, mobile: false },
