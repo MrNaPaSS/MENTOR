@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import logging
 from dataclasses import asdict
 
@@ -43,6 +44,8 @@ class Subscription:
         self.agg: int = 1
         self.sort: str = DEFAULT_SORT
         self.shelf: float = SHELF_MIN_NOTIONAL
+        # Таймфрейм графика: по нему складывается живая свеча.
+        self.interval: str = "1m"
         self.screener: bool = True
 
 
@@ -86,7 +89,13 @@ class ScalpingHub:
             await self.collector.unpin(sub.symbol)
 
     async def set_symbol(
-        self, ws, symbol: str | None, rows: int, agg: int, shelf: float
+        self,
+        ws,
+        symbol: str | None,
+        rows: int,
+        agg: int,
+        shelf: float,
+        interval: str = "1m",
     ) -> None:
         """Переключить клиента на другой стакан.
 
@@ -99,7 +108,7 @@ class ScalpingHub:
             return
 
         old, new = sub.symbol, symbol.upper() if symbol else None
-        sub.rows, sub.agg, sub.shelf = rows, agg, shelf
+        sub.rows, sub.agg, sub.shelf, sub.interval = rows, agg, shelf, interval
         if old == new:
             return
 
@@ -144,7 +153,7 @@ class ScalpingHub:
         # Десять человек на биткойне с одинаковыми настройками это один расчёт
         # лестницы за такт, а не десять: собрать стакан дороже, чем отправить.
         screener_cache: dict[str, dict] = {}
-        dom_cache: dict[tuple[str, int, int, float], dict | None] = {}
+        dom_cache: dict[tuple[str, int, int, float, str], dict | None] = {}
         dead: list[object] = []
 
         for ws, sub in targets:
@@ -156,7 +165,7 @@ class ScalpingHub:
                         screener_cache[sub.sort] = frame
                     await ws.send_json({"event": "screener", "payload": frame})
                 if sub.symbol:
-                    key = (sub.symbol, sub.rows, sub.agg, sub.shelf)
+                    key = (sub.symbol, sub.rows, sub.agg, sub.shelf, sub.interval)
                     if key in dom_cache:
                         dom = dom_cache[key]
                     else:
@@ -191,7 +200,45 @@ class ScalpingHub:
             "wall": asdict(wall) if wall else None,
             "shelves": [asdict(s) for s in liquidity_shelves(state, min_notional=sub.shelf)],
             "clusters": _clusters(state, ladder, step),
+            # Живая свеча из ленты сделок: график рисует её сразу, не дожидаясь
+            # следующего опроса истории.
+            "candle": _live_candle(state, sub.interval),
         }
+
+
+# Секунды в таймфрейме графика.
+INTERVAL_SECONDS = {
+    "1m": 60,
+    "3m": 180,
+    "5m": 300,
+    "15m": 900,
+    "30m": 1800,
+    "1h": 3600,
+}
+
+
+def _live_candle(state, interval: str) -> dict | None:
+    """Текущая свеча по ленте сделок.
+
+    Только для таймфреймов не длиннее часа: за более крупными мы не храним
+    столько секунд, и они прекрасно доезжают историей по REST.
+    """
+    if state.candles is None:
+        return None
+    seconds = INTERVAL_SECONDS.get(interval)
+    if not seconds:
+        return None
+    candle = state.candles.current(seconds, int(time.time() * 1000))
+    if candle is None:
+        return None
+    return {
+        "time": candle.time,
+        "open": candle.open,
+        "high": candle.high,
+        "low": candle.low,
+        "close": candle.close,
+        "volume": candle.volume,
+    }
 
 
 def _clusters(state, ladder, step) -> list[dict]:

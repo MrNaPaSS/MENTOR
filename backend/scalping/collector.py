@@ -24,6 +24,7 @@ import time
 import aiohttp
 
 from backend.scalping.binance import BinanceRest, StreamClient
+from backend.scalping.candles import LiveCandles
 from backend.scalping.clusters import ClusterHistory
 from backend.scalping.ladder import detect_tick
 from backend.scalping.state import BAND_BP, MarketState
@@ -271,6 +272,8 @@ class ScalpingCollector:
             await self._set_depth_rate(sym, fast=True)
 
         state = self.state.ensure(sym)
+        if state.candles is None:
+            state.candles = LiveCandles()
         if state.clusters is None:
             # Шаг берём у биржи и больше не меняем: под экран история
             # схлопывается при отдаче, а не при записи.
@@ -289,6 +292,7 @@ class ScalpingCollector:
         state = self.state.get(sym)
         if state:
             state.clusters = None
+            state.candles = None
         await self._set_depth_rate(sym, fast=False)
 
     # ── синхронизация книги ─────────────────────────────────────────────────
@@ -360,6 +364,8 @@ class ScalpingCollector:
             # m=true — покупатель стоял лимитом, значит по рынку бил продавец.
             is_buy = not bool(data.get("m", True))
             state.tape.add(ts, price, qty, is_buy)
+            if state.candles is not None:
+                state.candles.add(ts, price, qty)
             if state.clusters is not None:
                 if state.clusters.tick <= 0:
                     state.clusters.ensure_tick(detect_tick(state.book))

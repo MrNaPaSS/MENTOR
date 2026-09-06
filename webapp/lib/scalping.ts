@@ -66,6 +66,21 @@ export type DomFrame = {
   /** Полки ликвидности: уровни с деньгами от выбранного трейдером порога. */
   shelves: Wall[];
   clusters: ClusterColumn[];
+  /**
+   * Текущая свеча, собранная из ленты сделок.
+   *
+   * Приходит с каждым кадром стакана — восемь раз в секунду. История свечей
+   * по-прежнему тянется по REST, но текущая рисуется сразу, а не с задержкой
+   * до следующего опроса.
+   */
+  candle: {
+    time: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  } | null;
 };
 
 export type SortKey =
@@ -111,6 +126,8 @@ type Options = {
   sort: SortKey;
   /** Порог полки ликвидности в деньгах — считает его сервер. */
   shelf: number;
+  /** Таймфрейм графика: по нему сервер складывает живую свечу. */
+  interval: string;
 };
 
 // Последний список монет держим в сессии вкладки: при возврате в раздел он
@@ -129,7 +146,7 @@ function cachedScreener(): ScreenerRow[] {
   }
 }
 
-export function useScalpingFeed({ symbol, rows, agg, sort, shelf }: Options) {
+export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval }: Options) {
   const [screener, setScreener] = useState<ScreenerRow[]>([]);
   const [dom, setDom] = useState<DomFrame | null>(null);
   const [connected, setConnected] = useState(false);
@@ -139,8 +156,8 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf }: Options) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Настройки читаем из ref: пересоздавать соединение при смене шага сетки
   // незачем, достаточно отправить команду.
-  const optsRef = useRef({ symbol, rows, agg, sort, shelf });
-  optsRef.current = { symbol, rows, agg, sort, shelf };
+  const optsRef = useRef({ symbol, rows, agg, sort, shelf, interval });
+  optsRef.current = { symbol, rows, agg, sort, shelf, interval };
 
   const send = useCallback((message: object) => {
     const ws = socketRef.current;
@@ -175,6 +192,7 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf }: Options) {
               rows: o.rows,
               agg: o.agg,
               shelf: o.shelf,
+              interval: o.interval,
             }),
           );
         }
@@ -223,8 +241,8 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf }: Options) {
   // секунды останутся цены прошлой монеты.
   useEffect(() => {
     setDom(null);
-    send({ action: "symbol", symbol, rows, agg, shelf });
-  }, [symbol, rows, agg, shelf, send]);
+    send({ action: "symbol", symbol, rows, agg, shelf, interval });
+  }, [symbol, rows, agg, shelf, interval, send]);
 
   useEffect(() => {
     send({ action: "sort", sort });

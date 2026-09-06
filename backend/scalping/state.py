@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass, field
 
 from backend.scalping.book import OrderBook
+from backend.scalping.candles import LiveCandles
 from backend.scalping.clusters import ClusterHistory
 from backend.scalping.metrics import (
     Wall,
@@ -54,6 +55,10 @@ class SymbolState:
     # История прошедших объёмов. Заводится только когда инструмент открыт в
     # стакане: по всему списку скринера это сотни тысяч ячеек впустую.
     clusters: ClusterHistory | None = None
+
+    # Посекундная лента для живой свечи. Тоже только у открытого инструмента:
+    # график показывают по одному, а не по всему списку.
+    candles: LiveCandles | None = None
 
     def __post_init__(self) -> None:
         if self.book is None:

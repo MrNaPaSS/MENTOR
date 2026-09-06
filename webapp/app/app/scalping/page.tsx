@@ -257,7 +257,7 @@ export default function ScalpingPage() {
   const [screenerW, setScreenerW] = useState(PANE_LIMITS.screener.def);
   const [domW, setDomW] = useState(PANE_LIMITS.dom.def);
 
-  const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort, shelf });
+  const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort, shelf, interval: timeframe });
 
   // Цена для графика — три раза в секунду вместо восьми. Ярлык позиции и итог
   // сделки от этого не станут менее живыми, а перерисовку всего графика на
@@ -1093,6 +1093,7 @@ export default function ScalpingPage() {
                     trade && trade.symbol === symbol ? trade : preview
                   }
                   livePrice={chartPrice}
+                  liveCandle={dom?.candle ?? null}
                   onCloseTrade={() => setCloseOpen(true)}
                   showJournal={journalOpen}
                   journalKey={journalKey}

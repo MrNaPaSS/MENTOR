@@ -105,6 +105,7 @@ async def _handle_scalping_command(hub, websocket, message) -> None:
             shelf=_clamp_float(
                 message.get("shelf"), SHELF_MIN_NOTIONAL, SHELF_MIN_LIMIT, SHELF_MAX_LIMIT
             ),
+            interval=str(message.get("interval") or "1m")[:8],
         )
     elif action == "sort":
         sort = message.get("sort")

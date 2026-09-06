@@ -330,6 +330,7 @@ function PriceChart({
   theme,
   trade,
   livePrice,
+  liveCandle,
   onCloseTrade,
   showJournal,
   journalKey,
@@ -345,6 +346,13 @@ function PriceChart({
   trade: ActiveTrade | null;
   /** Последняя цена рынка: по ней считается плавающий результат. */
   livePrice: number;
+  /**
+   * Текущая свеча из ленты сделок, восемь раз в секунду.
+   *
+   * История приходит по REST раз в пять секунд, и без этого текущая свеча
+   * отставала от биржи ровно на это время — на скальпе это вечность.
+   */
+  liveCandle: Candle | null;
   /** Закрыть сделку по нажатию на ярлык позиции. */
   onCloseTrade?: () => void;
   /** Показывать отработанные сетапы из журнала прямо на графике. */
@@ -984,6 +992,37 @@ function PriceChart({
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
   }, [interval]);
+
+  // Живая свеча: дорисовываем последний бар по ленте сделок.
+  //
+  // Библиотека умеет обновлять последний бар одним вызовом, без пересборки
+  // ряда. Свечу с чужим временем игнорируем: она из другого таймфрейма,
+  // приехала между переключениями, и подставлять её в ряд нельзя.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series || !liveCandle) return;
+    const bars = dataRef.current;
+    const last = bars.at(-1);
+    if (!last) return;
+    if (liveCandle.time < last.time) return;
+
+    series.update({ ...liveCandle, time: liveCandle.time as UTCTimestamp });
+    if (cfg.volume) {
+      volumeRef.current?.update({
+        time: liveCandle.time as UTCTimestamp,
+        value: liveCandle.volume,
+        color:
+          liveCandle.close >= liveCandle.open
+            ? THEMES[themeRef.current].upVolume
+            : THEMES[themeRef.current].downVolume,
+      });
+    }
+
+    // Держим ряд в согласии с экраном: индикаторы считаются по нему, и без
+    // этого они отставали бы от нарисованной свечи.
+    if (liveCandle.time === last.time) bars[bars.length - 1] = liveCandle;
+    else bars.push(liveCandle);
+  }, [liveCandle, cfg.volume]);
 
   // Отработанные сетапы из журнала прямо на графике.
   //
