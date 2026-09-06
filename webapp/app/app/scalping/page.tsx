@@ -23,6 +23,7 @@ import {
   VolumeX,
   PanelLeftClose,
   PanelLeftOpen,
+  Star,
   Sun,
   Wifi,
   WifiOff,
@@ -241,6 +242,10 @@ type Workspace = {
   symbol: string | null;
   /** Отметки на ценах: пережидают перезагрузку вместе с остальными настройками. */
   alerts: PriceAlert[];
+  /** Избранные монеты: свой раздел наверху скринера. */
+  favorites: string[];
+  /** Показывать в скринере только избранное. */
+  onlyFavorites: boolean;
 };
 
 function readWorkspace(): Partial<Workspace> | null {
@@ -280,6 +285,9 @@ export default function ScalpingPage() {
 
   // Отметки на ценах: терминал скажет, когда уровень пересекут.
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  // Избранные монеты: свой раздел наверху и отдельный режим показа.
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
   // Уровень, по которому нажали в стакане: спрашиваем, что с ним делать.
   const [level, setLevel] = useState<LadderRow | null>(null);
 
@@ -454,6 +462,10 @@ export default function ScalpingPage() {
       setSound(saved.sound);
       setMuted(!saved.sound);
     }
+    if (Array.isArray(saved.favorites)) {
+      setFavorites(saved.favorites.filter((s) => typeof s === "string" && s));
+    }
+    if (typeof saved.onlyFavorites === "boolean") setOnlyFavorites(saved.onlyFavorites);
     if (Array.isArray(saved.alerts)) {
       setAlerts(
         saved.alerts.filter(
@@ -531,6 +543,8 @@ export default function ScalpingPage() {
       symbol,
       sound,
       alerts,
+      favorites,
+      onlyFavorites,
     } satisfies Workspace;
 
     try {
@@ -564,6 +578,8 @@ export default function ScalpingPage() {
     symbol,
     sound,
     alerts,
+    favorites,
+    onlyFavorites,
   ]);
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
@@ -1115,11 +1131,11 @@ export default function ScalpingPage() {
   const alertPrices = myAlerts.map((a) => a.price);
 
   /**
-   * Список для скринера: монеты с идущими сделками наверху.
+   * Список для скринера тремя разделами: сделки, избранное, остальное.
    *
-   * За позицией следят, а не ищут её в полусотне строк, и уж тем более не
-   * после того, как монета уехала вниз по обороту. Внутри групп порядок
-   * прежний - тот, что задан выбранной сортировкой.
+   * Наверху то, за чем следят: открытая позиция или ждущая заявка. Следом
+   * избранное - монеты, которые трейдер отобрал сам. Дальше поток по обороту.
+   * Внутри разделов порядок прежний, тот, что задан выбранной сортировкой.
    *
    * Монету, выпавшую из состава наблюдения, поднять неоткуда: её строки в
    * потоке просто нет. Разметка сделки при этом никуда не девается - она на
@@ -1129,11 +1145,20 @@ export default function ScalpingPage() {
     () => new Set(trades.filter((t) => t.status !== "closed").map((t) => t.symbol)),
     [trades],
   );
+  const starred = useMemo(() => new Set(favorites), [favorites]);
   const screenerRows = useMemo(() => {
-    if (traded.size === 0) return screener;
     const mine = screener.filter((r) => traded.has(r.symbol));
-    return mine.length === 0 ? screener : [...mine, ...screener.filter((r) => !traded.has(r.symbol))];
-  }, [screener, traded]);
+    const liked = screener.filter((r) => !traded.has(r.symbol) && starred.has(r.symbol));
+    if (onlyFavorites) return [...mine, ...liked];
+    const rest = screener.filter((r) => !traded.has(r.symbol) && !starred.has(r.symbol));
+    return [...mine, ...liked, ...rest];
+  }, [screener, traded, starred, onlyFavorites]);
+
+  const toggleFavorite = useCallback((sym: string) => {
+    setFavorites((list) =>
+      list.includes(sym) ? list.filter((s) => s !== sym) : [...list, sym],
+    );
+  }, []);
 
   // Сделки по открытой монете: их рисует график, остальные ждут своей.
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
@@ -1216,6 +1241,19 @@ export default function ScalpingPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-1 border-b border-[var(--pane-border)] px-2 py-2">
+            <button
+              onClick={() => setOnlyFavorites((v) => !v)}
+              title={
+                onlyFavorites
+                  ? "Показать все монеты"
+                  : "Показать только избранные и те, по которым идут сделки"
+              }
+              className={`${CHIP} mr-1 ${
+                onlyFavorites ? "text-[var(--pane-gold)]" : CHIP_OFF
+              }`}
+            >
+              <Star className="h-3 w-3" fill={onlyFavorites ? "currentColor" : "none"} />
+            </button>
             <span className="mr-1 text-[11px] text-[var(--pane-muted)]">Сортировка:</span>
             {(Object.keys(SORT_LABELS) as VisibleSortKey[]).map((key) => (
               <button
@@ -1235,6 +1273,8 @@ export default function ScalpingPage() {
               rows={screenerRows}
               selected={symbol}
               active={traded}
+              favorites={starred}
+              onToggleFavorite={toggleFavorite}
               sort={sort}
               onSort={setSort}
               onSelect={selectSymbol}

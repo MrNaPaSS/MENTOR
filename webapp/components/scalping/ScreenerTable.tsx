@@ -11,7 +11,7 @@
 // потом оборот. Сортировка — по клику на заголовок.
 
 import { memo } from "react";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, Star } from "lucide-react";
 import {
   base,
   money,
@@ -80,12 +80,24 @@ type Props = {
   selected: string | null;
   /** Монеты с идущими сделками: они стоят наверху и помечены. */
   active?: Set<string>;
+  /** Избранные монеты: свой раздел наверху и звезда в строке. */
+  favorites?: Set<string>;
+  onToggleFavorite?: (symbol: string) => void;
   sort: SortKey;
   onSort: (key: SortKey) => void;
   onSelect: (symbol: string) => void;
 };
 
-export default function ScreenerTable({ rows, selected, active, sort, onSort, onSelect }: Props) {
+export default function ScreenerTable({
+  rows,
+  selected,
+  active,
+  favorites,
+  onToggleFavorite,
+  sort,
+  onSort,
+  onSelect,
+}: Props) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-fixed border-collapse whitespace-nowrap text-[11px] tabular-nums">
@@ -122,6 +134,8 @@ export default function ScreenerTable({ rows, selected, active, sort, onSort, on
               row={row}
               selected={row.symbol === selected}
               mine={Boolean(active?.has(row.symbol))}
+              starred={Boolean(favorites?.has(row.symbol))}
+              onStar={onToggleFavorite}
               onSelect={onSelect}
             />
           ))}
@@ -139,12 +153,17 @@ const Row = memo(function Row({
   row,
   selected,
   mine,
+  starred,
+  onStar,
   onSelect,
 }: {
   row: ScreenerRow;
   selected: boolean;
   /** По этой монете идёт сделка. */
   mine: boolean;
+  /** Монета в избранном. */
+  starred: boolean;
+  onStar?: (symbol: string) => void;
   onSelect: (symbol: string) => void;
 }) {
   return (
@@ -162,6 +181,24 @@ const Row = memo(function Row({
           иначе длинные имена вроде MARSCOIN распирают строку на две. */}
       <td className="px-1.5 py-1.5">
         <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+          {onStar && (
+            <button
+              // Нажатие не должно открывать монету: звезда - отдельное
+              // действие, и промах по ней стоил бы смены инструмента.
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                onStar(row.symbol);
+              }}
+              title={starred ? "Убрать из избранного" : "В избранное"}
+              className={`shrink-0 self-center transition-colors duration-150 ease-out ${
+                starred
+                  ? "text-[var(--pane-gold)]"
+                  : "text-[var(--pane-muted)] opacity-40 hover:opacity-100"
+              }`}
+            >
+              <Star className="h-3 w-3" fill={starred ? "currentColor" : "none"} />
+            </button>
+          )}
           <span
             className={`w-[62px] shrink-0 overflow-hidden text-ellipsis font-semibold ${
               mine ? "text-[var(--pane-accent)]" : "text-[var(--pane-text)]"
