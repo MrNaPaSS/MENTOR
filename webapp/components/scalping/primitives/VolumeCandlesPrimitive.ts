@@ -62,38 +62,44 @@ class VolumeCandlesRenderer implements IPrimitivePaneRenderer {
     ) => void;
   }) {
     target.useBitmapCoordinateSpace(({ context, horizontalPixelRatio: hx, verticalPixelRatio: vy }) => {
+      // Толщина линий - ровно как у обычных свечей библиотеки: один пиксель
+      // экрана. Координаты кладём на сетку пикселей и сдвигаем на половину
+      // толщины: линия, попавшая между пикселями, размазывается сглаживанием
+      // на два-три и выглядит жирной, хотя задана тонкой.
+      const line = Math.max(1, Math.round(hx));
+      const half = line % 2 === 1 ? 0.5 : 0;
+
       for (const bar of this.bars) {
         const body = bar.rising ? this.palette.up : this.palette.down;
         const wick = bar.rising ? this.palette.upWick : this.palette.downWick;
-        const x = bar.x * hx;
-        const width = Math.max(1, bar.width * hx);
+        const x = Math.round(bar.x * hx) + half;
+        const width = Math.max(line, Math.round(bar.width * hx));
 
         // Фитиль по центру свечи и всегда тонкий: он говорит, куда цена
         // ходила, а не сколько за этим стояло денег.
         context.strokeStyle = wick;
-        context.lineWidth = Math.max(1, hx);
+        context.lineWidth = line;
         context.beginPath();
-        context.moveTo(x, bar.high * vy);
-        context.lineTo(x, bar.low * vy);
+        context.moveTo(x, Math.round(bar.high * vy));
+        context.lineTo(x, Math.round(bar.low * vy));
         context.stroke();
 
-        const top = Math.min(bar.open, bar.close) * vy;
-        const bottom = Math.max(bar.open, bar.close) * vy;
-        const height = Math.max(bottom - top, vy);
-        const left = x - width / 2;
+        const top = Math.round(Math.min(bar.open, bar.close) * vy);
+        const bottom = Math.round(Math.max(bar.open, bar.close) * vy);
+        const height = Math.max(bottom - top, line);
+        const left = Math.round(x - width / 2);
 
         context.fillStyle = body;
         // Доджи рисуем чертой: тело нулевой высоты просто исчезло бы.
         context.fillRect(left, top, width, height);
 
         const border = bar.rising ? this.palette.upBorder : this.palette.downBorder;
-        if (border) {
-          // Обводка внутрь: линия по краю прямоугольника съедала бы полпикселя
-          // с каждой стороны, и тонкие свечи выглядели бы толще соседей.
+        if (border && width > line * 2 && height > line * 2) {
+          // Обводка внутрь и по сетке: иначе она съедает по половине пикселя с
+          // каждой стороны, и тонкие свечи выглядят толще соседей.
           context.strokeStyle = border;
-          context.lineWidth = Math.max(1, hx);
-          const inset = context.lineWidth / 2;
-          context.strokeRect(left + inset, top + inset, Math.max(width - context.lineWidth, 0), Math.max(height - context.lineWidth, 0));
+          context.lineWidth = line;
+          context.strokeRect(left + half, top + half, width - line, height - line);
         }
       }
     });
