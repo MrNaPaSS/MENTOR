@@ -37,6 +37,7 @@ import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog"
 import JournalPanel from "@/components/scalping/JournalPanel";
 import { play, setMuted } from "@/lib/sound";
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
+import { setTerminalTheme } from "@/lib/terminalTheme";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
 import LevelMenu from "@/components/scalping/LevelMenu";
@@ -1162,6 +1163,13 @@ export default function ScalpingPage() {
 
   // Сделки по открытой монете: их рисует график, остальные ждут своей.
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
+
+  // Тема уезжает наружу: по ней светлеет оболочка сайта вокруг терминала.
+  // Белые панели на чёрной странице выглядят вырезанными из другого
+  // приложения.
+  useEffect(() => {
+    setTerminalTheme(theme);
+  }, [theme]);
 
   // Класс темы для рабочих панелей: стакан и график светлеют вместе.
   const pane = theme === "light" ? "pane-light" : "pane-dark";

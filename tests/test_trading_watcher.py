@@ -466,3 +466,45 @@ def test_fill_time_reads_any_of_the_names():
     assert fill_time({"time": 1700000000000}) == 1700000000000
     assert fill_time({"createdTime": "1700000000000"}) == 1700000000000
     assert fill_time({"unknown": 1}) == 0
+
+
+# ── лестница целей на маленькой позиции ─────────────────────────────────────
+
+def test_ladder_keeps_all_three_when_the_size_allows():
+    from backend.trading.watcher import split_ladder
+
+    plan = split_ladder(10.0, [101.0, 102.0, 103.0], step=0.001, min_qty=0.001)
+    assert [p for p, _ in plan] == [101.0, 102.0, 103.0]
+    assert [round(size, 6) for _, size in plan] == [3.0, 5.0, 2.0]
+    assert sum(size for _, size in plan) == pytest.approx(10.0)
+
+
+def test_small_position_gets_fewer_targets_but_gets_them():
+    """Раньше сделка оставалась с одним стопом: доля не набирала минимума.
+
+    Цели при этом были нарисованы на графике - трейдер видел лестницу, которой
+    на бирже нет. Мелкие доли теперь копятся до первой проходящей.
+    """
+    from backend.trading.watcher import split_ladder
+
+    # 0.0002 BTC при минимуме 0.0001: треть - это 0.00006, не проходит.
+    plan = split_ladder(0.0002, [101.0, 102.0, 103.0], step=0.0001, min_qty=0.0001)
+    assert plan, "лестница обязана быть хоть какой-то"
+    assert sum(size for _, size in plan) == pytest.approx(0.0002)
+    # Первая цель пропущена, объём ушёл дальше по лестнице.
+    assert plan[0][0] > 101.0
+
+
+def test_ladder_is_empty_only_when_even_the_whole_position_is_too_small():
+    from backend.trading.watcher import split_ladder
+
+    assert split_ladder(0.00005, [101.0, 102.0], step=0.0001, min_qty=0.0001) == []
+    assert split_ladder(0.0, [101.0], step=0.001, min_qty=0.001) == []
+
+
+def test_leftover_goes_to_the_last_target():
+    """Остаток и по замыслу её: последняя цель забирает всё, что осталось."""
+    from backend.trading.watcher import split_ladder
+
+    plan = split_ladder(0.0007, [101.0, 102.0, 103.0], step=0.0001, min_qty=0.0001)
+    assert sum(size for _, size in plan) == pytest.approx(0.0007)

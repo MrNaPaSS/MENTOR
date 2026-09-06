@@ -368,34 +368,30 @@ class PositionWatcher:
             return False
 
         filters = await client.symbol_filters(trade.symbol)
-        # Наименьшая из долей: если даже она не набирает шага лота, лестницу
-        # ставить нечем.
-        smallest = min(take_share(i, len(prices)) for i in range(len(prices)))
-        share = floor_to_step(float(trade.qty) * smallest, filters["step"])
-        if share < filters["min_qty"]:
-            # Объём не делится на цели — закрывать позицию будет стоп или сам
-            # трейдер. Молча оставить сделку без целей честнее, чем поставить
-            # одну на весь объём: расчёт был не такой.
-            logger.info("Объём %s не делится на цели, лестница не ставится", trade.symbol)
+        plan = split_ladder(
+            float(trade.qty), prices, filters["step"], filters["min_qty"]
+        )
+        if not plan:
+            # Даже вся позиция не набирает минимального объёма заявки -
+            # закрывать её будет стоп или сам трейдер.
+            logger.warning(
+                "Объём %s мал даже для одной цели, лестница не ставится", trade.symbol
+            )
             trade.targets_json = "[]"
             return True
 
         long = trade.side == "long"
         placed: list[dict[str, Any]] = []
-        for i, price in enumerate(prices):
+        for i, (price, size) in enumerate(plan):
             try:
                 # Условная заявка, а не сокращающий лимит: на позиции с висящей
-                # защитой биржа отвечает «cannot set reduce only» — свободного к
+                # защитой биржа отвечает «cannot set reduce only» - свободного к
                 # сокращению объёма у неё нет, он весь зарезервирован стопом.
                 order = await client.place_tp_sl(
                     symbol=trade.symbol,
                     plan_type="TAKE_PROFIT",
                     trigger_price=num(round_to_tick(price, filters["tick"])),
-                    quantity=num(
-                        floor_to_step(
-                            float(trade.qty) * take_share(i, len(prices)), filters["step"]
-                        )
-                    ),
+                    quantity=num(size),
                     position_side="LONG" if long else "SHORT",
                     client_algo_id=f"tp{i + 1}_{trade.client_id}"[:32],
                 )
@@ -409,6 +405,10 @@ class PositionWatcher:
         if not placed:
             return False
         trade.tp_orders_json = json.dumps(placed, ensure_ascii=False)
+        # Цели сделки - те, что реально стоят на бирже. Иначе стоп после первой
+        # прятался бы за ценой, которой на бирже нет, а журнал показывал бы
+        # замысел вместо сделки.
+        trade.targets_json = json.dumps([p["price"] for p in placed])
         logger.info("Цели выставлены: %s, %d шт.", trade.symbol, len(placed))
         return True
 
@@ -689,6 +689,38 @@ def settle(
         return derived, fee, price
 
     return reported, fee, price
+
+
+def split_ladder(
+    qty: float, prices: list[float], step: float, min_qty: float
+) -> list[tuple[float, float]]:
+    """Разложить объём позиции по целям: цена и объём каждой.
+
+    Доли лестницы - 30 / 50 / 20 процентов, но объём биржа принимает только
+    кратный шагу лота и не меньше минимального. На маленькой позиции доля в неё
+    не укладывается, и раньше лестница не ставилась вовсе: сделка оставалась с
+    одним стопом, хотя цели были нарисованы на графике.
+
+    Теперь мелкие доли копятся до первой, которая проходит: вместо трёх целей
+    получится две или одна, но они будут. Остаток достаётся последней - он и по
+    замыслу её: третья цель забирает всё, что осталось.
+    """
+    if qty <= 0 or not prices or step <= 0:
+        return []
+
+    plan: list[tuple[float, float]] = []
+    carry = 0.0
+    for i, price in enumerate(prices):
+        carry += qty * take_share(i, len(prices))
+        size = floor_to_step(carry, step)
+        if size >= min_qty:
+            plan.append((price, size))
+            carry -= size
+
+    if plan and carry > 0:
+        price, size = plan[-1]
+        plan[-1] = (price, floor_to_step(size + carry, step))
+    return plan
 
 
 def position_side(row: dict[str, Any] | None) -> str:

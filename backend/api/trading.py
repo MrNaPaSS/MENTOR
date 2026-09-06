@@ -31,10 +31,9 @@ from core.trading.position import (
     Position,
     breakeven_price,
     should_move_stop,
-    take_share,
 )
 from core.weex import keys as keystore
-from backend.trading.watcher import fill_time, position_for, settle
+from backend.trading.watcher import fill_time, position_for, settle, split_ladder
 from core.weex.futures import (
     public_filters,
     Credentials,
@@ -326,24 +325,19 @@ async def open_position(
     placed: list[dict[str, Any]] = []
     warning = ""
     # Доли целей неравные: первая снимает 30%, вторая 50%, последняя остаток.
-    # Проверяем наименьшую — если и она меньше шага лота, лестницу не ставим.
-    smallest = min(
-        (take_share(i, len(body.takes)) for i in range(len(body.takes))), default=0.0
-    )
-    share = floor_to_step(quantity * smallest, filters["step"])
+    # На маленькой позиции доля не набирает минимального объёма заявки, и
+    # мелкие доли копятся до первой проходящей: вместо трёх целей будет две или
+    # одна, но они будут - раньше сделка оставалась с одним стопом.
+    ladder = split_ladder(quantity, list(body.takes), filters["step"], filters["min_qty"])
 
-    if body.takes and not entry_price and share >= filters["min_qty"]:
-        for i, price in enumerate(body.takes):
+    if ladder and not entry_price:
+        for i, (price, size) in enumerate(ladder):
             try:
                 order = await client.place_tp_sl(
                     symbol=symbol,
                     plan_type="TAKE_PROFIT",
                     trigger_price=_num(round_to_tick(price, filters["tick"])),
-                    quantity=_num(
-                        floor_to_step(
-                            quantity * take_share(i, len(body.takes)), filters["step"]
-                        )
-                    ),
+                    quantity=_num(size),
                     position_side=position_side,
                     client_algo_id=f"tp{i + 1}_{body.client_order_id or ''}"[:32],
                 )
@@ -373,7 +367,10 @@ async def open_position(
     live.entry = entry_price or 0.0
     live.initial_stop = stop_price
     live.current_stop = stop_price
-    live.targets_json = json.dumps(body.takes)
+    # Цели сделки - те, что реально встали на бирже. Если вход лимитный, их
+    # ещё нет: тогда запоминаем замысел, а сопровождение перепишет его тем, что
+    # поставит само.
+    live.targets_json = json.dumps([p["price"] for p in placed] if placed else body.takes)
     live.tp_orders_json = json.dumps(placed, ensure_ascii=False)
     live.qty = quantity
     live.leverage = body.leverage
