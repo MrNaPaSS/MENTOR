@@ -189,3 +189,31 @@ def test_workspace_round_trip(client):
 def test_oversized_workspace_is_rejected(client):
     huge = {"junk": "я" * 20_000}
     assert client.put("/api/journal/workspace", json=huge).status_code == 413
+
+
+def test_new_field_is_added_to_an_existing_table(tmp_path):
+    """Поле, появившееся в модели позже, должно доехать до старой базы.
+
+    create_all умеет только создавать таблицы целиком. Без дополнения схемы
+    первый же запрос падает с «нет такой колонки», и журнал перестаёт
+    открываться — ровно это и случилось на боевой базе.
+    """
+    import sqlite3
+
+    import core.db as db
+
+    path = tmp_path / "old.sqlite3"
+    con = sqlite3.connect(path)
+    con.execute(
+        "CREATE TABLE scalp_workspaces (id INTEGER PRIMARY KEY, student_id INTEGER)"
+    )
+    con.commit()
+    con.close()
+
+    db.init_engine(f"sqlite:///{path}")
+    db.create_all()
+
+    con = sqlite3.connect(path)
+    columns = {row[1] for row in con.execute("PRAGMA table_info(scalp_workspaces)")}
+    con.close()
+    assert {"payload", "updated_at"} <= columns

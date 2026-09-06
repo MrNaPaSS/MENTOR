@@ -6,6 +6,7 @@ URL берётся из ``DATABASE_URL`` (см. .env.example). SQLAlchemy абс
 
 from __future__ import annotations
 
+import logging
 import os
 
 from sqlalchemy import create_engine
@@ -94,6 +95,48 @@ def _migrate_add_columns(engine) -> None:
                     conn.commit()
                 except Exception:
                     pass
+
+        _add_missing_columns(conn, inspector, engine)
+
+
+def _add_missing_columns(conn, inspector, engine) -> None:
+    """Дополнить таблицы терминала полями, появившимися в моделях позже.
+
+    `create_all` умеет только создавать таблицы целиком: поле, добавленное в
+    модель после того, как таблица уже существует, он не добавит, и первый же
+    запрос падает с «нет такой колонки». Здесь это делается само — по разнице
+    между моделью и базой.
+
+    Перечень таблиц ограничен нашими: трогать чужие автоматикой не будем.
+    """
+    from sqlalchemy import text
+
+    from core.models import LiveTrade, ScalpTrade, ScalpWorkspace, WeexCredential
+
+    tables = set(inspector.get_table_names())
+    for model in (ScalpTrade, ScalpWorkspace, WeexCredential, LiveTrade):
+        table = model.__table__
+        if table.name not in tables:
+            continue
+
+        present = {c["name"] for c in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in present:
+                continue
+
+            kind = column.type.compile(engine.dialect)
+            ddl = f"ALTER TABLE {table.name} ADD COLUMN {column.name} {kind}"
+
+            default = getattr(column.default, "arg", None)
+            if default is not None and not callable(default):
+                literal = f"'{default}'" if isinstance(default, str) else str(default)
+                ddl += f" DEFAULT {literal}"
+
+            conn.execute(text(ddl))
+            conn.commit()
+            logging.getLogger("nmnh.db").info(
+                "Добавлена колонка %s.%s", table.name, column.name
+            )
 
 
 # Стартовый каталог магазина — вставляется один раз, если таблица пуста.
