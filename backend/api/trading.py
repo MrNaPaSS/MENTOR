@@ -168,20 +168,53 @@ async def plans(
     говорит правду - молчаливая картинка здесь дороже всего.
     """
     client = _require_client(session, student)
+    sym = symbol.upper()
     try:
-        orders = await client.algo_orders(symbol.upper())
+        orders = await client.algo_orders(sym)
     except WeexTradeError as exc:
         raise _fail(exc) from exc
 
+    live = session.execute(
+        select(LiveTrade)
+        .where(LiveTrade.student_id == student.id)
+        .where(LiveTrade.symbol == sym)
+        .where(LiveTrade.status.in_(("waiting", "open")))
+    ).scalars().all()
+
+    # Свои заявки узнаём по записанным идентификаторам, а не по названию вида:
+    # имена у биржи свои, и по ним мы уже дважды принимали цели за чужое.
+    mine_takes = {
+        str(t.get("order_id") or "")
+        for row in live
+        for t in json.loads(row.tp_orders_json or "[]")
+    }
+    mine_stops = {str(row.sl_order_id or "") for row in live}
+    mine_takes.discard("")
+    mine_stops.discard("")
+
     stops = 0
     takes = 0
+    unknown: list[str] = []
     for order in orders:
+        order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
         kind = str(order.get("planType") or order.get("type") or "").lower()
-        if "profit" in kind or kind.endswith("tp"):
+        if order_id and order_id in mine_takes:
             takes += 1
-        else:
+        elif order_id and order_id in mine_stops:
             stops += 1
-    return {"symbol": symbol.upper(), "stops": stops, "takes": takes}
+        elif "profit" in kind or kind.endswith("tp"):
+            takes += 1
+        elif "stop" in kind or "loss" in kind or kind.endswith("sl"):
+            stops += 1
+        else:
+            # Незнакомую заявку записываем в стопы: она чем-то да защищает, а
+            # ложная тревога «целей нет» дороже незамеченной цели.
+            unknown.append(kind or "без вида")
+            stops += 1
+
+    if unknown:
+        logger.info("Условные заявки %s неизвестного вида: %s", sym, ", ".join(unknown))
+    return {"symbol": sym, "stops": stops, "takes": takes}
 
 
 @router.get("/limits/{symbol}")
