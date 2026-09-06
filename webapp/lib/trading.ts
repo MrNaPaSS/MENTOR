@@ -105,6 +105,19 @@ export function closePosition(trade: ActiveTrade, share: number) {
   );
 }
 
+/** Что из защиты реально стоит на бирже. */
+export type ExchangePlans = { stops: number; takes: number };
+
+/**
+ * Спросить биржу, стоят ли стоп и цели.
+ *
+ * График рисует их по замыслу сделки. Когда биржа заявку не приняла, картинка
+ * успокаивает вместо того, чтобы предупредить, - а на кону вся защита позиции.
+ */
+export function plansOf(symbol: string) {
+  return request<ExchangePlans>(`/api/trading/plans/${symbol.toUpperCase()}`);
+}
+
 /** Пределы инструмента: их задаёт биржа, и знать их нужно до ордера. */
 export type SymbolLimits = {
   /** Потолок плеча по этой монете: у большинства он ×20 или ×50. */

@@ -50,6 +50,7 @@ import {
   closePosition,
   openPosition,
   limitsOf,
+  plansOf,
   positionOf,
   tradingStatus,
   type SymbolLimits,
@@ -279,6 +280,11 @@ export default function ScalpingPage() {
   const [closing, setClosing] = useState<ActiveTrade | null>(null);
   const tradesRef = useRef<ActiveTrade[]>([]);
   tradesRef.current = trades;
+  // Что из защиты реально стоит на бирже. График рисует цели по замыслу
+  // сделки, и когда биржа их не приняла, картинка успокаивает вместо того,
+  // чтобы предупредить.
+  const [plans, setPlans] = useState<{ stops: number; takes: number } | null>(null);
+
   // Пределы монеты: потолок плеча и комиссия. У большинства монет биржи
   // плечо упирается в ×20 или ×50, а кнопки предлагают до ×400 - без этого
   // отказ приходил уже после нажатия «Войти».
@@ -970,11 +976,30 @@ export default function ScalpingPage() {
       }
     }
 
+    async function guard() {
+      const open = tradesRef.current.filter(
+        (t) => t.symbol === symbol && t.status === "open",
+      );
+      if (open.length === 0) {
+        setPlans(null);
+        return;
+      }
+      try {
+        const body = await plansOf(symbol!);
+        if (!cancelled) setPlans(body);
+      } catch {
+        // Биржа не ответила - молчим, а не пугаем понапрасну.
+      }
+    }
+
     check();
+    guard();
     const id = setInterval(check, 3000);
+    const watch = setInterval(guard, 9000);
     return () => {
       cancelled = true;
       clearInterval(id);
+      clearInterval(watch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, symbol, watchKey]);
@@ -1536,6 +1561,23 @@ export default function ScalpingPage() {
                     {dom.wall.side === "bid" ? "поддержка" : "сопротивление"}
                   </span>
                 )}
+                {/* Защита сверена с биржей: цели на графике и цели на бирже -
+                    разные вещи, и знать об этом трейдер должен сразу. */}
+                {plans && mine.some((t) => t.status === "open") && (
+                  <>
+                    {plans.takes === 0 && mine.some((t) => t.targets.length > 0) && (
+                      <span className="text-[var(--pane-down)]" title="Биржа не приняла цели - на графике они есть, на счёте нет">
+                        цели не на бирже
+                      </span>
+                    )}
+                    {plans.stops === 0 && (
+                      <span className="text-[var(--pane-down)]" title="Стопа на бирже нет: позиция без защиты">
+                        стоп не на бирже
+                      </span>
+                    )}
+                  </>
+                )}
+
                 {orderNote && (
                   <span
                     className={`ml-auto ${

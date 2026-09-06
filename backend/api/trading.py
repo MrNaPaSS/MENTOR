@@ -155,6 +155,35 @@ def _fail(exc: WeexTradeError) -> HTTPException:
     return HTTPException(status, f"Биржа: {exc}")
 
 
+@router.get("/plans/{symbol}")
+async def plans(
+    symbol: str,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Что из защиты реально стоит на бирже: стопы и цели.
+
+    График рисует цели по замыслу сделки, и когда биржа их не приняла,
+    трейдер видит лестницу, которой нет. Пусть терминал сверяется с биржей и
+    говорит правду - молчаливая картинка здесь дороже всего.
+    """
+    client = _require_client(session, student)
+    try:
+        orders = await client.algo_orders(symbol.upper())
+    except WeexTradeError as exc:
+        raise _fail(exc) from exc
+
+    stops = 0
+    takes = 0
+    for order in orders:
+        kind = str(order.get("planType") or order.get("type") or "").lower()
+        if "profit" in kind or kind.endswith("tp"):
+            takes += 1
+        else:
+            stops += 1
+    return {"symbol": symbol.upper(), "stops": stops, "takes": takes}
+
+
 @router.get("/limits/{symbol}")
 async def limits(symbol: str, student: Student = Depends(get_current_student)):
     """Пределы инструмента: плечо, комиссия, шаги.
