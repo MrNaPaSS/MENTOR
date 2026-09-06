@@ -35,6 +35,20 @@ function money(value: number): string {
   return `${sign}${Math.abs(value).toFixed(2)}`;
 }
 
+/** Взятые цели: сколько из скольких. Пусто — целей не было вовсе. */
+function takes(trade: JournalTrade): string {
+  if (trade.targets.length === 0) return trade.takes_hit > 0 ? String(trade.takes_hit) : "—";
+  return `${trade.takes_hit}/${trade.targets.length}`;
+}
+
+/** Полный список целей с отметкой взятых — в подсказке, чтобы не растить таблицу. */
+function takesHint(trade: JournalTrade): string {
+  if (trade.targets.length === 0) return "Цели не выставлялись";
+  return trade.targets
+    .map((price, i) => `${i < trade.takes_hit ? "✓" : "·"} тейк ${i + 1}: ${price}`)
+    .join("\n");
+}
+
 function tone(value: number): string {
   if (value > 0) return "text-[var(--pane-up)]";
   if (value < 0) return "text-[var(--pane-down)]";
@@ -238,6 +252,7 @@ export default function JournalPanel({
                   <th>Монета</th>
                   <th>Вход</th>
                   <th>Выход</th>
+                  <th>Цели</th>
                   <th className="text-right">Итог</th>
                   <th />
                 </tr>
@@ -268,6 +283,12 @@ export default function JournalPanel({
                     </td>
                     <td className="text-[var(--pane-text-2)]">{t.entry}</td>
                     <td className="text-[var(--pane-text-2)]">{t.exit_price ?? "—"}</td>
+                    <td
+                      title={takesHint(t)}
+                      className={t.takes_hit > 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-muted)]"}
+                    >
+                      {takes(t)}
+                    </td>
                     <td className={`text-right ${tone(t.pnl)}`}>{money(t.pnl)}</td>
                     <td className="pl-2 text-right">
                       <button

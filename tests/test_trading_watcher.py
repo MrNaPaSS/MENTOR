@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from backend.trading.watcher import (
     MISSING_TOLERANCE,
     decide,
@@ -217,3 +219,56 @@ def test_after_the_second_take_the_stop_hides_behind_the_target():
     where = dict(position("0.2"))
     where["breakEvenPrice"] = "100.35"
     assert decide(row, where, {"tp3"}, 102.5, 0).move_stop_to is None
+
+
+# ── запись в журнал ──────────────────────────────────────────────────────────
+
+def test_journal_entry_keeps_the_targets_of_the_trade():
+    """Журнал должен помнить не только итог, но и замысел.
+
+    Цели не переносились вовсе: в записи оставался пустой список, и сделку
+    нельзя было ни отрисовать задним числом, ни понять, какие цели сработали.
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from backend.trading.watcher import PositionWatcher
+    from core.models import Base, ScalpTrade, Student
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    student = Student(tg_id=1)
+    session.add(student)
+    session.commit()
+
+    row = trade(
+        student_id=student.id,
+        takes_hit=1,
+        opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        closed_at=datetime(2026, 1, 1, 1, tzinfo=timezone.utc),
+    )
+
+    class Exchange:
+        async def user_trades(self, symbol, limit=100):
+            return [
+                {"time": 4102444800000, "realizedPnl": "-1.2", "commission": "0.3", "price": "99.4"}
+            ]
+
+    watcher = PositionWatcher(lambda: session, lambda: None)
+    asyncio.run(watcher._record(session, Exchange(), row))
+    session.commit()
+
+    saved = session.execute(select(ScalpTrade)).scalar_one()
+    assert json.loads(saved.targets_json) == [101.0, 102.0, 103.0]
+    assert saved.takes_hit == 1
+    # Убыточная сделка со взятой целью — это стоп, а не цель: тейк был один из
+    # трёх, и на счёте минус.
+    assert saved.outcome == "stop"
+    assert float(saved.pnl) == pytest.approx(-1.5)

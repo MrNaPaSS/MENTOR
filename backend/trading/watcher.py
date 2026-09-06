@@ -555,6 +555,10 @@ class PositionWatcher:
                 margin=float(trade.margin or 0) or 1.0,
                 leverage=trade.leverage,
                 takes_hit=trade.takes_hit,
+                # Цели переносим целиком: без них журнал знает, сколько целей
+                # взято, но не знает, каких именно, и отрисовать сделку задним
+                # числом уже нечем.
+                targets_json=trade.targets_json or "[]",
                 outcome="take" if pnl > 0 else "stop",
                 pnl=pnl,
                 opened_at=trade.opened_at,
