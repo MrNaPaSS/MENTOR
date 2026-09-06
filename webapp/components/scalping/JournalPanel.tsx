@@ -60,12 +60,15 @@ function monthCells(year: number, month: number, days: JournalDay[]) {
 export default function JournalPanel({
   symbol,
   refreshKey,
+  onHover,
   onClose,
 }: {
   /** Показать только этот инструмент. Пусто — все. */
   symbol?: string;
   /** Меняется, когда терминал записал новую сделку: повод перечитать. */
   refreshKey: number;
+  /** Сделка под курсором: её разметка показывается на графике. */
+  onHover?: (trade: JournalTrade | null) => void;
   onClose: () => void;
 }) {
   const now = new Date();
@@ -160,13 +163,19 @@ export default function JournalPanel({
       ) : (
         <div className="min-h-0 flex-1 overflow-auto px-3 py-2">
           {summary && (
-            <div className="mb-3 grid grid-cols-4 gap-2 font-mono tabular-nums">
+            <div className="mb-3 grid grid-cols-5 gap-2 font-mono tabular-nums">
               <Stat label="Итог, $" value={money(summary.pnl)} tone={tone(summary.pnl)} />
               <Stat label="Сделок" value={String(summary.count)} />
               <Stat label="Прибыльных" value={`${summary.win_rate}%`} />
               <Stat
-                label="Лучшая / худшая"
-                value={`${money(summary.best)} / ${money(summary.worst)}`}
+                label="Лучшая"
+                value={summary.wins > 0 ? money(summary.best) : "—"}
+                tone={summary.wins > 0 ? tone(summary.best) : undefined}
+              />
+              <Stat
+                label="Худшая"
+                value={summary.losses > 0 ? money(summary.worst) : "—"}
+                tone={summary.losses > 0 ? tone(summary.worst) : undefined}
               />
             </div>
           )}
@@ -235,7 +244,12 @@ export default function JournalPanel({
               </thead>
               <tbody>
                 {trades.map((t) => (
-                  <tr key={t.id} className="border-t border-[var(--pane-border)]">
+                  <tr
+                    key={t.id}
+                    onMouseEnter={() => onHover?.(t)}
+                    onMouseLeave={() => onHover?.(null)}
+                    className="cursor-default border-t border-[var(--pane-border)] transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)]"
+                  >
                     <td className="py-1 text-[var(--pane-muted)]">
                       {new Date(t.closed_at).toLocaleString("ru", {
                         day: "2-digit",

@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 import ssl
 from typing import Any
 
@@ -390,6 +391,21 @@ async def close_position(
         position = next(
             (p for p in positions if str(p.get("symbol", "")).upper() == symbol), None
         )
+        # Момент входа нужен, чтобы собрать все исполнения этой сделки, а не
+        # только последний ордер.
+        live = session.execute(
+            select(LiveTrade)
+            .where(LiveTrade.student_id == student.id)
+            .where(LiveTrade.symbol == symbol)
+            .where(LiveTrade.status.in_(("waiting", "open")))
+            .order_by(LiveTrade.id.desc())
+        ).scalars().first()
+        # Если позиция ещё не отмечена набранной, берём момент отправки входа:
+        # сопровождение проставляет opened_at раз в пятнадцать секунд, а закрыть
+        # руками можно и раньше. Без этого в итог попадал бы только последний
+        # ордер — и результат расходился с биржей в разы.
+        opened_at = (live.opened_at or live.created_at) if live else None
+
         size = 0.0
         for name in ("total", "size", "positionAmt", "available"):
             try:
@@ -449,8 +465,8 @@ async def close_position(
     # Наша цифра — это цена маркировки без комиссий: она совпадает с тем, что
     # биржа показывает по открытой позиции, но не с тем, что приходит на счёт.
     # Выход по рынку идёт по встречной стороне книги, и обе ноги платят
-    # комиссию. Разница видна сразу: было +209, пришло +75.
-    realized, fee, fill = await _settled(client, symbol, order_id)
+    # комиссию. Разница видна сразу: было +37, пришло +5.
+    realized, fee, fill = await _settled(client, symbol, order_id, opened_at)
 
     return {
         "closed": quantity,
@@ -461,48 +477,90 @@ async def close_position(
     }
 
 
-async def _settled(
-    client: WeexFutures, symbol: str, order_id: str
-) -> tuple[float | None, float | None, float | None]:
-    """Что на самом деле дала сделка: результат, комиссия и цена исполнения.
+def _epoch_ms(value: datetime | None) -> int:
+    """Время в миллисекундах эпохи.
 
-    Исполнения появляются в отчёте не мгновенно, поэтому спрашиваем трижды с
-    нарастающей паузой — так же сделано в боте заказчика. Не дождались — честно
-    возвращаем пустоту вместо выдуманного числа.
+    SQLite отдаёт дату без часового пояса, а `timestamp()` у наивной даты
+    считает её местным временем: итог уезжал бы на разницу поясов, а у ранних
+    дат на Windows и вовсе падал. Наивную считаем UTC — мы её такой и писали.
     """
-    if not order_id:
-        return None, None, None
+    if value is None:
+        return 0
+    try:
+        aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return int(aware.timestamp() * 1000)
+    except (OverflowError, OSError, ValueError):
+        return 0
 
-    for pause in (0.0, 0.25, 0.6):
+
+async def _settled(
+    client: WeexFutures,
+    symbol: str,
+    order_id: str,
+    since: datetime | None,
+) -> tuple[float | None, float | None, float | None]:
+    """Итог сделки по исполнениям с биржи: результат за вычетом комиссии.
+
+    Считаем по всем исполнениям с момента входа, а не по одному закрывающему
+    ордеру. Сделка состоит из входа, сработавших целей и выхода; спрашивать
+    только последний ордер значит потерять остальное — а если биржа не успела
+    его проиндексировать, то и всё сразу.
+
+    Исполнения появляются в отчёте не мгновенно, поэтому спрашиваем несколько
+    раз с нарастающей паузой, как в боте заказчика.
+    """
+    opened_ms = _epoch_ms(since)
+
+    for pause in (0.0, 0.25, 0.6, 1.0):
         if pause:
             await asyncio.sleep(pause)
         try:
-            fills = await client.user_trades(symbol, limit=50)
+            fills = await client.user_trades(symbol, limit=100)
         except WeexTradeError as exc:
             logger.warning("Исполнения %s не получены: %s", symbol, exc)
             return None, None, None
 
-        mine = [f for f in fills if str(f.get("orderId") or "") == str(order_id)]
+        mine = []
+        for f in fills:
+            try:
+                stamp = int(f.get("time") or 0)
+            except (TypeError, ValueError):
+                stamp = 0
+            same_order = order_id and str(f.get("orderId") or "") == str(order_id)
+            if same_order or (opened_ms and stamp >= opened_ms):
+                mine.append(f)
+
+        # Пока в отчёте нет закрывающего ордера, итог считать рано: он и есть
+        # самая большая часть результата.
+        if order_id and not any(str(f.get("orderId") or "") == str(order_id) for f in mine):
+            continue
         if not mine:
             continue
 
-        realized = 0.0
+        gross = 0.0
         fee = 0.0
         price = None
         for f in mine:
             try:
-                realized += float(f.get("realizedPnl") or 0)
+                gross += float(f.get("realizedPnl") or 0)
                 fee += abs(float(f.get("commission") or 0))
                 value = float(f.get("price") or 0)
                 if value > 0:
                     price = value
             except (TypeError, ValueError):
                 continue
-        logger.info(
-            "Закрыто %s: результат %.4f, комиссия %.4f", symbol, realized, fee
-        )
-        return round(realized, 8), round(fee, 8), price
 
+        net = gross - fee
+        logger.info(
+            "Сделка %s закрыта: по бирже %.4f, комиссия %.4f, на счёт %.4f",
+            symbol,
+            gross,
+            fee,
+            net,
+        )
+        return round(net, 8), round(fee, 8), price
+
+    logger.warning("Исполнения %s не появились в отчёте вовремя", symbol)
     return None, None, None
 
 

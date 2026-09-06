@@ -20,6 +20,8 @@ export type JournalTrade = {
   margin: number;
   leverage: number;
   takes_hit: number;
+  /** Цели, с которыми сделка задумывалась: по ним она рисуется на графике. */
+  targets: number[];
   outcome: "stop" | "take" | "manual";
   pnl: number;
   opened_at: string | null;
@@ -100,6 +102,7 @@ export function saveTrade(trade: ActiveTrade) {
       margin: trade.margin,
       leverage: trade.leverage,
       takes_hit: trade.takesHit,
+      targets: trade.targets,
       outcome: trade.outcome ?? "manual",
       pnl: trade.pnl,
       opened_at: trade.openedAt ? new Date(trade.openedAt).toISOString() : null,

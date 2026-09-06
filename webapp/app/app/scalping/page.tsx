@@ -46,6 +46,7 @@ import {
   loadWorkspace,
   saveTrade,
   saveWorkspace,
+  type JournalTrade,
 } from "@/lib/journal";
 import {
   computeTrade,
@@ -241,6 +242,8 @@ export default function ScalpingPage() {
   const [journalH, setJournalH] = useState(JOURNAL_LIMITS.def);
   // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
   const [journalKey, setJournalKey] = useState(0);
+  // Сделка из журнала под курсором: её разметка показывается на графике.
+  const [hovered, setHovered] = useState<JournalTrade | null>(null);
   const savedTradeRef = useRef<string | null>(null);
   // Пока настройки и сделка не подняты из хранилища, писать туда нельзя:
   // первый проход эффектов видит пустое состояние и стёр бы живую запись.
@@ -1168,6 +1171,7 @@ export default function ScalpingPage() {
                   onCloseTrade={() => setCloseOpen(true)}
                   showJournal={journalOpen}
                   journalKey={journalKey}
+                  ghost={hovered && hovered.symbol === symbol ? hovered : null}
                   onShelfClick={openTrade}
                 />
               </div>
@@ -1224,6 +1228,7 @@ export default function ScalpingPage() {
             <JournalPanel
               symbol={symbol ?? undefined}
               refreshKey={journalKey}
+              onHover={setHovered}
               onClose={() => setJournalOpen(false)}
             />
           </section>

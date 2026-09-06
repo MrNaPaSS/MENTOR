@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import timezone
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -432,16 +433,23 @@ class PositionWatcher:
         if exists is not None:
             return
 
-        pnl = 0.0
+        gross = 0.0
+        fee = 0.0
         exit_price: float | None = None
         try:
             since = trade.opened_at or trade.created_at
-            opened_ms = int(since.timestamp() * 1000) if since else 0
+            # Наивную дату из базы считаем UTC: `timestamp()` у неё считает по
+            # местному времени, и окно исполнений уезжало бы на разницу поясов.
+            aware = (
+                since if since is None or since.tzinfo else since.replace(tzinfo=timezone.utc)
+            )
+            opened_ms = int(aware.timestamp() * 1000) if aware else 0
             for fill in await client.user_trades(trade.symbol, limit=100):
                 try:
                     if int(fill.get("time", 0)) < opened_ms:
                         continue
-                    pnl += float(fill.get("realizedPnl") or 0)
+                    gross += float(fill.get("realizedPnl") or 0)
+                    fee += abs(float(fill.get("commission") or 0))
                     price = float(fill.get("price") or 0)
                     if price > 0:
                         exit_price = price
@@ -449,6 +457,10 @@ class PositionWatcher:
                     continue
         except WeexTradeError as exc:
             logger.warning("Исполнения %s не получены: %s", trade.symbol, exc)
+
+        # В журнал идёт то, что осталось на счёте: биржа считает результат до
+        # комиссии, а трейдер видит после.
+        pnl = gross - fee
 
         session.add(
             ScalpTrade(

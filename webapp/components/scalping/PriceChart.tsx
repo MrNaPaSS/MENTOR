@@ -38,7 +38,7 @@ import {
   type Shapes,
 } from "./primitives/ShapesPrimitive";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
-import { loadCalendar, loadTrades } from "@/lib/journal";
+import { loadCalendar, loadTrades, type JournalTrade } from "@/lib/journal";
 import {
   floatingAt,
   pendingTargets,
@@ -351,6 +351,7 @@ function PriceChart({
   onCloseTrade,
   showJournal,
   journalKey,
+  ghost,
   onShelfClick,
 }: {
   symbol: string;
@@ -376,6 +377,8 @@ function PriceChart({
   showJournal?: boolean;
   /** Растёт после каждой записи в журнал — повод перечитать метки. */
   journalKey?: number;
+  /** Сделка из журнала под курсором: показываем, как она шла. */
+  ghost?: JournalTrade | null;
   /**
    * Нажатие по линии полки. Вторым аргументом идёт ATR текущего таймфрейма:
    * по нему предлагается стоп, а волатильность известна только здесь — свечи
@@ -408,6 +411,7 @@ function PriceChart({
   const shelfLinesRef = useRef<IPriceLine[]>([]);
   const tradeLinesRef = useRef<IPriceLine[]>([]);
   const tradeShapesRef = useRef<Shapes | null>(null);
+  const ghostShapesRef = useRef<Shapes | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const dataRef = useRef<Candle[]>([]);
   // Нажатие по полке ищет ближайшую линию к точке клика, а слушатель графика
@@ -425,17 +429,17 @@ function PriceChart({
    * сделки. Поэтому наборы хранятся отдельно и склеиваются здесь.
    */
   const pushShapes = useCallback(() => {
-    const base = shapeDataRef.current;
-    const extra = tradeShapesRef.current;
+    const parts = [shapeDataRef.current, tradeShapesRef.current, ghostShapesRef.current];
+    const alive = parts.filter((p): p is Shapes => Boolean(p));
     shapesRef.current?.setShapes(
-      extra
-        ? {
-            bands: [...base.bands, ...extra.bands],
-            boxes: [...base.boxes, ...extra.boxes],
-            segments: [...base.segments, ...extra.segments],
-            points: [...base.points, ...extra.points],
-          }
-        : base,
+      alive.length === 1
+        ? alive[0]
+        : {
+            bands: alive.flatMap((p) => p.bands),
+            boxes: alive.flatMap((p) => p.boxes),
+            segments: alive.flatMap((p) => p.segments),
+            points: alive.flatMap((p) => p.points),
+          },
     );
   }, []);
 
@@ -1045,6 +1049,84 @@ function PriceChart({
     if (liveCandle.time === last.time) bars[bars.length - 1] = liveCandle;
     else bars.push(liveCandle);
   }, [liveCandle, cfg.volume]);
+
+  // Сделка из журнала под курсором: как она шла и чем кончилась.
+  //
+  // Рисуется на своём отрезке времени — от входа до выхода, — а не в будущем:
+  // это уже история, и накрывать ею текущую цену нечестно. Цели показаны все,
+  // включая невзятые: замысел важен не меньше итога.
+  useEffect(() => {
+    if (!ghost) {
+      ghostShapesRef.current = null;
+      pushShapes();
+      return;
+    }
+
+    const candles = dataRef.current;
+    const from = snapToBar(candles, ghost.opened_at ?? ghost.closed_at);
+    const to = snapToBar(candles, ghost.closed_at);
+    if (from === null || to === null) {
+      // Сделка старше загруженной истории — рисовать не на чем.
+      ghostShapesRef.current = null;
+      pushShapes();
+      return;
+    }
+
+    const palette = THEMES[themeRef.current];
+    const span = { fromTime: from as UTCTimestamp, toTime: (to === from ? to + 1 : to) as UTCTimestamp };
+    const far = ghost.targets.at(-1);
+
+    ghostShapesRef.current = {
+      bands: [],
+      boxes: [
+        {
+          ...span,
+          top: Math.max(ghost.entry, ghost.stop),
+          bottom: Math.min(ghost.entry, ghost.stop),
+          fill: palette.riskBox,
+          border: palette.riskBorder,
+        },
+        ...(far !== undefined
+          ? [
+              {
+                ...span,
+                top: Math.max(ghost.entry, far),
+                bottom: Math.min(ghost.entry, far),
+                fill: palette.rewardBox,
+                border: palette.rewardBorder,
+                label: `${ghost.pnl >= 0 ? "+" : "−"}${Math.abs(ghost.pnl).toFixed(2)}`,
+                labelColor: palette.text,
+              },
+            ]
+          : []),
+      ],
+      segments: [
+        {
+          ...span,
+          price: ghost.entry,
+          color: palette.text,
+          dashed: false,
+          label: "вход",
+        },
+        ...ghost.targets.map((price, i) => ({
+          ...span,
+          price,
+          color: palette.bidLine,
+          dashed: i >= ghost.takes_hit,     // невзятая цель — пунктиром
+          label: `тейк ${i + 1}`,
+        })),
+        {
+          ...span,
+          price: ghost.stop,
+          color: palette.askLine,
+          dashed: true,
+          label: "стоп",
+        },
+      ],
+      points: [],
+    };
+    pushShapes();
+  }, [ghost, pushShapes]);
 
   // Отработанные сетапы из журнала прямо на графике.
   //

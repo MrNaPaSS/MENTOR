@@ -248,6 +248,9 @@ class ScalpTrade(Base):
     margin: Mapped[float] = mapped_column(Numeric(20, 8))
     leverage: Mapped[int] = mapped_column(Integer, default=1)
     takes_hit: Mapped[int] = mapped_column(Integer, default=0)
+    # Цены целей: без них сделку не отрисовать на графике задним числом, а
+    # журнал должен показывать не только итог, но и замысел.
+    targets_json: Mapped[str] = mapped_column(Text, default="[]")
     outcome: Mapped[str] = mapped_column(String(8))            # stop | take | manual
     pnl: Mapped[float] = mapped_column(Numeric(20, 8), default=0)
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

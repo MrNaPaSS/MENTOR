@@ -49,6 +49,7 @@ class TradeIn(BaseModel):
     margin: float = Field(gt=0)
     leverage: int = Field(ge=1, le=400)
     takes_hit: int = Field(default=0, ge=0, le=10)
+    targets: list[float] = Field(default_factory=list, max_length=10)
     outcome: str
     pnl: float
     opened_at: datetime | None = None
@@ -95,6 +96,7 @@ def _row(trade: ScalpTrade) -> dict[str, Any]:
         "margin": float(trade.margin),
         "leverage": trade.leverage,
         "takes_hit": trade.takes_hit,
+        "targets": json.loads(trade.targets_json or "[]"),
         "outcome": trade.outcome,
         "pnl": float(trade.pnl),
         "opened_at": _iso(trade.opened_at),
@@ -171,6 +173,7 @@ async def add_trade(
     trade.margin = body.margin
     trade.leverage = body.leverage
     trade.takes_hit = body.takes_hit
+    trade.targets_json = json.dumps(body.targets)
     trade.outcome = body.outcome
     trade.pnl = body.pnl
     trade.opened_at = _as_utc(body.opened_at)

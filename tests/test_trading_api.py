@@ -455,10 +455,17 @@ def test_journal_gets_the_exchange_result_not_our_estimate(app_and_exchange):
     Наша цифра считается по цене маркировки и без комиссий. Правду знает
     только биржа, и в отчёт должна идти она.
     """
-    client, exchange, _ = app_and_exchange
+    client, exchange, session = app_and_exchange
+    _watched(session, opened_ms=1000)
     exchange.position = {"symbol": "BTCUSDT", "total": "0.5"}
     exchange.fills = [
-        {"orderId": "o1", "realizedPnl": "75.4", "commission": "8.2", "price": "79500"},
+        {
+            "orderId": "o1",
+            "realizedPnl": "83.6",
+            "commission": "8.2",
+            "price": "79500",
+            "time": 2000,
+        },
     ]
 
     body = client.post(
@@ -466,6 +473,7 @@ def test_journal_gets_the_exchange_result_not_our_estimate(app_and_exchange):
         json={"symbol": "BTCUSDT", "side": "long", "share": 1},
     ).json()
 
+    # 83.6 по бирже минус 8.2 комиссии — столько и приходит на счёт.
     assert body["realized"] == 75.4
     assert body["fee"] == 8.2
     assert body["fill_price"] == 79500.0
@@ -483,3 +491,55 @@ def test_missing_fills_do_not_invent_a_result(app_and_exchange):
     ).json()
 
     assert body["realized"] is None and body["fee"] is None
+
+
+def _watched(session, opened_ms: int) -> None:
+    """Сделка под ведением: без неё сервер не знает, с какого момента считать."""
+    from datetime import datetime, timezone
+
+    from core.models import LiveTrade
+
+    session.add(
+        LiveTrade(
+            student_id=1,
+            client_id="c1",
+            symbol="BTCUSDT",
+            side="long",
+            entry=80000,
+            initial_stop=79000,
+            current_stop=79000,
+            targets_json="[]",
+            tp_orders_json="[]",
+            qty=0.5,
+            leverage=10,
+            margin=100,
+            status="open",
+            opened_at=datetime.fromtimestamp(opened_ms / 1000, tz=timezone.utc),
+        )
+    )
+    session.commit()
+
+
+def test_result_counts_every_fill_of_the_trade_minus_fees(app_and_exchange):
+    """Сделка — это вход, сработавшие цели и выход, а не один ордер.
+
+    Спрашивать только закрывающий ордер значит потерять остальное; а если биржа
+    не успела его проиндексировать — потерять всё и записать свою оценку.
+    Комиссия вычитается: биржа считает результат до неё, трейдер видит после.
+    """
+    client, exchange, session = app_and_exchange
+    _watched(session, opened_ms=1000)
+    exchange.position = {"symbol": "BTCUSDT", "total": "0.5"}
+    exchange.fills = [
+        {"orderId": "tp1", "realizedPnl": "20.0", "commission": "3.0", "time": 2000},
+        {"orderId": "o1", "realizedPnl": "-10.0", "commission": "1.57", "time": 3000},
+    ]
+
+    body = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "long", "share": 1},
+    ).json()
+
+    # 20 − 10 = 10 по бирже, минус 4.57 комиссии.
+    assert body["realized"] == 5.43
+    assert body["fee"] == 4.57
