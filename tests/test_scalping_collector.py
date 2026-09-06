@@ -40,6 +40,11 @@ class FakeStream:
 class FakeRest:
     """Отдаёт заранее заданные снимок и суточную сводку."""
 
+    # Настоящий клиент умеет сообщать, что биржа закрыла нас на время. Здесь
+    # ограничения нет — иначе тесты зависели бы от него.
+    blocked = False
+    blocked_for = 0.0
+
     def __init__(self, depth: dict | None = None, tickers: list | None = None) -> None:
         self._depth = depth
         self._tickers = tickers or []
