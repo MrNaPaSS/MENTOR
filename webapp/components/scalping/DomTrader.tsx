@@ -256,7 +256,13 @@ const Row = memo(function Row({
   return (
     <div
       onClick={pickable ? () => onPick?.(row) : undefined}
-      title={pickable ? "Расчёт сделки от этого уровня" : undefined}
+      title={
+        row.whale
+          ? "Крупная заявка от вашего порога — нажмите, чтобы посчитать сделку"
+          : pickable
+            ? "Расчёт сделки от этого уровня"
+            : undefined
+      }
       className={`flex items-center ${isBid ? "bg-[var(--pane-up-faint)]" : "bg-[var(--pane-down-faint)]"} ${
         pickable
           ? "cursor-pointer ring-[var(--pane-accent)] transition-shadow duration-150 ease-out hover:ring-1 hover:ring-inset"
@@ -277,7 +283,9 @@ const Row = memo(function Row({
       >
         <div
           className={`absolute inset-y-[2px] left-0 ${
-            row.is_wall
+            row.whale
+              ? "bg-[var(--pane-accent-soft)]"
+              : row.is_wall
               ? "bg-[var(--pane-gold-soft)]"
               : row.strong
                 ? isBid
@@ -291,7 +299,9 @@ const Row = memo(function Row({
         />
         <span
           className={`relative z-10 ${
-            row.is_wall
+            row.whale
+              ? "font-semibold text-[var(--pane-accent)]"
+              : row.is_wall
               ? "font-semibold text-[var(--pane-gold)]"
               : row.strong
                 ? "font-semibold text-[var(--pane-text)]"

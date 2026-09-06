@@ -43,6 +43,10 @@ class LadderRow:
     is_wall: bool       # крупная заявка: кратно выше медианы по своей стороне
     strong: bool        # имбаланс: сторона перевешивает противоположную
     cum: float          # накопленный объём в деньгах от лучшей цены
+    # Крупная заявка по абсолютной сумме, а не относительно соседей. Плита
+    # ищется «кратно выше медианы», и на редком стакане ею оказывается и сотня
+    # тысяч; здесь порог в деньгах, и задаёт его сам трейдер.
+    whale: bool = False
 
 
 def detect_tick(book: OrderBook, sample: int = 40) -> float:
@@ -135,6 +139,7 @@ def build_ladder(
     tick: float | None = None,
     agg: int = 1,
     imbalance_ratio: float = IMBALANCE_RATIO,
+    whale_notional: float = 0.0,
 ) -> tuple[list[LadderRow], float]:
     """Собрать лестницу стакана. Возвращает строки сверху вниз и её шаг."""
     rows = max(1, min(rows, MAX_ROWS))
@@ -167,6 +172,7 @@ def build_ladder(
                 notional=price * size,
                 is_wall=price in wall_prices,
                 strong=price in strong_asks,
+                whale=whale_notional > 0 and price * size >= whale_notional,
                 cum=cum,
             )
         )
@@ -183,6 +189,7 @@ def build_ladder(
                 notional=price * size,
                 is_wall=price in wall_prices,
                 strong=price in strong_bids,
+                whale=whale_notional > 0 and price * size >= whale_notional,
                 cum=cum,
             )
         )

@@ -78,7 +78,9 @@ async def dom(
     if not state.book.ready:
         raise HTTPException(503, f"Стакан {sym} ещё собирается")
 
-    ladder, step = build_ladder(state.book, rows=rows, tick=tick, agg=agg)
+    ladder, step = build_ladder(
+        state.book, rows=rows, tick=tick, agg=agg, whale_notional=shelf
+    )
     wall = biggest_wall(state)
     tape = state.tape.metrics(int(time.time()))
 

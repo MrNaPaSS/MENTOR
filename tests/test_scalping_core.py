@@ -317,3 +317,37 @@ def test_no_shelves_without_price():
     from backend.scalping.metrics import find_shelves
 
     assert find_shelves([Level(100.0, 20000.0)], "bid", mid=0) == []
+
+
+# ── крупные заявки в лестнице ────────────────────────────────────────────────
+
+def test_ladder_marks_big_orders_by_money():
+    """Плита ищется относительно соседей, а кит — по абсолютной сумме.
+
+    На редком стакане «кратно выше медианы» оказывается и сотня тысяч, поэтому
+    порог в деньгах трейдер задаёт сам.
+    """
+    from backend.scalping.book import OrderBook
+    from backend.scalping.ladder import build_ladder
+
+    book = OrderBook("TESTUSDT")
+    book.apply_snapshot(
+        [["100.00", "30"], ["99.99", "1"]],      # 3000 и 99.99
+        [["100.01", "1"], ["100.02", "20"]],     # 100 и 2000
+        1,
+    )
+
+    rows, _ = build_ladder(book, rows=10, whale_notional=1000)
+    big = {r.price: r.whale for r in rows}
+    assert big[100.00] is True and big[100.02] is True
+    assert big[99.99] is False and big[100.01] is False
+
+
+def test_without_a_threshold_nobody_is_a_whale():
+    from backend.scalping.book import OrderBook
+    from backend.scalping.ladder import build_ladder
+
+    book = OrderBook("TESTUSDT")
+    book.apply_snapshot([["100.00", "1000"]], [["100.01", "1000"]], 1)
+    rows, _ = build_ladder(book, rows=10)
+    assert all(r.whale is False for r in rows)

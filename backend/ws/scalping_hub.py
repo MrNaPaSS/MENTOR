@@ -187,7 +187,11 @@ class ScalpingHub:
         state = self.collector.state.get(sub.symbol or "")
         if state is None or not state.book.ready:
             return None
-        ladder, step = build_ladder(state.book, rows=sub.rows, agg=sub.agg)
+        # Порог крупной заявки в лестнице — тот же, что у полок на графике:
+        # трейдер задаёт его один раз и видит одни и те же уровни в обоих местах.
+        ladder, step = build_ladder(
+            state.book, rows=sub.rows, agg=sub.agg, whale_notional=sub.shelf
+        )
         wall = biggest_wall(state)
         return {
             "symbol": state.symbol,
