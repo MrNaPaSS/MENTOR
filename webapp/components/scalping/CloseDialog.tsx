@@ -10,7 +10,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { price as fmtPrice } from "@/lib/scalping";
-import { pnlAt, type ActiveTrade } from "@/lib/trade/position";
+import { floatingAt, type ActiveTrade } from "@/lib/trade/position";
 
 const SHARES = [25, 50, 75, 100];
 
@@ -50,7 +50,9 @@ export default function CloseDialog({
 
   const long = trade.side === "long";
   const share = percent / 100;
-  const floating = pnlAt(trade, price);
+  // По открытой позиции — как на бирже. Забранное по целям сюда не входит: его
+  // уже нет в рынке, и закрывать нечего.
+  const floating = floatingAt(trade, price);
   const part = floating * share;
   const qty = trade.qty * share;
   const waiting = trade.status === "planned";
@@ -136,6 +138,13 @@ export default function CloseDialog({
                 label="Останется"
                 value={percent >= 100 ? "ничего" : (trade.qty - qty).toPrecision(4)}
               />
+              {trade.realized !== 0 && (
+                <Line
+                  label="Уже забрано"
+                  value={`${trade.realized >= 0 ? "+" : "−"}${Math.abs(trade.realized).toFixed(2)} $`}
+                  tone="text-text-muted"
+                />
+              )}
               <Line
                 label="Результат"
                 value={`${part >= 0 ? "+" : "−"}${Math.abs(part).toFixed(2)} $`}

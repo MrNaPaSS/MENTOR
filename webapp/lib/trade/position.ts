@@ -97,6 +97,19 @@ export function createTrade(seed: TradeSeed, id: string, now = Date.now()): Acti
  * закрыла свою часть по своей цене, и она в рынке больше не участвует. Именно
  * так и получалось, что на экране висело вдвое больше, чем пришло на счёт.
  */
+export function floatingAt(trade: ActiveTrade, price: number): number {
+  if (trade.status !== "open") return 0;
+  const move = trade.side === "long" ? price - trade.entry : trade.entry - price;
+  return move * trade.qty;
+}
+
+/**
+ * Итог по сделке целиком: забранное по целям плюс плавающее по остатку.
+ *
+ * Это не то же самое, что показывает биржа. Она знает только открытую позицию,
+ * и после сработавшей цели её цифра относится к остатку. Обе честные, но
+ * смешивать их нельзя — иначе на экране 219 там, где на счёт пришло 148.
+ */
 export function pnlAt(trade: ActiveTrade, price: number): number {
   if (trade.status === "planned") return 0;
   if (trade.status === "closed") return trade.pnl;

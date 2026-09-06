@@ -5,6 +5,7 @@ import {
   closeManually,
   closePartially,
   createTrade,
+  floatingAt,
   pendingTargets,
   pnlAt,
   type ActiveTrade,
@@ -253,5 +254,26 @@ describe("частичная фиксация", () => {
     let trade = advance(long(), 100, T0);
     trade = closePartially(trade, 1, 100.5, T0 + 1).remaining;
     expect(closePartially(trade, 1, 101, T0 + 2).recorded).toBeNull();
+  });
+});
+
+describe("что показывать на экране", () => {
+  it("плавающий результат — только по остатку, как на бирже", () => {
+    // После взятой цели биржа показывает результат по тому, что осталось в
+    // позиции. Наша цифра должна совпадать с ней: трейдер сверяет глазами.
+    let trade = advance(long(), 100, T0);
+    trade = advance(trade, 101, T0 + 1);            // взята первая цель
+
+    expect(floatingAt(trade, 102)).toBeCloseTo(2 * (20 / 3), 6);
+    // Забранное лежит отдельно и в эту цифру не входит.
+    expect(trade.realized).toBeCloseTo(10 / 3, 6);
+    // Итог по сделке — сумма того и другого.
+    expect(pnlAt(trade, 102)).toBeCloseTo(10 / 3 + 2 * (20 / 3), 6);
+  });
+
+  it("до входа и после закрытия плавающего результата нет", () => {
+    expect(floatingAt(long(), 100)).toBe(0);
+    const closed = advance(advance(long(), 100, T0), 98, T0 + 1);
+    expect(floatingAt(closed, 97)).toBe(0);
   });
 });

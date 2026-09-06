@@ -40,6 +40,7 @@ import {
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 import { loadCalendar, loadTrades } from "@/lib/journal";
 import {
+  floatingAt,
   pendingTargets,
   pnlAt,
   type ActiveTrade,
@@ -1140,7 +1141,12 @@ function PriceChart({
     });
   }, [wall?.price, wall?.side]);
 
-  const pnl = trade ? pnlAt(trade, livePrice) : 0;
+  // Главная цифра — по открытой позиции: ровно её показывает биржа, и с ней
+  // трейдер сверяется глазами. Забранное по целям стоит рядом отдельно: смешать
+  // их значит показать 219 там, где на счёт пришло 148.
+  const floating = trade ? floatingAt(trade, livePrice) : 0;
+  const taken = trade ? trade.realized : 0;
+  const total = trade ? pnlAt(trade, livePrice) : 0;
 
   return (
     <div className="relative h-full w-full">
@@ -1172,10 +1178,24 @@ function PriceChart({
           {trade.status === "planned" ? (
             <span className="text-[var(--pane-muted)]">ждём вход</span>
           ) : (
-            <span className={pnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
-              {pnl >= 0 ? "+" : "−"}
-              {Math.abs(pnl).toFixed(2)} USD
-            </span>
+            <>
+              <span
+                className={floating >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
+                title="По открытой позиции — как на бирже"
+              >
+                {floating >= 0 ? "+" : "−"}
+                {Math.abs(floating).toFixed(2)} USD
+              </span>
+              {taken !== 0 && (
+                <span
+                  className="text-[var(--pane-muted)]"
+                  title={`Забрано по целям, всего по сделке ${total >= 0 ? "+" : "−"}${Math.abs(total).toFixed(2)}`}
+                >
+                  забрано {taken >= 0 ? "+" : "−"}
+                  {Math.abs(taken).toFixed(2)}
+                </span>
+              )}
+            </>
           )}
           <button
             onClick={onCloseTrade}
