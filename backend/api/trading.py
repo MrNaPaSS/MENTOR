@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from backend.deps import get_current_student, get_session, require_scalping
+from backend.deps import get_current_student, get_session
 from core.models import LiveTrade, Student, WeexCredential, utcnow
 from core.trading.position import (
     Position,
@@ -43,11 +43,7 @@ from core.weex.futures import (
     round_to_tick,
 )
 
-router = APIRouter(
-    prefix="/api/trading",
-    tags=["trading"],
-    dependencies=[Depends(require_scalping)],
-)
+router = APIRouter(prefix="/api/trading", tags=["trading"])
 logger = logging.getLogger("nmnh.trading")
 
 # Одна сессия на процесс: соединения живут дольше запроса, и заводить их по

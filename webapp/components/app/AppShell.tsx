@@ -26,11 +26,11 @@ import { fmtUsd, modeLabel } from "@/lib/format";
 import MarketTicker from "@/components/market/MarketTicker";
 
 const NAV = [
-  // Анализы — главный раздел: с них начинается работа ученика. Дашборд убран,
-  // его содержимое дублировало то, что и так видно в аналитике и профиле.
-  { href: "/app/analysis", label: "Анализы", icon: ImageIcon, mobile: true },
-  { href: "/app/market", label: "Рынок", icon: Globe, mobile: true },
+  // Скальпинг первым: это рабочий стол трейдера, с него начинается день.
+  // Дальше рынок и анализы, остальное — как было.
   { href: "/app/scalping", label: "Скальпинг", icon: Waves, mobile: false },
+  { href: "/app/market", label: "Рынок", icon: Globe, mobile: true },
+  { href: "/app/analysis", label: "Анализы", icon: ImageIcon, mobile: true },
   { href: "/app/news", label: "ТВ", icon: Tv, mobile: false },
   { href: "/app/analytics", label: "Аналитика", icon: BarChart3, mobile: false },
   { href: "/app/shop", label: "Маркет", icon: ShoppingBag, mobile: true },
@@ -85,11 +85,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
-  // Скальпинг открыт не всем: он работает с живыми деньгами, и пока раздел
-  // доводится, в меню его видят только допущенные. Сервер проверяет то же
-  // самое на каждом запросе — прятать кнопку одной этой строкой было бы
-  // защитой от честных людей.
-  const visible = NAV.filter((n) => n.href !== "/app/scalping" || profile?.scalping);
 
   const balance = parseFloat(profile?.balance_usdt || "0");
   const mode = profile?.mode || "moderate";
@@ -109,7 +104,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Навигация - десктоп */}
           <nav className="hidden items-center gap-0.5 lg:flex">
-            {visible.map((n) => {
+            {NAV.map((n) => {
               const Icon = n.icon;
               const active = isActive(n.href);
               return (

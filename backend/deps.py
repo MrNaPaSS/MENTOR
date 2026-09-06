@@ -77,38 +77,3 @@ def get_current_mentor(payload: dict = Depends(get_token_payload)) -> dict:
     return payload
 
 
-def scalping_allowed(student: Student, config: BackendConfig) -> bool:
-    """Открыт ли ученику скальпинг-терминал.
-
-    Раздел работает с живыми деньгами, поэтому по умолчанию он закрыт для всех.
-    Ментору открыт всегда: его UID платформа знает и так, и заставлять его
-    прописывать себя же в список — верный способ закрыть раздел самому себе.
-    Остальным доступ выдаётся списком в окружении.
-    """
-    uid = str(student.weex_uid or "")
-    if config.mentor_uid and uid == config.mentor_uid:
-        return True
-
-    allowed = set(config.scalping_allowed)
-    return bool(allowed) and (str(student.tg_id or "") in allowed or uid in allowed)
-
-
-def require_scalping(
-    payload: dict = Depends(get_token_payload),
-    session=Depends(get_session),
-    config: BackendConfig = Depends(get_config),
-) -> Student | None:
-    """Пустить в терминал ментора или ученика из списка допущенных.
-
-    Проверка на сервере, а не только в интерфейсе: спрятанная кнопка не мешает
-    открыть адрес руками, а за этим адресом — торговля.
-    """
-    if payload.get("role") == "mentor":
-        return None
-
-    student = session.get(Student, int(payload.get("sub") or 0))
-    if student is None or not student.is_active:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Пользователь не найден")
-    if not scalping_allowed(student, config):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Раздел пока закрыт")
-    return student

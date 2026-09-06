@@ -184,9 +184,6 @@ class ProfileOut(BaseModel):
     turbo_leverage: Optional[int]
     balance_usdt: Optional[Decimal]
     balance_source: str
-    # Открыт ли скальпинг-терминал этому ученику. Интерфейс по этому полю
-    # решает, показывать ли раздел в меню.
-    scalping: bool = False
 
 
 class ProfilePatch(BaseModel):

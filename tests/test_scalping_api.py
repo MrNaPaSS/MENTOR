@@ -15,7 +15,6 @@ from fastapi.testclient import TestClient
 
 from backend.api import scalping as scalping_api
 from backend.config import BackendConfig
-from backend.deps import require_scalping
 from backend.security import create_access_token
 
 # Раздел закрыт для всех, кроме ментора и допущенных: сокет проверяет токен из
@@ -86,7 +85,6 @@ def app_and_collector():
     app.state.scalping = collector
     app.state.scalping_hub = ScalpingHub(collector)  # type: ignore[arg-type]
     # Доступ к разделу проверяется отдельно — здесь он не предмет теста.
-    app.dependency_overrides[require_scalping] = lambda: None
     # Сокету зависимости не подменить: он читает настройки приложения и токен
     # из адреса, поэтому здесь настоящие и то, и другое.
     app.state.config = BackendConfig(
@@ -171,7 +169,6 @@ def test_endpoints_are_503_without_collector():
     """Если сбор выключен, эндпоинты честно говорят об этом, а не падают."""
     app = FastAPI()
     app.include_router(scalping_api.router)
-    app.dependency_overrides[require_scalping] = lambda: None
     app.state.scalping = None
     with TestClient(app) as client:
         assert client.get("/api/scalping/screener").status_code == 503

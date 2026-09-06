@@ -28,8 +28,6 @@ import PaneDivider from "@/components/scalping/PaneDivider";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
 import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
-import { api } from "@/lib/api";
-import { getAccessToken } from "@/lib/auth";
 import type { ChartTheme } from "@/lib/indicator/shapes";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
@@ -218,22 +216,6 @@ function readWorkspace(): Partial<Workspace> | null {
 }
 
 export default function ScalpingPage() {
-  // Раздел закрыт до готовности: сервер это проверяет на каждом запросе, а
-  // здесь мы просто не показываем рабочий экран тем, кому он ещё не открыт —
-  // иначе человек увидит ряд ошибок вместо объяснения.
-  const [access, setAccess] = useState<boolean | null>(null);
-  useEffect(() => {
-    const token = getAccessToken();
-    if (!token) {
-      setAccess(false);
-      return;
-    }
-    api
-      .profile(token)
-      .then((body) => setAccess(Boolean(body.scalping)))
-      .catch(() => setAccess(false));
-  }, []);
-
   const [symbol, setSymbol] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("walls");
   const [agg, setAgg] = useState(10);
@@ -889,20 +871,6 @@ export default function ScalpingPage() {
   // Класс темы для рабочих панелей: стакан и график светлеют вместе.
   const pane = theme === "light" ? "pane-light" : "pane-dark";
   const paneStyle = paneHeight(journalOpen, journalH);
-
-  if (access === false) {
-    return (
-      <div className="grid h-[60vh] place-items-center px-6 text-center">
-        <div className="max-w-md">
-          <p className="text-sm font-semibold text-text-primary">Раздел пока закрыт</p>
-          <p className="mt-2 text-[12px] leading-relaxed text-text-muted">
-            Скальпинг-терминал работает с живыми деньгами и сейчас доступен
-            ограниченному кругу. Доступ открывает ментор.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div>

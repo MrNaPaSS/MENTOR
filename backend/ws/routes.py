@@ -59,7 +59,7 @@ async def ws_authed(websocket: WebSocket, token: str = Query(default="")):
 
 
 @router.websocket("/ws/scalping")
-async def ws_scalping(websocket: WebSocket, token: str = Query(default="")):
+async def ws_scalping(websocket: WebSocket):
     """Скринер и стакан. Клиент сам говорит, какой инструмент открыт.
 
     Команды приходят JSON-сообщениями:
@@ -73,12 +73,6 @@ async def ws_scalping(websocket: WebSocket, token: str = Query(default="")):
     hub = getattr(websocket.app.state, "scalping_hub", None)
     if hub is None:
         await websocket.close(code=4503)  # сбор данных выключен в конфигурации
-        return
-
-    # Тот же замок, что и на остальном разделе. У сокета нет заголовков, поэтому
-    # токен приходит в адресе: ?token=...
-    if not _scalping_allowed(websocket, token):
-        await websocket.close(code=4403)
         return
 
     await websocket.accept()
@@ -131,33 +125,3 @@ def _clamp_float(value, default: float, low: float, high: float) -> float:
         return max(low, min(float(value), high))
     except (TypeError, ValueError):
         return default
-
-
-def _scalping_allowed(websocket: WebSocket, token: str) -> bool:
-    """Пускать ли этот сокет в терминал.
-
-    Раздел закрыт до готовности: ментору открыт всегда, ученику — если он в
-    списке допущенных. Без токена — нет.
-    """
-    from core.db import SessionLocal
-    from core.models import Student
-    from backend.deps import scalping_allowed
-
-    config = websocket.app.state.config
-    if not token:
-        return False
-    try:
-        payload = decode_token(token, config.jwt_secret)
-    except TokenError:
-        return False
-    if payload.get("type") != "access":
-        return False
-    if payload.get("role") == "mentor":
-        return True
-
-    session = SessionLocal()
-    try:
-        student = session.get(Student, int(payload.get("sub") or 0))
-        return bool(student and student.is_active and scalping_allowed(student, config))
-    finally:
-        session.close()

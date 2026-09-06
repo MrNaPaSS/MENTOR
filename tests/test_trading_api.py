@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.api import trading as trading_api
-from backend.deps import get_current_student, get_session, require_scalping
+from backend.deps import get_current_student, get_session
 from core.db import Base
 from core.models import Student
 
@@ -116,7 +116,6 @@ def app_and_exchange(monkeypatch):
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_current_student] = lambda: student
     # Доступ к разделу проверяется отдельно — здесь он не предмет теста.
-    app.dependency_overrides[require_scalping] = lambda: student
 
     with TestClient(app) as client:
         yield client, exchange, session
