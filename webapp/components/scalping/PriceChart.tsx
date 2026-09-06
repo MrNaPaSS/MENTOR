@@ -579,6 +579,10 @@ function PriceChart({
       down: palette.down,
       upWick: palette.upWick,
       downWick: palette.downWick,
+      // Обводка там, где она есть у обычных свечей темы: на светлой свеча
+      // роста белая, и без неё на белом листе её не видно вовсе.
+      upBorder: palette.candleBorders ? palette.upBorder : undefined,
+      downBorder: palette.candleBorders ? palette.downBorder : undefined,
     });
   }, []);
 

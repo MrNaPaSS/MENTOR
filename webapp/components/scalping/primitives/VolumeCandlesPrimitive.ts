@@ -26,6 +26,14 @@ export type CandlePalette = {
   down: string;
   upWick: string;
   downWick: string;
+  /**
+   * Обводка тела. Пусто - без неё.
+   *
+   * На светлой теме свеча роста белая, и без обводки её просто нет на белом
+   * листе: видно только фитиль, торчащий из пустоты.
+   */
+  upBorder?: string;
+  downBorder?: string;
 };
 
 type Ready = {
@@ -71,9 +79,22 @@ class VolumeCandlesRenderer implements IPrimitivePaneRenderer {
 
         const top = Math.min(bar.open, bar.close) * vy;
         const bottom = Math.max(bar.open, bar.close) * vy;
+        const height = Math.max(bottom - top, vy);
+        const left = x - width / 2;
+
         context.fillStyle = body;
         // Доджи рисуем чертой: тело нулевой высоты просто исчезло бы.
-        context.fillRect(x - width / 2, top, width, Math.max(bottom - top, vy));
+        context.fillRect(left, top, width, height);
+
+        const border = bar.rising ? this.palette.upBorder : this.palette.downBorder;
+        if (border) {
+          // Обводка внутрь: линия по краю прямоугольника съедала бы полпикселя
+          // с каждой стороны, и тонкие свечи выглядели бы толще соседей.
+          context.strokeStyle = border;
+          context.lineWidth = Math.max(1, hx);
+          const inset = context.lineWidth / 2;
+          context.strokeRect(left + inset, top + inset, Math.max(width - context.lineWidth, 0), Math.max(height - context.lineWidth, 0));
+        }
       }
     });
   }
