@@ -1426,7 +1426,13 @@ export default function ScalpingPage() {
                   {dom ? fmtPrice(dom.mid, dom.tick) : "-"}
                 </span>
                 {dom?.wall && (
-                  <span className="text-[var(--pane-gold)]">
+                  <span
+                    className="cursor-help text-[var(--pane-gold)]"
+                    title={
+                      "Самая крупная одиночная заявка в книге - одна цена биржи, а не строка стакана. " +
+                      "Строка складывает все заявки своего шага цены, поэтому в ней сумма больше."
+                    }
+                  >
                     плита {money(dom.wall.notional)} · {fmtPrice(dom.wall.price, dom.tick)} ·{" "}
                     {dom.wall.side === "bid" ? "поддержка" : "сопротивление"}
                   </span>

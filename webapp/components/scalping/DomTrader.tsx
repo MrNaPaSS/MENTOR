@@ -295,8 +295,10 @@ const Row = memo(function Row({
       onMouseEnter={row.notional > 0 ? () => onHover?.(row) : undefined}
       onMouseLeave={row.notional > 0 ? () => onHover?.(null) : undefined}
       title={
-        (pickable ? "Нажмите: расчёт сделки или уведомление на этой цене" : "") +
-        (alerted ? "\nОтметка стоит: скажем, когда эту цену пересекут" : "")
+        (pickable
+          ? "Сумма всех заявок в этом шаге цены." +
+            "\nНажмите: расчёт сделки или уведомление на этой цене"
+          : "") + (alerted ? "\nОтметка стоит: скажем, когда эту цену пересекут" : "")
       }
       className={`flex items-center ${isBid ? "bg-[var(--pane-up-faint)]" : "bg-[var(--pane-down-faint)]"} ${
         pickable
