@@ -263,10 +263,9 @@ class PositionWatcher:
             self._http,
         )
         positions = await client.positions()
-        by_symbol = {str(p.get("symbol", "")).upper(): p for p in positions}
 
         for trade in trades:
-            position = by_symbol.get(trade.symbol.upper())
+            position = position_for(positions, trade.symbol, trade.side)
             streak = self._missing.get(trade.id, 0)
             self._missing[trade.id] = streak + 1 if position_size(position) <= 0 else 0
 
@@ -411,10 +410,7 @@ class PositionWatcher:
         size = float(trade.qty)
         try:
             positions = await client.positions()
-            for row in positions:
-                if str(row.get("symbol", "")).upper() == trade.symbol.upper():
-                    size = position_size(row) or size
-                    break
+            size = position_size(position_for(positions, trade.symbol, trade.side)) or size
         except WeexTradeError:
             pass
 
@@ -579,6 +575,51 @@ class PositionWatcher:
 # без биржевой цифры стоп встаёт по нашей формуле, а она не знает ни цены
 # исполнения, ни комиссии счёта.
 _be_fields_logged = False
+
+
+def position_side(row: dict[str, Any] | None) -> str:
+    """Сторона позиции: long, short или пусто, если биржа не сказала.
+
+    В хедже по инструменту стоят две позиции, и брать первую попавшуюся нельзя:
+    лонг увидит объём шорта, а приказ на закрытие уйдёт не в ту сторону - биржа
+    ответит «position side invalid» и будет права.
+
+    Сначала смотрим название стороны, потом знак объёма: в одностороннем режиме
+    поля со стороной может не быть вовсе, а минус в размере есть всегда.
+    """
+    if not row:
+        return ""
+    name = str(row.get("positionSide") or row.get("holdSide") or row.get("side") or "").lower()
+    if "long" in name or "buy" in name:
+        return "long"
+    if "short" in name or "sell" in name:
+        return "short"
+
+    for key in ("total", "size", "positionAmt", "available"):
+        try:
+            value = float(row.get(key))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if value:
+            return "long" if value > 0 else "short"
+    return ""
+
+
+def position_for(
+    positions: list[dict[str, Any]], symbol: str, side: str
+) -> dict[str, Any] | None:
+    """Позиция нужной стороны по инструменту.
+
+    Строку без стороны считаем своей: в одностороннем режиме позиция по
+    инструменту одна, и отказываться от неё значило бы не увидеть собственную.
+    """
+    for row in positions:
+        if str(row.get("symbol", "")).upper() != symbol.upper():
+            continue
+        found = position_side(row)
+        if found in ("", side):
+            return row
+    return None
 
 
 def exchange_breakeven(position: dict[str, Any] | None) -> float | None:

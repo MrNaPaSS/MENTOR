@@ -294,3 +294,40 @@ def test_journal_entry_keeps_the_targets_of_the_trade():
     # трёх, и на счёте минус.
     assert saved.outcome == "stop"
     assert float(saved.pnl) == pytest.approx(-1.5)
+
+
+# ── сторона позиции ──────────────────────────────────────────────────────────
+
+def test_position_side_reads_the_name_or_the_sign():
+    from backend.trading.watcher import position_side
+
+    assert position_side({"positionSide": "LONG"}) == "long"
+    assert position_side({"holdSide": "short"}) == "short"
+    # В одностороннем режиме стороны в ответе может не быть - её выдаёт минус.
+    assert position_side({"total": "-2"}) == "short"
+    assert position_side({"total": "2"}) == "long"
+    assert position_side({"total": "0"}) == ""
+    assert position_side(None) == ""
+
+
+def test_open_short_does_not_answer_for_a_waiting_long():
+    """При открытом шорте отмена ждущего лонга уходила закрывать шорт.
+
+    Терминал видел объём чужой стороны и слал рыночный приказ с не той
+    стороной позиции; биржа отвечала «position side invalid», а лимитка так и
+    оставалась висеть.
+    """
+    from backend.trading.watcher import position_for
+
+    rows = [{"symbol": "BTCUSDT", "positionSide": "SHORT", "total": "0.5"}]
+    assert position_for(rows, "BTCUSDT", "short") is not None
+    assert position_for(rows, "BTCUSDT", "long") is None
+
+
+def test_one_way_position_belongs_to_its_own_side():
+    from backend.trading.watcher import position_for
+
+    # Без поля стороны, но с минусом в объёме - это шорт, и лонгу он не свой.
+    rows = [{"symbol": "BTCUSDT", "total": "-0.5"}]
+    assert position_for(rows, "BTCUSDT", "short") is not None
+    assert position_for(rows, "BTCUSDT", "long") is None

@@ -34,6 +34,7 @@ from core.trading.position import (
     take_share,
 )
 from core.weex import keys as keystore
+from backend.trading.watcher import position_for
 from core.weex.futures import (
     public_filters,
     Credentials,
@@ -415,9 +416,11 @@ async def close_position(
 
     try:
         positions = await client.positions()
-        position = next(
-            (p for p in positions if str(p.get("symbol", "")).upper() == symbol), None
-        )
+        # Со стороной, а не просто по инструменту. При открытом шорте отмена
+        # ждущей лимитки в лонг уходила закрывать... шорт: терминал видел его
+        # объём и слал рыночный приказ с чужой стороной. Биржа отвечала
+        # «position side invalid» - и была права, а лимитка так и висела.
+        position = position_for(positions, symbol, body.side)
         # Момент входа нужен, чтобы собрать все исполнения этой сделки, а не
         # только последний ордер.
         rows = session.execute(
