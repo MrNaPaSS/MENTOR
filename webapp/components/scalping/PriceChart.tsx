@@ -424,9 +424,12 @@ function PriceChart({
   // Ярлык позиции и таймер свечи — это HTML поверх канвы, и им нужны пиксели.
   // Координата цены меняется и без новых данных: от прокрутки и масштаба, — а
   // о них библиотека не сообщает, поэтому опрашиваем по таймеру.
-  const [entryY, setEntryY] = useState<number | null>(null);
-  const [priceY, setPriceY] = useState<number | null>(null);
-  const [countdown, setCountdown] = useState("");
+  // Плашка позиции и таймер свечи стоят на своих ценах и обязаны держаться
+  // на них при любом движении графика. Поэтому их положение пишется прямо в
+  // узел на каждом кадре: состояние React перерисовывается позже отрисовки
+  // холста, и плашка отставала бы от линии на всё время перетаскивания.
+  const labelRef = useRef<HTMLDivElement>(null);
+  const clockRef = useRef<HTMLDivElement>(null);
   // Результат за сегодня по журналу. null — журнал недоступен: ученик не вошёл
   // в кабинет, и показывать ему чужой ноль незачем.
   const [todayPnl, setTodayPnl] = useState<number | null>(null);
@@ -934,26 +937,53 @@ function PriceChart({
     pushShapes();
   }, [trade, pushShapes]);
 
-  // Опрос координат для наложений. Четыре раза в секунду: таймер свечи идёт
-  // посекундно, а ярлык должен успевать за прокруткой, но не за каждым кадром.
+  // Положение наложений — покадрово, вместе с самим графиком.
+  //
+  // Раз в четверть секунды было мало: при перетаскивании и масштабировании
+  // холст перерисовывается каждый кадр, и плашка позиции плыла относительно
+  // своей линии. Кадр стоит одного вычисления координаты и записи стиля —
+  // дешевле, чем перерисовка React, которой здесь больше нет вовсе.
   useEffect(() => {
-    function tick() {
+    let frame = 0;
+    let shownClock = "";
+
+    function place(node: HTMLDivElement | null, y: number | null, offset: number) {
+      if (!node) return;
+      if (y === null) {
+        node.style.visibility = "hidden";
+        return;
+      }
+      node.style.visibility = "visible";
+      node.style.transform = `translateY(${y + offset}px)`;
+    }
+
+    function draw() {
+      frame = requestAnimationFrame(draw);
       const series = candleRef.current;
       if (!series) return;
-      const price = livePriceRef.current > 0 ? livePriceRef.current : dataRef.current.at(-1)?.close ?? 0;
-      const entry = trade && trade.status !== "closed" ? series.priceToCoordinate(trade.entry) : null;
-      setEntryY((prev) => (prev === entry ? prev : entry));
-      const y = price > 0 ? series.priceToCoordinate(price) : null;
-      setPriceY((prev) => (prev === y ? prev : y));
-      setCountdown((prev) => {
-        const next = untilClose(interval);
-        return prev === next ? prev : next;
-      });
+
+      const active = tradeRef.current;
+      place(
+        labelRef.current,
+        active && active.status !== "closed" ? series.priceToCoordinate(active.entry) : null,
+        -12,
+      );
+
+      const price =
+        livePriceRef.current > 0 ? livePriceRef.current : dataRef.current.at(-1)?.close ?? 0;
+      place(clockRef.current, price > 0 ? series.priceToCoordinate(price) : null, 10);
+
+      // Текст таймера меняется раз в секунду — пишем его только при смене.
+      const next = untilClose(interval);
+      if (next !== shownClock && clockRef.current) {
+        shownClock = next;
+        clockRef.current.textContent = next;
+      }
     }
-    tick();
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
-  }, [trade, interval]);
+
+    frame = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frame);
+  }, [interval]);
 
   // Отработанные сетапы из журнала прямо на графике.
   //
@@ -1066,14 +1096,15 @@ function PriceChart({
       {/* Ярлык позиции у линии входа: состояние, объём и результат в деньгах.
           Пока цена не дошла до уровня, там ноль и слово «ждём» — это тоже
           ответ, и он честнее пустого места. */}
-      {trade && trade.status !== "closed" && entryY !== null && (
+      {trade && trade.status !== "closed" && (
         <div
-          // Справа, но с отступом от ценовой шкалы: ярлык стоит на конце своей
-          // линии, а не в начале графика, где под ним чужие свечи, и при этом
-          // не наезжает на плашки цен.
-          className="pointer-events-auto absolute right-28 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
+          ref={labelRef}
+          // Справа, но с отступом от ценовой шкалы: плашка стоит на конце своей
+          // линии, а не в начале графика, где под ней чужие свечи, и при этом
+          // не наезжает на плашки цен. Вертикаль задаётся покадрово.
+          className="pointer-events-auto absolute right-28 top-0 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
           style={{
-            top: entryY - 12,
+            visibility: "hidden",
             borderColor: "var(--pane-border)",
             background: "var(--pane-bg)",
             color: "var(--pane-text)",
@@ -1124,18 +1155,15 @@ function PriceChart({
 
       {/* Время до закрытия свечи — под ценой, у самой шкалы. Скальперу важно,
           сколько осталось: свеча закрывается, и уровень подтверждается или нет. */}
-      {priceY !== null && (
-        <div
-          className="pointer-events-none absolute right-1 z-10 rounded px-1 py-px font-mono text-[10px] tabular-nums"
-          style={{
-            top: priceY + 10,
-            background: "var(--pane-deep)",
-            color: "var(--pane-text-2)",
-          }}
-        >
-          {countdown}
-        </div>
-      )}
+      <div
+        ref={clockRef}
+        className="pointer-events-none absolute right-1 top-0 z-10 rounded px-1 py-px font-mono text-[10px] tabular-nums"
+        style={{
+          visibility: "hidden",
+          background: "var(--pane-deep)",
+          color: "var(--pane-text-2)",
+        }}
+      />
     </div>
   );
 }
