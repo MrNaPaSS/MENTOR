@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { draftAt, flip, moveLevel, qtyOf, riskOf, rewardOf, rrOf, sideOf } from "@/lib/trade/manual";
+import {
+  draftAt,
+  flip,
+  maxMargin,
+  moveLevel,
+  qtyOf,
+  riskOf,
+  rewardOf,
+  rrOf,
+  sideOf,
+} from "@/lib/trade/manual";
 
 const base = {
   side: "long" as const,
@@ -104,5 +114,30 @@ describe("сторона", () => {
     expect(turned.take).toBe(79_800);
     expect(riskOf(turned)).toBeCloseTo(riskOf(base), 9);
     expect(rewardOf(turned)).toBeCloseTo(rewardOf(base), 9);
+  });
+});
+
+
+describe("предельная сумма", () => {
+  it("не больше свободных денег счёта", () => {
+    expect(maxMargin(80_000, 10, 250)).toBe(250);
+  });
+
+  it("считает потолок заявки по монете через цену и плечо", () => {
+    // 0.5 монеты по 80 000 - это 40 000 позиции, на десятом плече 4 000 маржи.
+    expect(maxMargin(80_000, 10, 1e9, { maxQty: 0.5 })).toBeCloseTo(4_000, 6);
+  });
+
+  it("берёт самое строгое из ограничений", () => {
+    expect(maxMargin(80_000, 10, 1_000, { maxQty: 0.5, maxPosition: 0.1 })).toBe(800);
+  });
+
+  it("без единого известного предела не ограничивает", () => {
+    expect(maxMargin(80_000, 10, 0)).toBe(0);
+  });
+
+  it("бессмысленный ввод не считает", () => {
+    expect(maxMargin(0, 10, 500)).toBe(0);
+    expect(maxMargin(80_000, 0, 500)).toBe(0);
   });
 });

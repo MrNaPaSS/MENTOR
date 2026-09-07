@@ -32,6 +32,7 @@ from core.trading.position import (
     breakeven_price,
     should_move_stop,
 )
+from backend.trading.refusals import explain
 from core.weex import keys as keystore
 from backend.trading.watcher import (
     fill_time,
@@ -152,15 +153,17 @@ def _require_client(session, student: Student) -> WeexFutures:
 
 
 def _fail(exc: WeexTradeError) -> HTTPException:
-    """Отказ биржи наружу отдаём как есть: трейдеру нужно знать причину.
+    """Отказ биржи наружу - словами, по которым понятно, что делать.
 
     Отказ по существу — это 400, а не 502: шлюз ни при чём, не подошли данные
     ордера. Заодно 502 от приложения браузер и прокси разбирают по-разному, и
     сообщение биржи до трейдера не доезжало.
+
+    Оригинал остаётся в журнале целиком: трейдеру нужен ответ, а нам - причина.
     """
     logger.warning("WEEX отказал: %s (код %s)", exc, exc.code)
     status = 502 if exc.retryable else 400
-    return HTTPException(status, f"Биржа: {exc}")
+    return HTTPException(status, explain(str(exc)))
 
 
 @router.get("/plans/{symbol}")
@@ -329,6 +332,11 @@ async def limits(symbol: str, student: Student = Depends(get_current_student)):
         "step": float(filters.get("step") or 0.001),
         "tick": float(filters.get("tick") or 0.01),
         "min_qty": float(filters.get("min_qty") or 0.001),
+        # Потолок одной заявки и всей позиции, в монете. По ним считается
+        # предельная сумма сделки: отказ «position exceed max size» приходит
+        # уже после нажатия, а знать предел нужно до.
+        "max_qty": float(filters.get("max_qty") or 0.0),
+        "max_position": float(filters.get("max_position") or 0.0),
     }
 
 

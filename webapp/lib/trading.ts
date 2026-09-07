@@ -176,6 +176,10 @@ export type SymbolLimits = {
   step: number;
   tick: number;
   min_qty: number;
+  /** Потолок одной заявки по монете, в самой монете. Ноль - биржа не назвала. */
+  max_qty: number;
+  /** Потолок всей позиции по монете. */
+  max_position: number;
 };
 
 /**

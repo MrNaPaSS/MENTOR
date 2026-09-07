@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from backend.api.trading import _fail, _num, _require_client
+from backend.api.trading import _fail, _get_session, _num, _require_client
 from backend.deps import get_current_student, get_session
 from backend.trading.watcher import (
     cancel_plan,
@@ -47,6 +47,7 @@ from core.weex.futures import (
     WeexFutures,
     WeexTradeError,
     plan_order_id,
+    public_price,
     round_to_tick,
 )
 
@@ -178,7 +179,13 @@ async def move_levels(
     if position is None:
         result = await _move_waiting(client, live, body, tick)
     else:
-        result = await _move_open(client, live, body, tick, mark_price(position))
+        # Цену спрашиваем отдельно: в ответе по позиции её нет вовсе - там
+        # только объёмы, стоимости и комиссии. Без неё не понять, где стоп, а
+        # где цель, и прежний стоп оставался висеть рядом с новым.
+        market = mark_price(position)
+        if market is None:
+            market = await public_price(await _get_session(), live.symbol)
+        result = await _move_open(client, live, body, tick, market)
 
     live.updated_at = utcnow()
     session.commit()

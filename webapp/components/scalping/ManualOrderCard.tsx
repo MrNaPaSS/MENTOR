@@ -16,6 +16,7 @@ import { GripHorizontal, X } from "lucide-react";
 import { price as fmtPrice } from "@/lib/scalping";
 import {
   flip,
+  maxMargin,
   moveLevel,
   qtyOf,
   rewardOf,
@@ -44,6 +45,9 @@ export default function ManualOrderCard({
   tick,
   maxLeverage,
   takerFee = TAKER_FEE,
+  maxQty,
+  maxPosition,
+  free = 0,
   onChange,
   onSubmit,
   onCancel,
@@ -54,6 +58,12 @@ export default function ManualOrderCard({
   maxLeverage?: number;
   /** Комиссия тейкера этой монеты: платится на входе и на выходе. */
   takerFee?: number;
+  /** Потолок одной заявки по монете, в самой монете. */
+  maxQty?: number;
+  /** Потолок всей позиции по монете. */
+  maxPosition?: number;
+  /** Свободные деньги счёта: маржу больше остатка внести нечем. */
+  free?: number;
   onChange: (next: ManualDraft) => void;
   onSubmit: () => void;
   onCancel: () => void;
@@ -85,6 +95,13 @@ export default function ManualOrderCard({
     if (cap !== null && draft.leverage > cap) onChange({ ...draft, leverage: cap });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cap, draft.leverage]);
+
+  // Предельная сумма: остаток счёта и потолки биржи по этой монете. Ноль -
+  // предел неизвестен, и тогда не ограничиваем: запретить возможное хуже, чем
+  // не подсказать.
+  const ceiling = maxMargin(draft.entry, draft.leverage, free, { maxQty, maxPosition });
+  const margins = ceiling > 0 ? capped(MARGINS, ceiling) : MARGINS;
+  const overSize = ceiling > 0 && draft.margin > ceiling;
 
   const long = draft.side === "long";
   const qty = qtyOf(draft);
@@ -206,7 +223,7 @@ export default function ManualOrderCard({
             же, и набирать их с клавиатуры двадцать раз за сессию незачем. */}
         <Chips
           label="сумма"
-          values={MARGINS}
+          values={margins}
           current={draft.margin}
           format={(v) => `${v}`}
           onPick={(value) => onChange({ ...draft, margin: value })}
@@ -250,9 +267,18 @@ export default function ManualOrderCard({
           </p>
         )}
 
+        {/* Предел биржи по этой монете и плечу. Отказ «position exceed max
+            size» приходит уже после нажатия - сказать надо до. */}
+        {overSize && (
+          <p className="text-[10px] leading-tight text-[var(--pane-down)]">
+            Больше {ceiling.toFixed(0)} $ на ×{draft.leverage} биржа не примет
+          </p>
+        )}
+
         <button
           onClick={onSubmit}
-          className="w-full rounded-md py-1.5 text-[11px] font-semibold transition-transform duration-150 ease-out active:scale-[0.98]"
+          disabled={overSize}
+          className="w-full rounded-md disabled:cursor-not-allowed disabled:opacity-50 py-1.5 text-[11px] font-semibold transition-transform duration-150 ease-out active:scale-[0.98]"
           style={{
             background: long ? "var(--pane-up)" : "var(--pane-down)",
             color: "var(--pane-deep)",
@@ -321,6 +347,19 @@ function PriceRow({
       </span>
     </label>
   );
+}
+
+/**
+ * Готовые суммы не выше предела, и сам предел последней кнопкой.
+ *
+ * Так же, как с плечом: кнопка, которая гарантированно приведёт к отказу
+ * биржи, - это не выбор, а ловушка. А встать ровно в потолок трейдер вправе.
+ */
+function capped(values: number[], ceiling: number): number[] {
+  const fits = values.filter((value) => value <= ceiling);
+  const top = Math.floor(ceiling);
+  if (top > 0 && !fits.includes(top)) fits.push(top);
+  return fits.length > 0 ? fits : [top > 0 ? top : values[0]];
 }
 
 function Chips({

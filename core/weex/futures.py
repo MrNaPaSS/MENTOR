@@ -65,6 +65,11 @@ DEFAULT_FILTERS = {
     "min_qty": 0.001,
     "max_leverage": 20.0,
     "taker_fee": 0.0008,
+    # Потолок одной заявки и всей позиции по инструменту, в монете. Биржа
+    # отдаёт их в справочнике, и знать их нужно до отправки: отказ «position
+    # exceed max size» приходит уже после нажатия.
+    "max_qty": 0.0,
+    "max_position": 0.0,
 }
 
 # Кэш на процесс: состав инструментов меняется раз в месяцы, а запрос тяжёлый.
@@ -191,9 +196,14 @@ def _parse_filters(row: dict[str, Any]) -> dict[str, float] | None:
     return {
         "step": out.get("step") or DEFAULT_FILTERS["step"],
         "tick": out.get("tick") or DEFAULT_FILTERS["tick"],
-        "min_qty": out.get("min_qty") or out.get("step") or DEFAULT_FILTERS["min_qty"],
+        "min_qty": _f(row.get("minOrderSize"))
+        or out.get("min_qty")
+        or out.get("step")
+        or DEFAULT_FILTERS["min_qty"],
         "max_leverage": _f(row.get("maxLeverage")) or DEFAULT_FILTERS["max_leverage"],
         "taker_fee": _f(row.get("takerFeeRate")) or DEFAULT_FILTERS["taker_fee"],
+        "max_qty": _f(row.get("maxOrderSize")),
+        "max_position": _f(row.get("maxPositionSize")),
     }
 
 

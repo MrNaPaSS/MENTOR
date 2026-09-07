@@ -1244,9 +1244,10 @@ function PriceChart({
       // спорят с разметкой той сделки, которая действительно идёт. Расчёт из
       // открытого окна — исключение: его показывают именно целиком.
       if (trade.status === "planned" && trade !== preview && trade.id !== peeked) {
-        tradeLinesRef.current.push(
-          line(trade.entry, palette.mtf, `лимит ${trade.side === "long" ? "↑" : "↓"}`, 2),
-        );
+        // Без подписи на линии: рядом с ней на той же цене стоит плашка
+        // «ждём вход» с крестиком, и подпись наезжала на него - снять заявку
+        // становилось нечем. Сторону и цену плашка называет сама.
+        tradeLinesRef.current.push(line(trade.entry, palette.mtf, "", 2));
         continue;
       }
 

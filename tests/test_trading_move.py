@@ -39,6 +39,14 @@ def moving(monkeypatch):
     exchange = FakeExchange()
     monkeypatch.setattr(trading_move, "_require_client", lambda *_: exchange)
 
+    # Цену биржа отдаёт отдельной ручкой: в ответе по позиции её нет. В тестах
+    # она постоянна - проверяем разбор заявок, а не сеть.
+    async def price(_session, _symbol):
+        return 80_050.0
+
+    monkeypatch.setattr(trading_move, "public_price", price)
+    monkeypatch.setattr(trading_move, "_get_session", lambda: _nothing())
+
     live = LiveTrade(
         student_id=student.id,
         client_id="BTCUSDT-1",
@@ -62,6 +70,11 @@ def moving(monkeypatch):
 
     with TestClient(app) as client:
         yield client, exchange, session, live
+
+
+async def _nothing():
+    """Сеанс сети в тестах не нужен: цену подменяем целиком."""
+    return None
 
 
 def move(client, **body):
@@ -357,3 +370,30 @@ def test_target_above_market_is_never_taken_for_a_stop(moving):
 
     assert "s1" in exchange.algo_cancelled
     assert "x9" not in exchange.algo_cancelled
+
+
+def test_stop_is_recognised_without_a_price_in_the_position(moving):
+    """Цены в ответе по позиции нет - её спрашивают отдельно.
+
+    Без цены правило «стоп ниже рынка» не работает вовсе, и прежний стоп
+    оставался висеть рядом с новым. Именно это и происходило на счёте.
+    """
+    client, exchange, session, live = moving
+    live.status = "open"
+    session.commit()
+
+    # Ровно как отвечает биржа: объёмы и стоимости, ни одной цены.
+    exchange.position = {
+        "symbol": "BTCUSDT",
+        "positionSide": "LONG",
+        "size": "0.01",
+        "cumOpenValue": "800",
+        "cumOpenSize": "0.01",
+    }
+    exchange.plans_open = [
+        {"orderId": "s1", "planType": "POSITION_TPSL", "triggerPrice": "79900", "quantity": "0.01"},
+    ]
+
+    move(client, stop=79_950.0)
+
+    assert "s1" in exchange.algo_cancelled

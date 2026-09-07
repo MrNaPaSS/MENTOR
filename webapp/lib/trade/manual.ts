@@ -133,6 +133,34 @@ export function moveLevel(
 }
 
 /**
+ * Наибольшая сумма, с которой сделку вообще примут.
+ *
+ * Ограничений три, и берётся самое строгое: свободные деньги счёта - маржу
+ * больше остатка внести нечем; потолок одной заявки по монете; потолок всей
+ * позиции. Два последних биржа держит в монете, поэтому переводим их в деньги
+ * через цену входа и плечо.
+ *
+ * Ноль означает «предел неизвестен»: биржа его не назвала, и выдумывать за неё
+ * нельзя - лучше не ограничивать вовсе, чем запретить возможное.
+ */
+export function maxMargin(
+  entry: number,
+  leverage: number,
+  free: number,
+  caps: { maxQty?: number; maxPosition?: number } = {},
+): number {
+  if (!(entry > 0) || !(leverage >= 1)) return 0;
+
+  const limits: number[] = [];
+  if (free > 0) limits.push(free);
+  for (const qty of [caps.maxQty, caps.maxPosition]) {
+    if (qty && qty > 0) limits.push((qty * entry) / leverage);
+  }
+  if (limits.length === 0) return 0;
+  return Math.min(...limits);
+}
+
+/**
  * Развернуть заготовку на другую сторону.
  *
  * Стоп и цель меняются местами относительно входа, расстояния сохраняются:
