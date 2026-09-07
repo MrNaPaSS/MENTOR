@@ -395,11 +395,24 @@ class PositionWatcher:
                 changed = True
 
         if decision.closed:
+            # Сначала запись, потом закрытие. Наоборот - это сделка, которой
+            # нет ни на бирже, ни в журнале: запись падала, сделка всё равно
+            # помечалась закрытой, и следующий проход её уже не видел. Сделки
+            # по стопу пропадали из журнала именно так.
+            try:
+                await self._record(session, client, trade)
+            except Exception as exc:  # noqa: BLE001 - причина в логе, попробуем позже
+                logger.error(
+                    "Сделка %s не записана в журнал, попробуем на следующем проходе: %s",
+                    trade.symbol,
+                    exc,
+                )
+                return
+
             trade.status = "closed"
             trade.closed_at = utcnow()
             changed = True
             self._missing.pop(trade.id, None)
-            await self._record(session, client, trade)
             logger.info("Позиция закрыта: %s", trade.symbol)
 
         if changed:
@@ -617,8 +630,6 @@ class PositionWatcher:
             .where(ScalpTrade.student_id == trade.student_id)
             .where(ScalpTrade.client_id == trade.client_id)
         ).scalar_one_or_none()
-        if exists is not None:
-            return
 
         gross = 0.0
         fee = 0.0
@@ -667,31 +678,32 @@ class PositionWatcher:
         # комиссии, а трейдер видит после.
         pnl = gross - fee
 
-        session.add(
-            ScalpTrade(
-                student_id=trade.student_id,
-                client_id=trade.client_id,
-                symbol=trade.symbol,
-                side=trade.side,
-                entry=float(trade.entry),
-                stop=float(trade.initial_stop),
-                exit_price=exit_price,
-                qty=float(trade.qty),
-                margin=float(trade.margin or 0) or 1.0,
-                leverage=trade.leverage,
-                takes_hit=hit,
-                # Цели переносим целиком: без них журнал знает, сколько целей
-                # взято, но не знает, каких именно, и отрисовать сделку задним
-                # числом уже нечем.
-                targets_json=trade.targets_json or "[]",
-                outcome="take" if pnl > 0 else "stop",
-                pnl=pnl,
-                fee=fee,
-                opened_at=trade.opened_at,
-                closed_at=trade.closed_at or utcnow(),
-                note="биржа",
-            )
+        # Запись могла появиться раньше нашей: терминал пишет сразу, чтобы
+        # сделка не пропала, если сервер до неё не дойдёт. Тогда мы её не
+        # пропускаем, а поправляем - наши числа с биржи, а те были оценкой.
+        record = exists or ScalpTrade(
+            student_id=trade.student_id, client_id=trade.client_id
         )
+        record.symbol = trade.symbol
+        record.side = trade.side
+        record.entry = float(trade.entry)
+        record.stop = float(trade.initial_stop)
+        record.exit_price = exit_price
+        record.qty = float(trade.qty)
+        record.margin = float(trade.margin or 0) or 1.0
+        record.leverage = trade.leverage
+        record.takes_hit = hit
+        # Цели переносим целиком: без них журнал знает, сколько целей взято,
+        # но не знает, каких именно, и отрисовать сделку задним числом нечем.
+        record.targets_json = trade.targets_json or "[]"
+        record.outcome = "take" if pnl > 0 else "stop"
+        record.pnl = pnl
+        record.fee = fee
+        record.opened_at = trade.opened_at
+        record.closed_at = trade.closed_at or utcnow()
+        record.note = "биржа"
+        if exists is None:
+            session.add(record)
 
 
 # Имена полей в отчёте об исполнениях. У каждой биржи свои, а по этим числам
