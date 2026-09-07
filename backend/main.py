@@ -107,7 +107,7 @@ def create_app(
     app.include_router(stats.router)
     app.include_router(students.router)
     app.include_router(profile.router)
-    app.include_router(shots.router)
+    app.include_router(shots.api_router)
     app.include_router(admin_affiliate.router)
     app.include_router(institutional.router)
     app.include_router(broadcast.router)
@@ -120,6 +120,9 @@ def create_app(
     app.include_router(shop.admin_router)
     app.include_router(scalping_api.router)
     app.include_router(ws_routes.router)
+    # Короткий путь снимка - последним: он живёт в корне и ловит одиночный
+    # сегмент, поэтому пускать его вперёд остальных маршрутов нельзя.
+    app.include_router(shots.router)
 
     # Отдача загруженных файлов (картинки товаров и т.п.). Фронт подставляет API_URL
     # к путям /uploads/..., поэтому файлы грузятся с бэкенда даже при сплит-деплое.

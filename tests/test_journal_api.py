@@ -252,6 +252,7 @@ def test_shot_is_saved_and_served(tmp_path, monkeypatch):
     session.commit()
 
     app = FastAPI()
+    app.include_router(shots_api.api_router)
     app.include_router(shots_api.router)
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_current_student] = lambda: student
@@ -273,7 +274,7 @@ def test_shot_is_saved_and_served(tmp_path, monkeypatch):
         assert created.status_code == 201
         shot_id = created.json()["id"]
 
-        page = client.get(f"/api/shots/{shot_id}")
+        page = client.get(f"/{shot_id}")
         assert page.status_code == 200
         assert "BTCUSDT" in page.text
         # Превью в мессенджерах собирается по og-тегам ещё до открытия.
@@ -281,7 +282,7 @@ def test_shot_is_saved_and_served(tmp_path, monkeypatch):
         # Имени владельца на странице нет.
         assert "scalper" not in page.text
 
-        image = client.get(f"/api/shots/{shot_id}.png")
+        image = client.get(f"/{shot_id}.png")
         assert image.status_code == 200
         assert image.content == png
 
@@ -310,6 +311,7 @@ def test_shot_refuses_what_is_not_a_picture(tmp_path, monkeypatch):
     session.commit()
 
     app = FastAPI()
+    app.include_router(shots_api.api_router)
     app.include_router(shots_api.router)
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_current_student] = lambda: student

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import os
 import re
 import secrets
 from datetime import timezone
@@ -30,8 +31,18 @@ from sqlalchemy import select
 from backend.deps import get_current_student, get_session
 from core.models import ChartShot, Student
 
-router = APIRouter(prefix="/api/shots", tags=["shots"])
+# Ссылка на снимок - короткая и без служебных слов: её отправляют людям, а не
+# программам. Отсюда путь прямо в корне, «api» и «shots» в нём не нужны.
+#
+# Адрес берётся из окружения: когда снимки начнут отдаваться с основного
+# домена, ссылки станут красивее без единой правки кода.
+router = APIRouter(tags=["shots"])
+api_router = APIRouter(prefix="/api/shots", tags=["shots"])
 
+BASE_URL = (os.getenv("SHOTS_BASE_URL", "") or "").rstrip("/")
+
+# Идентификатор снимка: буквы, цифры, дефис и подчёркивание. Ограничение нужно
+# не для красоты - без него путь в корне перехватывал бы чужие адреса.
 _DIR = Path(__file__).parent.parent.parent / "webapp" / "public" / "uploads" / "shots"
 
 # Восемь мегабайт: снимок графика в PNG весит доли мегабайта, всё что заметно
@@ -39,6 +50,7 @@ _DIR = Path(__file__).parent.parent.parent / "webapp" / "public" / "uploads" / "
 MAX_BYTES = 8 * 1024 * 1024
 
 _DATA_URL = re.compile(r"^data:image/png;base64,", re.IGNORECASE)
+_ID_OK = re.compile(r"^[A-Za-z0-9_-]{8,16}$")
 
 
 class ShotIn(BaseModel):
@@ -50,7 +62,7 @@ class ShotIn(BaseModel):
     note: str = Field(default="", max_length=140)
 
 
-@router.post("", status_code=201)
+@api_router.post("", status_code=201)
 def save_shot(
     body: ShotIn,
     student: Student = Depends(get_current_student),
@@ -83,12 +95,14 @@ def save_shot(
         )
     )
     session.commit()
-    return {"id": shot_id, "url": f"/api/shots/{shot_id}"}
+    return {"id": shot_id, "url": f"{BASE_URL}/{shot_id}"}
 
 
-@router.get("/{shot_id}.png")
+@router.get("/{shot_id}.png", include_in_schema=False)
 def shot_image(shot_id: str, session=Depends(get_session)):
     """Сама картинка. Открыта всем: ссылкой делятся с теми, у кого нет входа."""
+    if not _ID_OK.match(shot_id):
+        raise HTTPException(404, "Снимок не найден")
     shot = session.get(ChartShot, shot_id)
     path = _DIR / f"{shot_id}.png"
     if shot is None or not path.exists():
@@ -96,13 +110,15 @@ def shot_image(shot_id: str, session=Depends(get_session)):
     return FileResponse(path, media_type="image/png")
 
 
-@router.get("/{shot_id}", response_class=HTMLResponse)
+@router.get("/{shot_id}", response_class=HTMLResponse, include_in_schema=False)
 def shot_page(shot_id: str, session=Depends(get_session)):
     """Страница снимка: картинка, монета, таймфрейм, автор и время.
 
     Отдаём готовый HTML с сервера, а не страницу приложения: ссылку открывают
     в мессенджерах, и превью там собирается по og-тегам ещё до открытия.
     """
+    if not _ID_OK.match(shot_id):
+        raise HTTPException(404, "Снимок не найден")
     shot = session.execute(
         select(ChartShot).where(ChartShot.id == shot_id)
     ).scalar_one_or_none()
@@ -119,7 +135,7 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     stamp = when.strftime("%d.%m.%Y %H:%M UTC") if when else ""
 
     title = f"{symbol} · {interval}"
-    image = f"/api/shots/{shot_id}.png"
+    image = f"{BASE_URL}/{shot_id}.png"
 
     return HTMLResponse(
         f"""<!doctype html>

@@ -252,5 +252,8 @@ export async function share(
       interval: meta.interval,
     }),
   });
-  return body ? `${API_URL}${body.url}` : null;
+  if (!body) return null;
+  // Сервер может отдать готовый адрес: тогда снимки живут на своём домене, и
+  // подставлять адрес приложения нельзя.
+  return /^https?:\/\//.test(body.url) ? body.url : `${API_URL}${body.url}`;
 }

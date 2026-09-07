@@ -401,54 +401,6 @@ function riskFree(trade: ActiveTrade): boolean {
   return trade.side === "long" ? trade.stop >= trade.entry : trade.stop <= trade.entry;
 }
 
-/**
- * Снимок графика со всеми слоями.
- *
- * Библиотека умеет отдавать свой холст сама, но рисует в нём только то, что
- * знает: наши примитивы - свечи по объёму, боксы сделок, ленты индикатора -
- * живут отдельными холстами поверх, и снимок выходил пустым белым листом.
- * Поэтому собираем всё, что реально видно: холсты складываются в порядке
- * наложения, как их рисует браузер.
- */
-function snapshot(chart: IChartApi, box: HTMLDivElement): HTMLCanvasElement | null {
-  // Основа - холст библиотеки: она рисует его заново и целиком, со свечами,
-  // шкалами и сеткой. Читать её живые холсты нельзя: они могут быть отданы в
-  // отдельный поток, и тогда чтение возвращает пустоту - именно так снимок и
-  // получался белым листом.
-  let base: HTMLCanvasElement | null = null;
-  try {
-    base = chart.takeScreenshot();
-  } catch {
-    base = null;
-  }
-  if (!base) return null;
-
-  // Поверх - наши слои: объёмные свечи, боксы сделок, ленты индикатора.
-  // Библиотека о них не знает, поэтому в её снимок они не попадают.
-  const frame = box.getBoundingClientRect();
-  const ratio = base.width / Math.max(1, frame.width);
-  const ctx = base.getContext("2d");
-  if (!ctx) return base;
-
-  for (const layer of Array.from(box.querySelectorAll("canvas"))) {
-    if (layer.width === 0 || layer.height === 0) continue;
-    const at = layer.getBoundingClientRect();
-    try {
-      ctx.drawImage(
-        layer,
-        Math.round((at.left - frame.left) * ratio),
-        Math.round((at.top - frame.top) * ratio),
-        Math.round(at.width * ratio),
-        Math.round(at.height * ratio),
-      );
-    } catch {
-      // Слой, закрытый для чтения, пропускаем: снимок без него лучше, чем
-      // ошибка вместо картинки.
-    }
-  }
-  return base;
-}
-
 /** ATR последних баров: по нему предлагается стоп. */
 function currentAtr(candles: Candle[]): number {
   if (candles.length < 15) return 0;
@@ -868,7 +820,10 @@ function PriceChart({
     if (shotRef.current) {
       // Сначала пробуем собрать слои сами - в них наши примитивы. Если
       // собрать нечего, берём холст библиотеки: он хотя бы со свечами.
-      shotRef.current.current = () => snapshot(chart, box);
+      // Снимок делает библиотека: она рисует холст заново и целиком. Читать
+      // живые холсты со страницы нельзя - браузер отдаёт их в отдельный поток,
+      // и чтение возвращает пустоту, из-за чего снимок выходил белым листом.
+      shotRef.current.current = () => chart.takeScreenshot();
     }
     return () => {
       chart.remove();
