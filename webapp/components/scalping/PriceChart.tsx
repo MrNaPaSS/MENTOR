@@ -862,8 +862,9 @@ function PriceChart({
         handler?.(nearest, atr);
         return;
       }
-      // Мимо полок - значит трейдер целился в саму цену: отсюда начинается
-      // ручная лимитка.
+      // Мимо полок - значит по пустому месту. Закреплённая разметка заявки
+      // снимается: трейдер посмотрел, поправил и отпустил её взглядом.
+      setPinned(null);
       const price = series.coordinateToPrice(param.point.y);
       if (price !== null && price > 0) emptyClickRef.current?.(price, atr);
     });
@@ -1715,7 +1716,8 @@ function PriceChart({
               className="pointer-events-auto absolute right-28 top-0 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
               style={{
                 visibility: "hidden",
-                borderColor: "var(--pane-border)",
+                borderColor:
+                  pinned === t.id ? "var(--pane-accent)" : "var(--pane-border)",
                 background: "var(--pane-bg)",
                 color: "var(--pane-text)",
               }}
@@ -1727,10 +1729,14 @@ function PriceChart({
               </span>
               {t.status === "planned" ? (
                 <span
-                  className="cursor-help text-[var(--pane-muted)]"
-                  title="Наведите - покажем бокс, стоп и цели этой заявки"
+                  className="cursor-pointer text-[var(--pane-muted)]"
+                  title={
+                    pinned === t.id
+                      ? "Нажмите, чтобы убрать разметку"
+                      : "Нажмите - закрепим бокс, стоп и цели, их можно будет двигать"
+                  }
                 >
-                  ждём вход
+                  {pinned === t.id ? "правим" : "ждём вход"}
                 </span>
               ) : (
                 <span
