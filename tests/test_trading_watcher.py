@@ -819,3 +819,73 @@ def test_named_fee_is_taken_as_it_is():
     ]
     _, fee, _ = settle(fills, 100.0, "long", taker_fee=0.0008)
     assert fee == pytest.approx(4.01)
+
+
+def test_fee_is_counted_for_fills_the_report_stays_silent_about():
+    """Комиссия названа не за все исполнения - досчитываем молчащие.
+
+    Числа настоящие, с биржи. Лонг ETHUSDT: вход 2482.71, закрытие 2488.80,
+    объём 20.155, на счёт пришло +90.7024. Позиция закрывалась тремя частями,
+    и про среднюю - половину объёма - отчёт про комиссию промолчал.
+
+    Раньше одного названного исполнения хватало, чтобы отключить досчёт для
+    всех прочих: комиссия выходила ровно на три четверти настоящей, и в журнал
+    уходило +98.71 вместо +90.70.
+    """
+    from backend.trading.watcher import settle
+
+    entry = 2482.71
+    qty = 20.155
+    exit_price = 2488.80
+    # Ставка, по которой биржа удержала на самом деле: 0.032% с ноги.
+    rate = 0.00032
+
+    parts = [0.3, 0.5, 0.2]
+    fills = [
+        {
+            "side": "BUY",
+            "price": str(entry),
+            "qty": str(qty),
+            "realizedPnl": "0",
+            "commission": str(entry * qty * rate),
+        }
+    ]
+    for i, share in enumerate(parts):
+        size = qty * share
+        one = {
+            "side": "SELL",
+            "price": str(exit_price),
+            "qty": str(size),
+            "realizedPnl": str((exit_price - entry) * size),
+        }
+        # Про среднюю часть биржа комиссию не назвала.
+        if i != 1:
+            one["commission"] = str(exit_price * size * rate)
+        fills.append(one)
+
+    gross, fee, _ = settle(fills, entry, "long", taker_fee=0.0008)
+
+    assert gross == pytest.approx(122.744, abs=0.01)
+    # Комиссия обеих ног целиком, а не трёх четвертей.
+    assert fee == pytest.approx(qty * (entry + exit_price) * rate, rel=1e-6)
+    # То, что пришло на счёт.
+    assert gross - fee == pytest.approx(90.70, abs=0.05)
+
+
+def test_silent_fill_uses_the_rate_of_the_named_ones_not_the_reference():
+    """Ставку берём у самих исполнений, а не справочную.
+
+    Справочная ставка инструмента бывает втрое выше удержанной, и досчёт по ней
+    записал бы убыток, которого не было.
+    """
+    from backend.trading.watcher import settle
+
+    fills = [
+        # 0.032% от оборота 1000 - это 0.32, по ней и досчитаем вторую ногу.
+        {"side": "BUY", "price": "100", "qty": "10", "commission": "0.32"},
+        # Комиссии нет: досчитаем по ставке первой ноги, 0.032%.
+        {"side": "SELL", "price": "110", "qty": "10", "realizedPnl": "100"},
+    ]
+    _, fee, _ = settle(fills, 100.0, "long", taker_fee=0.0008)
+
+    assert fee == pytest.approx(0.32 + 110 * 10 * 0.00032, rel=1e-6)
