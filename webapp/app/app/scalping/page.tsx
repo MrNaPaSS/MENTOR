@@ -1108,8 +1108,18 @@ export default function ScalpingPage() {
   useEffect(() => {
     // Снятая лимитка в журнал не идёт: позиции не было, и запись о ней
     // засоряет и список, и статистику.
+    //
+    // При подключённом счёте не пишем вовсе: сделку записывает сопровождение
+    // по исполнениям с биржи, и делает это до того, как пометит её закрытой,
+    // повторяя попытки при неудаче. Наша оценка считается по цене стакана и
+    // расходится с настоящей в разы - вписывать её в журнал значит вести
+    // статистику по выдуманным числам.
     const done = trades.filter(
-      (t) => t.status === "closed" && wasEntered(t) && !savedTradesRef.current.has(t.id),
+      (t) =>
+        t.status === "closed" &&
+        wasEntered(t) &&
+        !live &&
+        !savedTradesRef.current.has(t.id),
     );
     for (const t of done) {
       savedTradesRef.current.add(t.id);
@@ -1127,7 +1137,7 @@ export default function ScalpingPage() {
     if (trades.some((t) => t.status === "closed")) {
       setTrades((list) => list.filter((t) => t.status !== "closed"));
     }
-  }, [trades]);
+  }, [trades, live]);
 
   /**
    * Поставить или снять отметку на цене.
