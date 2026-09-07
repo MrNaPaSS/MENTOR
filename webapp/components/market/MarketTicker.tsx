@@ -63,15 +63,13 @@ export default function MarketTicker() {
   const items = [...tickers, ...tickers];
 
   return (
-    // Строка живёт в теме сайта, а не сама по себе. Раньше цвета были заданы
-    // прямо, мимо палитры, и на светлой теме над белым сайтом висела чёрная
-    // полоса - единственное тёмное место на всей странице.
+    // У строки свой набор цветов на каждую тему - он задан переменными
+    // `--tick-*`. Тёмный остался тем, с которым её задумывали; светлый не
+    // взят у панелей терминала, а подобран отдельно: витрина рынка не обязана
+    // совпадать с ними, но на белой странице обязана быть белой.
     <div
       className="overflow-hidden border-b backdrop-blur-sm"
-      style={{
-        background: "rgb(var(--bg-deep) / 0.9)",
-        borderColor: "var(--pane-border)",
-      }}
+      style={{ background: "var(--tick-bg)", borderColor: "var(--tick-line)" }}
     >
       <div
         ref={trackRef}
@@ -86,20 +84,20 @@ export default function MarketTicker() {
               {/* Цветная точка = индикатор направления */}
               <span
                 className="inline-block h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: pos ? "var(--pane-up)" : "var(--pane-down)" }}
+                style={{ backgroundColor: pos ? "var(--tick-up)" : "var(--tick-down)" }}
               />
-              <span className="font-semibold" style={{ color: "var(--pane-text-2)" }}>
+              <span className="font-semibold" style={{ color: "var(--tick-symbol)" }}>
                 {sym}
               </span>
               <span
                 className="font-mono font-medium tabular-nums"
-                style={{ color: "var(--pane-text)" }}
+                style={{ color: "var(--tick-price)" }}
               >
                 ${formatPrice(t.price)}
               </span>
               <span
                 className="font-mono text-[11px] font-semibold tabular-nums"
-                style={{ color: pos ? "var(--pane-up)" : "var(--pane-down)" }}
+                style={{ color: pos ? "var(--tick-up)" : "var(--tick-down)" }}
               >
                 {pos ? "▲" : "▼"} {Math.abs(t.change).toFixed(2)}%
               </span>

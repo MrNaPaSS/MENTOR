@@ -1834,7 +1834,7 @@ function PriceChart({
         // на него в журнале. Идти за ним через панель инструментов незачем.
         <button
           onClick={onOpenJournal}
-          title="Открыть журнал сделок"
+          title={showJournal ? "Закрыть журнал" : "Открыть журнал сделок"}
           className="absolute right-24 top-1 z-10 font-mono text-[11px] tabular-nums transition-opacity duration-150 ease-out hover:opacity-80"
         >
           <span className="text-[var(--pane-muted)]">PnL сегодня </span>

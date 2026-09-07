@@ -14,7 +14,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import journal as journal_api
-from backend.deps import get_current_student, get_session
+from backend.deps import (
+    get_current_mentor,
+    get_current_student,
+    get_session,
+    get_token_payload,
+)
 from core.db import Base
 from core.models import Student
 
@@ -42,11 +47,21 @@ def client():
     app.include_router(journal_api.router)
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_current_student] = lambda: student
+    # По умолчанию клиент - ученик: проверку прав наставника проходит настоящая
+    # зависимость, а не подстановка, иначе тест на отказ ничего не проверяет.
+    app.dependency_overrides[get_token_payload] = lambda: {"role": "student"}
     # Доступ к разделу проверяется отдельно — здесь он не предмет теста.
 
     with TestClient(app) as c:
+        # Права наставника подставляет тот тест, которому они нужны.
+        c.app = app  # type: ignore[attr-defined]
         yield c
     session.close()
+
+
+def as_mentor(client):
+    """Дать этому клиенту права наставника."""
+    client.app.dependency_overrides[get_current_mentor] = lambda: {"role": "mentor"}
 
 
 def trade(**over):
@@ -168,11 +183,46 @@ def test_december_calendar_does_not_break_on_year_edge(client):
     assert body["total"] == 30.0
 
 
-def test_trade_can_be_deleted(client):
+def test_trade_can_be_deleted_by_mentor(client):
+    as_mentor(client)
     created = client.post("/api/journal/trades", json=trade()).json()
     assert client.delete(f"/api/journal/trades/{created['id']}").status_code == 200
     assert client.get("/api/journal/trades").json()["summary"]["count"] == 0
     assert client.delete(f"/api/journal/trades/{created['id']}").status_code == 404
+
+
+def test_student_cannot_delete_a_trade(client):
+    """Журнал - статистика, а не список удачных сделок.
+
+    Право стереть из него неудачную запись обесценивает его целиком: остаётся
+    красивый ряд, из которого ничего не следует.
+    """
+    created = client.post("/api/journal/trades", json=trade()).json()
+    assert client.delete(f"/api/journal/trades/{created['id']}").status_code == 403
+    assert client.get("/api/journal/trades").json()["summary"]["count"] == 1
+
+
+def test_exchange_record_is_not_overwritten_by_the_terminal(client, ):
+    """Оценка с экрана не переписывает числа, пришедшие с биржи.
+
+    Терминал пишет сделку сразу, чтобы она не потерялась, но его результат -
+    оценка по цене стакана. Сопровождение следом кладёт настоящий, с биржи. Кто
+    напишет последним, того и цифры, и последним оказывался терминал.
+    """
+    from core.models import ScalpTrade
+
+    created = client.post("/api/journal/trades", json=trade(pnl=487.0)).json()
+
+    # Сопровождение поправило запись настоящими числами.
+    session = client.app.dependency_overrides[get_session]()
+    row = session.get(ScalpTrade, created["id"])
+    row.pnl = 519.0
+    row.from_exchange = True
+    session.commit()
+
+    # Терминал повторяет свою отправку - и она ничего не меняет.
+    again = client.post("/api/journal/trades", json=trade(pnl=487.0)).json()
+    assert again["pnl"] == 519.0
 
 
 def test_workspace_round_trip(client):

@@ -1934,13 +1934,16 @@ export default function ScalpingPage() {
               className={`${pane} flex shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] xl:w-[var(--dom-w)]`}
               style={paneStyle}
             >
-              <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-3 py-2">
+              {/* Шапка переносится по строкам, а не выдавливает кнопки наружу.
+                  На монете с мелким шагом подпись «= 0.00000001» длиннее всех
+                  кнопок вместе взятых, и глубина уезжала за край панели. */}
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-[var(--pane-border)] px-3 py-2">
                 <span className="font-semibold text-[var(--pane-text)]">{base(symbol)}</span>
                 {/* Без словесных подписей: множители и глубина разделены
                     чертой, а что делает кнопка - говорит подсказка при
                     наведении. Рядом с множителем стоит получившийся шаг в
                     деньгах - по нему и ориентируются, а не по кратности. */}
-                <div className="flex items-center gap-0.5">
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-0.5">
                   {STEPS.map((step) => (
                     <button
                       key={step.agg}
@@ -1952,12 +1955,15 @@ export default function ScalpingPage() {
                     </button>
                   ))}
                   {dom && dom.tick > 0 && (
-                    <span className="ml-1 font-mono text-[10px] text-[var(--pane-text-2)]">
+                    <span
+                      className="ml-1 max-w-[7rem] truncate font-mono text-[10px] text-[var(--pane-text-2)]"
+                      title={`Шаг цены в стакане: ${fmtPrice(dom.tick, dom.tick)}`}
+                    >
                       = {fmtPrice(dom.tick, dom.tick)}
                     </span>
                   )}
 
-                  <span className="mx-2 h-3 w-px bg-[var(--pane-border)]" />
+                  <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
                   {DEPTHS.map((depth) => (
                     <button
                       key={depth}
@@ -2285,7 +2291,7 @@ export default function ScalpingPage() {
                   dragLevels={dragLevels}
                   orderChip={orderChip}
                   onAddAlert={addAlert}
-                  onOpenJournal={() => setJournalOpen(true)}
+                  onOpenJournal={() => setJournalOpen((open) => !open)}
                   onAddOrder={startManual}
                 />
               </div>

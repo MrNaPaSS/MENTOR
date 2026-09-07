@@ -16,6 +16,7 @@ import { RefreshCw, Trash2, X } from "lucide-react";
 import {
   loadCalendar,
   loadTrades,
+  canEditJournal,
   removeTrade,
   type JournalDay,
   type JournalSummary,
@@ -116,6 +117,12 @@ export default function JournalPanel({
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Право править журнал спрашиваем после отрисовки: ключ лежит в браузере, а
+  // на сервере страницы его нет, и разметка разошлась бы с ним.
+  const [mentor, setMentor] = useState(false);
+  useEffect(() => {
+    setMentor(canEditJournal());
+  }, []);
 
   const reload = useCallback(async () => {
     setBusy(true);
@@ -274,7 +281,7 @@ export default function JournalPanel({
                   <th>Выход</th>
                   <th>Цели</th>
                   <th className="text-right">Итог</th>
-                  <th />
+                  {mentor && <th />}
                 </tr>
               </thead>
               <tbody>
@@ -322,15 +329,20 @@ export default function JournalPanel({
                         </span>
                       )}
                     </td>
-                    <td className="pl-2 text-right">
-                      <button
-                        onClick={() => drop(t.id)}
-                        title="Удалить запись"
-                        className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-down)]"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </td>
+                    {/* Убрать запись может только наставник: журнал - это
+                        статистика, и право стереть из неё неудачную сделку
+                        обесценивает её целиком. */}
+                    {mentor && (
+                      <td className="pl-2 text-right">
+                        <button
+                          onClick={() => drop(t.id)}
+                          title="Удалить запись"
+                          className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-down)]"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

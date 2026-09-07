@@ -259,6 +259,11 @@ class ScalpTrade(Base):
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     note: Mapped[str] = mapped_column(String(255), default="")
+    # Запись пришла из исполнений биржи, а не с экрана. Терминал пишет сделку
+    # сразу, своей оценкой, чтобы она не пропала; настоящие числа приходят
+    # следом с сервера. Без этой отметки поздняя оценка затирала правду, и в
+    # журнале стояли цифры, которых на счёте не было.
+    from_exchange: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     student: Mapped["Student"] = relationship()

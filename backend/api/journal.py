@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from core.models import ScalpTrade, ScalpWorkspace, Student, utcnow
-from backend.deps import get_current_student, get_session
+from backend.deps import get_current_mentor, get_current_student, get_session
 
 router = APIRouter(prefix="/api/journal", tags=["journal"])
 
@@ -167,6 +167,19 @@ async def add_trade(
         trade = ScalpTrade(student_id=student.id, client_id=body.client_id)
         session.add(trade)
 
+    # Запись, собранную из исполнений биржи, оценкой с экрана не переписываем.
+    #
+    # Терминал пишет сделку сразу, как только позиция пропала: если сервер до
+    # неё не дойдёт, она не должна потеряться. Но его числа - оценка по цене
+    # стакана, без проскальзывания и комиссии, а сопровождение следом кладёт
+    # настоящие, с биржи. Кто напишет последним, того и цифры - и последним
+    # оказывался терминал. Именно так в журнале появлялись +487 там, где на
+    # счёт пришло +519.
+    if getattr(trade, "from_exchange", False):
+        session.commit()
+        session.refresh(trade)
+        return _row(trade)
+
     trade.symbol = body.symbol.upper()
     trade.side = body.side
     trade.entry = body.entry
@@ -192,11 +205,18 @@ async def add_trade(
 @router.delete("/trades/{trade_id}")
 async def delete_trade(
     trade_id: int,
-    student: Student = Depends(get_current_student),
+    mentor: dict = Depends(get_current_mentor),
     session=Depends(get_session),
 ):
+    """Убрать запись из журнала. Только ментор.
+
+    Журнал - это статистика, по которой ученик и наставник судят о торговле.
+    Право стереть из неё неудачную сделку обесценивает её целиком: остаётся
+    красивый список, из которого ничего не следует. Ошибочную запись убирает
+    наставник, а ученик - нет.
+    """
     trade = session.get(ScalpTrade, trade_id)
-    if trade is None or trade.student_id != student.id:
+    if trade is None:
         raise HTTPException(404, "Сделка не найдена")
     session.delete(trade)
     session.commit()

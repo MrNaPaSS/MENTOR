@@ -5,7 +5,7 @@
 // просто выключен — писать некуда, и притворяться, что записалось, нельзя.
 
 import { authReq } from "./api";
-import { getAccessToken } from "./auth";
+import { getAccessToken, getMentorToken } from "./auth";
 import type { ActiveTrade } from "./trade/position";
 
 export type JournalTrade = {
@@ -77,8 +77,23 @@ export function loadCalendar(year: number, month: number) {
   );
 }
 
+/**
+ * Убрать запись из журнала. Только под ключом наставника.
+ *
+ * Журнал - это статистика, по которой судят о торговле. Право стереть из неё
+ * неудачную сделку обесценивает её целиком: остаётся красивый список, из
+ * которого ничего не следует. Поэтому запрос уходит с токеном наставника, а не
+ * ученика, и сервер проверяет то же самое.
+ */
 export function removeTrade(id: number) {
-  return request<{ ok: boolean }>(`/api/journal/trades/${id}`, { method: "DELETE" });
+  const token = getMentorToken();
+  if (!token) return Promise.resolve(null);
+  return authReq<{ ok: boolean }>(`/api/journal/trades/${id}`, token, { method: "DELETE" });
+}
+
+/** Есть ли право править журнал: ключ наставника в этом браузере. */
+export function canEditJournal(): boolean {
+  return Boolean(getMentorToken());
 }
 
 /**

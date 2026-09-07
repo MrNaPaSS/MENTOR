@@ -16,7 +16,7 @@ export default function DashboardRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/app/analysis");
+    router.replace("/app/scalping");
   }, [router]);
 
   return null;

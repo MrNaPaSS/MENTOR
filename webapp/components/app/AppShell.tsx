@@ -27,9 +27,10 @@ import MarketTicker from "@/components/market/MarketTicker";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 
 const NAV = [
-  // Скальпинг первым: это рабочий стол трейдера, с него начинается день.
+  // Терминал первым: это рабочий стол трейдера, с него начинается день,
+  // и с него же открывается кабинет.
   // Дальше рынок и анализы, остальное — как было.
-  { href: "/app/scalping", label: "Скальпинг", icon: Waves, mobile: false },
+  { href: "/app/scalping", label: "Терминал", icon: Waves, mobile: false },
   { href: "/app/market", label: "Рынок", icon: Globe, mobile: true },
   { href: "/app/analysis", label: "Анализы", icon: ImageIcon, mobile: true },
   { href: "/app/news", label: "ТВ", icon: Tv, mobile: false },

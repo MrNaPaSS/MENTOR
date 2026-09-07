@@ -670,6 +670,8 @@ class PositionWatcher:
         record.opened_at = trade.opened_at
         record.closed_at = trade.closed_at or utcnow()
         record.note = "биржа"
+        # Отметка для журнала: эту запись оценкой с экрана не переписывают.
+        record.from_exchange = True
         if exists is None:
             session.add(record)
         self._pending.pop(trade.id, None)
