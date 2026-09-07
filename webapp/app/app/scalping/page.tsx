@@ -1233,10 +1233,13 @@ export default function ScalpingPage() {
                   Math.abs(current.qty - position.size) > position.size * 0.01
                     ? position.size
                     : current.qty;
-                const stop =
-                  current.breakeven && position.breakeven && position.breakeven > 0
-                    ? position.breakeven
-                    : current.stop;
+                // Стопа здесь нет намеренно. Раньше сюда писалась цена
+                // безубытка по расчёту биржи - справочное число, а не заявка, -
+                // и она раз в три секунды затирала настоящий стоп. Трейдер
+                // переносил стоп руками, на бирже он переезжал, а на графике не
+                // менялось ничего. Цену стопа приносит опрос заявок ниже: там
+                // она и есть, а не выводится формулой.
+                //
                 // Цена входа и плавающий результат - биржевые. Своя средняя
                 // берётся от задуманного уровня, а исполнилось по другой цене:
                 // у биржи +25, у нас +5.
@@ -1244,13 +1247,12 @@ export default function ScalpingPage() {
                 const unrealized = position.unrealized ?? undefined;
                 if (
                   qty === current.qty &&
-                  stop === current.stop &&
                   entry === current.entry &&
                   unrealized === current.unrealized
                 ) {
                   return current;
                 }
-                return { ...current, qty, stop, entry, unrealized };
+                return { ...current, qty, entry, unrealized };
               }
 
               if (current.status === "open") {
@@ -1312,7 +1314,7 @@ export default function ScalpingPage() {
     check();
     guard();
     const id = setInterval(check, 3000);
-    const watch = setInterval(guard, 9000);
+    const watch = setInterval(guard, 4000);
     return () => {
       cancelled = true;
       clearInterval(id);

@@ -105,6 +105,10 @@ export default function ManualOrderCard({
     draft.entry > 0 ? `${(Math.abs(price - draft.entry) / draft.entry * 100).toFixed(2)}%` : "";
 
   function grab(event: React.PointerEvent<HTMLDivElement>) {
+    // Кнопки в шапке перетаскиванием не считаются. Иначе нажатие на них
+    // начинало тащить окно, а `preventDefault` съедал само нажатие - крестик
+    // не закрывал окно, разворот не разворачивал.
+    if ((event.target as HTMLElement).closest("button")) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = { x: event.clientX - at.x, y: event.clientY - at.y };
@@ -113,10 +117,12 @@ export default function ManualOrderCard({
 
   function move(event: React.PointerEvent<HTMLDivElement>) {
     if (!dragRef.current) return;
+    event.preventDefault();
     setAt({ x: event.clientX - dragRef.current.x, y: event.clientY - dragRef.current.y });
   }
 
   function release(event: React.PointerEvent<HTMLDivElement>) {
+    if (!dragRef.current) return;
     dragRef.current = null;
     setDragging(false);
     event.currentTarget.releasePointerCapture(event.pointerId);

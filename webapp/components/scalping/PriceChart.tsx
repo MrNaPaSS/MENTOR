@@ -1883,7 +1883,9 @@ function PriceChart({
               return !v;
             });
           }}
-          title="Отметка или сделка на этой цене"
+          // Подсказка только пока меню закрыто: открытое она перекрывает
+          // собой, и пункт «открыть лонг» просто не виден.
+          title={plusMenu ? undefined : "Отметка или сделка на этой цене"}
           className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border text-[13px] leading-none shadow transition-colors duration-150 ease-out"
           style={{
             borderColor: "var(--pane-border)",

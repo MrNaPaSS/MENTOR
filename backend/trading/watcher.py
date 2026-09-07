@@ -737,11 +737,14 @@ async def set_stop(
             )
             stop = edge
 
+    # Цену, с которой заявка уходит на биржу, считаем один раз: с ней же потом
+    # сверяем список, чтобы не снять только что поставленный стоп.
+    trigger = round_to_tick(stop, filters["tick"])
     try:
         placed = await client.place_tp_sl(
             symbol=trade.symbol,
             plan_type="STOP_LOSS",
-            trigger_price=num(round_to_tick(stop, filters["tick"])),
+            trigger_price=num(trigger),
             quantity=num(quantity),
             position_side="LONG" if long else "SHORT",
             client_algo_id=(label or f"sl{trade.takes_hit}_{trade.client_id}")[:32],
@@ -753,7 +756,7 @@ async def set_stop(
         return False
 
     fresh = plan_order_id(placed)
-    await drop_old_stops(client, trade, keep=fresh)
+    await drop_old_stops(client, trade, keep=fresh, market=market, fresh=trigger)
     logger.info(
         "Стоп %s: было %s, стало %s (целей взято %d, рынок %s)",
         trade.symbol,
@@ -769,11 +772,86 @@ async def set_stop(
     return True
 
 
-async def drop_old_stops(client: WeexFutures, trade: LiveTrade, keep: str) -> None:
+async def cancel_plan(client: WeexFutures, symbol: str, order: dict[str, Any]) -> str:
+    """Снять условную заявку. Возвращает сработавший идентификатор или пустую строку.
+
+    Идентификатор условной заявки биржа кладёт в разное поле, и угадать его
+    заранее нельзя: в одном ответе это `orderId`, в другом `algoId`. Ошиблись -
+    биржа отвечает «не найдено», заявка остаётся висеть, а мы об этом молчим.
+    Так на позиции и оказывались два стопа и две цели: новую поставили, старую
+    «сняли».
+
+    Поэтому перебираем известные имена, пока одно не сработает. Лишний отказ
+    дешевле, чем незамеченная живая заявка на деньги.
+    """
+    tried: list[str] = []
+    last = ""
+    for name in (
+        "orderId",
+        "algoId",
+        "id",
+        "planOrderId",
+        "orderNo",
+        "clientAlgoId",
+        "clientOid",
+    ):
+        value = order.get(name)
+        if not value:
+            continue
+        mark = str(value)
+        if mark in tried:
+            continue
+        tried.append(mark)
+        try:
+            await client.cancel_algo_order(symbol, mark)
+        except WeexTradeError as exc:
+            last = str(exc)
+            continue
+        if len(tried) > 1:
+            logger.info("Заявка %s снята по полю %s", mark, name)
+        return mark
+    if tried:
+        logger.warning("Заявку %s снять не удалось (%s): %s", tried, symbol, last)
+    return ""
+
+
+async def plan_alive(client: WeexFutures, symbol: str, marks: set[str]) -> bool:
+    """Висит ли ещё заявка с такими метками.
+
+    Проверка после снятия: отказ биржи мы видим, а вот «успешный» ответ на
+    несуществующий идентификатор - нет. Верить надо списку заявок, а не ответу.
+    """
+    if not marks:
+        return False
+    try:
+        orders = await client.algo_orders(symbol)
+    except WeexTradeError:
+        # Не спросили - не утверждаем, что заявки нет.
+        return True
+    return any(order_marks(order) & marks for order in orders)
+
+
+async def drop_old_stops(
+    client: WeexFutures,
+    trade: LiveTrade,
+    keep: str,
+    market: float | None = None,
+    fresh: float | None = None,
+) -> None:
     """Снять прежние стопы, оставив только что поставленный.
 
     Цели не трогаем: они тоже условные заявки, и снять их значит остаться
     без лестницы.
+
+    Стоп от названия вида не опознавался: тот, что приезжает вместе со входом,
+    биржа заводит сама и называет по-своему. Заявка с незнакомым названием
+    оставалась висеть, и после переноса на позиции оказывались два стопа -
+    новый и прежний.
+
+    Поэтому решает не название, а сторона. Живой стоп лонга всегда ниже рынка,
+    живая цель всегда выше: будь наоборот, они бы уже сработали. Это факт о
+    заявке, а не догадка о её имени, и цель под такое правило не попадёт
+    никогда. Рынок неизвестен - остаёмся при осторожном разборе по названию.
     """
     recorded = json.loads(trade.tp_orders_json or "[]")
     takes = {str(t.get("order_id") or "") for t in recorded}
@@ -791,13 +869,18 @@ async def drop_old_stops(client: WeexFutures, trade: LiveTrade, keep: str) -> No
         if not order_id or keep in marks or marks & takes:
             continue
 
-        # Снимаем только то, что уверенно опознали как стоп. Раньше здесь
-        # было наоборот: пропускались цели, а всё остальное снималось - и
-        # заявка с незнакомым названием вида уходила под нож. Так и пропали
-        # цели через несколько секунд после входа: терминал снял их сам,
-        # приняв за чужие стопы.
+        trigger = _first(order, ("triggerPrice", "stopPrice", "triggerPx", "planPrice", "price"))
+
+        # Только что поставленный стоп щадим и по цене: идентификатор в ответе
+        # биржи приходит не всегда, и без этой проверки мы сняли бы его сам.
+        if fresh and trigger and abs(trigger - fresh) <= max(fresh, 1.0) * 1e-6:
+            continue
+
+        # Сторона решает: живой стоп лонга ниже рынка, живая цель выше.
         kind = str(order.get("planType") or order.get("type") or "").lower()
         stop_like = "stop" in kind or "loss" in kind or kind.endswith("sl")
+        if not stop_like and market and market > 0 and trigger:
+            stop_like = trigger < market if trade.side == "long" else trigger > market
         if not stop_like:
             logger.info(
                 "Условная заявка %s (%s) оставлена: не опознана как стоп",
@@ -805,11 +888,14 @@ async def drop_old_stops(client: WeexFutures, trade: LiveTrade, keep: str) -> No
                 kind or "без вида",
             )
             continue
-        try:
-            await client.cancel_algo_order(trade.symbol, order_id)
+        if await cancel_plan(client, trade.symbol, order):
             logger.info("Снят прежний стоп %s по %s", order_id, trade.symbol)
-        except WeexTradeError as exc:
-            logger.warning("Прежний стоп %s не снят: %s", order_id, exc)
+        else:
+            logger.warning(
+                "Прежний стоп %s по %s остался висеть - на позиции их теперь два",
+                order_id,
+                trade.symbol,
+            )
 
 
 def _first(row: dict[str, Any], names: tuple[str, ...]) -> float | None:

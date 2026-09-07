@@ -296,3 +296,64 @@ def test_two_waiting_limits_do_not_both_open(moving):
     assert decide(live, position, set(), None, 0, resting=False).opened is True
     # Нижняя всё ещё стоит - к этой позиции она отношения не имеет.
     assert decide(lower, position, set(), None, 0, resting=True).opened is False
+
+
+def test_exchange_made_stop_is_removed_by_side(moving):
+    """Стоп, заведённый биржей вместе со входом, снимается по стороне.
+
+    Название вида у него своё, и разбор по имени его не узнавал: заявка
+    оставалась висеть, и после переноса на позиции оказывались два стопа -
+    новый и прежний. Живой стоп лонга всегда ниже рынка, живая цель выше: это
+    факт о заявке, а не догадка о её имени.
+    """
+    client, exchange, session, live = moving
+    live.status = "open"
+    live.tp_orders_json = json.dumps([{"price": 80_400.0, "order_id": "p1"}])
+    session.commit()
+
+    exchange.position = {
+        "symbol": "BTCUSDT",
+        "positionSide": "LONG",
+        "size": "0.01",
+        "markPrice": "80050",
+    }
+    exchange.plans_open = [
+        # Ни «stop», ни «loss», ни «sl» в названии - ровно то, что приезжает
+        # вместе с лимиткой.
+        {"orderId": "s1", "planType": "POSITION_TPSL", "triggerPrice": "79900", "quantity": "0.01"},
+        {"orderId": "p1", "planType": "TAKE_PROFIT", "triggerPrice": "80400", "quantity": "0.01"},
+    ]
+
+    move(client, stop=79_950.0)
+
+    # Прежний стоп снят, цель не тронута.
+    assert "s1" in exchange.algo_cancelled
+    assert "p1" not in exchange.algo_cancelled
+    assert [p["plan_type"] for p in exchange.plans] == ["STOP_LOSS"]
+
+    session.refresh(live)
+    assert float(live.current_stop) == 79_950.0
+
+
+def test_target_above_market_is_never_taken_for_a_stop(moving):
+    """Чужая цель выше рынка стопом не считается и под нож не идёт."""
+    client, exchange, session, live = moving
+    live.status = "open"
+    session.commit()
+
+    exchange.position = {
+        "symbol": "BTCUSDT",
+        "positionSide": "LONG",
+        "size": "0.01",
+        "markPrice": "80050",
+    }
+    exchange.plans_open = [
+        {"orderId": "s1", "planType": "POSITION_TPSL", "triggerPrice": "79900", "quantity": "0.01"},
+        # Название незнакомое и заявка не наша - но она выше рынка, значит цель.
+        {"orderId": "x9", "planType": "SOMETHING", "triggerPrice": "80600", "quantity": "0.01"},
+    ]
+
+    move(client, stop=79_950.0)
+
+    assert "s1" in exchange.algo_cancelled
+    assert "x9" not in exchange.algo_cancelled

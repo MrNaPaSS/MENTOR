@@ -33,8 +33,10 @@ from sqlalchemy import select
 from backend.api.trading import _fail, _num, _require_client
 from backend.deps import get_current_student, get_session
 from backend.trading.watcher import (
+    cancel_plan,
     mark_price,
     order_marks,
+    plan_alive,
     position_for,
     set_stop,
     stop_label,
@@ -292,6 +294,19 @@ async def _move_open(
         )
         if not moved:
             raise HTTPException(409, "Биржа не приняла новый стоп - прежний остался на месте")
+
+        # Проверяем, что прежний стоп действительно ушёл. Снятие по неверному
+        # идентификатору выглядит как успешное, и позиция оставалась с двумя
+        # стопами: терминал зеркалил то один, то другой, и уровень «возвращался».
+        stale = {m for order in _stops for m in order_marks(order)}
+        stale.discard(live.sl_order_id or "")
+        if stale and await plan_alive(client, live.symbol, stale):
+            raise HTTPException(
+                409,
+                "Новый стоп поставлен, но прежний биржа не сняла - "
+                "снимите лишний в приложении биржи",
+            )
+
         live.current_stop = stop
         # Сопровождение переставляет стоп в безубыток после первой цели. Свой
         # стоп трейдер поставил руками и осознанно: возвращать его расчётом
@@ -312,10 +327,17 @@ async def _move_open(
         if size <= 0:
             raise HTTPException(409, "Биржа не назвала объём этой цели")
 
-        try:
-            await client.cancel_algo_order(live.symbol, _id(old))
-        except WeexTradeError as exc:
-            raise _fail(exc) from exc
+        # Сначала снимаем, потом ставим: две цели на один объём биржа исполнит
+        # обе. И убеждаемся, что старая действительно ушла - «успешный» ответ на
+        # неверный идентификатор выглядит точно так же, как настоящее снятие, и
+        # именно так на позиции появлялась вторая цель.
+        cancel_plan_result = await cancel_plan(client, live.symbol, old)
+        if not cancel_plan_result or await plan_alive(client, live.symbol, order_marks(old)):
+            raise HTTPException(
+                409,
+                "Биржа не сняла прежнюю цель - новую не ставим, "
+                "иначе на позиции окажутся две",
+            )
 
         live.replaces = (live.replaces or 0) + 1
         try:
