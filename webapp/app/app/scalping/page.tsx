@@ -464,6 +464,9 @@ export default function ScalpingPage() {
   // Уведомления поверх терминала: сюда попадает то, что случилось само и не
   // на глазах у трейдера.
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // Объёмы всех открытых позиций счёта: по ним считается счётчик у итога дня.
+  const [liveSizes, setLiveSizes] = useState<Record<string, number>>({});
   const midRef = useRef(0);
   midRef.current = dom?.mid ?? 0;
   useEffect(() => {
@@ -1540,6 +1543,7 @@ export default function ScalpingPage() {
 
       const before = sizesRef.current;
       sizesRef.current = sizes;
+      setLiveSizes(sizes);
       // Первый круг только запоминает: без «до» переход не отличить от того,
       // что позиция стояла всё это время.
       if (!before) return;
@@ -1593,6 +1597,20 @@ export default function ScalpingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live]);
 
+  /**
+   * На телефоне терминала нет.
+   *
+   * Три панели рядом, перетаскивание уровней мышью и стакан в сорок строк на
+   * ладони не работают, и в нижнем меню телефона раздела нет. Но открывается
+   * терминал первым, и вход с телефона вёл ровно туда - в то, чем нельзя
+   * пользоваться. Уводим в раздел, который на телефоне живёт.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.innerWidth >= 1024) return;
+    window.location.replace("/app/analysis");
+  }, []);
+
   // Отметки открытой монеты: их рисует график и подсвечивает стакан.
   const myAlerts = alerts.filter((a) => a.symbol === symbol);
   const alertPrices = myAlerts.map((a) => a.price);
@@ -1629,6 +1647,19 @@ export default function ScalpingPage() {
 
   // Сделки по открытой монете: их рисует график, остальные ждут своей.
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
+
+  /**
+   * Сколько заявок ждёт и сколько позиций в работе - по всем монетам.
+   *
+   * Заявки свои: на бирже они лежат по одной монете, и спрашивать их по всем
+   * полусотне значило бы полсотни запросов на каждом круге. Позиции - биржевые:
+   * они приходят одним ответом, и врать о них нельзя.
+   */
+  const counts = useMemo(() => {
+    const waiting = trades.filter((t) => t.status === "planned").length;
+    const open = Object.values(liveSizes).filter((size) => size > 0).length;
+    return { waiting, open };
+  }, [trades, liveSizes]);
 
   /**
    * Уровни, которые трейдер тянет мышью.
@@ -2323,6 +2354,7 @@ export default function ScalpingPage() {
                   orderChip={orderChip}
                   onAddAlert={addAlert}
                   onOpenJournal={() => setJournalOpen((open) => !open)}
+                  counts={counts}
                   onAddOrder={startManual}
                 />
               </div>

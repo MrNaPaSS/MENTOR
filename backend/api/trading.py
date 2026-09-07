@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.deps import get_current_student, get_session
-from core.models import LiveTrade, Student, WeexCredential, utcnow
+from core.models import LiveTrade, ScalpTrade, Student, WeexCredential, utcnow
 from core.trading.position import (
     Position,
     breakeven_price,
@@ -683,6 +683,18 @@ async def close_position(
         body.side,
     )
 
+    # Закрытая руками сделка тоже идёт в журнал - и пишем её здесь.
+    #
+    # Сопровождение ведёт только те, что ещё живы: закрытую мы сами сняли с
+    # ведения строкой выше, и записывать её стало некому. Так и пропадали
+    # сделки, закрытые кнопкой в терминале: на бирже прибыль есть, в журнале
+    # сделки нет вовсе.
+    #
+    # Числа те же, что вернутся на экран: результат и комиссия с исполнений
+    # биржи, а не наша оценка.
+    if live is not None and remaining < filters["min_qty"]:
+        _journal(session, student, live, realized, fee, fill, quantity)
+
     return {
         "closed": quantity,
         "remaining": remaining,
@@ -690,6 +702,58 @@ async def close_position(
         "fee": fee,
         "fill_price": fill,
     }
+
+
+def _journal(
+    session,
+    student: Student,
+    live: LiveTrade,
+    realized: float | None,
+    fee: float | None,
+    fill: float | None,
+    quantity: float,
+) -> None:
+    """Записать закрытую сделку в журнал по числам биржи.
+
+    Повторная запись обновляет прежнюю: клиент мог успеть записать свою оценку,
+    и наши числа её поправят, а не заведут вторую строку.
+    """
+    row = session.execute(
+        select(ScalpTrade)
+        .where(ScalpTrade.student_id == student.id)
+        .where(ScalpTrade.client_id == live.client_id)
+    ).scalar_one_or_none()
+    if row is None:
+        row = ScalpTrade(student_id=student.id, client_id=live.client_id)
+        session.add(row)
+
+    # Комиссию второй раз не вычитаем: `_settled` уже отдаёт результат за её
+    # вычетом - ровно то число, что уходит на экран. Вычесть её здесь ещё раз
+    # значит записать в журнал убыток, которого не было.
+    pnl = float(realized or 0.0)
+    row.symbol = live.symbol
+    row.side = live.side
+    row.entry = float(live.entry)
+    row.stop = float(live.initial_stop)
+    row.exit_price = fill
+    row.qty = quantity or float(live.qty)
+    row.margin = float(live.margin or 0) or 1.0
+    row.leverage = live.leverage
+    row.takes_hit = live.takes_hit
+    row.targets_json = live.targets_json or "[]"
+    # Закрыто рукой - так и пишем: это не сработавшая цель и не стоп, и путать
+    # их в статистике незачем.
+    row.outcome = "manual"
+    row.pnl = pnl
+    row.fee = float(fee or 0.0)
+    row.opened_at = live.opened_at or live.created_at
+    row.closed_at = utcnow()
+    row.note = "биржа"
+    row.from_exchange = True
+    session.commit()
+    logger.info(
+        "В журнал: %s %s, итог %.4f (комиссия %.4f)", live.symbol, live.side, pnl, fee or 0.0
+    )
 
 
 def _epoch_ms(value: datetime | None) -> int:

@@ -390,6 +390,33 @@ function riskFree(trade: ActiveTrade): boolean {
   return trade.side === "long" ? trade.stop >= trade.entry : trade.stop <= trade.entry;
 }
 
+/**
+ * Подпись деления на шкале времени - в часах трейдера.
+ *
+ * Библиотека отдаёт время бара в UTC и подписывает его же. Здесь оно
+ * переводится в местное: день - датой, всё, что мельче, - часами и минутами.
+ */
+function localTick(time: number | string, kind: number): string {
+  const at = new Date(Number(time) * 1000);
+  if (Number.isNaN(at.getTime())) return String(time);
+  // Метки крупнее дня библиотека нумерует нулём и единицей: год и месяц.
+  if (kind <= 1) return at.toLocaleDateString("ru-RU", { month: "short", year: "2-digit" });
+  if (kind === 2) return at.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+  return at.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Время под перекрестьем - тоже местное, с датой. */
+function localStamp(time: number | string): string {
+  const at = new Date(Number(time) * 1000);
+  if (Number.isNaN(at.getTime())) return String(time);
+  return at.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** ATR последних баров: по нему предлагается стоп. */
 function currentAtr(candles: Candle[]): number {
   if (candles.length < 15) return 0;
@@ -441,6 +468,7 @@ function PriceChart({
   onAddAlert,
   onAddOrder,
   onOpenJournal,
+  counts,
 }: {
   symbol: string;
   interval: string;
@@ -545,6 +573,13 @@ function PriceChart({
   onAddOrder?: (price: number, atr: number, side: "long" | "short") => void;
   /** Открыть журнал. Итог дня в углу - вопрос, а ответ на него в журнале. */
   onOpenJournal?: () => void;
+  /**
+   * Сколько заявок ждёт и сколько позиций в работе - по всем монетам.
+   *
+   * Рядом с итогом дня, потому что это ответ на тот же вопрос: что у меня
+   * сейчас происходит. Открытая монета - одна, а идти может несколько.
+   */
+  counts?: { waiting: number; open: number };
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -770,6 +805,18 @@ function PriceChart({
         secondsVisible: false,
         // Пустое место справа: там рисуется бокс сделки и туда идёт цена.
         rightOffset: RIGHT_BARS,
+        // Время на шкале - местное, часов трейдера.
+        //
+        // Библиотека по умолчанию подписывает деления в UTC, и на графике
+        // стояло время, которого нет ни на одних часах в комнате: сверять
+        // свечу с новостью или с записью в журнале приходилось в уме.
+        tickMarkFormatter: localTick,
+      },
+      localization: {
+        locale: "ru-RU",
+        // Та же местная зона в подписи перекрестья: шкала и перекрестье,
+        // расходящиеся на три часа, - это хуже, чем UTC в обоих.
+        timeFormatter: localStamp,
       },
       crosshair: {
         mode: 0,
@@ -1865,6 +1912,17 @@ function PriceChart({
             {todayPnl >= 0 ? "+" : "-"}
             {Math.abs(todayPnl).toFixed(2)} $
           </span>
+          {counts && (counts.waiting > 0 || counts.open > 0) && (
+            <>
+              <span className="mx-1 text-[var(--pane-border)]">·</span>
+              <span
+                className="text-[var(--pane-text-2)]"
+                title="Ждут исполнения заявки · открыто позиций, по всем монетам"
+              >
+                {counts.waiting} / {counts.open}
+              </span>
+            </>
+          )}
         </button>
       )}
 

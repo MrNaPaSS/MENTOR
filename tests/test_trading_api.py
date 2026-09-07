@@ -632,3 +632,65 @@ def test_cancelling_a_limit_keeps_the_other_trade_protected(app_and_exchange):
     assert "sl-open" not in exchange.algo_cancelled
     assert "tp-open" not in exchange.algo_cancelled
     assert "orphan" in exchange.algo_cancelled
+
+
+def test_manual_close_writes_the_trade_to_the_journal(app_and_exchange):
+    """Закрытая кнопкой сделка попадает в журнал.
+
+    Сопровождение ведёт только живые сделки. Закрытие снимает сделку с ведения
+    - и записывать её становилось некому: на бирже прибыль есть, а в журнале
+    сделки нет вовсе.
+    """
+    import json as _json
+
+    from core.models import LiveTrade, ScalpTrade
+
+    client, exchange, session = app_and_exchange
+    student = session.query(Student).one()
+
+    session.add(
+        LiveTrade(
+            student_id=student.id,
+            client_id="BTCUSDT-1",
+            symbol="BTCUSDT",
+            side="long",
+            entry=80_000.0,
+            initial_stop=79_800.0,
+            current_stop=79_800.0,
+            targets_json=_json.dumps([80_400.0]),
+            qty=0.01,
+            leverage=10,
+            margin=80.0,
+            status="open",
+        )
+    )
+    session.commit()
+
+    exchange.position = {"symbol": "BTCUSDT", "positionSide": "LONG", "total": "0.01"}
+    exchange.fills = [
+        {
+            "orderId": "o1",
+            "side": "SELL",
+            "price": "80500",
+            "qty": "0.01",
+            "realizedPnl": "5.0",
+            "commission": "0.64",
+            "time": 9_999_999_999_999,
+        }
+    ]
+
+    answer = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "long", "share": 1, "trade_id": "BTCUSDT-1"},
+    ).json()
+    assert answer["remaining"] == 0
+
+    row = session.query(ScalpTrade).one()
+    assert row.symbol == "BTCUSDT"
+    assert row.side == "long"
+    # Результат за вычетом комиссии - то же число, что ушло на экран. База
+    # хранит деньги десятичными, поэтому сравниваем через float.
+    assert float(row.pnl) == pytest.approx(5.0 - 0.64, rel=1e-9)
+    assert row.outcome == "manual"
+    # Помечена биржевой: оценка с экрана её не перепишет.
+    assert row.from_exchange is True
