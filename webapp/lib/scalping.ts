@@ -27,6 +27,22 @@ export type ScreenerRow = {
   live: boolean;
 };
 
+/**
+ * Список монет самой WEEX: суточная сводка биржи по всем её инструментам.
+ *
+ * Свой сборщик знает про монету всё - стакан, ленту, плиты, - но ведёт только
+ * полсотни. Здесь наоборот: каждая пара, которой на бирже можно торговать, но
+ * из полей лишь то, что есть в сводке. Пустые колонки честнее выдуманных.
+ */
+export async function weexScreener(sort: string, limit = 200): Promise<ScreenerRow[]> {
+  const res = await fetch(
+    `${API_URL}/api/scalping/screener?source=weex&sort=${sort}&limit=${limit}`,
+  );
+  if (!res.ok) return [];
+  const body: { rows?: ScreenerRow[] } = await res.json();
+  return body.rows ?? [];
+}
+
 export type LadderRow = {
   price: number;
   bid: number;

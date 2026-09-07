@@ -26,6 +26,7 @@ from backend.scalping.state import (
     biggest_wall,
     liquidity_shelves,
 )
+from backend.scalping import weex_market
 
 router = APIRouter(prefix="/api/scalping", tags=["scalping"])
 
@@ -42,14 +43,36 @@ async def screener(
     request: Request,
     sort: str = Query(DEFAULT_SORT, description=f"Одно из: {', '.join(SORT_KEYS)}"),
     limit: int = Query(50, ge=1, le=200),
+    source: str = Query("book", description="book - свой сборщик, weex - список биржи"),
 ) -> dict[str, Any]:
-    """Список монет с метриками скальпинга, отсортированный по выбранному полю."""
+    """Список монет с метриками скальпинга, отсортированный по выбранному полю.
+
+    Источников два. Свой сборщик держит стаканы и ленту и потому знает про
+    монету всё - но только про те полсотни, что он ведёт. Список WEEX - это
+    суточная сводка биржи по всем её инструментам: там нет ни дельты ленты, ни
+    плит, зато есть каждая пара, которой на бирже можно торговать.
+    """
+    if source == "weex":
+        # Сборщик здесь ни при чём: список идёт прямо с биржи, и работает он
+        # даже когда свой сбор выключен вовсе.
+        from backend.api.trading import _get_session
+
+        rows = await weex_market.screener_rows(await _get_session(), sort, limit)
+        return {
+            "sort": sort,
+            "band_bp": BAND_BP,
+            "count": len(rows),
+            "source": "weex",
+            "rows": rows,
+        }
+
     collector = get_collector(request)
     rows = collector.state.rows(sort=sort)[:limit]
     return {
         "sort": sort if sort in SORT_KEYS else DEFAULT_SORT,
         "band_bp": BAND_BP,
         "count": len(rows),
+        "source": "book",
         "rows": [asdict(r) for r in rows],
     }
 
