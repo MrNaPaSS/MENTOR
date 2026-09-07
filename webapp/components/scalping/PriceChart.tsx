@@ -313,15 +313,19 @@ function tradeBoxes(
   // Бокс риска остаётся и после переноса стопа в безубыток: он показывает, чем
   // сделка рисковала. Живого риска в нём уже нет, поэтому рисуется бледнее —
   // иначе картинка врёт, будто убыток всё ещё возможен.
-  const risk = trade.breakeven ? trade.initialStop : trade.stop;
+  // Риск снят не по флагу, а по факту: стоп должен стоять за ценой входа.
+  // Флаг говорил «безубыток» и тогда, когда стоп на бирже не сдвинулся, - и
+  // метка BE оказывалась на исходном стопе, то есть на цене убытка.
+  const safe = riskFree(trade);
+  const risk = safe ? trade.initialStop : trade.stop;
   const boxes: Shapes["boxes"] = [
     {
       fromTime: anchor as UTCTimestamp,
       toTime: span,
       top: Math.max(trade.entry, risk),
       bottom: Math.min(trade.entry, risk),
-      fill: trade.breakeven ? palette.spentBox : palette.riskBox,
-      border: trade.breakeven ? palette.spentBorder : palette.riskBorder,
+      fill: safe ? palette.spentBox : palette.riskBox,
+      border: safe ? palette.spentBorder : palette.riskBorder,
       // Без надписи: бледная заливка и метка BE у края и так говорят, что
       // риска в этом боксе больше нет, а слова поверх свечей мешают читать
       // цену - ради неё график и открыт.
@@ -331,7 +335,7 @@ function tradeBoxes(
   // Безубыток подписан у правого края бокса, на той цене, где стоп стоит на
   // самом деле. Ярлык на линии входа врал бы дважды: и местом, и ценой —
   // биржа считает безубыток с комиссией, это заметно выше входа.
-  const segments: Shapes["segments"] = trade.breakeven
+  const segments: Shapes["segments"] = safe
     ? [
         {
           fromTime: anchor as UTCTimestamp,
@@ -384,6 +388,17 @@ function tradeShapes(
     segments: parts.flatMap((p) => p.segments),
     points: parts.flatMap((p) => p.points),
   };
+}
+
+/**
+ * Снят ли риск: стоп стоит по ту сторону цены входа.
+ *
+ * Именно это значит «безубыток» для трейдера, и проверяется это числами, а не
+ * состоянием сделки: пока стоп на бирже не переехал, риск на месте, чего бы
+ * ни думал терминал.
+ */
+function riskFree(trade: ActiveTrade): boolean {
+  return trade.side === "long" ? trade.stop >= trade.entry : trade.stop <= trade.entry;
 }
 
 /** ATR последних баров: по нему предлагается стоп. */
@@ -1151,7 +1166,7 @@ function PriceChart({
       // Подпись «б/у» должна стоять там, где стоп стоит на самом деле.
       tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
       tradeLinesRef.current.push(
-        trade.breakeven
+        riskFree(trade)
           ? line(trade.stop, palette.mtf, "", 2)   // подпись BE стоит у бокса
           : line(trade.stop, palette.askLine, "стоп", 2),
       );
