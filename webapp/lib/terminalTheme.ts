@@ -17,12 +17,17 @@ export type TerminalTheme = "dark" | "light";
 const KEY = "nmnh.scalping.theme";
 const EVENT = "nmnh-terminal-theme";
 
+/** Тема, с которой сайт открывается впервые. */
+const DEFAULT: TerminalTheme = "light";
+
 export function readTerminalTheme(): TerminalTheme {
   try {
-    return localStorage.getItem(KEY) === "light" ? "light" : "dark";
+    const saved = localStorage.getItem(KEY);
+    if (saved === "light" || saved === "dark") return saved;
+    return DEFAULT;
   } catch {
     // В приватном окне доступ к хранилищу бросает исключение.
-    return "dark";
+    return DEFAULT;
   }
 }
 
@@ -53,7 +58,9 @@ export function setTerminalTheme(theme: TerminalTheme): void {
  * может смениться, и оболочка не должна остаться в прежней.
  */
 export function useTerminalTheme(): TerminalTheme {
-  const [theme, setTheme] = useState<TerminalTheme>("dark");
+  // До первого чтения хранилища держим ту же тему, что и без него: иначе на
+  // мгновение показалась бы чужая.
+  const [theme, setTheme] = useState<TerminalTheme>(DEFAULT);
 
   useEffect(() => {
     const saved = readTerminalTheme();

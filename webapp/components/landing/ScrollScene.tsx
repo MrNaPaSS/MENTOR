@@ -27,16 +27,26 @@ export default function ScrollScene() {
       return; // WebGL недоступен - остаётся CSS-фон
     }
 
-    const CYAN = new THREE.Color("#0AFFE0");
-    const GOLD = new THREE.Color("#FFD700");
-    const GREEN = new THREE.Color("#00D4A0");
-    const RED = new THREE.Color("#FF4757");
+    // Цвета и способ смешивания зависят от темы сайта.
+    //
+    // Складывающее смешивание светит: на чёрной странице это неон, на белой -
+    // ничего, свет поверх света остаётся белым. Поэтому на светлой теме краски
+    // те же, что у графика в терминале - чёрно-белые свечи и золотая линия
+    // уровня, - и смешивание обычное.
+    const light = document.documentElement.dataset.terminal === "light";
+    const CYAN = new THREE.Color(light ? "#2962FF" : "#0AFFE0");
+    const GOLD = new THREE.Color(light ? "#A97400" : "#FFD700");
+    const GREEN = new THREE.Color(light ? "#00A86B" : "#00D4A0");
+    const RED = new THREE.Color(light ? "#FF1A2E" : "#FF4757");
+    const BLEND = light ? THREE.NormalBlending : THREE.AdditiveBlending;
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0a0a1a, 0.055);
+    // Туман под цвет страницы: на белой он должен уводить в белое, иначе
+    // дальние свечи темнеют вместо того, чтобы растворяться.
+    scene.fog = new THREE.FogExp2(light ? 0xf2f3f5 : 0x0a0a1a, 0.055);
 
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
     camera.position.set(0, 0.5, 8);
@@ -55,8 +65,8 @@ export default function ScrollScene() {
     const pGeo = new THREE.BufferGeometry();
     pGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const pMat = new THREE.PointsMaterial({
-      color: CYAN, size: 0.045, transparent: true, opacity: 0.5,
-      blending: THREE.AdditiveBlending, depthWrite: false,
+      color: CYAN, size: 0.045, transparent: true, opacity: light ? 0.25 : 0.5,
+      blending: BLEND, depthWrite: false,
     });
     const particles = new THREE.Points(pGeo, pMat);
     root.add(particles);
@@ -83,8 +93,8 @@ export default function ScrollScene() {
       const col = up ? GREEN : RED;
       const target = 0.5 + Math.random() * 3.2;
       const mat = new THREE.MeshBasicMaterial({
-        color: col, transparent: true, opacity: 0.78,
-        blending: THREE.AdditiveBlending, depthWrite: false,
+        color: col, transparent: true, opacity: light ? 0.5 : 0.78,
+        blending: BLEND, depthWrite: false,
       });
       const body = new THREE.Mesh(bodyGeo, mat);
       const wick = new THREE.Mesh(wickGeo, mat);
@@ -103,8 +113,8 @@ export default function ScrollScene() {
     const lineGeo = new THREE.BufferGeometry();
     lineGeo.setAttribute("position", new THREE.BufferAttribute(linePos, 3));
     const lineMat = new THREE.LineBasicMaterial({
-      color: GOLD, transparent: true, opacity: 0.45,
-      blending: THREE.AdditiveBlending, depthWrite: false,
+      color: GOLD, transparent: true, opacity: light ? 0.35 : 0.45,
+      blending: BLEND, depthWrite: false,
     });
     const priceLine = new THREE.Line(lineGeo, lineMat);
     priceLine.position.y = 1.5;

@@ -397,3 +397,33 @@ def test_stop_is_recognised_without_a_price_in_the_position(moving):
     move(client, stop=79_950.0)
 
     assert "s1" in exchange.algo_cancelled
+
+
+def test_open_position_may_put_the_stop_beyond_the_entry(moving):
+    """Безубыток стоит за ценой входа - и туда стоп переносить можно.
+
+    Запрет «стоп по ту сторону входа» верен для ждущей заявки, но у открытой
+    позиции он не давал перенести стоп в безубыток вовсе.
+    """
+    client, exchange, session, live = moving
+    opened(session, live, exchange)
+
+    # Лонг со входом 80 000 при рынке 80 050: стоп поднимаем выше входа, в
+    # безубыток, но ниже рынка - иначе он сработал бы в тот же миг.
+    answer = move(client, stop=80_020.0)
+
+    assert answer.status_code == 200
+    assert exchange.plans[-1]["trigger_price"] == "80020"
+    session.refresh(live)
+    assert float(live.current_stop) == 80_020.0
+
+
+def test_stop_on_the_wrong_side_of_the_market_is_pulled_to_it(moving):
+    """Стоп выше рынка биржа не примет - постановка подводит его к цене."""
+    client, exchange, session, live = moving
+    opened(session, live, exchange)
+
+    move(client, stop=80_500.0)   # рынок 80 050
+
+    # Ровно на шаг ниже рынка: в саму цену биржа тоже не пускает.
+    assert exchange.plans[-1]["trigger_price"] == "80049.9"

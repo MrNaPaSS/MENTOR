@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { TrendingUp } from "lucide-react";
 
+import { useTerminalTheme } from "@/lib/terminalTheme";
+
 /**
  * Премиальный живой свечной график для Hero (canvas 2D).
  * Стриминг свечей, тики цены в реальном времени, неоновое свечение, градиентная заливка,
@@ -18,6 +20,48 @@ interface Candle {
 
 const COUNT = 44;
 const TF = ["15m", "1H", "4H"] as const;
+
+/**
+ * Цвета графика на главной - те же, что у графика в терминале.
+ *
+ * Светлая тема там чёрно-белая: тело растущей свечи белое в чёрной обводке,
+ * падающей - чёрное. Неон на белой странице выглядит чужим, а знакомая по
+ * терминалу картинка сразу говорит, куда человек попал.
+ */
+const SKINS = {
+  dark: {
+    grid: "rgba(255,255,255,0.05)",
+    axis: "rgba(160,170,190,0.55)",
+    line: "rgba(10,255,224,0.85)",
+    glow: "rgba(10,255,224,0.7)",
+    fillTop: "rgba(10,255,224,0.22)",
+    fillBottom: "rgba(10,255,224,0)",
+    up: "#00D4A0",
+    down: "#FF4757",
+    upBorder: "#00D4A0",
+    downBorder: "#FF4757",
+    mark: "rgba(255,215,0,0.55)",
+    markFill: "#FFD700",
+    markText: "#0A0A1A",
+    dot: "#0AFFE0",
+  },
+  light: {
+    grid: "rgba(0,0,0,0.06)",
+    axis: "#787B86",
+    line: "rgba(41,98,255,0.75)",
+    glow: "rgba(41,98,255,0.35)",
+    fillTop: "rgba(41,98,255,0.12)",
+    fillBottom: "rgba(41,98,255,0)",
+    up: "#FFFFFF",
+    down: "#000000",
+    upBorder: "#000000",
+    downBorder: "#000000",
+    mark: "rgba(169,116,0,0.55)",
+    markFill: "#A97400",
+    markText: "#FFFFFF",
+    dot: "#2962FF",
+  },
+} as const;
 
 function seedCandles(base: number): Candle[] {
   const out: Candle[] = [];
@@ -35,6 +79,9 @@ function seedCandles(base: number): Candle[] {
 }
 
 export default function HeroChart() {
+  const theme = useTerminalTheme();
+  const skinRef = useRef(SKINS[theme]);
+  skinRef.current = SKINS[theme];
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [price, setPrice] = useState(0);
   const [changePct, setChangePct] = useState(0);
@@ -93,11 +140,13 @@ export default function HeroChart() {
 
       g.clearRect(0, 0, width, height);
 
+      const skin = skinRef.current;
+
       // Сетка
-      g.strokeStyle = "rgba(255,255,255,0.05)";
+      g.strokeStyle = skin.grid;
       g.lineWidth = 1;
       g.font = "10px 'JetBrains Mono', monospace";
-      g.fillStyle = "rgba(160,170,190,0.55)";
+      g.fillStyle = skin.axis;
       g.textBaseline = "middle";
       for (let gi = 0; gi <= 4; gi++) {
         const gy = PAD_Y + (gi / 4) * (height - PAD_Y * 2);
@@ -111,8 +160,8 @@ export default function HeroChart() {
 
       // Градиентная заливка под линией закрытий
       const grad = g.createLinearGradient(0, PAD_Y, 0, height);
-      grad.addColorStop(0, "rgba(10,255,224,0.22)");
-      grad.addColorStop(1, "rgba(10,255,224,0)");
+      grad.addColorStop(0, skin.fillTop);
+      grad.addColorStop(1, skin.fillBottom);
       g.beginPath();
       g.moveTo(x(0), y(data[0].c));
       for (let i = 1; i < COUNT; i++) g.lineTo(x(i), y(data[i].c));
@@ -126,9 +175,9 @@ export default function HeroChart() {
       g.beginPath();
       g.moveTo(x(0), y(data[0].c));
       for (let i = 1; i < COUNT; i++) g.lineTo(x(i), y(data[i].c));
-      g.strokeStyle = "rgba(10,255,224,0.85)";
+      g.strokeStyle = skin.line;
       g.lineWidth = 1.6;
-      g.shadowColor = "rgba(10,255,224,0.7)";
+      g.shadowColor = skin.glow;
       g.shadowBlur = 10;
       g.stroke();
       g.shadowBlur = 0;
@@ -138,10 +187,11 @@ export default function HeroChart() {
       for (let i = 0; i < COUNT; i++) {
         const c = data[i];
         const up = c.c >= c.o;
-        const col = up ? "#00D4A0" : "#FF4757";
+        const col = up ? skin.up : skin.down;
+        const edge = up ? skin.upBorder : skin.downBorder;
         const cx = x(i);
         // фитиль
-        g.strokeStyle = col;
+        g.strokeStyle = edge;
         g.globalAlpha = 0.5 + (i / COUNT) * 0.5;
         g.lineWidth = 1;
         g.beginPath();
@@ -155,36 +205,43 @@ export default function HeroChart() {
         const bh = Math.max(Math.abs(yc - yo), 1);
         g.fillStyle = col;
         if (i === COUNT - 1) {
-          g.shadowColor = col;
+          g.shadowColor = edge;
           g.shadowBlur = 12;
         }
         g.fillRect(cx - cw / 2, top, cw, bh);
         g.shadowBlur = 0;
+        // Обводка: на белой теме тело растущей свечи белое, и без неё её
+        // просто нет на странице.
+        if (edge !== col) {
+          g.lineWidth = 1;
+          g.strokeStyle = edge;
+          g.strokeRect(cx - cw / 2 + 0.5, top + 0.5, cw - 1, Math.max(bh - 1, 1));
+        }
       }
       g.globalAlpha = 1;
 
       // Лайв-цена: пунктирная линия + ценник
       const cy = y(current);
       g.setLineDash([4, 4]);
-      g.strokeStyle = "rgba(255,215,0,0.55)";
+      g.strokeStyle = skin.mark;
       g.beginPath();
       g.moveTo(0, cy);
       g.lineTo(plotW, cy);
       g.stroke();
       g.setLineDash([]);
 
-      g.fillStyle = "#FFD700";
+      g.fillStyle = skin.markFill;
       const label = current.toFixed(0);
       const lw = g.measureText(label).width + 12;
       g.fillRect(plotW + 2, cy - 9, Math.min(lw, PAD_R - 4), 18);
-      g.fillStyle = "#0A0A1A";
+      g.fillStyle = skin.markText;
       g.textBaseline = "middle";
       g.fillText(label, plotW + 8, cy + 1);
 
       // Точка последней цены с пульсацией
       g.beginPath();
-      g.fillStyle = "#0AFFE0";
-      g.shadowColor = "#0AFFE0";
+      g.fillStyle = skin.dot;
+      g.shadowColor = skin.dot;
       g.shadowBlur = 14;
       g.arc(x(COUNT - 1), y(current), 3, 0, Math.PI * 2);
       g.fill();

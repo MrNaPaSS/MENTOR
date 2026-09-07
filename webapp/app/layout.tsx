@@ -53,7 +53,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ru">
+    // Тема по умолчанию отмечена сразу на сервере: без этого первый кадр
+    // рисуется тёмным, а через мгновение перекрашивается в светлый. Свой выбор
+    // трейдера перебивает скрипт темы при первом же рендере в браузере.
+    <html lang="ru" data-terminal="light">
       <body className="min-h-screen bg-bg-deep font-sans text-text-primary antialiased">
         <Script
           src="https://telegram.org/js/telegram-web-app.js"

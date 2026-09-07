@@ -437,7 +437,9 @@ export default function ScalpingPage() {
   const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
   const [timeframe, setTimeframe] = useState("1m");
   const [indicators, setIndicators] = useState<Indicators>(DEFAULT_INDICATORS);
-  const [theme, setTheme] = useState<ChartTheme>("dark");
+  // Светлая - тема сайта по умолчанию; сохранённый выбор подставит рабочее
+  // место, когда доедет.
+  const [theme, setTheme] = useState<ChartTheme>("light");
 
   // Открыт при каждой загрузке: работа начинается с выбора монеты, и свёрнутый
   // список на старте — это лишний клик перед каждой сессией. Свернётся сам,
@@ -879,12 +881,17 @@ export default function ScalpingPage() {
             targets: t.targets.map((p) => p + shift),
           };
         }
-        // Уровень по ту сторону входа биржа отклонит. Останавливаем его на шаг
-        // раньше: трейдер видит предел, вместо того чтобы узнать о нём отказом.
         const step = limits?.tick && limits.tick > 0 ? limits.tick : t.entry * 1e-6;
         const long = t.side === "long";
         if (kind === "stop") {
-          const edge = long ? t.entry - step : t.entry + step;
+          // Предел у стопа разный до входа и после.
+          //
+          // У ждущей заявки он по ту сторону входа: иначе это не стоп, а вторая
+          // цель, и биржа такую не примет. У открытой позиции - по ту сторону
+          // рынка: стоп в безубытке стоит выше входа лонга, и запрет по входу
+          // не давал его туда перенести вовсе.
+          const from = t.status === "open" && chartPrice > 0 ? chartPrice : t.entry;
+          const edge = long ? from - step : from + step;
           return { ...t, stop: long ? Math.min(price, edge) : Math.max(price, edge) };
         }
         const edge = long ? t.entry + step : t.entry - step;
