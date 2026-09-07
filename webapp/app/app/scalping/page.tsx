@@ -314,6 +314,7 @@ export default function ScalpingPage() {
   // Способ снять холст графика: кладёт его сам график, пользуется кнопка.
   const shotRef = useRef<(() => HTMLCanvasElement | null) | null>(null);
   const [shotMenu, setShotMenu] = useState(false);
+  const shotMenuRef = useRef<HTMLDivElement>(null);
   // Имя для подписи на снимке. Оно рисуется в картинке и на сервер не уходит.
   const [author, setAuthor] = useState<string | null>(null);
 
@@ -1292,6 +1293,24 @@ export default function ScalpingPage() {
     setTerminalTheme(theme);
   }, [theme]);
 
+  // Нажатие мимо меню снимка закрывает его. Меню, которое не уходит само,
+  // остаётся висеть поверх графика и мешает работать.
+  useEffect(() => {
+    if (!shotMenu) return;
+    function away(event: PointerEvent) {
+      if (!shotMenuRef.current?.contains(event.target as Node)) setShotMenu(false);
+    }
+    function esc(event: KeyboardEvent) {
+      if (event.key === "Escape") setShotMenu(false);
+    }
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [shotMenu]);
+
   /**
    * Снимок графика: скачать, скопировать или получить ссылку.
    *
@@ -1668,7 +1687,7 @@ export default function ScalpingPage() {
                   </button>
 
                   {/* Снимок графика: три способа поделиться одним нажатием. */}
-                  <div className="relative">
+                  <div className="relative" ref={shotMenuRef}>
                     <button
                       onClick={() => setShotMenu((v) => !v)}
                       title="Снимок графика"
