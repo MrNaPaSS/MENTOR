@@ -37,7 +37,13 @@ import type { ChartTheme } from "@/lib/indicator/shapes";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
 import { play, setMuted } from "@/lib/sound";
-import { composeShot, copy as copyShot, download as downloadShot, share as shareShot } from "@/lib/shot";
+import {
+  composeShot,
+  copy as copyShot,
+  download as downloadShot,
+  loadLogo,
+  share as shareShot,
+} from "@/lib/shot";
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import { setTerminalTheme } from "@/lib/terminalTheme";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
@@ -1300,12 +1306,14 @@ export default function ScalpingPage() {
       return;
     }
 
-    const picture = composeShot(canvas, {
-      symbol,
-      interval: timeframe,
-      author: author ?? undefined,
-      theme,
-    });
+    // Знак ждём до сборки: он часть подписи, и снимок без него выглядит
+    // недоделанным. Не загрузился - обойдёмся, но картинку всё равно отдадим.
+    const mark = await loadLogo();
+    const picture = composeShot(
+      canvas,
+      { symbol, interval: timeframe, author: author ?? undefined, theme },
+      mark,
+    );
 
     if (action === "download") {
       await downloadShot(picture, `${base(symbol)}-${timeframe}`);

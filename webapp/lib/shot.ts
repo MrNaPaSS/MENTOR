@@ -15,6 +15,12 @@ import { getAccessToken } from "./auth";
 /** Высота шапки над графиком, пиксели. */
 const HEAD = 44;
 
+/** Высота подписи под графиком: логотип и адрес. */
+const FOOT = 34;
+
+/** Толщина рамки вокруг снимка. */
+const FRAME = 2;
+
 export type ShotMeta = {
   symbol: string;
   interval: string;
@@ -25,9 +31,47 @@ export type ShotMeta = {
 };
 
 const THEMES = {
-  dark: { bg: "#0B0E11", head: "#181A20", line: "#2B3139", text: "#EAECEF", muted: "#7A8290" },
-  light: { bg: "#FFFFFF", head: "#F2F3F5", line: "#D6DCDE", text: "#111418", muted: "#787B86" },
+  // Рамка контрастна теме: тёмный снимок обводится белым, светлый - чёрным.
+  // Иначе картинка сливается с фоном переписки, куда её вставляют.
+  dark: {
+    bg: "#0B0E11",
+    head: "#181A20",
+    line: "#2B3139",
+    text: "#EAECEF",
+    muted: "#7A8290",
+    frame: "#FFFFFF",
+  },
+  light: {
+    bg: "#FFFFFF",
+    head: "#F2F3F5",
+    line: "#D6DCDE",
+    text: "#111418",
+    muted: "#787B86",
+    frame: "#000000",
+  },
 };
+
+/**
+ * Логотип для подписи.
+ *
+ * Загружается один раз и остаётся в памяти: снимок делают подряд, и каждый
+ * раз ждать картинку незачем. Не загрузился - подпись обойдётся без знака,
+ * но снимок всё равно получится.
+ */
+let logo: HTMLImageElement | null = null;
+
+export function loadLogo(): Promise<HTMLImageElement | null> {
+  if (logo?.complete) return Promise.resolve(logo);
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      logo = image;
+      resolve(image);
+    };
+    image.onerror = () => resolve(null);
+    image.src = "/nmnh_logo.png";
+  });
+}
 
 /**
  * Собрать снимок: холст графика плюс шапка с подписями.
@@ -35,28 +79,39 @@ const THEMES = {
  * Возвращает готовый холст - из него получаются и файл, и буфер обмена, и
  * ссылка, поэтому собирается он один раз на все три случая.
  */
-export function composeShot(chart: HTMLCanvasElement, meta: ShotMeta): HTMLCanvasElement {
+export function composeShot(
+  chart: HTMLCanvasElement,
+  meta: ShotMeta,
+  mark?: HTMLImageElement | null,
+): HTMLCanvasElement {
   const palette = THEMES[meta.theme];
   const ratio = window.devicePixelRatio || 1;
   const head = Math.round(HEAD * ratio);
+  const foot = Math.round(FOOT * ratio);
+  const frame = Math.max(1, Math.round(FRAME * ratio));
 
   const out = document.createElement("canvas");
-  out.width = chart.width;
-  out.height = chart.height + head;
+  out.width = chart.width + frame * 2;
+  out.height = chart.height + head + foot + frame * 2;
 
   const ctx = out.getContext("2d");
   if (!ctx) return chart;
 
-  ctx.fillStyle = palette.bg;
+  // Рамка: заливаем всё её цветом и оставляем поля, а внутрь кладём снимок.
+  ctx.fillStyle = palette.frame;
   ctx.fillRect(0, 0, out.width, out.height);
+  ctx.translate(frame, frame);
+
+  ctx.fillStyle = palette.bg;
+  ctx.fillRect(0, 0, chart.width, chart.height + head + foot);
 
   ctx.fillStyle = palette.head;
-  ctx.fillRect(0, 0, out.width, head);
+  ctx.fillRect(0, 0, chart.width, head);
   ctx.strokeStyle = palette.line;
   ctx.lineWidth = Math.max(1, ratio);
   ctx.beginPath();
   ctx.moveTo(0, head);
-  ctx.lineTo(out.width, head);
+  ctx.lineTo(chart.width, head);
   ctx.stroke();
 
   const pad = 16 * ratio;
@@ -82,10 +137,25 @@ export function composeShot(chart: HTMLCanvasElement, meta: ShotMeta): HTMLCanva
   });
   const sign = meta.author ? `@${meta.author} · ${stamp}` : stamp;
   ctx.textAlign = "right";
-  ctx.fillText(sign, out.width - pad, head / 2);
+  ctx.fillText(sign, chart.width - pad, head / 2);
   ctx.textAlign = "left";
 
   ctx.drawImage(chart, 0, head);
+
+  // Подпись под графиком слева: знак и адрес. По ней снимок узнают, куда бы
+  // его ни переслали, - ради этого он и делается ссылкой, а не файлом.
+  const baseline = head + chart.height + foot / 2;
+  let x = pad;
+  const badge = mark ?? logo;
+  if (badge) {
+    const size = 20 * ratio;
+    ctx.drawImage(badge, x, baseline - size / 2, size, size);
+    x += size + 8 * ratio;
+  }
+  ctx.fillStyle = palette.text;
+  ctx.font = `700 ${13 * ratio}px Inter, system-ui, sans-serif`;
+  ctx.fillText("NMNH.TRADE", x, baseline);
+
   return out;
 }
 
