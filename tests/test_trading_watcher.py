@@ -583,9 +583,11 @@ def test_only_recognized_stops_are_cancelled():
     """
     import inspect
 
-    from backend.trading.watcher import PositionWatcher
+    # Снятие живёт отдельной функцией: её же зовёт ручка переноса стопа мышью,
+    # и двух разных способов снять старый стоп быть не должно.
+    from backend.trading.watcher import drop_old_stops
 
-    source = inspect.getsource(PositionWatcher._drop_old_stops)
+    source = inspect.getsource(drop_old_stops)
     assert "stop_like" in source
     assert "if not stop_like:" in source
 

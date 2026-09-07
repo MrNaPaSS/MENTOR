@@ -192,7 +192,11 @@ def decide(
         # стоящий дальше биржевого нуля, - это не защита, а ранний выход, и
         # держаться за него только потому, что он «лучше», значит выбивать
         # сделку раньше времени.
-        if trade.takes_hit == 1:
+        # Стоп, поставленный руками на этом же числе целей, расчётом не
+        # трогаем: трейдер видел рынок и решил сам, а безубыток - всего лишь
+        # правило по умолчанию. Возьмёт следующую цель - правило вернётся.
+        by_hand = int(getattr(trade, "hand_stop", -1) or -1) == trade.takes_hit
+        if trade.takes_hit == 1 and not by_hand:
             fresh = exchange_breakeven(position)
             if (
                 fresh is not None
@@ -528,119 +532,11 @@ class PositionWatcher:
         stop: float,
         market: float | None = None,
     ) -> bool:
-        """Поставить стоп на новую цену: снять старый и выставить новый.
-
-        Не «передвинуть»: стоп, приехавший вместе со входом, биржа заводит сама,
-        и его идентификатор в ответе на ордер не приходит. Угадывать его по
-        названию типа заявки — та самая ошибка, из-за которой стоп оставался на
-        прежней цене после взятой цели.
-
-        Порядок именно такой: сначала новый, потом снятие старого. Наоборот —
-        это окно, в котором позиция стоит вообще без защиты.
-        """
-        filters = await client.symbol_filters(trade.symbol)
-        size = float(trade.qty)
-        try:
-            positions = await client.positions()
-            size = position_size(position_for(positions, trade.symbol, trade.side)) or size
-        except WeexTradeError:
-            pass
-
-        quantity = floor_to_step(size, filters["step"])
-        if quantity < filters["min_qty"]:
-            logger.warning("Стоп %s не поставлен: нечего защищать", trade.symbol)
-            return False
-
-        long = trade.side == "long"
-
-        # Стоп по ту сторону рынка биржа не примет: у лонга он обязан стоять
-        # ниже цены, у шорта выше. Так и вышло на взятой цели - безубыток
-        # оказался выше рынка, заявку отклонили, и позиция осталась со старым
-        # стопом. Отступаем на шаг от цены: ровно в цену тоже не пускают.
-        if market and market > 0:
-            edge = market - filters["tick"] if long else market + filters["tick"]
-            wrong = stop > edge if long else stop < edge
-            if wrong:
-                logger.info(
-                    "Стоп %s подведён к рынку: %s не по ту сторону от %s",
-                    trade.symbol,
-                    stop,
-                    market,
-                )
-                stop = edge
-
-        try:
-            placed = await client.place_tp_sl(
-                symbol=trade.symbol,
-                plan_type="STOP_LOSS",
-                trigger_price=num(round_to_tick(stop, filters["tick"])),
-                quantity=num(quantity),
-                position_side="LONG" if long else "SHORT",
-                client_algo_id=f"sl{trade.takes_hit}_{trade.client_id}"[:32],
-            )
-        except WeexTradeError as exc:
-            # Не встал — старый остаётся на месте. Это хуже, чем хотелось, но
-            # честнее, чем снять защиту и не поставить новую.
-            logger.warning("Стоп %s не поставлен: %s", trade.symbol, exc)
-            return False
-
-        fresh = plan_order_id(placed)
-        await self._drop_old_stops(client, trade, keep=fresh)
-        logger.info(
-            "Стоп %s: было %s, стало %s (целей взято %d, рынок %s)",
-            trade.symbol,
-            trade.current_stop,
-            stop,
-            trade.takes_hit,
-            market if market else "неизвестен",
-        )
-        trade.sl_order_id = fresh
-        logger.info(
-            "Стоп %s переставлен на %s после %d целей", trade.symbol, stop, trade.takes_hit
-        )
-        return True
+        return await set_stop(client, trade, stop, market)
 
     async def _drop_old_stops(self, client: WeexFutures, trade: LiveTrade, keep: str) -> None:
-        """Снять прежние стопы, оставив только что поставленный.
+        await drop_old_stops(client, trade, keep)
 
-        Цели не трогаем: они тоже условные заявки, и снять их значит остаться
-        без лестницы.
-        """
-        recorded = json.loads(trade.tp_orders_json or "[]")
-        takes = {str(t.get("order_id") or "") for t in recorded}
-        takes |= {take_label(trade.client_id, i) for i in range(len(recorded))}
-        takes.discard("")
-        try:
-            orders = await client.algo_orders(trade.symbol)
-        except WeexTradeError as exc:
-            logger.warning("Старые стопы %s не сняты: %s", trade.symbol, exc)
-            return
-
-        for order in orders:
-            marks = order_marks(order)
-            order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
-            if not order_id or keep in marks or marks & takes:
-                continue
-
-            # Снимаем только то, что уверенно опознали как стоп. Раньше здесь
-            # было наоборот: пропускались цели, а всё остальное снималось - и
-            # заявка с незнакомым названием вида уходила под нож. Так и пропали
-            # цели через несколько секунд после входа: терминал снял их сам,
-            # приняв за чужие стопы.
-            kind = str(order.get("planType") or order.get("type") or "").lower()
-            stop_like = "stop" in kind or "loss" in kind or kind.endswith("sl")
-            if not stop_like:
-                logger.info(
-                    "Условная заявка %s (%s) оставлена: не опознана как стоп",
-                    order_id,
-                    kind or "без вида",
-                )
-                continue
-            try:
-                await client.cancel_algo_order(trade.symbol, order_id)
-                logger.info("Снят прежний стоп %s по %s", order_id, trade.symbol)
-            except WeexTradeError as exc:
-                logger.warning("Прежний стоп %s не снят: %s", order_id, exc)
 
     async def _find_stop_order(self, client: WeexFutures, trade: LiveTrade) -> str:
         """Найти стоп этой позиции среди условных заявок.
@@ -791,6 +687,129 @@ _SIZE_FIELDS = ("qty", "size", "amount", "dealSize", "fillSize", "volume")
 _SIDE_FIELDS = ("side", "orderSide", "direction", "tradeSide")
 
 _fills_warned = False
+
+
+async def set_stop(
+    client: WeexFutures,
+    trade: LiveTrade,
+    stop: float,
+    market: float | None = None,
+    label: str | None = None,
+) -> bool:
+    """Поставить стоп на новую цену: снять старый и выставить новый.
+
+    Не «передвинуть»: стоп, приехавший вместе со входом, биржа заводит сама,
+    и его идентификатор в ответе на ордер не приходит. Угадывать его по
+    названию типа заявки — та самая ошибка, из-за которой стоп оставался на
+    прежней цене после взятой цели.
+
+    Порядок именно такой: сначала новый, потом снятие старого. Наоборот —
+    это окно, в котором позиция стоит вообще без защиты.
+    """
+    filters = await client.symbol_filters(trade.symbol)
+    size = float(trade.qty)
+    try:
+        positions = await client.positions()
+        size = position_size(position_for(positions, trade.symbol, trade.side)) or size
+    except WeexTradeError:
+        pass
+
+    quantity = floor_to_step(size, filters["step"])
+    if quantity < filters["min_qty"]:
+        logger.warning("Стоп %s не поставлен: нечего защищать", trade.symbol)
+        return False
+
+    long = trade.side == "long"
+
+    # Стоп по ту сторону рынка биржа не примет: у лонга он обязан стоять
+    # ниже цены, у шорта выше. Так и вышло на взятой цели - безубыток
+    # оказался выше рынка, заявку отклонили, и позиция осталась со старым
+    # стопом. Отступаем на шаг от цены: ровно в цену тоже не пускают.
+    if market and market > 0:
+        edge = market - filters["tick"] if long else market + filters["tick"]
+        wrong = stop > edge if long else stop < edge
+        if wrong:
+            logger.info(
+                "Стоп %s подведён к рынку: %s не по ту сторону от %s",
+                trade.symbol,
+                stop,
+                market,
+            )
+            stop = edge
+
+    try:
+        placed = await client.place_tp_sl(
+            symbol=trade.symbol,
+            plan_type="STOP_LOSS",
+            trigger_price=num(round_to_tick(stop, filters["tick"])),
+            quantity=num(quantity),
+            position_side="LONG" if long else "SHORT",
+            client_algo_id=(label or f"sl{trade.takes_hit}_{trade.client_id}")[:32],
+        )
+    except WeexTradeError as exc:
+        # Не встал — старый остаётся на месте. Это хуже, чем хотелось, но
+        # честнее, чем снять защиту и не поставить новую.
+        logger.warning("Стоп %s не поставлен: %s", trade.symbol, exc)
+        return False
+
+    fresh = plan_order_id(placed)
+    await drop_old_stops(client, trade, keep=fresh)
+    logger.info(
+        "Стоп %s: было %s, стало %s (целей взято %d, рынок %s)",
+        trade.symbol,
+        trade.current_stop,
+        stop,
+        trade.takes_hit,
+        market if market else "неизвестен",
+    )
+    trade.sl_order_id = fresh
+    logger.info(
+        "Стоп %s переставлен на %s после %d целей", trade.symbol, stop, trade.takes_hit
+    )
+    return True
+
+
+async def drop_old_stops(client: WeexFutures, trade: LiveTrade, keep: str) -> None:
+    """Снять прежние стопы, оставив только что поставленный.
+
+    Цели не трогаем: они тоже условные заявки, и снять их значит остаться
+    без лестницы.
+    """
+    recorded = json.loads(trade.tp_orders_json or "[]")
+    takes = {str(t.get("order_id") or "") for t in recorded}
+    takes |= {take_label(trade.client_id, i) for i in range(len(recorded))}
+    takes.discard("")
+    try:
+        orders = await client.algo_orders(trade.symbol)
+    except WeexTradeError as exc:
+        logger.warning("Старые стопы %s не сняты: %s", trade.symbol, exc)
+        return
+
+    for order in orders:
+        marks = order_marks(order)
+        order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
+        if not order_id or keep in marks or marks & takes:
+            continue
+
+        # Снимаем только то, что уверенно опознали как стоп. Раньше здесь
+        # было наоборот: пропускались цели, а всё остальное снималось - и
+        # заявка с незнакомым названием вида уходила под нож. Так и пропали
+        # цели через несколько секунд после входа: терминал снял их сам,
+        # приняв за чужие стопы.
+        kind = str(order.get("planType") or order.get("type") or "").lower()
+        stop_like = "stop" in kind or "loss" in kind or kind.endswith("sl")
+        if not stop_like:
+            logger.info(
+                "Условная заявка %s (%s) оставлена: не опознана как стоп",
+                order_id,
+                kind or "без вида",
+            )
+            continue
+        try:
+            await client.cancel_algo_order(trade.symbol, order_id)
+            logger.info("Снят прежний стоп %s по %s", order_id, trade.symbol)
+        except WeexTradeError as exc:
+            logger.warning("Прежний стоп %s не снят: %s", order_id, exc)
 
 
 def _first(row: dict[str, Any], names: tuple[str, ...]) -> float | None:

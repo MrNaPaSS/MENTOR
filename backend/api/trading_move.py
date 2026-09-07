@@ -32,9 +32,21 @@ from sqlalchemy import select
 
 from backend.api.trading import _fail, _num, _require_client
 from backend.deps import get_current_student, get_session
-from backend.trading.watcher import order_marks, position_for, stop_label, take_label
+from backend.trading.watcher import (
+    mark_price,
+    order_marks,
+    position_for,
+    set_stop,
+    stop_label,
+    take_label,
+)
 from core.models import LiveTrade, Student, utcnow
-from core.weex.futures import WeexFutures, WeexTradeError, round_to_tick
+from core.weex.futures import (
+    WeexFutures,
+    WeexTradeError,
+    plan_order_id,
+    round_to_tick,
+)
 
 router = APIRouter(prefix="/api/trading", tags=["trading"])
 logger = logging.getLogger("nmnh.trading")
@@ -164,7 +176,7 @@ async def move_levels(
     if position is None:
         result = await _move_waiting(client, live, body, tick)
     else:
-        result = await _move_open(client, live, body, tick)
+        result = await _move_open(client, live, body, tick, mark_price(position))
 
     live.updated_at = utcnow()
     session.commit()
@@ -240,27 +252,51 @@ async def _move_waiting(
 
 
 async def _move_open(
-    client: WeexFutures, live: LiveTrade, body: MoveIn, tick: float
+    client: WeexFutures,
+    live: LiveTrade,
+    body: MoveIn,
+    tick: float,
+    market: float | None = None,
 ) -> dict[str, Any]:
-    """Подвинуть защиту открытой позиции - на месте, не снимая."""
+    """Подвинуть защиту открытой позиции.
+
+    Не «передвинуть заявку», а поставить новую и снять прежнюю. Ручка биржи для
+    переноса условной заявки на нашем счёте не двигает её, а заводит вторую: на
+    позиции оказывались два стопа в паре долларов друг от друга, терминал
+    показывал то один, то другой, и уровень «возвращался назад» сам собой.
+
+    Порядок разный и по делу. Стоп: сначала новый, потом снятие старого -
+    наоборот это окно, в котором позиция стоит без защиты. Цель: сначала снятие,
+    потом новая - две цели на один объём биржа исполнит обе.
+    """
     if body.entry is not None:
         raise HTTPException(409, "Позиция уже открыта - вход не переносится")
 
-    takes, stops = await _protection(client, live)
+    takes, _stops = await _protection(client, live)
     targets: list[float] = json.loads(live.targets_json or "[]")
 
     if body.stop is not None:
         stop = round_to_tick(body.stop, tick)
         _guard(live.side, live.entry, stop, None)
-        if not stops:
-            raise HTTPException(409, "Стопа на бирже нет - поставьте защиту заново")
-        try:
-            await client.modify_tp_sl(
-                symbol=live.symbol, order_id=_id(stops[0]), trigger_price=_num(stop)
-            )
-        except WeexTradeError as exc:
-            raise _fail(exc) from exc
+        # Метка своя на каждый перенос: биржа помнит снятую ещё некоторое время
+        # и повторную отклоняет - стоп тогда просто не переезжает.
+        live.replaces = (live.replaces or 0) + 1
+        # Цену рынка передаём: стоп по ту сторону рынка биржа не принимает, и
+        # постановка подведёт его к рынку сама, вместо отказа.
+        moved = await set_stop(
+            client,
+            live,
+            stop,
+            market,
+            label=f"slm{live.replaces}_{live.client_id}",
+        )
+        if not moved:
+            raise HTTPException(409, "Биржа не приняла новый стоп - прежний остался на месте")
         live.current_stop = stop
+        # Сопровождение переставляет стоп в безубыток после первой цели. Свой
+        # стоп трейдер поставил руками и осознанно: возвращать его расчётом
+        # нельзя, пока сделка не дойдёт до следующей цели.
+        live.hand_stop = live.takes_hit
 
     if body.take is not None:
         take = round_to_tick(body.take, tick)
@@ -270,18 +306,51 @@ async def _move_open(
         ladder = sorted(takes, key=_trigger, reverse=live.side == "short")
         if body.take_index >= len(ladder):
             raise HTTPException(409, "Такой цели на бирже нет")
+
+        old = ladder[body.take_index]
+        size = _size(old)
+        if size <= 0:
+            raise HTTPException(409, "Биржа не назвала объём этой цели")
+
         try:
-            await client.modify_tp_sl(
-                symbol=live.symbol,
-                order_id=_id(ladder[body.take_index]),
-                trigger_price=_num(take),
-            )
+            await client.cancel_algo_order(live.symbol, _id(old))
         except WeexTradeError as exc:
             raise _fail(exc) from exc
+
+        live.replaces = (live.replaces or 0) + 1
+        try:
+            placed = await client.place_tp_sl(
+                symbol=live.symbol,
+                plan_type="TAKE_PROFIT",
+                trigger_price=_num(take),
+                quantity=_num(size),
+                position_side="LONG" if live.side == "long" else "SHORT",
+                client_algo_id=f"tpm{live.replaces}_{live.client_id}"[:32],
+            )
+        except WeexTradeError as exc:
+            # Старой цели уже нет, новая не встала - сказать надо прямо: трейдер
+            # думает, что подвинул уровень, а цель исчезла вовсе.
+            logger.warning("Цель %s не переставлена: %s", live.symbol, exc)
+            raise HTTPException(
+                409, f"Цель снята, но новая не встала: {exc}. Поставьте её заново."
+            ) from exc
+
         while len(targets) <= body.take_index:
             targets.append(take)
         targets[body.take_index] = take
         live.targets_json = json.dumps(targets)
+
+        # Запоминаем новую заявку: по её идентификатору сопровождение узнаёт,
+        # что цель взята. Со старым оно ждало бы исполнения снятой.
+        recorded = json.loads(live.tp_orders_json or "[]")
+        while len(recorded) <= body.take_index:
+            recorded.append({"price": take, "order_id": "", "filled": False})
+        recorded[body.take_index] = {
+            "price": take,
+            "order_id": plan_order_id(placed),
+            "filled": False,
+        }
+        live.tp_orders_json = json.dumps(recorded, ensure_ascii=False)
 
     return {
         "entry": live.entry,
@@ -289,6 +358,18 @@ async def _move_open(
         "takes": targets,
         "planned": False,
     }
+
+
+def _size(order: dict[str, Any]) -> float:
+    """Объём условной заявки. Имя поля у биржи своё."""
+    for name in ("quantity", "size", "qty", "origQty", "volume"):
+        try:
+            value = float(order.get(name))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            return value
+    return 0.0
 
 
 def _guard(side: str, entry: float, stop: float | None, take: float | None) -> None:

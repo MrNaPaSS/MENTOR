@@ -130,32 +130,99 @@ def test_waiting_target_touches_only_the_plan(moving):
     assert json.loads(live.targets_json) == [80_900.0]
 
 
-def test_open_position_moves_protection_in_place(moving):
-    """У открытой позиции защиту не снимают: двигаем одним запросом."""
-    client, exchange, session, live = moving
+def opened(session, live, exchange):
+    """Позиция набрана, на бирже стоят стоп и цель."""
     live.status = "open"
     live.tp_orders_json = json.dumps([{"price": 80_400.0, "order_id": "p1"}])
     session.commit()
-
     exchange.position = {"symbol": "BTCUSDT", "positionSide": "LONG", "size": "0.01"}
     exchange.plans_open = [
-        {"orderId": "s1", "planType": "STOP_LOSS", "triggerPrice": "79900"},
-        {"orderId": "p1", "planType": "TAKE_PROFIT", "triggerPrice": "80400"},
+        {"orderId": "s1", "planType": "STOP_LOSS", "triggerPrice": "79900", "quantity": "0.01"},
+        {"orderId": "p1", "planType": "TAKE_PROFIT", "triggerPrice": "80400", "quantity": "0.01"},
     ]
+
+
+def test_moved_stop_replaces_the_old_one(moving):
+    """Стоп ставится новый, прежний снимается - вторым он висеть не должен.
+
+    Ручка биржи для переноса условной заявки не двигает её, а заводит вторую:
+    на позиции оказывались два стопа в паре долларов друг от друга.
+    """
+    client, exchange, session, live = moving
+    opened(session, live, exchange)
 
     move(client, stop=79_950.0)
-    move(client, take=80_700.0)
 
-    assert exchange.cancelled == []
-    assert exchange.algo_cancelled == []
-    assert [(m["order_id"], m["trigger_price"]) for m in exchange.modified] == [
-        ("s1", "79950"),
-        ("p1", "80700"),
-    ]
+    # Никаких «передвинуть»: только новая заявка и снятие прежней.
+    assert exchange.modified == []
+    assert [p["plan_type"] for p in exchange.plans] == ["STOP_LOSS"]
+    assert exchange.plans[-1]["trigger_price"] == "79950"
+    assert "s1" in exchange.algo_cancelled
 
     session.refresh(live)
     assert float(live.current_stop) == 79_950.0
+    # Отметка «поставлен руками»: сопровождение не вернёт его расчётом.
+    assert live.hand_stop == live.takes_hit
+
+
+def test_moved_target_replaces_the_old_one(moving):
+    """Цель тоже переставляется заявкой, а не переносом."""
+    client, exchange, session, live = moving
+    opened(session, live, exchange)
+
+    move(client, take=80_700.0)
+
+    assert exchange.modified == []
+    assert "p1" in exchange.algo_cancelled
+    placed = exchange.plans[-1]
+    assert placed["plan_type"] == "TAKE_PROFIT"
+    assert placed["trigger_price"] == "80700"
+    # Объём берём у снятой заявки: цель закрывает свою долю позиции, а не всю.
+    assert placed["quantity"] == "0.01"
+
+    session.refresh(live)
     assert json.loads(live.targets_json) == [80_700.0]
+    # Идентификатор записан тот, что вернула биржа на новую заявку: по старому
+    # сопровождение ждало бы исполнения снятой и цель считалась бы невзятой.
+    assert json.loads(live.tp_orders_json)[0]["order_id"] == f"p{len(exchange.plans)}"
+
+
+def test_hand_set_stop_survives_the_breakeven_rule(moving):
+    """Стоп, поставленный руками, расчёт безубытка не возвращает."""
+    from backend.trading.watcher import decide
+
+    _, _, session, live = moving
+    live.status = "open"
+    live.takes_hit = 1
+    live.qty = 0.01
+    live.entry = 80_000.0
+    live.current_stop = 79_800.0
+    live.tp_orders_json = json.dumps([{"price": 80_400.0, "order_id": "p1", "filled": True}])
+    session.commit()
+
+    position = {
+        "symbol": "BTCUSDT",
+        "positionSide": "LONG",
+        "size": "0.01",
+        "cumOpenValue": "800",
+        "cumOpenSize": "0.01",
+        "cumOpenFee": "0.6",
+        "cumCloseValue": "0",
+        "cumCloseSize": "0",
+        "cumCloseFee": "0",
+    }
+
+    live.hand_stop = -1
+    session.commit()
+    free = decide(live, position, {"p1"}, 80_100.0, 0)
+
+    live.hand_stop = 1
+    session.commit()
+    held = decide(live, position, {"p1"}, 80_100.0, 0)
+
+    # Без отметки расчёт вправе двигать стоп, с отметкой - нет.
+    assert held.move_stop_to is None
+    assert free.move_stop_to is None or held.move_stop_to != free.move_stop_to
 
 
 def test_entry_is_not_moved_under_an_open_position(moving):
