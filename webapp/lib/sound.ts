@@ -42,18 +42,34 @@ type Tone = {
 
 // Смысл слышен без объяснений: вход — вверх, стоп — вниз, ошибка — резко и
 // низко. Прибыль отличается от простой цели тем, что заканчивается выше.
+//
+// Весь набор опущен на октаву и стал вдвое тише. Прежние ноты жили в области
+// 880-1568 Гц - там, где сидят будильник и сигнал микроволновки, - и в тишине
+// кабинета били по ушам. Смысл держится на движении между нотами, а не на их
+// высоте: вниз читается как вниз в любом регистре, и разбирать сигналы на слух
+// это не мешает.
 const TONES: Record<SoundKind, Tone> = {
-  order: { notes: [880], step: 0.05, type: "triangle", gain: 0.05 },
-  entry: { notes: [660, 880], step: 0.07, type: "triangle", gain: 0.07 },
-  take: { notes: [880, 1175], step: 0.08, type: "sine", gain: 0.07 },
-  profit: { notes: [880, 1175, 1568], step: 0.09, type: "sine", gain: 0.08 },
-  stop: { notes: [440, 330], step: 0.1, type: "sine", gain: 0.07 },
-  close: { notes: [587, 440], step: 0.08, type: "triangle", gain: 0.06 },
-  error: { notes: [220, 220], step: 0.12, type: "square", gain: 0.05 },
+  order: { notes: [440], step: 0.06, type: "sine", gain: 0.026 },
+  entry: { notes: [330, 440], step: 0.08, type: "sine", gain: 0.034 },
+  take: { notes: [440, 587], step: 0.09, type: "sine", gain: 0.034 },
+  profit: { notes: [440, 587, 784], step: 0.1, type: "sine", gain: 0.04 },
+  stop: { notes: [294, 220], step: 0.11, type: "sine", gain: 0.036 },
+  close: { notes: [330, 262], step: 0.09, type: "sine", gain: 0.03 },
+  // Треугольник вместо меандра: тот резал слух гармониками, а «резко и низко»
+  // держится на самой низкой ноте набора, а не на жёсткости тембра.
+  error: { notes: [165, 165], step: 0.13, type: "triangle", gain: 0.03 },
   // Две одинаковые ноты повыше: ни на что не похоже в этом наборе, и трейдер
   // не спутает пересечение уровня со взятой целью.
-  alert: { notes: [1046, 1046], step: 0.1, type: "sine", gain: 0.06 },
+  alert: { notes: [523, 523], step: 0.11, type: "sine", gain: 0.03 },
 };
+
+/**
+ * Срез верха: выше этой частоты сигнал не звенит.
+ *
+ * Звонкость - это не громкость, а верхние гармоники. Даже у синуса их добавляет
+ * сам щелчок включения, и в наушниках он слышен как металлический призвук.
+ */
+const TONE_CUTOFF = 1400;
 
 let context: AudioContext | null = null;
 let muted = false;
@@ -99,24 +115,39 @@ export function play(kind: SoundKind): void {
   // Музыка отходит на задний план, пока говорит терминал. Сигнал короткий и
   // негромкий - в клубном бите он тонет, а сообщает он о взятой цели или о
   // выбитом стопе. Приглушаем на длину сигнала с небольшим запасом.
-  duck(tone.notes.length * tone.step * 1000 + 600);
+  // Считаем по настоящей длине сигнала: последняя нота начинается на своём
+  // шаге, а гаснет ещё полтора шага спустя. Вернуть музыку раньше, чем стих
+  // хвост, - значит накрыть музыкой то, ради чего её и приглушали.
+  duck((tone.notes.length - 1 + 1.6) * tone.step * 1000 + 600);
   const start = ctx.currentTime;
 
   tone.notes.forEach((frequency, i) => {
     const at = start + i * tone.step;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    // Фильтр на каждую ноту: срезает верхние гармоники, из-за которых сигнал
+    // звенел даже на негромкой ноте.
+    const soft = ctx.createBiquadFilter();
+    soft.type = "lowpass";
+    soft.frequency.setValueAtTime(TONE_CUTOFF, at);
+    // Без подъёма на срезе: он вернул бы ту самую звонкость на самой границе.
+    soft.Q.setValueAtTime(0.7, at);
 
     osc.type = tone.type;
     osc.frequency.setValueAtTime(frequency, at);
 
-    // Мгновенное включение и выключение даёт щелчок, поэтому короткие спады.
+    // Мягкая атака и долгий спад.
+    //
+    // Резкое включение слышно как щелчок, и именно он давал сигналу звонкость:
+    // ухо ловит не ноту, а удар по ней. Тридцать миллисекунд подъёма этот удар
+    // убирают, оставаясь незаметными - сигнал по-прежнему звучит сразу.
+    // Спад длиннее самой ноты: звук уходит в тишину, а не обрывается.
     gain.gain.setValueAtTime(0.0001, at);
-    gain.gain.exponentialRampToValueAtTime(tone.gain, at + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, at + tone.step);
+    gain.gain.exponentialRampToValueAtTime(tone.gain, at + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + tone.step * 1.6);
 
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(soft).connect(ctx.destination);
     osc.start(at);
-    osc.stop(at + tone.step + 0.02);
+    osc.stop(at + tone.step * 1.6 + 0.02);
   });
 }
