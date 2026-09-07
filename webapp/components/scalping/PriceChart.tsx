@@ -552,6 +552,8 @@ function PriceChart({
   // ставится один раз — значит и полки, и обработчик читаются из ref.
   const shelvesRef = useRef<Wall[]>(shelves);
   shelvesRef.current = shelves;
+  const wallRef = useRef<Wall | null>(wall);
+  wallRef.current = wall;
   const shelfClickRef = useRef(onShelfClick);
   shelfClickRef.current = onShelfClick;
 
@@ -783,7 +785,13 @@ function PriceChart({
 
       let nearest: Wall | null = null;
       let best = SHELF_HIT_PX;
-      for (const shelf of shelvesRef.current) {
+      // Плита - такой же уровень, как полка: по ней тоже считают сделку.
+      // Раньше нажатие по ней не давало ничего, и приходилось искать ту же
+      // цену в стакане.
+      const levels = wallRef.current
+        ? [wallRef.current, ...shelvesRef.current]
+        : shelvesRef.current;
+      for (const shelf of levels) {
         const y = series.priceToCoordinate(shelf.price);
         if (y === null) continue;
         const distance = Math.abs(y - param.point.y);
@@ -1109,7 +1117,13 @@ function PriceChart({
     shelfLinesRef.current = [];
     if (!cfg.shelves) return;
 
-    shelfLinesRef.current = shelves.map((shelf) =>
+    // Полку на цене плиты не рисуем: это один и тот же уровень, и две линии
+    // с двумя подписями на нём спорят друг с другом, а не дополняют.
+    const shown = wall
+      ? shelves.filter((shelf) => Math.abs(shelf.price - wall.price) > (tick || 0) / 2)
+      : shelves;
+
+    shelfLinesRef.current = shown.map((shelf) =>
       series.createPriceLine({
         price: shelf.price,
         color: shelf.side === "bid" ? THEMES[theme].bidLine : THEMES[theme].askLine,
@@ -1119,7 +1133,7 @@ function PriceChart({
         title: money(shelf.notional),
       }),
     );
-  }, [shelfKey, cfg.shelves, theme]);
+  }, [shelfKey, cfg.shelves, theme, wall?.price, tick]);
 
   // Разметка сделки: вход, стоп и цели линиями, риск и потенциал — боксами.
   //
