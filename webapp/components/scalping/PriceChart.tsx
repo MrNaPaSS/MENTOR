@@ -551,8 +551,11 @@ function PriceChart({
   onEmptyClick?: (price: number, atr: number) => void;
   /** Поставить отметку на текущей цене - из плюсика у неё же. */
   onAddAlert?: (price: number) => void;
-  /** Начать лимитку от текущей цены. Вторым числом - ATR для подсказки стопа. */
-  onAddOrder?: (price: number, atr: number) => void;
+  /**
+   * Начать лимитку от текущей цены. Вторым числом - ATR для подсказки стопа,
+   * третьим - сторона: её трейдер называет сам, а не выводит из цены.
+   */
+  onAddOrder?: (price: number, atr: number, side: "long" | "short") => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -697,6 +700,10 @@ function PriceChart({
   // самой цене и едет вместе с ней, поэтому положение задаётся покадрово.
   const plusRef = useRef<HTMLDivElement>(null);
   const [plusMenu, setPlusMenu] = useState(false);
+  // Пока курсор на плюсике или открыто его меню, кнопка стоит на месте.
+  // Цена меняется восемь раз в секунду, и кнопка, едущая вместе с ней, уходит
+  // из-под курсора ровно в тот момент, когда по ней целятся.
+  const plusHeldRef = useRef(false);
   // Результат за сегодня по журналу. null — журнал недоступен: ученик не вошёл
   // в кабинет, и показывать ему чужой ноль незачем.
   const [todayPnl, setTodayPnl] = useState<number | null>(null);
@@ -1366,7 +1373,7 @@ function PriceChart({
         livePriceRef.current > 0 ? livePriceRef.current : dataRef.current.at(-1)?.close ?? 0;
       const atPrice = price > 0 ? series.priceToCoordinate(price) : null;
       place(clockRef.current, atPrice, 10);
-      place(plusRef.current, atPrice, -10);
+      if (!plusHeldRef.current) place(plusRef.current, atPrice, -10);
 
       // Текст таймера меняется раз в секунду — пишем его только при смене.
       const next = untilClose(interval);
@@ -1689,7 +1696,9 @@ function PriceChart({
   useEffect(() => {
     if (!plusMenu) return;
     function away(event: MouseEvent) {
-      if (!plusRef.current?.contains(event.target as Node)) setPlusMenu(false);
+      if (plusRef.current?.contains(event.target as Node)) return;
+      setPlusMenu(false);
+      plusHeldRef.current = false;
     }
     document.addEventListener("mousedown", away);
     return () => document.removeEventListener("mousedown", away);
@@ -1855,9 +1864,25 @@ function PriceChart({
       {/* Плюсик у текущей цены: два действия, которые нужны прямо на ней -
           отметить уровень или встать в него лимиткой. Раньше для этого надо
           было знать, что нажатие по графику что-то делает. */}
-      <div ref={plusRef} className="absolute right-16 top-0 z-30" style={{ visibility: "hidden" }}>
+      <div
+        ref={plusRef}
+        className="absolute right-16 top-0 z-30"
+        style={{ visibility: "hidden" }}
+        onPointerEnter={() => {
+          plusHeldRef.current = true;
+        }}
+        onPointerLeave={() => {
+          plusHeldRef.current = plusMenu;
+        }}
+      >
         <button
-          onClick={() => setPlusMenu((v) => !v)}
+          onClick={() => {
+            setPlusMenu((v) => {
+              // Меню закрыли - кнопка снова едет за ценой.
+              plusHeldRef.current = !v;
+              return !v;
+            });
+          }}
           title="Отметка или сделка на этой цене"
           className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border text-[13px] leading-none shadow transition-colors duration-150 ease-out"
           style={{
@@ -1875,23 +1900,26 @@ function PriceChart({
           >
             {(
               [
-                ["alert", "Добавить уведомление"],
-                ["order", "Открыть сделку"],
+                ["alert", "Добавить уведомление", "var(--pane-text-2)"],
+                ["long", "Открыть лонг отсюда", THEMES[theme].up],
+                ["short", "Открыть шорт отсюда", THEMES[theme].down],
               ] as const
-            ).map(([action, label]) => (
+            ).map(([action, label, color]) => (
               <button
                 key={action}
                 onClick={() => {
                   setPlusMenu(false);
+                  plusHeldRef.current = false;
                   const at =
                     livePriceRef.current > 0
                       ? livePriceRef.current
                       : dataRef.current.at(-1)?.close ?? 0;
                   if (!(at > 0)) return;
                   if (action === "alert") alertAddRef.current?.(at);
-                  else orderAddRef.current?.(at, currentAtr(dataRef.current));
+                  else orderAddRef.current?.(at, currentAtr(dataRef.current), action);
                 }}
-                className="block w-full px-3 py-1.5 text-left text-[11px] text-[var(--pane-text-2)] transition-colors hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+                className="block w-full px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-[var(--pane-hover)]"
+                style={{ color }}
               >
                 {label}
               </button>

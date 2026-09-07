@@ -780,8 +780,8 @@ export default function ScalpingPage() {
    * Приходит из плюсика у текущей цены: два действия названы словами, и гадать,
    * что делает нажатие по графику, не приходится. Дальше уровни тянут мышью.
    */
-  function startManual(price: number, atr: number) {
-    setManual(draftAt(price, chartPrice, atr, margin, leverage));
+  function startManual(price: number, atr: number, side: "long" | "short") {
+    setManual(draftAt(price, chartPrice, atr, margin, leverage, side));
   }
 
   /** Отметка на цене из того же плюсика. */
@@ -2168,6 +2168,7 @@ export default function ScalpingPage() {
                     draft={manual}
                     tick={limits?.tick ?? 0}
                     maxLeverage={limits?.max_leverage}
+                    takerFee={limits?.taker_fee}
                     onChange={setManual}
                     onSubmit={sendManual}
                     onCancel={() => setManual(null)}
