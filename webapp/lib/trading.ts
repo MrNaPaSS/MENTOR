@@ -202,6 +202,45 @@ export type ExchangePosition = {
 };
 
 /**
+ * Объёмы всех открытых позиций счёта: ключ «монета:сторона».
+ *
+ * Одним запросом по всем монетам. Лимитка исполняется тогда, когда трейдер
+ * смотрит на другой график, и спрашивать по одной открытой монете значит
+ * узнать о своей же сделке в последнюю очередь.
+ */
+export async function openSizes(): Promise<Record<string, number> | null> {
+  const body = await request<{ positions: Record<string, unknown>[] }>(
+    "/api/trading/positions",
+  );
+  if (!body) return null;
+
+  const out: Record<string, number> = {};
+  for (const row of body.positions) {
+    const symbol = String(row.symbol ?? "").toUpperCase();
+    if (!symbol) continue;
+    const side = String(row.positionSide ?? row.holdSide ?? row.side ?? "").toLowerCase();
+    let size = 0;
+    for (const name of ["total", "size", "positionAmt", "available"]) {
+      const value = Math.abs(Number(row[name]));
+      if (Number.isFinite(value) && value > 0) {
+        size = value;
+        break;
+      }
+    }
+    if (size <= 0) continue;
+    // Сторону биржа называет не всегда: в одностороннем режиме поля может не
+    // быть вовсе. Тогда записываем под обе - позиция по монете ровно одна.
+    const keys = side.includes("short")
+      ? [`${symbol}:short`]
+      : side.includes("long")
+        ? [`${symbol}:long`]
+        : [`${symbol}:long`, `${symbol}:short`];
+    for (const key of keys) out[key] = (out[key] ?? 0) + size;
+  }
+  return out;
+}
+
+/**
  * Спросить биржу, что там с позицией.
  *
  * Терминал обязан быть зеркалом биржи, а не жить своей арифметикой: он уже

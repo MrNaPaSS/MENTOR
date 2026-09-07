@@ -230,38 +230,12 @@ export function snapshot(
 }
 
 /**
- * Знак для подписи.
- *
- * Загружается один раз и остаётся в памяти: снимки делают подряд. Не загрузился
- * - подпись обойдётся без знака, но снимок всё равно получится: картинка важнее
- * украшения.
- */
-let logo: HTMLImageElement | null = null;
-
-export function loadLogo(): Promise<HTMLImageElement | null> {
-  if (logo?.complete) return Promise.resolve(logo);
-  return new Promise((resolve) => {
-    const image = new Image();
-    image.onload = () => {
-      logo = image;
-      resolve(image);
-    };
-    image.onerror = () => resolve(null);
-    image.src = "/nmnh_logo.png";
-  });
-}
-
-/**
  * Собрать снимок: график, шапка с подписями, рамка и наш знак снизу.
  *
  * Возвращает готовый холст - из него получаются и файл, и буфер обмена, и
  * ссылка, поэтому собирается он один раз на все три случая.
  */
-export function composeShot(
-  chart: HTMLCanvasElement,
-  meta: ShotMeta,
-  mark?: HTMLImageElement | null,
-): HTMLCanvasElement {
+export function composeShot(chart: HTMLCanvasElement, meta: ShotMeta): HTMLCanvasElement {
   const palette = THEMES[meta.theme];
   const ratio = window.devicePixelRatio || 1;
   const head = Math.round(HEAD * ratio);
@@ -324,23 +298,12 @@ export function composeShot(
   ctx.fillText(sign, left + chart.width - pad, top + head / 2);
   ctx.textAlign = "left";
 
-  // Подпись под графиком слева: знак и адрес. По ним снимок узнают, куда бы его
-  // ни переслали.
+  // Подпись под графиком слева - одним адресом, без знака. Мелкий знак рядом с
+  // текстом читался пятном и портил снимок; имя работает лучше картинки.
   const baseline = top + head + chart.height + foot / 2;
-  let x = left + pad;
-  const badge = mark ?? logo;
-  if (badge?.complete && badge.naturalWidth > 0) {
-    const size = 20 * ratio;
-    try {
-      ctx.drawImage(badge, x, baseline - size / 2, size, size);
-      x += size + 8 * ratio;
-    } catch {
-      // Знак не нарисовался - подпись обойдётся текстом.
-    }
-  }
   ctx.fillStyle = palette.text;
   ctx.font = `700 ${13 * ratio}px Inter, system-ui, sans-serif`;
-  ctx.fillText("NMNH.TRADE", x, baseline);
+  ctx.fillText("NMNH.TRADE", left + pad, baseline);
 
   return out;
 }

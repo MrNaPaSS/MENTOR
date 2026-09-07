@@ -41,7 +41,6 @@ import {
   composeShot,
   copy as copyShot,
   download as downloadShot,
-  loadLogo,
   share as shareShot,
   type ShotResult,
 } from "@/lib/shot";
@@ -51,6 +50,7 @@ import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
 import LevelMenu from "@/components/scalping/LevelMenu";
 import ManualOrderCard from "@/components/scalping/ManualOrderCard";
+import Toasts, { type Toast } from "@/components/scalping/Toasts";
 import type { DragLevel } from "@/components/scalping/DragLevels";
 import type { OrderChip } from "@/components/scalping/OrderChip";
 import { draftAt, moveLevel, qtyOf, riskOf, type ManualDraft } from "@/lib/trade/manual";
@@ -63,6 +63,7 @@ import {
   closePosition,
   moveLevels,
   openPosition,
+  openSizes,
   limitsOf,
   plansOf,
   positionOf,
@@ -455,6 +456,9 @@ export default function ScalpingPage() {
   // трейдер волен тянуть уровни сколько угодно. Отдельно от расчёта по полке -
   // там первичен процент стопа, здесь цена уровня.
   const [manual, setManual] = useState<ManualDraft | null>(null);
+  // Уведомления поверх терминала: сюда попадает то, что случилось само и не
+  // на глазах у трейдера.
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const midRef = useRef(0);
   midRef.current = dom?.mid ?? 0;
   useEffect(() => {
@@ -1500,6 +1504,69 @@ export default function ScalpingPage() {
     };
   }, [manual, limits?.tick]);
 
+  /**
+   * Исполнение лимитки по любой монете, а не только по открытой.
+   *
+   * Заявка срабатывает сама и почти всегда тогда, когда трейдер смотрит на
+   * другой график. Зеркало биржи спрашивает только текущую монету, и о своей
+   * же сделке трейдер узнавал последним - открыв её монету через полчаса.
+   *
+   * Спрашиваем объёмы всех позиций одним запросом и следим за переходом «не
+   * было - стало»: именно он и означает, что вход состоялся.
+   */
+  const sizesRef = useRef<Record<string, number> | null>(null);
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+
+    async function look() {
+      const waiting = tradesRef.current.filter((t) => t.status === "planned");
+      if (waiting.length === 0) {
+        sizesRef.current = null;
+        return;
+      }
+      const sizes = await openSizes().catch(() => null);
+      if (cancelled || !sizes) return;
+
+      const before = sizesRef.current;
+      sizesRef.current = sizes;
+      // Первый круг только запоминает: без «до» переход не отличить от того,
+      // что позиция стояла всё это время.
+      if (!before) return;
+
+      for (const trade of waiting) {
+        const key = `${trade.symbol}:${trade.side}`;
+        if ((before[key] ?? 0) > 0 || (sizes[key] ?? 0) <= 0) continue;
+        setToasts((list) =>
+          list.some((toast) => toast.id === trade.id)
+            ? list
+            : [
+                ...list,
+                {
+                  id: trade.id,
+                  symbol: trade.symbol,
+                  title: `${base(trade.symbol)} - вход состоялся`,
+                  text: `${trade.side === "long" ? "лонг" : "шорт"} по ${fmtPrice(
+                    trade.entry,
+                    limits?.tick ?? 0,
+                  )}`,
+                  tone: trade.side === "long" ? "up" : "down",
+                },
+              ],
+        );
+        play("entry");
+      }
+    }
+
+    look();
+    const id = setInterval(look, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live]);
+
   // Отметки открытой монеты: их рисует график и подсвечивает стакан.
   const myAlerts = alerts.filter((a) => a.symbol === symbol);
   const alertPrices = myAlerts.map((a) => a.price);
@@ -1677,14 +1744,14 @@ export default function ScalpingPage() {
 
     // Обещанием, а не готовой картинкой: право писать в буфер браузер даёт
     // только на свежее нажатие, и любое ожидание между кликом и записью его
-    // снимает - запись молча отклоняется, а в буфере остаётся прежнее. Поэтому
-    // копирование начинается сразу, а знак и сборка доезжают внутрь него.
-    const building = loadLogo().then((mark) =>
-      composeShot(
-        taken.canvas,
-        { symbol, interval: timeframe, author: author ?? undefined, theme },
-        mark,
-      ),
+    // снимает - запись молча отклоняется, а в буфере остаётся прежнее.
+    const building = Promise.resolve(
+      composeShot(taken.canvas, {
+        symbol,
+        interval: timeframe,
+        author: author ?? undefined,
+        theme,
+      }),
     );
 
     if (action === "copy") {
@@ -1740,6 +1807,17 @@ export default function ScalpingPage() {
           : pane
       }
     >
+      {/* Уведомления поверх всего: лимитка срабатывает сама, и почти всегда
+          тогда, когда трейдер смотрит на другую монету. */}
+      <Toasts
+        items={toasts}
+        onClose={(id) => setToasts((list) => list.filter((t) => t.id !== id))}
+        onPick={(next) => {
+          selectSymbol(next);
+          setToasts((list) => list.filter((t) => t.symbol !== next));
+        }}
+      />
+
       <div
         className="flex flex-col gap-3 xl:flex-row xl:gap-0"
         style={
@@ -2207,6 +2285,7 @@ export default function ScalpingPage() {
                   dragLevels={dragLevels}
                   orderChip={orderChip}
                   onAddAlert={addAlert}
+                  onOpenJournal={() => setJournalOpen(true)}
                   onAddOrder={startManual}
                 />
               </div>

@@ -63,12 +63,15 @@ export default function MarketTicker() {
   const items = [...tickers, ...tickers];
 
   return (
-    // Бегущая строка остаётся тёмной в любой теме: это витрина рынка, и она
-    // читается как отдельная полоса над сайтом, а не как его часть. Цвета
-    // заданы прямо, мимо палитры, которую переключает тема терминала.
+    // Строка живёт в теме сайта, а не сама по себе. Раньше цвета были заданы
+    // прямо, мимо палитры, и на светлой теме над белым сайтом висела чёрная
+    // полоса - единственное тёмное место на всей странице.
     <div
       className="overflow-hidden border-b backdrop-blur-sm"
-      style={{ background: "rgba(11,14,17,0.9)", borderColor: "rgba(43,49,57,0.5)" }}
+      style={{
+        background: "rgb(var(--bg-deep) / 0.9)",
+        borderColor: "var(--pane-border)",
+      }}
     >
       <div
         ref={trackRef}
@@ -83,17 +86,20 @@ export default function MarketTicker() {
               {/* Цветная точка = индикатор направления */}
               <span
                 className="inline-block h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: pos ? "#00D4A0" : "#FF4757" }}
+                style={{ backgroundColor: pos ? "var(--pane-up)" : "var(--pane-down)" }}
               />
-              <span className="font-semibold" style={{ color: "#B7BDC6" }}>
+              <span className="font-semibold" style={{ color: "var(--pane-text-2)" }}>
                 {sym}
               </span>
-              <span className="font-mono font-medium tabular-nums" style={{ color: "#FFFFFF" }}>
+              <span
+                className="font-mono font-medium tabular-nums"
+                style={{ color: "var(--pane-text)" }}
+              >
                 ${formatPrice(t.price)}
               </span>
               <span
                 className="font-mono text-[11px] font-semibold tabular-nums"
-                style={{ color: pos ? "#00D4A0" : "#FF4757" }}
+                style={{ color: pos ? "var(--pane-up)" : "var(--pane-down)" }}
               >
                 {pos ? "▲" : "▼"} {Math.abs(t.change).toFixed(2)}%
               </span>

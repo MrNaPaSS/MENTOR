@@ -445,6 +445,7 @@ function PriceChart({
   onEmptyClick,
   onAddAlert,
   onAddOrder,
+  onOpenJournal,
 }: {
   symbol: string;
   interval: string;
@@ -547,6 +548,8 @@ function PriceChart({
    * третьим - сторона: её трейдер называет сам, а не выводит из цены.
    */
   onAddOrder?: (price: number, atr: number, side: "long" | "short") => void;
+  /** Открыть журнал. Итог дня в углу - вопрос, а ответ на него в журнале. */
+  onOpenJournal?: () => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -1345,13 +1348,33 @@ function PriceChart({
     if (!last) return;
     if (liveCandle.time < last.time) return;
 
-    series.update({ ...liveCandle, time: liveCandle.time as UTCTimestamp });
+    // Свеча с ленты знает только то, что пришло с момента подписки. На минуте
+    // это почти вся свеча, а на пяти и десяти минутах - её хвост: открытие,
+    // максимум и минимум остались в прошлом, до подписки. Класть такую поверх
+    // настоящей значит стереть свечу до огрызка - именно это и выглядело как
+    // «текущая свеча не рисуется».
+    //
+    // Поэтому не заменяем, а дополняем: у своей свечи берём открытие и
+    // крайние точки, у ленты - цену закрытия и то, что она видела нового.
+    const same = liveCandle.time === last.time;
+    const merged = same
+      ? {
+          time: last.time,
+          open: last.open,
+          high: Math.max(last.high, liveCandle.high),
+          low: Math.min(last.low, liveCandle.low),
+          close: liveCandle.close,
+          volume: Math.max(last.volume, liveCandle.volume),
+        }
+      : liveCandle;
+
+    series.update({ ...merged, time: merged.time as UTCTimestamp });
     if (cfg.volume) {
       volumeRef.current?.update({
-        time: liveCandle.time as UTCTimestamp,
-        value: liveCandle.volume,
+        time: merged.time as UTCTimestamp,
+        value: merged.volume,
         color:
-          liveCandle.close >= liveCandle.open
+          merged.close >= merged.open
             ? THEMES[themeRef.current].upVolume
             : THEMES[themeRef.current].downVolume,
       });
@@ -1359,8 +1382,8 @@ function PriceChart({
 
     // Держим ряд в согласии с экраном: индикаторы считаются по нему, и без
     // этого они отставали бы от нарисованной свечи.
-    if (liveCandle.time === last.time) bars[bars.length - 1] = liveCandle;
-    else bars.push(liveCandle);
+    if (same) bars[bars.length - 1] = merged;
+    else bars.push(merged);
 
     // Объёмная свеча толстеет прямо на глазах: объём в ней растёт с каждой
     // сделкой, и рисовать её прежней шириной значит отставать от рынка.
@@ -1807,13 +1830,19 @@ function PriceChart({
 
       {/* Итог дня: одна цифра в углу. Всё остальное — в журнале. */}
       {todayPnl !== null && (
-        <div className="pointer-events-none absolute right-24 top-1 z-10 font-mono text-[11px] tabular-nums">
+        // Кнопка, а не подпись: цифра дня - это вопрос «из чего она», и ответ
+        // на него в журнале. Идти за ним через панель инструментов незачем.
+        <button
+          onClick={onOpenJournal}
+          title="Открыть журнал сделок"
+          className="absolute right-24 top-1 z-10 font-mono text-[11px] tabular-nums transition-opacity duration-150 ease-out hover:opacity-80"
+        >
           <span className="text-[var(--pane-muted)]">PnL сегодня </span>
           <span className={todayPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
             {todayPnl >= 0 ? "+" : "-"}
             {Math.abs(todayPnl).toFixed(2)} $
           </span>
-        </div>
+        </button>
       )}
 
       {/* Плюсик у текущей цены: два действия, которые нужны прямо на ней -
