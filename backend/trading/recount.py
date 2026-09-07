@@ -35,6 +35,11 @@ from datetime import timedelta, timezone
 import aiohttp
 from sqlalchemy import select
 
+# Ради побочного действия: при импорте читается .env - адрес базы и ключ,
+# которым зашифрованы ключи учеников. Сервер делает это при старте, а скрипт
+# запускают отдельно, и без этой строки он падал на первом же ученике с
+# «WEEX_KEYS_SECRET не задан».
+import backend.config  # noqa: F401
 from core.db import SessionLocal, init_engine
 from core.models import ScalpTrade, WeexCredential, utcnow
 from core.weex import keys as keystore
@@ -74,6 +79,14 @@ async def recount(days: int, apply: bool, student: int | None) -> int:
             return 0
 
         print(f"Сделок к проверке: {len(trades)}")
+
+        if not keystore.enabled():
+            # Без ключа расшифровать ключи учеников нечем, и спросить биржу не
+            # выйдет. Говорим это словами, а не трассировкой стека.
+            print()
+            print("WEEX_KEYS_SECRET не задан - ключи учеников не расшифровать.")
+            print("Запускать нужно там же, где работает бекенд, и с тем же .env.")
+            return 0
 
         by_student: dict[int, list[ScalpTrade]] = {}
         for one in trades:
