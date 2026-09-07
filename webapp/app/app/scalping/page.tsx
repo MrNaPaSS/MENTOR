@@ -1019,19 +1019,25 @@ export default function ScalpingPage() {
         if (cancelled || !body) return;
         setPlans(body);
 
-        // Стоп на графике - тот, что стоит на бирже. Свой мы считали формулой,
-        // и после второй цели он оказывался в третьем месте: на графике одно,
-        // в заявке другое, а в голове у трейдера третье.
+        // Стоп и взятые цели - с биржи. Свой расчёт здесь только мешал: он
+        // решал, что цель взята, ставил безубыток и рисовал стоп формулой, а на
+        // бирже в это время стояла прежняя заявка.
         const at = body.stop_price;
-        if (at && at > 0) {
-          setTrades((list) =>
-            list.map((t) =>
-              t.symbol === symbol && t.status === "open" && Math.abs(t.stop - at) > at * 0.0001
-                ? { ...t, stop: at }
-                : t,
-            ),
-          );
-        }
+        setTrades((list) =>
+          list.map((t) => {
+            if (t.symbol !== symbol || t.status !== "open") return t;
+
+            // Целей на бирже меньше, чем в замысле, - значит остальные
+            // сработали. Пока список заявок пуст по причине сбоя связи, число
+            // не растёт: сервер в этом случае отдаёт то, что записано у нас.
+            const hit = Math.max(t.takesHit, Math.max(0, t.targets.length - body.takes));
+            const stop = at && at > 0 ? at : t.stop;
+            if (hit === t.takesHit && Math.abs(stop - t.stop) < Math.max(stop, 1) * 0.00001) {
+              return t;
+            }
+            return { ...t, takesHit: hit, stop, breakeven: hit > 0 };
+          }),
+        );
       } catch {
         // Биржа не ответила - молчим, а не пугаем понапрасну.
       }

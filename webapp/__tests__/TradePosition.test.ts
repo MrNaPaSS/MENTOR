@@ -320,11 +320,20 @@ describe("сделка на бирже", () => {
     expect(advanceQuote(waiting(), { bid: 99.9, ask: 100 }, 1).status).toBe("open");
   });
 
-  it("открытую позицию ведём сами: цели и безубыток - это разметка", () => {
+  it("на бирже цели и безубыток считает биржа, а не мы", () => {
+    // Наша арифметика решала, что цель взята, ставила безубыток и рисовала
+    // стоп формулой - а на бирже в это время стояла прежняя заявка, и метка
+    // «BE» оказывалась на цене, которой ни в одной заявке нет.
     const open = advanceQuote(waiting(), { bid: 99.9, ask: 100 }, 1);
     const after = advanceQuote(open, { bid: 101, ask: 101.1 }, 2, true);
-    expect(after.takesHit).toBe(1);
-    expect(after.breakeven).toBe(true);
+    expect(after).toBe(open);
+    expect(after.takesHit).toBe(0);
+    expect(after.breakeven).toBe(false);
+
+    // Без биржи считаем сами - иначе разметки не будет вовсе.
+    const offline = advanceQuote(open, { bid: 101, ask: 101.1 }, 2);
+    expect(offline.takesHit).toBe(1);
+    expect(offline.breakeven).toBe(true);
   });
 
   it("закрытие тоже за биржей", () => {

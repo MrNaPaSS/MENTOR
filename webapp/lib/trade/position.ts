@@ -274,7 +274,11 @@ export function advanceQuote(
    */
   live = false,
 ): ActiveTrade {
-  if (live && trade.status === "planned") return trade;
+  // На бирже за сделку отвечает биржа. Наша арифметика здесь только мешала:
+  // она сама решала, что цель взята, ставила безубыток и рисовала стоп по
+  // своей формуле - а на бирже в это время стоял прежний стоп, и метка «BE»
+  // оказывалась на цене, которой ни в одной заявке нет.
+  if (live) return trade;
 
   const long = trade.side === "long";
   const price =
