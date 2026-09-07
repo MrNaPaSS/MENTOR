@@ -1326,15 +1326,6 @@ export default function ScalpingPage() {
       return;
     }
 
-    // Знак ждём до сборки: он часть подписи, и снимок без него выглядит
-    // недоделанным. Не загрузился - обойдёмся, но картинку всё равно отдадим.
-    const mark = await loadLogo();
-    const picture = composeShot(
-      canvas,
-      { symbol, interval: timeframe, author: author ?? undefined, theme },
-      mark,
-    );
-
     // Пустой снимок выглядит как настоящий: файл на месте, размеры верные, а
     // внутри белый лист. Молчать об этом нельзя - трейдер отправит пустоту и
     // узнает об этом от собеседника.
@@ -1346,18 +1337,33 @@ export default function ScalpingPage() {
       return;
     }
 
-    if (action === "download") {
-      await downloadShot(picture, `${base(symbol)}-${timeframe}`);
-      setOrderNote({ text: "Снимок сохранён", bad: false });
+    // Сборка обещанием, а не готовой картинкой: копирование должно начаться в
+    // том же нажатии, иначе браузер снимает право писать в буфер и запись
+    // молча отклоняется - в буфере остаётся то, что там лежало.
+    const building = loadLogo().then((mark) =>
+      composeShot(
+        canvas,
+        { symbol, interval: timeframe, author: author ?? undefined, theme },
+        mark,
+      ),
+    );
+
+    if (action === "copy") {
+      const done = await copyShot(building);
+      setOrderNote({
+        text: done
+          ? "Снимок в буфере обмена"
+          : "Браузер не дал скопировать картинку - сохраните файлом",
+        bad: !done,
+      });
       return;
     }
 
-    if (action === "copy") {
-      const done = await copyShot(picture);
-      setOrderNote({
-        text: done ? "Снимок в буфере обмена" : "Браузер не даёт копировать картинки - сохраните файлом",
-        bad: !done,
-      });
+    const picture = await building;
+
+    if (action === "download") {
+      await downloadShot(picture, `${base(symbol)}-${timeframe}`);
+      setOrderNote({ text: "Снимок сохранён", bad: false });
       return;
     }
 

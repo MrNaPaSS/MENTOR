@@ -214,20 +214,29 @@ export async function download(canvas: HTMLCanvasElement, name: string): Promise
 /**
  * Скопировать снимок в буфер обмена.
  *
- * Возвращает `false`, когда браузер этого не умеет: копирование картинок есть
- * не везде, и молча ничего не делать здесь нельзя - трейдер решит, что скопировал.
+ * Принимает не готовую картинку, а обещание её собрать - и это важно. Право
+ * писать в буфер браузер даёт только по свежему нажатию: любое ожидание между
+ * кликом и записью его снимает, и запись молча отклоняется. Поэтому запись
+ * начинается сразу, а картинка доезжает внутрь неё сама.
+ *
+ * Возвращает `false`, когда браузер этого не умеет или отказал: молча ничего
+ * не делать здесь нельзя - трейдер решит, что скопировал, и вставит старое.
  */
-export async function copy(canvas: HTMLCanvasElement): Promise<boolean> {
-  const blob = await toBlob(canvas);
-  if (!blob || typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
-    return false;
+export function copy(picture: Promise<HTMLCanvasElement>): Promise<boolean> {
+  if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
+    return Promise.resolve(false);
   }
-  try {
-    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-    return true;
-  } catch {
-    return false;
-  }
+
+  const png = picture.then(async (canvas) => {
+    const blob = await toBlob(canvas);
+    if (!blob) throw new Error("снимок не собрался");
+    return blob;
+  });
+
+  return navigator.clipboard
+    .write([new ClipboardItem({ "image/png": png })])
+    .then(() => true)
+    .catch(() => false);
 }
 
 /**
