@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
+import RadioChip from "@/components/app/RadioChip";
 import { api, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { useCoins } from "@/lib/useCoins";
@@ -104,8 +105,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <MarketTicker />
 
         <div className="flex h-14 items-center justify-between px-4 md:px-6">
-          {/* Лого */}
-          <Logo />
+          {/* Лого и радио: музыку включают на весь рабочий день, и место ей
+              рядом со знаком, а не среди кнопок сделки. */}
+          <div className="flex items-center gap-2">
+            <Logo />
+            <RadioChip />
+          </div>
 
           {/* Навигация - десктоп */}
           <nav className="hidden items-center gap-0.5 lg:flex">
