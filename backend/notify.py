@@ -14,8 +14,18 @@ logger = logging.getLogger("nmnh.notify")
 
 class Notifier(ABC):
     @abstractmethod
-    async def send_message(self, chat_id: int, text: str) -> bool:
-        """Отправить сообщение. Возвращает True при успехе."""
+    async def send_message(
+        self,
+        chat_id: int,
+        text: str,
+        message_thread_id: int | None = None,
+        parse_mode: str | None = None,
+    ) -> bool:
+        """Отправить сообщение. Возвращает True при успехе.
+
+        `message_thread_id` - тема форума. Без него сообщение уходит в общую
+        ленту супергруппы, а не в нужную тему.
+        """
 
     async def close(self) -> None:
         return None
@@ -24,8 +34,14 @@ class Notifier(ABC):
 class NullNotifier(Notifier):
     """Заглушка: ничего не шлёт (когда BOT_TOKEN не задан)."""
 
-    async def send_message(self, chat_id: int, text: str) -> bool:
-        logger.info("notify(null) -> %s: %s", chat_id, text)
+    async def send_message(
+        self,
+        chat_id: int,
+        text: str,
+        message_thread_id: int | None = None,
+        parse_mode: str | None = None,
+    ) -> bool:
+        logger.info("notify(null) -> %s/%s: %s", chat_id, message_thread_id, text)
         return False
 
 
@@ -44,11 +60,22 @@ class TelegramNotifier(Notifier):
             self._session = aiohttp.ClientSession()
         return self._session
 
-    async def send_message(self, chat_id: int, text: str) -> bool:
+    async def send_message(
+        self,
+        chat_id: int,
+        text: str,
+        message_thread_id: int | None = None,
+        parse_mode: str | None = None,
+    ) -> bool:
         session = await self._get_session()
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+        payload: dict = {"chat_id": chat_id, "text": text}
+        if message_thread_id:
+            payload["message_thread_id"] = message_thread_id
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
         try:
-            async with session.post(url, json={"chat_id": chat_id, "text": text}) as resp:
+            async with session.post(url, json=payload) as resp:
                 return resp.status == 200
         except Exception as exc:
             logger.warning("Не удалось отправить сообщение %s: %s", chat_id, exc)

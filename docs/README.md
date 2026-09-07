@@ -14,6 +14,7 @@
 | [tz/signal-bot-tz.md](tz/signal-bot-tz.md) | ТЗ NMNH Signal Bot (доработанное, v1.1) |
 | [tz/webapp-tz.md](tz/webapp-tz.md) | ТЗ NMNH Platform WebApp (доработанное, v2.1) |
 | [features/scalping.md](features/scalping.md) | Скринер и стакан заявок: источник данных, метрики, лимиты биржи |
+| [worklog/2026-09-08-terminal.md](worklog/2026-09-08-terminal.md) | Журнал, комиссия, радио и разметка: что чинилось и почему |
 
 ## С чего начать читать
 

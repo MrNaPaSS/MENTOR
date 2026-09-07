@@ -34,6 +34,17 @@ export type RadioState = {
 const KEY = "nmnh.radio";
 const DEFAULT_VOLUME = 0.6;
 
+/**
+ * Станция, с которой радио открывается впервые.
+ *
+ * Ищем по адресу, а не по номеру в списке: список однажды переставят местами,
+ * и номер молча выберет чужую станцию - ту, что окажется на этом месте.
+ */
+const DEFAULT_STATION = Math.max(
+  0,
+  STATIONS.findIndex((s) => s.url === "https://radio.promodj.com/mini-192"),
+);
+
 /** До какой доли громкости приглушаем музыку под уведомление. */
 const DUCK_TO = 0.25;
 /** За сколько секунд громкость доезжает до цели: рывок слышен щелчком. */
@@ -42,7 +53,12 @@ const DUCK_FADE = 0.12;
 /** Старые Safari прячут конструктор под своей приставкой. */
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 
-let state: RadioState = { station: 0, mode: "off", volume: DEFAULT_VOLUME, live: false };
+let state: RadioState = {
+  station: DEFAULT_STATION,
+  mode: "off",
+  volume: DEFAULT_VOLUME,
+  live: false,
+};
 let audio: HTMLAudioElement | null = null;
 let ctx: AudioContext | null = null;
 let analyser: AnalyserNode | null = null;
@@ -71,7 +87,12 @@ export function snapshot(): RadioState {
 }
 
 /** На сервере радио не играет: снимок постоянный, иначе React уходит в цикл. */
-const SERVER: RadioState = { station: 0, mode: "off", volume: DEFAULT_VOLUME, live: false };
+const SERVER: RadioState = {
+  station: DEFAULT_STATION,
+  mode: "off",
+  volume: DEFAULT_VOLUME,
+  live: false,
+};
 
 export function serverSnapshot(): RadioState {
   return SERVER;
@@ -101,11 +122,11 @@ export function restore(): void {
     const station = Number(raw?.station);
     const volume = Number(raw?.volume);
     emit({
-      station: Number.isInteger(station) && STATIONS[station] ? station : 0,
+      station: Number.isInteger(station) && STATIONS[station] ? station : DEFAULT_STATION,
       volume: volume >= 0 && volume <= 1 ? volume : DEFAULT_VOLUME,
     });
   } catch {
-    // Не прочиталось - остаёмся на первой станции.
+    // Не прочиталось - остаёмся на станции по умолчанию.
   }
 }
 

@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -27,6 +29,7 @@ from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
 from backend.balance_collector import BalanceCollector
 from backend.scalping.collector import ScalpingCollector
+from backend.scalping.density_alerts import DensityWatcher, run_watcher as run_density_watcher
 from backend.ws.scalping_hub import ScalpingHub
 from backend.notify import get_notifier
 from backend.ratelimit import RateLimiter, AuthRateLimitMiddleware
@@ -53,6 +56,16 @@ def create_app(
     scalping = ScalpingCollector(top_n=config.scalping_top_n) if config.scalping_enabled else None
     scalping_hub = ScalpingHub(scalping) if scalping else None
 
+    # Оповещения о плотности берут книгу у сборщика: без скальпинга стакана
+    # нет, и включать их отдельно нечего
+    density = None
+    if scalping and config.density_alerts_enabled and config.bot_token and config.density_chat_id:
+        density = DensityWatcher(
+            state=scalping.state,
+            symbols=config.density_symbols,
+            min_notional=config.density_min_notional,
+        )
+
     # Ведение позиций: стоп в безубыток после первой цели переносится сервером,
     # иначе закрытая вкладка означала бы сделку без сопровождения.
     watcher = PositionWatcher(SessionLocal, trading_api._get_session)
@@ -63,10 +76,27 @@ def create_app(
         balance_collector.start()
         if scalping:
             scalping.start()
+        density_task = None
+        if density:
+            async def _post(text: str) -> None:
+                await notifier.send_message(
+                    config.density_chat_id,
+                    text,
+                    message_thread_id=config.density_topic_id or None,
+                    parse_mode="HTML",
+                )
+
+            density_task = asyncio.create_task(run_density_watcher(density, _post))
         watcher.start()
         try:
             yield
         finally:
+            if density_task:
+                density_task.cancel()
+                try:
+                    await density_task
+                except asyncio.CancelledError:
+                    pass
             await watcher.stop()
             await trading_api.close_session()
             if scalping_hub:

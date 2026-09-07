@@ -5,7 +5,11 @@
 // Строка внизу графика годится для ответа на нажатие: трейдер только что нажал
 // и смотрит туда. Но лимитка исполняется сама, и почти всегда - когда трейдер
 // смотрит на другую монету. Такое событие обязано перехватить взгляд, поэтому
-// оно приходит сверху по центру, поверх всего.
+// оно приходит вверху по центру графика - там, куда смотрят.
+//
+// Не на весь экран, а на график. Прежде уведомление висело у верхнего края
+// окна: в оконном режиме это шапка сайта, то есть мимо взгляда, а на широком
+// мониторе - вообще другой конец стекла.
 //
 // Уведомление само уходит через несколько секунд и убирается нажатием: висеть
 // над графиком дольше нужного ему нечего.
@@ -47,7 +51,7 @@ export default function Toasts({
   if (items.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-3 z-[80] flex flex-col items-center gap-2">
+    <div className="pointer-events-none absolute inset-x-0 top-10 z-40 flex flex-col items-center gap-2 px-2">
       {items.map((item) => {
         const tone =
           item.tone === "up"
@@ -60,14 +64,20 @@ export default function Toasts({
             key={item.id}
             onClick={() => item.symbol && onPick?.(item.symbol)}
             className={
-              "pointer-events-auto flex animate-fade-in items-center gap-3 rounded-lg border " +
-              "px-3 py-2 shadow-xl motion-reduce:animate-none " +
+              "pointer-events-auto flex max-w-full animate-fade-in items-center gap-3 rounded-xl " +
+              "border px-4 py-2.5 backdrop-blur-sm transition-shadow duration-200 " +
+              "motion-reduce:animate-none " +
               (item.symbol ? "cursor-pointer" : "")
             }
             style={{
               borderColor: tone,
               background: "var(--pane-bg)",
               color: "var(--pane-text)",
+              // Две тени: мягкая чёрная кладёт плашку над графиком, цветная
+              // подсвечивает её изнутри цветом события. Одна чёрная на светлой
+              // теме выглядит грязным пятном, одна цветная на тёмной - не
+              // отделяет плашку от свечей под ней.
+              boxShadow: `0 10px 30px -8px rgba(0, 0, 0, 0.45), 0 0 22px -6px ${tone}`,
             }}
           >
             <span

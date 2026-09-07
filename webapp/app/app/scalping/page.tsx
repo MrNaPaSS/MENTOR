@@ -1968,15 +1968,6 @@ export default function ScalpingPage() {
     >
       {/* Уведомления поверх всего: лимитка срабатывает сама, и почти всегда
           тогда, когда трейдер смотрит на другую монету. */}
-      <Toasts
-        items={toasts}
-        onClose={(id) => setToasts((list) => list.filter((t) => t.id !== id))}
-        onPick={(next) => {
-          selectSymbol(next);
-          setToasts((list) => list.filter((t) => t.symbol !== next));
-        }}
-      />
-
       <div
         className="flex flex-col gap-3 xl:flex-row xl:gap-0"
         style={
@@ -2413,6 +2404,18 @@ export default function ScalpingPage() {
               </div>
 
               <div className="relative min-h-0 flex-1 p-1">
+                {/* Уведомления - вверху по центру самого графика: событие
+                    случается, пока трейдер смотрит сюда, и здесь же он его
+                    видит. Нажатие открывает монету, о которой речь. */}
+                <Toasts
+                  items={toasts}
+                  onClose={(id) => setToasts((list) => list.filter((t) => t.id !== id))}
+                  onPick={(next) => {
+                    selectSymbol(next);
+                    setToasts((list) => list.filter((t) => t.symbol !== next));
+                  }}
+                />
+
                 {manual && (
                   <ManualOrderCard
                     draft={manual}

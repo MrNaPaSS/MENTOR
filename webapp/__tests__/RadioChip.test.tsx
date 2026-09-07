@@ -107,7 +107,14 @@ describe("радио в шапке", () => {
     localStorage.setItem("nmnh.radio", '{"station":99,"volume":"громко"}');
     await mount();
     fireEvent.click(stationsButton());
-    expect(screen.getByText("PromoDJ Klubb").className).toContain("text-accent-cyan");
+    // Станция по умолчанию, а не первая попавшаяся из списка.
+    expect(screen.getByText("PromoDJ Mini").className).toContain("text-accent-cyan");
+  });
+
+  it("впервые открывается станцией по умолчанию", async () => {
+    await mount();
+    fireEvent.click(stationsButton());
+    expect(screen.getByText("PromoDJ Mini").className).toContain("text-accent-cyan");
   });
 });
 

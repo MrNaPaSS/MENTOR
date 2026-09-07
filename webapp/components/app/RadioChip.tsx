@@ -33,6 +33,23 @@ import {
 const PULSE_W = 26;
 const PULSE_H = 14;
 
+/**
+ * Размах: во сколько раз форма волны растягивается по высоте.
+ *
+ * Отсчёты потока редко подходят к краям шкалы, и без растяжения линия едва
+ * подрагивала. Верх всё равно ограничен окном и обрезкой, поэтому громкое место
+ * упирается в потолок полоски - это и нужно: удар должен читаться как удар.
+ */
+const SWING = 4.6;
+
+/**
+ * Насколько быстро линия тянется к новой форме, доля за кадр.
+ *
+ * Меньше - вязко, рывок размазывается в плавную волну. Больше - дрожь: за кадр
+ * звук меняется целиком, и линия начинает трястись вместо движения.
+ */
+const SNAP = 0.55;
+
 export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
   const theme = useTerminalTheme();
   const radio = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
@@ -116,13 +133,13 @@ export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
       if (waveform(raw)) {
         // Своя форма волны. Тянемся к ней, а не прыгаем: за кадр звук успевает
         // измениться целиком, и без сглаживания вместо движения выходит рябь.
-        for (let x = 0; x < PULSE_W; x++) shape[x] += (raw[x] * 2.6 - shape[x]) * 0.35;
+        for (let x = 0; x < PULSE_W; x++) shape[x] += (raw[x] * SWING - shape[x]) * SNAP;
       } else if (!off) {
         // Играем, но отсчётов не видим - ровное сердцебиение раз в секунду.
         // Врать про громкость нечем, а показать, что звук идёт, надо.
         const phase = (tick % 60) / 60;
         const beat = phase < 0.12 ? Math.sin((phase / 0.12) * Math.PI) * 0.8 : 0;
-        for (let x = 0; x < PULSE_W; x++) shape[x] += (beat - shape[x]) * 0.35;
+        for (let x = 0; x < PULSE_W; x++) shape[x] += (beat - shape[x]) * SNAP;
       }
       // Выключено - форма так и остаётся нулевой, и линия выходит прямой.
       // Отдельная ветка ей не нужна: эффект пересоздаётся на смене состояния, и
@@ -245,7 +262,10 @@ export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
               value={radio.volume}
               onChange={(e) => setVolume(Number(e.target.value))}
               style={{ accentColor: pane ? "var(--pane-accent)" : "var(--c-accent)" }}
-              className="h-1 flex-1 cursor-pointer"
+              // min-w-0: у ползунка своя внутренняя ширина, а флекс-элемент по
+              // умолчанию не сжимается меньше неё - от этого он и вылезал за
+              // край ярлыка. w-full заставляет его брать ровно то, что дали.
+              className="h-1 w-full min-w-0 shrink cursor-pointer"
               aria-label="Громкость радио"
             />
           </div>
