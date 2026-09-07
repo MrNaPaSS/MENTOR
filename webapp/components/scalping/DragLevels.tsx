@@ -29,20 +29,12 @@ export type DragLevel = {
   /**
    * Нажали, не сдвинув.
    *
-   * Отдельное действие: у ждущей заявки им закрепляют разметку - бокс, стоп и
-   * цели, - чтобы поправить её, не удерживая курсор на линии.
+   * Отдельное действие: у ждущей заявки им показывают и закрепляют разметку -
+   * бокс, стоп и цели. Сама по себе, по наведению, она не появляется.
    */
   onClick?: () => void;
   /** Чьей сделке принадлежит уровень. Пусто - это ещё не отправленная заготовка. */
   trade?: string;
-  /**
-   * Курсор над линией.
-   *
-   * У ждущей заявки разметка на графике не рисуется - она спорила бы с той
-   * сделкой, которая действительно идёт. Но тянуть уровень вслепую нельзя,
-   * поэтому под курсором её показывают целиком.
-   */
-  onHover?: (over: boolean) => void;
 };
 
 /**
@@ -52,6 +44,9 @@ export type DragLevel = {
  * целился в свечу.
  */
 const GRAB = 9;
+
+/** Сколько точек курсор вправе пройти, чтобы это осталось нажатием. */
+const SLACK = 3;
 
 export default function DragLevels({
   levels,
@@ -76,7 +71,18 @@ export default function DragLevels({
   // Откуда взяли и куда довели. Обе цены нужны: пока уровень ведут, его цена
   // снаружи уже меняется, и сравнивать конец пути с ней бессмысленно - они
   // всегда равны, и на биржу не уходило ничего.
-  const heldRef = useRef<{ id: string; from: number; price: number } | null>(null);
+  //
+  // `moved` отличает нажатие от протяжки. По одной цене их не различить: ведя
+  // уровень строго вбок, цену не меняешь, - и такая протяжка засчитывалась как
+  // нажатие, само собой включая то, что вешают на нажатие.
+  const heldRef = useRef<{
+    id: string;
+    from: number;
+    price: number;
+    x: number;
+    y: number;
+    moved: boolean;
+  } | null>(null);
 
   // Положение - покадрово, вместе с самим графиком. Раз в четверть секунды
   // полоска отставала бы от своей линии при перетаскивании графика.
@@ -106,17 +112,30 @@ export default function DragLevels({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    heldRef.current = { id: level.id, from: level.price, price: level.price };
+    heldRef.current = {
+      id: level.id,
+      from: level.price,
+      price: level.price,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+    };
     setHeld(level.id);
   }
 
   function drag(event: React.PointerEvent<HTMLDivElement>, level: DragLevel) {
-    if (heldRef.current?.id !== level.id) return;
+    const start = heldRef.current;
+    if (start?.id !== level.id) return;
+    // Рука дрожит: пара точек - это всё ещё нажатие, а не протяжка.
+    const moved =
+      start.moved ||
+      Math.abs(event.clientX - start.x) > SLACK ||
+      Math.abs(event.clientY - start.y) > SLACK;
     const box = boxRef.current?.getBoundingClientRect();
     if (!box) return;
     const price = toPrice(event.clientY - box.top);
     if (price === null || !(price > 0)) return;
-    heldRef.current = { ...heldRef.current, price };
+    heldRef.current = { ...start, price, moved };
     level.onDrag(price);
   }
 
@@ -127,11 +146,10 @@ export default function DragLevels({
     setHeld(null);
     setOver(null);
     event.currentTarget.releasePointerCapture(event.pointerId);
-    level.onHover?.(false);
     // Сравниваем с ценой, с которой взяли, а не с текущей: текущую мы сами же
     // и меняли, пока вели, - они равны всегда, и заявка не уходила на биржу.
-    if (held.price !== held.from) level.onDrop(held.price);
-    else level.onClick?.();
+    if (!held.moved) level.onClick?.();
+    else if (held.price !== held.from) level.onDrop(held.price);
   }
 
   return (
@@ -148,14 +166,10 @@ export default function DragLevels({
             ref={(node) => {
               nodesRef.current.set(level.id, node);
             }}
-            onPointerEnter={() => {
-              setOver(level.id);
-              level.onHover?.(true);
-            }}
+            onPointerEnter={() => setOver(level.id)}
             onPointerLeave={() => {
               if (heldRef.current?.id === level.id) return;
               setOver(null);
-              level.onHover?.(false);
             }}
             onPointerDown={(event) => grab(event, level)}
             onPointerMove={(event) => drag(event, level)}

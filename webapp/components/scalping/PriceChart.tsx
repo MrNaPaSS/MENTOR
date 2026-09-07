@@ -211,6 +211,14 @@ const SHELF_HIT_PX = 8;
 // значит показывать то, чего там не было.
 const RIGHT_BARS = 14;
 
+/**
+ * Сколько пустых баров дорисовываем за ленту, пока не приехала история.
+ *
+ * Два часа минуток. Больше - значит ряд отстал не на пропуск сделок, а на
+ * сбой связи, и выдумывать за биржу плоскую историю нечестно.
+ */
+const FILL_BARS = 120;
+
 /** Секунды в интервале графика: нужны таймеру закрытия свечи. */
 const INTERVAL_SECONDS: Record<string, number> = {
   "1m": 60,
@@ -745,15 +753,17 @@ function PriceChart({
   shotRef.current = shot;
   const previewRef = useRef(preview);
   previewRef.current = preview;
-  // Ярлык ждущей сделки под курсором: показываем, что её ждёт, — бокс и цели.
-  const [peeked, setPeeked] = useState<string | null>(null);
-  // Закреплённая заявка: её разметка держится на графике, пока не сняли. Под
-  // курсором она видна лишь пока курсор на месте, а поправлять уровни надо
-  // руками - для этого её и закрепляют нажатием.
+  // Закреплённая заявка: её разметка - бокс, стоп и цели - держится на графике,
+  // пока не сняли.
+  //
+  // Только нажатием. По наведению разметка вспыхивала сама: курсор шёл к
+  // ценовой шкале справа, задевал линию ждущей заявки, и на графике появлялись
+  // чужие стопы и цели поверх той сделки, которая действительно идёт. Разметка
+  // видна в двух случаях: сделка открыта или заявку нажали.
   const [pinned, setPinned] = useState<string | null>(null);
-  const shown = pinned ?? peeked;
-  const peekedRef = useRef<string | null>(null);
-  peekedRef.current = shown;
+  const shown = pinned;
+  const shownRef = useRef<string | null>(null);
+  shownRef.current = shown;
 
   // Полки перерисовываем только когда меняется сам набор цен. Стакан обновляется
   // восемь раз в секунду, и пересоздание линий на каждом кадре давало бы моргание.
@@ -994,7 +1004,7 @@ function PriceChart({
       tradeShapesRef.current = tradeShapes(
         [
           ...tradeRef.current.filter(
-            (t) => t.status === "open" || t.id === peekedRef.current,
+            (t) => t.status === "open" || t.id === shownRef.current,
           ),
           previewRef.current,
         ],
@@ -1423,6 +1433,15 @@ function PriceChart({
     if (!last) return;
     if (liveCandle.time < last.time) return;
 
+    // Шаг сетки таймфрейма. По нему и отличаем свою свечу от чужой.
+    const step = INTERVAL_SECONDS[interval] ?? 0;
+    // Свеча чужого таймфрейма приезжает между переключениями: подписка на
+    // ленту меняет интервал не в тот же миг, что график. Её время не ложится
+    // на сетку - и в ряду появлялся лишний бар, сдвинутый относительно
+    // остальных. Проверяем сеткой, а не обещанием: пятиминутка кратна минуте,
+    // и одним «больше последнего» её не отличить.
+    if (step > 0 && liveCandle.time % step !== 0) return;
+
     // Свеча с ленты знает только то, что пришло с момента подписки. На минуте
     // это почти вся свеча, а на пяти и десяти минутах - её хвост: открытие,
     // максимум и минимум остались в прошлом, до подписки. Класть такую поверх
@@ -1443,27 +1462,56 @@ function PriceChart({
         }
       : liveCandle;
 
-    series.update({ ...merged, time: merged.time as UTCTimestamp });
-    if (cfg.volume) {
-      volumeRef.current?.update({
-        time: merged.time as UTCTimestamp,
-        value: merged.volume,
-        color:
-          merged.close >= merged.open
-            ? THEMES[themeRef.current].upVolume
-            : THEMES[themeRef.current].downVolume,
-      });
+    /** Нарисовать бар и оставить его в ряду. */
+    const put = (bar: Candle, append: boolean) => {
+      series.update({ ...bar, time: bar.time as UTCTimestamp });
+      if (cfg.volume) {
+        volumeRef.current?.update({
+          time: bar.time as UTCTimestamp,
+          value: bar.volume,
+          color:
+            bar.close >= bar.open
+              ? THEMES[themeRef.current].upVolume
+              : THEMES[themeRef.current].downVolume,
+        });
+      }
+      // Держим ряд в согласии с экраном: индикаторы считаются по нему, и без
+      // этого они отставали бы от нарисованной свечи.
+      if (append) bars.push(bar);
+      else bars[bars.length - 1] = bar;
+    };
+
+    if (!same && step > 0) {
+      // Минуты без единой сделки. Лента о них молчать вправе - сделок не
+      // было, - а ряд из-за этого получал дыру: за баром 12:03 сразу шёл
+      // 12:07, и график врал о том, сколько времени заняло движение. Биржа
+      // такие минуты отдаёт плоскими свечами по последней цене; до её ответа
+      // дорисовываем их сами, ровно так же.
+      const missing = Math.round((liveCandle.time - last.time) / step) - 1;
+      // Отстал слишком сильно - это не пропуск, а мёртвый ряд: ждём историю
+      // с биржи, а не выдумываем два часа плоских свечей.
+      if (missing > FILL_BARS) return;
+      for (let i = 1; i <= missing; i++) {
+        put(
+          {
+            time: last.time + step * i,
+            open: last.close,
+            high: last.close,
+            low: last.close,
+            close: last.close,
+            volume: 0,
+          },
+          true,
+        );
+      }
     }
 
-    // Держим ряд в согласии с экраном: индикаторы считаются по нему, и без
-    // этого они отставали бы от нарисованной свечи.
-    if (same) bars[bars.length - 1] = merged;
-    else bars.push(merged);
+    put(merged, !same);
 
     // Объёмная свеча толстеет прямо на глазах: объём в ней растёт с каждой
     // сделкой, и рисовать её прежней шириной значит отставать от рынка.
     if (cfg.heavy) paintCandles();
-  }, [liveCandle, cfg.volume, cfg.heavy, paintCandles]);
+  }, [liveCandle, interval, cfg.volume, cfg.heavy, paintCandles]);
 
   // Точность ценовой шкалы - по шагу инструмента, а не по умолчанию в цент.
   useEffect(() => {
@@ -1715,27 +1763,35 @@ function PriceChart({
     });
   }, [wall?.price, wall?.side]);
 
-  // Уровень ждущей заявки под курсором показывает её разметку целиком: тянуть
-  // стоп, не видя ни бокса, ни целей, - это тянуть вслепую.
+  // Полоски захвата у ждущей заявки: пока её не закрепили - только на лимитке.
+  //
+  // Стоп и цели у неё на графике не нарисованы, а полоски под них заводились
+  // всё равно - невидимые, во всю ширину и светящиеся под курсором. Курсор шёл
+  // через график, задевал их, и по экрану ползли цветные полосы там, где линий
+  // нет; нажатие на такую полосу закрепляло чужую разметку с боксами. Взять
+  // уровень, которого не видишь, всё равно нельзя - значит и полоски под ним
+  // не нужно.
   const waiting = useMemo(
     () => new Set(trades.filter((t) => t.status === "planned").map((t) => t.id)),
     [trades],
   );
-  const peekable = useMemo(
+  const pinnable = useMemo(
     () =>
-      (dragLevels ?? []).map((level) =>
-        level.trade && waiting.has(level.trade)
-          ? {
-              ...level,
-              onHover: (over: boolean) => setPeeked(over ? level.trade ?? null : null),
-              // Нажатие по линии заявки закрепляет её разметку: дальше уровни
-              // правят руками, а держать курсор на линии для этого нельзя.
-              onClick: () =>
-                setPinned((now) => (now === level.trade ? null : level.trade ?? null)),
-            }
-          : level,
-      ),
-    [dragLevels, waiting],
+      (dragLevels ?? []).flatMap((level) => {
+        if (!level.trade || !waiting.has(level.trade)) return [level];
+        if (level.trade === pinned) return [level];
+        if (level.kind !== "entry") return [];
+        // Нажатие по лимитке закрепляет разметку заявки: дальше уровни видны и
+        // их правят руками.
+        return [
+          {
+            ...level,
+            onClick: () =>
+              setPinned((now) => (now === level.trade ? null : level.trade ?? null)),
+          },
+        ];
+      }),
+    [dragLevels, waiting, pinned],
   );
 
   // Меню плюсика закрывается нажатием мимо: открытое окно, которое нельзя
@@ -1768,7 +1824,7 @@ function PriceChart({
           знает ценовой ряд - он же их и пересчитывает. */}
       {dragLevels && dragLevels.length > 0 && (
         <DragLevels
-          levels={peekable}
+          levels={pinnable}
           toY={priceToY}
           toPrice={yToPrice}
           format={(value) => fmtPrice(value, tick ?? 0)}
@@ -1798,11 +1854,10 @@ function PriceChart({
               ref={(node) => {
                 labelsRef.current.set(t.id, node);
               }}
-              // Наведение на «ждём вход» показывает, что именно ждёт трейдер:
+              // Нажатие на «ждём вход» показывает, что именно ждёт трейдер:
               // бокс риска, цели и стоп. Постоянно они не рисуются — позиции
-              // ещё нет, — но посмотреть на них он вправе в любую секунду.
-              onMouseEnter={t.status === "planned" ? () => setPeeked(t.id) : undefined}
-              onMouseLeave={t.status === "planned" ? () => setPeeked(null) : undefined}
+              // ещё нет, — и по наведению тоже: курсор проходит здесь по пути к
+              // ценовой шкале, и разметка вспыхивала сама собой.
               onClick={
                 t.status === "planned"
                   ? () => setPinned((now) => (now === t.id ? null : t.id))
