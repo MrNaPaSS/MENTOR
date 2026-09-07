@@ -73,47 +73,93 @@ export function backdrop(node: Element | null, theme: ShotTheme): string {
 }
 
 /**
+ * Откуда взялись пиксели снимка.
+ *
+ * Источник называем вслух, потому что пустой снимок надо уметь объяснить: с
+ * холстов страницы, из собственного снимка библиотеки - или ниоткуда.
+ */
+export type ShotSource = "layers" | "library" | "empty";
+
+export type ShotResult = {
+  canvas: HTMLCanvasElement;
+  source: ShotSource;
+  /** Размеры найденных холстов - строкой, для честного сообщения трейдеру. */
+  layers: string;
+};
+
+/**
+ * Есть ли на холсте хоть что-то, кроме ровной заливки.
+ *
+ * Поле заливается одним цветом перед рисованием, поэтому любой второй цвет -
+ * уже содержимое. Читаем холст целиком один раз и идём по нему с шагом: точки
+ * поштучно на снимке в пятнадцать мегабайт заняли бы заметное время.
+ */
+function hasInk(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): boolean {
+  let dots: Uint8ClampedArray;
+  try {
+    dots = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  } catch {
+    // Холст закрыт для чтения - считаем, что содержимое есть: пусть лучше
+    // снимок уйдёт как есть, чем мы объявим его пустым по ошибке.
+    return true;
+  }
+
+  const step = Math.max(1, Math.floor(canvas.width / 300)) * 4;
+  let first = -1;
+  for (let i = 0; i < dots.length; i += step) {
+    const dot = (dots[i] << 24) | (dots[i + 1] << 16) | (dots[i + 2] << 8) | dots[i + 3];
+    if (first === -1) first = dot;
+    else if (dot !== first) return true;
+  }
+  return false;
+}
+
+/**
  * Снимок графика: то, что нарисовано на экране.
  *
- * Свой снимок у библиотеки есть, но он рисует заново только её слои, а наши -
- * объёмные свечи, боксы сделки, ленты индикатора - остаются за кадром. Поэтому
- * складываем холсты страницы в порядке наложения, как их видит трейдер.
+ * Основной путь - сложить холсты страницы в порядке наложения: только так в
+ * картинку попадают наши слои - объёмные свечи, боксы сделки, ленты индикатора.
  *
- * Считаем в экранных точках и один раз задаём плотность: пересчитывать каждый
- * слой руками - тот самый путь, на котором картинка уезжала за край.
+ * Если со слоёв ничего не пришло, берём собственный снимок библиотеки. Он рисует
+ * её ряды заново и не зависит от того, что случилось с холстами на странице, -
+ * график без нашей разметки лучше, чем пустой лист.
+ *
+ * Фон в обоих случаях заливаем сами, до всего остального: у графика в тёмной
+ * теме он прозрачный, чёрное поле трейдер видит сквозь холсты, со страницы.
  */
 export function snapshot(
   chart: IChartApi,
   box: HTMLElement,
   theme: ShotTheme,
-): HTMLCanvasElement | null {
+): ShotResult | null {
+  const frame = box.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  const width = Math.round(frame.width * ratio);
+  const height = Math.round(frame.height * ratio);
+  if (width === 0 || height === 0) return null;
+
+  const out = document.createElement("canvas");
+  out.width = width;
+  out.height = height;
+  const ctx = out.getContext("2d");
+  if (!ctx) return null;
+
+  const paint = backdrop(box, theme);
+  // Заливка сбрасывает систему координат и заново задаёт плотность экрана:
+  // дальше всё рисуется в экранных точках, как их видит трейдер.
+  const clear = () => {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = paint;
+    ctx.fillRect(0, 0, width, height);
+    ctx.scale(ratio, ratio);
+  };
+
   const layers = Array.from(box.querySelectorAll("canvas")).filter(
     (canvas) => canvas.width > 0 && canvas.height > 0,
   );
-  if (layers.length === 0) {
-    try {
-      return chart.takeScreenshot();
-    } catch {
-      return null;
-    }
-  }
+  const note = layers.map((c) => `${c.width}x${c.height}`).join(" ") || "нет";
 
-  const frame = box.getBoundingClientRect();
-  const ratio = window.devicePixelRatio || 1;
-
-  const out = document.createElement("canvas");
-  out.width = Math.round(frame.width * ratio);
-  out.height = Math.round(frame.height * ratio);
-
-  const ctx = out.getContext("2d");
-  if (!ctx) return null;
-  ctx.scale(ratio, ratio);
-
-  // Фон - первым и обязательно: холсты графика прозрачные, поле трейдер видит
-  // со страницы. Без этой заливки снимок выходит прозрачным насквозь.
-  ctx.fillStyle = backdrop(box, theme);
-  ctx.fillRect(0, 0, frame.width, frame.height);
-
+  clear();
   for (const layer of layers) {
     const at = layer.getBoundingClientRect();
     try {
@@ -123,7 +169,25 @@ export function snapshot(
       // чем ошибка вместо картинки.
     }
   }
-  return out;
+  if (hasInk(out, ctx)) return { canvas: out, source: "layers", layers: note };
+
+  let own: HTMLCanvasElement | null = null;
+  try {
+    own = chart.takeScreenshot();
+  } catch {
+    own = null;
+  }
+  if (own && own.width > 0) {
+    clear();
+    try {
+      ctx.drawImage(own, 0, 0, frame.width, frame.height);
+    } catch {
+      // Ничего: ниже отдадим пустой снимок и скажем об этом вслух.
+    }
+    if (hasInk(out, ctx)) return { canvas: out, source: "library", layers: note };
+  }
+
+  return { canvas: out, source: "empty", layers: note };
 }
 
 /**
@@ -240,39 +304,4 @@ export function composeShot(
   ctx.fillText("NMNH.TRADE", x, baseline);
 
   return out;
-}
-
-/**
- * Есть ли на снимке хоть что-то, кроме ровного поля.
- *
- * Пустой снимок выглядит как настоящий: файл на месте, размеры верные, а внутри
- * один цвет. Отличить это можно только по точкам, поэтому смотрим их сами - по
- * редкой сетке и только под шапкой, где должен быть график: шапка своими
- * подписями замаскировала бы пустоту.
- */
-export function hasChart(picture: HTMLCanvasElement): boolean {
-  const ctx = picture.getContext("2d");
-  if (!ctx || picture.width === 0 || picture.height === 0) return false;
-
-  const ratio = window.devicePixelRatio || 1;
-  const from = Math.round(HEAD * ratio) + Math.max(1, Math.round(FRAME * ratio));
-  if (from >= picture.height) return false;
-
-  try {
-    const step = Math.max(1, Math.floor(Math.min(picture.width, picture.height) / 40));
-    let first: string | null = null;
-    for (let y = from; y < picture.height; y += step) {
-      for (let x = 0; x < picture.width; x += step) {
-        const [r, g, b, a] = ctx.getImageData(x, y, 1, 1).data;
-        const dot = `${r},${g},${b},${a}`;
-        if (first === null) first = dot;
-        else if (dot !== first) return true;
-      }
-    }
-  } catch {
-    // Холст закрыт для чтения - считаем, что содержимое есть: пусть лучше
-    // снимок уйдёт как есть, чем мы объявим его пустым по ошибке.
-    return true;
-  }
-  return false;
 }

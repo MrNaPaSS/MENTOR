@@ -13,8 +13,8 @@ import { authReq, API_URL } from "./api";
 import { getAccessToken } from "./auth";
 import type { ShotMeta } from "./shotFrame";
 
-export { composeShot, hasChart, loadLogo, snapshot, THEMES } from "./shotFrame";
-export type { ShotMeta, ShotTheme } from "./shotFrame";
+export { backdrop, composeShot, loadLogo, snapshot, THEMES } from "./shotFrame";
+export type { ShotMeta, ShotResult, ShotSource, ShotTheme } from "./shotFrame";
 
 /** Холст в PNG. Промис, потому что кодирование идёт вне основного потока. */
 export function toBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {

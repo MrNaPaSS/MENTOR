@@ -41,9 +41,9 @@ import {
   composeShot,
   copy as copyShot,
   download as downloadShot,
-  hasChart,
   loadLogo,
   share as shareShot,
+  type ShotResult,
 } from "@/lib/shot";
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import { setTerminalTheme } from "@/lib/terminalTheme";
@@ -313,7 +313,7 @@ export default function ScalpingPage() {
   // Уровень, по которому нажали в стакане: спрашиваем, что с ним делать.
   const [level, setLevel] = useState<LadderRow | null>(null);
   // Способ снять холст графика: кладёт его сам график, пользуется кнопка.
-  const shotRef = useRef<(() => HTMLCanvasElement | null) | null>(null);
+  const shotRef = useRef<(() => ShotResult | null) | null>(null);
   const [shotMenu, setShotMenu] = useState(false);
   const shotMenuRef = useRef<HTMLDivElement>(null);
   // Имя для подписи на снимке. Оно рисуется в картинке и на сервер не уходит.
@@ -1320,9 +1320,18 @@ export default function ScalpingPage() {
    */
   async function takeShot(action: "download" | "copy" | "link") {
     setShotMenu(false);
-    const canvas = shotRef.current?.();
-    if (!canvas || !symbol) {
+    const taken = shotRef.current?.();
+    if (!taken || !symbol) {
       setOrderNote({ text: "График ещё не готов к снимку", bad: true });
+      return;
+    }
+
+    // Пустой снимок выглядит как настоящий: файл на месте, размеры верные, а
+    // внутри ровное поле. Молчать нельзя - трейдер отправит пустоту и узнает об
+    // этом от собеседника. Заодно называем, что нашлось: без этих чисел причину
+    // пустого снимка не отличить от причины пустого графика.
+    if (taken.source === "empty") {
+      setOrderNote({ text: `Снимок пуст: холсты графика ${taken.layers}`, bad: true });
       return;
     }
 
@@ -1332,7 +1341,7 @@ export default function ScalpingPage() {
     // копирование начинается сразу, а знак и сборка доезжают внутрь него.
     const building = loadLogo().then((mark) =>
       composeShot(
-        canvas,
+        taken.canvas,
         { symbol, interval: timeframe, author: author ?? undefined, theme },
         mark,
       ),
@@ -1348,14 +1357,6 @@ export default function ScalpingPage() {
     }
 
     const picture = await building;
-
-    // Пустой снимок выглядит как настоящий: файл на месте, размеры верные, а
-    // внутри ровное поле. Молчать нельзя - трейдер отправит пустоту и узнает об
-    // этом от собеседника.
-    if (!hasChart(picture)) {
-      setOrderNote({ text: "Снимок вышел пустым - график ещё не отрисован", bad: true });
-      return;
-    }
 
     if (action === "download") {
       await downloadShot(picture, `${base(symbol)}-${timeframe}`);

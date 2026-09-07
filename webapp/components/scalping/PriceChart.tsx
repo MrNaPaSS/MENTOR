@@ -40,7 +40,7 @@ import {
 } from "./primitives/ShapesPrimitive";
 import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
 import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
-import { snapshot } from "@/lib/shotFrame";
+import { snapshot, type ShotResult } from "@/lib/shotFrame";
 import { loadCalendar, loadTrades, type JournalTrade } from "@/lib/journal";
 import {
   floatingAt,
@@ -509,7 +509,7 @@ function PriceChart({
    * шапке рядом с темой, поэтому наружу отдаётся не картинка, а способ её
    * получить в нужный момент.
    */
-  shot?: React.MutableRefObject<(() => HTMLCanvasElement | null) | null>;
+  shot?: React.MutableRefObject<(() => ShotResult | null) | null>;
   /** Отметки на ценах: терминал скажет, когда их пересекут. */
   alerts?: { id: string; price: number }[];
   /** Снять отметку по крестику у её будильника. */
