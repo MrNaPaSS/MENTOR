@@ -1,93 +1,20 @@
 "use client";
 
-// Снимок графика: собрать картинку, сохранить, скопировать, поделиться.
+// Снимок графика: сохранить файлом, положить в буфер, отдать ссылкой.
 //
-// Библиотека графика отдаёт свой холст, но на нём нет ни имени монеты, ни
-// таймфрейма, ни времени - того, без чего чужой скриншот бесполезен. Поэтому
-// картинка собирается заново: шапка с подписями, под ней сам график.
+// Само рисование живёт в shotFrame.ts - там ни одного импорта, и эту часть
+// можно прогнать в браузере отдельно. Здесь только доставка готовой картинки
+// туда, куда её просит трейдер.
 //
 // Имя трейдера рисуется прямо в картинке и на сервере не хранится: подпись
 // нужна тому, кто смотрит, а базе о владельце знать незачем.
 
 import { authReq, API_URL } from "./api";
 import { getAccessToken } from "./auth";
+import type { ShotMeta } from "./shotFrame";
 
-/** Высота шапки над графиком, пиксели. */
-const HEAD = 44;
-
-export type ShotMeta = {
-  symbol: string;
-  interval: string;
-  /** Имя трейдера в подписи. Пусто - подписи не будет. */
-  author?: string;
-  /** Тема снимка: подпись рисуется в цветах графика, а не наоборот. */
-  theme: "dark" | "light";
-};
-
-const THEMES = {
-  dark: { bg: "#0B0E11", head: "#181A20", line: "#2B3139", text: "#EAECEF", muted: "#7A8290" },
-  light: { bg: "#FFFFFF", head: "#F2F3F5", line: "#D6DCDE", text: "#111418", muted: "#787B86" },
-};
-
-/**
- * Собрать снимок: холст графика плюс шапка с подписями.
- *
- * Возвращает готовый холст - из него получаются и файл, и буфер обмена, и
- * ссылка, поэтому собирается он один раз на все три случая.
- */
-export function composeShot(chart: HTMLCanvasElement, meta: ShotMeta): HTMLCanvasElement {
-  const palette = THEMES[meta.theme];
-  const ratio = window.devicePixelRatio || 1;
-  const head = Math.round(HEAD * ratio);
-
-  const out = document.createElement("canvas");
-  out.width = chart.width;
-  out.height = chart.height + head;
-
-  const ctx = out.getContext("2d");
-  if (!ctx) return chart;
-
-  ctx.fillStyle = palette.bg;
-  ctx.fillRect(0, 0, out.width, out.height);
-
-  ctx.fillStyle = palette.head;
-  ctx.fillRect(0, 0, out.width, head);
-  ctx.strokeStyle = palette.line;
-  ctx.lineWidth = Math.max(1, ratio);
-  ctx.beginPath();
-  ctx.moveTo(0, head);
-  ctx.lineTo(out.width, head);
-  ctx.stroke();
-
-  const pad = 16 * ratio;
-  ctx.textBaseline = "middle";
-
-  ctx.fillStyle = palette.text;
-  ctx.font = `700 ${17 * ratio}px Inter, system-ui, sans-serif`;
-  const symbol = meta.symbol.replace(/USDT$/, "");
-  ctx.fillText(symbol, pad, head / 2);
-
-  const width = ctx.measureText(symbol).width;
-  ctx.fillStyle = palette.muted;
-  ctx.font = `${13 * ratio}px "JetBrains Mono", monospace`;
-  ctx.fillText(meta.interval, pad + width + 10 * ratio, head / 2);
-
-  // Справа - кто и когда. Без этого снимок теряет половину смысла: чужой
-  // график без времени невозможно ни проверить, ни обсудить.
-  const stamp = new Date().toLocaleString("ru", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const sign = meta.author ? `@${meta.author} · ${stamp}` : stamp;
-  ctx.textAlign = "right";
-  ctx.fillText(sign, out.width - pad, head / 2);
-  ctx.textAlign = "left";
-
-  ctx.drawImage(chart, 0, head);
-  return out;
-}
+export { composeShot, hasChart, loadLogo, snapshot, THEMES } from "./shotFrame";
+export type { ShotMeta, ShotTheme } from "./shotFrame";
 
 /** Холст в PNG. Промис, потому что кодирование идёт вне основного потока. */
 export function toBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
@@ -103,15 +30,16 @@ export async function download(canvas: HTMLCanvasElement, name: string): Promise
   link.href = url;
   link.download = `${name}.png`;
   link.click();
-  // Освобождаем сразу: браузер уже забрал данные, а ссылка живёт до перезагрузки.
-  URL.revokeObjectURL(url);
+  // Освобождаем не сразу: браузер забирает данные не в этот же миг, и ссылка,
+  // отозванная слишком рано, оставляет трейдера без файла.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /**
  * Скопировать снимок в буфер обмена.
  *
- * Принимает обещание картинки, а не готовую: право писать в буфер браузер
- * даёт только на свежее нажатие, и любое ожидание между кликом и записью его
+ * Принимает обещание картинки, а не готовую: право писать в буфер браузер даёт
+ * только на свежее нажатие, и любое ожидание между кликом и записью его
  * снимает. Поэтому запись начинается сразу, а картинка доезжает внутрь неё.
  *
  * Возвращает `false`, когда браузер не умеет или отказал: молчать нельзя -
