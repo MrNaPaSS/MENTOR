@@ -26,6 +26,13 @@ export type DragLevel = {
   onDrag: (price: number) => void;
   /** Отпустили. Только отсюда цена уходит на биржу. */
   onDrop: (price: number) => void;
+  /**
+   * Нажали, не сдвинув.
+   *
+   * Отдельное действие: у ждущей заявки им закрепляют разметку - бокс, стоп и
+   * цели, - чтобы поправить её, не удерживая курсор на линии.
+   */
+  onClick?: () => void;
   /** Чьей сделке принадлежит уровень. Пусто - это ещё не отправленная заготовка. */
   trade?: string;
   /**
@@ -124,10 +131,15 @@ export default function DragLevels({
     // Сравниваем с ценой, с которой взяли, а не с текущей: текущую мы сами же
     // и меняли, пока вели, - они равны всегда, и заявка не уходила на биржу.
     if (held.price !== held.from) level.onDrop(held.price);
+    else level.onClick?.();
   }
 
   return (
-    <div ref={boxRef} className="pointer-events-none absolute inset-0 z-20">
+    // Ниже плашек сделки и кнопок: полоска идёт во всю ширину и на своей цене
+    // накрывала плашку «ждём вход» вместе с её крестиком - снять заявку
+    // становилось нечем. Под плашкой линию не взять, но она там и не нужна:
+    // остальная ширина графика свободна.
+    <div ref={boxRef} className="pointer-events-none absolute inset-0 z-[9]">
       {levels.map((level) => {
         const active = over === level.id || held === level.id;
         return (

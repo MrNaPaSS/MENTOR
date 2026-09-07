@@ -189,18 +189,9 @@ export type Indicators = {
   blocks: boolean;
   /** Разрывы справедливой цены и равные экстремумы. */
   gaps: boolean;
-  /** Максимумы и минимумы прошлого дня, недели и месяца. */
-  levels: boolean;
   /** Зоны премии, равновесия и скидки. */
   zones: boolean;
 };
-
-/** Периоды старших уровней: код интервала биржи и подпись на графике. */
-const MTF_PERIODS: { interval: string; high: string; low: string }[] = [
-  { interval: "1d", high: "PDH", low: "PDL" },
-  { interval: "1w", high: "PWH", low: "PWL" },
-  { interval: "1M", high: "PMH", low: "PML" },
-];
 
 // Текущая свеча меняется постоянно, закрытые — нет. Пять секунд держат график
 // живым, не расходуя лимит запросов биржи впустую.
@@ -579,7 +570,6 @@ function PriceChart({
   const themeRef = useRef(theme);
   themeRef.current = theme;
   const lineRef = useRef<IPriceLine | null>(null);
-  const mtfLinesRef = useRef<IPriceLine[]>([]);
   const shelfLinesRef = useRef<IPriceLine[]>([]);
   const tradeLinesRef = useRef<IPriceLine[]>([]);
   const tradeShapesRef = useRef<Shapes | null>(null);
@@ -684,7 +674,6 @@ function PriceChart({
   // максимум и минимум разнесены на три тысячи — линия оказывается далеко за
   // краем окна, и нажатие кнопки выглядит как «ничего не произошло». Поэтому
   // уровни ещё и выписываются строкой с расстоянием до цены.
-  const [levels, setLevels] = useState<{ title: string; price: number }[]>([]);
 
   // Ярлык позиции и таймер свечи — это HTML поверх канвы, и им нужны пиксели.
   // Координата цены меняется и без новых данных: от прокрутки и масштаба, — а
@@ -725,8 +714,13 @@ function PriceChart({
   previewRef.current = preview;
   // Ярлык ждущей сделки под курсором: показываем, что её ждёт, — бокс и цели.
   const [peeked, setPeeked] = useState<string | null>(null);
+  // Закреплённая заявка: её разметка держится на графике, пока не сняли. Под
+  // курсором она видна лишь пока курсор на месте, а поправлять уровни надо
+  // руками - для этого её и закрепляют нажатием.
+  const [pinned, setPinned] = useState<string | null>(null);
+  const shown = pinned ?? peeked;
   const peekedRef = useRef<string | null>(null);
-  peekedRef.current = peeked;
+  peekedRef.current = shown;
 
   // Полки перерисовываем только когда меняется сам набор цен. Стакан обновляется
   // восемь раз в секунду, и пересоздание линий на каждом кадре давало бы моргание.
@@ -744,7 +738,6 @@ function PriceChart({
       indicators.structure,
       indicators.blocks,
       indicators.gaps,
-      indicators.levels,
       indicators.zones,
       indicators.shelves,
     ],
@@ -891,7 +884,6 @@ function PriceChart({
       heavyRef.current = null;
       lineRef.current = null;
       tradeLinesRef.current = [];
-      mtfLinesRef.current = [];
       shelfLinesRef.current = [];
     };
   }, []);
@@ -1122,61 +1114,6 @@ function PriceChart({
 
   // Уровни прошлого дня, недели и месяца. Грузятся отдельно от свечей графика:
   // это другие интервалы, и меняются они раз в сутки, а не каждые пять секунд.
-  useEffect(() => {
-    const series = candleRef.current;
-    if (!series) return;
-
-    let cancelled = false;
-    for (const l of mtfLinesRef.current) series.removePriceLine(l);
-    mtfLinesRef.current = [];
-    setLevels([]);
-    if (!cfg.levels) return;
-
-    async function load() {
-      const collected: { title: string; price: number }[] = [];
-
-      for (const period of MTF_PERIODS) {
-        try {
-          const res = await fetch(
-            `${API_URL}/api/scalping/klines/${symbol}?interval=${period.interval}&limit=3`,
-          );
-          if (!res.ok) continue;
-          const body: { candles: Candle[] } = await res.json();
-          // Берём предпоследнюю свечу: последняя — текущий незакрытый период,
-          // а уровень интересен именно завершённый.
-          const previous = body.candles.at(-2);
-          if (cancelled || !previous || !candleRef.current) continue;
-
-          for (const [price, title] of [
-            [previous.high, period.high],
-            [previous.low, period.low],
-          ] as const) {
-            collected.push({ title, price });
-            mtfLinesRef.current.push(
-              candleRef.current.createPriceLine({
-                price,
-                color: THEMES[themeRef.current].mtf,
-                lineWidth: 1,
-                lineStyle: 2,
-                axisLabelVisible: true,
-                title,
-              }),
-            );
-          }
-        } catch {
-          // Уровень не загрузился — график от этого не ломается.
-        }
-      }
-
-      if (!cancelled) setLevels(collected);
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [symbol, cfg.levels, theme]);
-
   // Полки ликвидности: цены, где в стакане стоит от двух миллионов. Это то,
   // чего нет ни в одном индикаторе — уровни берутся из живой книги заявок, а не
   // из истории цены. Видно, куда цена идёт и где её встретят.
@@ -1243,7 +1180,7 @@ function PriceChart({
       // до этого момента ни риска, ни потенциала ещё нет, а нарисованные они
       // спорят с разметкой той сделки, которая действительно идёт. Расчёт из
       // открытого окна — исключение: его показывают именно целиком.
-      if (trade.status === "planned" && trade !== preview && trade.id !== peeked) {
+      if (trade.status === "planned" && trade !== preview && trade.id !== shown) {
         // Без подписи на линии: рядом с ней на той же цене стоит плашка
         // «ждём вход» с крестиком, и подпись наезжала на него - снять заявку
         // становилось нечем. Сторону и цену плашка называет сама.
@@ -1274,7 +1211,7 @@ function PriceChart({
       dataRef.current,
     );
     pushShapes();
-  }, [trades, preview, peeked, theme, pushShapes]);
+  }, [trades, preview, shown, theme, pushShapes]);
 
   // Вертикальное перетаскивание прямо по свечам.
   //
@@ -1387,6 +1324,12 @@ function PriceChart({
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
   }, [interval]);
+
+  useEffect(() => {
+    if (pinned && !trades.some((t) => t.id === pinned && t.status === "planned")) {
+      setPinned(null);
+    }
+  }, [trades, pinned]);
 
   // Живая свеча: дорисовываем последний бар по ленте сделок.
   //
@@ -1686,6 +1629,10 @@ function PriceChart({
           ? {
               ...level,
               onHover: (over: boolean) => setPeeked(over ? level.trade ?? null : null),
+              // Нажатие по линии заявки закрепляет её разметку: дальше уровни
+              // правят руками, а держать курсор на линии для этого нельзя.
+              onClick: () =>
+                setPinned((now) => (now === level.trade ? null : level.trade ?? null)),
             }
           : level,
       ),
@@ -1730,10 +1677,6 @@ function PriceChart({
       )}
 
       {orderChip && <OrderChipView chip={orderChip} toY={priceToY} toPrice={yToPrice} />}
-      {cfg.levels && levels.length > 0 && (
-        <LevelsStrip levels={levels} price={dataRef.current.at(-1)?.close ?? 0} />
-      )}
-
       {/* Ярлык позиции у линии входа: состояние, объём и результат в деньгах.
           По ярлыку на сделку - их может идти несколько сразу, и общий на всех
           сказал бы неправду о каждой. Пока цена не дошла до уровня, там слово
@@ -1761,6 +1704,11 @@ function PriceChart({
               // ещё нет, — но посмотреть на них он вправе в любую секунду.
               onMouseEnter={t.status === "planned" ? () => setPeeked(t.id) : undefined}
               onMouseLeave={t.status === "planned" ? () => setPeeked(null) : undefined}
+              onClick={
+                t.status === "planned"
+                  ? () => setPinned((now) => (now === t.id ? null : t.id))
+                  : undefined
+              }
               // Справа, но с отступом от ценовой шкалы: плашка стоит на конце
               // своей линии, а не в начале графика, где под ней чужие свечи, и
               // при этом не наезжает на плашки цен. Вертикаль задаётся покадрово.
@@ -1955,35 +1903,6 @@ function PriceChart({
  * Ближние — первыми: на скальпе важно, что рядом, а не что было в прошлом
  * месяце. Строка нужна потому, что сама линия почти всегда за краем окна.
  */
-function LevelsStrip({
-  levels,
-  price,
-}: {
-  levels: { title: string; price: number }[];
-  price: number;
-}) {
-  if (price <= 0) return null;
-  const sorted = [...levels]
-    .map((l) => ({ ...l, distance: ((l.price - price) / price) * 100 }))
-    .sort((a, b) => Math.abs(a.distance) - Math.abs(b.distance))
-    .slice(0, 4);
-
-  return (
-    <div className="pointer-events-none absolute left-2 top-1 z-10 flex gap-3 font-mono text-[10px] tabular-nums text-[var(--pane-muted)]">
-      {sorted.map((l) => (
-        <span key={l.title}>
-          {l.title}{" "}
-          <span className="text-text-secondary">{fmtPrice(l.price)}</span>{" "}
-          <span className={l.distance >= 0 ? "text-success" : "text-danger"}>
-            {l.distance >= 0 ? "+" : ""}
-            {l.distance.toFixed(1)}%
-          </span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
 // Страница перерисовывается на каждом кадре стакана — восемь раз в секунду.
 // График к этому равнодушен только если его собственный рендер не запускается
 // впустую: сам холст живёт своей жизнью, а JSX вокруг него пересобирать незачем.

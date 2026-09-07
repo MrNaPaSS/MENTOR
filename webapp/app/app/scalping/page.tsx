@@ -149,7 +149,6 @@ const INDICATOR_LABELS: Record<Exclude<keyof Indicators, "heavy">, string> = {
   blocks: "Блоки",
   gaps: "FVG",
   shelves: "Полки",
-  levels: "Уровни",
   zones: "Зоны",
   ema: "EMA",
   volume: "Объём",
@@ -228,7 +227,6 @@ const DEFAULT_INDICATORS: Indicators = {
   shelves: true,
   blocks: true,
   gaps: true,
-  levels: true,
   ema: true,
   volume: true,
   // Выключен по умолчанию: непривычный вид свечей стоит включать осознанно.
