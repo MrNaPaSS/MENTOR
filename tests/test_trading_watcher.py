@@ -515,38 +515,39 @@ def test_leftover_goes_to_the_last_target():
 
 # ── сколько целей взято на самом деле ───────────────────────────────────────
 
-def test_last_take_is_counted_even_though_it_closed_the_position():
-    """Третью цель журнал терял: позиции уже нет, считать по остатку нечем.
+def test_last_take_is_counted_when_it_closes_the_position():
+    """Последняя цель закрывает позицию целиком - по остатку её не сосчитать.
 
-    Смотрим на исполнения: цель пройдена, если сделка прошла по её цене или
-    дальше.
+    Считаем по заявкам: цели, которой не стало среди висящих, исполнилась.
+    Снимать их к этому моменту мы ещё не начинали, так что перепутать не с чем.
     """
-    from backend.trading.watcher import takes_reached
-
-    fills = [
-        {"price": "101", "side": "sell"},
-        {"price": "102", "side": "sell"},
-        {"price": "103", "side": "sell"},
-    ]
-    assert takes_reached(fills, [101.0, 102.0, 103.0], "long") == 3
-
-
-def test_only_the_targets_the_market_reached_are_counted():
-    from backend.trading.watcher import takes_reached
-
-    fills = [{"price": "101.5", "side": "sell"}]
-    assert takes_reached(fills, [101.0, 102.0, 103.0], "long") == 1
-    assert takes_reached([], [101.0], "long") == 0
-    assert takes_reached(fills, [], "long") == 0
+    row = trade(
+        takes_hit=2,
+        qty=0.6,
+        tp_orders=[
+            {"price": 101.0, "order_id": "tp1", "filled": True},
+            {"price": 102.0, "order_id": "tp2", "filled": True},
+            {"price": 103.0, "order_id": "tp3", "filled": False},
+        ],
+    )
+    decision = decide(row, None, set(), None, MISSING_TOLERANCE)
+    assert decision.closed is True
+    # tp3 пропала из висящих - значит сработала.
+    assert decision.takes_hit == 3
+    assert decision.filled_orders == ["tp3"]
 
 
-def test_short_counts_downwards():
-    from backend.trading.watcher import takes_reached
+def test_manual_close_does_not_invent_taken_targets():
+    """Цели сняли, вышли руками выше - взятых целей от этого не появилось.
 
-    fills = [{"price": "98.5", "side": "buy"}]
-    assert takes_reached(fills, [99.0, 98.0, 97.0], "short") == 1
-
-
+    Раньше считалось по цене: дошли до уровня - значит «цель взята». В журнал
+    попадали две цели там, где не сработала ни одна.
+    """
+    row = trade(takes_hit=0, qty=3.0, tp_orders=[])
+    decision = decide(row, None, set(), None, MISSING_TOLERANCE)
+    assert decision.closed is True
+    assert decision.takes_hit == 0
+    assert decision.filled_orders == []
 def test_watcher_awaits_the_session_factory():
     """Фабрика сессии асинхронная, и забытое ожидание валит весь обход.
 

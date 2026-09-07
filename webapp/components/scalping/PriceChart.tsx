@@ -1702,10 +1702,7 @@ function PriceChart({
           сколько осталось: свеча закрывается, и уровень подтверждается или нет. */}
       <div
         ref={clockRef}
-        // Размером и полями как плашка текущей цены на шкале: счётчик стоит
-        // прямо под ней, и мельче он читается как что-то второстепенное.
-        // Двенадцать пикселей - тот же кегль, каким библиотека пишет цену.
-        className="pointer-events-none absolute right-1 top-0 z-10 rounded px-1.5 text-center font-mono text-[12px] leading-[18px] tabular-nums"
+        className="pointer-events-none absolute right-1 top-0 z-10 rounded px-1 py-px font-mono text-[10px] tabular-nums"
         style={{
           visibility: "hidden",
           background: "var(--pane-deep)",

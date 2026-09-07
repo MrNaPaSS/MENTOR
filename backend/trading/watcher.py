@@ -129,8 +129,26 @@ def decide(
         # Позиция появилась - заявка входа исполнилась.
         return Decision(trade.takes_hit, opened=size > 0, size=size)
 
+    takes: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
+
     if size <= 0 and missing_streak >= MISSING_TOLERANCE:
-        return Decision(trade.takes_hit, closed=True)
+        # Последняя цель закрывает позицию целиком, и считать по остатку в этот
+        # момент нечего. Смотрим на заявки: цель, которой не стало в списке
+        # висящих, исполнилась - снимать их мы к этому моменту ещё не начинали.
+        away = [
+            t for t in takes if str(t.get("order_id") or "") not in open_plans
+        ]
+        fresh = [
+            str(t.get("order_id") or "")
+            for t in away
+            if not t.get("filled") and t.get("order_id")
+        ]
+        # Считаем, а не складываем: часть целей уже отмечена, и сумма насчитала
+        # бы их дважды. При обрыве связи список висящих подставляется из наших
+        # записей - тогда «пропавших» нет, и число не растёт на пустом месте.
+        return Decision(
+            max(trade.takes_hit, len(away)), closed=True, filled_orders=fresh
+        )
 
     # Позиция больше запомненной - лимитка дозаполнилась. Это не взятая цель, а
     # добор объёма: считать цели от старого числа значит увидеть их там, где их
@@ -138,7 +156,6 @@ def decide(
     if size > float(trade.qty):
         return Decision(trade.takes_hit, size=size)
 
-    takes: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
     hit = max(trade.takes_hit, takes_filled(float(trade.qty), size, len(takes)))
 
     state = Position(
@@ -507,6 +524,14 @@ class PositionWatcher:
 
         fresh = plan_order_id(placed)
         await self._drop_old_stops(client, trade, keep=fresh)
+        logger.info(
+            "Стоп %s: было %s, стало %s (целей взято %d, рынок %s)",
+            trade.symbol,
+            trade.current_stop,
+            stop,
+            trade.takes_hit,
+            market if market else "неизвестен",
+        )
         trade.sl_order_id = fresh
         logger.info(
             "Стоп %s переставлен на %s после %d целей", trade.symbol, stop, trade.takes_hit
@@ -614,10 +639,27 @@ class PositionWatcher:
             ]
             hit = trade.takes_hit
             gross, fee, exit_price = settle(fills, float(trade.entry), trade.side)
-            hit = max(
-                trade.takes_hit,
-                takes_reached(fills, json.loads(trade.targets_json or "[]"), trade.side),
+            # По этим строкам разбирается любое расхождение с биржей: сколько
+            # исполнений попало в счёт, за какое окно и что в них было.
+            logger.info(
+                "Итог %s по %d исполнениям с %s: биржа %.4f, комиссия %.4f",
+                trade.symbol,
+                len(fills),
+                aware.isoformat() if aware else "начала",
+                gross,
+                fee,
             )
+            for one in fills:
+                logger.debug(
+                    "  исполнение %s: цена %s объём %s сторона %s результат %s комиссия %s",
+                    one.get("orderId") or one.get("id") or "?",
+                    one.get("price"),
+                    one.get("qty") or one.get("size"),
+                    one.get("side"),
+                    one.get("realizedPnl"),
+                    one.get("commission"),
+                )
+
         except WeexTradeError as exc:
             logger.warning("Исполнения %s не получены: %s", trade.symbol, exc)
 
@@ -736,32 +778,6 @@ def settle(
         return derived, fee, price
 
     return reported, fee, price
-
-
-def takes_reached(
-    fills: list[dict[str, Any]], targets: list[float], side: str
-) -> int:
-    """Сколько целей сделка действительно прошла.
-
-    Считать по остатку позиции можно, только пока позиция есть. Последняя цель
-    закрывает её целиком - и в тот момент считать уже нечего: в журнал уходило
-    «взято две» там, где взяли все три.
-
-    Смотрим на исполнения: цель пройдена, если закрывающая сделка прошла по её
-    цене или дальше. Это и есть факт, а не намерение.
-    """
-    if not targets or not fills:
-        return 0
-    long = side == "long"
-    prices = [
-        value
-        for value in (_first(row, _PRICE_FIELDS) for row in fills)
-        if value and value > 0
-    ]
-    if not prices:
-        return 0
-    reach = max(prices) if long else min(prices)
-    return sum(1 for target in targets if (reach >= target if long else reach <= target))
 
 
 def split_ladder(

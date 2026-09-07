@@ -682,6 +682,18 @@ async def _settled(
 
         gross, fee, price = settle(mine, entry, side)
         net = gross - fee
+        # Подробности - в лог: расхождение с цифрой биржи разбирается только по
+        # исполнениям, а не по итоговому числу.
+        for one in mine:
+            logger.info(
+                "Исполнение %s %s: цена %s объём %s результат %s комиссия %s",
+                symbol,
+                one.get("side"),
+                one.get("price"),
+                one.get("qty") or one.get("size"),
+                one.get("realizedPnl"),
+                one.get("commission"),
+            )
         logger.info(
             "Сделка %s закрыта: по бирже %.4f, комиссия %.4f, на счёт %.4f",
             symbol,
