@@ -25,7 +25,6 @@ import {
   PanelLeftOpen,
   Star,
   Camera,
-  Crosshair,
   Sun,
   Wifi,
   WifiOff,
@@ -53,16 +52,8 @@ import CloseDialog from "@/components/scalping/CloseDialog";
 import LevelMenu from "@/components/scalping/LevelMenu";
 import ManualOrderCard from "@/components/scalping/ManualOrderCard";
 import type { DragLevel } from "@/components/scalping/DragLevels";
-import {
-  draftAt,
-  flip,
-  moveLevel,
-  qtyOf,
-  rewardOf,
-  riskOf,
-  rrOf,
-  type ManualDraft,
-} from "@/lib/trade/manual";
+import type { OrderChip } from "@/components/scalping/OrderChip";
+import { draftAt, moveLevel, qtyOf, riskOf, type ManualDraft } from "@/lib/trade/manual";
 import Logo from "@/components/ui/Logo";
 import { api } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
@@ -466,9 +457,6 @@ export default function ScalpingPage() {
   // трейдер волен тянуть уровни сколько угодно. Отдельно от расчёта по полке -
   // там первичен процент стопа, здесь цена уровня.
   const [manual, setManual] = useState<ManualDraft | null>(null);
-  // Ждём нажатие по графику, чтобы поставить лимитку. Без этого ожидания любое
-  // нажатие по свечам заводило бы заявку - а по графику нажимают постоянно.
-  const [armed, setArmed] = useState(false);
   const midRef = useRef(0);
   midRef.current = dom?.mid ?? 0;
   useEffect(() => {
@@ -787,15 +775,23 @@ export default function ScalpingPage() {
   }
 
   /**
-   * Начать ручную лимитку с цены, по которой нажали.
+   * Начать ручную лимитку с цены.
    *
-   * Только по взведённой кнопке: нажатие по графику - это ещё и прокрутка, и
-   * выбор уровня, и просто взгляд. Заводить заявку на каждое из них нельзя.
+   * Приходит из плюсика у текущей цены: два действия названы словами, и гадать,
+   * что делает нажатие по графику, не приходится. Дальше уровни тянут мышью.
    */
   function startManual(price: number, atr: number) {
-    if (!armed) return;
-    setArmed(false);
     setManual(draftAt(price, chartPrice, atr, margin, leverage));
+  }
+
+  /** Отметка на цене из того же плюсика. */
+  function addAlert(price: number) {
+    if (!symbol || !(price > 0)) return;
+    setAlerts((list) => [
+      ...list.filter((a) => !(a.symbol === symbol && Math.abs(a.price - price) < 1e-9)),
+      { id: `${symbol}-${Date.now()}`, symbol, price },
+    ]);
+    setOrderNote({ text: `Отметка на ${fmtPrice(price, limits?.tick ?? 0)}`, bad: false });
   }
 
   /**
@@ -1483,6 +1479,27 @@ export default function ScalpingPage() {
     };
   }, [symbol]);
 
+  /**
+   * Чип ждущей лимитки: он же и способ поставить стоп с целью.
+   *
+   * Кнопки SL и TP стоят на линии входа, а не в углу экрана: нажал и повёл -
+   * уровень встал туда, куда смотрел трейдер.
+   */
+  const orderChip = useMemo<OrderChip | null>(() => {
+    if (!manual) return null;
+    const step = limits?.tick ?? 0;
+    return {
+      price: manual.entry,
+      side: manual.side,
+      text: `${qtyOf(manual).toFixed(4)} · риск -${riskOf(manual).toFixed(2)} $`,
+      onDragStop: (price) =>
+        setManual((draft) => (draft ? moveLevel(draft, "stop", price, step) : draft)),
+      onDragTake: (price) =>
+        setManual((draft) => (draft ? moveLevel(draft, "take", price, step) : draft)),
+      onCancel: () => setManual(null),
+    };
+  }, [manual, limits?.tick]);
+
   // Отметки открытой монеты: их рисует график и подсвечивает стакан.
   const myAlerts = alerts.filter((a) => a.symbol === symbol);
   const alertPrices = myAlerts.map((a) => a.price);
@@ -1533,19 +1550,12 @@ export default function ScalpingPage() {
     const out: DragLevel[] = [];
 
     if (manual) {
-      const money = (value: number) => `${value >= 0 ? "+" : "-"}${Math.abs(value).toFixed(2)}`;
       const step = limits?.tick ?? 0;
       const at = (kind: "entry" | "stop" | "take"): DragLevel => ({
         id: `manual:${kind}`,
         kind,
         price: kind === "entry" ? manual.entry : kind === "stop" ? manual.stop : manual.take,
         title: kind === "entry" ? "вход" : kind === "stop" ? "стоп" : "цель",
-        note:
-          kind === "entry"
-            ? `${manual.side === "long" ? "лонг" : "шорт"} ×${manual.leverage}`
-            : kind === "stop"
-              ? money(-riskOf(manual))
-              : `${money(rewardOf(manual))} · ${rrOf(manual).toFixed(1)}R`,
         color:
           kind === "entry"
             ? "var(--pane-text)"
@@ -1571,7 +1581,6 @@ export default function ScalpingPage() {
           kind: "entry",
           price: trade.entry,
           title: "лимит",
-          note: trade.side === "long" ? "лонг" : "шорт",
           color: "var(--pane-text)",
           onDrag: (price) => dragTrade(trade, "entry", 0, price),
           onDrop: (price) => void dropTrade(trade, "entry", 0, price),
@@ -1583,7 +1592,6 @@ export default function ScalpingPage() {
         kind: "stop",
         price: trade.stop,
         title: "стоп",
-        note: trade.side === "long" ? "лонг" : "шорт",
         color: "var(--pane-down)",
         onDrag: (price) => dragTrade(trade, "stop", 0, price),
         onDrop: (price) => void dropTrade(trade, "stop", 0, price),
@@ -2026,24 +2034,6 @@ export default function ScalpingPage() {
                     <BookText className="h-3.5 w-3.5" />
                   </button>
 
-                  {/* Лимитка руками: взводим ожидание нажатия по графику.
-                      Сразу заводить заявку по нажатию нельзя - по графику
-                      нажимают и чтобы прокрутить, и чтобы просто посмотреть. */}
-                  <button
-                    onClick={() => {
-                      setArmed((v) => !v);
-                      setManual(null);
-                    }}
-                    title={
-                      armed
-                        ? "Нажмите по цене на графике - там встанет лимитка"
-                        : "Поставить лимитку руками: нажать по цене, потом тянуть TP и SL"
-                    }
-                    className={`${CHIP} ${armed ? CHIP_ON : CHIP_OFF}`}
-                  >
-                    <Crosshair className="h-3.5 w-3.5" />
-                  </button>
-
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
                   <button
                     onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
@@ -2173,12 +2163,6 @@ export default function ScalpingPage() {
               </div>
 
               <div className="relative min-h-0 flex-1 p-1">
-                {armed && !manual && (
-                  <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-md border border-[var(--pane-accent-soft)] bg-[var(--pane-bg)] px-3 py-1.5 text-[11px] text-[var(--pane-text-2)] shadow-lg">
-                    Нажмите по цене на графике - там встанет лимитка
-                  </div>
-                )}
-
                 {manual && (
                   <ManualOrderCard
                     draft={manual}
@@ -2217,7 +2201,9 @@ export default function ScalpingPage() {
                   onRemoveAlert={(id) => setAlerts((list) => list.filter((a) => a.id !== id))}
                   onShelfClick={openTrade}
                   dragLevels={dragLevels}
-                  onEmptyClick={startManual}
+                  orderChip={orderChip}
+                  onAddAlert={addAlert}
+                  onAddOrder={startManual}
                 />
               </div>
             </section>

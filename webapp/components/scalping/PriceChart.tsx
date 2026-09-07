@@ -42,6 +42,7 @@ import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
 import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
 import DragLevels, { type DragLevel } from "./DragLevels";
+import OrderChipView, { type OrderChip } from "./OrderChip";
 import { loadCalendar, loadTrades, type JournalTrade } from "@/lib/journal";
 import {
   floatingAt,
@@ -449,7 +450,10 @@ function PriceChart({
   onRemoveAlert,
   onShelfClick,
   dragLevels,
+  orderChip,
   onEmptyClick,
+  onAddAlert,
+  onAddOrder,
 }: {
   symbol: string;
   interval: string;
@@ -532,12 +536,23 @@ function PriceChart({
    */
   dragLevels?: DragLevel[];
   /**
+   * Чип ждущей лимитки на её линии: сторона, объём и кнопки SL, TP, снять.
+   *
+   * Отдельно от уровней: у него своё место - линия входа - и свои действия, а
+   * не одна цена, которую тянут.
+   */
+  orderChip?: OrderChip | null;
+  /**
    * Нажатие по пустому месту графика - с ценой этого места.
    *
    * Отсюда начинается ручная лимитка. Полка перехватывает нажатие первой:
    * рядом с уровнем трейдер целился в уровень, а не в пустоту.
    */
   onEmptyClick?: (price: number, atr: number) => void;
+  /** Поставить отметку на текущей цене - из плюсика у неё же. */
+  onAddAlert?: (price: number) => void;
+  /** Начать лимитку от текущей цены. Вторым числом - ATR для подсказки стопа. */
+  onAddOrder?: (price: number, atr: number) => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -586,6 +601,10 @@ function PriceChart({
   shelfClickRef.current = onShelfClick;
   const emptyClickRef = useRef(onEmptyClick);
   emptyClickRef.current = onEmptyClick;
+  const alertAddRef = useRef(onAddAlert);
+  alertAddRef.current = onAddAlert;
+  const orderAddRef = useRef(onAddOrder);
+  orderAddRef.current = onAddOrder;
 
   /**
    * Отдать примитиву фигуры индикатора вместе с разметкой сделки.
@@ -674,6 +693,10 @@ function PriceChart({
   // Ярлыки позиций: по одному на сделку, поэтому не ref, а карта по её id.
   const labelsRef = useRef(new Map<string, HTMLDivElement | null>());
   const clockRef = useRef<HTMLDivElement>(null);
+  // Плюсик у текущей цены: отсюда ставят отметку и заводят лимитку. Стоит на
+  // самой цене и едет вместе с ней, поэтому положение задаётся покадрово.
+  const plusRef = useRef<HTMLDivElement>(null);
+  const [plusMenu, setPlusMenu] = useState(false);
   // Результат за сегодня по журналу. null — журнал недоступен: ученик не вошёл
   // в кабинет, и показывать ему чужой ноль незачем.
   const [todayPnl, setTodayPnl] = useState<number | null>(null);
@@ -1341,7 +1364,9 @@ function PriceChart({
 
       const price =
         livePriceRef.current > 0 ? livePriceRef.current : dataRef.current.at(-1)?.close ?? 0;
-      place(clockRef.current, price > 0 ? series.priceToCoordinate(price) : null, 10);
+      const atPrice = price > 0 ? series.priceToCoordinate(price) : null;
+      place(clockRef.current, atPrice, 10);
+      place(plusRef.current, atPrice, -10);
 
       // Текст таймера меняется раз в секунду — пишем его только при смене.
       const next = untilClose(interval);
@@ -1659,6 +1684,17 @@ function PriceChart({
     [dragLevels, waiting],
   );
 
+  // Меню плюсика закрывается нажатием мимо: открытое окно, которое нельзя
+  // закрыть тем же движением, каким открыл, - ловушка.
+  useEffect(() => {
+    if (!plusMenu) return;
+    function away(event: MouseEvent) {
+      if (!plusRef.current?.contains(event.target as Node)) setPlusMenu(false);
+    }
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [plusMenu]);
+
   const priceToY = useCallback(
     (value: number) => candleRef.current?.priceToCoordinate(value) ?? null,
     [],
@@ -1682,6 +1718,8 @@ function PriceChart({
           format={(value) => fmtPrice(value, tick ?? 0)}
         />
       )}
+
+      {orderChip && <OrderChipView chip={orderChip} toY={priceToY} toPrice={yToPrice} />}
       {cfg.levels && levels.length > 0 && (
         <LevelsStrip levels={levels} price={dataRef.current.at(-1)?.close ?? 0} />
       )}
@@ -1813,6 +1851,54 @@ function PriceChart({
           </span>
         </div>
       )}
+
+      {/* Плюсик у текущей цены: два действия, которые нужны прямо на ней -
+          отметить уровень или встать в него лимиткой. Раньше для этого надо
+          было знать, что нажатие по графику что-то делает. */}
+      <div ref={plusRef} className="absolute right-16 top-0 z-30" style={{ visibility: "hidden" }}>
+        <button
+          onClick={() => setPlusMenu((v) => !v)}
+          title="Отметка или сделка на этой цене"
+          className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border text-[13px] leading-none shadow transition-colors duration-150 ease-out"
+          style={{
+            borderColor: "var(--pane-border)",
+            background: "var(--pane-bg)",
+            color: "var(--pane-text-2)",
+          }}
+        >
+          +
+        </button>
+        {plusMenu && (
+          <div
+            className="pointer-events-auto absolute right-6 top-0 w-44 overflow-hidden rounded-lg border shadow-xl"
+            style={{ borderColor: "var(--pane-border)", background: "var(--pane-bg)" }}
+          >
+            {(
+              [
+                ["alert", "Добавить уведомление"],
+                ["order", "Открыть сделку"],
+              ] as const
+            ).map(([action, label]) => (
+              <button
+                key={action}
+                onClick={() => {
+                  setPlusMenu(false);
+                  const at =
+                    livePriceRef.current > 0
+                      ? livePriceRef.current
+                      : dataRef.current.at(-1)?.close ?? 0;
+                  if (!(at > 0)) return;
+                  if (action === "alert") alertAddRef.current?.(at);
+                  else orderAddRef.current?.(at, currentAtr(dataRef.current));
+                }}
+                className="block w-full px-3 py-1.5 text-left text-[11px] text-[var(--pane-text-2)] transition-colors hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Время до закрытия свечи — под ценой, у самой шкалы. Скальперу важно,
           сколько осталось: свеча закрывается, и уровень подтверждается или нет. */}
