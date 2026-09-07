@@ -103,12 +103,12 @@ export default function ShopPage() {
               >
                 {/* Hero */}
                 <CardHero image={img} icon={it.icon} accent="gold">
-                  <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-black/45 px-3 py-1.5 backdrop-blur-md">
+                  <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-bg-deep/45 px-3 py-1.5 backdrop-blur-md">
                     <Coins className="h-3.5 w-3.5 text-accent-gold" />
                     <span className="font-mono text-sm font-bold text-accent-gold">{it.price.toLocaleString("ru")}</span>
                   </div>
                   {img && (
-                    <div className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-black/45 text-accent-gold backdrop-blur-md">
+                    <div className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-bg-deep/45 text-accent-gold backdrop-blur-md">
                       <ShopIcon name={it.icon} className="h-4 w-4" />
                     </div>
                   )}
@@ -129,7 +129,7 @@ export default function ShopPage() {
                     className={`mt-4 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition ${
                       affordable
                         ? "bg-gradient-to-r from-accent-gold to-amber-400 text-bg shadow-[0_6px_18px_-6px_rgba(255,200,0,0.6)] hover:shadow-[0_8px_24px_-6px_rgba(255,200,0,0.8)]"
-                        : "cursor-not-allowed border border-border bg-white/[0.03] text-text-muted"
+                        : "cursor-not-allowed border border-border bg-bg-panel/60 text-text-muted"
                     }`}
                   >
                     {affordable ? <><Coins className="h-4 w-4" /> Купить</> : "Недостаточно монет"}
@@ -153,13 +153,13 @@ export default function ShopPage() {
               {/* Hero */}
               <CardHero image={img} icon={it.icon} accent="cyan">
                 {it.price > 0 && (
-                  <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-black/45 px-3 py-1.5 backdrop-blur-md">
+                  <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-bg-deep/45 px-3 py-1.5 backdrop-blur-md">
                     <Coins className="h-3.5 w-3.5 text-accent-gold" />
                     <span className="font-mono text-sm font-bold text-accent-gold">{it.price.toLocaleString("ru")}</span>
                   </div>
                 )}
                 {img && (
-                  <div className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-black/45 text-accent-cyan backdrop-blur-md">
+                  <div className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-bg-deep/45 text-accent-cyan backdrop-blur-md">
                     <ShopIcon name={it.icon} className="h-4 w-4" />
                   </div>
                 )}
@@ -174,7 +174,7 @@ export default function ShopPage() {
                     <ExternalLink className="h-4 w-4" /> Открыть
                   </a>
                 ) : (
-                  <span className="mt-4 rounded-xl border border-border bg-white/[0.02] px-4 py-3 text-center text-sm text-text-muted">Скоро</span>
+                  <span className="mt-4 rounded-xl border border-border bg-bg-panel/60 px-4 py-3 text-center text-sm text-text-muted">Скоро</span>
                 )}
               </div>
             </div>
@@ -213,7 +213,7 @@ export default function ShopPage() {
 
       {/* ── Модал подтверждения покупки ── */}
       {buying && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !busy && setBuying(null)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-deep/70 p-4 backdrop-blur-sm" onClick={() => !busy && setBuying(null)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-bg-panel p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-text-primary">Подтвердить покупку</h3>
             <p className="mt-2 text-sm text-text-muted">

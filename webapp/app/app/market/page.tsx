@@ -12,10 +12,10 @@ const SmartMoney   = dynamic(() => import("@/app/app/smartmoney/page"), {
     <div className="space-y-4">
       {[...Array(3)].map((_, i) => (
         <div key={i} className="animate-pulse rounded-xl border border-border/50 bg-bg-panel p-4">
-          <div className="mb-3 h-4 w-40 rounded bg-white/[0.06]" />
+          <div className="mb-3 h-4 w-40 rounded bg-bg-panel/60" />
           <div className="space-y-2">
-            <div className="h-3 rounded bg-white/[0.04]" style={{ width: "80%" }} />
-            <div className="h-3 rounded bg-white/[0.04]" style={{ width: "60%" }} />
+            <div className="h-3 rounded bg-bg-panel/60" style={{ width: "80%" }} />
+            <div className="h-3 rounded bg-bg-panel/60" style={{ width: "60%" }} />
           </div>
         </div>
       ))}
@@ -268,7 +268,7 @@ export default function MarketPage() {
                 {TF.map((t) => (
                   <button key={t.key} onClick={() => setTf(t.key)}
                     className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                      tf === t.key ? "bg-white/10 text-text-primary" : "text-text-muted hover:text-text-primary"
+                      tf === t.key ? "bg-bg-panel/10 text-text-primary" : "text-text-muted hover:text-text-primary"
                     }`}>{t.label}</button>
                 ))}
               </div>

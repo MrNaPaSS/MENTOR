@@ -30,7 +30,7 @@ function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex gap-0.5 rounded-xl border border-border bg-white/[0.02] p-1">
+    <div className="flex gap-0.5 rounded-xl border border-border bg-bg-panel/60 p-1">
       {options.map((o) => {
         const active = value === o.key;
         return (
@@ -39,7 +39,7 @@ function Segmented<T extends string>({
             onClick={() => onChange(o.key)}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
               active
-                ? "bg-white/[0.07] text-text-primary ring-1 ring-inset ring-white/[0.08]"
+                ? "bg-bg-panel/60 text-text-primary ring-1 ring-inset ring-white/[0.08]"
                 : "text-text-muted hover:text-text-primary/80"
             }`}
           >
@@ -124,7 +124,7 @@ export default function SignalsFeed() {
         <div className="relative mt-3">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
           <input
-            className="w-full rounded-xl border border-border bg-white/[0.02] py-2.5 pl-10 pr-3 text-sm text-text-primary placeholder:text-text-muted outline-none transition focus:border-accent-cyan/40 focus:bg-white/[0.03]"
+            className="w-full rounded-xl border border-border bg-bg-panel/60 py-2.5 pl-10 pr-3 text-sm text-text-primary placeholder:text-text-muted outline-none transition focus:border-accent-cyan/40 focus:bg-bg-panel/60"
             placeholder="Поиск по паре - BTC, ETH, SOL…"
             value={q}
             onChange={(e) => setQ(e.target.value)}

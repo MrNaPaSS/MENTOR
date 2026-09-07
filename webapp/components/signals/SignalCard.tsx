@@ -77,7 +77,7 @@ function PriceTrack({ signal, currentPrice }: { signal: SignalOut; currentPrice?
   return (
     <div className="space-y-2.5 pt-1">
       {/* Track */}
-      <div className="relative h-2 rounded-full bg-white/[0.04]">
+      <div className="relative h-2 rounded-full bg-bg-panel/60">
         {/* Loss zone */}
         {longDir ? (
           <div className="absolute inset-y-0 left-0 rounded-l-full bg-danger/25" style={{ width: `${entryPct}%` }} />
@@ -207,10 +207,10 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
           </div>
           <div
             className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-              active ? "border-success/20 bg-success/[0.08] text-success" : "border-border bg-white/[0.03] text-text-primary/30"
+              active ? "border-success/20 bg-success/[0.08] text-success" : "border-border bg-bg-panel/60 text-text-primary/30"
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-success shadow-[0_0_6px] shadow-success/70" : "bg-white/30"}`} />
+            <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-success shadow-[0_0_6px] shadow-success/70" : "bg-bg-panel/30"}`} />
             {active ? "Live" : "Closed"}
           </div>
         </div>
@@ -230,7 +230,7 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
           <PriceTrack signal={s} currentPrice={currentPrice} />
 
           {/* Levels */}
-          <div className="grid grid-cols-4 divide-x divide-white/[0.05] overflow-hidden rounded-xl border border-border bg-white/[0.015]">
+          <div className="grid grid-cols-4 divide-x divide-white/[0.05] overflow-hidden rounded-xl border border-border bg-bg-panel/60">
             <Metric label="Вход" value={s.entry_price ? fmtUsd(parseFloat(s.entry_price), 4) : "-"} tone="text-text-primary" />
             <Metric label="Стоп" value={s.stop_loss ? fmtUsd(parseFloat(s.stop_loss), 4) : "-"} tone="text-danger" />
             <Metric label="TP1" value={s.tp1 ? fmtUsd(parseFloat(s.tp1), 4) : "-"} tone="text-success" />
@@ -239,7 +239,7 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
 
           {/* Calc */}
           {calc && (
-            <div className="overflow-hidden rounded-xl border border-border bg-white/[0.015]">
+            <div className="overflow-hidden rounded-xl border border-border bg-bg-panel/60">
               <div className="grid grid-cols-3 divide-x divide-white/[0.05]">
                 <Metric label="Маржа" value={`$${calc.margin.toFixed(0)}`} tone="text-text-primary/80" />
                 <Metric label="Риск" value={`-$${calc.risk.toFixed(0)}`} tone="text-danger" />
@@ -249,7 +249,7 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
                   tone="text-success"
                 />
               </div>
-              <div className="flex items-center justify-between border-t border-border bg-white/[0.01] px-4 py-2.5">
+              <div className="flex items-center justify-between border-t border-border bg-bg-panel/60 px-4 py-2.5">
                 <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-text-primary/30">Risk / Reward</span>
                 <span className="bg-gradient-to-r from-accent-gold to-yellow-300 bg-clip-text font-mono text-sm font-black text-transparent">
                   1 : {calc.rr1.toFixed(1)}
@@ -272,7 +272,7 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
             <button
               onClick={() => setChartOpen(true)}
               title="Открыть график и стакан"
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-white/[0.02] px-3.5 py-2.5 text-[12px] font-semibold text-text-primary/50 ring-1 ring-inset ring-white/[0.07] transition-all duration-150 hover:text-text-primary/80 hover:ring-white/[0.16]"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-bg-panel/60 px-3.5 py-2.5 text-[12px] font-semibold text-text-primary/50 ring-1 ring-inset ring-white/[0.07] transition-all duration-150 hover:text-text-primary/80 hover:ring-white/[0.16]"
             >
               <CandlestickChart className="h-3.5 w-3.5" />
               График

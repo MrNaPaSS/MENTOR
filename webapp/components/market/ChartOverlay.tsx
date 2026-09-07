@@ -57,7 +57,7 @@ export default function ChartOverlay({ symbol, direction, onClose }: Props) {
       {/* Затемнение */}
       <div
         onClick={handleClose}
-        className={`absolute inset-0 bg-black/75 backdrop-blur-sm transition-opacity duration-500 ${show ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-bg-deep/75 backdrop-blur-sm transition-opacity duration-500 ${show ? "opacity-100" : "opacity-0"}`}
       />
 
       {/* Панель — переворачивается при появлении */}
@@ -91,7 +91,7 @@ export default function ChartOverlay({ symbol, direction, onClose }: Props) {
             <button
               onClick={handleClose}
               title="Закрыть (Esc)"
-              className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] px-3 py-1.5 text-[12px] font-semibold text-text-primary/70 ring-1 ring-inset ring-white/[0.08] transition hover:bg-white/[0.08] hover:text-text-primary"
+              className="flex items-center gap-1.5 rounded-lg bg-bg-panel/60 px-3 py-1.5 text-[12px] font-semibold text-text-primary/70 ring-1 ring-inset ring-white/[0.08] transition hover:bg-bg-panel/60 hover:text-text-primary"
             >
               Закрыть
               <X className="h-4 w-4" />

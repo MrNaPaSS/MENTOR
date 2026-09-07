@@ -57,7 +57,7 @@ interface Achievement {
 }
 
 const RARITY_STYLES = {
-  common: { border: "border-border", glow: "", badge: "bg-white/10 text-text-primary", label: "Обычная" },
+  common: { border: "border-border", glow: "", badge: "bg-bg-panel/10 text-text-primary", label: "Обычная" },
   rare: { border: "border-blue-400/40", glow: "shadow-[0_0_12px_rgba(96,165,250,0.2)]", badge: "bg-blue-400/20 text-blue-400", label: "Редкая" },
   epic: { border: "border-purple-400/40", glow: "shadow-[0_0_12px_rgba(167,139,250,0.25)]", badge: "bg-purple-400/20 text-purple-400", label: "Эпическая" },
   legendary: { border: "border-accent-gold/40", glow: "shadow-[0_0_16px_rgba(255,215,0,0.25)]", badge: "bg-accent-gold/20 text-accent-gold", label: "Легендарная" },
@@ -216,7 +216,7 @@ function CircleProgress({ pct, color, size = 80, children }: { pct: number; colo
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={6} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(128,128,128,0.25)" strokeWidth={6} />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none"
           stroke={color} strokeWidth={6}
@@ -605,7 +605,7 @@ export default function AnalyticsPage() {
                     <span className="text-text-primary/50">до <span className="text-accent-gold font-bold">{nextM.label}</span> осталось <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
                     <span className="text-accent-gold font-bold">{nextM.label}</span>
                   </div>
-                  <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
+                  <div className="relative h-2 overflow-hidden rounded-full bg-bg-panel/60">
                     <div className="h-full rounded-full transition-all duration-1000"
                       style={{ width: `${trackPct}%`, background: "linear-gradient(90deg, #f59e0b, #fde68a)" }} />
                   </div>
@@ -625,8 +625,8 @@ export default function AnalyticsPage() {
                         reached
                           ? "border-accent-gold bg-accent-gold/15 shadow-[0_0_16px_rgba(251,191,36,0.4)]"
                           : isCurrent
-                          ? "border-border bg-white/[0.04]"
-                          : "border-border bg-white/[0.02]"
+                          ? "border-border bg-bg-panel/60"
+                          : "border-border bg-bg-panel/60"
                       }`}>
                         <span className={`text-lg leading-none ${reached ? "" : "opacity-25"}`}>{m.emoji}</span>
                         {reached && (
@@ -692,7 +692,7 @@ export default function AnalyticsPage() {
 
             {/* Мини-полоса прогресса профит/лосс */}
             {(profitDays + lossDays) > 0 && (
-              <div className="mt-3 overflow-hidden rounded-full bg-white/[0.05]" style={{ height: 4 }}>
+              <div className="mt-3 overflow-hidden rounded-full bg-bg-panel/60" style={{ height: 4 }}>
                 <div className="flex h-full">
                   <div className="bg-success/60 transition-all duration-700" style={{ width: `${(profitDays / (profitDays + lossDays)) * 100}%` }} />
                   <div className="bg-danger/50 transition-all duration-700" style={{ width: `${(lossDays / (profitDays + lossDays)) * 100}%` }} />
@@ -742,7 +742,7 @@ export default function AnalyticsPage() {
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedDay.balance !== null && (
-                      <span className="rounded-lg bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-text-primary">
+                      <span className="rounded-lg bg-bg-panel/60 px-2.5 py-1 text-[11px] font-semibold text-text-primary">
                         💰 ${fmtDot(selectedDay.balance, 2)}
                       </span>
                     )}
@@ -871,7 +871,7 @@ export default function AnalyticsPage() {
                 </div>
 
                 {/* Прогресс */}
-                <div className="relative mt-4 h-2.5 overflow-hidden rounded-full bg-black/40">
+                <div className="relative mt-4 h-2.5 overflow-hidden rounded-full bg-bg-deep/40">
                   <div
                     className="h-full rounded-full shadow-[0_0_10px_rgba(255,200,0,0.5)] transition-all duration-700"
                     style={{ width: `${pct}%`, background: "linear-gradient(90deg, #f59e0b, #fde68a)" }}
@@ -882,7 +882,7 @@ export default function AnalyticsPage() {
                 {/* Разбивка XP */}
                 <div className="relative mt-4 grid grid-cols-2 gap-2">
                   {breakdown.map(({ icon: Icon, label, val, color, bg }) => (
-                    <div key={label} className="flex items-center gap-2 rounded-xl border border-border bg-white/[0.02] px-2.5 py-2">
+                    <div key={label} className="flex items-center gap-2 rounded-xl border border-border bg-bg-panel/60 px-2.5 py-2">
                       <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${bg} ${color}`}>
                         <Icon className="h-3.5 w-3.5" />
                       </div>
@@ -905,7 +905,7 @@ export default function AnalyticsPage() {
               const Icon = goal.icon;
               const pct = Math.min((goal.current / goal.target) * 100, 100);
               return (
-                <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-success/[0.04]" : "border-border bg-white/[0.02]"}`}>
+                <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-success/[0.04]" : "border-border bg-bg-panel/60"}`}>
                   <div className="flex items-center gap-2 mb-1.5">
                     <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: goal.color }} />
                     <span className="text-[11px] font-semibold text-text-primary flex-1 min-w-0 truncate">{goal.label}</span>
@@ -951,7 +951,7 @@ export default function AnalyticsPage() {
             const total = cat.id === "all" ? achievements.length : achievements.filter(a => a.category === cat.id).length;
             return (
               <button key={cat.id} onClick={() => setAchCategory(cat.id)}
-                className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-accent-gold/10 text-accent-gold" : "border-border bg-white/[0.02] text-text-primary/40 hover:text-text-primary/70"}`}>
+                className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-accent-gold/10 text-accent-gold" : "border-border bg-bg-panel/60 text-text-primary/40 hover:text-text-primary/70"}`}>
                 <cat.icon className="h-3 w-3 shrink-0" />
                 <span>{cat.label}</span>
                 <span className={`font-mono text-[9px] ${achCategory === cat.id ? "text-accent-gold/60" : "text-text-primary/20"}`}>{count}/{total}</span>

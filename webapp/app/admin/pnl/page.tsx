@@ -108,7 +108,7 @@ export default function PnlPage() {
               />
               <button
                 onClick={() => handleDelete(img.name)}
-                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/70 text-text-primary opacity-0 transition hover:bg-danger/80 group-hover:opacity-100"
+                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-bg-deep/70 text-text-primary opacity-0 transition hover:bg-danger/80 group-hover:opacity-100"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

@@ -95,7 +95,7 @@ export default function NewSignal() {
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-sm font-bold transition-all ${
                   long
                     ? "border-success/40 bg-success/10 text-success"
-                    : "border-border bg-white/[0.02] text-text-muted hover:text-text-primary"
+                    : "border-border bg-bg-panel/60 text-text-muted hover:text-text-primary"
                 }`}
               >
                 <TrendingUp className="h-4 w-4" /> LONG
@@ -105,7 +105,7 @@ export default function NewSignal() {
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-sm font-bold transition-all ${
                   !long
                     ? "border-danger/40 bg-danger/10 text-danger"
-                    : "border-border bg-white/[0.02] text-text-muted hover:text-text-primary"
+                    : "border-border bg-bg-panel/60 text-text-muted hover:text-text-primary"
                 }`}
               >
                 <TrendingDown className="h-4 w-4" /> SHORT
@@ -133,7 +133,7 @@ export default function NewSignal() {
                 className={`flex-1 rounded-xl border py-2 text-sm font-bold transition-all ${
                   leverage === v
                     ? "border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan"
-                    : "border-border bg-white/[0.02] text-text-muted hover:text-text-primary"
+                    : "border-border bg-bg-panel/60 text-text-muted hover:text-text-primary"
                 }`}
               >
                 ×{v}

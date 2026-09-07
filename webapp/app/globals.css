@@ -40,9 +40,11 @@
   --text-primary: 17 20 24;
   --text-secondary: 74 80 88;
   --text-muted: 120 123 134;
-  /* Бирюза акцента на белом слепнет - берём насыщенный синий. */
-  --accent-cyan: 41 98 255;
-  --accent-gold: 169 116 0;
+  /* Цвета взяты у индикатора: на светлой теме он работает сиреневым, а не
+     бирюзой - бирюза на белом слепнет и перестаёт быть акцентом. Сиреневый
+     #7E57C2 - линия тренда, #9575CD - заливка блоков, #2962FF - метки. */
+  --accent-cyan: 126 87 194;
+  --accent-gold: 141 110 0;
   --success: 0 168 107;
   --danger: 255 26 46;
   --border: 214 220 222;
@@ -115,7 +117,7 @@
     -webkit-font-smoothing: antialiased;
   }
   ::selection {
-    background: rgba(10, 255, 224, 0.22);
+    background: rgb(var(--accent-cyan) / 0.22);
     color: #fff;
   }
   /* Тонкий скроллбар в тёмной теме */
@@ -213,13 +215,13 @@
 
 /* ── Свечения и эффекты ── */
 .glow-cyan {
-  box-shadow: 0 0 0 1px rgba(10, 255, 224, 0.4), 0 0 28px rgba(10, 255, 224, 0.14);
+  box-shadow: 0 0 0 1px rgb(var(--accent-cyan) / 0.4), 0 0 28px rgb(var(--accent-cyan) / 0.14);
 }
 .glow-gold {
   box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.4), 0 0 28px rgba(255, 215, 0, 0.14);
 }
 .text-glow-cyan {
-  text-shadow: 0 0 18px rgba(10, 255, 224, 0.55);
+  text-shadow: 0 0 18px rgb(var(--accent-cyan) / 0.55);
 }
 
 /* Скелетон-шиммер (ТЗ §10.5) */

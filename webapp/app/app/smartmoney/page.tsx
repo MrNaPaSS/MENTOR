@@ -233,7 +233,7 @@ function AnimBar({pct,color,height=6,delay=0}:{pct:number;color:string;height?:n
     return ()=>clearTimeout(id);
   },[pct,delay]);
   return (
-    <div className="overflow-hidden rounded-full bg-white/[0.05]" style={{height}}>
+    <div className="overflow-hidden rounded-full bg-bg-panel/60" style={{height}}>
       <div ref={ref} className="h-full rounded-full" style={{backgroundColor:color,opacity:0.7}} />
     </div>
   );
@@ -314,7 +314,7 @@ function CotSection() {
           </div>
 
           {/* Position structure */}
-          <div className="rounded-2xl border border-border bg-white/[0.02] p-4 space-y-3">
+          <div className="rounded-2xl border border-border bg-bg-panel/60 p-4 space-y-3">
             <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Структура позиций (% от ОИ)</div>
 
             {[
@@ -329,10 +329,10 @@ function CotSection() {
                     <span style={{color:row.sc}}>S {row.short.toFixed(1)}%</span>
                   </div>
                 </div>
-                <div className="flex h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                <div className="flex h-2 overflow-hidden rounded-full bg-bg-panel/60">
                   <div className="h-full rounded-l-full transition-all duration-700"
                     style={{width:`${row.long}%`,background:`linear-gradient(90deg,${row.lc}50,${row.lc}90)`}} />
-                  <div className="mx-[1px] h-full w-[2px] flex-shrink-0 bg-white/20 rounded-full" />
+                  <div className="mx-[1px] h-full w-[2px] flex-shrink-0 bg-bg-panel/20 rounded-full" />
                   <div className="h-full rounded-r-full transition-all duration-700"
                     style={{width:`${row.short}%`,background:`linear-gradient(90deg,${row.sc}90,${row.sc}50)`}} />
                 </div>
@@ -351,14 +351,14 @@ function CotSection() {
                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-danger/50"/>медвежий</span>
               </div>
             </div>
-            <div className="flex items-end gap-1.5 rounded-xl bg-white/[0.02] px-3 pb-2 pt-3" style={{height:80}}>
+            <div className="flex items-end gap-1.5 rounded-xl bg-bg-panel/60 px-3 pb-2 pt-3" style={{height:80}}>
               {[...cot].reverse().map((row,i)=>{
                 const h = Math.max((Math.abs(row.nc_net)/maxNet)*62,4);
                 const color = row.nc_net>=0 ? "#0ecb81" : "#f6465d";
                 return (
                   <div key={i} title={`${row.date}: ${row.nc_net>0?"+":""}${fmt(row.nc_net)}`}
                     className="group relative flex flex-1 flex-col items-center justify-end cursor-default" style={{height:68}}>
-                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[8px] text-text-primary opacity-0 transition-opacity group-hover:opacity-100 z-10">
+                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-bg-deep/80 px-1.5 py-0.5 text-[8px] text-text-primary opacity-0 transition-opacity group-hover:opacity-100 z-10">
                       {fmtK(row.nc_net)}
                     </div>
                     <div className="w-full rounded-t-sm transition-all duration-200 group-hover:opacity-100"
@@ -516,20 +516,20 @@ function EtfSection() {
                 {((data.total_btc/21_000_000)*100).toFixed(2)}% от максимальной эмиссии
               </div>
             </div>
-            <div className="h-12 w-px bg-white/[0.07]"/>
+            <div className="h-12 w-px bg-bg-panel/60"/>
             <div>
               <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Фондов</div>
               <div className="font-mono text-[28px] font-black leading-none text-text-primary">{data.etfs.length}</div>
             </div>
             {btcPrice>0 && <>
-              <div className="h-12 w-px bg-white/[0.07]"/>
+              <div className="h-12 w-px bg-bg-panel/60"/>
               <div>
                 <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">BTC/USD</div>
                 <div className="font-mono text-[24px] font-black leading-none text-accent-cyan">${btcPrice.toLocaleString("en-US")}</div>
               </div>
             </>}
             {topEtf && <>
-              <div className="h-12 w-px bg-white/[0.07]"/>
+              <div className="h-12 w-px bg-bg-panel/60"/>
               <div>
                 <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Лидер</div>
                 <div className="font-mono text-[18px] font-black leading-none text-text-primary">{topEtf.ticker}</div>
@@ -741,7 +741,7 @@ function FearGaugeSmall({val,color}:{val:number;color:string}) {
   return (
     <svg viewBox="0 0 124 62" className="w-full overflow-visible">
       <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
-        fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10" strokeLinecap="butt"/>
+        fill="none" stroke="rgba(128,128,128,0.25)" strokeWidth="10" strokeLinecap="butt"/>
       {[{from:0,to:.25,c:"#0ecb81"},{from:.25,to:.45,c:"#5ac87a"},{from:.45,to:.55,c:"#9ca3af"},{from:.55,to:.75,c:"#f0b90b"},{from:.75,to:1,c:"#f6465d"}]
         .map((z,i)=>{
           const a1=Math.PI-z.from*Math.PI, a2=Math.PI-z.to*Math.PI;
@@ -810,7 +810,7 @@ function OnchainSection() {
         <div className="mb-4 grid grid-cols-2 gap-3">
 
           {/* Fear & Greed card */}
-          <div className="sm-hover rounded-2xl border border-border bg-white/[0.02] p-4">
+          <div className="sm-hover rounded-2xl border border-border bg-bg-panel/60 p-4">
             <div className="mb-1 text-[9px] uppercase tracking-widest text-text-primary/25">Fear & Greed Index</div>
             <FearGaugeSmall val={fgVal} color={fgColor}/>
             <div className="mt-1 text-center">
@@ -821,7 +821,7 @@ function OnchainSection() {
           </div>
 
           {/* Dominance card */}
-          <div className="sm-hover rounded-2xl border border-border bg-white/[0.02] p-4">
+          <div className="sm-hover rounded-2xl border border-border bg-bg-panel/60 p-4">
             <div className="mb-3 text-[9px] uppercase tracking-widest text-text-primary/25">Доминация крипторынка</div>
             <div className="space-y-3">
               {[
@@ -1097,7 +1097,7 @@ function TrendingSection() {
             const rs = rankStyle(i);
             return (
               <div key={c.id} className="sm-fade-up sm-hover flex items-center gap-3 rounded-xl px-3 py-2.5"
-                style={{ animationDelay: `${i * 0.04}s`, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                style={{ animationDelay: `${i * 0.04}s`, background: "rgba(255,255,255,0.025)", border: "1px solid rgb(var(--border) / 0.7)" }}>
                 <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg font-mono text-[11px] font-black"
                   style={{ color: rs.color, background: rs.bg, border: `1px solid ${rs.bd}` }}>
                   {i + 1}
@@ -1107,7 +1107,7 @@ function TrendingSection() {
                 <span className="font-bold text-[13px] text-text-primary">{c.symbol}</span>
                 <span className="truncate text-[11px] text-text-primary/30">{c.name}</span>
                 {c.rank != null && (
-                  <span className="ml-auto flex-shrink-0 rounded-md bg-white/[0.05] px-2 py-0.5 font-mono text-[9px] font-semibold text-text-primary/40">
+                  <span className="ml-auto flex-shrink-0 rounded-md bg-bg-panel/60 px-2 py-0.5 font-mono text-[9px] font-semibold text-text-primary/40">
                     #{c.rank}
                   </span>
                 )}

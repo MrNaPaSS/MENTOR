@@ -66,7 +66,7 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
 
           {/* Бейджи поверх изображения */}
           <div className="absolute left-4 top-4 flex items-center gap-2">
-            <span className="flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-text-primary backdrop-blur-sm">
+            <span className="flex items-center gap-1.5 rounded-full bg-bg-deep/60 px-3 py-1 text-[11px] font-semibold text-text-primary backdrop-blur-sm">
               <TrendingUp className="h-3 w-3 text-accent-cyan" />
               Анализ
             </span>
@@ -78,7 +78,7 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
           </div>
 
           {/* Кнопка открыть - появляется при hover */}
-          <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-[11px] text-text-primary/70 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+          <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-full bg-bg-deep/60 px-3 py-1 text-[11px] text-text-primary/70 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
             <ExternalLink className="h-3 w-3" />
             TradingView
           </div>
@@ -122,7 +122,7 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
           {item.symbol && (
             <button
               onClick={() => setChartOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-white/[0.03] px-3.5 py-2 text-[12px] font-semibold text-accent-cyan ring-1 ring-inset ring-accent-cyan/20 transition hover:bg-accent-cyan/[0.1] hover:ring-accent-cyan/40"
+              className="flex items-center gap-1.5 rounded-xl bg-bg-panel/60 px-3.5 py-2 text-[12px] font-semibold text-accent-cyan ring-1 ring-inset ring-accent-cyan/20 transition hover:bg-accent-cyan/[0.1] hover:ring-accent-cyan/40"
             >
               <CandlestickChart className="h-3.5 w-3.5" />
               Открыть график

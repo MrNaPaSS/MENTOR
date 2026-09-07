@@ -61,7 +61,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
             <h3 className="text-xl font-bold text-text-primary">Лидерборд</h3>
           </div>
         )}
-        <div className="flex gap-1 rounded-xl border border-border bg-white/[0.03] p-1">
+        <div className="flex gap-1 rounded-xl border border-border bg-bg-panel/60 p-1">
           {PERIODS.map((p) => (
             <button
               key={p}
@@ -118,7 +118,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
                 </div>
 
                 {/* Прогресс-бар */}
-                <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/5">
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-bg-panel/5">
                   <div
                     className="h-full rounded-full transition-all duration-1000"
                     style={{ width: `${pct}%`, background: m.color }}
@@ -138,7 +138,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
             return (
               <div
                 key={r.rank}
-                className="flex items-center gap-4 py-3 transition hover:bg-white/[0.02] rounded-xl px-2"
+                className="flex items-center gap-4 py-3 transition hover:bg-bg-panel/60 rounded-xl px-2"
               >
                 <span className="w-7 text-center font-mono text-sm font-bold text-text-muted">
                   {r.rank}
@@ -156,7 +156,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
                 </div>
                 <div className="w-24 shrink-0">
                   <div className="text-right font-mono text-sm font-bold text-text-primary">${fmtUsd(r.balance)}</div>
-                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/5">
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-bg-panel/5">
                     <div
                       className="h-full rounded-full bg-accent-cyan/60"
                       style={{ width: `${pct}%` }}

@@ -154,7 +154,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
               key={m}
               onClick={() => setMode(m)}
               className={`flex h-5 w-6 items-center justify-center rounded-sm transition ${
-                mode === m ? "bg-white/10" : "hover:bg-white/5"
+                mode === m ? "bg-bg-panel/10" : "hover:bg-bg-panel/5"
               }`}
               title={m}
             >

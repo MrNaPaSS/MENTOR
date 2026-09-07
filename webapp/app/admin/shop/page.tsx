@@ -321,7 +321,7 @@ function ItemEditor({ token, item, onClose, onSaved }: {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !busy && onClose()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-deep/70 p-4 backdrop-blur-sm" onClick={() => !busy && onClose()}>
       <div className="w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-bg-panel p-6 max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-bold text-text-primary">{item ? "Редактировать товар" : "Новый товар"}</h3>
 

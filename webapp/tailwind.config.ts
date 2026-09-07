@@ -47,16 +47,16 @@ const config: Config = {
         h3: ["1.75rem", { lineHeight: "1.2", fontWeight: "600" }],
       },
       boxShadow: {
-        "glow-cyan": "0 0 0 1px rgba(10,255,224,0.45), 0 0 28px rgba(10,255,224,0.18)",
+        "glow-cyan": "0 0 0 1px rgb(var(--accent-cyan) / 0.45), 0 0 28px rgb(var(--accent-cyan) / 0.18)",
         "glow-gold": "0 0 0 1px rgba(255,215,0,0.45), 0 0 28px rgba(255,215,0,0.16)",
-        "glow-soft": "0 0 40px rgba(10,255,224,0.10)",
+        "glow-soft": "0 0 40px rgb(var(--accent-cyan) / 0.10)",
         card: "0 8px 30px rgba(0,0,0,0.40)",
       },
       backgroundImage: {
         "grid-faint":
           "linear-gradient(to right, rgba(42,42,62,0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(42,42,62,0.4) 1px, transparent 1px)",
         "radial-cyan":
-          "radial-gradient(60% 60% at 50% 0%, rgba(10,255,224,0.12) 0%, transparent 70%)",
+          "radial-gradient(60% 60% at 50% 0%, rgb(var(--accent-cyan) / 0.12) 0%, transparent 70%)",
       },
       keyframes: {
         "fade-in": {
@@ -84,11 +84,11 @@ const config: Config = {
           "100%": { transform: "translateX(-50%)" },
         },
         "pulse-glow": {
-          "0%, 100%": { boxShadow: "0 0 0 1px rgba(10,255,224,0.35), 0 0 16px rgba(10,255,224,0.10)" },
-          "50%": { boxShadow: "0 0 0 1px rgba(10,255,224,0.7), 0 0 30px rgba(10,255,224,0.30)" },
+          "0%, 100%": { boxShadow: "0 0 0 1px rgb(var(--accent-cyan) / 0.35), 0 0 16px rgb(var(--accent-cyan) / 0.10)" },
+          "50%": { boxShadow: "0 0 0 1px rgb(var(--accent-cyan) / 0.7), 0 0 30px rgb(var(--accent-cyan) / 0.30)" },
         },
         "price-flash": {
-          "0%": { backgroundColor: "rgba(10,255,224,0.22)" },
+          "0%": { backgroundColor: "rgb(var(--accent-cyan) / 0.22)" },
           "100%": { backgroundColor: "transparent" },
         },
         float: {

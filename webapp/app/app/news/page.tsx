@@ -293,7 +293,7 @@ export default function NewsPage() {
                 <button
                   key={n}
                   onClick={() => setGrid(n)}
-                  className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${gridSize === n ? "bg-white/15 text-text-primary" : "text-text-muted hover:text-text-primary"}`}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${gridSize === n ? "bg-bg-panel/15 text-text-primary" : "text-text-muted hover:text-text-primary"}`}
                 >
                   {n === 1 ? "1×1" : n === 2 ? "1×2" : n === 4 ? "2×2" : "2×3"}
                 </button>
@@ -372,7 +372,7 @@ export default function NewsPage() {
                     <div className="flex gap-2 opacity-0 transition group-hover:opacity-100">
                       <button
                         onClick={() => setFullscreenId(ch.id)}
-                        className="rounded-lg bg-white/5 px-2 py-1 text-[10px] text-text-muted hover:text-text-primary"
+                        className="rounded-lg bg-bg-panel/5 px-2 py-1 text-[10px] text-text-muted hover:text-text-primary"
                       >
                         ⛶ Fullscreen
                       </button>

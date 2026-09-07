@@ -211,7 +211,7 @@ export default function AdminDashboard() {
             <button 
               onClick={exportToCSV}
               disabled={refs.length === 0}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-text-primary font-semibold rounded-xl border border-border transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2.5 bg-bg-panel/5 hover:bg-bg-panel/10 text-text-primary font-semibold rounded-xl border border-border transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download className="h-4 w-4" />
               Экспорт CSV
@@ -245,7 +245,7 @@ export default function AdminDashboard() {
               <span className="text-[10px] text-text-muted">в системе</span>
             </div>
             {/* Декоративный микро-график */}
-            <div className="mt-3 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+            <div className="mt-3 h-1 w-full bg-bg-panel/5 rounded-full overflow-hidden">
               <div className="h-full bg-accent-cyan rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (activeStudentsCount / Math.max(1, students.length)) * 100)}%` }} />
             </div>
           </div>
@@ -255,7 +255,7 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-accent-gold/35 to-transparent" />
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Ожидают аппрува</span>
-              <span className={`grid h-8 w-8 place-items-center rounded-xl ring-1 ${pendingStudentsCount > 0 ? "bg-accent-gold/15 text-accent-gold ring-accent-gold/30 animate-pulse" : "bg-white/5 text-text-muted ring-white/5"}`}>
+              <span className={`grid h-8 w-8 place-items-center rounded-xl ring-1 ${pendingStudentsCount > 0 ? "bg-accent-gold/15 text-accent-gold ring-accent-gold/30 animate-pulse" : "bg-bg-panel/5 text-text-muted ring-white/5"}`}>
                 <UserCheck className="h-4 w-4" />
               </span>
             </div>
@@ -536,7 +536,7 @@ export default function AdminDashboard() {
             <div className="flex justify-center py-4">
               <svg width="140" height="140" viewBox="0 0 40 40" className="transform -rotate-90">
                 {/* Подложка */}
-                <circle cx="20" cy="20" r="15.915" fill="transparent" stroke="rgba(255,255,255,0.03)" strokeWidth="4" />
+                <circle cx="20" cy="20" r="15.915" fill="transparent" stroke="rgba(128,128,128,0.25)" strokeWidth="4" />
                 
                 {/* Спот (Cyan) */}
                 <circle 
@@ -601,9 +601,9 @@ export default function AdminDashboard() {
                   </defs>
                   
                   {/* Сетка */}
-                  <line x1="40" y1="40" x2="560" y2="40" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                  <line x1="40" y1="100" x2="560" y2="100" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                  <line x1="40" y1="160" x2="560" y2="160" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                  <line x1="40" y1="40" x2="560" y2="40" stroke="rgba(128,128,128,0.25)" strokeWidth="1" />
+                  <line x1="40" y1="100" x2="560" y2="100" stroke="rgba(128,128,128,0.25)" strokeWidth="1" />
+                  <line x1="40" y1="160" x2="560" y2="160" stroke="rgba(128,128,128,0.25)" strokeWidth="1" />
                   
                   {/* Заполненная область */}
                   {svgChartPoints && (
@@ -666,7 +666,7 @@ export default function AdminDashboard() {
             ) : (
               <table className="w-full min-w-[720px] text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-white/[0.02] border-b border-border">
+                  <tr className="bg-bg-panel/60 border-b border-border">
                     
                     {/* UID */}
                     <th 
@@ -768,7 +768,7 @@ export default function AdminDashboard() {
 
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5 bg-white/[0.01]">
+                <tbody className="divide-y divide-white/5 bg-bg-panel/60">
                   {filteredAndSortedRefs.map((r) => {
                     const totalRefVolume = Number(r.spot_volume) + Number(r.futures_volume);
                     // Доля реферала от общего объема сети
@@ -777,12 +777,12 @@ export default function AdminDashboard() {
                     return (
                       <tr 
                         key={r.uid} 
-                        className="hover:bg-white/[0.03] transition duration-150 group"
+                        className="hover:bg-bg-panel/60 transition duration-150 group"
                       >
                         {/* UID */}
                         <td className="py-3 px-4 font-mono font-medium text-text-primary flex items-center gap-1.5">
                           <span>{r.uid}</span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-bg-panel/5 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity">
                             {volumeShare > 10 ? "VIP 🔥" : "активный"}
                           </span>
                         </td>
@@ -795,7 +795,7 @@ export default function AdminDashboard() {
                                 <CheckCircle2 className="h-3 w-3" /> Да
                               </span>
                             ) : (
-                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-text-muted border border-border">
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-bg-panel/5 text-text-muted border border-border">
                                 <XCircle className="h-3 w-3" /> Нет
                               </span>
                             )}
@@ -843,7 +843,7 @@ export default function AdminDashboard() {
                               <CheckCircle2 className="h-3 w-3" /> Да
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-text-muted border border-border">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-bg-panel/5 text-text-muted border border-border">
                               <XCircle className="h-3 w-3" /> Нет
                             </span>
                           )}
@@ -856,7 +856,7 @@ export default function AdminDashboard() {
                               <Activity className="h-3 w-3" /> Да
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-text-muted border border-border">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-bg-panel/5 text-text-muted border border-border">
                               Нет
                             </span>
                           )}

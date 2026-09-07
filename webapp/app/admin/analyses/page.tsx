@@ -90,7 +90,7 @@ export default function AnalysesPage() {
           return (
             <div
               key={item.id}
-              className="group relative flex gap-4 overflow-hidden rounded-2xl border border-border bg-white/4 p-4 transition hover:border-border"
+              className="group relative flex gap-4 overflow-hidden rounded-2xl border border-border bg-bg-panel/4 p-4 transition hover:border-border"
             >
               {/* Превью */}
               {img ? (
@@ -98,7 +98,7 @@ export default function AnalysesPage() {
                   <img src={img} alt="" className="h-full w-full object-cover" />
                 </div>
               ) : (
-                <div className="flex h-20 w-32 flex-shrink-0 items-center justify-center rounded-xl bg-white/5">
+                <div className="flex h-20 w-32 flex-shrink-0 items-center justify-center rounded-xl bg-bg-panel/5">
                   <ImageOff className="h-6 w-6 text-text-muted opacity-40" />
                 </div>
               )}

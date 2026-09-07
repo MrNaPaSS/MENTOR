@@ -81,7 +81,7 @@ export default function Header() {
         aria-hidden={!open}
       >
         <div
-          className={`absolute inset-0 bg-black/60 transition-opacity ${
+          className={`absolute inset-0 bg-bg-deep/60 transition-opacity ${
             open ? "opacity-100" : "opacity-0"
           }`}
           onClick={() => setOpen(false)}
@@ -106,7 +106,7 @@ export default function Header() {
               key={l.href}
               href={l.href}
               onClick={() => setOpen(false)}
-              className="rounded-xl px-3 py-3 text-base text-text-secondary transition hover:bg-white/5 hover:text-text-primary"
+              className="rounded-xl px-3 py-3 text-base text-text-secondary transition hover:bg-bg-panel/5 hover:text-text-primary"
             >
               {l.label}
             </a>

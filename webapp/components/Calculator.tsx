@@ -62,7 +62,7 @@ export default function Calculator() {
       className="overflow-hidden rounded-3xl"
       style={{
         background: "linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%)",
-        border: "1px solid rgba(255,255,255,0.08)",
+        border: "1px solid rgb(var(--border) / 0.7)",
         boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
       }}
     >
@@ -233,7 +233,7 @@ export default function Calculator() {
               {/* TP rows */}
               <div
                 className="rounded-2xl p-1"
-                style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.06)" }}
+                style={{ background: "rgb(var(--bg-deep) / 0.25)", border: "1px solid rgb(var(--border) / 0.7)" }}
               >
                 {result.take_profits.map((tp, i) => (
                   <div

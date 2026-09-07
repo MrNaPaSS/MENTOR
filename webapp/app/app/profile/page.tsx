@@ -12,7 +12,7 @@ const ADMIN_WEEX_UID = "6613031308";
 
 const glass = {
   background: "linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgb(var(--border) / 0.7)",
 };
 
 export default function ProfilePage() {
@@ -135,7 +135,7 @@ export default function ProfilePage() {
           <SettingRow label="Режим торговли">
             <div
               className="flex rounded-xl p-1"
-              style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}
+              style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
             >
               {(["moderate", "turbo"] as const).map((m) => {
                 const active = p.mode === m;
@@ -170,7 +170,7 @@ export default function ProfilePage() {
           <SettingRow label="Язык интерфейса">
             <div
               className="flex rounded-xl p-1"
-              style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}
+              style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
             >
               {(["ru", "en"] as const).map((l) => {
                 const active = p.language === l;
