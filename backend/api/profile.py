@@ -9,23 +9,31 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
 from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student
-from backend.deps import get_current_student, get_session, get_weex
+from backend.api.journal import is_admin
+from backend.config import BackendConfig
+from backend.deps import get_config, get_current_student, get_session, get_weex
 from backend.schemas import ProfileOut, ProfilePatch, AnalyticsMe
 
 router = APIRouter(prefix="/api", tags=["profile"])
 
 
-def _profile(s: Student) -> ProfileOut:
+def _profile(s: Student, admin: bool = False) -> ProfileOut:
     return ProfileOut(
         id=s.id, username=s.username, weex_uid=s.weex_uid, mode=s.mode,
         language=s.language, risk_percent=s.risk_percent, turbo_leverage=s.turbo_leverage,
         balance_usdt=s.balance_usdt, balance_source=s.balance_source,
+        is_admin=admin,
     )
 
 
 @router.get("/profile", response_model=ProfileOut)
-def get_profile(student: Student = Depends(get_current_student)):
-    return _profile(student)
+def get_profile(
+    student: Student = Depends(get_current_student),
+    config: BackendConfig = Depends(get_config),
+):
+    # Права наставника отдаём вместе с профилем: интерфейсу надо знать их до
+    # того, как он нарисует кнопку, которой у ученика быть не должно.
+    return _profile(student, is_admin(student, config))
 
 
 @router.patch("/profile", response_model=ProfileOut)

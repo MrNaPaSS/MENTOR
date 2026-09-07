@@ -14,12 +14,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import journal as journal_api
-from backend.deps import (
-    get_current_mentor,
-    get_current_student,
-    get_session,
-    get_token_payload,
-)
+from backend.config import BackendConfig
+from backend.deps import get_config, get_current_student, get_session
 from core.db import Base
 from core.models import Student
 
@@ -47,9 +43,9 @@ def client():
     app.include_router(journal_api.router)
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_current_student] = lambda: student
-    # По умолчанию клиент - ученик: проверку прав наставника проходит настоящая
-    # зависимость, а не подстановка, иначе тест на отказ ничего не проверяет.
-    app.dependency_overrides[get_token_payload] = lambda: {"role": "student"}
+    # По умолчанию наставник - кто-то другой: проверку прав проходит настоящий
+    # код, а не подстановка, иначе тест на отказ ничего не проверяет.
+    app.dependency_overrides[get_config] = lambda: _config(admin_tg_id=999)
     # Доступ к разделу проверяется отдельно — здесь он не предмет теста.
 
     with TestClient(app) as c:
@@ -59,9 +55,23 @@ def client():
     session.close()
 
 
+def _config(admin_tg_id: int) -> BackendConfig:
+    """Настройки с нужным наставником и всем остальным по умолчанию."""
+    return BackendConfig(
+        jwt_secret="x",
+        access_ttl_seconds=900,
+        refresh_ttl_seconds=3600,
+        weex_use_mock=True,
+        code_ttl_seconds=300,
+        max_code_attempts=3,
+        expose_codes=False,
+        admin_tg_id=admin_tg_id,
+    )
+
+
 def as_mentor(client):
-    """Дать этому клиенту права наставника."""
-    client.app.dependency_overrides[get_current_mentor] = lambda: {"role": "mentor"}
+    """Этот ученик и есть наставник: его телеграм назван в настройках."""
+    client.app.dependency_overrides[get_config] = lambda: _config(admin_tg_id=1)
 
 
 def trade(**over):

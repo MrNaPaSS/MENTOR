@@ -121,7 +121,17 @@ export default function JournalPanel({
   // на сервере страницы его нет, и разметка разошлась бы с ним.
   const [mentor, setMentor] = useState(false);
   useEffect(() => {
-    setMentor(canEditJournal());
+    let alive = true;
+    canEditJournal()
+      .then((may) => {
+        if (alive) setMentor(may);
+      })
+      .catch(() => {
+        // Не ответили - кнопки не будет. Лишняя кнопка хуже её отсутствия.
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const reload = useCallback(async () => {

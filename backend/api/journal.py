@@ -20,7 +20,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from core.models import ScalpTrade, ScalpWorkspace, Student, utcnow
-from backend.deps import get_current_mentor, get_current_student, get_session
+from backend.config import BackendConfig
+from backend.deps import get_config, get_current_student, get_session
 
 router = APIRouter(prefix="/api/journal", tags=["journal"])
 
@@ -202,19 +203,32 @@ async def add_trade(
     return _row(trade)
 
 
+def is_admin(student: Student, config: BackendConfig) -> bool:
+    """Наставник это или обычный ученик.
+
+    По учётной записи, а не по отдельному входу с паролем: наставник открывает
+    терминал под собой, и заставлять его логиниться вторым способом ради одной
+    кнопки незачем.
+    """
+    return bool(config.admin_tg_id) and student.tg_id == config.admin_tg_id
+
+
 @router.delete("/trades/{trade_id}")
 async def delete_trade(
     trade_id: int,
-    mentor: dict = Depends(get_current_mentor),
+    student: Student = Depends(get_current_student),
+    config: BackendConfig = Depends(get_config),
     session=Depends(get_session),
 ):
-    """Убрать запись из журнала. Только ментор.
+    """Убрать запись из журнала. Только наставник.
 
     Журнал - это статистика, по которой ученик и наставник судят о торговле.
     Право стереть из неё неудачную сделку обесценивает её целиком: остаётся
     красивый список, из которого ничего не следует. Ошибочную запись убирает
     наставник, а ученик - нет.
     """
+    if not is_admin(student, config):
+        raise HTTPException(403, "Убрать запись из журнала может только наставник")
     trade = session.get(ScalpTrade, trade_id)
     if trade is None:
         raise HTTPException(404, "Сделка не найдена")

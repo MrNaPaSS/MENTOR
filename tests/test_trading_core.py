@@ -234,7 +234,15 @@ def test_filters_are_read_from_either_shape_of_answer():
             ],
         }
     )
-    assert binance_like == {"step": 0.0001, "tick": 0.1, "min_qty": 0.0001}
+    # Сверяем нужные поля, а не весь словарь целиком: справочник со временем
+    # прирастает - потолок плеча, комиссия, предельные объёмы, - и тест, знающий
+    # их наперечёт, падает на каждом таком добавлении, ничего не поймав.
+    assert binance_like is not None
+    assert (binance_like["step"], binance_like["tick"], binance_like["min_qty"]) == (
+        0.0001,
+        0.1,
+        0.0001,
+    )
 
     by_precision = _parse_filters(
         {"symbol": "ETHUSDT", "quantityPrecision": 3, "pricePrecision": 2}

@@ -184,6 +184,9 @@ class ProfileOut(BaseModel):
     turbo_leverage: Optional[int]
     balance_usdt: Optional[Decimal]
     balance_source: str
+    # Права наставника. Интерфейсу нужно знать их до отрисовки: кнопки, которой
+    # у ученика быть не должно, он не нарисует и на мгновение.
+    is_admin: bool = False
 
 
 class ProfilePatch(BaseModel):

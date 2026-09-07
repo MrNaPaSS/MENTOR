@@ -159,12 +159,17 @@ def decide(
             for t in away
             if not t.get("filled") and t.get("order_id")
         ]
-        # Считаем, а не складываем: часть целей уже отмечена, и сумма насчитала
-        # бы их дважды. При обрыве связи список висящих подставляется из наших
-        # записей - тогда «пропавших» нет, и число не растёт на пустом месте.
-        return Decision(
-            max(trade.takes_hit, len(away)), closed=True, filled_orders=fresh
-        )
+        # Число взятых целей на закрытии не поднимаем.
+        #
+        # Здесь считались «пропавшие» заявки - но стоп закрывает позицию
+        # целиком, и вместе с ней с биржи разом уходят все оставшиеся цели. По
+        # этому счёту выбитая сделка выглядела как сделка, забравшая все три:
+        # именно так в журнале на стопе рисовались три достигнутые цели.
+        #
+        # Сколько целей взято на самом деле, знает остаток позиции, пока она
+        # была открыта, - это число уже накоплено. А что было в конце, разберёт
+        # запись в журнал: у неё есть цена выхода и реальные исполнения.
+        return Decision(trade.takes_hit, closed=True, filled_orders=fresh)
 
     # Позиция больше запомненной - лимитка дозаполнилась. Это не взятая цель, а
     # добор объёма: считать цели от старого числа значит увидеть их там, где их
@@ -197,7 +202,7 @@ def decide(
         # правило по умолчанию. Возьмёт следующую цель - правило вернётся.
         by_hand = int(getattr(trade, "hand_stop", -1) or -1) == trade.takes_hit
         if trade.takes_hit == 1 and not by_hand:
-            fresh = exchange_breakeven(position)
+            fresh = exchange_breakeven(position, side=trade.side)
             if (
                 fresh is not None
                 and abs(fresh - state.stop) > state.entry * BE_DRIFT
@@ -231,7 +236,7 @@ def decide(
     # Только вперёд: стоп, уже спрятанный за первой целью, не опускаем обратно
     # к нулю - это увеличение риска задним числом. Своя формула и правило «за
     # предыдущей целью» остаются запасными, на случай молчания биржи.
-    target = exchange_breakeven(position)
+    target = exchange_breakeven(position, side=trade.side)
     if target is None:
         target = stop_after_take(state, hit, prices, mark_price)
     if target is not None and not should_move_stop(state, target):
@@ -618,6 +623,10 @@ class PositionWatcher:
                 return False
 
             gross, fee, exit_price = settle(fills, float(trade.entry), trade.side)
+            # Взятые цели - те, до которых цена выхода действительно дошла.
+            # Стоп уносит с биржи все оставшиеся заявки разом, и считать цели по
+            # их исчезновению значит записать выбитой сделке все три.
+            hit = max(hit, targets_reached(trade, exit_price))
             # По этим строкам разбирается любое расхождение с биржей: сколько
             # исполнений попало в счёт, за какое окно и что в них было.
             logger.info(
@@ -1086,22 +1095,32 @@ def _f(row: dict[str, Any], *names: str) -> float:
 
 
 def exchange_breakeven(
-    position: dict[str, Any] | None, taker_fee: float = DEFAULT_TAKER_FEE
+    position: dict[str, Any] | None,
+    taker_fee: float = DEFAULT_TAKER_FEE,
+    side: str | None = None,
 ) -> float | None:
-    """Цена, при которой позиция закрывается в настоящий ноль.
+    """Цена, при которой оставшаяся позиция закрывается в ноль.
 
-    Готового поля с безубытком WEEX не отдаёт - в ответе по позиции его нет
-    вовсе. Зато есть всё, из чего он складывается: сколько денег зашло в
-    позицию, сколько вышло, сколько удержано комиссии и фандинга. По ним
-    считаем точно, а не по формуле «вход плюс две комиссии»: та не знает ни
-    реальной цены исполнения, ни частичных закрытий, ни фандинга и промахивалась
-    на десятки пунктов.
+    Ровно та, что биржа показывает в позиции как Break Even. Готового поля WEEX
+    не отдаёт, поэтому считаем её сами - из средней цены входа и комиссии обеих
+    ног:
 
-        лонг:  P = (зашло - вышло + удержано) / (остаток * (1 - комиссия))
-        шорт:  P = (зашло - вышло - удержано) / (остаток * (1 + комиссия))
+        лонг:  P = средняя * (1 + комиссия) / (1 - комиссия)
+        шорт:  P = средняя * (1 - комиссия) / (1 + комиссия)
 
-    «Зашло» и «вышло» - это цена на объём по всем исполнениям, поэтому средняя
-    цена входа и доли закрытий учтены сами собой.
+    Средняя берётся из денег и объёма входов, а не из задуманного уровня: это
+    настоящая цена исполнения, с проскальзыванием и доборами.
+
+    Раньше здесь считался другой ноль - «вся сделка в ноль, с учётом уже
+    забранной прибыли». Он честен по смыслу, но забранная прибыль опускает его
+    ниже входа, и после первой цели стоп уезжал под среднюю. Трейдер при этом
+    видел в приложении биржи своё число и ставил стоп по нему - расхождение
+    вышло в сто двадцать пунктов. Терминал обязан быть зеркалом биржи, а не
+    спорить с ней своей арифметикой, пусть и правильной.
+
+    Сторону берём у сделки, а не угадываем по ответу: в одностороннем режиме
+    поля со стороной может не быть вовсе, и шорт считался бы как лонг - это
+    ошибка ровно на две комиссии, и в ту сторону, где стоп не защищает.
     """
     if not position:
         return None
@@ -1124,27 +1143,37 @@ def exchange_breakeven(
         if price > 0:
             return price
 
-    size = position_size(position)
-    opened = _f(position, "cumOpenValue", "openValue")
-    if size <= 0 or opened <= 0 or not (0 <= taker_fee < 1):
+    entry = average_entry(position)
+    if entry is None or not (0 <= taker_fee < 1):
         _log_missing_fields(position)
         return None
 
-    closed = _f(position, "cumCloseValue")
-    held = (
-        abs(_f(position, "cumOpenFee", "openFee"))
-        + abs(_f(position, "cumCloseFee", "closeFee"))
-        + _f(position, "cumFundingFee", "fundingFee")
-    )
-
-    if position_side(position) == "short":
-        price = (opened - closed - held) / (size * (1 + taker_fee))
+    long = (side or position_side(position)) != "short"
+    if long:
+        price = entry * (1 + taker_fee) / (1 - taker_fee)
     else:
-        price = (opened - closed + held) / (size * (1 - taker_fee))
+        price = entry * (1 - taker_fee) / (1 + taker_fee)
     return price if price > 0 else None
 
 
 _be_warned = False
+
+
+def targets_reached(trade: LiveTrade, exit_price: float | None) -> int:
+    """Сколько целей взято, судя по цене выхода.
+
+    Цель считается взятой, если цена дошла до неё в сторону прибыли. Это факт о
+    сделке, а не догадка по заявкам: стоп снимает с биржи все оставшиеся цели
+    разом, и по их отсутствию выбитая сделка выглядит забравшей всё.
+    """
+    if not exit_price or exit_price <= 0:
+        return 0
+    try:
+        targets = [float(p) for p in json.loads(trade.targets_json or "[]")]
+    except (TypeError, ValueError):
+        return 0
+    long = trade.side == "long"
+    return sum(1 for price in targets if (exit_price >= price if long else exit_price <= price))
 
 
 def _log_missing_fields(position: dict[str, Any]) -> None:

@@ -394,11 +394,32 @@ def test_breakeven_of_a_short_lies_below_the_entry():
     assert price is not None and price < 80000
 
 
-def test_partial_close_moves_the_breakeven():
-    """Забранная цель сдвигает ноль: часть прибыли уже на счёте."""
+def test_breakeven_is_the_one_the_exchange_shows():
+    """Ноль - средняя цена входа плюс комиссия обеих ног.
+
+    Ровно то число, что стоит в позиции у биржи. Свой, «честный» ноль с учётом
+    уже забранной прибыли уезжал ниже средней, трейдер видел в приложении
+    другое, и стоп после первой цели вставал на сто двадцать пунктов ниже.
+    """
     from backend.trading.watcher import exchange_breakeven
 
-    whole = exchange_breakeven(weex_position(), taker_fee=0.0008)
+    long = exchange_breakeven(weex_position(), taker_fee=0.0008, side="long")
+    assert long == pytest.approx(80000 * 1.0008 / 0.9992, rel=1e-9)
+
+    short = exchange_breakeven(weex_position(), taker_fee=0.0008, side="short")
+    assert short == pytest.approx(80000 * 0.9992 / 1.0008, rel=1e-9)
+
+
+def test_partial_close_does_not_move_the_breakeven():
+    """Забранная цель ноль не двигает: у остатка позиции он свой.
+
+    Прибыль первой цели уже на счёте и к оставшемуся объёму отношения не имеет.
+    Биржа считает так же, и спорить с ней своей арифметикой значит ставить стоп
+    не туда, куда смотрит трейдер.
+    """
+    from backend.trading.watcher import exchange_breakeven
+
+    whole = exchange_breakeven(weex_position(), taker_fee=0.0008, side="long")
     after = exchange_breakeven(
         weex_position(
             size="0.7",
@@ -407,9 +428,26 @@ def test_partial_close_moves_the_breakeven():
             cumCloseFee="19.4",
         ),
         taker_fee=0.0008,
+        side="long",
     )
-    assert whole is not None and after is not None
-    assert after < whole
+    assert whole == pytest.approx(after, rel=1e-9)
+
+
+def test_side_is_taken_from_the_trade_not_guessed():
+    """Ответ без стороны не должен превращать шорт в лонг.
+
+    Ошибка ровно на две комиссии, и в ту сторону, где стоп не защищает.
+    """
+    from backend.trading.watcher import exchange_breakeven
+
+    faceless = weex_position()
+    faceless.pop("positionSide", None)
+    faceless.pop("holdSide", None)
+    faceless.pop("side", None)
+
+    assert exchange_breakeven(faceless, taker_fee=0.0008, side="short") == pytest.approx(
+        80000 * 0.9992 / 1.0008, rel=1e-9
+    )
 
 
 def test_average_entry_comes_from_value_over_size():
@@ -525,11 +563,13 @@ def test_leftover_goes_to_the_last_target():
 
 # ── сколько целей взято на самом деле ───────────────────────────────────────
 
-def test_last_take_is_counted_when_it_closes_the_position():
-    """Последняя цель закрывает позицию целиком - по остатку её не сосчитать.
+def test_closing_does_not_invent_taken_targets():
+    """Закрытие позиции само по себе целей не добавляет.
 
-    Считаем по заявкам: цели, которой не стало среди висящих, исполнилась.
-    Снимать их к этому моменту мы ещё не начинали, так что перепутать не с чем.
+    Раньше считались цели, пропавшие из висящих заявок. Но стоп закрывает
+    позицию целиком, и вместе с ней с биржи разом уходят все оставшиеся цели -
+    выбитая сделка выглядела забравшей все три. Сколько взято на самом деле,
+    разбирает запись в журнал: у неё есть цена выхода.
     """
     row = trade(
         takes_hit=2,
@@ -542,9 +582,34 @@ def test_last_take_is_counted_when_it_closes_the_position():
     )
     decision = decide(row, None, set(), None, MISSING_TOLERANCE)
     assert decision.closed is True
-    # tp3 пропала из висящих - значит сработала.
-    assert decision.takes_hit == 3
+    assert decision.takes_hit == 2
     assert decision.filled_orders == ["tp3"]
+
+
+def test_targets_are_counted_by_the_exit_price():
+    """Цель взята, если цена выхода до неё дошла. Это факт, а не догадка."""
+    from backend.trading.watcher import targets_reached
+
+    row = trade(takes_hit=0)
+
+    # Вышли по третьей цели - взяты все три.
+    assert targets_reached(row, 103.0) == 3
+    # Вышли между второй и третьей - две.
+    assert targets_reached(row, 102.4) == 2
+    # Выбило стопом ниже входа - ни одной, сколько бы заявок ни исчезло.
+    assert targets_reached(row, 99.2) == 0
+
+    short = trade(
+        takes_hit=0,
+        side="short",
+        tp_orders=[
+            {"price": 99.0, "order_id": "tp1", "filled": False},
+            {"price": 98.0, "order_id": "tp2", "filled": False},
+            {"price": 97.0, "order_id": "tp3", "filled": False},
+        ],
+    )
+    assert targets_reached(short, 97.0) == 3
+    assert targets_reached(short, 101.0) == 0
 
 
 def test_manual_close_does_not_invent_taken_targets():
@@ -641,8 +706,9 @@ def test_stop_goes_to_the_exchange_breakeven_after_every_take():
 
     decision = decide(row, where, {"tp3"}, 102.5, 0)
     assert decision.takes_hit == 2
-    # Ноль биржи ниже текущего стопа - назад не двигаем.
-    assert decision.move_stop_to is None
+    # Ноль биржи - средняя входа с комиссией обеих ног: сто и шестнадцать
+    # сотых. Текущий стоп ниже, значит вперёд, туда, где стоит ноль у биржи.
+    assert decision.move_stop_to == pytest.approx(100 * 1.0008 / 0.9992, rel=1e-9)
 
 
 def test_forward_move_to_a_better_breakeven_happens():

@@ -176,10 +176,13 @@ function paneHeight(
   journalH: number,
   full: boolean,
 ): React.CSSProperties {
-  // Сколько высоты забирает всё, что вокруг: шапка сайта, отступы страницы и
-  // нижняя навигация. В полном экране их нет - остаются только поля слоя, и
-  // эти сто пикселей достаются стакану.
-  const around = full ? 16 : 124;
+  // Сколько высоты забирает всё, что вокруг: шапка сайта с бегущей строкой
+  // (девяносто шесть точек) и наше поле снизу (восемь). В полном экране их нет
+  // - остаются только поля слоя, и эти сто пикселей достаются стакану.
+  //
+  // Число обязано сходиться с отступами: пока здесь стояло сто двадцать четыре,
+  // а поле снизу стало восемью, под панелями оставалась лишняя полоса пустоты.
+  const around = full ? 16 : 104;
   return journalOpen
     ? { height: `calc(100vh - ${around + journalH + 20}px)`, minHeight: 220 }
     : { height: `calc(100vh - ${around}px)`, minHeight: full ? 320 : 520 };
@@ -1520,8 +1523,8 @@ export default function ScalpingPage() {
     let cancelled = false;
 
     async function look() {
-      const waiting = tradesRef.current.filter((t) => t.status === "planned");
-      if (waiting.length === 0) {
+      const mine = tradesRef.current.filter((t) => t.status !== "closed");
+      if (mine.length === 0) {
         sizesRef.current = null;
         return;
       }
@@ -1534,27 +1537,43 @@ export default function ScalpingPage() {
       // что позиция стояла всё это время.
       if (!before) return;
 
-      for (const trade of waiting) {
-        const key = `${trade.symbol}:${trade.side}`;
-        if ((before[key] ?? 0) > 0 || (sizes[key] ?? 0) <= 0) continue;
+      const raise = (toast: Toast) =>
         setToasts((list) =>
-          list.some((toast) => toast.id === trade.id)
-            ? list
-            : [
-                ...list,
-                {
-                  id: trade.id,
-                  symbol: trade.symbol,
-                  title: `${base(trade.symbol)} - вход состоялся`,
-                  text: `${trade.side === "long" ? "лонг" : "шорт"} по ${fmtPrice(
-                    trade.entry,
-                    limits?.tick ?? 0,
-                  )}`,
-                  tone: trade.side === "long" ? "up" : "down",
-                },
-              ],
+          list.some((one) => one.id === toast.id) ? list : [...list, toast],
         );
-        play("entry");
+
+      for (const trade of mine) {
+        const key = `${trade.symbol}:${trade.side}`;
+        const was = before[key] ?? 0;
+        const now = sizes[key] ?? 0;
+        const side = trade.side === "long" ? "лонг" : "шорт";
+
+        // Позиции не было - стала: лимитка исполнилась.
+        if (trade.status === "planned" && was <= 0 && now > 0) {
+          raise({
+            id: `${trade.id}:in`,
+            symbol: trade.symbol,
+            title: `${base(trade.symbol)} - вход состоялся`,
+            text: `${side} по ${fmtPrice(trade.entry, limits?.tick ?? 0)}`,
+            tone: trade.side === "long" ? "up" : "down",
+          });
+          play("entry");
+          continue;
+        }
+
+        // Была - не стало: сделка закрылась. Стопом, целью или руками - об
+        // этом скажет журнал, а знать о самом событии трейдер должен сразу,
+        // даже если смотрит на другую монету.
+        if (trade.status === "open" && was > 0 && now <= 0) {
+          raise({
+            id: `${trade.id}:out`,
+            symbol: trade.symbol,
+            title: `${base(trade.symbol)} - позиция закрыта`,
+            text: `${side} · итог в журнале`,
+            tone: "plain",
+          });
+          play("order");
+        }
       }
     }
 

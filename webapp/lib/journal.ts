@@ -5,7 +5,7 @@
 // просто выключен — писать некуда, и притворяться, что записалось, нельзя.
 
 import { authReq } from "./api";
-import { getAccessToken, getMentorToken } from "./auth";
+import { getAccessToken } from "./auth";
 import type { ActiveTrade } from "./trade/position";
 
 export type JournalTrade = {
@@ -86,14 +86,21 @@ export function loadCalendar(year: number, month: number) {
  * ученика, и сервер проверяет то же самое.
  */
 export function removeTrade(id: number) {
-  const token = getMentorToken();
-  if (!token) return Promise.resolve(null);
-  return authReq<{ ok: boolean }>(`/api/journal/trades/${id}`, token, { method: "DELETE" });
+  return request<{ ok: boolean }>(`/api/journal/trades/${id}`, { method: "DELETE" });
 }
 
-/** Есть ли право править журнал: ключ наставника в этом браузере. */
-export function canEditJournal(): boolean {
-  return Boolean(getMentorToken());
+/**
+ * Есть ли право править журнал.
+ *
+ * Спрашиваем у сервера вместе с профилем: право за учётной записью, а не за
+ * отдельным входом с паролем. Наставник открывает терминал под собой, и
+ * логиниться вторым способом ради одной кнопки ему незачем.
+ */
+export async function canEditJournal(): Promise<boolean> {
+  const token = getAccessToken();
+  if (!token) return false;
+  const me = await authReq<{ is_admin?: boolean }>("/api/profile", token).catch(() => null);
+  return Boolean(me?.is_admin);
 }
 
 /**

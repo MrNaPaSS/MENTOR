@@ -203,6 +203,8 @@ export interface Profile {
   turbo_leverage: number | null;
   balance_usdt: string | null;
   balance_source: string;
+  /** Наставник: у него есть право править журнал. */
+  is_admin?: boolean;
   /** Открыт ли скальпинг-терминал: раздел работает с живыми деньгами. */
 }
 
