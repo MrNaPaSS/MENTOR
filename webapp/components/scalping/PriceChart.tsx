@@ -411,25 +411,27 @@ function riskFree(trade: ActiveTrade): boolean {
  * наложения, как их рисует браузер.
  */
 function snapshot(chart: IChartApi, box: HTMLDivElement): HTMLCanvasElement | null {
-  const layers = Array.from(box.querySelectorAll("canvas")).filter(
-    (canvas) => canvas.width > 0 && canvas.height > 0,
-  );
-  if (layers.length === 0) return chart.takeScreenshot?.() ?? null;
+  // Основа - холст библиотеки: она рисует его заново и целиком, со свечами,
+  // шкалами и сеткой. Читать её живые холсты нельзя: они могут быть отданы в
+  // отдельный поток, и тогда чтение возвращает пустоту - именно так снимок и
+  // получался белым листом.
+  let base: HTMLCanvasElement | null = null;
+  try {
+    base = chart.takeScreenshot();
+  } catch {
+    base = null;
+  }
+  if (!base) return null;
 
-  // Каждый слой стоит на своём месте: холст свечей, холст ценовой шкалы и
-  // холст шкалы времени - разные элементы. Сложить их в одну точку значит
-  // получить кашу, поэтому берём положение каждого относительно контейнера.
+  // Поверх - наши слои: объёмные свечи, боксы сделок, ленты индикатора.
+  // Библиотека о них не знает, поэтому в её снимок они не попадают.
   const frame = box.getBoundingClientRect();
-  const ratio = window.devicePixelRatio || 1;
+  const ratio = base.width / Math.max(1, frame.width);
+  const ctx = base.getContext("2d");
+  if (!ctx) return base;
 
-  const out = document.createElement("canvas");
-  out.width = Math.round(frame.width * ratio);
-  out.height = Math.round(frame.height * ratio);
-
-  const ctx = out.getContext("2d");
-  if (!ctx) return chart.takeScreenshot?.() ?? null;
-
-  for (const layer of layers) {
+  for (const layer of Array.from(box.querySelectorAll("canvas"))) {
+    if (layer.width === 0 || layer.height === 0) continue;
     const at = layer.getBoundingClientRect();
     try {
       ctx.drawImage(
@@ -440,11 +442,11 @@ function snapshot(chart: IChartApi, box: HTMLDivElement): HTMLCanvasElement | nu
         Math.round(at.height * ratio),
       );
     } catch {
-      // Холст, который браузер не даёт прочитать, пропускаем: лучше снимок
-      // без одного слоя, чем ошибка вместо картинки.
+      // Слой, закрытый для чтения, пропускаем: снимок без него лучше, чем
+      // ошибка вместо картинки.
     }
   }
-  return out;
+  return base;
 }
 
 /** ATR последних баров: по нему предлагается стоп. */
@@ -866,7 +868,7 @@ function PriceChart({
     if (shotRef.current) {
       // Сначала пробуем собрать слои сами - в них наши примитивы. Если
       // собрать нечего, берём холст библиотеки: он хотя бы со свечами.
-      shotRef.current.current = () => snapshot(chart, box) ?? chart.takeScreenshot();
+      shotRef.current.current = () => snapshot(chart, box);
     }
     return () => {
       chart.remove();

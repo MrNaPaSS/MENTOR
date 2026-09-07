@@ -163,6 +163,36 @@ export function composeShot(
   return out;
 }
 
+/**
+ * Есть ли на холсте хоть что-то, кроме одного сплошного цвета.
+ *
+ * Пустой снимок выглядит как обычная картинка: файл на месте, размеры верные,
+ * а внутри белый лист. Отличить это можно только по точкам, поэтому проверяем
+ * их сами - по редкой сетке, чтобы не читать миллионы пикселей зря.
+ */
+export function hasContent(canvas: HTMLCanvasElement): boolean {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx || canvas.width === 0 || canvas.height === 0) return false;
+
+  try {
+    const step = Math.max(1, Math.floor(Math.min(canvas.width, canvas.height) / 40));
+    let first: string | null = null;
+    for (let y = 0; y < canvas.height; y += step) {
+      for (let x = 0; x < canvas.width; x += step) {
+        const [r, g, b, a] = ctx.getImageData(x, y, 1, 1).data;
+        const dot = `${r},${g},${b},${a}`;
+        if (first === null) first = dot;
+        else if (dot !== first) return true;
+      }
+    }
+  } catch {
+    // Холст закрыт для чтения - считаем, что содержимое есть: пусть лучше
+    // снимок уйдёт как есть, чем мы объявим его пустым по ошибке.
+    return true;
+  }
+  return false;
+}
+
 /** Холст в PNG. Промис, потому что кодирование идёт вне основного потока. */
 export function toBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
   return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));

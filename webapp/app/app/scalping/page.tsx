@@ -41,6 +41,7 @@ import {
   composeShot,
   copy as copyShot,
   download as downloadShot,
+  hasContent,
   loadLogo,
   share as shareShot,
 } from "@/lib/shot";
@@ -1333,6 +1334,17 @@ export default function ScalpingPage() {
       { symbol, interval: timeframe, author: author ?? undefined, theme },
       mark,
     );
+
+    // Пустой снимок выглядит как настоящий: файл на месте, размеры верные, а
+    // внутри белый лист. Молчать об этом нельзя - трейдер отправит пустоту и
+    // узнает об этом от собеседника.
+    if (!hasContent(canvas)) {
+      setOrderNote({
+        text: `Снимок пуст: холст графика ${canvas.width}x${canvas.height} ничего не отдал`,
+        bad: true,
+      });
+      return;
+    }
 
     if (action === "download") {
       await downloadShot(picture, `${base(symbol)}-${timeframe}`);
