@@ -864,7 +864,9 @@ function PriceChart({
 
     chartRef.current = chart;
     if (shotRef.current) {
-      shotRef.current.current = () => snapshot(chart, box);
+      // Сначала пробуем собрать слои сами - в них наши примитивы. Если
+      // собрать нечего, берём холст библиотеки: он хотя бы со свечами.
+      shotRef.current.current = () => snapshot(chart, box) ?? chart.takeScreenshot();
     }
     return () => {
       chart.remove();

@@ -97,21 +97,27 @@ export function composeShot(
   const ctx = out.getContext("2d");
   if (!ctx) return chart;
 
-  // Рамка: заливаем всё её цветом и оставляем поля, а внутрь кладём снимок.
+  // Координаты считаем явно, без сдвига системы координат: сдвинутая система
+  // легко уводит рисование за холст, и снимок выходит пустым листом.
+  const left = frame;
+  const top = frame;
+
   ctx.fillStyle = palette.frame;
   ctx.fillRect(0, 0, out.width, out.height);
-  ctx.translate(frame, frame);
 
   ctx.fillStyle = palette.bg;
-  ctx.fillRect(0, 0, chart.width, chart.height + head + foot);
+  ctx.fillRect(left, top, chart.width, chart.height + head + foot);
+
+  // Сам график - первым делом: он здесь главное, а подписи вокруг него.
+  ctx.drawImage(chart, left, top + head);
 
   ctx.fillStyle = palette.head;
-  ctx.fillRect(0, 0, chart.width, head);
+  ctx.fillRect(left, top, chart.width, head);
   ctx.strokeStyle = palette.line;
   ctx.lineWidth = Math.max(1, ratio);
   ctx.beginPath();
-  ctx.moveTo(0, head);
-  ctx.lineTo(chart.width, head);
+  ctx.moveTo(left, top + head);
+  ctx.lineTo(left + chart.width, top + head);
   ctx.stroke();
 
   const pad = 16 * ratio;
@@ -120,12 +126,12 @@ export function composeShot(
   ctx.fillStyle = palette.text;
   ctx.font = `700 ${17 * ratio}px Inter, system-ui, sans-serif`;
   const symbol = meta.symbol.replace(/USDT$/, "");
-  ctx.fillText(symbol, pad, head / 2);
+  ctx.fillText(symbol, left + pad, top + head / 2);
 
   const width = ctx.measureText(symbol).width;
   ctx.fillStyle = palette.muted;
   ctx.font = `${13 * ratio}px "JetBrains Mono", monospace`;
-  ctx.fillText(meta.interval, pad + width + 10 * ratio, head / 2);
+  ctx.fillText(meta.interval, left + pad + width + 10 * ratio, top + head / 2);
 
   // Справа - кто и когда. Без этого снимок теряет половину смысла: чужой
   // график без времени невозможно ни проверить, ни обсудить.
@@ -137,15 +143,13 @@ export function composeShot(
   });
   const sign = meta.author ? `@${meta.author} · ${stamp}` : stamp;
   ctx.textAlign = "right";
-  ctx.fillText(sign, chart.width - pad, head / 2);
+  ctx.fillText(sign, left + chart.width - pad, top + head / 2);
   ctx.textAlign = "left";
-
-  ctx.drawImage(chart, 0, head);
 
   // Подпись под графиком слева: знак и адрес. По ней снимок узнают, куда бы
   // его ни переслали, - ради этого он и делается ссылкой, а не файлом.
-  const baseline = head + chart.height + foot / 2;
-  let x = pad;
+  const baseline = top + head + chart.height + foot / 2;
+  let x = left + pad;
   const badge = mark ?? logo;
   if (badge) {
     const size = 20 * ratio;
