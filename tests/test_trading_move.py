@@ -196,3 +196,36 @@ def test_level_on_the_wrong_side_is_refused_by_words(moving, field, price, words
 def test_nothing_to_move_is_refused(moving):
     client, _, _, _ = moving
     assert move(client).status_code == 422
+
+
+def test_two_waiting_limits_do_not_both_open(moving):
+    """Две лимитки на покупку: исполнилась одна - открыться должна одна.
+
+    Биржа отдаёт одну сводную позицию на монету и сторону, и по ней заявки
+    неразличимы. Отличает их только то, стоит ли ещё сам вход.
+    """
+    from backend.trading.watcher import decide
+
+    _, _, session, live = moving
+    lower = LiveTrade(
+        student_id=live.student_id,
+        client_id="BTCUSDT-2",
+        symbol="BTCUSDT",
+        side="long",
+        entry=79_000.0,
+        initial_stop=78_900.0,
+        current_stop=78_900.0,
+        targets_json=json.dumps([79_400.0]),
+        qty=0.01,
+        leverage=10,
+        status="waiting",
+    )
+    session.add(lower)
+    session.commit()
+
+    position = {"symbol": "BTCUSDT", "positionSide": "LONG", "size": "0.01"}
+
+    # Верхняя исполнилась: её заявки в стакане уже нет.
+    assert decide(live, position, set(), None, 0, resting=False).opened is True
+    # Нижняя всё ещё стоит - к этой позиции она отношения не имеет.
+    assert decide(lower, position, set(), None, 0, resting=True).opened is False

@@ -1196,6 +1196,22 @@ export default function ScalpingPage() {
       const watching = tradesRef.current.filter(
         (t) => t.symbol === symbol && t.status !== "closed",
       );
+
+      // Чьи входы ещё стоят на бирже. Без этого списка сводная позиция по
+      // монете открывала все ждущие заявки разом: зацепило верхнюю лимитку, а
+      // на графике открывались обе, и вторая жила сделкой, которой нет.
+      //
+      // Не спросили - считаем, что стоят все ждущие: показать заявку ждущей
+      // лишние три секунды не страшно, а открыть несуществующую - страшно.
+      let resting = new Set(watching.filter((t) => t.status === "planned").map((t) => t.id));
+      try {
+        const body = await plansOf(symbol!);
+        if (cancelled) return;
+        if (body) resting = new Set(body.resting);
+      } catch {
+        // Биржа не ответила - остаёмся при осторожном предположении.
+      }
+
       for (const watched of watching) {
         try {
           const position = await positionOf(symbol!, watched.side);
@@ -1206,8 +1222,11 @@ export default function ScalpingPage() {
               if (current.id !== watched.id || current.status === "closed") return current;
 
               if (position.size > 0) {
-                // Позиция набрана: у нас она могла ещё ждать входа.
+                // Позиция набрана: у нас она могла ещё ждать входа. Но только
+                // если исполнилась именно эта заявка - соседняя, всё ещё
+                // стоящая, к чужой позиции отношения не имеет.
                 if (current.status === "planned") {
+                  if (resting.has(current.id)) return current;
                   return { ...current, status: "open", openedAt: Date.now() };
                 }
                 // Объём и безубыток берём биржевые: по ним считается результат

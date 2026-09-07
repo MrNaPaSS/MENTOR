@@ -122,16 +122,25 @@ def decide(
     open_plans: set[str],
     mark_price: float | None,
     missing_streak: int,
+    resting: bool = False,
 ) -> Decision:
     """Решение по одной сделке. Только числа, никаких обращений наружу.
 
     `open_plans` — идентификаторы условных заявок, которые ещё висят на бирже.
+    `resting` — вход этой сделки всё ещё стоит на бирже и ждёт своей цены.
     """
     size = position_size(position)
 
     if trade.status == "waiting":
-        # Позиция появилась - заявка входа исполнилась.
-        return Decision(trade.takes_hit, opened=size > 0, size=size)
+        # Позиция появилась - но исполнилась ли именно эта заявка?
+        #
+        # Биржа отдаёт одну сводную позицию на монету и сторону: две лимитки на
+        # покупку по ней неразличимы. Раньше сюда приходил один и тот же объём,
+        # и обе сделки объявлялись открытыми - на одну позицию вставали две
+        # лестницы целей и два стопа, а в журнал уходили две записи.
+        #
+        # Пока наш вход стоит в заявках, позиция набрана не им.
+        return Decision(trade.takes_hit, opened=size > 0 and not resting, size=size)
 
     takes: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
 
@@ -331,8 +340,35 @@ class PositionWatcher:
                 price = prices[sym]
 
             plans = await self._open_plans(client, trade)
-            decision = decide(trade, position, plans, price, self._missing[trade.id])
+            resting = await self._resting(client, trade)
+            decision = decide(
+                trade, position, plans, price, self._missing[trade.id], resting
+            )
             await self._apply(session, client, trade, decision, price)
+
+    async def _resting(self, client: WeexFutures, trade: LiveTrade) -> bool:
+        """Стоит ли ещё вход этой сделки в заявках биржи.
+
+        Спрашиваем только у ждущих: у открытой сделки вход давно исполнился, и
+        лишний запрос на каждом обходе не нужен.
+
+        Не ответила биржа - считаем, что стоит: объявить заявку исполненной, не
+        зная этого, значит поставить лестницу целей на чужую позицию.
+        """
+        if trade.status != "waiting":
+            return False
+        try:
+            orders = await client.open_orders(trade.symbol)
+        except WeexTradeError as exc:
+            logger.debug("Заявки %s не получены: %s", trade.symbol, exc)
+            return True
+        for order in orders:
+            mark = str(order.get("clientOrderId") or order.get("clientOid") or "")
+            # По началу строки: при переносе лимитки к идентификатору
+            # дописывается номер попытки, а сам он остаётся прежним.
+            if mark and mark.startswith(trade.client_id):
+                return True
+        return False
 
     async def _open_plans(self, client: WeexFutures, trade: LiveTrade) -> set[str]:
         """Условные заявки, которые ещё висят на бирже.

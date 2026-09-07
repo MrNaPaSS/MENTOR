@@ -61,6 +61,9 @@ export default function DragLevels({
   // Что тянут сейчас и куда дотянули. В ref, а не в состоянии: положение
   // пишется каждый кадр, и перерисовывать ради него React незачем.
   const [held, setHeld] = useState<string | null>(null);
+  // Под курсором. Подпись разворачивается только здесь: десяток названий с
+  // ценами закрывал сам график - ровно то, ради чего его и открыли.
+  const [over, setOver] = useState<string | null>(null);
   const heldRef = useRef<{ id: string; price: number } | null>(null);
 
   // Положение - покадрово, вместе с самим графиком. Раз в четверть секунды
@@ -111,6 +114,7 @@ export default function DragLevels({
     heldRef.current = null;
     setHeld(null);
     event.currentTarget.releasePointerCapture(event.pointerId);
+    setOver(null);
     level.onHover?.(false);
     // Отпустили ровно там, откуда взяли - на биржу ходить незачем.
     if (price !== level.price) level.onDrop(price);
@@ -118,25 +122,35 @@ export default function DragLevels({
 
   return (
     <div ref={boxRef} className="pointer-events-none absolute inset-0 z-20">
-      {levels.map((level) => (
+      {levels.map((level) => {
+        // Развёрнута подпись или один квадрат: разворачиваем под курсором и
+        // пока уровень держат - в остальное время он не должен закрывать свечи.
+        const open = over === level.id || held === level.id;
+        return (
         <div
           key={level.id}
           ref={(node) => {
             nodesRef.current.set(level.id, node);
           }}
-          onPointerEnter={() => level.onHover?.(true)}
+          onPointerEnter={() => {
+            setOver(level.id);
+            level.onHover?.(true);
+          }}
           onPointerLeave={() => {
-            if (heldRef.current?.id !== level.id) level.onHover?.(false);
+            if (heldRef.current?.id === level.id) return;
+            setOver(null);
+            level.onHover?.(false);
           }}
           onPointerDown={(event) => grab(event, level)}
           onPointerMove={(event) => drag(event, level)}
           onPointerUp={(event) => drop(event, level)}
           onPointerCancel={(event) => drop(event, level)}
-          title={`Потяните, чтобы перенести: ${level.title}`}
+          title={`${level.title} ${format(level.price)} - потяните, чтобы перенести`}
           className={
-            "pointer-events-auto absolute left-2 top-0 flex select-none items-center gap-1.5 " +
-            "rounded border px-1.5 py-0.5 font-mono text-[10px] tabular-nums shadow " +
-            (held === level.id ? "cursor-grabbing" : "cursor-ns-resize")
+            "pointer-events-auto absolute left-1 top-0 flex select-none items-center " +
+            "rounded-[3px] border font-mono text-[10px] tabular-nums " +
+            (open ? "gap-1.5 px-1.5 py-0.5 shadow" : "p-[3px]") +
+            (held === level.id ? " cursor-grabbing" : " cursor-ns-resize")
           }
           style={{
             // touchAction: без него палец на телефоне прокручивает страницу
@@ -144,7 +158,7 @@ export default function DragLevels({
             touchAction: "none",
             visibility: "hidden",
             borderColor: level.color,
-            background: "var(--pane-bg)",
+            background: open ? "var(--pane-bg)" : "transparent",
             color: level.color,
             // Взятый уровень поднимаем над остальными: под курсором должен быть
             // он, а не сосед, мимо которого его проносят.
@@ -153,14 +167,21 @@ export default function DragLevels({
         >
           <span
             aria-hidden
-            className="h-2.5 w-2.5 rounded-[2px]"
+            className="h-2 w-2 rounded-[1px]"
             style={{ background: level.color }}
           />
-          <span className="uppercase">{level.title}</span>
-          <span className="text-[var(--pane-text)]">{format(level.price)}</span>
-          {level.note ? <span className="text-[var(--pane-muted)]">{level.note}</span> : null}
+          {open && (
+            <>
+              <span className="uppercase">{level.title}</span>
+              <span className="text-[var(--pane-text)]">{format(level.price)}</span>
+              {level.note ? (
+                <span className="text-[var(--pane-muted)]">{level.note}</span>
+              ) : null}
+            </>
+          )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

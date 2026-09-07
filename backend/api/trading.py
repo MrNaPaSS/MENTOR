@@ -239,6 +239,33 @@ async def plans(
 
     if unknown:
         logger.info("Условные заявки %s неизвестного вида: %s", sym, ", ".join(unknown))
+
+    # Наши входы, которые всё ещё стоят и ждут своей цены.
+    #
+    # Без этого списка терминал не может отличить свои заявки друг от друга:
+    # биржа отдаёт одну сводную позицию на монету и сторону, и по ней две
+    # лимитки на покупку выглядят одинаково исполнившимися. Так и вышло -
+    # зацепило верхнюю, а на графике открылись обе.
+    waiting = [row.client_id for row in live if row.status == "waiting"]
+    try:
+        orders = await client.open_orders(sym)
+    except WeexTradeError as exc:
+        # Не спросили - считаем, что стоят все: объявить заявку исполненной,
+        # не зная этого, дороже, чем показать её ждущей на пару секунд дольше.
+        logger.warning("Заявки %s не получены: %s", sym, exc)
+        resting = waiting
+    else:
+        marks = [
+            str(order.get("clientOrderId") or order.get("clientOid") or "")
+            for order in orders
+        ]
+        # По началу строки: при переносе лимитки к идентификатору дописывается
+        # номер попытки, а сам он остаётся прежним.
+        resting = [
+            row.client_id
+            for row in live
+            if any(mark.startswith(row.client_id) for mark in marks if mark)
+        ]
     return {
         "symbol": sym,
         "stops": stops,
@@ -258,6 +285,9 @@ async def plans(
         # пунктов, а стоп к тому времени уже стоял в третьем месте.
         "stop_price": stop_price,
         "take_prices": sorted(take_prices),
+        # Чьи входы ещё ждут своей цены. Только по этому списку терминал и
+        # отличает свою исполнившуюся лимитку от соседней, которая ещё стоит.
+        "resting": resting,
     }
 
 
