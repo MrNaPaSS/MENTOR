@@ -574,7 +574,7 @@ function PriceChart({
   themeRef.current = theme;
   const lineRef = useRef<IPriceLine | null>(null);
   const shelfLinesRef = useRef<IPriceLine[]>([]);
-  const tradeLinesRef = useRef<IPriceLine[]>([]);
+  const tradeLinesRef = useRef(new Map<string, IPriceLine>());
   const tradeShapesRef = useRef<Shapes | null>(null);
   const ghostShapesRef = useRef<Shapes | null>(null);
   const hoverLineRef = useRef<IPriceLine | null>(null);
@@ -887,7 +887,7 @@ function PriceChart({
       shapesRef.current = null;
       heavyRef.current = null;
       lineRef.current = null;
-      tradeLinesRef.current = [];
+      tradeLinesRef.current = new Map();
       shelfLinesRef.current = [];
     };
   }, []);
@@ -1161,20 +1161,39 @@ function PriceChart({
     const series = candleRef.current;
     if (!series) return;
 
-    for (const l of tradeLinesRef.current) series.removePriceLine(l);
-    tradeLinesRef.current = [];
     tradeShapesRef.current = null;
-
     const palette = THEMES[themeRef.current];
-    const line = (price: number, color: string, title: string, style: 0 | 2) =>
-      series.createPriceLine({
+
+    // Линии не пересоздаём, а переставляем.
+    //
+    // Перетаскивание уровня меняет цену на каждом кадре. Снимать и заводить
+    // заново вход, стоп и три цели по десять раз в секунду - это моргание и
+    // заметное отставание разметки от курсора: бокс догонял стоп рывками уже
+    // после того, как его отпустили. Живущая линия умеет менять цену сама.
+    const kept = new Map<string, IPriceLine>();
+    const line = (
+      key: string,
+      price: number,
+      color: string,
+      title: string,
+      style: 0 | 2,
+    ) => {
+      const options = {
         price,
         color,
-        lineWidth: 1,
+        lineWidth: 1 as const,
         lineStyle: style,
         axisLabelVisible: true,
         title,
-      });
+      };
+      const alive = tradeLinesRef.current.get(key);
+      if (alive) {
+        alive.applyOptions(options);
+        kept.set(key, alive);
+        return;
+      }
+      kept.set(key, series.createPriceLine(options));
+    };
 
     for (const trade of [...trades, ...(preview ? [preview] : [])]) {
       if (trade.status === "closed") continue;
@@ -1188,26 +1207,35 @@ function PriceChart({
         // Без подписи на линии: рядом с ней на той же цене стоит плашка
         // «ждём вход» с крестиком, и подпись наезжала на него - снять заявку
         // становилось нечем. Сторону и цену плашка называет сама.
-        tradeLinesRef.current.push(line(trade.entry, palette.mtf, "", 2));
+        line(`${trade.id}:limit`, trade.entry, palette.mtf, "", 2);
         continue;
       }
 
       // Вход и стоп — разные цены даже в безубытке: биржа считает его с учётом
       // комиссии и реального исполнения, и это на десятки пунктов от входа.
       // Подпись «б/у» должна стоять там, где стоп стоит на самом деле.
-      tradeLinesRef.current.push(line(trade.entry, palette.text, "вход", 0));
-      tradeLinesRef.current.push(
-        riskFree(trade)
-          ? line(trade.stop, palette.mtf, "", 2)   // подпись BE стоит у бокса
-          : line(trade.stop, palette.askLine, "стоп", 2),
-      );
+      line(`${trade.id}:entry`, trade.entry, palette.text, "вход", 0);
+      // Подпись «б/у» стоит у бокса, а не на линии: в безубытке она была бы
+      // второй подписью о том же на той же цене.
+      if (riskFree(trade)) line(`${trade.id}:stop`, trade.stop, palette.mtf, "", 2);
+      else line(`${trade.id}:stop`, trade.stop, palette.askLine, "стоп", 2);
+
       pendingTargets(trade).forEach((price, i) => {
-        tradeLinesRef.current.push(
-          line(price, palette.bidLine, `тейк ${trade.takesHit + i + 1}`, 2),
+        line(
+          `${trade.id}:take${i}`,
+          price,
+          palette.bidLine,
+          `тейк ${trade.takesHit + i + 1}`,
+          2,
         );
       });
-
     }
+
+    // Линии сделок, которых больше нет на графике, снимаем.
+    for (const [key, alive] of tradeLinesRef.current) {
+      if (!kept.has(key)) series.removePriceLine(alive);
+    }
+    tradeLinesRef.current = kept;
 
     tradeShapesRef.current = tradeShapes(
       [...trades.filter((t) => t.status === "open" || t.id === shown), preview],
