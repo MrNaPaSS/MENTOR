@@ -617,18 +617,35 @@ async def close_position(
             except (TypeError, ValueError, AttributeError):
                 continue
 
-        if size <= 0:
-            # Позиции нет — но заявки могут стоять: вход ещё не исполнился, а с
-            # ним висят стоп и цели. Снятие расчёта должно убирать всё это, иначе
-            # «отменённая» сделка откроется сама, стоило рынку дойти до уровня.
+        # Снимаемая сделка ещё ждёт своего входа - это отмена заявки, а не
+        # закрытие позиции.
+        #
+        # Позиция по этой монете и стороне может быть, но набрана она соседней
+        # сделкой: две лимитки на продажу, исполнилась нижняя. Раньше здесь
+        # смотрели только на объём позиции - и снятие верхней, ещё стоящей
+        # заявки уходило рыночным приказом закрывать чужую открытую позицию.
+        # Трейдер отменял одну, а закрывались обе.
+        waiting = await _entry_resting(client, live)
+        if size <= 0 or waiting:
+            # Заявки снимаем всегда: вход ещё не исполнился, а с ним висят стоп
+            # и цели. «Отменённая» сделка иначе откроется сама, стоило рынку
+            # дойти до уровня.
             cancelled = await _cancel_trade(
                 client, symbol, live, [r for r in rows if r is not live]
             )
             await _forget(session, student, symbol, live)
             return {
                 "closed": 0.0,
-                "remaining": 0.0,
-                "note": f"позиции нет, снято заявок: {cancelled}" if cancelled else "позиции нет",
+                # Позиция соседней сделки остаётся: терминал не должен решить,
+                # что закрылось всё.
+                "remaining": size if waiting else 0.0,
+                "note": (
+                    f"заявка снята, позиция соседней сделки не тронута"
+                    if waiting and size > 0
+                    else f"позиции нет, снято заявок: {cancelled}"
+                    if cancelled
+                    else "позиции нет"
+                ),
             }
 
         filters = await client.symbol_filters(symbol)
@@ -1007,6 +1024,29 @@ async def _cancel_everything(client: WeexFutures, symbol: str) -> int:
 
     logger.info("Снято заявок по %s: %d", symbol, removed)
     return removed
+
+
+async def _entry_resting(client: WeexFutures, live: LiveTrade | None) -> bool:
+    """Стоит ли ещё вход этой сделки в заявках биржи.
+
+    По нашему клиентскому идентификатору с начала строки: при переносе лимитки
+    к нему дописывается номер попытки, а сам он остаётся прежним.
+
+    Биржа не ответила - верим записанному состоянию: снять заявку и не тронуть
+    позицию безопаснее, чем наоборот.
+    """
+    if live is None:
+        return False
+    try:
+        orders = await client.open_orders(live.symbol)
+    except WeexTradeError as exc:
+        logger.warning("Заявки %s не получены: %s", live.symbol, exc)
+        return live.status == "waiting"
+    for order in orders:
+        mark = str(order.get("clientOrderId") or order.get("clientOid") or "")
+        if mark and mark.startswith(live.client_id):
+            return True
+    return False
 
 
 async def _forget(

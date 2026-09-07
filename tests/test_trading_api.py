@@ -708,3 +708,55 @@ def test_manual_close_writes_the_trade_to_the_journal(app_and_exchange):
     assert row.outcome == "manual"
     # Помечена биржевой: оценка с экрана её не перепишет.
     assert row.from_exchange is True
+
+
+def test_cancelling_a_waiting_limit_never_closes_the_position(app_and_exchange):
+    """Две лимитки на продажу, исполнилась нижняя. Снятие верхней не трогает позицию.
+
+    Раньше здесь смотрели только на объём позиции: она есть - значит закрываем.
+    И снятие ещё стоящей заявки уходило рыночным приказом закрывать позицию,
+    набранную соседней сделкой. Трейдер отменял одну, а закрывались обе.
+    """
+    import json as _json
+
+    from core.models import LiveTrade
+
+    client, exchange, session = app_and_exchange
+    student = session.query(Student).one()
+
+    for client_id, status in (("BTCUSDT-low", "open"), ("BTCUSDT-high", "waiting")):
+        session.add(
+            LiveTrade(
+                student_id=student.id,
+                client_id=client_id,
+                symbol="BTCUSDT",
+                side="short",
+                entry=80_000.0,
+                initial_stop=80_200.0,
+                current_stop=80_200.0,
+                targets_json=_json.dumps([79_600.0]),
+                tp_orders_json="[]",
+                qty=0.01,
+                leverage=10,
+                margin=80.0,
+                status=status,
+            )
+        )
+    session.commit()
+
+    # Позиция набрана нижней сделкой, верхняя лимитка ещё стоит в заявках.
+    exchange.position = {"symbol": "BTCUSDT", "positionSide": "SHORT", "total": "0.01"}
+    exchange.pending = [{"orderId": "e2", "clientOrderId": "BTCUSDT-high"}]
+
+    answer = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "short", "share": 1, "trade_id": "BTCUSDT-high"},
+    ).json()
+
+    # Ни одного рыночного приказа: позицию никто не закрывал.
+    assert exchange.orders == []
+    assert answer["closed"] == 0
+    # Позиция соседней сделки осталась - терминал не должен решить, что всё ушло.
+    assert answer["remaining"] == 0.01
+    # А сама заявка снята.
+    assert "e2" in exchange.cancelled
