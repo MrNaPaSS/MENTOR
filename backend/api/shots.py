@@ -132,7 +132,14 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     when = shot.created_at
     if when and when.tzinfo is None:
         when = when.replace(tzinfo=timezone.utc)
+    # Время снимка в двух видах: машинное для браузера и UTC как запасное.
+    #
+    # Сервер живёт в UTC, а смотрит снимок человек - у себя. Час, посчитанный
+    # не в его поясе, ему нечем сверить с собственным графиком, поэтому
+    # окончательную подпись собирает браузер, а серверная остаётся на случай
+    # выключенных скриптов.
     stamp = when.strftime("%d.%m.%Y %H:%M UTC") if when else ""
+    iso = when.isoformat() if when else ""
 
     title = f"{symbol} · {interval}"
     image = f"{BASE_URL}/{shot_id}.png"
@@ -166,7 +173,52 @@ def shot_page(shot_id: str, session=Depends(get_session)):
   .who {{ margin-left: auto; color: #7a8290; }}
   img {{ display: block; width: 100%; height: auto; }}
   .note {{ padding: 12px 18px; color: #b7bdc6; }}
-  a {{ color: #0affe0; text-decoration: none; }}
+
+  /* Знак NMNH - тот же, что в шапке сайта: жирный шрифт, глитч по цветам
+     акцента и опасности, свечение под курсором. Пояснительной подписи под ним
+     нет: знак и так ведёт на сайт, а объяснять логотип словами незачем. */
+  .logo {{
+    display: inline-block; padding: 10px 22px; border-radius: 14px;
+    border: 1px solid #2b3139; background: #181a20;
+    color: #eaecef; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;
+    text-decoration: none;
+    transition: border-color .2s ease, box-shadow .2s ease, color .2s ease;
+  }}
+  .logo:hover {{
+    border-color: rgba(10, 255, 224, .4);
+    color: #fff;
+    text-shadow: 0 0 18px rgba(10, 255, 224, .75);
+    box-shadow: 0 0 28px rgba(10, 255, 224, .12);
+  }}
+  .glitch {{ position: relative; display: inline-block; }}
+  .glitch::before, .glitch::after {{
+    content: attr(data-text); position: absolute; inset: 0;
+    pointer-events: none; opacity: .85;
+  }}
+  .glitch::before {{
+    color: #0affe0; animation: glitch-x 3.4s infinite steps(2, end);
+    clip-path: inset(0 0 60% 0);
+  }}
+  .glitch::after {{
+    color: #f6465d; animation: glitch-y 2.8s infinite steps(2, end);
+    clip-path: inset(60% 0 0 0);
+  }}
+  @keyframes glitch-x {{
+    0%, 86%, 100% {{ transform: translate(0); opacity: 0; }}
+    88% {{ transform: translate(-3px, -1px); opacity: .9; }}
+    92% {{ transform: translate(3px, 1px); opacity: .9; }}
+    96% {{ transform: translate(-2px, 1px); opacity: .6; }}
+  }}
+  @keyframes glitch-y {{
+    0%, 86%, 100% {{ transform: translate(0); opacity: 0; }}
+    89% {{ transform: translate(3px, 1px); opacity: .9; }}
+    93% {{ transform: translate(-3px, -1px); opacity: .9; }}
+    97% {{ transform: translate(2px, -1px); opacity: .6; }}
+  }}
+  /* Тем, кому движение мешает, знак стоит смирно. */
+  @media (prefers-reduced-motion: reduce) {{
+    .glitch::before, .glitch::after {{ animation: none; opacity: 0; }}
+  }}
 </style>
 </head>
 <body>
@@ -174,12 +226,26 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     <div class="head">
       <span class="sym">{symbol}</span>
       <span class="tf">{interval}</span>
-      <span class="who">{stamp}</span>
+      <time class="who" datetime="{iso}">{stamp}</time>
     </div>
     <img src="{image}" alt="{title}">
     {f'<div class="note">{note}</div>' if note else ''}
   </div>
-  <a href="https://www.nmnh.trade">NMNH · терминал скальпера</a>
+  <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH">NMNH</span></a>
+<script>
+  // Время - по часам того, кто смотрит.
+  (function () {{
+    var node = document.querySelector("time.who");
+    if (!node) return;
+    var at = new Date(node.getAttribute("datetime"));
+    if (isNaN(at)) return;
+    node.textContent = at.toLocaleString("ru", {{
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    }});
+    node.title = "по вашему времени";
+  }})();
+</script>
 </body>
 </html>"""
     )
