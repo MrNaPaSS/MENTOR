@@ -283,8 +283,17 @@ def test_journal_entry_keeps_the_targets_of_the_trade():
 
     class Exchange:
         async def user_trades(self, symbol, limit=100):
+            # Закрывающее исполнение обязательно: без него запись не делается -
+            # биржа заносит его в отчёт не мгновенно, а результат вышел бы
+            # нулевым вместо настоящего убытка.
             return [
-                {"time": 4102444800000, "realizedPnl": "-1.2", "commission": "0.3", "price": "99.4"}
+                {
+                    "time": 4102444800000,
+                    "realizedPnl": "-1.2",
+                    "commission": "0.3",
+                    "price": "99.4",
+                    "side": "SELL",
+                }
             ]
 
     watcher = PositionWatcher(lambda: session, lambda: None)
@@ -669,3 +678,43 @@ def test_take_alive_under_its_label_is_not_counted_as_filled():
     decision = decide(row, position("2.1"), plans, 101.5, 0)
     # Объём упал, но заявка жива - значит цель не сработала, а лимитка добралась.
     assert decision.filled_orders == []
+
+
+def test_record_waits_for_the_closing_fill():
+    """Пока выхода нет в отчёте, запись не делается.
+
+    Биржа заносит исполнение не мгновенно, а позиции уже не видно: результат
+    считался по одним входам и уходил в журнал нулём вместо настоящего убытка.
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from backend.trading.watcher import PositionWatcher
+    from core.models import Base, ScalpTrade, Student
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    student = Student(tg_id=1)
+    session.add(student)
+    session.commit()
+
+    row = trade(
+        student_id=student.id,
+        opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        closed_at=datetime(2026, 1, 1, 1, tzinfo=timezone.utc),
+    )
+
+    class OnlyEntry:
+        async def user_trades(self, symbol, limit=100):
+            return [{"time": 4102444800000, "price": "100", "side": "BUY", "qty": "3"}]
+
+    watcher = PositionWatcher(lambda: session, lambda: None)
+    assert asyncio.run(watcher._record(session, OnlyEntry(), row)) is False
+    assert session.execute(select(ScalpTrade)).scalars().all() == []

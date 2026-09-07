@@ -54,6 +54,10 @@ POLL_INTERVAL = 15.0
 # Сколько проверок подряд позиция может отсутствовать, прежде чем считать её
 # закрытой. Ответ приходит не мгновенно, и одна пустая выдача сразу после
 # ордера значит «заявка ещё стоит», а не «сделка закрыта».
+# Сколько проходов ждать, пока биржа занесёт закрывающее исполнение в отчёт.
+# Восемь проходов - две минуты: дольше ждать бессмысленно, запишем что есть.
+RECORD_ATTEMPTS = 8
+
 MISSING_TOLERANCE = 2
 
 # Статусы биржи, означающие «ордер отработал».
@@ -232,6 +236,8 @@ class PositionWatcher:
         self.interval = interval
         self._task: asyncio.Task | None = None
         self._missing: dict[int, int] = {}
+        # Сколько проходов ждём исполнения выхода по каждой сделке.
+        self._pending: dict[int, int] = {}
 
     def start(self) -> None:
         if not keystore.enabled():
@@ -406,7 +412,8 @@ class PositionWatcher:
             # помечалась закрытой, и следующий проход её уже не видел. Сделки
             # по стопу пропадали из журнала именно так.
             try:
-                await self._record(session, client, trade)
+                if not await self._record(session, client, trade):
+                    return
             except Exception as exc:  # noqa: BLE001 - причина в логе, попробуем позже
                 logger.error(
                     "Сделка %s не записана в журнал, попробуем на следующем проходе: %s",
@@ -625,12 +632,17 @@ class PositionWatcher:
                 return order_id
         return ""
 
-    async def _record(self, session, client: WeexFutures, trade: LiveTrade) -> None:
+    async def _record(self, session, client: WeexFutures, trade: LiveTrade) -> bool:
         """Записать закрытую сделку в журнал по реальным исполнениям.
 
         Результат берём у биржи, а не считаем сами: наш расчёт не знает ни
         проскальзывания, ни комиссии, и в журнале появилась бы прибыль, которой
         не было.
+
+        Возвращает `False`, когда закрывающего исполнения в отчёте ещё нет.
+        Биржа заносит его туда не мгновенно, а позиции уже не видно - и запись
+        уходила с нулём вместо настоящего убытка. В этом случае сделка остаётся
+        открытой и попытка повторяется на следующем проходе.
         """
         exists = session.execute(
             select(ScalpTrade)
@@ -656,6 +668,23 @@ class PositionWatcher:
                 if not opened_ms or fill_time(f) >= opened_ms
             ]
             hit = trade.takes_hit
+
+            # Закрывающее исполнение идёт против стороны сделки. Пока его нет,
+            # считать нечего: в отчёте одни входы, и результат выйдет нулевым.
+            closing = "sell" if trade.side == "long" else "buy"
+            has_exit = any(
+                closing in str(f.get("side") or "").lower() for f in fills
+            )
+            waited = self._pending.get(trade.id, 0)
+            if not has_exit and waited < RECORD_ATTEMPTS:
+                self._pending[trade.id] = waited + 1
+                logger.info(
+                    "Исполнений выхода %s ещё нет, ждём (попытка %d)",
+                    trade.symbol,
+                    waited + 1,
+                )
+                return False
+
             gross, fee, exit_price = settle(fills, float(trade.entry), trade.side)
             # По этим строкам разбирается любое расхождение с биржей: сколько
             # исполнений попало в счёт, за какое окно и что в них было.
@@ -711,6 +740,8 @@ class PositionWatcher:
         record.note = "биржа"
         if exists is None:
             session.add(record)
+        self._pending.pop(trade.id, None)
+        return True
 
 
 # Имена полей в отчёте об исполнениях. У каждой биржи свои, а по этим числам
