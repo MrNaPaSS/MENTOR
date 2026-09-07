@@ -622,7 +622,15 @@ class PositionWatcher:
                 )
                 return False
 
-            gross, fee, exit_price = settle(fills, float(trade.entry), trade.side)
+            # Ставка нужна только на случай, когда комиссии в отчёте нет.
+            # Не узнали её - записываем то, что назвала биржа: остаться без
+            # записи из-за справочной цифры нельзя.
+            taker = 0.0
+            try:
+                taker = float((await client.symbol_filters(trade.symbol)).get("taker_fee") or 0)
+            except Exception as exc:  # noqa: BLE001 - причина в логе, запись важнее
+                logger.debug("Ставка комиссии %s не получена: %s", trade.symbol, exc)
+            gross, fee, exit_price = settle(fills, float(trade.entry), trade.side, taker)
             # Взятые цели - те, до которых цена выхода действительно дошла.
             # Стоп уносит с биржи все оставшиеся заявки разом, и считать цели по
             # их исчезновению значит записать выбитой сделке все три.
@@ -927,7 +935,7 @@ def fill_time(row: dict[str, Any]) -> int:
 
 
 def settle(
-    fills: list[dict[str, Any]], entry: float, side: str
+    fills: list[dict[str, Any]], entry: float, side: str, taker_fee: float = 0.0
 ) -> tuple[float, float, float | None]:
     """Итог по исполнениям: результат до комиссии, комиссия и цена выхода.
 
@@ -935,12 +943,19 @@ def settle(
     считаем сами по ценам закрывающих исполнений: у сделки известны цена входа
     и сторона, а в исполнении есть цена, объём и направление. Промолчать здесь
     нельзя: в журнал уйдёт ноль, и трейдер увидит +2 вместо +64.
+
+    С комиссией то же самое. Поля с ней в отчёте может не быть вовсе, и тогда в
+    журнал уходил результат до неё: на счёт пришло 18.51, а записано было
+    22.52 - ровно на комиссию больше. Не назвали - считаем сами, по ставке
+    инструмента и обороту исполнений.
     """
     reported = 0.0
     derived = 0.0
     fee = 0.0
+    turnover = 0.0
     price: float | None = None
     has_reported = False
+    has_fee = False
     long = side == "long"
 
     for row in fills:
@@ -951,12 +966,15 @@ def settle(
 
         paid = _first(row, _FEE_FIELDS)
         if paid is not None:
+            has_fee = True
             fee += abs(paid)
 
         at = _first(row, _PRICE_FIELDS) or 0.0
         size = abs(_first(row, _SIZE_FIELDS) or 0.0)
         if at > 0:
             price = at
+        # Оборот всех ног: по нему считается комиссия, когда биржа её не назвала.
+        turnover += at * size
 
         # Закрывающее исполнение идёт против стороны сделки: лонг закрывают
         # продажей. Открывающие в результат не входят - они его создали.
@@ -968,6 +986,17 @@ def settle(
         )
         if closing and at > 0 and size > 0 and entry > 0:
             derived += (at - entry) * size if long else (entry - at) * size
+
+    # Комиссия, которую биржа не назвала. Ставка инструмента на оборот обеих
+    # ног - то же, что она удержала бы сама.
+    if not has_fee and turnover > 0 and taker_fee > 0:
+        fee = turnover * taker_fee
+        logger.info(
+            "Комиссия в отчёте не названа: считаем по ставке %.4f%% на оборот %.2f - %.4f",
+            taker_fee * 100,
+            turnover,
+            fee,
+        )
 
     if not has_reported and fills:
         global _fills_warned

@@ -831,7 +831,14 @@ async def _settled(
         if not mine:
             continue
 
-        gross, fee, price = settle(mine, entry, side)
+        # Ставку инструмента передаём: комиссию биржа называет в отчёте не
+        # всегда, и без неё в журнал уходил результат до её удержания.
+        taker = 0.0
+        try:
+            taker = float((await client.symbol_filters(symbol)).get("taker_fee") or 0)
+        except Exception as exc:  # noqa: BLE001 - причина в логе, итог важнее
+            logger.debug("Ставка комиссии %s не получена: %s", symbol, exc)
+        gross, fee, price = settle(mine, entry, side, taker)
         net = gross - fee
         # Подробности - в лог: расхождение с цифрой биржи разбирается только по
         # исполнениям, а не по итоговому числу.

@@ -786,3 +786,36 @@ def test_record_waits_for_the_closing_fill():
     watcher = PositionWatcher(lambda: session, lambda: None)
     assert asyncio.run(watcher._record(session, OnlyEntry(), row)) is False
     assert session.execute(select(ScalpTrade)).scalars().all() == []
+
+
+def test_fee_is_counted_even_when_the_exchange_does_not_name_it():
+    """Комиссии в отчёте нет - считаем по ставке инструмента.
+
+    На счёт пришло 18.51, а в журнал уходило 22.52 - ровно на комиссию больше:
+    поля с ней в исполнениях не было, и результат записывался до её удержания.
+    """
+    from backend.trading.watcher import settle
+
+    fills = [
+        # Ни commission, ни fee - только результат и цены.
+        {"side": "BUY", "price": "100", "qty": "25", "realizedPnl": "0"},
+        {"side": "SELL", "price": "100.9", "qty": "25", "realizedPnl": "22.52"},
+    ]
+    gross, fee, price = settle(fills, 100.0, "long", taker_fee=0.0008)
+
+    assert gross == pytest.approx(22.52)
+    # Оборот обеих ног: 2500 + 2522.5, по восемь сотых процента.
+    assert fee == pytest.approx((100 * 25 + 100.9 * 25) * 0.0008, rel=1e-9)
+    assert gross - fee == pytest.approx(18.502, abs=0.02)
+    assert price == pytest.approx(100.9)
+
+
+def test_named_fee_is_taken_as_it_is():
+    """Назвала комиссию - берём её, а не считаем свою."""
+    from backend.trading.watcher import settle
+
+    fills = [
+        {"side": "SELL", "price": "100.9", "qty": "25", "realizedPnl": "22.52", "commission": "4.01"},
+    ]
+    _, fee, _ = settle(fills, 100.0, "long", taker_fee=0.0008)
+    assert fee == pytest.approx(4.01)

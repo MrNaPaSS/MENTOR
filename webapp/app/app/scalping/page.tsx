@@ -102,9 +102,7 @@ import {
   type LadderRow,
   type Wall,
   useScalpingFeed,
-  weexScreener,
   SORT_LABELS,
-  type ScreenerRow,
   type SortKey,
   type VisibleSortKey,
 } from "@/lib/scalping";
@@ -470,9 +468,6 @@ export default function ScalpingPage() {
   // Объёмы всех открытых позиций счёта: по ним считается счётчик у итога дня.
   const [liveSizes, setLiveSizes] = useState<Record<string, number>>({});
 
-  // Откуда список монет: свой сборщик или сводка самой биржи.
-  const [weex, setWeex] = useState(false);
-  const [weexRows, setWeexRows] = useState<ScreenerRow[]>([]);
   const midRef = useRef(0);
   midRef.current = dom?.mid ?? 0;
   useEffect(() => {
@@ -1603,6 +1598,15 @@ export default function ScalpingPage() {
             tone: "plain",
           });
           play("order");
+
+          // Перечитываем журнал: в боевом режиме сделку пишет сервер, по
+          // исполнениям с биржи, и терминалу об этом никто не сообщает - запись
+          // появлялась только после перезагрузки страницы.
+          //
+          // Дважды: сразу и через несколько секунд. Сервер ждёт, пока биржа
+          // покажет закрывающее исполнение, и раньше него записи ещё нет.
+          setJournalKey((key) => key + 1);
+          window.setTimeout(() => setJournalKey((key) => key + 1), 6000);
         }
       }
     }
@@ -1651,15 +1655,12 @@ export default function ScalpingPage() {
   );
   const starred = useMemo(() => new Set(favorites), [favorites]);
   const screenerRows = useMemo(() => {
-    // Список биржи заменяет поток целиком: смешивать их нельзя, у них разный
-    // набор монет и разная полнота полей.
-    const source = weex ? weexRows : screener;
-    const mine = source.filter((r) => traded.has(r.symbol));
-    const liked = source.filter((r) => !traded.has(r.symbol) && starred.has(r.symbol));
+    const mine = screener.filter((r) => traded.has(r.symbol));
+    const liked = screener.filter((r) => !traded.has(r.symbol) && starred.has(r.symbol));
     if (onlyFavorites) return [...mine, ...liked];
-    const rest = source.filter((r) => !traded.has(r.symbol) && !starred.has(r.symbol));
+    const rest = screener.filter((r) => !traded.has(r.symbol) && !starred.has(r.symbol));
     return [...mine, ...liked, ...rest];
-  }, [screener, weex, weexRows, traded, starred, onlyFavorites]);
+  }, [screener, traded, starred, onlyFavorites]);
 
   const toggleFavorite = useCallback((sym: string) => {
     setFavorites((list) =>
@@ -1669,32 +1670,6 @@ export default function ScalpingPage() {
 
   // Сделки по открытой монете: их рисует график, остальные ждут своей.
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
-
-  /**
-   * Список монет с самой биржи, когда трейдер его попросил.
-   *
-   * Спрашиваем раз в пять секунд: суточная сводка меняется медленнее, а весит
-   * под триста килобайт - тянуть её восемь раз в секунду незачем.
-   */
-  useEffect(() => {
-    if (!weex) {
-      setWeexRows([]);
-      return;
-    }
-    let cancelled = false;
-
-    async function pull() {
-      const rows = await weexScreener(sort).catch(() => []);
-      if (!cancelled && rows.length > 0) setWeexRows(rows);
-    }
-
-    pull();
-    const id = setInterval(pull, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [weex, sort]);
 
   /**
    * Сколько заявок ждёт и сколько позиций в работе - по всем монетам.
@@ -1966,23 +1941,7 @@ export default function ScalpingPage() {
           style={paneStyle}
         >
           <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-2 py-1.5">
-            <span className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold text-[var(--pane-text)]">Скринер</span>
-              {/* Список монет самой биржи. Свой сборщик ведёт полсотни пар и
-                  знает про них всё; здесь - каждая пара WEEX, но только то,
-                  что есть в суточной сводке. */}
-              <button
-                onClick={() => setWeex((on) => !on)}
-                title={
-                  weex
-                    ? "Показан список монет WEEX. Нажмите, чтобы вернуть свой поток со стаканами"
-                    : "Показать все монеты WEEX: цена, изменение и оборот прямо с биржи"
-                }
-                className={`${CHIP} ${weex ? CHIP_ON : CHIP_OFF}`}
-              >
-                WEEX
-              </button>
-            </span>
+            <span className="text-xs font-semibold text-[var(--pane-text)]">Скринер</span>
             <div className="flex items-center gap-1">
               {/* Связь переехала сюда из заголовка страницы: строка заголовка
                   съедала полсотни пикселей высоты, а знать о разрыве потока
