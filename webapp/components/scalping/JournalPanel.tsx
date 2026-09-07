@@ -96,6 +96,7 @@ export default function JournalPanel({
   symbol,
   refreshKey,
   onHover,
+  onPick,
   onClose,
 }: {
   /** Показать только этот инструмент. Пусто — все. */
@@ -104,6 +105,15 @@ export default function JournalPanel({
   refreshKey: number;
   /** Сделка под курсором: её разметка показывается на графике. */
   onHover?: (trade: JournalTrade | null) => void;
+  /**
+   * Нажали на строку: график переходит к этой сделке.
+   *
+   * Наведение показывает разметку мельком и только если открыта та же монета.
+   * Нажатие переключает инструмент и увозит график к её времени - строка в
+   * таблице отвечает на вопрос «сколько», а на вопрос «почему» отвечает
+   * только сам график.
+   */
+  onPick?: (trade: JournalTrade) => void;
   onClose: () => void;
 }) {
   const now = new Date();
@@ -300,7 +310,11 @@ export default function JournalPanel({
                     key={t.id}
                     onMouseEnter={() => onHover?.(t)}
                     onMouseLeave={() => onHover?.(null)}
-                    className="cursor-default border-t border-[var(--pane-border)] transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)]"
+                    onClick={() => onPick?.(t)}
+                    title="Открыть график сделки"
+                    className={`border-t border-[var(--pane-border)] transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)] ${
+                      onPick ? "cursor-pointer" : "cursor-default"
+                    }`}
                   >
                     <td className="py-1 text-[var(--pane-muted)]">
                       {new Date(t.closed_at).toLocaleString("ru", {

@@ -11,6 +11,8 @@
 // Браузер не даёт играть до первого действия пользователя, поэтому звуковой
 // контекст создаётся лениво — на первом же событии после клика он уже готов.
 
+import { duck } from "./radio";
+
 export type SoundKind =
   /** Заявка ушла на биржу. */
   | "order"
@@ -94,6 +96,10 @@ export function play(kind: SoundKind): void {
   if (!ctx) return;
 
   const tone = TONES[kind];
+  // Музыка отходит на задний план, пока говорит терминал. Сигнал короткий и
+  // негромкий - в клубном бите он тонет, а сообщает он о взятой цели или о
+  // выбитом стопе. Приглушаем на длину сигнала с небольшим запасом.
+  duck(tone.notes.length * tone.step * 1000 + 600);
   const start = ctx.currentTime;
 
   tone.notes.forEach((frequency, i) => {

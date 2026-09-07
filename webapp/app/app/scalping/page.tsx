@@ -55,6 +55,7 @@ import type { DragLevel } from "@/components/scalping/DragLevels";
 import type { OrderChip } from "@/components/scalping/OrderChip";
 import { draftAt, moveLevel, qtyOf, riskOf, type ManualDraft } from "@/lib/trade/manual";
 import Logo from "@/components/ui/Logo";
+import RadioChip from "@/components/app/RadioChip";
 import { api } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { useCoins } from "@/lib/useCoins";
@@ -408,6 +409,10 @@ export default function ScalpingPage() {
   const [journalKey, setJournalKey] = useState(0);
   // Сделка из журнала под курсором: её разметка показывается на графике.
   const [hovered, setHovered] = useState<JournalTrade | null>(null);
+  // Сделка, открытая из журнала нажатием. Наведение показывает разметку, пока
+  // курсор на строке; нажатие оставляет её на графике и увозит его к тому
+  // времени, когда сделка шла.
+  const [picked, setPicked] = useState<JournalTrade | null>(null);
   // Строка стакана под курсором: график проводит по ней линию. Держим только
   // цену, сторону и подпись — сама строка меняется восемь раз в секунду, и
   // хранить её значило бы перерисовывать график с той же частотой.
@@ -2258,11 +2263,18 @@ export default function ScalpingPage() {
                 {/* В полном экране шапки сайта нет, а знак нужен: он же и
                     дорога назад - нажатие уводит на главную. */}
                 {full && (
-                  <Logo
-                    href="/app/analysis"
-                    tone={theme === "light" ? "text-[var(--pane-text)]" : "text-text-primary"}
-                    className="pointer-events-auto absolute left-1/2 -translate-x-1/2 text-base"
-                  />
+                  // Знак и радио вместе, как в шапке кабинета: в полном экране
+                  // её не видно, а музыку выключают чаще всего именно отсюда -
+                  // когда рынок пошёл и нужна тишина. Плеер общий, поэтому
+                  // кнопка здесь управляет тем же потоком, что и та.
+                  <div className="pointer-events-auto absolute left-1/2 flex -translate-x-1/2 items-center gap-2">
+                    <Logo
+                      href="/app/analysis"
+                      tone={theme === "light" ? "text-[var(--pane-text)]" : "text-text-primary"}
+                      className="text-base"
+                    />
+                    <RadioChip tone="pane" />
+                  </div>
                 )}
               </div>
 
@@ -2364,7 +2376,14 @@ export default function ScalpingPage() {
                   }}
                   showJournal={journalOpen}
                   journalKey={journalKey}
-                  ghost={hovered && hovered.symbol === symbol ? hovered : null}
+                  ghost={(() => {
+                    const one = picked ?? hovered;
+                    return one && one.symbol === symbol ? one : null;
+                  })()}
+                  // Увозить график к сделке нужно только когда её открыли
+                  // нажатием: под курсором разметка показывается там, где
+                  // трейдер уже смотрит, и дёргать под ним экран незачем.
+                  ghostFocus={picked?.id ?? null}
                   hoverLevel={levelHint}
                   shot={shotRef}
                   // Шаг сетки лестницы делим на укрупнение: биржевой шаг от
@@ -2456,6 +2475,10 @@ export default function ScalpingPage() {
               symbol={symbol ?? undefined}
               refreshKey={journalKey}
               onHover={setHovered}
+              onPick={(t) => {
+                setPicked(t);
+                if (t.symbol !== symbol) setSymbol(t.symbol);
+              }}
               onClose={() => setJournalOpen(false)}
             />
           </section>

@@ -464,6 +464,7 @@ function PriceChart({
   showJournal,
   journalKey,
   ghost,
+  ghostFocus,
   hoverLevel,
   shot,
   tick,
@@ -516,6 +517,13 @@ function PriceChart({
   journalKey?: number;
   /** Сделка из журнала под курсором: показываем, как она шла. */
   ghost?: JournalTrade | null;
+  /**
+   * Сделка открыта нажатием: увезти к ней график.
+   *
+   * Значение - её опознаватель, а не сама сделка: график переезжает один раз,
+   * на нажатие, и не дёргается на каждой перерисовке разметки.
+   */
+  ghostFocus?: string | number | null;
   /**
    * Уровень из стакана под курсором: цена и деньги, стоящие на ней.
    *
@@ -1595,6 +1603,24 @@ function PriceChart({
       return;
     }
 
+    // Открыли сделку из журнала - показываем то время, когда она шла. Без
+    // этого разметка ложится за краем экрана: журнал помнит месяц, а на
+    // графике полторы сотни последних баров, и нажатие выглядело бы как
+    // «ничего не произошло».
+    if (ghostFocus) {
+      // Поля по краям: сделка, прижатая к рамке, не читается - не видно ни
+      // откуда пришла цена, ни куда ушла после выхода.
+      const pad = Math.max((to - from) * 0.6, 60);
+      try {
+        chartRef.current?.timeScale().setVisibleRange({
+          from: (from - pad) as UTCTimestamp,
+          to: (to + pad) as UTCTimestamp,
+        });
+      } catch {
+        // Библиотека отказала - разметка всё равно на месте, доедет руками.
+      }
+    }
+
     const palette = THEMES[themeRef.current];
     const span = { fromTime: from as UTCTimestamp, toTime: (to === from ? to + 1 : to) as UTCTimestamp };
 
@@ -1666,7 +1692,7 @@ function PriceChart({
       points: [],
     };
     pushShapes();
-  }, [ghost, theme, pushShapes]);
+  }, [ghost, ghostFocus, theme, pushShapes]);
 
   // Отработанные сетапы из журнала прямо на графике.
   //

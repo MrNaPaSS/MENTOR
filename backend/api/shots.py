@@ -167,29 +167,25 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     width: min(1200px, 100%); background: #181a20; border: 1px solid #2b3139;
     border-radius: 16px; overflow: hidden;
   }}
-  .head {{ display: flex; align-items: baseline; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #2b3139; }}
-  .sym {{ font-size: 18px; font-weight: 700; }}
-  .tf {{ color: #7a8290; font-family: "JetBrains Mono", monospace; }}
-  .who {{ margin-left: auto; color: #7a8290; }}
+  /* Шторка узкая: она подписывает картинку, а не соперничает с ней. */
+  .head {{ display: flex; align-items: baseline; gap: 10px; padding: 7px 14px; border-bottom: 1px solid #2b3139; }}
+  .sym {{ font-size: 15px; font-weight: 700; }}
+  .tf {{ color: #7a8290; font-family: "JetBrains Mono", monospace; font-size: 12px; }}
+  .who {{ margin-left: auto; color: #7a8290; font-size: 12px; }}
   img {{ display: block; width: 100%; height: auto; }}
   .note {{ padding: 12px 18px; color: #b7bdc6; }}
 
   /* Знак NMNH - тот же, что в шапке сайта: жирный шрифт, глитч по цветам
      акцента и опасности, свечение под курсором. Пояснительной подписи под ним
      нет: знак и так ведёт на сайт, а объяснять логотип словами незачем. */
+  /* Без рамки и подложки - одни буквы. Кнопка вокруг знака делала из него
+     элемент управления, которым он не является: это подпись, ведущая домой. */
   .logo {{
-    display: inline-block; padding: 10px 22px; border-radius: 14px;
-    border: 1px solid #2b3139; background: #181a20;
+    display: inline-block; padding: 4px;
     color: #eaecef; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;
-    text-decoration: none;
-    transition: border-color .2s ease, box-shadow .2s ease, color .2s ease;
+    text-decoration: none; transition: color .2s ease, text-shadow .2s ease;
   }}
-  .logo:hover {{
-    border-color: rgba(10, 255, 224, .4);
-    color: #fff;
-    text-shadow: 0 0 18px rgba(10, 255, 224, .75);
-    box-shadow: 0 0 28px rgba(10, 255, 224, .12);
-  }}
+  .logo:hover {{ color: #fff; text-shadow: 0 0 18px rgba(10, 255, 224, .75); }}
   .glitch {{ position: relative; display: inline-block; }}
   .glitch::before, .glitch::after {{
     content: attr(data-text); position: absolute; inset: 0;

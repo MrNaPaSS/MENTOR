@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -889,3 +890,88 @@ def test_silent_fill_uses_the_rate_of_the_named_ones_not_the_reference():
     _, fee, _ = settle(fills, 100.0, "long", taker_fee=0.0008)
 
     assert fee == pytest.approx(0.32 + 110 * 10 * 0.00032, rel=1e-6)
+
+
+def test_takes_are_counted_from_fills_not_from_the_counter():
+    """Две цели и стоп в безубытке - в журнале две цели, а не три.
+
+    Счётчик сделки ведёт сопровождение, и он умеет только расти: стоп уносит с
+    биржи все оставшиеся цели разом, и по их исчезновению сделка выглядит
+    забравшей всё. Исполнения врать не умеют - по ним и считаем.
+    """
+    from backend.trading.watcher import takes_from_fills
+
+    row = SimpleNamespace(
+        side="long",
+        targets_json=json.dumps([101.0, 102.0, 103.0]),
+        # Счётчик уже раздут: цели ушли с биржи вместе со стопом.
+        takes_hit=3,
+    )
+    fills = [
+        {"side": "BUY", "price": "100", "qty": "10"},
+        {"side": "SELL", "price": "101", "qty": "3"},
+        {"side": "SELL", "price": "102", "qty": "5"},
+        # Стоп в безубытке: до третьей цели не дошли.
+        {"side": "SELL", "price": "100.08", "qty": "2"},
+    ]
+
+    assert takes_from_fills(row, fills) == 2
+
+
+def test_takes_from_fills_counts_a_short_the_other_way():
+    from backend.trading.watcher import takes_from_fills
+
+    row = SimpleNamespace(
+        side="short",
+        targets_json=json.dumps([99.0, 98.0, 97.0]),
+        takes_hit=0,
+    )
+    fills = [
+        {"side": "SELL", "price": "100", "qty": "10"},
+        {"side": "BUY", "price": "98", "qty": "8"},
+    ]
+
+    assert takes_from_fills(row, fills) == 2
+
+
+def test_takes_from_fills_keeps_the_counter_when_there_are_no_fills():
+    """Исполнений нет - остаёмся при счётчике: он хотя бы не пуст."""
+    from backend.trading.watcher import takes_from_fills
+
+    row = SimpleNamespace(side="long", targets_json=json.dumps([101.0]), takes_hit=1)
+
+    assert takes_from_fills(row, []) == 1
+
+
+def test_entry_fill_does_not_take_a_target_by_itself():
+    """Вход в счёт не идёт: иначе цель «брала» бы себя ценой входа."""
+    from backend.trading.watcher import takes_from_fills
+
+    row = SimpleNamespace(
+        side="long",
+        targets_json=json.dumps([101.0, 102.0]),
+        takes_hit=0,
+    )
+    # Одна покупка по цене выше целей - и ни одной продажи.
+    fills = [{"side": "BUY", "price": "105", "qty": "10"}]
+
+    assert takes_from_fills(row, fills) == 0
+
+
+def test_a_partial_report_may_not_lower_the_counter():
+    """Отчёт без входа застал сделку с середины - счётчик не опускаем.
+
+    Взятая цель могла остаться за краем окна исполнений, и счёт по такому
+    отчёту занизил бы число целей вместо того, чтобы поправить завышенное.
+    """
+    from backend.trading.watcher import takes_from_fills
+
+    row = SimpleNamespace(
+        side="long",
+        targets_json=json.dumps([101.0, 102.0, 103.0]),
+        takes_hit=2,
+    )
+    # Только стоп в безубытке: ни входа, ни исполнений по целям.
+    fills = [{"side": "SELL", "price": "100.08", "qty": "2"}]
+
+    assert takes_from_fills(row, fills) == 2

@@ -631,10 +631,18 @@ class PositionWatcher:
             except Exception as exc:  # noqa: BLE001 - причина в логе, запись важнее
                 logger.debug("Ставка комиссии %s не получена: %s", trade.symbol, exc)
             gross, fee, exit_price = settle(fills, float(trade.entry), trade.side, taker)
-            # Взятые цели - те, до которых цена выхода действительно дошла.
-            # Стоп уносит с биржи все оставшиеся заявки разом, и считать цели по
-            # их исчезновению значит записать выбитой сделке все три.
-            hit = max(hit, targets_reached(trade, exit_price))
+            # Взятые цели считаем по самим исполнениям биржи.
+            #
+            # Счётчик сделки ведёт сопровождение, и он умеет только расти: стоп
+            # уносит с биржи все оставшиеся цели разом, по их исчезновению
+            # сделка выглядит забравшей всё, и в журнале у выбитой в безубыток
+            # стояли три цели вместо двух. Прежняя проверка ценой выхода это не
+            # чинила - она бралась через max() и опустить счётчик не могла.
+            #
+            # Исполнения врать не умеют: до какой цели дошла хоть одна продажа
+            # лонга, та и взята. Не получили исполнений - остаёмся при счётчике:
+            # он хотя бы не пуст.
+            hit = takes_from_fills(trade, fills)
             # По этим строкам разбирается любое расхождение с биржей: сколько
             # исполнений попало в счёт, за какое окно и что в них было.
             logger.info(
@@ -1212,6 +1220,56 @@ def exchange_breakeven(
 
 
 _be_warned = False
+
+
+def takes_from_fills(trade: LiveTrade, fills: list[dict[str, Any]]) -> int:
+    """Сколько целей взято, судя по закрывающим исполнениям.
+
+    Цель считается взятой, если хоть одно закрытие прошло по ней или дальше в
+    сторону прибыли. Лонг закрывают продажей, шорт - покупкой; вход в счёт не
+    идёт, иначе цель «брала» бы сама себя ценой входа.
+
+    Это надёжнее одной цены выхода: у сделки, закрытой по частям, выходов
+    несколько, и последний из них - стоп в безубытке, по которому не взята ни
+    одна цель.
+    """
+    try:
+        targets = [float(p) for p in json.loads(trade.targets_json or "[]")]
+    except (TypeError, ValueError):
+        return 0
+    if not targets:
+        return 0
+
+    long = trade.side == "long"
+    closing = "sell" if long else "buy"
+    opening = "buy" if long else "sell"
+    best: float | None = None
+    whole = False
+    for row in fills:
+        direction = str(
+            next((row[name] for name in _SIDE_FIELDS if name in row), "")
+        ).lower()
+        at = _first(row, _PRICE_FIELDS) or 0.0
+        if opening in direction:
+            # Вход в отчёте - значит он покрывает сделку с самого начала.
+            whole = True
+            continue
+        if closing not in direction or at <= 0:
+            continue
+        best = at if best is None else (max(best, at) if long else min(best, at))
+
+    if best is None:
+        return trade.takes_hit
+    counted = sum(1 for price in targets if (best >= price if long else best <= price))
+
+    # Опустить счётчик вправе только полный отчёт.
+    #
+    # Список исполнений приходит окном - последние сто и не раньше времени
+    # входа. Если входа в нём нет, окно застало сделку с середины, взятая цель
+    # могла остаться за его краем, и счёт по такому отчёту занизил бы число
+    # целей вместо того, чтобы поправить завышенное. Тогда доверяем счётчику:
+    # ошибиться в его сторону безопаснее.
+    return counted if whole else max(trade.takes_hit, counted)
 
 
 def targets_reached(trade: LiveTrade, exit_price: float | None) -> int:

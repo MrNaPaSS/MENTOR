@@ -55,7 +55,11 @@ export default function Header() {
         {/* Действия справа */}
         <div className="hidden items-center gap-2 md:flex">
           {authed ? (
-            <Link href="/app/analysis" className="btn-primary">
+            // С компьютера кабинет открывается терминалом: это рабочий стол
+            // трейдера, с него начинается день. В меню телефона ниже дорога
+            // ведёт в «Анализы» - три панели и стакан в сорок строк на ладони
+            // не работают, и сам терминал с узкого экрана туда же и уводит.
+            <Link href="/app/scalping" className="btn-primary">
               Кабинет <ArrowRight className="h-4 w-4" />
             </Link>
           ) : (
