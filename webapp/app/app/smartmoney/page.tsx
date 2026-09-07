@@ -125,7 +125,7 @@ const COINGECKO_API = "https://api.coingecko.com/api/v3";
 function fmt(n:number, dec=0)  { return n.toLocaleString("en-US",{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
 function fmtK(n:number)         { return Math.abs(n)>=1000?(n/1000).toFixed(1)+"K":String(n); }
 function fmtB(n:number)         { if(n>=1e9)return`$${(n/1e9).toFixed(1)}B`; if(n>=1e6)return`$${(n/1e6).toFixed(0)}M`; return`$${n.toFixed(0)}`; }
-function signColor(n:number)    { return n>0?"text-success":n<0?"text-danger":"text-white/30"; }
+function signColor(n:number)    { return n>0?"text-success":n<0?"text-danger":"text-text-primary/30"; }
 
 async function fetchJson<T>(url:string, opts?:RequestInit): Promise<T|null> {
   try {
@@ -188,14 +188,14 @@ function Section({icon,title,sub,badge,accent="cyan",delay=0,children}:{
       <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full"
         style={{background:`radial-gradient(circle,${ac}12 0%,transparent 70%)`}} />
 
-      <div className="flex items-center gap-3 border-b border-white/[0.05] px-5 py-3.5">
+      <div className="flex items-center gap-3 border-b border-border px-5 py-3.5">
         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl"
           style={{background:`${ac}18`,border:`1px solid ${ac}35`,boxShadow:`0 0 12px ${ac}20`}}>
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <span className="text-[13px] font-semibold text-white">{title}</span>
-          {sub && <span className="ml-3 text-[10px] text-white/25">{sub}</span>}
+          <span className="text-[13px] font-semibold text-text-primary">{title}</span>
+          {sub && <span className="ml-3 text-[10px] text-text-primary/25">{sub}</span>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">{badge}</div>
       </div>
@@ -212,12 +212,12 @@ function KpiCard({label,value,sub,color,bg,border,delay=0}:{
   return (
     <div className="sm-fade-up sm-hover rounded-2xl px-4 py-3.5"
       style={{animationDelay:`${delay}s`,background:bg,border:`1px solid ${border}`}}>
-      <div className="mb-1 text-[9px] uppercase tracking-widest text-white/30">{label}</div>
+      <div className="mb-1 text-[9px] uppercase tracking-widest text-text-primary/30">{label}</div>
       <div className="font-mono text-[22px] font-extrabold leading-none tabular-nums"
         style={{color,textShadow:`0 0 20px ${color}50`}}>
         {value}
       </div>
-      {sub && <div className="mt-1.5 text-[10px] text-white/35">{sub}</div>}
+      {sub && <div className="mt-1.5 text-[10px] text-text-primary/35">{sub}</div>}
     </div>
   );
 }
@@ -314,8 +314,8 @@ function CotSection() {
           </div>
 
           {/* Position structure */}
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-3">
-            <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Структура позиций (% от ОИ)</div>
+          <div className="rounded-2xl border border-border bg-white/[0.02] p-4 space-y-3">
+            <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Структура позиций (% от ОИ)</div>
 
             {[
               {label:"Lev. Money (хедж-фонды)", long:cur.nc_long_pct, short:cur.nc_short_pct, lc:"#0ecb81", sc:"#f6465d"},
@@ -323,7 +323,7 @@ function CotSection() {
             ].map((row,ri)=>(
               <div key={ri}>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] text-white/40">{row.label}</span>
+                  <span className="text-[10px] text-text-primary/40">{row.label}</span>
                   <div className="flex gap-3 text-[10px] font-mono">
                     <span style={{color:row.lc}}>L {row.long.toFixed(1)}%</span>
                     <span style={{color:row.sc}}>S {row.short.toFixed(1)}%</span>
@@ -343,10 +343,10 @@ function CotSection() {
           {/* History mini-chart */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <div className="text-[9px] uppercase tracking-widest text-white/25">
+              <div className="text-[9px] uppercase tracking-widest text-text-primary/25">
                 Нетто позиция хедж-фондов - {cot.length} недель
               </div>
-              <div className="flex items-center gap-3 text-[8px] text-white/20">
+              <div className="flex items-center gap-3 text-[8px] text-text-primary/20">
                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-success/50"/>бычий</span>
                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-danger/50"/>медвежий</span>
               </div>
@@ -358,7 +358,7 @@ function CotSection() {
                 return (
                   <div key={i} title={`${row.date}: ${row.nc_net>0?"+":""}${fmt(row.nc_net)}`}
                     className="group relative flex flex-1 flex-col items-center justify-end cursor-default" style={{height:68}}>
-                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[8px] text-white opacity-0 transition-opacity group-hover:opacity-100 z-10">
+                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[8px] text-text-primary opacity-0 transition-opacity group-hover:opacity-100 z-10">
                       {fmtK(row.nc_net)}
                     </div>
                     <div className="w-full rounded-t-sm transition-all duration-200 group-hover:opacity-100"
@@ -368,17 +368,17 @@ function CotSection() {
                 );
               })}
             </div>
-            <div className="mt-1.5 flex justify-between text-[8px] text-white/15">
+            <div className="mt-1.5 flex justify-between text-[8px] text-text-primary/15">
               <span>← старше</span><span>новее →</span>
             </div>
           </div>
 
           {/* Insight box */}
-          <div className="rounded-xl border border-accent-gold/15 bg-accent-gold/[0.04] p-3.5 text-[10px] leading-relaxed text-white/35">
+          <div className="rounded-xl border border-accent-gold/15 bg-accent-gold/[0.04] p-3.5 text-[10px] leading-relaxed text-text-primary/35">
             <span className="font-semibold text-accent-gold">Leveraged Money нетто &gt; 0</span> - хедж-фонды в лонге, бычий сигнал.{" "}
             <span className="font-semibold text-accent-gold">Asset Manager</span> - институциональные, часто контртрендовые.
             {prev && (<>{" "}Нед. изм.: <span className={signColor(cur.nc_net-prev.nc_net)}>{cur.nc_net>=prev.nc_net?"▲":"▼"} {Math.abs(cur.nc_net-prev.nc_net).toLocaleString()}</span>.</>)}
-            {" "}<span className="text-white/20">CFTC публикует каждую пятницу - данные за предыдущий вторник.</span>
+            {" "}<span className="text-text-primary/20">CFTC публикует каждую пятницу - данные за предыдущий вторник.</span>
           </div>
 
         </div>
@@ -446,11 +446,11 @@ function MacroSection() {
                 <div className="pointer-events-none absolute right-2 bottom-2 text-[28px] opacity-[0.06] select-none">{meta.icon}</div>
 
                 <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-[8px] font-bold uppercase tracking-widest text-white/25">{item.label}</span>
+                  <span className="text-[8px] font-bold uppercase tracking-widest text-text-primary/25">{item.label}</span>
                   <span className="font-mono text-[9px] font-bold" style={{color:"rgba(255,255,255,0.2)"}}>{item.key}</span>
                 </div>
 
-                <div className="font-mono text-[20px] font-extrabold leading-none text-white">
+                <div className="font-mono text-[20px] font-extrabold leading-none text-text-primary">
                   {fmt(item.price,dec)}
                 </div>
 
@@ -466,7 +466,7 @@ function MacroSection() {
                   </span>
                 </div>
 
-                <div className="mt-2 text-[9px] text-white/20">{meta.context}</div>
+                <div className="mt-2 text-[9px] text-text-primary/20">{meta.context}</div>
               </div>
             );
           })}
@@ -508,32 +508,32 @@ function EtfSection() {
             style={{background:"radial-gradient(ellipse at 80% 50%,rgba(240,185,11,0.06),transparent 70%)"}} />
           <div className="relative flex flex-wrap items-center gap-6">
             <div>
-              <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Всего BTC в ETF</div>
+              <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Всего BTC в ETF</div>
               <div className="font-mono text-[32px] font-black leading-none text-accent-gold">
                 ~{(data.total_btc/1000).toFixed(0)}<span className="text-[16px] font-semibold ml-1">K BTC</span>
               </div>
-              <div className="mt-1 text-[10px] text-white/25">
+              <div className="mt-1 text-[10px] text-text-primary/25">
                 {((data.total_btc/21_000_000)*100).toFixed(2)}% от максимальной эмиссии
               </div>
             </div>
             <div className="h-12 w-px bg-white/[0.07]"/>
             <div>
-              <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Фондов</div>
-              <div className="font-mono text-[28px] font-black leading-none text-white">{data.etfs.length}</div>
+              <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Фондов</div>
+              <div className="font-mono text-[28px] font-black leading-none text-text-primary">{data.etfs.length}</div>
             </div>
             {btcPrice>0 && <>
               <div className="h-12 w-px bg-white/[0.07]"/>
               <div>
-                <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">BTC/USD</div>
+                <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">BTC/USD</div>
                 <div className="font-mono text-[24px] font-black leading-none text-accent-cyan">${btcPrice.toLocaleString("en-US")}</div>
               </div>
             </>}
             {topEtf && <>
               <div className="h-12 w-px bg-white/[0.07]"/>
               <div>
-                <div className="text-[9px] uppercase tracking-widest text-white/25 mb-1">Лидер</div>
-                <div className="font-mono text-[18px] font-black leading-none text-white">{topEtf.ticker}</div>
-                <div className="text-[9px] text-white/25">{topEtf.sharePct}% доли</div>
+                <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Лидер</div>
+                <div className="font-mono text-[18px] font-black leading-none text-text-primary">{topEtf.ticker}</div>
+                <div className="text-[9px] text-text-primary/25">{topEtf.sharePct}% доли</div>
               </div>
             </>}
           </div>
@@ -542,7 +542,7 @@ function EtfSection() {
         {/* ETF list */}
         <div className="space-y-2">
           {/* header */}
-          <div className="grid px-3 text-[8px] uppercase tracking-widest text-white/20"
+          <div className="grid px-3 text-[8px] uppercase tracking-widest text-text-primary/20"
             style={{gridTemplateColumns:"28px 1fr 70px 60px 55px 80px"}}>
             <span>#</span><span>Фонд</span>
             <span className="text-right">BTC</span>
@@ -566,24 +566,24 @@ function EtfSection() {
 
                 <div className="relative grid items-center gap-2"
                   style={{gridTemplateColumns:"28px 1fr 70px 60px 55px 80px"}}>
-                  <div className="text-[11px] font-bold text-white/20">{i+1}</div>
+                  <div className="text-[11px] font-bold text-text-primary/20">{i+1}</div>
 
                   <div>
-                    <div className="text-[12px] font-bold text-white">{etf.ticker}</div>
-                    <div className="text-[9px] text-white/30 truncate">{etf.name}</div>
+                    <div className="text-[12px] font-bold text-text-primary">{etf.ticker}</div>
+                    <div className="text-[9px] text-text-primary/30 truncate">{etf.name}</div>
                   </div>
 
-                  <div className="text-right font-mono text-[11px] text-white/70">
+                  <div className="text-right font-mono text-[11px] text-text-primary/70">
                     {etf.btc>0 ? `${(etf.btc/1000).toFixed(0)}K` : "-"}
                   </div>
-                  <div className="text-right font-mono text-[10px] text-white/35">
+                  <div className="text-right font-mono text-[10px] text-text-primary/35">
                     {etf.aum_usd&&etf.aum_usd>0 ? `$${(etf.aum_usd/1e9).toFixed(1)}B` : "-"}
                   </div>
                   <div className="text-right font-mono text-[12px] font-bold text-success">
                     {etf.sharePct}%
                   </div>
                   <div className="text-right">
-                    <div className="font-mono text-[11px] text-white">{etf.price>0?`$${etf.price}`:"-"}</div>
+                    <div className="font-mono text-[11px] text-text-primary">{etf.price>0?`$${etf.price}`:"-"}</div>
                     {etf.price>0 && (
                       <div className="font-mono text-[9px]" style={{color:pos?"#0ecb81":"#f6465d"}}>
                         {pos?"+":""}{etf.changePct.toFixed(2)}%
@@ -601,7 +601,7 @@ function EtfSection() {
           })}
         </div>
 
-        <p className="text-[9px] text-white/15">AUM и BTC холдинги - Nasdaq API. Цены ETF - Yahoo Finance. BTC/USD - CoinGecko.</p>
+        <p className="text-[9px] text-text-primary/15">AUM и BTC холдинги - Nasdaq API. Цены ETF - Yahoo Finance. BTC/USD - CoinGecko.</p>
       </div>}
     </Section>
   );
@@ -666,7 +666,7 @@ function DerivativesSection() {
 
         {/* Rows */}
         <div className="space-y-2">
-          <div className="grid px-3 text-[8px] uppercase tracking-widest text-white/20"
+          <div className="grid px-3 text-[8px] uppercase tracking-widest text-text-primary/20"
             style={{gridTemplateColumns:"48px 1fr 90px 80px 80px"}}>
             <span>Пара</span><span>OI (доля)</span>
             <span className="text-right">OI</span>
@@ -689,14 +689,14 @@ function DerivativesSection() {
                 }}>
                 <div className="grid items-center gap-3" style={{gridTemplateColumns:"48px 1fr 90px 80px 80px"}}>
 
-                  <div className="font-bold text-[14px] text-white">{r.sym}</div>
+                  <div className="font-bold text-[14px] text-text-primary">{r.sym}</div>
 
                   <div>
                     <AnimBar pct={oiPct} color="#0affe0" height={5} delay={i*0.04}/>
-                    <div className="mt-1 text-[8px] text-white/20">{oiPct.toFixed(0)}% от макс.</div>
+                    <div className="mt-1 text-[8px] text-text-primary/20">{oiPct.toFixed(0)}% от макс.</div>
                   </div>
 
-                  <div className="text-right font-mono text-[12px] text-white/70">
+                  <div className="text-right font-mono text-[12px] text-text-primary/70">
                     {r.oi>0 ? fmtB(r.oi) : "-"}
                   </div>
 
@@ -704,7 +704,7 @@ function DerivativesSection() {
                     <div className="font-mono text-[12px] font-bold" style={{color:frColor}}>
                       {fr>=0?"+":""}{frPct.toFixed(4)}%
                     </div>
-                    <div className="mt-0.5 text-[8px] font-semibold text-white/25">
+                    <div className="mt-0.5 text-[8px] font-semibold text-text-primary/25">
                       {fr>0.01?"ПЕРЕГРЕВ":fr>0.001?"ЛОНГИ":fr<-0.001?"ШОРТЫ":"НЕЙТР."}
                     </div>
                   </div>
@@ -719,7 +719,7 @@ function DerivativesSection() {
           })}
         </div>
 
-        <p className="mt-3 text-[8.5px] text-white/15">
+        <p className="mt-3 text-[8.5px] text-text-primary/15">
           Funding {">"} 0% - лонги переплачивают (перегрев) · Funding {"<"} 0% - шорты платят лонгам (бычий сигнал)
         </p>
       </>}
@@ -810,8 +810,8 @@ function OnchainSection() {
         <div className="mb-4 grid grid-cols-2 gap-3">
 
           {/* Fear & Greed card */}
-          <div className="sm-hover rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-            <div className="mb-1 text-[9px] uppercase tracking-widest text-white/25">Fear & Greed Index</div>
+          <div className="sm-hover rounded-2xl border border-border bg-white/[0.02] p-4">
+            <div className="mb-1 text-[9px] uppercase tracking-widest text-text-primary/25">Fear & Greed Index</div>
             <FearGaugeSmall val={fgVal} color={fgColor}/>
             <div className="mt-1 text-center">
               <span className="text-[13px] font-bold" style={{color:fgColor}}>
@@ -821,8 +821,8 @@ function OnchainSection() {
           </div>
 
           {/* Dominance card */}
-          <div className="sm-hover rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-            <div className="mb-3 text-[9px] uppercase tracking-widest text-white/25">Доминация крипторынка</div>
+          <div className="sm-hover rounded-2xl border border-border bg-white/[0.02] p-4">
+            <div className="mb-3 text-[9px] uppercase tracking-widest text-text-primary/25">Доминация крипторынка</div>
             <div className="space-y-3">
               {[
                 {label:"BTC",    val:d.btcDom,    col:"#f0b90b"},
@@ -833,7 +833,7 @@ function OnchainSection() {
                 <div key={x.label}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] font-semibold" style={{color:x.col}}>{x.label}</span>
-                    <span className="font-mono text-[11px] font-bold text-white">{x.val.toFixed(1)}%</span>
+                    <span className="font-mono text-[11px] font-bold text-text-primary">{x.val.toFixed(1)}%</span>
                   </div>
                   <AnimBar pct={x.val} color={x.col} height={5} delay={i*0.08}/>
                 </div>
@@ -863,9 +863,9 @@ function OnchainSection() {
                 background:`${m.color}09`,
                 border:`1px solid ${m.color}20`,
               }}>
-              <div className="mb-1 text-[8.5px] uppercase tracking-widest text-white/25">{m.label}</div>
+              <div className="mb-1 text-[8.5px] uppercase tracking-widest text-text-primary/25">{m.label}</div>
               <div className="font-mono text-[15px] font-extrabold leading-none" style={{color:m.color}}>{m.value}</div>
-              <div className="mt-1 text-[9px] text-white/30">{m.sub}</div>
+              <div className="mt-1 text-[9px] text-text-primary/30">{m.sub}</div>
             </div>
           ))}
         </div>
@@ -956,7 +956,7 @@ function FundingHeatmapSection() {
           ].map((s,i)=>(
             <div key={s.label} className="sm-fade-up rounded-2xl px-4 py-3.5 text-center"
               style={{animationDelay:`${i*0.05}s`,background:s.bg,border:`1px solid ${s.border}`}}>
-              <div className="mb-1 text-[9px] uppercase tracking-widest text-white/25">{s.label}</div>
+              <div className="mb-1 text-[9px] uppercase tracking-widest text-text-primary/25">{s.label}</div>
               <div className="font-mono text-[16px] font-extrabold" style={{color:s.color}}>{s.value}</div>
             </div>
           ))}
@@ -985,7 +985,7 @@ function FundingHeatmapSection() {
 
                 {/* Symbol */}
                 <div className="mb-2.5 flex items-center justify-between">
-                  <span className="text-[12px] font-black text-white/80">{r.sym}</span>
+                  <span className="text-[12px] font-black text-text-primary/80">{r.sym}</span>
                   <span className="text-[7px] font-bold uppercase tracking-wider"
                     style={{color:th.color,opacity:0.8}}>{th.label}</span>
                 </div>
@@ -1007,7 +1007,7 @@ function FundingHeatmapSection() {
                     style={{color:r.pct24h>=0?"#0ecb81":"#f6465d"}}>
                     {r.pct24h>=0?"+":""}{r.pct24h.toFixed(2)}%
                   </span>
-                  {next && <span className="text-[8px] text-white/20">через {next}</span>}
+                  {next && <span className="text-[8px] text-text-primary/20">через {next}</span>}
                 </div>
 
               </div>
@@ -1015,7 +1015,7 @@ function FundingHeatmapSection() {
           })}
         </div>
 
-        <p className="mt-3 text-[8.5px] text-white/15">
+        <p className="mt-3 text-[8.5px] text-text-primary/15">
           FR {"<"} 0% - шорты платят лонгам (бычий) · FR {">"} 0.01% - лонги перегреты
         </p>
 
@@ -1104,10 +1104,10 @@ function TrendingSection() {
                 </span>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={c.thumb} alt={c.symbol} className="h-6 w-6 flex-shrink-0 rounded-full ring-1 ring-white/10" />
-                <span className="font-bold text-[13px] text-white">{c.symbol}</span>
-                <span className="truncate text-[11px] text-white/30">{c.name}</span>
+                <span className="font-bold text-[13px] text-text-primary">{c.symbol}</span>
+                <span className="truncate text-[11px] text-text-primary/30">{c.name}</span>
                 {c.rank != null && (
-                  <span className="ml-auto flex-shrink-0 rounded-md bg-white/[0.05] px-2 py-0.5 font-mono text-[9px] font-semibold text-white/40">
+                  <span className="ml-auto flex-shrink-0 rounded-md bg-white/[0.05] px-2 py-0.5 font-mono text-[9px] font-semibold text-text-primary/40">
                     #{c.rank}
                   </span>
                 )}
@@ -1149,7 +1149,7 @@ function BtcNetworkSection() {
         <div className="space-y-4">
           {/* Комиссии по приоритету */}
           <div>
-            <div className="mb-2 text-[9px] uppercase tracking-widest text-white/25">Комиссия сети (sat/vB)</div>
+            <div className="mb-2 text-[9px] uppercase tracking-widest text-text-primary/25">Комиссия сети (sat/vB)</div>
             <div className="grid grid-cols-4 gap-2">
               {feeTiers.map((f, i) => (
                 <div key={f.label} className="sm-fade-up rounded-xl px-2 py-2.5 text-center"
@@ -1157,7 +1157,7 @@ function BtcNetworkSection() {
                   <div className="font-mono text-[18px] font-extrabold leading-none" style={{ color: f.color, textShadow: `0 0 16px ${f.color}40` }}>
                     {f.value}
                   </div>
-                  <div className="mt-1.5 text-[8px] uppercase tracking-wider text-white/30">{f.label}</div>
+                  <div className="mt-1.5 text-[8px] uppercase tracking-wider text-text-primary/30">{f.label}</div>
                 </div>
               ))}
             </div>
@@ -1176,7 +1176,7 @@ function BtcNetworkSection() {
               border={diffPos ? "rgba(14,203,129,0.2)" : "rgba(246,70,93,0.2)"} delay={0.15} />
           </div>
 
-          <p className="text-[9px] text-white/15">
+          <p className="text-[9px] text-text-primary/15">
             Низкая комиссия = свободная сеть · рост сложности = приток майнеров (бычий сигнал для безопасности сети).
           </p>
         </div>
@@ -1194,7 +1194,7 @@ export default function SmartMoneyPage() {
       <div className="space-y-5">
 
         {/* Page header */}
-        <div className="sm-fade relative overflow-hidden rounded-2xl border border-white/[0.06] px-6 py-5"
+        <div className="sm-fade relative overflow-hidden rounded-2xl border border-border px-6 py-5"
           style={{background:"linear-gradient(135deg,rgba(240,185,11,0.08),rgba(10,255,224,0.04),rgba(14,203,129,0.05))"}}>
           <div className="pointer-events-none absolute inset-0"
             style={{background:"radial-gradient(ellipse at 10% 50%,rgba(240,185,11,0.06),transparent 60%)"}}/>
@@ -1204,8 +1204,8 @@ export default function SmartMoneyPage() {
               <Building2 className="h-5 w-5 text-accent-gold"/>
             </div>
             <div>
-              <h1 className="text-[20px] font-black text-white tracking-tight">Smart Money</h1>
-              <p className="mt-0.5 text-[11px] text-white/30 tracking-wide">
+              <h1 className="text-[20px] font-black text-text-primary tracking-tight">Smart Money</h1>
+              <p className="mt-0.5 text-[11px] text-text-primary/30 tracking-wide">
                 CFTC COT · Деривативы · Ончейн · Макро · Bitcoin ETF · Потоки капитала
               </p>
             </div>

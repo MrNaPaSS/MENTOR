@@ -96,7 +96,7 @@ export default function ProfilePage() {
             )}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-lg font-bold text-white">@{p.username || "-"}</div>
+            <div className="truncate text-lg font-bold text-text-primary">@{p.username || "-"}</div>
             <div className="mt-0.5 font-mono text-xs text-text-muted">WEEX UID: {maskUid(p.weex_uid)}</div>
           </div>
         </div>
@@ -105,7 +105,7 @@ export default function ProfilePage() {
         <div className="mt-5 flex items-end justify-between">
           <div>
             <div className="text-xs font-medium text-text-muted uppercase tracking-wider">Баланс</div>
-            <div className="mt-1 font-mono text-3xl font-black tabular-nums text-white">
+            <div className="mt-1 font-mono text-3xl font-black tabular-nums text-text-primary">
               {fmtUsd(p.balance_usdt)}
               <span className="ml-1.5 text-base font-semibold text-text-muted">USDT</span>
             </div>
@@ -236,7 +236,7 @@ export default function ProfilePage() {
             >
               <ShieldCheck className="h-4 w-4" style={{ color: "#FFC400" }} />
             </div>
-            <span className="font-bold text-white">Админ панель</span>
+            <span className="font-bold text-text-primary">Админ панель</span>
           </div>
           <span style={{ color: "#FFC400" }}>→</span>
         </Link>

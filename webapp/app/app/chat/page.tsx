@@ -43,7 +43,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-[calc(100vh-9rem)] flex-col">
-      <h1 className="text-h2 mb-3 text-white">Чат сообщества</h1>
+      <h1 className="text-h2 mb-3 text-text-primary">Чат сообщества</h1>
 
       {/* Баннер Telegram */}
       <a
@@ -72,7 +72,7 @@ export default function ChatPage() {
           <div key={m.id} className={`flex ${m.self ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${
               m.self
-                ? "bg-accent-cyan/15 text-white ring-1 ring-accent-cyan/30"
+                ? "bg-accent-cyan/15 text-text-primary ring-1 ring-accent-cyan/30"
                 : "bg-bg-card text-text-primary ring-1 ring-border"
             }`}>
               <div className="mb-0.5 flex items-center gap-1 text-xs">

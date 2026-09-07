@@ -10,7 +10,7 @@ const CHIP: Record<Accent, string> = {
 };
 
 const VALUE: Record<Accent, string> = {
-  cyan: "text-white",
+  cyan: "text-text-primary",
   gold: "text-accent-gold",
   success: "text-success",
   danger: "text-danger",
@@ -35,7 +35,7 @@ interface StatCardProps {
 /** Премиум KPI-карточка: стеклянная, с верхней неоновой кромкой и иконкой-чипом. */
 export default function StatCard({ icon: Icon, label, value, accent = "cyan", hint, loading }: StatCardProps) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-border bg-bg-card/80 p-5 shadow-card backdrop-blur-sm transition hover:border-white/20">
+    <div className="group relative overflow-hidden rounded-2xl border border-border bg-bg-card/80 p-5 shadow-card backdrop-blur-sm transition hover:border-border">
       <div className={`absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent to-transparent ${LINE[accent]}`} />
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wider text-text-muted">{label}</span>

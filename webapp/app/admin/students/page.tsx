@@ -60,7 +60,7 @@ export default function AdminStudents() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-h2 text-white">Ученики ({students.length})</h1>
+      <h1 className="text-h2 text-text-primary">Ученики ({students.length})</h1>
 
       {/* Сводка по входам: сразу видно, до кого платформа ещё не дотянулась. */}
       {loaded && students.length > 0 && (
@@ -92,7 +92,7 @@ export default function AdminStudents() {
           <div className="space-y-2">
             {pending.map((s) => (
               <div key={s.id} className="flex items-center justify-between rounded-xl border border-border bg-bg-panel px-4 py-2.5">
-                <span className="font-medium text-white">@{s.username || s.id}</span>
+                <span className="font-medium text-text-primary">@{s.username || s.id}</span>
                 <div className="flex gap-2">
                   <button onClick={() => approve(s.id)} disabled={busy === s.id} className="btn-primary px-3 py-1.5 text-xs">
                     <Check className="h-3.5 w-3.5" /> Принять
@@ -130,7 +130,7 @@ export default function AdminStudents() {
             <tbody>
               {students.map((s) => (
                 <tr key={s.id} className="border-t border-border/60">
-                  <td className="py-2.5 font-medium text-white">@{s.username || s.id}</td>
+                  <td className="py-2.5 font-medium text-text-primary">@{s.username || s.id}</td>
                   <td className="font-mono text-text-muted">{maskUid(s.weex_uid)}</td>
                   <td>
                     <div className="flex gap-1 rounded-lg border border-border bg-bg-panel p-0.5">
@@ -208,7 +208,7 @@ function SummaryCard({
   total: number;
   tone?: "ok" | "warn";
 }) {
-  const color = tone === "ok" ? "text-success" : tone === "warn" ? "text-accent-gold" : "text-white";
+  const color = tone === "ok" ? "text-success" : tone === "warn" ? "text-accent-gold" : "text-text-primary";
   const share = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
     <div className="rounded-xl border border-border bg-bg-panel p-4">

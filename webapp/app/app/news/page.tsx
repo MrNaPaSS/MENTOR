@@ -77,13 +77,13 @@ function LiveStream({ channelId, name, muted = true }: { channelId: string; name
       {offline && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black">
           <span className="text-3xl">📡</span>
-          <p className="text-sm font-semibold text-white">{name}</p>
+          <p className="text-sm font-semibold text-text-primary">{name}</p>
           <p className="text-xs text-text-muted">Канал не в эфире прямо сейчас</p>
           <a
             href={`https://www.youtube.com/@${channelId}/live`}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-1 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-500"
+            className="mt-1 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-text-primary hover:bg-red-500"
           >
             ▶ Открыть на YouTube
           </a>
@@ -180,7 +180,7 @@ function CryptoNewsFeed() {
           className="flex gap-3 rounded-xl border border-border/40 bg-bg-panel/40 p-3 transition hover:border-accent-cyan/30 hover:bg-accent-cyan/5"
         >
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-white leading-snug line-clamp-2">{n.title}</p>
+            <p className="text-sm font-semibold text-text-primary leading-snug line-clamp-2">{n.title}</p>
             <p className="mt-0.5 text-[11px] text-text-muted line-clamp-2">{n.body}</p>
             <div className="mt-1.5 flex items-center gap-2 text-[10px] text-text-muted">
               <span className="font-semibold text-accent-cyan">{n.source}</span>
@@ -245,7 +245,7 @@ export default function NewsPage() {
       <div className="fixed inset-0 z-[100] flex flex-col bg-black">
         <div className="flex items-center justify-between bg-bg-panel px-4 py-2">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-white">{fullscreenCh.name}</span>
+            <span className="text-sm font-bold text-text-primary">{fullscreenCh.name}</span>
             <LiveIndicator />
           </div>
           <button onClick={() => setFullscreenId(null)} className="btn-outline px-3 py-1.5 text-xs">
@@ -264,7 +264,7 @@ export default function NewsPage() {
       {/* Заголовок + табы */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-white">Новости & ТВ</h1>
+          <h1 className="text-2xl font-extrabold text-text-primary">Новости & ТВ</h1>
           <p className="text-sm text-text-muted">Прямые эфиры, TradingView лента и крипто-новости</p>
         </div>
 
@@ -279,7 +279,7 @@ export default function NewsPage() {
               <button
                 key={key}
                 onClick={() => setTab(key)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${tab === key ? "bg-accent-cyan text-bg-deep" : "text-text-muted hover:text-white"}`}
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${tab === key ? "bg-accent-cyan text-bg-deep" : "text-text-muted hover:text-text-primary"}`}
               >
                 {label}
               </button>
@@ -293,7 +293,7 @@ export default function NewsPage() {
                 <button
                   key={n}
                   onClick={() => setGrid(n)}
-                  className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${gridSize === n ? "bg-white/15 text-white" : "text-text-muted hover:text-white"}`}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${gridSize === n ? "bg-white/15 text-text-primary" : "text-text-muted hover:text-text-primary"}`}
                 >
                   {n === 1 ? "1×1" : n === 2 ? "1×2" : n === 4 ? "2×2" : "2×3"}
                 </button>
@@ -314,7 +314,7 @@ export default function NewsPage() {
       {tab === "crypto" && (
         <div className="card">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-bold text-white">Крипто-новости (English)</h2>
+            <h2 className="text-base font-bold text-text-primary">Крипто-новости (English)</h2>
             <span className="text-[10px] text-text-muted">источник: CryptoCompare</span>
           </div>
           <CryptoNewsFeed />
@@ -335,7 +335,7 @@ export default function NewsPage() {
                   className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
                     active
                       ? "border-accent-cyan/50 bg-accent-cyan/10 text-accent-cyan"
-                      : "border-border bg-bg-panel text-text-muted hover:text-white"
+                      : "border-border bg-bg-panel text-text-muted hover:text-text-primary"
                   }`}
                 >
                   {active && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-cyan" />}
@@ -366,13 +366,13 @@ export default function NewsPage() {
                         className="h-2 w-2 rounded-full"
                         style={{ backgroundColor: ch.color }}
                       />
-                      <span className="text-sm font-semibold text-white">{ch.name}</span>
+                      <span className="text-sm font-semibold text-text-primary">{ch.name}</span>
                       <LiveIndicator />
                     </div>
                     <div className="flex gap-2 opacity-0 transition group-hover:opacity-100">
                       <button
                         onClick={() => setFullscreenId(ch.id)}
-                        className="rounded-lg bg-white/5 px-2 py-1 text-[10px] text-text-muted hover:text-white"
+                        className="rounded-lg bg-white/5 px-2 py-1 text-[10px] text-text-muted hover:text-text-primary"
                       >
                         ⛶ Fullscreen
                       </button>

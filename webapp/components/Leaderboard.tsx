@@ -50,24 +50,24 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
   const maxBalance = parseFloat(visible[0]?.balance || "1");
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/8"
+    <div className="overflow-hidden rounded-2xl border border-border"
       style={{ background: "linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)" }}
     >
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
         {showHeading && (
           <div className="flex items-center gap-2">
             <Crown className="h-5 w-5 text-accent-gold" />
-            <h3 className="text-xl font-bold text-white">Лидерборд</h3>
+            <h3 className="text-xl font-bold text-text-primary">Лидерборд</h3>
           </div>
         )}
-        <div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+        <div className="flex gap-1 rounded-xl border border-border bg-white/[0.03] p-1">
           {PERIODS.map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                period === p ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"
+                period === p ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-text-primary"
               }`}
             >
               {p}
@@ -108,7 +108,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
                   className={`mx-auto mt-2 rounded-2xl object-cover ring-2 ring-white/20 ${isFirst ? "h-16 w-16" : "h-12 w-12"}`}
                   loading="lazy"
                 />
-                <div className="mt-2 font-bold text-white">@{r.username ?? "-"}</div>
+                <div className="mt-2 font-bold text-text-primary">@{r.username ?? "-"}</div>
                 <div className="text-[10px] text-text-muted">{modeLabel(r.mode)}</div>
                 <div
                   className="mt-3 font-mono text-lg font-extrabold"
@@ -151,11 +151,11 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
                   loading="lazy"
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-white text-sm">@{r.username}</div>
+                  <div className="font-medium text-text-primary text-sm">@{r.username}</div>
                   <div className="text-[11px] text-text-muted">{modeLabel(r.mode)}</div>
                 </div>
                 <div className="w-24 shrink-0">
-                  <div className="text-right font-mono text-sm font-bold text-white">${fmtUsd(r.balance)}</div>
+                  <div className="text-right font-mono text-sm font-bold text-text-primary">${fmtUsd(r.balance)}</div>
                   <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/5">
                     <div
                       className="h-full rounded-full bg-accent-cyan/60"
@@ -184,7 +184,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
       )}
 
       {/* Footer */}
-      <div className="flex items-center gap-2 border-t border-white/5 px-5 py-3 text-xs text-text-muted">
+      <div className="flex items-center gap-2 border-t border-border px-5 py-3 text-xs text-text-muted">
         <Medal className="h-3.5 w-3.5 text-accent-gold" />
         Топ-3 отмечены медалями · Баланс USDT · Обновляется каждые 24ч
       </div>

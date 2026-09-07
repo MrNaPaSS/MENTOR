@@ -45,7 +45,7 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
   const [chartOpen, setChartOpen] = useState(false);
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-white/[0.07] bg-bg-panel">
+    <article className="overflow-hidden rounded-2xl border border-border bg-bg-panel">
 
       {/* ── График (hero) ─────────────────────────────────────── */}
       {img ? (
@@ -66,7 +66,7 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
 
           {/* Бейджи поверх изображения */}
           <div className="absolute left-4 top-4 flex items-center gap-2">
-            <span className="flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur-sm">
+            <span className="flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-text-primary backdrop-blur-sm">
               <TrendingUp className="h-3 w-3 text-accent-cyan" />
               Анализ
             </span>
@@ -78,13 +78,13 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
           </div>
 
           {/* Кнопка открыть - появляется при hover */}
-          <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-[11px] text-white/70 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+          <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-[11px] text-text-primary/70 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
             <ExternalLink className="h-3 w-3" />
             TradingView
           </div>
 
           {/* Дата поверх нижнего градиента */}
-          <div className="absolute bottom-3 left-4 text-[11px] text-white/50">
+          <div className="absolute bottom-3 left-4 text-[11px] text-text-primary/50">
             {fmtDate(item.created_at)}
           </div>
         </a>
@@ -95,7 +95,7 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-cyan/10">
               <TrendingUp className="h-3.5 w-3.5 text-accent-cyan" />
             </span>
-            <span className="text-sm font-semibold text-white">Анализ</span>
+            <span className="text-sm font-semibold text-text-primary">Анализ</span>
             {item.audience !== "all" && (
               <span className="rounded-md border border-accent-gold/30 bg-accent-gold/10 px-2 py-0.5 text-[10px] font-semibold text-accent-gold">
                 {AUDIENCE_LABEL[item.audience] ?? item.audience}
@@ -117,7 +117,7 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
 
       {/* ── Футер: дата + кнопка «Открыть график» ───────────── */}
       {(!img || item.symbol) && (
-        <div className="flex items-center justify-between gap-3 border-t border-white/[0.05] px-5 py-3">
+        <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
           <span className="text-[11px] text-text-muted">{!img ? fmtDate(item.created_at) : ""}</span>
           {item.symbol && (
             <button
@@ -126,7 +126,7 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
             >
               <CandlestickChart className="h-3.5 w-3.5" />
               Открыть график
-              <span className="font-mono text-[11px] text-white/50">{item.symbol}</span>
+              <span className="font-mono text-[11px] text-text-primary/50">{item.symbol}</span>
             </button>
           )}
         </div>
@@ -157,7 +157,7 @@ function AnalysisFeed() {
       {!loaded ? (
         <div className="space-y-4 xl:max-w-2xl">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="overflow-hidden rounded-2xl border border-white/[0.07] bg-bg-panel">
+            <div key={i} className="overflow-hidden rounded-2xl border border-border bg-bg-panel">
               <div className="skeleton h-64 w-full" />
               <div className="space-y-2 p-5">
                 <div className="skeleton h-4 w-3/4 rounded-lg" />
@@ -167,7 +167,7 @@ function AnalysisFeed() {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-2xl border border-white/[0.07] bg-bg-panel grid place-items-center py-24 text-center text-text-muted">
+        <div className="rounded-2xl border border-border bg-bg-panel grid place-items-center py-24 text-center text-text-muted">
           <TrendingUp className="mb-3 h-10 w-10 opacity-20" />
           <p className="font-medium">Анализов пока нет</p>
           <p className="mt-1 text-sm opacity-60">Ментор ещё не опубликовал анализ</p>
@@ -203,7 +203,7 @@ export default function AnalysisPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-extrabold text-white">Анализы</h1>
+        <h1 className="text-2xl font-extrabold text-text-primary">Анализы</h1>
         <p className="text-sm text-text-muted">
           {tab === "analysis" ? "Разборы рынка от ментора" : "Сигналы, рассчитанные под ваш депозит"}
         </p>
@@ -215,7 +215,7 @@ export default function AnalysisPage() {
         <button
           onClick={() => setTab("analysis")}
           className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
-            tab === "analysis" ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"
+            tab === "analysis" ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-text-primary"
           }`}
         >
           <ImageIcon className="h-4 w-4" />
@@ -232,7 +232,7 @@ export default function AnalysisPage() {
               ? "cursor-not-allowed text-text-muted/40"
               : tab === "signals"
               ? "bg-accent-cyan/15 text-accent-cyan"
-              : "text-text-muted hover:text-white"
+              : "text-text-muted hover:text-text-primary"
           }`}
         >
           {signalsLocked ? <Lock className="h-3.5 w-3.5" /> : <Radio className="h-4 w-4" />}

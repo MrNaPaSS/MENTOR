@@ -56,7 +56,7 @@ export default function DevBar() {
             <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-accent-gold">
               <Wrench className="h-3.5 w-3.5" /> Dev-вход
             </span>
-            <button onClick={() => setOpen(false)} className="text-text-muted hover:text-white" aria-label="Закрыть">
+            <button onClick={() => setOpen(false)} className="text-text-muted hover:text-text-primary" aria-label="Закрыть">
               <X className="h-4 w-4" />
             </button>
           </div>

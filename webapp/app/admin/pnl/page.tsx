@@ -60,7 +60,7 @@ export default function PnlPage() {
 
   return (
     <div className="max-w-4xl space-y-6">
-      <h1 className="text-h2 text-white">PnL скриншоты</h1>
+      <h1 className="text-h2 text-text-primary">PnL скриншоты</h1>
 
       {/* Загрузка */}
       <div className="card space-y-4">
@@ -73,7 +73,7 @@ export default function PnlPage() {
           onDrop={(e) => { e.preventDefault(); handleUpload(e.dataTransfer.files); }}
         >
           <Upload className="h-8 w-8 text-text-muted" />
-          <p className="text-sm font-semibold text-white">Кликни или перетащи файлы</p>
+          <p className="text-sm font-semibold text-text-primary">Кликни или перетащи файлы</p>
           <p className="text-xs text-text-muted">JPG, PNG, WEBP</p>
         </div>
 
@@ -108,7 +108,7 @@ export default function PnlPage() {
               />
               <button
                 onClick={() => handleDelete(img.name)}
-                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/70 text-white opacity-0 transition hover:bg-danger/80 group-hover:opacity-100"
+                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/70 text-text-primary opacity-0 transition hover:bg-danger/80 group-hover:opacity-100"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

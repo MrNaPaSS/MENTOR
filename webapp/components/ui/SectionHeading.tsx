@@ -25,7 +25,7 @@ export default function SectionHeading({
           {eyebrow}
         </span>
       )}
-      <h2 className="text-h2 text-white">{title}</h2>
+      <h2 className="text-h2 text-text-primary">{title}</h2>
       {subtitle && (
         <p className="max-w-2xl text-text-secondary">{subtitle}</p>
       )}

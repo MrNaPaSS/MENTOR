@@ -208,7 +208,7 @@ export default function Calculator() {
               >
                 <TrendingUp className="h-7 w-7" style={{ color: "#0AFFE0", opacity: 0.5 }} />
               </div>
-              <p className="font-semibold text-white opacity-40">Заполни параметры</p>
+              <p className="font-semibold text-text-primary opacity-40">Заполни параметры</p>
               <p className="mt-1 text-xs text-text-muted opacity-60">Маржа · объём · риск · тейки появятся здесь</p>
             </div>
           ) : (

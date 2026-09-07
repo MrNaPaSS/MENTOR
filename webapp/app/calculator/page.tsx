@@ -57,7 +57,7 @@ export default function CalculatorPage() {
               <div className="grid h-10 w-10 place-items-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/25">
                 <Icon className="h-5 w-5" />
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-white">{title}</h3>
+              <h3 className="mt-4 text-lg font-semibold text-text-primary">{title}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-text-secondary">{text}</p>
             </Reveal>
           ))}

@@ -30,7 +30,7 @@ function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex gap-0.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-1">
+    <div className="flex gap-0.5 rounded-xl border border-border bg-white/[0.02] p-1">
       {options.map((o) => {
         const active = value === o.key;
         return (
@@ -39,8 +39,8 @@ function Segmented<T extends string>({
             onClick={() => onChange(o.key)}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
               active
-                ? "bg-white/[0.07] text-white ring-1 ring-inset ring-white/[0.08]"
-                : "text-text-muted hover:text-white/80"
+                ? "bg-white/[0.07] text-text-primary ring-1 ring-inset ring-white/[0.08]"
+                : "text-text-muted hover:text-text-primary/80"
             }`}
           >
             {o.dot && <span className={`h-1.5 w-1.5 rounded-full ${o.dot}`} />}
@@ -89,7 +89,7 @@ export default function SignalsFeed() {
   return (
     <div className="space-y-5">
       {/* ── Панель управления ───────────────────────────────────── */}
-      <div className="rounded-2xl border border-white/[0.06] bg-bg-panel/40 p-3 sm:p-4">
+      <div className="rounded-2xl border border-border bg-bg-panel/40 p-3 sm:p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           {/* Фильтры */}
           <div className="flex flex-wrap items-center gap-2">
@@ -112,7 +112,7 @@ export default function SignalsFeed() {
                     const n = parseInt(e.target.value.replace(/\D/g, ""), 10);
                     setBalance(Number.isNaN(n) ? 0 : n);
                   }}
-                  className="w-24 bg-transparent font-mono text-sm font-bold text-white outline-none tabular"
+                  className="w-24 bg-transparent font-mono text-sm font-bold text-text-primary outline-none tabular"
                 />
                 <span className="text-[10px] font-medium text-text-muted">USDT</span>
               </div>
@@ -124,7 +124,7 @@ export default function SignalsFeed() {
         <div className="relative mt-3">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
           <input
-            className="w-full rounded-xl border border-white/[0.06] bg-white/[0.02] py-2.5 pl-10 pr-3 text-sm text-white placeholder:text-text-muted outline-none transition focus:border-accent-cyan/40 focus:bg-white/[0.03]"
+            className="w-full rounded-xl border border-border bg-white/[0.02] py-2.5 pl-10 pr-3 text-sm text-text-primary placeholder:text-text-muted outline-none transition focus:border-accent-cyan/40 focus:bg-white/[0.03]"
             placeholder="Поиск по паре - BTC, ETH, SOL…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -136,13 +136,13 @@ export default function SignalsFeed() {
       {!loaded ? (
         <div className="grid gap-4 xl:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="overflow-hidden rounded-2xl border border-white/[0.06] bg-bg-panel">
+            <div key={i} className="overflow-hidden rounded-2xl border border-border bg-bg-panel">
               <div className="skeleton h-64 w-full" />
             </div>
           ))}
         </div>
       ) : visible.length === 0 ? (
-        <div className="grid place-items-center rounded-2xl border border-white/[0.06] bg-bg-panel py-20 text-center text-text-muted">
+        <div className="grid place-items-center rounded-2xl border border-border bg-bg-panel py-20 text-center text-text-muted">
           <Radio className="mb-3 h-10 w-10 opacity-20" />
           <p className="font-medium">Сигналов не найдено</p>
           <p className="mt-1 text-sm opacity-60">
@@ -153,7 +153,7 @@ export default function SignalsFeed() {
         <>
           <div className="flex items-center justify-between px-1">
             <span className="text-xs text-text-muted">
-              Показано <span className="font-semibold text-white">{visible.length}</span>
+              Показано <span className="font-semibold text-text-primary">{visible.length}</span>
               {activeCount > 0 && (
                 <>
                   {" · "}

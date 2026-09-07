@@ -65,7 +65,7 @@ export default function InstallPrompt() {
           <Download className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-white">Установить NMNH</p>
+          <p className="text-sm font-semibold text-text-primary">Установить NMNH</p>
           {iosHint ? (
             <p className="flex items-center gap-1 text-xs text-text-muted">
               Нажми <Share className="inline h-3 w-3" /> «Поделиться» → «На экран Домой»
@@ -79,7 +79,7 @@ export default function InstallPrompt() {
             Установить
           </button>
         )}
-        <button onClick={dismiss} className="grid h-8 w-8 place-items-center rounded-lg text-text-muted hover:text-white" aria-label="Закрыть">
+        <button onClick={dismiss} className="grid h-8 w-8 place-items-center rounded-lg text-text-muted hover:text-text-primary" aria-label="Закрыть">
           <X className="h-4 w-4" />
         </button>
       </div>

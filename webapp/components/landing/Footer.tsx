@@ -26,13 +26,13 @@ export default function Footer() {
             <ul className="mt-4 space-y-2.5 text-sm">
               {NAV_LINKS.map((l) => (
                 <li key={l.href}>
-                  <a href={l.href} className="text-text-secondary transition hover:text-white">
+                  <a href={l.href} className="text-text-secondary transition hover:text-text-primary">
                     {l.label}
                   </a>
                 </li>
               ))}
               <li>
-                <Link href="/calculator" className="text-text-secondary transition hover:text-white">
+                <Link href="/calculator" className="text-text-secondary transition hover:text-text-primary">
                   Калькулятор
                 </Link>
               </li>
@@ -45,7 +45,7 @@ export default function Footer() {
               href={SOCIAL_LINKS.weexAffiliate}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-white transition hover:border-accent-cyan/40"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-text-primary transition hover:border-accent-cyan/40"
             >
               Биржа WEEX →
             </a>

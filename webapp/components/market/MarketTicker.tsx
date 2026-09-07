@@ -63,7 +63,13 @@ export default function MarketTicker() {
   const items = [...tickers, ...tickers];
 
   return (
-    <div className="overflow-hidden border-b border-border/50 bg-bg-deep/90 backdrop-blur-sm">
+    // Бегущая строка остаётся тёмной в любой теме: это витрина рынка, и она
+    // читается как отдельная полоса над сайтом, а не как его часть. Цвета
+    // заданы прямо, мимо палитры, которую переключает тема терминала.
+    <div
+      className="overflow-hidden border-b backdrop-blur-sm"
+      style={{ background: "rgba(11,14,17,0.9)", borderColor: "rgba(43,49,57,0.5)" }}
+    >
       <div
         ref={trackRef}
         className="flex animate-marquee gap-8 whitespace-nowrap py-2 will-change-transform"
@@ -79,8 +85,10 @@ export default function MarketTicker() {
                 className="inline-block h-1.5 w-1.5 rounded-full"
                 style={{ backgroundColor: pos ? "#00D4A0" : "#FF4757" }}
               />
-              <span className="font-semibold text-text-secondary">{sym}</span>
-              <span className="font-mono font-medium text-white tabular-nums">
+              <span className="font-semibold" style={{ color: "#B7BDC6" }}>
+                {sym}
+              </span>
+              <span className="font-mono font-medium tabular-nums" style={{ color: "#FFFFFF" }}>
                 ${formatPrice(t.price)}
               </span>
               <span

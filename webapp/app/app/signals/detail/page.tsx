@@ -34,7 +34,7 @@ function SignalDetailContent() {
 
   const levels = signal
     ? [
-        { label: "Вход", value: signal.entry_price, tone: "text-white" },
+        { label: "Вход", value: signal.entry_price, tone: "text-text-primary" },
         { label: "Стоп-лосс", value: signal.stop_loss, tone: "text-danger" },
         { label: "TP1", value: signal.tp1, tone: "text-success" },
         { label: "TP2", value: signal.tp2, tone: "text-success" },
@@ -55,7 +55,7 @@ function SignalDetailContent() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className={`badge-${long ? "success" : "danger"} text-sm`}>{signal.direction}</span>
-              <h1 className="text-h3 text-white">{signal.symbol}</h1>
+              <h1 className="text-h3 text-text-primary">{signal.symbol}</h1>
               <span className="text-text-muted">x{signal.leverage}</span>
             </div>
             <span className={`badge-${signal.status === "active" ? "cyan" : "muted"}`}>

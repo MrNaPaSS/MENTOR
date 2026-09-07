@@ -41,7 +41,7 @@ export default function AdminSignals() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-h2 text-white">Сигналы</h1>
+      <h1 className="text-h2 text-text-primary">Сигналы</h1>
 
       <div className="card overflow-x-auto">
         {!loaded ? (
@@ -66,7 +66,7 @@ export default function AdminSignals() {
               {signals.map((s) => (
                 <tr key={s.id} className="border-t border-border/60">
                   <td className="py-2.5 font-mono text-text-muted">{s.id}</td>
-                  <td className="font-semibold text-white">{s.symbol}</td>
+                  <td className="font-semibold text-text-primary">{s.symbol}</td>
                   <td>
                     <span className={`badge-${isLong(s.direction) ? "success" : "danger"}`}>{s.direction}</span>
                   </td>
@@ -100,7 +100,7 @@ export default function AdminSignals() {
                           </button>
                           <button
                             onClick={() => setConfirmDelete(null)}
-                            className="rounded-lg border border-border px-2 py-1.5 text-xs text-text-muted hover:text-white transition"
+                            className="rounded-lg border border-border px-2 py-1.5 text-xs text-text-muted hover:text-text-primary transition"
                           >
                             Отмена
                           </button>

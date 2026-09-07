@@ -6,7 +6,7 @@ import { API_URL } from "@/lib/api";
 
 function PnlCard({ src }: { src: string }) {
   return (
-    <div className="group relative w-[380px] shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-bg-deep shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300 hover:-translate-y-1 hover:border-accent-cyan/25 hover:shadow-[0_12px_40px_rgba(10,255,224,0.07)]">
+    <div className="group relative w-[380px] shrink-0 overflow-hidden rounded-2xl border border-border bg-bg-deep shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300 hover:-translate-y-1 hover:border-accent-cyan/25 hover:shadow-[0_12px_40px_rgba(10,255,224,0.07)]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}

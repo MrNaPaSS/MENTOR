@@ -92,7 +92,7 @@ export default function Faq() {
                     >
                       {f.tag}
                     </span>
-                    <span className="font-semibold leading-snug text-white">{f.q}</span>
+                    <span className="font-semibold leading-snug text-text-primary">{f.q}</span>
                   </div>
 
                   {/* Chevron */}
@@ -141,7 +141,7 @@ export default function Faq() {
           }}
         >
           <div className="flex-1">
-            <p className="font-bold text-white">Остался вопрос?</p>
+            <p className="font-bold text-text-primary">Остался вопрос?</p>
             <p className="mt-1 text-sm text-text-secondary">
               Напишите в Telegram - отвечаем в течение нескольких часов.
             </p>

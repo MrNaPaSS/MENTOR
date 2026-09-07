@@ -1607,7 +1607,7 @@ export default function ScalpingPage() {
                 {full && (
                   <Logo
                     href="/app/analysis"
-                    tone={theme === "light" ? "text-[var(--pane-text)]" : "text-white"}
+                    tone={theme === "light" ? "text-[var(--pane-text)]" : "text-text-primary"}
                     className="pointer-events-auto absolute left-1/2 -translate-x-1/2 text-base"
                   />
                 )}

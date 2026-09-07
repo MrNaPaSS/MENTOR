@@ -13,7 +13,7 @@ export default function PageHeader({ eyebrow, title, subtitle, action }: PageHea
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
         {eyebrow && <span className="eyebrow">{eyebrow}</span>}
-        <h1 className="text-h2 mt-1 text-white">{title}</h1>
+        <h1 className="text-h2 mt-1 text-text-primary">{title}</h1>
         {subtitle && <p className="mt-1.5 text-text-secondary">{subtitle}</p>}
       </div>
       {action}

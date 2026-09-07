@@ -65,7 +65,7 @@ export default function AnalysesPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Анализы на сайте</h1>
+        <h1 className="text-2xl font-bold text-text-primary">Анализы на сайте</h1>
         <span className="text-sm text-text-muted">{items.length} записей</span>
       </div>
 
@@ -90,7 +90,7 @@ export default function AnalysesPage() {
           return (
             <div
               key={item.id}
-              className="group relative flex gap-4 overflow-hidden rounded-2xl border border-white/8 bg-white/4 p-4 transition hover:border-white/15"
+              className="group relative flex gap-4 overflow-hidden rounded-2xl border border-border bg-white/4 p-4 transition hover:border-border"
             >
               {/* Превью */}
               {img ? (
@@ -105,7 +105,7 @@ export default function AnalysesPage() {
 
               {/* Текст */}
               <div className="flex flex-1 flex-col justify-between overflow-hidden">
-                <p className="line-clamp-2 text-sm text-white/90">
+                <p className="line-clamp-2 text-sm text-text-primary/90">
                   {item.text || <span className="text-text-muted italic">без текста</span>}
                 </p>
                 <span className="mt-2 text-xs text-text-muted">{timeAgo(item.created_at)}</span>

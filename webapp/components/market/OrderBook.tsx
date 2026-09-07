@@ -132,7 +132,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
         <span
           onClick={() => setTab("book")}
           className={`cursor-pointer text-[11px] font-semibold transition ${
-            tab === "book" ? "text-white" : "text-text-muted hover:text-white"
+            tab === "book" ? "text-text-primary" : "text-text-muted hover:text-text-primary"
           }`}
         >
           Книга ордеров
@@ -140,7 +140,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
         <span
           onClick={() => setTab("trades")}
           className={`cursor-pointer text-[11px] font-semibold transition ${
-            tab === "trades" ? "text-white" : "text-text-muted hover:text-white"
+            tab === "trades" ? "text-text-primary" : "text-text-muted hover:text-text-primary"
           }`}
         >
           Сделки
@@ -335,7 +335,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
         <div className="flex items-center gap-1.5">
           <span
             className={`font-mono text-[15px] font-bold tabular transition-colors ${
-              priceDir === "up" ? "text-success" : priceDir === "down" ? "text-danger" : "text-white"
+              priceDir === "up" ? "text-success" : priceDir === "down" ? "text-danger" : "text-text-primary"
             }`}
           >
             {fmtPrice(midPrice)}

@@ -87,7 +87,7 @@ export default function FearGreed({ compact = false }: Props) {
   return (
     <div className="card space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-white">Fear & Greed Index</h3>
+        <h3 className="text-sm font-semibold text-text-primary">Fear & Greed Index</h3>
         <span className="badge-muted text-[10px]">Крипто-рынок</span>
       </div>
 

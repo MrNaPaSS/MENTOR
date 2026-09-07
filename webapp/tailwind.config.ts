@@ -12,14 +12,30 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Биржевые нейтрали уровня Binance/Bybit Pro
-        bg: { deep: "#0B0E11", card: "#181A20", panel: "#1E2329" },
-        accent: { cyan: "#0AFFE0", gold: "#F0B90B" },
-        text: { primary: "#EAECEF", secondary: "#B7BDC6", muted: "#7A8290" },
-        success: "#0ECB81",
-        danger: "#F6465D",
-        warning: "#F0B90B",
-        border: { DEFAULT: "#2B3139", accent: "#0AFFE0" },
+        // Биржевые нейтрали уровня Binance/Bybit Pro. Значения приходят из
+        // переменных каналами, поэтому у классов работает и прозрачность
+        // (bg-bg-deep/80), и подмена всей палитры светлой темой.
+        bg: {
+          deep: "rgb(var(--bg-deep) / <alpha-value>)",
+          card: "rgb(var(--bg-card) / <alpha-value>)",
+          panel: "rgb(var(--bg-panel) / <alpha-value>)",
+        },
+        accent: {
+          cyan: "rgb(var(--accent-cyan) / <alpha-value>)",
+          gold: "rgb(var(--accent-gold) / <alpha-value>)",
+        },
+        text: {
+          primary: "rgb(var(--text-primary) / <alpha-value>)",
+          secondary: "rgb(var(--text-secondary) / <alpha-value>)",
+          muted: "rgb(var(--text-muted) / <alpha-value>)",
+        },
+        success: "rgb(var(--success) / <alpha-value>)",
+        danger: "rgb(var(--danger) / <alpha-value>)",
+        warning: "rgb(var(--accent-gold) / <alpha-value>)",
+        border: {
+          DEFAULT: "rgb(var(--border) / <alpha-value>)",
+          accent: "rgb(var(--accent-cyan) / <alpha-value>)",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)", "Inter", "system-ui", "sans-serif"],

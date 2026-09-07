@@ -63,7 +63,7 @@ export default function ChartOverlay({ symbol, direction, onClose }: Props) {
       {/* Панель — переворачивается при появлении */}
       <div style={{ perspective: "2200px" }} className="relative z-10 h-[78vh] max-h-[760px] w-full max-w-[1400px]">
         <div
-          className="flex h-full flex-col overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0b0e11] shadow-[0_24px_80px_rgba(0,0,0,0.7)] transition-all duration-500 ease-[cubic-bezier(.22,.68,.16,1)]"
+          className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-[#0b0e11] shadow-[0_24px_80px_rgba(0,0,0,0.7)] transition-all duration-500 ease-[cubic-bezier(.22,.68,.16,1)]"
           style={{
             transformOrigin: "center",
             transform: show ? "rotateY(0deg)" : "rotateY(80deg)",
@@ -71,9 +71,9 @@ export default function ChartOverlay({ symbol, direction, onClose }: Props) {
           }}
         >
           {/* Шапка */}
-          <div className="flex shrink-0 items-center justify-between border-b border-white/[0.08] px-3 py-2.5 sm:px-4">
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2.5 sm:px-4">
             <div className="flex items-center gap-2.5">
-              <span className="font-mono text-base font-extrabold text-white sm:text-lg">{symbol}</span>
+              <span className="font-mono text-base font-extrabold text-text-primary sm:text-lg">{symbol}</span>
               {long !== null && (
                 <span
                   className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
@@ -91,7 +91,7 @@ export default function ChartOverlay({ symbol, direction, onClose }: Props) {
             <button
               onClick={handleClose}
               title="Закрыть (Esc)"
-              className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] px-3 py-1.5 text-[12px] font-semibold text-white/70 ring-1 ring-inset ring-white/[0.08] transition hover:bg-white/[0.08] hover:text-white"
+              className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] px-3 py-1.5 text-[12px] font-semibold text-text-primary/70 ring-1 ring-inset ring-white/[0.08] transition hover:bg-white/[0.08] hover:text-text-primary"
             >
               Закрыть
               <X className="h-4 w-4" />
@@ -103,7 +103,7 @@ export default function ChartOverlay({ symbol, direction, onClose }: Props) {
             <div className="relative min-h-0">
               <TradingChart symbol={symbol} interval="15" chartStyle="8" showToolbar fullHeight />
             </div>
-            <div ref={bookRef} className="min-h-0 overflow-hidden border-t border-white/[0.07] lg:border-l lg:border-t-0">
+            <div ref={bookRef} className="min-h-0 overflow-hidden border-t border-border lg:border-l lg:border-t-0">
               <OrderBook symbol={symbol} rows={bookRows} />
             </div>
           </div>

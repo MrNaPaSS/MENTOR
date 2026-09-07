@@ -238,18 +238,18 @@ export default function HeroChart() {
   return (
     <div className="glass overflow-hidden rounded-2xl">
       {/* Шапка терминала */}
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2.5">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent-cyan/15 text-accent-cyan ring-1 ring-accent-cyan/30">
             <TrendingUp className="h-4 w-4" />
           </span>
           <div className="leading-tight">
-            <div className="text-sm font-semibold text-white">BTCUSDT</div>
+            <div className="text-sm font-semibold text-text-primary">BTCUSDT</div>
             <div className="text-[10px] uppercase tracking-wider text-text-muted">Perpetual</div>
           </div>
         </div>
         <div className="text-right">
-          <div className="font-mono text-base font-bold text-white tabular">
+          <div className="font-mono text-base font-bold text-text-primary tabular">
             {price ? price.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "-"}
             <span className="text-text-muted"> $</span>
           </div>
@@ -266,7 +266,7 @@ export default function HeroChart() {
             key={t}
             onClick={() => setTf(t)}
             className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
-              tf === t ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"
+              tf === t ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-text-primary"
             }`}
           >
             {t}

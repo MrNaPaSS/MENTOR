@@ -112,7 +112,7 @@ export default function LoginPage() {
         </div>
 
         <div className="rounded-2xl border border-border bg-bg-card/80 p-7 shadow-card backdrop-blur-xl">
-          <h1 className="text-2xl font-bold text-white">Вход в NMNH Platform</h1>
+          <h1 className="text-2xl font-bold text-text-primary">Вход в NMNH Platform</h1>
           <p className="mt-1 text-sm text-text-muted">
             {step === 1 ? "Авторизация по WEEX UID" : "Подтверди вход кодом из Telegram"}
           </p>
@@ -174,7 +174,7 @@ export default function LoginPage() {
                     inputMode="numeric"
                     maxLength={6}
                     disabled={loading || success}
-                    className={`h-14 w-full rounded-xl border bg-bg-panel text-center font-mono text-2xl text-white outline-none transition focus:border-accent-cyan focus:ring-2 focus:ring-accent-cyan/25 ${
+                    className={`h-14 w-full rounded-xl border bg-bg-panel text-center font-mono text-2xl text-text-primary outline-none transition focus:border-accent-cyan focus:ring-2 focus:ring-accent-cyan/25 ${
                       success ? "border-success" : error ? "border-danger" : "border-border"
                     }`}
                   />
@@ -197,7 +197,7 @@ export default function LoginPage() {
 
               <div className="flex items-center justify-between text-sm">
                 <button
-                  className="inline-flex items-center gap-1 text-text-muted transition hover:text-white"
+                  className="inline-flex items-center gap-1 text-text-muted transition hover:text-text-primary"
                   onClick={() => {
                     setStep(1);
                     setDigits(Array(OTP_LEN).fill(""));

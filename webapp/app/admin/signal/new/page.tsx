@@ -81,7 +81,7 @@ export default function NewSignal() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <h1 className="text-h2 text-white">Новый сигнал</h1>
+      <h1 className="text-h2 text-text-primary">Новый сигнал</h1>
 
       <div className="card space-y-5">
 
@@ -95,7 +95,7 @@ export default function NewSignal() {
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-sm font-bold transition-all ${
                   long
                     ? "border-success/40 bg-success/10 text-success"
-                    : "border-white/10 bg-white/[0.02] text-text-muted hover:text-white"
+                    : "border-border bg-white/[0.02] text-text-muted hover:text-text-primary"
                 }`}
               >
                 <TrendingUp className="h-4 w-4" /> LONG
@@ -105,7 +105,7 @@ export default function NewSignal() {
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-sm font-bold transition-all ${
                   !long
                     ? "border-danger/40 bg-danger/10 text-danger"
-                    : "border-white/10 bg-white/[0.02] text-text-muted hover:text-white"
+                    : "border-border bg-white/[0.02] text-text-muted hover:text-text-primary"
                 }`}
               >
                 <TrendingDown className="h-4 w-4" /> SHORT
@@ -133,7 +133,7 @@ export default function NewSignal() {
                 className={`flex-1 rounded-xl border py-2 text-sm font-bold transition-all ${
                   leverage === v
                     ? "border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan"
-                    : "border-white/10 bg-white/[0.02] text-text-muted hover:text-white"
+                    : "border-border bg-white/[0.02] text-text-muted hover:text-text-primary"
                 }`}
               >
                 ×{v}
@@ -199,7 +199,7 @@ export default function NewSignal() {
             {AUDIENCE.map((a) => (
               <button key={a.key} onClick={() => setAudience(a.key)}
                 className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                  audience === a.key ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"
+                  audience === a.key ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-text-primary"
                 }`}>
                 {a.label}
               </button>
@@ -216,7 +216,7 @@ export default function NewSignal() {
 
       {deliveries && (
         <div className="card space-y-3">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-text-primary">
             Расчёт · {sentSymbol} {direction} ×{leverage} ({deliveries.length} студ.)
           </h2>
           {deliveries.length === 0 ? (
@@ -236,7 +236,7 @@ export default function NewSignal() {
               <tbody>
                 {deliveries.map((d, i) => (
                   <tr key={i} className="border-t border-border/60">
-                    <td className="py-2 font-medium text-white">@{d.username || "-"}</td>
+                    <td className="py-2 font-medium text-text-primary">@{d.username || "-"}</td>
                     <td className="text-text-secondary">{modeLabel(d.mode)}</td>
                     <td className="text-right font-mono">{fmtUsd(d.balance)}$</td>
                     <td className="text-right font-mono">{d.margin_usd ? `${fmtUsd(d.margin_usd)}$` : "-"}</td>

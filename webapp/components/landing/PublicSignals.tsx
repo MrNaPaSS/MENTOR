@@ -26,7 +26,7 @@ function ChartCard({ item }: { item: PreviewItem }) {
   if (!img) return null;
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-bg-deep shadow-[0_8px_32px_rgba(0,0,0,0.35)] transition-all duration-300 hover:border-accent-cyan/25 hover:-translate-y-1">
+    <div className="group relative overflow-hidden rounded-2xl border border-border bg-bg-deep shadow-[0_8px_32px_rgba(0,0,0,0.35)] transition-all duration-300 hover:border-accent-cyan/25 hover:-translate-y-1">
 
       {/* График - лёгкий блюр */}
       <div className="relative overflow-hidden">
@@ -77,7 +77,7 @@ function ChartCard({ item }: { item: PreviewItem }) {
 
 function SkeletonCard() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-bg-deep">
+    <div className="overflow-hidden rounded-2xl border border-border bg-bg-deep">
       <div className="skeleton" style={{ height: 200 }} />
       <div className="p-4 space-y-2">
         <div className="skeleton h-3 w-full rounded" />

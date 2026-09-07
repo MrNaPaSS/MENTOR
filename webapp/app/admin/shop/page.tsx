@@ -65,13 +65,13 @@ export default function AdminShop() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-h2 text-white">Маркет NMNH</h1>
+        <h1 className="text-h2 text-text-primary">Маркет NMNH</h1>
         {tab === "items" && (
           <div className="flex items-center gap-2">
             <button
               onClick={async () => { setRefreshing(true); try { await api.shopRefreshPreviews(token); load(); } finally { setRefreshing(false); } }}
               disabled={refreshing}
-              className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm text-text-secondary transition hover:text-white disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm text-text-secondary transition hover:text-text-primary disabled:opacity-50"
               title="Перетянуть обложки у всех товаров из их ссылок"
             >
               {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageDown className="h-4 w-4" />} Обновить превью
@@ -89,7 +89,7 @@ export default function AdminShop() {
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`relative px-4 py-2.5 text-sm font-semibold transition ${tab === id ? "text-accent-cyan" : "text-text-muted hover:text-white"}`}
+            className={`relative px-4 py-2.5 text-sm font-semibold transition ${tab === id ? "text-accent-cyan" : "text-text-muted hover:text-text-primary"}`}
           >
             {label}
             {tab === id && <span className="absolute inset-x-2 bottom-0 h-0.5 bg-accent-cyan" />}
@@ -155,7 +155,7 @@ function ItemsTab({ items, onEdit, token, onChange }: {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="truncate font-semibold text-white">{it.title}</p>
+                    <p className="truncate font-semibold text-text-primary">{it.title}</p>
                     {it.price > 0 && (
                       <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-accent-gold">
                         <Coins className="h-3 w-3" />{it.price}
@@ -169,10 +169,10 @@ function ItemsTab({ items, onEdit, token, onChange }: {
                     </a>
                   )}
                   <div className="mt-2 flex items-center gap-1.5">
-                    <button onClick={() => onEdit(it)} className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs text-text-secondary hover:text-white" title="Редактировать">
+                    <button onClick={() => onEdit(it)} className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs text-text-secondary hover:text-text-primary" title="Редактировать">
                       <Pencil className="h-3 w-3" /> Ред.
                     </button>
-                    <button onClick={() => toggle(it)} disabled={busy === it.id} className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs text-text-secondary hover:text-white" title={it.is_active ? "Скрыть" : "Показать"}>
+                    <button onClick={() => toggle(it)} disabled={busy === it.id} className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs text-text-secondary hover:text-text-primary" title={it.is_active ? "Скрыть" : "Показать"}>
                       {it.is_active ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                       {it.is_active ? "Скрыть" : "Показать"}
                     </button>
@@ -229,7 +229,7 @@ function OrdersTab({ orders, token, onChange }: { orders: ShopOrder[]; token: st
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-white">{o.item_title}</span>
+                <span className="font-semibold text-text-primary">{o.item_title}</span>
                 <span className="flex items-center gap-1 text-xs font-bold text-accent-gold"><Coins className="h-3 w-3" />{o.price}</span>
                 <span className={badge[o.status] || "badge-muted"}>{stLabel[o.status] || o.status}</span>
               </div>
@@ -245,7 +245,7 @@ function OrdersTab({ orders, token, onChange }: { orders: ShopOrder[]; token: st
                   value={note[o.id] || ""}
                   onChange={(e) => setNote((p) => ({ ...p, [o.id]: e.target.value }))}
                   placeholder="Комментарий / ссылка для ученика"
-                  className="w-56 rounded-lg border border-border bg-bg-deep px-2.5 py-1.5 text-xs text-white outline-none focus:border-accent-cyan/50"
+                  className="w-56 rounded-lg border border-border bg-bg-deep px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent-cyan/50"
                 />
                 <div className="flex gap-2">
                   <button onClick={() => resolve(o.id, "fulfill")} disabled={busy === o.id} className="flex items-center gap-1 rounded-lg border border-success/50 bg-success/10 px-3 py-1.5 text-xs font-bold text-success hover:bg-success/20">
@@ -323,7 +323,7 @@ function ItemEditor({ token, item, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !busy && onClose()}>
       <div className="w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-bg-panel p-6 max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-white">{item ? "Редактировать товар" : "Новый товар"}</h3>
+        <h3 className="text-lg font-bold text-text-primary">{item ? "Редактировать товар" : "Новый товар"}</h3>
 
         <div className="mt-4 space-y-3">
           <Field label="Название">
@@ -406,7 +406,7 @@ function ItemEditor({ token, item, onClose, onSaved }: {
         {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
         <div className="mt-5 flex gap-2">
-          <button onClick={onClose} disabled={busy} className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm text-text-muted hover:text-white">Отмена</button>
+          <button onClick={onClose} disabled={busy} className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm text-text-muted hover:text-text-primary">Отмена</button>
           <button onClick={save} disabled={busy || !form.title.trim()} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent-cyan px-4 py-2.5 text-sm font-bold text-bg hover:bg-accent-cyan/90 disabled:opacity-60">
             {busy && <Loader2 className="h-4 w-4 animate-spin" />} Сохранить
           </button>

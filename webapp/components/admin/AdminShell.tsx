@@ -55,7 +55,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <div className="flex min-h-screen">
         <Ambient />
         {/* Сайдбар */}
-        <aside className="glass fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-white/10 p-4 lg:flex">
+        <aside className="glass fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-border p-4 lg:flex">
           <div className="flex items-center gap-2">
             <Logo />
             <span className="badge-gold">ADMIN</span>
@@ -68,7 +68,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                   key={n.href}
                   href={n.href}
                   className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                    isActive(n.href) ? "bg-accent-cyan/12 text-accent-cyan" : "text-text-secondary hover:text-white"
+                    isActive(n.href) ? "bg-accent-cyan/12 text-accent-cyan" : "text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   <Icon className="h-4 w-4" /> {n.label}
@@ -88,7 +88,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </aside>
 
         {/* Моб. верхняя панель */}
-        <div className="glass fixed inset-x-0 top-0 z-40 flex items-center gap-2 border-b border-white/10 px-4 py-3 lg:hidden">
+        <div className="glass fixed inset-x-0 top-0 z-40 flex items-center gap-2 border-b border-border px-4 py-3 lg:hidden">
           <Logo />
           <span className="badge-gold">ADMIN</span>
           <div className="ml-auto flex gap-1 overflow-x-auto">
@@ -136,7 +136,7 @@ function MentorLogin({ onLogin }: { onLogin: (t: string) => void }) {
       <div className="card glass">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-accent-gold" />
-          <h1 className="text-xl font-bold text-white">NMNH <span className="text-accent-gold">ADMIN</span></h1>
+          <h1 className="text-xl font-bold text-text-primary">NMNH <span className="text-accent-gold">ADMIN</span></h1>
         </div>
         <input
           type="password"

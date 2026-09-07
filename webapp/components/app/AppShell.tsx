@@ -24,6 +24,7 @@ import { getAccessToken, logout } from "@/lib/auth";
 import { useCoins } from "@/lib/useCoins";
 import { fmtUsd, modeLabel } from "@/lib/format";
 import MarketTicker from "@/components/market/MarketTicker";
+import { useTerminalTheme } from "@/lib/terminalTheme";
 
 const NAV = [
   // Скальпинг первым: это рабочий стол трейдера, с него начинается день.
@@ -51,6 +52,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   // Баланс монет обновляется сам: их начисляет ещё и академия — снаружи вкладки.
   const { coins } = useCoins(pathname);
+  // Тема терминала красит весь сайт: подписка нужна, чтобы оболочка сменила
+  // цвета в тот же момент, что и панели, а не после перезагрузки.
+  useTerminalTheme();
 
   useEffect(() => {
     const token = getAccessToken();
@@ -94,7 +98,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Ambient />
 
       {/* ─── Верхний header ─── */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.06] bg-bg-deep/80 backdrop-blur-2xl">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-bg-deep/80 backdrop-blur-2xl">
         {/* Бегущая строка тикер */}
         <MarketTicker />
 
@@ -114,7 +118,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   className={`relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150 ${
                     active
                       ? "text-accent-cyan"
-                      : "text-text-muted hover:text-white"
+                      : "text-text-muted hover:text-text-primary"
                   }`}
                 >
                   {active && (
@@ -153,7 +157,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 href="/app/profile"
                 className="hidden items-center rounded-xl border border-border bg-bg-panel/60 px-3 py-1.5 transition hover:border-accent-cyan/40 sm:flex"
               >
-                <span className="font-mono text-sm font-bold text-white tabular">
+                <span className="font-mono text-sm font-bold text-text-primary tabular">
                   ${balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </Link>
@@ -177,7 +181,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* ─── Нижняя мобильная навигация ─── */}
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.08] bg-bg-deep/90 backdrop-blur-2xl lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-bg-deep/90 backdrop-blur-2xl lg:hidden">
         <div className="flex items-stretch justify-around">
           {NAV.filter((n) => n.mobile).map((n) => {
             const Icon = n.icon;

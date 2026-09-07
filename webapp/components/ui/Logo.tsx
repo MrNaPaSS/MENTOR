@@ -13,7 +13,7 @@ interface LogoProps {
   tone?: string;
 }
 
-export default function Logo({ href = "/", adminBadge, className = "", tone = "text-white" }: LogoProps) {
+export default function Logo({ href = "/", adminBadge, className = "", tone = "text-text-primary" }: LogoProps) {
   return (
     <Link
       href={href}

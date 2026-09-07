@@ -91,7 +91,7 @@ function HeatmapSection() {
       <div className="card p-0 overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Тепловая карта криптовалют</h3>
+            <h3 className="text-sm font-semibold text-text-primary">Тепловая карта криптовалют</h3>
             <p className="text-[11px] text-text-muted">Размер - капитализация · Цвет - изменение цены</p>
           </div>
           <span className="rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-success">LIVE</span>
@@ -114,7 +114,7 @@ function HeatmapSection() {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="card p-0 overflow-hidden">
           <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-white">Форекс тепловая карта</h3>
+            <h3 className="text-sm font-semibold text-text-primary">Форекс тепловая карта</h3>
             <p className="text-[11px] text-text-muted">Кросс-курсы валютных пар</p>
           </div>
           <TvWidget
@@ -128,7 +128,7 @@ function HeatmapSection() {
 
         <div className="card p-0 overflow-hidden">
           <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-white">ETF тепловая карта</h3>
+            <h3 className="text-sm font-semibold text-text-primary">ETF тепловая карта</h3>
             <p className="text-[11px] text-text-muted">Изменение ETF-фондов за день</p>
           </div>
           <TvWidget
@@ -155,7 +155,7 @@ function ScreenerSection() {
       <div className="card p-0 overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Скринер криптовалют</h3>
+            <h3 className="text-sm font-semibold text-text-primary">Скринер криптовалют</h3>
             <p className="text-[11px] text-text-muted">Фильтрация и поиск по всем монетам</p>
           </div>
         </div>
@@ -182,7 +182,7 @@ function OverviewSection() {
       {/* Экономический календарь - полная ширина */}
       <div className="card p-0 overflow-hidden">
         <div className="border-b border-border px-4 py-3">
-          <h3 className="text-sm font-semibold text-white">Экономический календарь</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Экономический календарь</h3>
           <p className="text-[11px] text-text-muted">Макроэкономические события, влияющие на рынок</p>
         </div>
         <TvWidget
@@ -217,7 +217,7 @@ export default function MarketPage() {
     <div className="space-y-5">
       {/* Заголовок */}
       <div>
-        <h1 className="text-2xl font-extrabold text-white">Рынок</h1>
+        <h1 className="text-2xl font-extrabold text-text-primary">Рынок</h1>
         <p className="text-sm text-text-muted">Графики · Тепловые карты · Скринер · Индексы · Smart Money</p>
       </div>
 
@@ -235,7 +235,7 @@ export default function MarketPage() {
                   ? isGold
                     ? "bg-accent-gold/15 text-accent-gold"
                     : "bg-accent-cyan/15 text-accent-cyan"
-                  : "text-text-muted hover:text-white"
+                  : "text-text-muted hover:text-text-primary"
               }`}
             >
               {t.icon}
@@ -259,7 +259,7 @@ export default function MarketPage() {
                 {PAIRS.map((p) => (
                   <button key={p} onClick={() => setSym(p)}
                     className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                      sym === p ? "bg-accent-cyan text-bg-deep" : "bg-bg-panel text-text-secondary hover:text-white"
+                      sym === p ? "bg-accent-cyan text-bg-deep" : "bg-bg-panel text-text-secondary hover:text-text-primary"
                     }`}>{p.replace("USDT", "")}</button>
                 ))}
               </div>
@@ -268,7 +268,7 @@ export default function MarketPage() {
                 {TF.map((t) => (
                   <button key={t.key} onClick={() => setTf(t.key)}
                     className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                      tf === t.key ? "bg-white/10 text-white" : "text-text-muted hover:text-white"
+                      tf === t.key ? "bg-white/10 text-text-primary" : "text-text-muted hover:text-text-primary"
                     }`}>{t.label}</button>
                 ))}
               </div>
@@ -281,7 +281,7 @@ export default function MarketPage() {
             <div className="card overflow-hidden p-0">
               <div className="border-b border-border p-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-white">Стакан цен</h3>
+                  <h3 className="text-sm font-semibold text-text-primary">Стакан цен</h3>
                   <span className="text-[10px] text-text-muted">{sym}</span>
                 </div>
               </div>
@@ -296,7 +296,7 @@ export default function MarketPage() {
           {PAIRS.slice(0, 4).map((p) => (
             <div key={p} className="card overflow-hidden p-0">
               <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <span className="text-sm font-semibold text-white">{p}</span>
+                <span className="text-sm font-semibold text-text-primary">{p}</span>
                 <span className="text-[10px] text-text-muted">15м</span>
               </div>
               <TradingChart symbol={p} interval="15" height={420} showToolbar={false} />

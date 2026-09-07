@@ -26,8 +26,18 @@ export function readTerminalTheme(): TerminalTheme {
   }
 }
 
-/** Запомнить тему и сказать об этом всем, кто её слушает. */
+/**
+ * Запомнить тему, отметить её на корне документа и сказать всем слушателям.
+ *
+ * Атрибут на `<html>` - то, за что цепляется палитра всего сайта: разметка о
+ * теме не знает, меняются только каналы цветов.
+ */
 export function setTerminalTheme(theme: TerminalTheme): void {
+  try {
+    document.documentElement.dataset.terminal = theme;
+  } catch {
+    // На сервере документа нет - тема применится при первом рендере в браузере.
+  }
   try {
     localStorage.setItem(KEY, theme);
   } catch {
@@ -46,14 +56,19 @@ export function useTerminalTheme(): TerminalTheme {
   const [theme, setTheme] = useState<TerminalTheme>("dark");
 
   useEffect(() => {
-    setTheme(readTerminalTheme());
+    const saved = readTerminalTheme();
+    setTheme(saved);
+    document.documentElement.dataset.terminal = saved;
 
     function onLocal(event: Event) {
       const next = (event as CustomEvent<TerminalTheme>).detail;
       setTheme(next === "light" ? "light" : "dark");
     }
     function onStorage(event: StorageEvent) {
-      if (event.key === KEY) setTheme(readTerminalTheme());
+      if (event.key !== KEY) return;
+      const next = readTerminalTheme();
+      setTheme(next);
+      document.documentElement.dataset.terminal = next;
     }
 
     window.addEventListener(EVENT, onLocal);

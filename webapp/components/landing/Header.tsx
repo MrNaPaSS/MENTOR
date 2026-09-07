@@ -45,7 +45,7 @@ export default function Header() {
             <a
               key={l.href}
               href={l.href}
-              className="rounded-lg px-3 py-2 text-sm text-text-secondary transition hover:text-white"
+              className="rounded-lg px-3 py-2 text-sm text-text-secondary transition hover:text-text-primary"
             >
               {l.label}
             </a>
@@ -68,7 +68,7 @@ export default function Header() {
         {/* Бургер (мобайл) */}
         <button
           onClick={() => setOpen(true)}
-          className="grid h-10 w-10 place-items-center rounded-lg text-white ring-1 ring-border md:hidden"
+          className="grid h-10 w-10 place-items-center rounded-lg text-text-primary ring-1 ring-border md:hidden"
           aria-label="Меню"
         >
           <Menu className="h-5 w-5" />
@@ -95,7 +95,7 @@ export default function Header() {
             <Logo />
             <button
               onClick={() => setOpen(false)}
-              className="grid h-10 w-10 place-items-center rounded-lg text-white ring-1 ring-border"
+              className="grid h-10 w-10 place-items-center rounded-lg text-text-primary ring-1 ring-border"
               aria-label="Закрыть"
             >
               <X className="h-5 w-5" />
@@ -106,7 +106,7 @@ export default function Header() {
               key={l.href}
               href={l.href}
               onClick={() => setOpen(false)}
-              className="rounded-xl px-3 py-3 text-base text-text-secondary transition hover:bg-white/5 hover:text-white"
+              className="rounded-xl px-3 py-3 text-base text-text-secondary transition hover:bg-white/5 hover:text-text-primary"
             >
               {l.label}
             </a>

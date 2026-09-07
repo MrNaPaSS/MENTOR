@@ -55,7 +55,7 @@ export default function BroadcastPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <h1 className="text-h2 text-white">Отправить анализ</h1>
+      <h1 className="text-h2 text-text-primary">Отправить анализ</h1>
 
       <div className="card space-y-5">
 
@@ -113,7 +113,7 @@ export default function BroadcastPage() {
             {AUDIENCE.map((a) => (
               <button key={a.key} onClick={() => setAudience(a.key)}
                 className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                  audience === a.key ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-white"
+                  audience === a.key ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-text-primary"
                 }`}>
                 {a.label}
               </button>

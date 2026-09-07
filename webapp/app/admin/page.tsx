@@ -180,7 +180,7 @@ export default function AdminDashboard() {
     <div className="space-y-8 pb-10">
       
       {/* Приветственный Баннер Ментора */}
-      <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-r from-[#0d1020] via-[#121836] to-[#0c0d1b] p-6 md:p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)]">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-[#0d1020] via-[#121836] to-[#0c0d1b] p-6 md:p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)]">
         <div className="absolute right-0 top-0 -mr-16 -mt-16 h-64 w-64 rounded-full bg-accent-cyan/10 blur-3xl pointer-events-none" />
         <div className="absolute left-1/3 bottom-0 -mb-20 h-48 w-48 rounded-full bg-accent-gold/5 blur-3xl pointer-events-none" />
         
@@ -198,7 +198,7 @@ export default function AdminDashboard() {
                 <span className="text-[11px] font-semibold text-success uppercase tracking-wider">WEEX API ACTIVE</span>
               </div>
             </div>
-            <h1 className="mt-3 text-2xl font-bold tracking-tight text-white md:text-3xl">Панель управления Ментора</h1>
+            <h1 className="mt-3 text-2xl font-bold tracking-tight text-text-primary md:text-3xl">Панель управления Ментора</h1>
             <p className="mt-1.5 text-sm text-text-muted max-w-xl">
               Управление потоком учеников, мониторинг торговых объемов вашей реферальной сети WEEX и публикация торговых сигналов NMNH.
             </p>
@@ -211,7 +211,7 @@ export default function AdminDashboard() {
             <button 
               onClick={exportToCSV}
               disabled={refs.length === 0}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl border border-white/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-text-primary font-semibold rounded-xl border border-border transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download className="h-4 w-4" />
               Экспорт CSV
@@ -230,7 +230,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           
           {/* Активные ученики */}
-          <div className="relative group overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm transition-all duration-300 hover:border-white/10 hover:bg-bg-card/60">
+          <div className="relative group overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm transition-all duration-300 hover:border-border hover:bg-bg-card/60">
             <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-accent-cyan/35 to-transparent" />
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Активных учеников</span>
@@ -239,7 +239,7 @@ export default function AdminDashboard() {
               </span>
             </div>
             <div className="mt-4 flex items-baseline gap-2">
-              <span className="font-mono text-3xl font-bold text-white">
+              <span className="font-mono text-3xl font-bold text-text-primary">
                 {!loaded ? "-" : activeStudentsCount}
               </span>
               <span className="text-[10px] text-text-muted">в системе</span>
@@ -251,7 +251,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Заявки на подтверждение */}
-          <Link href="/admin/students" className="relative group overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm transition-all duration-300 hover:border-accent-gold/30 hover:bg-bg-card/60 block">
+          <Link href="/admin/students" className="relative group overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm transition-all duration-300 hover:border-accent-gold/30 hover:bg-bg-card/60 block">
             <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-accent-gold/35 to-transparent" />
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Ожидают аппрува</span>
@@ -260,7 +260,7 @@ export default function AdminDashboard() {
               </span>
             </div>
             <div className="mt-4 flex items-baseline gap-2">
-              <span className={`font-mono text-3xl font-bold ${pendingStudentsCount > 0 ? "text-accent-gold" : "text-white"}`}>
+              <span className={`font-mono text-3xl font-bold ${pendingStudentsCount > 0 ? "text-accent-gold" : "text-text-primary"}`}>
                 {!loaded ? "-" : pendingStudentsCount}
               </span>
               <span className="text-[10px] text-text-muted">заявок</span>
@@ -272,7 +272,7 @@ export default function AdminDashboard() {
           </Link>
 
           {/* Сигналов всего */}
-          <div className="relative group overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm transition-all duration-300 hover:border-white/10 hover:bg-bg-card/60">
+          <div className="relative group overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm transition-all duration-300 hover:border-border hover:bg-bg-card/60">
             <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-success/35 to-transparent" />
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Опубликовано сигналов</span>
@@ -293,7 +293,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Активных сигналов сейчас */}
-          <Link href="/admin/signals" className="relative group overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm transition-all duration-300 hover:border-accent-cyan/30 hover:bg-bg-card/60 block">
+          <Link href="/admin/signals" className="relative group overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm transition-all duration-300 hover:border-accent-cyan/30 hover:bg-bg-card/60 block">
             <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-accent-cyan/35 to-transparent" />
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Активных сигналов</span>
@@ -302,7 +302,7 @@ export default function AdminDashboard() {
               </span>
             </div>
             <div className="mt-4 flex items-baseline gap-2">
-              <span className="font-mono text-3xl font-bold text-white">
+              <span className="font-mono text-3xl font-bold text-text-primary">
                 {!loaded ? "-" : stats?.active_signals ?? 0}
               </span>
               <span className="text-[10px] text-text-muted">в рынке</span>
@@ -324,15 +324,15 @@ export default function AdminDashboard() {
         </h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           {/* Новых рефералов */}
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-bg-card/30 px-4 py-3.5">
+          <div className="relative overflow-hidden rounded-xl border border-border bg-bg-card/30 px-4 py-3.5">
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-cyan/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Новых рефералов</p>
-            <p className="mt-1.5 font-mono text-2xl font-bold text-white">
+            <p className="mt-1.5 font-mono text-2xl font-bold text-text-primary">
               {!loaded && !today ? <span className="skeleton inline-block h-7 w-8" /> : (today?.referrals ?? 0)}
             </p>
           </div>
           {/* Активных трейдеров */}
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-bg-card/30 px-4 py-3.5">
+          <div className="relative overflow-hidden rounded-xl border border-border bg-bg-card/30 px-4 py-3.5">
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-cyan/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Торговали сегодня</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-accent-cyan">
@@ -340,7 +340,7 @@ export default function AdminDashboard() {
             </p>
           </div>
           {/* Депозиты */}
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-bg-card/30 px-4 py-3.5">
+          <div className="relative overflow-hidden rounded-xl border border-border bg-bg-card/30 px-4 py-3.5">
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-success/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Депозиты</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-success">
@@ -348,7 +348,7 @@ export default function AdminDashboard() {
             </p>
           </div>
           {/* Объём торговли */}
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-bg-card/30 px-4 py-3.5">
+          <div className="relative overflow-hidden rounded-xl border border-border bg-bg-card/30 px-4 py-3.5">
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-gold/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Объём торгов</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-accent-gold">
@@ -378,7 +378,7 @@ export default function AdminDashboard() {
           
           <div className="flex items-center gap-2">
             <span className="text-xs text-text-muted font-medium">Период выборки:</span>
-            <div className="flex gap-1 rounded-xl border border-white/5 bg-bg-card/60 p-1 backdrop-blur-sm">
+            <div className="flex gap-1 rounded-xl border border-border bg-bg-card/60 p-1 backdrop-blur-sm">
               {PERIODS.map((p) => (
                 <button
                   key={p}
@@ -386,7 +386,7 @@ export default function AdminDashboard() {
                   className={`rounded-lg px-3 py-1 text-xs font-bold transition-all ${
                     days === p 
                       ? "bg-accent-cyan/15 text-accent-cyan border border-accent-cyan/20" 
-                      : "text-text-muted hover:text-white border border-transparent"
+                      : "text-text-muted hover:text-text-primary border border-transparent"
                   }`}
                 >
                   {p} дней
@@ -399,21 +399,21 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
 
           {/* Рефералов всего */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Рефералов в сети</span>
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/25">
                 <Users className="h-4 w-4" />
               </span>
             </div>
-            <div className="mt-4 font-mono text-3xl font-bold text-white">
+            <div className="mt-4 font-mono text-3xl font-bold text-text-primary">
               {!aff ? <span className="skeleton inline-block h-8 w-16" /> : aff.referrals}
             </div>
             <div className="mt-2 text-[10px] text-text-muted">с регистрациями за {days}д</div>
           </div>
 
           {/* Активных трейдеров */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm">
             <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-accent-cyan/30 to-transparent" />
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Торговали</span>
@@ -430,7 +430,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Пополнили счёт */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm">
             <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-success/30 to-transparent" />
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Пополнили счёт</span>
@@ -467,7 +467,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
 
           {/* Депозиты сети */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Депозиты сети</span>
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-success/10 text-success ring-1 ring-success/25">
@@ -481,7 +481,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Торговый Объем */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Торговый объём</span>
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-accent-gold/10 text-accent-gold ring-1 ring-accent-gold/25">
@@ -495,7 +495,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Вывод средств */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Выведено средств</span>
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-danger/10 text-danger ring-1 ring-danger/25">
@@ -509,7 +509,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Ваш Доход (Rebate) */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Ваш Доход (Rebate)</span>
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-accent-gold/15 text-accent-gold ring-1 ring-accent-gold/30">
@@ -529,8 +529,8 @@ export default function AdminDashboard() {
         <div className="grid gap-6 md:grid-cols-3">
           
           {/* Распределение Спот vs Фьючерсы */}
-          <div className="md:col-span-1 rounded-2xl border border-white/5 bg-bg-card/30 p-5 backdrop-blur-sm space-y-4">
-            <h3 className="text-sm font-semibold text-white">Доли рынков рефералов</h3>
+          <div className="md:col-span-1 rounded-2xl border border-border bg-bg-card/30 p-5 backdrop-blur-sm space-y-4">
+            <h3 className="text-sm font-semibold text-text-primary">Доли рынков рефералов</h3>
             
             {/* SVG Donut Chart */}
             <div className="flex justify-center py-4">
@@ -563,14 +563,14 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div className="border-l-2 border-accent-cyan pl-2">
                 <p className="text-text-muted">Спот объём</p>
-                <p className="font-mono text-sm font-bold text-white mt-0.5">
+                <p className="font-mono text-sm font-bold text-text-primary mt-0.5">
                   {aff ? `$${fmtUsd(aff.total_spot_volume)}` : "0.00"}
                 </p>
                 <p className="text-[10px] text-accent-cyan mt-0.5">{spotShare.toFixed(1)}% доля</p>
               </div>
               <div className="border-l-2 border-accent-gold pl-2">
                 <p className="text-text-muted">Фьючерсы объём</p>
-                <p className="font-mono text-sm font-bold text-white mt-0.5">
+                <p className="font-mono text-sm font-bold text-text-primary mt-0.5">
                   {aff ? `$${fmtUsd(aff.total_futures_volume)}` : "0.00"}
                 </p>
                 <p className="text-[10px] text-accent-gold mt-0.5">{futuresShare.toFixed(1)}% доля</p>
@@ -579,9 +579,9 @@ export default function AdminDashboard() {
           </div>
 
           {/* График Динамики Сети (SVG Area Chart) */}
-          <div className="md:col-span-2 rounded-2xl border border-white/5 bg-bg-card/30 p-5 backdrop-blur-sm space-y-4">
+          <div className="md:col-span-2 rounded-2xl border border-border bg-bg-card/30 p-5 backdrop-blur-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">Рост торговой активности сети</h3>
+              <h3 className="text-sm font-semibold text-text-primary">Рост торговой активности сети</h3>
               <span className="text-[10px] font-semibold text-text-muted uppercase">Накопительный итог</span>
             </div>
 
@@ -635,10 +635,10 @@ export default function AdminDashboard() {
         </div>
 
         {/* Интерактивная Таблица Рефералов */}
-        <div className="rounded-2xl border border-white/5 bg-bg-card/40 p-5 backdrop-blur-sm space-y-4">
+        <div className="rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h3 className="text-base font-semibold text-white">Список рефералов вашей сети</h3>
+              <h3 className="text-base font-semibold text-text-primary">Список рефералов вашей сети</h3>
               <p className="text-xs text-text-muted mt-0.5">Детальная статистика по каждому трейдеру.</p>
             </div>
             
@@ -651,14 +651,14 @@ export default function AdminDashboard() {
                   placeholder="Поиск по UID..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 text-xs text-white bg-bg-panel/60 border border-white/5 rounded-xl focus:border-accent-cyan/40 focus:outline-none placeholder:text-text-muted"
+                  className="w-full pl-9 pr-4 py-2 text-xs text-text-primary bg-bg-panel/60 border border-border rounded-xl focus:border-accent-cyan/40 focus:outline-none placeholder:text-text-muted"
                 />
               </div>
             </div>
           </div>
 
           {/* Таблица */}
-          <div className="overflow-x-auto rounded-xl border border-white/5">
+          <div className="overflow-x-auto rounded-xl border border-border">
             {filteredAndSortedRefs.length === 0 ? (
               <div className="py-12 text-center text-xs text-text-muted">
                 {searchQuery ? "Рефералы с таким UID не найдены" : "Нет данных от WEEX API за этот период"}
@@ -666,12 +666,12 @@ export default function AdminDashboard() {
             ) : (
               <table className="w-full min-w-[720px] text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-white/[0.02] border-b border-white/5">
+                  <tr className="bg-white/[0.02] border-b border-border">
                     
                     {/* UID */}
                     <th 
                       onClick={() => handleSort("uid")}
-                      className="py-3.5 px-4 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-white transition"
+                      className="py-3.5 px-4 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-text-primary transition"
                     >
                       <div className="flex items-center gap-1">
                         UID
@@ -682,7 +682,7 @@ export default function AdminDashboard() {
                     {/* KYC */}
                     <th 
                       onClick={() => handleSort("kyc")}
-                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-white transition text-center"
+                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-text-primary transition text-center"
                     >
                       <div className="flex items-center justify-center gap-1">
                         KYC
@@ -693,7 +693,7 @@ export default function AdminDashboard() {
                     {/* Депозит */}
                     <th
                       onClick={() => handleSort("deposit")}
-                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-white transition text-right"
+                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-text-primary transition text-right"
                     >
                       <div className="flex items-center justify-end gap-1">
                         Депозит
@@ -704,7 +704,7 @@ export default function AdminDashboard() {
                     {/* Вывод */}
                     <th
                       onClick={() => handleSort("withdrawal")}
-                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-white transition text-right"
+                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-text-primary transition text-right"
                     >
                       <div className="flex items-center justify-end gap-1">
                         Вывод
@@ -715,7 +715,7 @@ export default function AdminDashboard() {
                     {/* Баланс */}
                     <th 
                       onClick={() => handleSort("balance")}
-                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-white transition text-right bg-accent-gold/[0.02]"
+                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-text-primary transition text-right bg-accent-gold/[0.02]"
                     >
                       <div className="flex items-center justify-end gap-1">
                         Баланс
@@ -726,7 +726,7 @@ export default function AdminDashboard() {
                     {/* Спот объем */}
                     <th 
                       onClick={() => handleSort("spot_volume")}
-                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-white transition text-right"
+                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-text-primary transition text-right"
                     >
                       <div className="flex items-center justify-end gap-1">
                         Спот объём
@@ -737,7 +737,7 @@ export default function AdminDashboard() {
                     {/* Фьючерсы объем */}
                     <th 
                       onClick={() => handleSort("futures_volume")}
-                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-white transition text-right"
+                      className="py-3.5 px-3 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-text-primary transition text-right"
                     >
                       <div className="flex items-center justify-end gap-1">
                         Фьючерсы объём
@@ -748,7 +748,7 @@ export default function AdminDashboard() {
                     {/* Начисленный ребейт */}
                     <th 
                       onClick={() => handleSort("commission")}
-                      className="py-3.5 px-4 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-white transition text-right"
+                      className="py-3.5 px-4 font-semibold text-text-muted uppercase tracking-wider cursor-pointer hover:text-text-primary transition text-right"
                     >
                       <div className="flex items-center justify-end gap-1">
                         Комиссия
@@ -780,7 +780,7 @@ export default function AdminDashboard() {
                         className="hover:bg-white/[0.03] transition duration-150 group"
                       >
                         {/* UID */}
-                        <td className="py-3 px-4 font-mono font-medium text-white flex items-center gap-1.5">
+                        <td className="py-3 px-4 font-mono font-medium text-text-primary flex items-center gap-1.5">
                           <span>{r.uid}</span>
                           <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity">
                             {volumeShare > 10 ? "VIP 🔥" : "активный"}
@@ -795,7 +795,7 @@ export default function AdminDashboard() {
                                 <CheckCircle2 className="h-3 w-3" /> Да
                               </span>
                             ) : (
-                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-text-muted border border-white/5">
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-text-muted border border-border">
                                 <XCircle className="h-3 w-3" /> Нет
                               </span>
                             )}
@@ -803,7 +803,7 @@ export default function AdminDashboard() {
                         </td>
 
                         {/* Депозит */}
-                        <td className="py-3 px-3 text-right font-mono font-semibold text-white">
+                        <td className="py-3 px-3 text-right font-mono font-semibold text-text-primary">
                           ${fmtUsd(r.deposit)}
                         </td>
 
@@ -812,7 +812,7 @@ export default function AdminDashboard() {
                           {Number(r.withdrawal) > 0 ? (
                             <span className="text-danger">-${fmtUsd(r.withdrawal)}</span>
                           ) : (
-                            <span className="text-white/20">-</span>
+                            <span className="text-text-primary/20">-</span>
                           )}
                         </td>
 
@@ -843,7 +843,7 @@ export default function AdminDashboard() {
                               <CheckCircle2 className="h-3 w-3" /> Да
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-text-muted border border-white/5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-text-muted border border-border">
                               <XCircle className="h-3 w-3" /> Нет
                             </span>
                           )}
@@ -856,7 +856,7 @@ export default function AdminDashboard() {
                               <Activity className="h-3 w-3" /> Да
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-text-muted border border-white/5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-text-muted border border-border">
                               Нет
                             </span>
                           )}
@@ -873,7 +873,7 @@ export default function AdminDashboard() {
             <span>Показано {filteredAndSortedRefs.length} из {refs.length} рефералов</span>
             {filteredAndSortedRefs.length > 0 && (
               <span className="flex items-center gap-1">
-                * Сортировка по полю: <strong className="text-white">{sortField} ({sortOrder})</strong>
+                * Сортировка по полю: <strong className="text-text-primary">{sortField} ({sortOrder})</strong>
               </span>
             )}
           </div>
@@ -892,12 +892,12 @@ export default function AdminDashboard() {
           
           <Link 
             href="/admin/students" 
-            className="group relative overflow-hidden rounded-2xl border border-white/5 bg-bg-card/30 p-5 backdrop-blur-sm transition-all duration-300 hover:border-accent-cyan/30 hover:bg-bg-card/50 block"
+            className="group relative overflow-hidden rounded-2xl border border-border bg-bg-card/30 p-5 backdrop-blur-sm transition-all duration-300 hover:border-accent-cyan/30 hover:bg-bg-card/50 block"
           >
             <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-accent-cyan/25 to-transparent" />
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="font-semibold text-white group-hover:text-accent-cyan transition">Картотека учеников</h3>
+                <h3 className="font-semibold text-text-primary group-hover:text-accent-cyan transition">Картотека учеников</h3>
                 <p className="mt-1 text-xs text-text-muted leading-relaxed">
                   Управление профилями, подтверждение заявок, выбор тарифов и балансов учащихся.
                 </p>
@@ -915,12 +915,12 @@ export default function AdminDashboard() {
 
           <Link 
             href="/admin/signals" 
-            className="group relative overflow-hidden rounded-2xl border border-white/5 bg-bg-card/30 p-5 backdrop-blur-sm transition-all duration-300 hover:border-accent-cyan/30 hover:bg-bg-card/50 block"
+            className="group relative overflow-hidden rounded-2xl border border-border bg-bg-card/30 p-5 backdrop-blur-sm transition-all duration-300 hover:border-accent-cyan/30 hover:bg-bg-card/50 block"
           >
             <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-accent-cyan/25 to-transparent" />
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="font-semibold text-white group-hover:text-accent-cyan transition">Торговые сигналы</h3>
+                <h3 className="font-semibold text-text-primary group-hover:text-accent-cyan transition">Торговые сигналы</h3>
                 <p className="mt-1 text-xs text-text-muted leading-relaxed">
                   История отправленных торговых сигналов, закрытие текущих сделок в рынке и статистика винрейта.
                 </p>

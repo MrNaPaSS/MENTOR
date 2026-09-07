@@ -57,7 +57,7 @@ interface Achievement {
 }
 
 const RARITY_STYLES = {
-  common: { border: "border-white/20", glow: "", badge: "bg-white/10 text-white", label: "Обычная" },
+  common: { border: "border-border", glow: "", badge: "bg-white/10 text-text-primary", label: "Обычная" },
   rare: { border: "border-blue-400/40", glow: "shadow-[0_0_12px_rgba(96,165,250,0.2)]", badge: "bg-blue-400/20 text-blue-400", label: "Редкая" },
   epic: { border: "border-purple-400/40", glow: "shadow-[0_0_12px_rgba(167,139,250,0.25)]", badge: "bg-purple-400/20 text-purple-400", label: "Эпическая" },
   legendary: { border: "border-accent-gold/40", glow: "shadow-[0_0_16px_rgba(255,215,0,0.25)]", badge: "bg-accent-gold/20 text-accent-gold", label: "Легендарная" },
@@ -127,7 +127,7 @@ function DayCell({ day, onClick, active, isToday }: {
   const borderCls = active
     ? "border-accent-cyan shadow-[0_0_14px_rgba(10,255,224,0.25)]"
     : isToday
-    ? "border-white/25 shadow-[0_0_8px_rgba(255,255,255,0.06)]"
+    ? "border-border shadow-[0_0_8px_rgba(255,255,255,0.06)]"
     : goalMet
     ? "border-success/30 shadow-[0_0_8px_rgba(0,212,160,0.12)]"
     : isPos
@@ -138,13 +138,13 @@ function DayCell({ day, onClick, active, isToday }: {
     ? "border-accent-cyan/25"
     : day.signals > 0
     ? "border-accent-cyan/10"
-    : "border-white/[0.04]";
+    : "border-border";
 
   return (
     <button
       onClick={onClick}
       style={{ aspectRatio: "1", background: bg }}
-      className={`group relative flex flex-col rounded-xl border transition-all duration-150 hover:scale-[1.06] hover:z-10 hover:border-white/20 ${borderCls} p-1.5`}
+      className={`group relative flex flex-col rounded-xl border transition-all duration-150 hover:scale-[1.06] hover:z-10 hover:border-border ${borderCls} p-1.5`}
       title={[
         day.date,
         hasDeposit ? "Депозит" : "",
@@ -153,7 +153,7 @@ function DayCell({ day, onClick, active, isToday }: {
       ].filter(Boolean).join(" · ")}
     >
       {/* Число месяца */}
-      <span className={`text-[10px] font-bold leading-none ${isToday ? "text-accent-cyan" : isEstimated ? "text-white/20" : "text-white/45"}`}>
+      <span className={`text-[10px] font-bold leading-none ${isToday ? "text-accent-cyan" : isEstimated ? "text-text-primary/20" : "text-text-primary/45"}`}>
         {dayNum}
       </span>
 
@@ -165,7 +165,7 @@ function DayCell({ day, onClick, active, isToday }: {
             {isPos ? "+" : ""}{Math.abs(pnl!) >= 10 ? pnl!.toFixed(0) : pnl!.toFixed(1)}%
           </span>
         ) : hasReal && pnl === 0 ? (
-          <span className="text-[9px] font-semibold text-white/18">0%</span>
+          <span className="text-[9px] font-semibold text-text-primary/18">0%</span>
         ) : null}
         {/* Объём — показывается всегда когда есть */}
         {hasTrades && (
@@ -515,14 +515,14 @@ export default function AnalyticsPage() {
       {/* Заголовок */}
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Аналитика <span className="text-accent-cyan">&</span> Прогресс</h1>
+          <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">Аналитика <span className="text-accent-cyan">&</span> Прогресс</h1>
           <p className="text-sm text-text-muted mt-0.5">Реальные данные на основе снимков баланса и активности по сигналам</p>
         </div>
         {tradeSummary && (
           <div className="hidden md:flex items-center gap-3 rounded-xl border border-accent-gold/20 bg-accent-gold/5 px-4 py-2">
             <span className="text-lg">🏆</span>
             <div>
-              <p className="font-mono text-xs text-white/40 leading-none">Всего объёма</p>
+              <p className="font-mono text-xs text-text-primary/40 leading-none">Всего объёма</p>
               <p className="font-mono text-base font-extrabold text-accent-gold leading-tight">${fmtDot(Math.round(totalVolume))}</p>
             </div>
           </div>
@@ -535,7 +535,7 @@ export default function AnalyticsPage() {
         {/* Объём месяца */}
         <div className="card flex flex-col items-center gap-2 py-5">
           <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)} color="#0AFFE0" size={72}>
-            <span className="font-mono text-[11px] font-bold text-white leading-tight text-center">
+            <span className="font-mono text-[11px] font-bold text-text-primary leading-tight text-center">
               {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
             </span>
           </CircleProgress>
@@ -546,7 +546,7 @@ export default function AnalyticsPage() {
         <div className="card flex flex-col items-center gap-2 py-5">
           <CircleProgress pct={(activityStreak / 7) * 100} color="#FF6B35" size={72}>
             <Flame className="h-5 w-5 text-orange-400" />
-            <span className="font-mono text-sm font-bold text-white">{activityStreak}</span>
+            <span className="font-mono text-sm font-bold text-text-primary">{activityStreak}</span>
           </CircleProgress>
           <span className="text-xs text-text-muted">Стрик активности</span>
           <span className="text-[10px] text-orange-400">цель: 7 дней</span>
@@ -565,7 +565,7 @@ export default function AnalyticsPage() {
         <div className="card flex flex-col items-center gap-2 py-5">
           <CircleProgress pct={Math.min(((tradingDays > 0 ? tradingDays : activeDays) / 15) * 100, 100)} color="#FFD700" size={72}>
             <Calendar className="h-4 w-4 text-accent-gold" />
-            <span className="font-mono text-sm font-bold text-white">{tradingDays > 0 ? tradingDays : activeDays}</span>
+            <span className="font-mono text-sm font-bold text-text-primary">{tradingDays > 0 ? tradingDays : activeDays}</span>
           </CircleProgress>
           <span className="text-xs text-text-muted">Дней торговали</span>
           <span className="text-[10px] text-accent-gold">цель: 15 дней</span>
@@ -584,15 +584,15 @@ export default function AnalyticsPage() {
         return (
           <div className="overflow-hidden rounded-xl border border-border bg-bg-card">
             {/* Шапка */}
-            <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-white/[0.05]">
+            <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-border">
               <BarChart2 className="h-4 w-4 text-accent-gold" />
               <div>
-                <h2 className="text-sm font-bold text-white leading-none">Путь трейдера</h2>
-                <p className="text-[10px] text-white/30 mt-0.5">Суммарный объём на WEEX</p>
+                <h2 className="text-sm font-bold text-text-primary leading-none">Путь трейдера</h2>
+                <p className="text-[10px] text-text-primary/30 mt-0.5">Суммарный объём на WEEX</p>
               </div>
               <div className="ml-auto text-right">
                 <span className="font-mono text-base font-extrabold text-accent-gold">${fmtDot(Math.round(totalVolume))}</span>
-                <span className="text-[10px] text-white/30 ml-1">USDT</span>
+                <span className="text-[10px] text-text-primary/30 ml-1">USDT</span>
               </div>
             </div>
 
@@ -601,15 +601,15 @@ export default function AnalyticsPage() {
               {nextM && (
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[10px]">
-                    <span className="text-white/30">{prevM ? prevM.label : "0"}</span>
-                    <span className="text-white/50">до <span className="text-accent-gold font-bold">{nextM.label}</span> осталось <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
+                    <span className="text-text-primary/30">{prevM ? prevM.label : "0"}</span>
+                    <span className="text-text-primary/50">до <span className="text-accent-gold font-bold">{nextM.label}</span> осталось <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
                     <span className="text-accent-gold font-bold">{nextM.label}</span>
                   </div>
                   <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
                     <div className="h-full rounded-full transition-all duration-1000"
                       style={{ width: `${trackPct}%`, background: "linear-gradient(90deg, #f59e0b, #fde68a)" }} />
                   </div>
-                  <p className="text-[10px] text-white/25 text-right">{trackPct.toFixed(1)}% до следующей вехи</p>
+                  <p className="text-[10px] text-text-primary/25 text-right">{trackPct.toFixed(1)}% до следующей вехи</p>
                 </div>
               )}
 
@@ -625,15 +625,15 @@ export default function AnalyticsPage() {
                         reached
                           ? "border-accent-gold bg-accent-gold/15 shadow-[0_0_16px_rgba(251,191,36,0.4)]"
                           : isCurrent
-                          ? "border-white/30 bg-white/[0.04]"
-                          : "border-white/10 bg-white/[0.02]"
+                          ? "border-border bg-white/[0.04]"
+                          : "border-border bg-white/[0.02]"
                       }`}>
                         <span className={`text-lg leading-none ${reached ? "" : "opacity-25"}`}>{m.emoji}</span>
                         {reached && (
                           <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-accent-gold text-[7px] font-black text-black">✓</span>
                         )}
                       </div>
-                      <span className={`font-mono text-[10px] font-bold ${reached ? "text-accent-gold" : isCurrent ? "text-white/50" : "text-white/20"}`}>{m.label}</span>
+                      <span className={`font-mono text-[10px] font-bold ${reached ? "text-accent-gold" : isCurrent ? "text-text-primary/50" : "text-text-primary/20"}`}>{m.label}</span>
                     </div>
                   );
                 })}
@@ -650,23 +650,23 @@ export default function AnalyticsPage() {
 
           {/* Шапка */}
           <div
-            className="border-b border-white/[0.06] px-5 pt-5 pb-4"
+            className="border-b border-border px-5 pt-5 pb-4"
             style={{ background: "linear-gradient(135deg, rgba(10,255,224,0.04) 0%, transparent 55%)" }}
           >
             <div className="flex items-center justify-between">
               <button
                 onClick={prevMonth}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-lg text-text-muted transition hover:border-white/20 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-lg text-text-muted transition hover:border-border hover:text-text-primary"
               >‹</button>
               <div className="text-center">
-                <h2 className="text-xl font-extrabold tracking-tight text-white">
+                <h2 className="text-xl font-extrabold tracking-tight text-text-primary">
                   {MONTHS_RU[month]} <span className="text-text-muted font-medium">{year}</span>
                 </h2>
               </div>
               <button
                 onClick={nextMonth}
                 disabled={year === today.getFullYear() && month === today.getMonth()}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-lg text-text-muted transition hover:border-white/20 hover:text-white disabled:opacity-25"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-lg text-text-muted transition hover:border-border hover:text-text-primary disabled:opacity-25"
               >›</button>
             </div>
 
@@ -706,7 +706,7 @@ export default function AnalyticsPage() {
             {/* Дни недели */}
             <div className="mb-2 grid grid-cols-7 gap-1.5">
               {WEEKDAYS.map(d => (
-                <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest text-white/20">{d}</div>
+                <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest text-text-primary/20">{d}</div>
               ))}
             </div>
 
@@ -724,7 +724,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Легенда */}
-            <div className="mt-4 flex flex-wrap justify-center gap-4 text-[10px] text-white/30">
+            <div className="mt-4 flex flex-wrap justify-center gap-4 text-[10px] text-text-primary/30">
               <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-accent-cyan" />Сигнал</span>
               <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-accent-gold" />Сделка</span>
               <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-success" />Депозит</span>
@@ -734,15 +734,15 @@ export default function AnalyticsPage() {
 
           {/* Детальная карточка выбранного дня */}
           {selectedDay && (
-            <div className="border-t border-white/[0.06] px-5 py-4" style={{ background: "rgba(255,255,255,0.015)" }}>
+            <div className="border-t border-border px-5 py-4" style={{ background: "rgba(255,255,255,0.015)" }}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-white">
+                  <p className="font-bold text-text-primary">
                     {new Date(selectedDay.date + "T12:00:00").toLocaleDateString("ru", { weekday: "long", day: "numeric", month: "long" })}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedDay.balance !== null && (
-                      <span className="rounded-lg bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-white">
+                      <span className="rounded-lg bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-text-primary">
                         💰 ${fmtDot(selectedDay.balance, 2)}
                       </span>
                     )}
@@ -766,7 +766,7 @@ export default function AnalyticsPage() {
                 <div className="shrink-0 text-right">
                   {selectedDay.pnl_pct !== null && !selectedDay.estimated ? (
                     <>
-                      <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-success" : selectedDay.pnl_pct < 0 ? "text-danger" : "text-white/40"}`}>
+                      <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-success" : selectedDay.pnl_pct < 0 ? "text-danger" : "text-text-primary/40"}`}>
                         {selectedDay.pnl_pct > 0 ? "+" : ""}{selectedDay.pnl_pct.toFixed(2)}%
                       </p>
                       {selectedDay.signals > 0 && selectedDay.pnl_pct > 0 && (
@@ -774,7 +774,7 @@ export default function AnalyticsPage() {
                       )}
                     </>
                   ) : (
-                    <p className="text-xs text-white/20">Нет снимка</p>
+                    <p className="text-xs text-text-primary/20">Нет снимка</p>
                   )}
                 </div>
               </div>
@@ -783,25 +783,25 @@ export default function AnalyticsPage() {
 
           {/* Итоги месяца */}
           {realDays.length >= 2 && (
-            <div className="border-t border-white/[0.06] px-5 py-3">
+            <div className="border-t border-border px-5 py-3">
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div>
                   <p className={`font-mono text-base font-extrabold ${totalPnl >= 0 ? "text-success" : "text-danger"}`}>
                     {totalPnl >= 0 ? "+" : ""}{totalPnl.toFixed(1)}%
                   </p>
-                  <p className="text-[10px] text-white/30">итог месяца</p>
+                  <p className="text-[10px] text-text-primary/30">итог месяца</p>
                 </div>
                 <div>
                   <p className="font-mono text-base font-extrabold text-success">
                     {bestDay ? `+${bestDay.pnl_pct!.toFixed(1)}%` : "-"}
                   </p>
-                  <p className="text-[10px] text-white/30">лучший день</p>
+                  <p className="text-[10px] text-text-primary/30">лучший день</p>
                 </div>
                 <div>
                   <p className="font-mono text-base font-extrabold text-danger">
                     {worstDay && worstDay.pnl_pct! < 0 ? `${worstDay.pnl_pct!.toFixed(1)}%` : "-"}
                   </p>
-                  <p className="text-[10px] text-white/30">худший день</p>
+                  <p className="text-[10px] text-text-primary/30">худший день</p>
                 </div>
               </div>
             </div>
@@ -841,7 +841,7 @@ export default function AnalyticsPage() {
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-gold/15 text-accent-gold">
                       <Star className="h-4 w-4" />
                     </div>
-                    <h2 className="text-base font-bold text-white">Уровень трейдера</h2>
+                    <h2 className="text-base font-bold text-text-primary">Уровень трейдера</h2>
                   </div>
                   {coinsBalance !== null && (
                     <div className="flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-accent-gold/10 px-2.5 py-1">
@@ -860,13 +860,13 @@ export default function AnalyticsPage() {
                       <span className="font-mono text-2xl font-black text-accent-gold leading-none">{level}</span>
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-white">{levelTitle}</p>
-                      <p className="mt-0.5 text-[11px] text-white/40">осталось {Math.max(0, xpNeeded - xpInLevel).toLocaleString("ru")} XP до ур. {level + 1}</p>
+                      <p className="text-sm font-bold text-text-primary">{levelTitle}</p>
+                      <p className="mt-0.5 text-[11px] text-text-primary/40">осталось {Math.max(0, xpNeeded - xpInLevel).toLocaleString("ru")} XP до ур. {level + 1}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="font-mono text-2xl font-extrabold leading-none text-white">{xp.toLocaleString("ru")}</span>
-                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-white/30">всего XP</p>
+                    <span className="font-mono text-2xl font-extrabold leading-none text-text-primary">{xp.toLocaleString("ru")}</span>
+                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-text-primary/30">всего XP</p>
                   </div>
                 </div>
 
@@ -877,17 +877,17 @@ export default function AnalyticsPage() {
                     style={{ width: `${pct}%`, background: "linear-gradient(90deg, #f59e0b, #fde68a)" }}
                   />
                 </div>
-                <p className="relative mt-1.5 text-right text-[10px] text-white/30">{xpInLevel.toLocaleString("ru")} / {xpNeeded.toLocaleString("ru")} XP</p>
+                <p className="relative mt-1.5 text-right text-[10px] text-text-primary/30">{xpInLevel.toLocaleString("ru")} / {xpNeeded.toLocaleString("ru")} XP</p>
 
                 {/* Разбивка XP */}
                 <div className="relative mt-4 grid grid-cols-2 gap-2">
                   {breakdown.map(({ icon: Icon, label, val, color, bg }) => (
-                    <div key={label} className="flex items-center gap-2 rounded-xl border border-white/[0.05] bg-white/[0.02] px-2.5 py-2">
+                    <div key={label} className="flex items-center gap-2 rounded-xl border border-border bg-white/[0.02] px-2.5 py-2">
                       <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${bg} ${color}`}>
                         <Icon className="h-3.5 w-3.5" />
                       </div>
                       <span className="flex-1 truncate text-[11px] text-text-muted">{label}</span>
-                      <span className={`font-mono text-[11px] font-bold ${val > 0 ? "text-white" : "text-white/25"}`}>+{val}</span>
+                      <span className={`font-mono text-[11px] font-bold ${val > 0 ? "text-text-primary" : "text-text-primary/25"}`}>+{val}</span>
                     </div>
                   ))}
                 </div>
@@ -898,20 +898,20 @@ export default function AnalyticsPage() {
           <div className="card space-y-4">
             <div className="flex items-center gap-2">
               <Target className="h-4 w-4 text-accent-cyan" />
-              <h2 className="text-base font-bold text-white">Цели месяца</h2>
+              <h2 className="text-base font-bold text-text-primary">Цели месяца</h2>
             </div>
 
             {goals.map((goal) => {
               const Icon = goal.icon;
               const pct = Math.min((goal.current / goal.target) * 100, 100);
               return (
-                <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-success/[0.04]" : "border-white/[0.06] bg-white/[0.02]"}`}>
+                <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-success/[0.04]" : "border-border bg-white/[0.02]"}`}>
                   <div className="flex items-center gap-2 mb-1.5">
                     <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: goal.color }} />
-                    <span className="text-[11px] font-semibold text-white flex-1 min-w-0 truncate">{goal.label}</span>
+                    <span className="text-[11px] font-semibold text-text-primary flex-1 min-w-0 truncate">{goal.label}</span>
                     {goal.unlocked
                       ? <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
-                      : <span className="font-mono text-[10px] text-white/30 shrink-0">{goal.current}/{goal.target}</span>
+                      : <span className="font-mono text-[10px] text-text-primary/30 shrink-0">{goal.current}/{goal.target}</span>
                     }
                   </div>
                   <div className="h-1 overflow-hidden rounded-full bg-bg-deep">
@@ -933,7 +933,7 @@ export default function AnalyticsPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Trophy className="h-4 w-4 text-accent-gold" />
-            <h2 className="text-base font-bold text-white">Достижения</h2>
+            <h2 className="text-base font-bold text-text-primary">Достижения</h2>
           </div>
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs text-accent-gold font-bold">{achievements.filter(a => a.earned).length}/{achievements.length}</span>
@@ -951,10 +951,10 @@ export default function AnalyticsPage() {
             const total = cat.id === "all" ? achievements.length : achievements.filter(a => a.category === cat.id).length;
             return (
               <button key={cat.id} onClick={() => setAchCategory(cat.id)}
-                className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-accent-gold/10 text-accent-gold" : "border-white/[0.07] bg-white/[0.02] text-white/40 hover:text-white/70"}`}>
+                className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-accent-gold/10 text-accent-gold" : "border-border bg-white/[0.02] text-text-primary/40 hover:text-text-primary/70"}`}>
                 <cat.icon className="h-3 w-3 shrink-0" />
                 <span>{cat.label}</span>
-                <span className={`font-mono text-[9px] ${achCategory === cat.id ? "text-accent-gold/60" : "text-white/20"}`}>{count}/{total}</span>
+                <span className={`font-mono text-[9px] ${achCategory === cat.id ? "text-accent-gold/60" : "text-text-primary/20"}`}>{count}/{total}</span>
               </button>
             );
           })}
@@ -973,14 +973,14 @@ export default function AnalyticsPage() {
                 <div className="flex items-start gap-3">
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${r.border}`}>
                     {ach.earned ? (
-                      <Icon className="h-5 w-5 text-white" />
+                      <Icon className="h-5 w-5 text-text-primary" />
                     ) : (
                       <Lock className="h-4 w-4 text-text-muted" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-white">{ach.title}</h3>
+                      <h3 className="text-sm font-bold text-text-primary">{ach.title}</h3>
                       <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${r.badge}`}>
                         {r.label}
                       </span>

@@ -75,7 +75,7 @@ export default function ShopPage() {
       {/* Заголовок + баланс */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary">
             <ShoppingBag className="h-6 w-6 text-accent-gold" /> Маркет NMNH
           </h1>
           <p className="mt-1 text-sm text-text-muted">Трать монеты NMNH на подписки, менторство и доступ к софту.</p>
@@ -99,7 +99,7 @@ export default function ShopPage() {
             return (
               <div
                 key={it.id}
-                className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-b from-bg-card/80 to-bg-card/20 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.6)] transition duration-300 hover:-translate-y-1 hover:border-accent-gold/40 hover:shadow-[0_16px_44px_-14px_rgba(255,200,0,0.28)]"
+                className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-bg-card/80 to-bg-card/20 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.6)] transition duration-300 hover:-translate-y-1 hover:border-accent-gold/40 hover:shadow-[0_16px_44px_-14px_rgba(255,200,0,0.28)]"
               >
                 {/* Hero */}
                 <CardHero image={img} icon={it.icon} accent="gold">
@@ -108,14 +108,14 @@ export default function ShopPage() {
                     <span className="font-mono text-sm font-bold text-accent-gold">{it.price.toLocaleString("ru")}</span>
                   </div>
                   {img && (
-                    <div className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/45 text-accent-gold backdrop-blur-md">
+                    <div className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-black/45 text-accent-gold backdrop-blur-md">
                       <ShopIcon name={it.icon} className="h-4 w-4" />
                     </div>
                   )}
                 </CardHero>
                 {/* Body */}
                 <div className="flex flex-1 flex-col p-5">
-                  <h3 className="font-semibold leading-snug text-white">{it.title}</h3>
+                  <h3 className="font-semibold leading-snug text-text-primary">{it.title}</h3>
                   <p className="mt-1.5 flex-1 text-sm leading-relaxed text-text-muted line-clamp-3">{it.description}</p>
                   {it.link_url && (
                     <a href={it.link_url} target="_blank" rel="noopener noreferrer"
@@ -129,7 +129,7 @@ export default function ShopPage() {
                     className={`mt-4 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition ${
                       affordable
                         ? "bg-gradient-to-r from-accent-gold to-amber-400 text-bg shadow-[0_6px_18px_-6px_rgba(255,200,0,0.6)] hover:shadow-[0_8px_24px_-6px_rgba(255,200,0,0.8)]"
-                        : "cursor-not-allowed border border-white/10 bg-white/[0.03] text-text-muted"
+                        : "cursor-not-allowed border border-border bg-white/[0.03] text-text-muted"
                     }`}
                   >
                     {affordable ? <><Coins className="h-4 w-4" /> Купить</> : "Недостаточно монет"}
@@ -149,7 +149,7 @@ export default function ShopPage() {
           {softwareItems.map((it) => {
             const img = cardImage(it.image_url, it.link_url);
             return (
-            <div key={it.id} className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-b from-bg-card/80 to-bg-card/20 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.6)] transition duration-300 hover:-translate-y-1 hover:border-accent-cyan/40 hover:shadow-[0_16px_44px_-14px_rgba(10,255,224,0.22)]">
+            <div key={it.id} className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-bg-card/80 to-bg-card/20 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.6)] transition duration-300 hover:-translate-y-1 hover:border-accent-cyan/40 hover:shadow-[0_16px_44px_-14px_rgba(10,255,224,0.22)]">
               {/* Hero */}
               <CardHero image={img} icon={it.icon} accent="cyan">
                 {it.price > 0 && (
@@ -159,14 +159,14 @@ export default function ShopPage() {
                   </div>
                 )}
                 {img && (
-                  <div className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/45 text-accent-cyan backdrop-blur-md">
+                  <div className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-black/45 text-accent-cyan backdrop-blur-md">
                     <ShopIcon name={it.icon} className="h-4 w-4" />
                   </div>
                 )}
               </CardHero>
               {/* Body */}
               <div className="flex flex-1 flex-col p-5">
-                <h3 className="font-semibold leading-snug text-white">{it.title}</h3>
+                <h3 className="font-semibold leading-snug text-text-primary">{it.title}</h3>
                 <p className="mt-1.5 flex-1 text-sm leading-relaxed text-text-muted line-clamp-3">{it.description}</p>
                 {it.link_url ? (
                   <a href={it.link_url} target="_blank" rel="noopener noreferrer"
@@ -174,7 +174,7 @@ export default function ShopPage() {
                     <ExternalLink className="h-4 w-4" /> Открыть
                   </a>
                 ) : (
-                  <span className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-center text-sm text-text-muted">Скоро</span>
+                  <span className="mt-4 rounded-xl border border-border bg-white/[0.02] px-4 py-3 text-center text-sm text-text-muted">Скоро</span>
                 )}
               </div>
             </div>
@@ -195,7 +195,7 @@ export default function ShopPage() {
               return (
                 <div key={o.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg-card/40 px-4 py-3">
                   <div>
-                    <p className="font-semibold text-white">{o.item_title}</p>
+                    <p className="font-semibold text-text-primary">{o.item_title}</p>
                     <p className="text-xs text-text-muted">
                       {new Date(o.created_at).toLocaleString("ru")} · {o.price.toLocaleString("ru")} NMNH
                       {o.mentor_note && ` · ${o.mentor_note}`}
@@ -215,9 +215,9 @@ export default function ShopPage() {
       {buying && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !busy && setBuying(null)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-bg-panel p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Подтвердить покупку</h3>
+            <h3 className="text-lg font-bold text-text-primary">Подтвердить покупку</h3>
             <p className="mt-2 text-sm text-text-muted">
-              <span className="font-semibold text-white">{buying.title}</span> за{" "}
+              <span className="font-semibold text-text-primary">{buying.title}</span> за{" "}
               <span className="font-mono font-bold text-accent-gold">{buying.price.toLocaleString("ru")} NMNH</span>.
               Монеты спишутся сразу, ментор выдаст доступ вручную.
             </p>
@@ -228,14 +228,14 @@ export default function ShopPage() {
               value={contact}
               onChange={(e) => setContact(e.target.value)}
               placeholder={buying.requires_tv ? "Ваш username на TradingView" : "@username"}
-              className="mt-1.5 w-full rounded-xl border border-border bg-bg-deep px-3 py-2.5 text-sm text-white outline-none focus:border-accent-gold/50"
+              className="mt-1.5 w-full rounded-xl border border-border bg-bg-deep px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent-gold/50"
             />
             {buying.requires_tv && !contact.trim() && (
               <p className="mt-1.5 text-xs text-text-muted">Доступ к индикатору выдаётся на этот аккаунт TradingView.</p>
             )}
             {error && <p className="mt-3 text-sm text-danger">{error}</p>}
             <div className="mt-5 flex gap-2">
-              <button onClick={() => setBuying(null)} disabled={busy} className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm text-text-muted transition hover:text-white">
+              <button onClick={() => setBuying(null)} disabled={busy} className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm text-text-muted transition hover:text-text-primary">
                 Отмена
               </button>
               <button onClick={confirmBuy} disabled={busy || (buying.requires_tv && !contact.trim())} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-bg transition hover:bg-accent-gold/90 disabled:opacity-60">

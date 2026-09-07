@@ -22,7 +22,7 @@ export default function Socials() {
                 href={s.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group flex w-52 flex-col gap-5 rounded-2xl border border-white/[0.18] bg-white/[0.08] p-6 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-[#229ED9]/50 hover:bg-white/[0.13]"
+                className="group flex w-52 flex-col gap-5 rounded-2xl border border-border bg-white/[0.08] p-6 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-[#229ED9]/50 hover:bg-white/[0.13]"
               >
                 <span
                   className="grid h-12 w-12 place-items-center rounded-xl ring-1 ring-[#229ED9]/30 transition group-hover:scale-110"
@@ -30,7 +30,7 @@ export default function Socials() {
                 >
                   <Icon className="h-6 w-6" />
                 </span>
-                <div className="text-base font-bold tracking-widest text-white">
+                <div className="text-base font-bold tracking-widest text-text-primary">
                   {s.name}
                 </div>
               </a>

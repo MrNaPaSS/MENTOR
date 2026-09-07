@@ -9,14 +9,43 @@
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
-  --bg-deep: #0b0e11;
-  --bg-card: #181a20;
-  --bg-panel: #1e2329;
-  --accent-cyan: #0affe0;
-  --accent-gold: #f0b90b;
-  --success: #0ecb81;
-  --danger: #f6465d;
-  --border: #2b3139;
+  /* Цвета заданы каналами, а не готовым цветом: так Tailwind умеет добавлять
+     к ним прозрачность (bg-bg-deep/80), а тема - подменять сами каналы. */
+  --bg-deep: 11 14 17;
+  --bg-card: 24 26 32;
+  --bg-panel: 30 35 41;
+  --text-primary: 234 236 239;
+  --text-secondary: 183 189 198;
+  --text-muted: 122 130 144;
+  --accent-cyan: 10 255 224;
+  --accent-gold: 240 185 11;
+  --success: 14 203 129;
+  --danger: 246 70 93;
+  --border: 43 49 57;
+}
+
+/* ── Светлая тема всего сайта ──────────────────────────────────────────────
+   Включается вместе со светлой темой терминала: белые панели на чёрной
+   странице выглядят вырезанными из другого приложения. Меняются только
+   каналы - ни одна разметка о теме не знает и знать не должна.
+
+   Бегущая строка исключена намеренно: это витрина рынка, она живёт своими
+   цветами в любой теме. */
+:root[data-terminal="light"] {
+  color-scheme: light;
+
+  --bg-deep: 242 243 245;
+  --bg-card: 255 255 255;
+  --bg-panel: 248 249 250;
+  --text-primary: 17 20 24;
+  --text-secondary: 74 80 88;
+  --text-muted: 120 123 134;
+  /* Бирюза акцента на белом слепнет - берём насыщенный синий. */
+  --accent-cyan: 41 98 255;
+  --accent-gold: 169 116 0;
+  --success: 0 168 107;
+  --danger: 255 26 46;
+  --border: 214 220 222;
 }
 
 /* ── Тема рабочих панелей скальпинга ──────────────────────────────────────
@@ -80,7 +109,7 @@
     scroll-behavior: smooth;
   }
   body {
-    background-color: var(--bg-deep);
+    background-color: rgb(var(--bg-deep));
     color: #eaecef;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -95,12 +124,12 @@
     height: 10px;
   }
   ::-webkit-scrollbar-track {
-    background: var(--bg-deep);
+    background: rgb(var(--bg-deep));
   }
   ::-webkit-scrollbar-thumb {
     background: #23233a;
     border-radius: 8px;
-    border: 2px solid var(--bg-deep);
+    border: 2px solid rgb(var(--bg-deep));
   }
   ::-webkit-scrollbar-thumb:hover {
     background: #2f2f4d;
@@ -220,12 +249,12 @@
   opacity: 0.85;
 }
 .glitch::before {
-  color: var(--accent-cyan);
+  color: rgb(var(--accent-cyan));
   animation: glitch-x 3.4s infinite steps(2, end);
   clip-path: inset(0 0 60% 0);
 }
 .glitch::after {
-  color: var(--danger);
+  color: rgb(var(--danger));
   animation: glitch-y 2.8s infinite steps(2, end);
   clip-path: inset(60% 0 0 0);
 }

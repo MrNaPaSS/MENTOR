@@ -90,7 +90,7 @@ export function VolumeDonut({ spot, futures }: { spot: number; futures: number }
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-xs text-text-muted">Объём</span>
-        <span className="font-mono text-lg font-bold text-white">{fmtUsd(total)}$</span>
+        <span className="font-mono text-lg font-bold text-text-primary">{fmtUsd(total)}$</span>
       </div>
     </div>
   );

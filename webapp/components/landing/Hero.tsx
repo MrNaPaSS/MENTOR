@@ -15,7 +15,7 @@ export default function Hero() {
 
       <div className="relative mx-auto grid max-w-6xl gap-10 px-4 md:px-6">
         <div className="max-w-3xl">
-          <h1 className="text-h1 text-white">
+          <h1 className="text-h1 text-text-primary">
             <span className="glitch" data-text="Торгуй как профи.">
               Торгуй как профи.
             </span>
@@ -41,7 +41,7 @@ export default function Hero() {
               href={SOCIAL_LINKS.weexAffiliate}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-white/20 px-7 py-3 text-[15px] font-semibold text-white transition-all duration-200 hover:border-white/35 hover:bg-white/[0.06] active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-7 py-3 text-[15px] font-semibold text-text-primary transition-all duration-200 hover:border-border hover:bg-white/[0.06] active:scale-[0.97]"
             >
               Открыть счёт WEEX <ExternalLink className="h-[14px] w-[14px] opacity-50" />
             </a>
@@ -51,7 +51,7 @@ export default function Hero() {
               href="https://t.me/moneyhoney7_bot"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] px-6 py-3 text-[15px] font-semibold text-text-secondary transition-all duration-200 hover:border-white/20 hover:bg-white/[0.05] hover:text-white active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 text-[15px] font-semibold text-text-secondary transition-all duration-200 hover:border-border hover:bg-white/[0.05] hover:text-text-primary active:scale-[0.97]"
             >
               <Send className="h-4 w-4" /> Telegram
             </a>

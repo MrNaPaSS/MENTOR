@@ -45,7 +45,7 @@ export default function HowItWorks() {
           return (
             <Reveal as="article" key={step.num} delay={i * 0.12}>
               <div
-                className={`group relative h-full overflow-hidden rounded-2xl border border-white/8 p-px transition-all duration-500 hover:-translate-y-2`}
+                className={`group relative h-full overflow-hidden rounded-2xl border border-border p-px transition-all duration-500 hover:-translate-y-2`}
                 style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)" }}
               >
                 {/* Gradient glow на hover */}
@@ -71,7 +71,7 @@ export default function HowItWorks() {
                     <Icon className="h-7 w-7" />
                   </span>
 
-                  <h3 className="mt-5 text-lg font-bold text-white">{step.title}</h3>
+                  <h3 className="mt-5 text-lg font-bold text-text-primary">{step.title}</h3>
                   <p className="mt-2.5 flex-1 text-sm leading-relaxed text-text-secondary">{step.text}</p>
 
                   {/* Нижний акцент */}
