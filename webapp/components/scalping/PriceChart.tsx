@@ -211,6 +211,9 @@ const SHELF_HIT_PX = 8;
 // значит показывать то, чего там не было.
 const RIGHT_BARS = 14;
 
+/** Высота меню плюсика: три пункта. По ней решаем, куда его раскрывать. */
+const PLUS_MENU_H = 96;
+
 /**
  * Сколько пустых баров дорисовываем за ленту, пока не приехала история.
  *
@@ -738,6 +741,11 @@ function PriceChart({
   // самой цене и едет вместе с ней, поэтому положение задаётся покадрово.
   const plusRef = useRef<HTMLDivElement>(null);
   const [plusMenu, setPlusMenu] = useState(false);
+  // Куда раскрывать меню плюсика. У нижнего края графика вниз некуда: холст
+  // теперь обрезает всё, что за него вылезает, и меню осталось бы наполовину
+  // за краем. Считаем один раз на открытии - положение кнопки к этому моменту
+  // уже известно, а следить за ним покадрово ради трёх пунктов незачем.
+  const [plusUp, setPlusUp] = useState(false);
   // Пока курсор на плюсике или открыто его меню, кнопка стоит на месте.
   // Цена меняется восемь раз в секунду, и кнопка, едущая вместе с ней, уходит
   // из-под курсора ровно в тот момент, когда по ней целятся.
@@ -1379,12 +1387,20 @@ function PriceChart({
 
     function place(node: HTMLDivElement | null, y: number | null, offset: number) {
       if (!node) return;
-      if (y === null) {
+      // Цена вне видимой части шкалы - плашке места нет.
+      //
+      // Координату график считает и для цены за краем экрана: она просто
+      // уезжает за высоту холста. Плашки при этом продолжали ехать за ней и
+      // вылезали поверх журнала - таймер свечи и плюсик висели над чужой
+      // панелью, будто принадлежат ей.
+      const height = boxRef.current?.clientHeight ?? 0;
+      const at = y === null ? null : y + offset;
+      if (at === null || (height > 0 && (at < 0 || at > height))) {
         node.style.visibility = "hidden";
         return;
       }
       node.style.visibility = "visible";
-      node.style.transform = `translateY(${y + offset}px)`;
+      node.style.transform = `translateY(${at}px)`;
     }
 
     function draw() {
@@ -1847,7 +1863,12 @@ function PriceChart({
   );
 
   return (
-    <div className="relative h-full w-full">
+    // overflow-hidden - страховка на всё, что ездит за ценой. Плашки, чипы и
+    // уровни держатся на translateY, и любая координата за краем холста
+    // выносила их поверх соседних панелей. Само по себе это уже не случается
+    // (см. place()), но чужая панель - слишком заметная плата за недосмотр в
+    // одном из полудюжины мест, которые сюда что-то кладут.
+    <div className="relative h-full w-full overflow-hidden">
       <div ref={boxRef} className="h-full w-full" />
 
       {/* Уровни под мышью: вход ручной лимитки, стоп и цель. Цену и координату
@@ -2044,6 +2065,11 @@ function PriceChart({
             setPlusMenu((v) => {
               // Меню закрыли - кнопка снова едет за ценой.
               plusHeldRef.current = !v;
+              if (!v) {
+                const at = plusRef.current?.getBoundingClientRect();
+                const box = boxRef.current?.getBoundingClientRect();
+                setPlusUp(Boolean(at && box && at.bottom + PLUS_MENU_H > box.bottom));
+              }
               return !v;
             });
           }}
@@ -2061,7 +2087,9 @@ function PriceChart({
         </button>
         {plusMenu && (
           <div
-            className="pointer-events-auto absolute right-6 top-0 w-44 overflow-hidden rounded-lg border shadow-xl"
+            className={`pointer-events-auto absolute right-6 w-44 overflow-hidden rounded-lg border shadow-xl ${
+              plusUp ? "bottom-0" : "top-0"
+            }`}
             style={{ borderColor: "var(--pane-border)", background: "var(--pane-bg)" }}
           >
             {(
