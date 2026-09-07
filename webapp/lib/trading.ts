@@ -112,6 +112,8 @@ export type ExchangePlans = {
   /** Цена стопа с биржи. Своя цифра расходилась с ней на сотню пунктов. */
   stop_price: number | null;
   take_prices: number[];
+  /** Сколько целей было поставлено. Ноль - лестницы на бирже не было вовсе. */
+  placed_takes: number;
 };
 
 /**

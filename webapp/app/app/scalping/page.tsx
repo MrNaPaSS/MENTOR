@@ -1028,10 +1028,14 @@ export default function ScalpingPage() {
           list.map((t) => {
             if (t.symbol !== symbol || t.status !== "open") return t;
 
-            // Целей на бирже меньше, чем в замысле, - значит остальные
-            // сработали. Пока список заявок пуст по причине сбоя связи, число
-            // не растёт: сервер в этом случае отдаёт то, что записано у нас.
-            const hit = Math.max(t.takesHit, Math.max(0, t.targets.length - body.takes));
+            // Цели считаем взятыми только среди тех, что были поставлены.
+            // «В замысле три, на бирже ноль» - это чаще всего лестница, не
+            // вставшая вовсе, а не три сработавшие цели: так с графика
+            // пропадали цели сразу после входа, а бокс объявлял безубыток.
+            const hit =
+              body.placed_takes > 0
+                ? Math.max(t.takesHit, Math.max(0, body.placed_takes - body.takes))
+                : t.takesHit;
             const stop = at && at > 0 ? at : t.stop;
             if (hit === t.takesHit && Math.abs(stop - t.stop) < Math.max(stop, 1) * 0.00001) {
               return t;
