@@ -1132,11 +1132,11 @@ function PriceChart({
 
     // Полку на цене плиты не рисуем: это один и тот же уровень, и две линии
     // с двумя подписями на нём спорят друг с другом, а не дополняют.
-    const shown = wall
+    const drawn = wall
       ? shelves.filter((shelf) => Math.abs(shelf.price - wall.price) > (tick || 0) / 2)
       : shelves;
 
-    shelfLinesRef.current = shown.map((shelf) =>
+    shelfLinesRef.current = drawn.map((shelf) =>
       series.createPriceLine({
         price: shelf.price,
         color: shelf.side === "bid" ? THEMES[theme].bidLine : THEMES[theme].askLine,
@@ -1207,7 +1207,7 @@ function PriceChart({
     }
 
     tradeShapesRef.current = tradeShapes(
-      [...trades.filter((t) => t.status === "open" || t.id === peeked), preview],
+      [...trades.filter((t) => t.status === "open" || t.id === shown), preview],
       palette,
       dataRef.current,
     );
