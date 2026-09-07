@@ -17,6 +17,7 @@ from core import repo
 from core.weex import get_weex_client
 from backend.config import BackendConfig
 from backend.trading.watcher import PositionWatcher
+from backend.api import shots
 from backend.api import trading as trading_api
 from backend.api import auth, market, market_data, market_extra, signals, stats, students, profile, admin_affiliate, institutional, broadcast, pnl, trades, journal, trading, coins, shop
 from backend.api import scalping as scalping_api
@@ -106,6 +107,7 @@ def create_app(
     app.include_router(stats.router)
     app.include_router(students.router)
     app.include_router(profile.router)
+    app.include_router(shots.router)
     app.include_router(admin_affiliate.router)
     app.include_router(institutional.router)
     app.include_router(broadcast.router)

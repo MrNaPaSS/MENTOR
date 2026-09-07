@@ -218,3 +218,110 @@ def test_new_field_is_added_to_an_existing_table(tmp_path):
     columns = {row[1] for row in con.execute("PRAGMA table_info(scalp_workspaces)")}
     con.close()
     assert {"payload", "updated_at"} <= columns
+
+
+# ── снимки графика ───────────────────────────────────────────────────────────
+
+def test_shot_is_saved_and_served(tmp_path, monkeypatch):
+    """Снимок сохраняется файлом, а ссылка отдаёт страницу с картинкой.
+
+    Владельца не храним: имя рисуется в самой картинке браузером, а базе о нём
+    знать незачем - ссылку открывают посторонние.
+    """
+    import base64
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from backend.api import shots as shots_api
+    from backend.deps import get_current_student, get_session
+    from core.models import Base, Student
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path)
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    student = Student(tg_id=1, username="scalper")
+    session.add(student)
+    session.commit()
+
+    app = FastAPI()
+    app.include_router(shots_api.router)
+    app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_current_student] = lambda: student
+
+    # Однопиксельный PNG - достаточно, чтобы проверить путь целиком.
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    )
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/shots",
+            json={
+                "image": "data:image/png;base64," + base64.b64encode(png).decode(),
+                "symbol": "btcusdt",
+                "interval": "1m",
+            },
+        )
+        assert created.status_code == 201
+        shot_id = created.json()["id"]
+
+        page = client.get(f"/api/shots/{shot_id}")
+        assert page.status_code == 200
+        assert "BTCUSDT" in page.text
+        # Превью в мессенджерах собирается по og-тегам ещё до открытия.
+        assert 'property="og:image"' in page.text
+        # Имени владельца на странице нет.
+        assert "scalper" not in page.text
+
+        image = client.get(f"/api/shots/{shot_id}.png")
+        assert image.status_code == 200
+        assert image.content == png
+
+
+def test_shot_refuses_what_is_not_a_picture(tmp_path, monkeypatch):
+    import base64
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from backend.api import shots as shots_api
+    from backend.deps import get_current_student, get_session
+    from core.models import Base, Student
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path)
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    student = Student(tg_id=1)
+    session.add(student)
+    session.commit()
+
+    app = FastAPI()
+    app.include_router(shots_api.router)
+    app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_current_student] = lambda: student
+
+    with TestClient(app) as client:
+        # Не PNG: подписи, исполняемые файлы и прочее сюда попадать не должно.
+        answer = client.post(
+            "/api/shots",
+            json={
+                "image": base64.b64encode(b"MZ" + b"0" * 200).decode(),
+                "symbol": "BTCUSDT",
+            },
+        )
+        assert answer.status_code == 400
+        assert list(tmp_path.iterdir()) == []

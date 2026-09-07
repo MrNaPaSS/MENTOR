@@ -24,6 +24,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Star,
+  Camera,
   Sun,
   Wifi,
   WifiOff,
@@ -36,6 +37,7 @@ import type { ChartTheme } from "@/lib/indicator/shapes";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
 import { play, setMuted } from "@/lib/sound";
+import { composeShot, copy as copyShot, download as downloadShot, share as shareShot } from "@/lib/shot";
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import { setTerminalTheme } from "@/lib/terminalTheme";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
@@ -303,6 +305,11 @@ export default function ScalpingPage() {
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   // Уровень, по которому нажали в стакане: спрашиваем, что с ним делать.
   const [level, setLevel] = useState<LadderRow | null>(null);
+  // Способ снять холст графика: кладёт его сам график, пользуется кнопка.
+  const shotRef = useRef<(() => HTMLCanvasElement | null) | null>(null);
+  const [shotMenu, setShotMenu] = useState(false);
+  // Имя для подписи на снимке. Оно рисуется в картинке и на сервер не уходит.
+  const [author, setAuthor] = useState<string | null>(null);
 
   // Полный экран: терминал остаётся один на всём стекле.
   //
@@ -313,18 +320,23 @@ export default function ScalpingPage() {
   const { coins } = useCoins(full ? "full" : "windowed");
   const [balance, setBalance] = useState<string | null>(null);
 
-  // Баланс счёта: в полном экране он единственное место, где его видно.
+  // Баланс счёта и имя для подписи на снимке. Имя рисуется в самой картинке и
+  // на сервер не уходит: подпись нужна тому, кто смотрит, а базе о владельце
+  // знать незачем.
   useEffect(() => {
-    if (!full || balance !== null) return;
+    if (balance !== null) return;
     const token = getAccessToken();
     if (!token) return;
     api
       .profile(token)
-      .then((body) => setBalance(body.balance_usdt ?? "0"))
+      .then((body) => {
+        setBalance(body.balance_usdt ?? "0");
+        setAuthor(body.username ?? null);
+      })
       .catch(() => {
         // Не ответил профиль - строка просто останется без баланса.
       });
-  }, [full, balance]);
+  }, [balance]);
 
   /**
    * Полный экран.
@@ -1274,6 +1286,61 @@ export default function ScalpingPage() {
     setTerminalTheme(theme);
   }, [theme]);
 
+  /**
+   * Снимок графика: скачать, скопировать или получить ссылку.
+   *
+   * Картинка собирается из холста графика и шапки с монетой, таймфреймом,
+   * именем и временем: чужой скриншот без этих подписей бесполезен.
+   */
+  async function takeShot(action: "download" | "copy" | "link") {
+    setShotMenu(false);
+    const canvas = shotRef.current?.();
+    if (!canvas || !symbol) {
+      setOrderNote({ text: "График ещё не готов к снимку", bad: true });
+      return;
+    }
+
+    const picture = composeShot(canvas, {
+      symbol,
+      interval: timeframe,
+      author: author ?? undefined,
+      theme,
+    });
+
+    if (action === "download") {
+      await downloadShot(picture, `${base(symbol)}-${timeframe}`);
+      setOrderNote({ text: "Снимок сохранён", bad: false });
+      return;
+    }
+
+    if (action === "copy") {
+      const done = await copyShot(picture);
+      setOrderNote({
+        text: done ? "Снимок в буфере обмена" : "Браузер не даёт копировать картинки - сохраните файлом",
+        bad: !done,
+      });
+      return;
+    }
+
+    setOrderNote({ text: "Выкладываем снимок…", bad: false });
+    try {
+      const link = await shareShot(picture, { symbol, interval: timeframe, theme });
+      if (!link) {
+        setOrderNote({ text: "Ссылку получить не удалось", bad: true });
+        return;
+      }
+      // Ссылку сразу в буфер: её для того и просят, чтобы отправить дальше.
+      try {
+        await navigator.clipboard.writeText(link);
+        setOrderNote({ text: `Ссылка скопирована: ${link}`, bad: false });
+      } catch {
+        setOrderNote({ text: link, bad: false });
+      }
+    } catch {
+      setOrderNote({ text: "Ссылку получить не удалось", bad: true });
+    }
+  }
+
   // Класс темы для рабочих панелей: стакан и график светлеют вместе.
   const pane = theme === "light" ? "pane-light" : "pane-dark";
   const paneStyle = paneHeight(journalOpen, journalH, full);
@@ -1592,6 +1659,36 @@ export default function ScalpingPage() {
                     {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
                   </button>
 
+                  {/* Снимок графика: три способа поделиться одним нажатием. */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShotMenu((v) => !v)}
+                      title="Снимок графика"
+                      className={`${CHIP} ${shotMenu ? CHIP_ON : CHIP_OFF}`}
+                    >
+                      <Camera className="h-3.5 w-3.5" />
+                    </button>
+                    {shotMenu && (
+                      <div className="absolute right-0 top-7 z-30 w-44 overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] py-1 shadow-xl">
+                        {(
+                          [
+                            ["download", "Скачать картинкой"],
+                            ["copy", "Скопировать"],
+                            ["link", "Ссылка на снимок"],
+                          ] as const
+                        ).map(([action, label]) => (
+                          <button
+                            key={action}
+                            onClick={() => takeShot(action)}
+                            className="block w-full px-3 py-1.5 text-left text-[11px] text-[var(--pane-text-2)] transition-colors hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     onClick={toggleFull}
                     title={full ? "Свернуть - Esc" : "Во весь экран"}
@@ -1701,6 +1798,7 @@ export default function ScalpingPage() {
                   journalKey={journalKey}
                   ghost={hovered && hovered.symbol === symbol ? hovered : null}
                   hoverLevel={levelHint}
+                  shot={shotRef}
                   // Шаг сетки лестницы делим на укрупнение: биржевой шаг от
                   // него не зависит, а точность шкалы должна быть по бирже.
                   tick={dom && dom.tick > 0 ? dom.tick / Math.max(1, agg) : undefined}

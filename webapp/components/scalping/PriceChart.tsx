@@ -441,6 +441,7 @@ function PriceChart({
   journalKey,
   ghost,
   hoverLevel,
+  shot,
   tick,
   alerts,
   onRemoveAlert,
@@ -500,6 +501,14 @@ function PriceChart({
    * подписи одинаковы, а одинаковые она не показывает.
    */
   tick?: number;
+  /**
+   * Сюда график кладёт способ снять свой холст.
+   *
+   * Снимок делает библиотека - у неё и холст, и все слои. Кнопка живёт в
+   * шапке рядом с темой, поэтому наружу отдаётся не картинка, а способ её
+   * получить в нужный момент.
+   */
+  shot?: React.MutableRefObject<(() => HTMLCanvasElement | null) | null>;
   /** Отметки на ценах: терминал скажет, когда их пересекут. */
   alerts?: { id: string; price: number }[];
   /** Снять отметку по крестику у её будильника. */
@@ -657,6 +666,10 @@ function PriceChart({
   // момент открытия сделки баров может ещё не быть.
   const tradeRef = useRef(trades);
   tradeRef.current = trades;
+  // Через ref: сам объект приходит из страницы и меняться не должен, а вот
+  // пересоздавать из-за него график незачем.
+  const shotRef = useRef(shot);
+  shotRef.current = shot;
   const previewRef = useRef(preview);
   previewRef.current = preview;
   // Ярлык ждущей сделки под курсором: показываем, что её ждёт, — бокс и цели.
@@ -804,6 +817,9 @@ function PriceChart({
     });
 
     chartRef.current = chart;
+    if (shotRef.current) {
+      shotRef.current.current = () => chartRef.current?.takeScreenshot() ?? null;
+    }
     return () => {
       chart.remove();
       chartRef.current = null;
