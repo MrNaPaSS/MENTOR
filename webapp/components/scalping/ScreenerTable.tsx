@@ -78,8 +78,14 @@ const COLUMNS: {
 type Props = {
   rows: ScreenerRow[];
   selected: string | null;
-  /** Монеты с идущими сделками: они стоят наверху и помечены. */
-  active?: Set<string>;
+  /**
+   * Что происходит по монете: точка в строке.
+   *
+   * Раньше пометка была одна на всё - и ждущая заявка, и набранная позиция
+   * выглядели одинаково. Разница между ними - деньги в рынке: у первой их там
+   * нет, у второй есть, и по списку это должно читаться не приглядываясь.
+   */
+  state?: Map<string, "planned" | "open">;
   /** Избранные монеты: свой раздел наверху и звезда в строке. */
   favorites?: Set<string>;
   onToggleFavorite?: (symbol: string) => void;
@@ -91,7 +97,7 @@ type Props = {
 export default function ScreenerTable({
   rows,
   selected,
-  active,
+  state,
   favorites,
   onToggleFavorite,
   sort,
@@ -133,7 +139,7 @@ export default function ScreenerTable({
               key={row.symbol}
               row={row}
               selected={row.symbol === selected}
-              mine={Boolean(active?.has(row.symbol))}
+              state={state?.get(row.symbol)}
               starred={Boolean(favorites?.has(row.symbol))}
               onStar={onToggleFavorite}
               onSelect={onSelect}
@@ -152,15 +158,15 @@ export default function ScreenerTable({
 const Row = memo(function Row({
   row,
   selected,
-  mine,
+  state,
   starred,
   onStar,
   onSelect,
 }: {
   row: ScreenerRow;
   selected: boolean;
-  /** По этой монете идёт сделка. */
-  mine: boolean;
+  /** Ждущая заявка, набранная позиция или ничего. */
+  state?: "planned" | "open";
   /** Монета в избранном. */
   starred: boolean;
   onStar?: (symbol: string) => void;
@@ -199,13 +205,33 @@ const Row = memo(function Row({
               <Star className="h-3 w-3" fill={starred ? "currentColor" : "none"} />
             </button>
           )}
+          {/* Точка состояния. Полая - заявка ждёт своей цены, залитая - позиция
+              набрана и деньги в рынке. Разные и цветом, и формой: цвет один
+              несёт смысл плохо, когда строк тридцать и глаз скользит по ним. */}
+          {state && (
+            <span
+              aria-hidden
+              title={
+                state === "open"
+                  ? "По этой монете открыта позиция"
+                  : "По этой монете ждёт заявка"
+              }
+              className="h-1.5 w-1.5 shrink-0 self-center rounded-full border"
+              style={{
+                borderColor:
+                  state === "open" ? "var(--pane-gold)" : "var(--pane-accent)",
+                background: state === "open" ? "var(--pane-gold)" : "transparent",
+              }}
+            />
+          )}
+          {/* Сам тикер цветом ничего не говорит: раньше он красился в акцент у
+              своих монет и спорил с подсветкой выбранной строки - два разных
+              смысла одним цветом. Смысл теперь на точке. */}
           <span
-            className={`w-[62px] shrink-0 overflow-hidden text-ellipsis font-semibold ${
-              mine ? "text-[var(--pane-accent)]" : "text-[var(--pane-text)]"
-            }`}
-            title={mine ? "По этой монете идёт сделка" : undefined}
+            className="w-[62px] shrink-0 overflow-hidden text-ellipsis font-semibold text-[var(--pane-text)]"
+
           >
-            {mine && "• "}
+
             {base(row.symbol)}
           </span>
           <span className="flex-1 text-right font-mono text-[10px] text-[var(--pane-text-2)]">

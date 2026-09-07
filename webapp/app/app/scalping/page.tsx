@@ -469,6 +469,16 @@ export default function ScalpingPage() {
   // Уведомления поверх терминала: сюда попадает то, что случилось само и не
   // на глазах у трейдера.
   const [toasts, setToasts] = useState<Toast[]>([]);
+  /**
+   * Поднять уведомление, если такого ещё нет.
+   *
+   * Одно и то же событие видят двое: опрос объёмов на бирже и наблюдение за
+   * состоянием сделки. Кто заметит первым - неизвестно, поэтому опознаватель у
+   * события общий, и второй заметивший ничего не добавляет.
+   */
+  const pushToast = useCallback((toast: Toast) => {
+    setToasts((list) => (list.some((one) => one.id === toast.id) ? list : [...list, toast]));
+  }, []);
 
   // Объёмы всех открытых позиций счёта: по ним считается счётчик у итога дня.
   const [liveSizes, setLiveSizes] = useState<Record<string, number>>({});
@@ -1385,13 +1395,51 @@ export default function ScalpingPage() {
       heard.current.set(t.id, stamp);
       if (previous === undefined) continue; // появление сделки - это не событие
 
+      // Звук говорит, что что-то случилось; уведомление - что именно. Раньше
+      // здесь был только звук: трейдер слышал сигнал, смотрел на другую монету
+      // и не знал, чей он и что произошло.
+      //
+      // Опознаватели общие с опросом объёмов - вход и закрытие видят оба, и
+      // второй заметивший ничего не добавит.
+      const coin = base(t.symbol);
+      const side = t.side === "long" ? "лонг" : "шорт";
       const wasTakes = Number(previous.split(":")[1] || 0);
-      if (t.status === "open" && t.takesHit > wasTakes) play("take");
-      else if (t.status === "open") play("entry");
-      else if (t.status === "closed") {
-        if (t.outcome === "take") play("profit");
-        else if (t.outcome === "stop") play("stop");
-        else play("close");
+      if (t.status === "open" && t.takesHit > wasTakes) {
+        play("take");
+        pushToast({
+          id: `${t.id}:take:${t.takesHit}`,
+          symbol: t.symbol,
+          title: `${coin} - взята цель ${t.takesHit}`,
+          text:
+            t.takesHit >= t.targets.length
+              ? `${side} · последняя`
+              : `${side} · осталось целей ${t.targets.length - t.takesHit}`,
+          tone: "up",
+        });
+      } else if (t.status === "open") {
+        play("entry");
+        pushToast({
+          id: `${t.id}:in`,
+          symbol: t.symbol,
+          title: `${coin} - вход состоялся`,
+          text: `${side} по ${fmtPrice(t.entry, limits?.tick ?? 0)}`,
+          tone: t.side === "long" ? "up" : "down",
+        });
+      } else if (t.status === "closed") {
+        const done =
+          t.outcome === "take"
+            ? { sound: "profit" as const, title: "сделка отработала", tone: "up" as const }
+            : t.outcome === "stop"
+              ? { sound: "stop" as const, title: "сработал стоп", tone: "down" as const }
+              : { sound: "close" as const, title: "позиция закрыта", tone: "plain" as const };
+        play(done.sound);
+        pushToast({
+          id: `${t.id}:out`,
+          symbol: t.symbol,
+          title: `${coin} - ${done.title}`,
+          text: `${side} · ${t.pnl >= 0 ? "+" : "-"}${Math.abs(t.pnl).toFixed(2)} $`,
+          tone: done.tone,
+        });
       }
     }
     // Забываем ушедшие: карта не должна расти вместе с историей за день.
@@ -1399,7 +1447,7 @@ export default function ScalpingPage() {
     for (const id of heard.current.keys()) {
       if (!alive.has(id)) heard.current.delete(id);
     }
-  }, [trades]);
+  }, [trades, limits?.tick, pushToast]);
 
   // Закрытая сделка уходит в журнал ровно один раз и после этого пропадает с
   // экрана. Идентификатор сделки сохраняется на клиенте, поэтому повтор после
@@ -1478,6 +1526,15 @@ export default function ScalpingPage() {
       const text = `${base(hit.symbol)} пересёк ${fmtPrice(hit.price, dom?.tick ?? 0)}`;
       play("alert");
       setOrderNote({ text, bad: false });
+      // Плашка внизу графика годится для ответа на нажатие, но отметку ставят
+      // как раз затем, чтобы не смотреть на график: уведомление сверху.
+      pushToast({
+        id: `alert:${hit.id}`,
+        symbol: hit.symbol,
+        title: `${base(hit.symbol)} - уровень пересечён`,
+        text: fmtPrice(hit.price, dom?.tick ?? 0),
+        tone: "plain",
+      });
       // Вкладка может быть свёрнута — ради этого отметку и ставят.
       if (typeof Notification !== "undefined" && Notification.permission === "granted") {
         try {
@@ -1567,10 +1624,7 @@ export default function ScalpingPage() {
       // что позиция стояла всё это время.
       if (!before) return;
 
-      const raise = (toast: Toast) =>
-        setToasts((list) =>
-          list.some((one) => one.id === toast.id) ? list : [...list, toast],
-        );
+      const raise = pushToast;
 
       for (const trade of mine) {
         const key = `${trade.symbol}:${trade.side}`;
@@ -1658,6 +1712,21 @@ export default function ScalpingPage() {
     () => new Set(trades.filter((t) => t.status !== "closed").map((t) => t.symbol)),
     [trades],
   );
+  /**
+   * Что происходит по каждой монете: ждёт заявка или набрана позиция.
+   *
+   * Открытая сильнее ждущей: по одной монете бывает и то и другое, а в списке
+   * место под одну точку - и она должна говорить о деньгах, которые уже в
+   * рынке, а не о намерении.
+   */
+  const tradeState = useMemo(() => {
+    const map = new Map<string, "planned" | "open">();
+    for (const t of trades) {
+      if (t.status === "planned" && !map.has(t.symbol)) map.set(t.symbol, "planned");
+      else if (t.status === "open") map.set(t.symbol, "open");
+    }
+    return map;
+  }, [trades]);
   const starred = useMemo(() => new Set(favorites), [favorites]);
   const screenerRows = useMemo(() => {
     const mine = screener.filter((r) => traded.has(r.symbol));
@@ -2002,7 +2071,7 @@ export default function ScalpingPage() {
             <ScreenerTable
               rows={screenerRows}
               selected={symbol}
-              active={traded}
+              state={tradeState}
               favorites={starred}
               onToggleFavorite={toggleFavorite}
               sort={sort}
