@@ -1,23 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw, LogOut, ShieldCheck, TrendingUp, Zap } from "lucide-react";
+import { Key, LogOut, RefreshCw, ShieldCheck, TrendingUp, Zap } from "lucide-react";
 import { api, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fmtUsd, maskUid } from "@/lib/format";
+import { tradingStatus, type TradingStatus } from "@/lib/trading";
 
 const ADMIN_WEEX_UID = "6613031308";
 
-const glass = {
-  background: "linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%)",
-  border: "1px solid rgb(var(--border) / 0.7)",
-};
+// Карточки красятся палитрой темы: страница светлеет вместе с терминалом, а
+// неоновая бирюза, вписанная числом, на белом листе слепит.
+const CARD = "rounded-3xl border border-border bg-bg-card/60 p-6";
 
 export default function ProfilePage() {
   const router = useRouter();
   const [p, setP] = useState<Profile | null>(null);
+  const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -25,6 +26,11 @@ export default function ProfilePage() {
     const token = getAccessToken();
     if (!token) return;
     api.profile(token).then(setP).catch(() => {});
+    // Состояние биржевого счёта: ключи вводятся в терминале, а вопрос
+    // «подключено ли» человек задаёт себе именно здесь.
+    tradingStatus()
+      .then(setExchange)
+      .catch(() => {});
   }, []);
 
   async function patch(body: Partial<Profile>) {
@@ -60,38 +66,16 @@ export default function ProfilePage() {
     <div className="space-y-4">
 
       {/* ── USER CARD ── */}
-      <div
-        className="relative overflow-hidden rounded-3xl p-6"
-        style={{
-          background: "linear-gradient(135deg, rgba(10,255,224,0.06) 0%, rgba(6,182,212,0.03) 50%, rgba(255,255,255,0.02) 100%)",
-          border: "1px solid rgba(10,255,224,0.15)",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
-        }}
-      >
-        {/* Glow blob */}
-        <div
-          className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-20"
-          style={{ background: "radial-gradient(circle, #0AFFE0, transparent 70%)" }}
-        />
+      <div className="relative overflow-hidden rounded-3xl border border-accent-cyan/25 bg-gradient-to-br from-accent-cyan/[0.07] via-bg-card/60 to-bg-card/30 p-6 shadow-card">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-accent-cyan/20 blur-3xl" />
 
         {/* Avatar + info */}
         <div className="flex items-center gap-4">
-          <div
-            className="relative grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-2xl font-black"
-            style={{
-              background: "linear-gradient(135deg, rgba(10,255,224,0.15), rgba(6,182,212,0.08))",
-              border: "1px solid rgba(10,255,224,0.3)",
-              color: "#0AFFE0",
-              boxShadow: "0 0 20px rgba(10,255,224,0.15)",
-            }}
-          >
+          <div className="relative grid h-16 w-16 shrink-0 place-items-center rounded-2xl border border-accent-cyan/30 bg-accent-cyan/10 text-2xl font-black text-accent-cyan">
             {initial}
             {isAdmin && (
-              <span
-                className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full"
-                style={{ background: "#FFC400", boxShadow: "0 0 8px rgba(255,196,0,0.6)" }}
-              >
-                <ShieldCheck className="h-3 w-3 text-black" />
+              <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-accent-gold">
+                <ShieldCheck className="h-3 w-3 text-bg-deep" />
               </span>
             )}
           </div>
@@ -116,8 +100,7 @@ export default function ProfilePage() {
           <button
             onClick={refreshBalance}
             disabled={refreshing}
-            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all disabled:opacity-50"
-            style={{ background: "rgba(10,255,224,0.08)", border: "1px solid rgba(10,255,224,0.2)", color: "#0AFFE0" }}
+            className="flex items-center gap-1.5 rounded-xl border border-accent-cyan/25 bg-accent-cyan/10 px-3 py-2 text-xs font-semibold text-accent-cyan transition-all hover:bg-accent-cyan/15 disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
             Обновить
@@ -125,8 +108,61 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* ── Биржевой счёт ──
+          Ключи вводятся в терминале, но вопрос «подключено ли» человек задаёт
+          себе здесь - и ответа тут не было вовсе. */}
+      <div className={CARD}>
+        <div className="mb-4 flex items-center justify-between">
+          <span className="text-sm font-semibold uppercase tracking-widest text-text-muted">
+            Биржевой счёт
+          </span>
+          <span
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+              exchange?.connected ? "bg-success/10 text-success" : "bg-bg-panel text-text-muted"
+            }`}
+          >
+            {exchange?.connected ? "подключён" : "не подключён"}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-bg-panel text-text-secondary">
+            <Key className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 text-sm">
+            <div className="font-semibold text-text-primary">WEEX Futures</div>
+            <div className="mt-0.5 text-[12px] text-text-muted">
+              {exchange?.connected ? (
+                <>
+                  Ключ ···{exchange.key_tail}
+                  {exchange.updated_at && (
+                    <> · с {new Date(exchange.updated_at).toLocaleDateString("ru")}</>
+                  )}
+                </>
+              ) : exchange && !exchange.enabled ? (
+                "Хранилище ключей не настроено на сервере"
+              ) : (
+                "Без ключей торговля из терминала недоступна"
+              )}
+            </div>
+          </div>
+          <Link
+            href="/app/scalping"
+            className="ml-auto shrink-0 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-text-secondary transition-colors hover:border-accent-cyan/40 hover:text-text-primary"
+          >
+            {exchange?.connected ? "Изменить" : "Подключить"}
+          </Link>
+        </div>
+
+        <p className="mt-4 text-[11px] leading-relaxed text-text-muted">
+          Ключи хранятся зашифрованными и в браузер не возвращаются - только
+          последние символы для опознания. Создавайте их с правом на торговлю и
+          без права на вывод средств.
+        </p>
+      </div>
+
       {/* ── SETTINGS ── */}
-      <div className="rounded-3xl p-6" style={glass}>
+      <div className={CARD}>
         <div className="mb-5 text-sm font-semibold uppercase tracking-widest text-text-muted">Настройки</div>
 
         <div className="space-y-5">
@@ -139,26 +175,22 @@ export default function ProfilePage() {
             >
               {(["moderate", "turbo"] as const).map((m) => {
                 const active = p.mode === m;
-                const color = m === "turbo" ? "#FF4757" : "#0AFFE0";
+                const tone = m === "turbo" ? "text-danger" : "text-accent-cyan";
+                const bar = m === "turbo" ? "bg-danger" : "bg-accent-cyan";
                 const Icon = m === "turbo" ? Zap : TrendingUp;
                 return (
                   <button
                     key={m}
                     onClick={() => patch({ mode: m })}
                     disabled={saving}
-                    className="relative flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-all duration-200 disabled:opacity-60"
-                    style={{
-                      color: active ? color : "rgba(255,255,255,0.35)",
-                      background: active ? "rgba(255,255,255,0.07)" : "transparent",
-                    }}
+                    className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-all duration-200 disabled:opacity-60 ${
+                      active ? `bg-bg-panel ${tone}` : "text-text-muted hover:text-text-secondary"
+                    }`}
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {m === "turbo" ? "Турбо" : "Умеренный"}
                     {active && (
-                      <span
-                        className="absolute inset-x-3 bottom-0 h-[2px] rounded-full"
-                        style={{ background: color }}
-                      />
+                      <span className={`absolute inset-x-3 bottom-0 h-[2px] rounded-full ${bar}`} />
                     )}
                   </button>
                 );
@@ -179,18 +211,13 @@ export default function ProfilePage() {
                     key={l}
                     onClick={() => patch({ language: l })}
                     disabled={saving}
-                    className="relative flex-1 rounded-lg py-2 text-sm font-bold uppercase tracking-wider transition-all duration-200 disabled:opacity-60"
-                    style={{
-                      color: active ? "#0AFFE0" : "rgba(255,255,255,0.35)",
-                      background: active ? "rgba(255,255,255,0.07)" : "transparent",
-                    }}
+                    className={`relative flex-1 rounded-lg py-2 text-sm font-bold uppercase tracking-wider transition-all duration-200 disabled:opacity-60 ${
+                      active ? "bg-bg-panel text-accent-cyan" : "text-text-muted hover:text-text-secondary"
+                    }`}
                   >
                     {l}
                     {active && (
-                      <span
-                        className="absolute inset-x-3 bottom-0 h-[2px] rounded-full"
-                        style={{ background: "#0AFFE0" }}
-                      />
+                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-accent-cyan" />
                     )}
                   </button>
                 );
@@ -222,35 +249,22 @@ export default function ProfilePage() {
       {isAdmin && (
         <Link
           href="/admin"
-          className="flex items-center justify-between rounded-3xl px-6 py-4 transition-all duration-200 hover:opacity-90"
-          style={{
-            background: "linear-gradient(135deg, rgba(255,196,0,0.12), rgba(255,196,0,0.06))",
-            border: "1px solid rgba(255,196,0,0.3)",
-            boxShadow: "0 0 24px rgba(255,196,0,0.08)",
-          }}
+          className="flex items-center justify-between rounded-3xl border border-accent-gold/30 bg-accent-gold/10 px-6 py-4 transition-all duration-200 hover:bg-accent-gold/15"
         >
           <div className="flex items-center gap-3">
-            <div
-              className="grid h-9 w-9 place-items-center rounded-xl"
-              style={{ background: "rgba(255,196,0,0.15)", border: "1px solid rgba(255,196,0,0.3)" }}
-            >
-              <ShieldCheck className="h-4 w-4" style={{ color: "#FFC400" }} />
+            <div className="grid h-9 w-9 place-items-center rounded-xl border border-accent-gold/30 bg-accent-gold/15">
+              <ShieldCheck className="h-4 w-4 text-accent-gold" />
             </div>
             <span className="font-bold text-text-primary">Админ панель</span>
           </div>
-          <span style={{ color: "#FFC400" }}>→</span>
+          <span className="text-accent-gold">→</span>
         </Link>
       )}
 
       {/* ── LOGOUT ── */}
       <button
         onClick={() => { logout(); router.push("/"); }}
-        className="flex w-full items-center justify-center gap-2 rounded-3xl py-3.5 text-sm font-semibold transition-all duration-200 hover:opacity-90"
-        style={{
-          background: "rgba(255,71,87,0.08)",
-          border: "1px solid rgba(255,71,87,0.2)",
-          color: "#FF4757",
-        }}
+        className="flex w-full items-center justify-center gap-2 rounded-3xl border border-danger/25 bg-danger/10 py-3.5 text-sm font-semibold text-danger transition-all duration-200 hover:bg-danger/15"
       >
         <LogOut className="h-4 w-4" /> Выйти из аккаунта
       </button>

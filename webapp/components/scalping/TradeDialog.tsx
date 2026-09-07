@@ -257,7 +257,12 @@ export default function TradeDialog({
             {live ? (
               <span className="text-warning">Заявка уйдёт на биржу</span>
             ) : (
-              <span>Счёт не подключён - будет только разметка</span>
+              // Разметка без счёта - это рисование на графике, а не торговля.
+              // Раньше окно её предлагало, и сделка выглядела открытой, хотя на
+              // бирже не было ничего.
+              <span className="text-[var(--pane-down)]">
+                Счёт не подключён - торговля недоступна
+              </span>
             )}
           </span>
           <div className="flex gap-2">
@@ -269,7 +274,7 @@ export default function TradeDialog({
             </button>
             <button
               onClick={onConfirm}
-              disabled={!plan || overLimit}
+              disabled={!plan || overLimit || !live}
               className={`${BUTTON} ${
                 long ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]" : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
               } disabled:opacity-40`}

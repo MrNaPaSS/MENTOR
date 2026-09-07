@@ -769,6 +769,18 @@ export default function ScalpingPage() {
     setDialogOpen(false);
     if (!plan || !draft || !symbol) return;
 
+    // Без подключённого счёта сделки не заводим вовсе. Прежде терминал рисовал
+    // её на графике и вёл как настоящую: на бирже при этом не было ничего, а
+    // трейдер видел позицию, стоп и цели.
+    if (!exchange?.connected) {
+      setOrderNote({
+        text: "Биржевой счёт не подключён - подключите ключи, чтобы торговать",
+        bad: true,
+      });
+      setExchangeOpen(true);
+      return;
+    }
+
     const next = createTrade(
       {
         symbol,
@@ -784,15 +796,6 @@ export default function ScalpingPage() {
     );
     setTrades((list) => [...list, next]);
     setDraft(null);
-
-    // Вход в сделку — это торговля, а не режим. Расчёт живёт вместе со
-    // сделкой, а не вместо неё: цифры трейдер уже видел в окне, дальше заявка
-    // уходит на биржу. Единственное, что может помешать, — неподключённый счёт.
-    if (!exchange?.connected) {
-      setOrderNote({ text: "Биржевой счёт не подключён - заявка не отправлена", bad: true });
-      setExchangeOpen(true);
-      return;
-    }
 
     setOrderNote({ text: "Отправляем ордер…", bad: false });
     try {
