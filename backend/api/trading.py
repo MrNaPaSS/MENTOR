@@ -17,6 +17,7 @@ import json
 import logging
 from datetime import datetime, timezone
 import ssl
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 import aiohttp
@@ -595,8 +596,13 @@ async def close_position(
         # Сделку ищем по её идентификатору, а не берём последнюю: терминал
         # умеет вести несколько сразу, и «последняя» - это чужая.
         live = next((r for r in rows if r.client_id == body.trade_id), None)
-        if live is None and body.trade_id is None:
-            live = rows[0] if rows else None
+        if live is None:
+            # Идентификатор не назвали или он не сошёлся - берём сделку только
+            # тогда, когда она по этой монете и стороне одна. Выбирать наугад
+            # из нескольких значит снять защиту чужой: «первая в списке» - это
+            # не та, которую закрывают.
+            same = [r for r in rows if r.side == body.side]
+            live = same[0] if len(same) == 1 else None
         # Если позиция ещё не отмечена набранной, берём момент отправки входа:
         # сопровождение проставляет opened_at раз в пятнадцать секунд, а закрыть
         # руками можно и раньше. Без этого в итог попадал бы только последний
@@ -615,7 +621,9 @@ async def close_position(
             # Позиции нет — но заявки могут стоять: вход ещё не исполнился, а с
             # ним висят стоп и цели. Снятие расчёта должно убирать всё это, иначе
             # «отменённая» сделка откроется сама, стоило рынку дойти до уровня.
-            cancelled = await _cancel_trade(client, symbol, live)
+            cancelled = await _cancel_trade(
+                client, symbol, live, [r for r in rows if r is not live]
+            )
             await _forget(session, student, symbol, live)
             return {
                 "closed": 0.0,
@@ -651,7 +659,7 @@ async def close_position(
             # Позиции больше нет: снимаем стоп и цели. Осевшие заявки на
             # несуществующий объём откроют позицию заново, стоило бы рынку
             # дойти до их цены.
-            await _cancel_trade(client, symbol, live)
+            await _cancel_trade(client, symbol, live, [r for r in rows if r is not live])
             await _forget(session, student, symbol, live)
 
     except WeexTradeError as exc:
@@ -769,7 +777,82 @@ async def _settled(
     return None, None, None
 
 
-async def _cancel_trade(client: WeexFutures, symbol: str, live: LiveTrade | None) -> int:
+def _owned(rows: Iterable[LiveTrade]) -> tuple[set[str], list[str]]:
+    """Метки и клиентские идентификаторы сделок, которые трогать нельзя."""
+    marks: set[str] = set()
+    prefixes: list[str] = []
+    for row in rows:
+        prefixes.append(row.client_id)
+        marks.add(str(row.sl_order_id or ""))
+        recorded = json.loads(row.tp_orders_json or "[]")
+        for take in recorded:
+            marks.add(str(take.get("order_id") or ""))
+        marks |= {take_label(row.client_id, i) for i in range(max(len(recorded), 3))}
+        marks |= {stop_label(row.client_id, hit) for hit in range(4)}
+    marks.discard("")
+    return marks, [p for p in prefixes if p]
+
+
+async def _cancel_orphans(client: WeexFutures, symbol: str, keep: Sequence[LiveTrade]) -> int:
+    """Снять заявки, у которых нет хозяина среди наших сделок.
+
+    Сюда приходят, когда снимаемую сделку опознать не удалось. Раньше в этом
+    случае снималось всё по инструменту - и открытая по той же монете позиция
+    оставалась без стопа и целей, ничего об этом не сказав. Это худший исход из
+    возможных, и заплатить им за уборку чужой заявки нельзя.
+
+    Поэтому щадим всё, что принадлежит известным сделкам, а снимаем только
+    ничьё: осевшая заявка без хозяина - это позиция, о которой трейдер не
+    знает, рынок дойдёт до её цены и исполнит.
+    """
+    if not keep:
+        return await _cancel_everything(client, symbol)
+
+    marks, prefixes = _owned(keep)
+    removed = 0
+
+    def ours(order: dict[str, Any]) -> bool:
+        if order_marks(order) & marks:
+            return True
+        mark = str(order.get("clientOrderId") or order.get("clientOid") or "")
+        return any(mark.startswith(p) for p in prefixes if mark)
+
+    try:
+        for order in await client.open_orders(symbol):
+            order_id = str(order.get("orderId") or order.get("id") or "")
+            if not order_id or ours(order):
+                continue
+            try:
+                await client.cancel_order(symbol, order_id)
+                removed += 1
+            except WeexTradeError as exc:
+                logger.warning("Ничья заявка %s не снята: %s", order_id, exc)
+    except WeexTradeError as exc:
+        logger.warning("Список заявок %s не получен: %s", symbol, exc)
+
+    try:
+        for order in await client.algo_orders(symbol):
+            order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
+            if not order_id or ours(order):
+                continue
+            try:
+                await client.cancel_algo_order(symbol, order_id)
+                removed += 1
+            except WeexTradeError as exc:
+                logger.warning("Ничья условная заявка %s не снята: %s", order_id, exc)
+    except WeexTradeError as exc:
+        logger.warning("Условные заявки %s не получены: %s", symbol, exc)
+
+    logger.info("Снято ничьих заявок по %s: %d (сделок под защитой %d)", symbol, removed, len(keep))
+    return removed
+
+
+async def _cancel_trade(
+    client: WeexFutures,
+    symbol: str,
+    live: LiveTrade | None,
+    keep: Sequence[LiveTrade] = (),
+) -> int:
     """Снять заявки одной сделки, не трогая соседние.
 
     Раньше снималось всё по инструменту. Пока сделка была одна, это и значило
@@ -779,11 +862,12 @@ async def _cancel_trade(client: WeexFutures, symbol: str, live: LiveTrade | None
 
     Свои заявки узнаём по идентификаторам: цели и стоп записаны в сделке, а
     вход помечен нашим клиентским идентификатором - им же он и отправлялся.
-    Если сделки на руках нет, снимаем всё: одиночную заявку без владельца
-    оставлять опаснее, чем снять лишнее.
+
+    Сделку не опознали - снимаем только то, у чего нет хозяина среди остальных
+    наших сделок. Снять всё подряд значит оставить открытую позицию без защиты.
     """
     if live is None:
-        return await _cancel_everything(client, symbol)
+        return await _cancel_orphans(client, symbol, keep)
 
     mine = {str(live.sl_order_id or "")}
     for take in json.loads(live.tp_orders_json or "[]"):

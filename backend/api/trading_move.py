@@ -80,12 +80,31 @@ def _live(session, student: Student, body: MoveIn) -> LiveTrade:
         .where(LiveTrade.side == body.side)
         .where(LiveTrade.status.in_(("waiting", "open")))
     )
+    rows = session.execute(query.order_by(LiveTrade.updated_at.desc())).scalars().all()
     if body.trade_id:
-        query = query.where(LiveTrade.client_id == body.trade_id)
-    row = session.execute(query.order_by(LiveTrade.updated_at.desc())).scalars().first()
-    if row is None:
+        exact = next((r for r in rows if r.client_id == body.trade_id), None)
+        if exact is not None:
+            return exact
+        # Идентификатор не сошёлся - это бывает после перезапуска терминала,
+        # когда разметка на графике пережила запись на сервере. Берём сделку,
+        # если по этой монете и стороне она одна: двигать уровни единственной
+        # сделки безопасно, а выбирать наугад из нескольких - нет.
+        if len(rows) == 1:
+            logger.info(
+                "Сделка %s не нашлась по идентификатору, взята единственная %s",
+                body.trade_id,
+                rows[0].client_id,
+            )
+            return rows[0]
+    if not rows:
         raise HTTPException(404, "Сделка не найдена - обновите терминал")
-    return row
+    if len(rows) > 1:
+        raise HTTPException(
+            409,
+            "По этой монете идёт несколько сделок, и какую двигать - неясно. "
+            "Обновите терминал.",
+        )
+    return rows[0]
 
 
 def _mine(live: LiveTrade) -> tuple[set[str], set[str]]:

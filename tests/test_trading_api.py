@@ -576,3 +576,59 @@ def test_limits_name_the_ceiling_of_the_instrument(app_and_exchange, monkeypatch
     body = client.get("/api/trading/limits/skhynixusdt").json()
     assert body["max_leverage"] == 50
     assert body["taker_fee"] == 0.0008
+
+
+def test_cancelling_a_limit_keeps_the_other_trade_protected(app_and_exchange):
+    """Снятие ждущей лимитки не трогает защиту открытой сделки.
+
+    Самый дорогой из возможных исходов: заявку сняли, а вместе с ней ушли стоп
+    и цели соседней позиции - и она осталась голой, ничего об этом не сказав.
+    Так и было: неопознанная сделка снимала всё по монете подряд.
+    """
+    import json as _json
+
+    from core.models import LiveTrade
+
+    client, exchange, session = app_and_exchange
+    student = session.query(Student).one()
+
+    # Открытая сделка со своей защитой.
+    session.add(
+        LiveTrade(
+            student_id=student.id,
+            client_id="BTCUSDT-open",
+            symbol="BTCUSDT",
+            side="short",
+            entry=80_000.0,
+            initial_stop=80_200.0,
+            current_stop=80_200.0,
+            targets_json=_json.dumps([79_600.0]),
+            tp_orders_json=_json.dumps([{"price": 79_600.0, "order_id": "tp-open"}]),
+            sl_order_id="sl-open",
+            qty=0.01,
+            leverage=10,
+            status="open",
+        )
+    )
+    session.commit()
+
+    exchange.position = None
+    exchange.pending = [{"orderId": "limit-1", "clientOrderId": "BTCUSDT-gone"}]
+    exchange.plans_open = [
+        {"orderId": "sl-open", "planType": "STOP_LOSS", "triggerPrice": "80200"},
+        {"orderId": "tp-open", "planType": "TAKE_PROFIT", "triggerPrice": "79600"},
+        # Ничья заявка: хозяина среди наших сделок нет - её и убираем.
+        {"orderId": "orphan", "planType": "STOP_LOSS", "triggerPrice": "81000"},
+    ]
+
+    # Снимаем лимитку, записи о которой на сервере уже нет.
+    answer = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "long", "share": 1, "trade_id": "BTCUSDT-gone"},
+    )
+    assert answer.status_code == 200
+
+    # Защита открытой сделки на месте, ничья заявка снята.
+    assert "sl-open" not in exchange.algo_cancelled
+    assert "tp-open" not in exchange.algo_cancelled
+    assert "orphan" in exchange.algo_cancelled
