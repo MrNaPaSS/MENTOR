@@ -37,14 +37,7 @@ import type { ChartTheme } from "@/lib/indicator/shapes";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
 import { play, setMuted } from "@/lib/sound";
-import {
-  composeShot,
-  copy as copyShot,
-  download as downloadShot,
-  hasContent,
-  loadLogo,
-  share as shareShot,
-} from "@/lib/shot";
+import { composeShot, copy as copyShot, download as downloadShot, share as shareShot } from "@/lib/shot";
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import { setTerminalTheme } from "@/lib/terminalTheme";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
@@ -1326,44 +1319,28 @@ export default function ScalpingPage() {
       return;
     }
 
-    // Пустой снимок выглядит как настоящий: файл на месте, размеры верные, а
-    // внутри белый лист. Молчать об этом нельзя - трейдер отправит пустоту и
-    // узнает об этом от собеседника.
-    if (!hasContent(canvas)) {
-      setOrderNote({
-        text: `Снимок пуст: холст графика ${canvas.width}x${canvas.height} ничего не отдал`,
-        bad: true,
-      });
-      return;
-    }
-
-    // Сборка обещанием, а не готовой картинкой: копирование должно начаться в
-    // том же нажатии, иначе браузер снимает право писать в буфер и запись
-    // молча отклоняется - в буфере остаётся то, что там лежало.
-    const building = loadLogo().then((mark) =>
-      composeShot(
-        canvas,
-        { symbol, interval: timeframe, author: author ?? undefined, theme },
-        mark,
-      ),
-    );
-
-    if (action === "copy") {
-      const done = await copyShot(building);
-      setOrderNote({
-        text: done
-          ? "Снимок в буфере обмена"
-          : "Браузер не дал скопировать картинку - сохраните файлом",
-        bad: !done,
-      });
-      return;
-    }
-
-    const picture = await building;
+    const picture = composeShot(canvas, {
+      symbol,
+      interval: timeframe,
+      author: author ?? undefined,
+      theme,
+    });
 
     if (action === "download") {
       await downloadShot(picture, `${base(symbol)}-${timeframe}`);
       setOrderNote({ text: "Снимок сохранён", bad: false });
+      return;
+    }
+
+    if (action === "copy") {
+      // Обещанием, а не готовой картинкой: право писать в буфер браузер даёт
+      // только на свежее нажатие, и любое ожидание между кликом и записью его
+      // снимает - запись молча отклоняется, а в буфере остаётся прежнее.
+      const done = await copyShot(Promise.resolve(picture));
+      setOrderNote({
+        text: done ? "Снимок в буфере обмена" : "Браузер не даёт копировать картинки - сохраните файлом",
+        bad: !done,
+      });
       return;
     }
 

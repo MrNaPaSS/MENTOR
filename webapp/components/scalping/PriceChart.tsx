@@ -40,7 +40,6 @@ import {
 } from "./primitives/ShapesPrimitive";
 import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
 import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
-import { hasContent } from "@/lib/shot";
 import { loadCalendar, loadTrades, type JournalTrade } from "@/lib/journal";
 import {
   floatingAt,
@@ -400,57 +399,6 @@ function tradeShapes(
  */
 function riskFree(trade: ActiveTrade): boolean {
   return trade.side === "long" ? trade.stop >= trade.entry : trade.stop <= trade.entry;
-}
-
-/**
- * Снимок графика.
- *
- * Двумя путями, потому что ни один не работает всегда. Библиотека рисует свой
- * холст заново - но в него не попадают наши слои, а на некоторых машинах он
- * приходит пустым вовсе. Слои со страницы читаются напрямую - но браузер
- * вправе отдать их в отдельный поток, и тогда чтение возвращает пустоту.
- *
- * Поэтому пробуем оба и берём тот, в котором есть хоть что-то. Проверка по
- * точкам: пустой холст неотличим от полного ни размером, ни типом.
- */
-function snapshot(chart: IChartApi, box: HTMLDivElement): HTMLCanvasElement | null {
-  const layers = Array.from(box.querySelectorAll("canvas")).filter(
-    (canvas) => canvas.width > 0 && canvas.height > 0,
-  );
-
-  const frame = box.getBoundingClientRect();
-  const own = document.createElement("canvas");
-  own.width = Math.round(frame.width * (window.devicePixelRatio || 1));
-  own.height = Math.round(frame.height * (window.devicePixelRatio || 1));
-  const ctx = own.getContext("2d");
-
-  if (ctx) {
-    for (const layer of layers) {
-      const at = layer.getBoundingClientRect();
-      // Плотность считаем у самого слоя: у шкал и полотна она может отличаться.
-      const density = layer.width / Math.max(1, at.width);
-      try {
-        ctx.drawImage(
-          layer,
-          Math.round((at.left - frame.left) * density),
-          Math.round((at.top - frame.top) * density),
-          Math.round(at.width * density),
-          Math.round(at.height * density),
-        );
-      } catch {
-        // Слой, закрытый для чтения, пропускаем.
-      }
-    }
-    if (hasContent(own)) return own;
-  }
-
-  try {
-    const shot = chart.takeScreenshot();
-    if (shot && hasContent(shot)) return shot;
-    return own.width > 0 ? own : shot;
-  } catch {
-    return own;
-  }
 }
 
 /** ATR последних баров: по нему предлагается стоп. */
@@ -870,9 +818,7 @@ function PriceChart({
 
     chartRef.current = chart;
     if (shotRef.current) {
-      // Сначала пробуем собрать слои сами - в них наши примитивы. Если
-      // собрать нечего, берём холст библиотеки: он хотя бы со свечами.
-      shotRef.current.current = () => snapshot(chart, box);
+      shotRef.current.current = () => chartRef.current?.takeScreenshot() ?? null;
     }
     return () => {
       chart.remove();
