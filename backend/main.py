@@ -21,6 +21,7 @@ from backend.api import shots
 from backend.api import trading as trading_api
 from backend.api import auth, market, market_data, market_extra, signals, stats, students, profile, admin_affiliate, institutional, broadcast, pnl, trades, journal, trading, coins, shop
 from backend.api import scalping as scalping_api
+from backend.api import trading_move
 from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
@@ -115,6 +116,7 @@ def create_app(
     app.include_router(trades.router)
     app.include_router(journal.router)
     app.include_router(trading.router)
+    app.include_router(trading_move.router)
     app.include_router(coins.router)
     app.include_router(shop.router)
     app.include_router(shop.admin_router)

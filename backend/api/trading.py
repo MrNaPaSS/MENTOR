@@ -757,7 +757,7 @@ async def _cancel_trade(client: WeexFutures, symbol: str, live: LiveTrade | None
         for order in await client.open_orders(symbol):
             order_id = str(order.get("orderId") or order.get("id") or "")
             client_id = str(order.get("clientOrderId") or order.get("clientOid") or "")
-            if order_id not in mine and client_id != live.client_id:
+            if order_id not in mine and not client_id.startswith(live.client_id):
                 continue
             try:
                 await client.cancel_order(symbol, order_id)

@@ -41,6 +41,7 @@ import {
 import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
 import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
+import DragLevels, { type DragLevel } from "./DragLevels";
 import { loadCalendar, loadTrades, type JournalTrade } from "@/lib/journal";
 import {
   floatingAt,
@@ -447,6 +448,8 @@ function PriceChart({
   alerts,
   onRemoveAlert,
   onShelfClick,
+  dragLevels,
+  onEmptyClick,
 }: {
   symbol: string;
   interval: string;
@@ -520,6 +523,21 @@ function PriceChart({
    * загружает график.
    */
   onShelfClick?: (shelf: Wall, atr: number) => void;
+  /**
+   * Уровни, которые трейдер тянет мышью: вход ручной лимитки, её стоп и цель,
+   * а у идущей сделки - защита на бирже.
+   *
+   * Собираются снаружи: график знает геометрию, но не знает ни о заявках, ни о
+   * деньгах, и знать не должен.
+   */
+  dragLevels?: DragLevel[];
+  /**
+   * Нажатие по пустому месту графика - с ценой этого места.
+   *
+   * Отсюда начинается ручная лимитка. Полка перехватывает нажатие первой:
+   * рядом с уровнем трейдер целился в уровень, а не в пустоту.
+   */
+  onEmptyClick?: (price: number, atr: number) => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -566,6 +584,8 @@ function PriceChart({
   wallRef.current = wall;
   const shelfClickRef = useRef(onShelfClick);
   shelfClickRef.current = onShelfClick;
+  const emptyClickRef = useRef(onEmptyClick);
+  emptyClickRef.current = onEmptyClick;
 
   /**
    * Отдать примитиву фигуры индикатора вместе с разметкой сделки.
@@ -795,7 +815,7 @@ function PriceChart({
     chart.subscribeClick((param) => {
       const handler = shelfClickRef.current;
       const series = candleRef.current;
-      if (!handler || !series || !param.point) return;
+      if (!series || !param.point) return;
 
       let nearest: Wall | null = null;
       let best = SHELF_HIT_PX;
@@ -814,7 +834,15 @@ function PriceChart({
           nearest = shelf;
         }
       }
-      if (nearest) handler(nearest, currentAtr(dataRef.current));
+      const atr = currentAtr(dataRef.current);
+      if (nearest) {
+        handler?.(nearest, atr);
+        return;
+      }
+      // Мимо полок - значит трейдер целился в саму цену: отсюда начинается
+      // ручная лимитка.
+      const price = series.coordinateToPrice(param.point.y);
+      if (price !== null && price > 0) emptyClickRef.current?.(price, atr);
     });
 
     chartRef.current = chart;
@@ -1612,9 +1640,48 @@ function PriceChart({
     });
   }, [wall?.price, wall?.side]);
 
+  // Уровень ждущей заявки под курсором показывает её разметку целиком: тянуть
+  // стоп, не видя ни бокса, ни целей, - это тянуть вслепую.
+  const waiting = useMemo(
+    () => new Set(trades.filter((t) => t.status === "planned").map((t) => t.id)),
+    [trades],
+  );
+  const peekable = useMemo(
+    () =>
+      (dragLevels ?? []).map((level) =>
+        level.trade && waiting.has(level.trade)
+          ? {
+              ...level,
+              onHover: (over: boolean) => setPeeked(over ? level.trade ?? null : null),
+            }
+          : level,
+      ),
+    [dragLevels, waiting],
+  );
+
+  const priceToY = useCallback(
+    (value: number) => candleRef.current?.priceToCoordinate(value) ?? null,
+    [],
+  );
+  const yToPrice = useCallback(
+    (y: number) => candleRef.current?.coordinateToPrice(y) ?? null,
+    [],
+  );
+
   return (
     <div className="relative h-full w-full">
       <div ref={boxRef} className="h-full w-full" />
+
+      {/* Уровни под мышью: вход ручной лимитки, стоп и цель. Цену и координату
+          знает ценовой ряд - он же их и пересчитывает. */}
+      {dragLevels && dragLevels.length > 0 && (
+        <DragLevels
+          levels={peekable}
+          toY={priceToY}
+          toPrice={yToPrice}
+          format={(value) => fmtPrice(value, tick ?? 0)}
+        />
+      )}
       {cfg.levels && levels.length > 0 && (
         <LevelsStrip levels={levels} price={dataRef.current.at(-1)?.close ?? 0} />
       )}

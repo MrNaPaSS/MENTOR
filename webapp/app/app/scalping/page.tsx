@@ -25,6 +25,7 @@ import {
   PanelLeftOpen,
   Star,
   Camera,
+  Crosshair,
   Sun,
   Wifi,
   WifiOff,
@@ -50,6 +51,18 @@ import { setTerminalTheme } from "@/lib/terminalTheme";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
 import LevelMenu from "@/components/scalping/LevelMenu";
+import ManualOrderCard from "@/components/scalping/ManualOrderCard";
+import type { DragLevel } from "@/components/scalping/DragLevels";
+import {
+  draftAt,
+  flip,
+  moveLevel,
+  qtyOf,
+  rewardOf,
+  riskOf,
+  rrOf,
+  type ManualDraft,
+} from "@/lib/trade/manual";
 import Logo from "@/components/ui/Logo";
 import { api } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
@@ -57,6 +70,7 @@ import { useCoins } from "@/lib/useCoins";
 import { fmtUsd } from "@/lib/format";
 import {
   closePosition,
+  moveLevels,
   openPosition,
   limitsOf,
   plansOf,
@@ -445,6 +459,16 @@ export default function ScalpingPage() {
   // сделки от этого не станут менее живыми, а перерисовку всего графика на
   // каждом кадре стакана это снимает.
   const [chartPrice, setChartPrice] = useState(0);
+
+  // Ручная лимитка: вход, стоп и цель ставятся мышью прямо по графику.
+  //
+  // Заготовка живёт до нажатия «Выставить»: на бирже в это время ничего нет, и
+  // трейдер волен тянуть уровни сколько угодно. Отдельно от расчёта по полке -
+  // там первичен процент стопа, здесь цена уровня.
+  const [manual, setManual] = useState<ManualDraft | null>(null);
+  // Ждём нажатие по графику, чтобы поставить лимитку. Без этого ожидания любое
+  // нажатие по свечам заводило бы заявку - а по графику нажимают постоянно.
+  const [armed, setArmed] = useState(false);
   const midRef = useRef(0);
   midRef.current = dom?.mid ?? 0;
   useEffect(() => {
@@ -762,6 +786,178 @@ export default function ScalpingPage() {
     setDialogOpen(true);
   }
 
+  /**
+   * Начать ручную лимитку с цены, по которой нажали.
+   *
+   * Только по взведённой кнопке: нажатие по графику - это ещё и прокрутка, и
+   * выбор уровня, и просто взгляд. Заводить заявку на каждое из них нельзя.
+   */
+  function startManual(price: number, atr: number) {
+    if (!armed) return;
+    setArmed(false);
+    setManual(draftAt(price, chartPrice, atr, margin, leverage));
+  }
+
+  /**
+   * Отправить ручную лимитку на биржу.
+   *
+   * Тем же путём, что и расчёт от полки: вход лимиткой, стоп вместе с ним одним
+   * ордером, цель ставит сопровождение в момент набора позиции.
+   */
+  async function sendManual() {
+    if (!manual || !symbol) return;
+    if (!exchange?.connected) {
+      setOrderNote({
+        text: "Биржевой счёт не подключён - подключите ключи, чтобы торговать",
+        bad: true,
+      });
+      setExchangeOpen(true);
+      return;
+    }
+
+    const next = createTrade(
+      {
+        symbol,
+        side: manual.side,
+        entry: manual.entry,
+        stop: manual.stop,
+        targets: [manual.take],
+        qty: qtyOf(manual),
+        margin: manual.margin,
+        leverage: manual.leverage,
+      },
+      `${symbol}-${Date.now()}`,
+    );
+    setTrades((list) => [...list, next]);
+    setManual(null);
+    setMargin(manual.margin);
+    setLeverage(manual.leverage);
+
+    setOrderNote({ text: "Отправляем лимитку…", bad: false });
+    try {
+      await openPosition(next, true);
+      setOrderNote({
+        text: `Лимитка на бирже: ${next.side === "long" ? "лонг" : "шорт"} ${base(next.symbol)}`,
+        bad: false,
+      });
+    } catch (err) {
+      // Заявка не встала - убираем её и с графика: нарисованная лимитка,
+      // которой нет на бирже, хуже отсутствия лимитки.
+      setTrades((list) => list.filter((t) => t.id !== next.id));
+      setOrderNote({
+        text: err instanceof Error ? err.message : "Биржа не приняла лимитку",
+        bad: true,
+      });
+    }
+  }
+
+  /**
+   * Перенести уровень идущей сделки: пока тянут - только на экране.
+   *
+   * Отправлять каждый кадр значит слать бирже сотню запросов на одно движение
+   * мышью; она ответит отказом по частоте, и уровень не переедет вовсе.
+   */
+  function dragTrade(
+    trade: ActiveTrade,
+    kind: "entry" | "stop" | "take",
+    index: number,
+    price: number,
+  ) {
+    setTrades((list) =>
+      list.map((t) => {
+        if (t.id !== trade.id) return t;
+        if (kind === "entry") {
+          // Вход тянет за собой стоп и цели: расстояния до них трейдер задал
+          // сам, и терять их при переносе заявки он не просил.
+          const shift = price - t.entry;
+          return {
+            ...t,
+            entry: price,
+            stop: t.stop + shift,
+            initialStop: t.initialStop + shift,
+            targets: t.targets.map((p) => p + shift),
+          };
+        }
+        // Уровень по ту сторону входа биржа отклонит. Останавливаем его на шаг
+        // раньше: трейдер видит предел, вместо того чтобы узнать о нём отказом.
+        const step = limits?.tick && limits.tick > 0 ? limits.tick : t.entry * 1e-6;
+        const long = t.side === "long";
+        if (kind === "stop") {
+          const edge = long ? t.entry - step : t.entry + step;
+          return { ...t, stop: long ? Math.min(price, edge) : Math.max(price, edge) };
+        }
+        const edge = long ? t.entry + step : t.entry - step;
+        const value = long ? Math.max(price, edge) : Math.min(price, edge);
+        const at = t.takesHit + index;
+        return { ...t, targets: t.targets.map((p, i) => (i === at ? value : p)) };
+      }),
+    );
+  }
+
+  /**
+   * Отпустили: только теперь уровень едет на бирже.
+   *
+   * Рисуем ответ биржи, а не то, куда дотянул трейдер: она округляет цену до
+   * своего шага и вправе отказать. Отказ возвращает уровень на место - иначе на
+   * графике стоял бы стоп, которого на бирже нет.
+   */
+  async function dropTrade(
+    trade: ActiveTrade,
+    kind: "entry" | "stop" | "take",
+    index: number,
+    price: number,
+  ) {
+    const was =
+      kind === "entry"
+        ? trade.entry
+        : kind === "stop"
+          ? trade.stop
+          : trade.targets[trade.takesHit + index];
+    try {
+      const body = await moveLevels({
+        symbol: trade.symbol,
+        side: trade.side,
+        trade_id: trade.id,
+        take_index: index,
+        // Перенос лимитки везёт с собой стоп и цель: расстояния до них задал
+        // трейдер, и на бирже они должны переехать вместе с входом. Иначе
+        // заявка встанет на новой цене со старым стопом - то есть с другим
+        // риском, чем показано на графике.
+        ...(kind === "entry"
+          ? {
+              entry: price,
+              stop: trade.stop + (price - trade.entry),
+              take: trade.targets[trade.takesHit] + (price - trade.entry),
+            }
+          : kind === "stop"
+            ? { stop: price }
+            : { take: price }),
+      });
+      if (!body) throw new Error("Сервер не ответил");
+      dragTrade(
+        trade,
+        kind,
+        index,
+        kind === "entry"
+          ? body.entry
+          : kind === "stop"
+            ? body.stop
+            : body.takes[index] ?? price,
+      );
+      setOrderNote({
+        text:
+          kind === "entry" ? "Лимитка перенесена" : kind === "stop" ? "Стоп перенесён" : "Цель перенесена",
+        bad: false,
+      });
+    } catch (err) {
+      dragTrade(trade, kind, index, was);
+      setOrderNote({
+        text: err instanceof Error ? err.message : "Биржа не приняла перенос",
+        bad: true,
+      });
+    }
+  }
+
   /** Строка стакана как уровень: сторона по тому, чьи заявки в ней стоят. */
   function openTradeFromRow(row: LadderRow) {
     const mid = dom?.mid ?? row.price;
@@ -901,6 +1097,24 @@ export default function ScalpingPage() {
   // существующей сделки: трейдер открыл расчёт посмотреть соотношение по
   // другому уровню, а его ожидающая заявка от этого исчезала.
   const preview = useMemo(() => {
+    // Ручная лимитка показывается тем же предпросмотром: линии входа, стопа и
+    // цели с боксами риска и потенциала уже нарисованы - заводить для неё
+    // вторую разметку значит получить две, которые разойдутся.
+    if (manual && symbol) {
+      return createTrade(
+        {
+          symbol,
+          side: manual.side,
+          entry: manual.entry,
+          stop: manual.stop,
+          targets: [manual.take],
+          qty: qtyOf(manual),
+          margin: manual.margin,
+          leverage: manual.leverage,
+        },
+        "preview",
+      );
+    }
     if (!dialogOpen || !plan || !draft || !symbol) return null;
     return createTrade(
       {
@@ -917,7 +1131,7 @@ export default function ScalpingPage() {
     );
     // planKey намеренно вместо plan: у объекта расчёта каждый раз новая ссылка.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dialogOpen, planKey, symbol, draft?.margin, draft?.leverage]);
+  }, [dialogOpen, planKey, symbol, draft?.margin, draft?.leverage, manual]);
 
   // Спрашиваем про встречную позицию, когда открыто окно расчёта.
   useEffect(() => {
@@ -1286,6 +1500,95 @@ export default function ScalpingPage() {
 
   // Сделки по открытой монете: их рисует график, остальные ждут своей.
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
+
+  /**
+   * Уровни, которые трейдер тянет мышью.
+   *
+   * Заготовка ручной лимитки - целиком: вход, стоп и цель. У идущей сделки -
+   * только защита: вход состоялся, и двигать его нечем.
+   *
+   * Собираем здесь, а не в графике: график знает геометрию, но о заявках и
+   * деньгах знать не должен.
+   */
+  const dragLevels = useMemo<DragLevel[]>(() => {
+    const out: DragLevel[] = [];
+
+    if (manual) {
+      const money = (value: number) => `${value >= 0 ? "+" : "-"}${Math.abs(value).toFixed(2)}`;
+      const step = limits?.tick ?? 0;
+      const at = (kind: "entry" | "stop" | "take"): DragLevel => ({
+        id: `manual:${kind}`,
+        kind,
+        price: kind === "entry" ? manual.entry : kind === "stop" ? manual.stop : manual.take,
+        title: kind === "entry" ? "вход" : kind === "stop" ? "стоп" : "цель",
+        note:
+          kind === "entry"
+            ? `${manual.side === "long" ? "лонг" : "шорт"} ×${manual.leverage}`
+            : kind === "stop"
+              ? money(-riskOf(manual))
+              : `${money(rewardOf(manual))} · ${rrOf(manual).toFixed(1)}R`,
+        color:
+          kind === "entry"
+            ? "var(--pane-text)"
+            : kind === "stop"
+              ? "var(--pane-down)"
+              : "var(--pane-up)",
+        onDrag: (price) => setManual((draft) => (draft ? moveLevel(draft, kind, price, step) : draft)),
+        onDrop: () => {
+          // На бирже этой заявки ещё нет - отпускать некуда.
+        },
+      });
+      out.push(at("entry"), at("stop"), at("take"));
+    }
+
+    for (const trade of mine) {
+      if (trade.status === "closed") continue;
+      if (trade.status === "planned") {
+        // Позиции ещё нет - значит и саму лимитку можно перенести. У открытой
+        // сделки вход уже состоялся, и двигать его нечем.
+        out.push({
+          id: `${trade.id}:entry`,
+          trade: trade.id,
+          kind: "entry",
+          price: trade.entry,
+          title: "лимит",
+          note: trade.side === "long" ? "лонг" : "шорт",
+          color: "var(--pane-text)",
+          onDrag: (price) => dragTrade(trade, "entry", 0, price),
+          onDrop: (price) => void dropTrade(trade, "entry", 0, price),
+        });
+      }
+      out.push({
+        id: `${trade.id}:stop`,
+        trade: trade.id,
+        kind: "stop",
+        price: trade.stop,
+        title: "стоп",
+        note: trade.side === "long" ? "лонг" : "шорт",
+        color: "var(--pane-down)",
+        onDrag: (price) => dragTrade(trade, "stop", 0, price),
+        onDrop: (price) => void dropTrade(trade, "stop", 0, price),
+      });
+      trade.targets.slice(trade.takesHit).forEach((price, index) => {
+        out.push({
+          id: `${trade.id}:take${index}`,
+          trade: trade.id,
+          kind: "take",
+          price,
+          title: `цель ${trade.takesHit + index + 1}`,
+          color: "var(--pane-up)",
+          onDrag: (next) => dragTrade(trade, "take", index, next),
+          onDrop: (next) => void dropTrade(trade, "take", index, next),
+        });
+      });
+    }
+
+    return out;
+    // Обработчики читают свежее состояние через setTrades - пересобирать
+    // список из-за них не нужно.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manual, mine, limits?.tick]);
+
 
   // Тема уезжает наружу: по ней светлеет оболочка сайта вокруг терминала.
   // Белые панели на чёрной странице выглядят вырезанными из другого
@@ -1704,6 +2007,24 @@ export default function ScalpingPage() {
                     <BookText className="h-3.5 w-3.5" />
                   </button>
 
+                  {/* Лимитка руками: взводим ожидание нажатия по графику.
+                      Сразу заводить заявку по нажатию нельзя - по графику
+                      нажимают и чтобы прокрутить, и чтобы просто посмотреть. */}
+                  <button
+                    onClick={() => {
+                      setArmed((v) => !v);
+                      setManual(null);
+                    }}
+                    title={
+                      armed
+                        ? "Нажмите по цене на графике - там встанет лимитка"
+                        : "Поставить лимитку руками: нажать по цене, потом тянуть TP и SL"
+                    }
+                    className={`${CHIP} ${armed ? CHIP_ON : CHIP_OFF}`}
+                  >
+                    <Crosshair className="h-3.5 w-3.5" />
+                  </button>
+
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
                   <button
                     onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
@@ -1832,7 +2153,24 @@ export default function ScalpingPage() {
                 )}
               </div>
 
-              <div className="min-h-0 flex-1 p-1">
+              <div className="relative min-h-0 flex-1 p-1">
+                {armed && !manual && (
+                  <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-md border border-[var(--pane-accent-soft)] bg-[var(--pane-bg)] px-3 py-1.5 text-[11px] text-[var(--pane-text-2)] shadow-lg">
+                    Нажмите по цене на графике - там встанет лимитка
+                  </div>
+                )}
+
+                {manual && (
+                  <ManualOrderCard
+                    draft={manual}
+                    tick={limits?.tick ?? 0}
+                    maxLeverage={limits?.max_leverage}
+                    onChange={setManual}
+                    onSubmit={sendManual}
+                    onCancel={() => setManual(null)}
+                  />
+                )}
+
                 <PriceChart
                   symbol={symbol}
                   interval={timeframe}
@@ -1859,6 +2197,8 @@ export default function ScalpingPage() {
                   alerts={myAlerts}
                   onRemoveAlert={(id) => setAlerts((list) => list.filter((a) => a.id !== id))}
                   onShelfClick={openTrade}
+                  dragLevels={dragLevels}
+                  onEmptyClick={startManual}
                 />
               </div>
             </section>

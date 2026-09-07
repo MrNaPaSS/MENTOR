@@ -128,6 +128,37 @@ export function plansOf(symbol: string) {
   return request<ExchangePlans>(`/api/trading/plans/${symbol.toUpperCase()}`);
 }
 
+/** Куда трейдер перетащил уровень. Шлём только то, что сдвинулось. */
+export type LevelMove = {
+  symbol: string;
+  side: "long" | "short";
+  entry?: number;
+  stop?: number;
+  take?: number;
+  take_index?: number;
+  trade_id?: string;
+};
+
+/**
+ * Перенести вход, стоп или цель на новую цену.
+ *
+ * Отправляется, когда трейдер отпустил квадрат, а не пока тянет: каждый кадр
+ * перетаскивания - это запрос к бирже, а биржа считает такое частотой запросов
+ * и отвечает отказом.
+ *
+ * Ответ - состояние по бирже. Рисовать надо его, а не то, куда трейдер
+ * дотянул: биржа округляет цену до своего шага и вправе отказать вовсе.
+ */
+export function moveLevels(body: LevelMove) {
+  return request<{
+    entry: number;
+    stop: number;
+    takes: number[];
+    /** Позиции ещё нет: двигали замысел ждущей заявки. */
+    planned: boolean;
+  }>("/api/trading/move", { method: "POST", body: JSON.stringify(body) });
+}
+
 /** Пределы инструмента: их задаёт биржа, и знать их нужно до ордера. */
 export type SymbolLimits = {
   /** Потолок плеча по этой монете: у большинства он ×20 или ×50. */
