@@ -76,7 +76,7 @@ export default function Calculator() {
             {(["LONG", "SHORT"] as const).map((d) => {
               const active = direction === d;
               const isLong = d === "LONG";
-              const color = isLong ? "#00D4A0" : "#FF4757";
+              const color = isLong ? "var(--c-up)" : "var(--c-down)";
               return (
                 <button
                   key={d}
@@ -134,7 +134,7 @@ export default function Calculator() {
                 onClick={fetchPrice}
                 disabled={priceLoading}
                 className="flex h-[42px] w-11 shrink-0 items-center justify-center rounded-lg transition-all"
-                style={{ background: "rgba(10,255,224,0.08)", border: "1px solid rgba(10,255,224,0.2)", color: "#0AFFE0" }}
+                style={{ background: "rgba(10,255,224,0.08)", border: "1px solid rgba(10,255,224,0.2)", color: "var(--c-accent)" }}
                 aria-label="Получить текущую цену"
               >
                 <RefreshCw className={`h-4 w-4 ${priceLoading ? "animate-spin" : ""}`} />
@@ -148,7 +148,7 @@ export default function Calculator() {
               <span className="text-sm font-medium text-text-secondary">Плечо</span>
               <span
                 className="rounded-lg px-2.5 py-1 font-mono text-sm font-bold"
-                style={{ background: "rgba(10,255,224,0.1)", color: "#0AFFE0", border: "1px solid rgba(10,255,224,0.2)" }}
+                style={{ background: "rgba(10,255,224,0.1)", color: "var(--c-accent)", border: "1px solid rgba(10,255,224,0.2)" }}
               >
                 ×{leverage}
               </span>
@@ -157,7 +157,7 @@ export default function Calculator() {
             <div className="relative h-1.5 w-full rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
               <div
                 className="absolute left-0 top-0 h-full rounded-full transition-all"
-                style={{ width: `${leveragePct}%`, background: "linear-gradient(90deg, #0AFFE0, #06B6D4)" }}
+                style={{ width: `${leveragePct}%`, background: "linear-gradient(90deg, var(--c-accent), var(--c-accent))" }}
               />
               <input
                 type="range"
@@ -180,7 +180,7 @@ export default function Calculator() {
             onClick={compute}
             disabled={loading}
             className="group relative w-full overflow-hidden rounded-2xl py-3.5 text-[15px] font-bold text-bg-deep transition-all duration-200 disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg, #0AFFE0 0%, #06B6D4 100%)" }}
+            style={{ background: "linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent) 100%)" }}
           >
             <span className="flex items-center justify-center gap-2">
               {loading ? "Считаем…" : <>Рассчитать <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></>}
@@ -195,7 +195,7 @@ export default function Calculator() {
         >
           {error && (
             <div className="mb-5 flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
-              style={{ background: "rgba(255,71,87,0.1)", border: "1px solid rgba(255,71,87,0.3)", color: "#FF4757" }}>
+              style={{ background: "rgba(255,71,87,0.1)", border: "1px solid rgba(255,71,87,0.3)", color: "var(--c-down)" }}>
               <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
             </div>
           )}
@@ -206,7 +206,7 @@ export default function Calculator() {
                 className="mb-4 grid h-16 w-16 place-items-center rounded-2xl"
                 style={{ background: "rgba(10,255,224,0.06)", border: "1px solid rgba(10,255,224,0.12)" }}
               >
-                <TrendingUp className="h-7 w-7" style={{ color: "#0AFFE0", opacity: 0.5 }} />
+                <TrendingUp className="h-7 w-7" style={{ color: "var(--c-accent)", opacity: 0.5 }} />
               </div>
               <p className="font-semibold text-text-primary opacity-40">Заполни параметры</p>
               <p className="mt-1 text-xs text-text-muted opacity-60">Маржа · объём · риск · тейки появятся здесь</p>
@@ -246,7 +246,7 @@ export default function Calculator() {
                         TP{tp.index} · RR 1:{Number(tp.rr).toFixed(1)}
                       </span>
                     </div>
-                    <span className="font-mono font-bold" style={{ color: "#00D4A0" }}>
+                    <span className="font-mono font-bold" style={{ color: "var(--c-up)" }}>
                       +${fmtUsd(tp.profit_usd)}
                     </span>
                   </div>
@@ -260,7 +260,7 @@ export default function Calculator() {
                   style={{ background: "rgba(255,196,0,0.06)", border: "1px solid rgba(255,196,0,0.2)" }}
                 >
                   <span className="text-sm text-text-secondary">Risk / Reward (TP1)</span>
-                  <span className="font-mono font-bold" style={{ color: "#FFC400" }}>
+                  <span className="font-mono font-bold" style={{ color: "var(--c-gold)" }}>
                     1 : {Number(result.take_profits[0].rr).toFixed(1)}
                   </span>
                 </div>
@@ -270,7 +270,7 @@ export default function Calculator() {
               {result.warnings.length > 0 && (
                 <ul className="space-y-1.5">
                   {result.warnings.map((w, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "#F59E0B" }}>
+                    <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "var(--c-warn)" }}>
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {w}
                     </li>
                   ))}
@@ -289,7 +289,7 @@ function Field({ label, accent, children }: { label: string; accent?: boolean; c
     <div>
       <div className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-text-secondary">
         {label}
-        {accent && <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#0AFFE0" }} />}
+        {accent && <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--c-accent)" }} />}
       </div>
       {children}
     </div>
@@ -297,7 +297,7 @@ function Field({ label, accent, children }: { label: string; accent?: boolean; c
 }
 
 function ResultCard({ label, value, accent }: { label: string; value: string; accent: "cyan" | "danger" | "neutral" }) {
-  const color = accent === "cyan" ? "#0AFFE0" : accent === "danger" ? "#FF4757" : "white";
+  const color = accent === "cyan" ? "var(--c-accent)" : accent === "danger" ? "var(--c-down)" : "white";
   const bg = accent === "cyan" ? "rgba(10,255,224,0.05)" : accent === "danger" ? "rgba(255,71,87,0.08)" : "rgba(255,255,255,0.03)";
   const border = accent === "cyan" ? "rgba(10,255,224,0.12)" : accent === "danger" ? "rgba(255,71,87,0.2)" : "rgba(255,255,255,0.06)";
   return (

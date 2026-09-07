@@ -161,7 +161,7 @@ function DayCell({ day, onClick, active, isToday }: {
       <div className="flex flex-1 flex-col items-center justify-center gap-[2px]">
         {hasReal && pnl !== 0 ? (
           <span className="text-[11px] font-extrabold leading-none tracking-tight"
-            style={{ color: isPos ? "#00D4A0" : "#FF4757" }}>
+            style={{ color: isPos ? "var(--c-up)" : "var(--c-down)" }}>
             {isPos ? "+" : ""}{Math.abs(pnl!) >= 10 ? pnl!.toFixed(0) : pnl!.toFixed(1)}%
           </span>
         ) : hasReal && pnl === 0 ? (
@@ -409,37 +409,37 @@ export default function AnalyticsPage() {
       id: "volume", label: "Объём за месяц", icon: BarChart2, target: 250_000,
       current: Math.round(monthVolume > 0 ? monthVolume : totalVolume / 3),
       unit: "USDT", reward: "💹 Активный трейдер",
-      color: "#0AFFE0", unlocked: (monthVolume > 0 ? monthVolume : totalVolume / 3) >= 250_000,
+      color: "var(--c-accent)", unlocked: (monthVolume > 0 ? monthVolume : totalVolume / 3) >= 250_000,
     },
     {
       id: "trading_days", label: "Дней торговали", icon: Calendar, target: 15,
       current: effectiveTradeDays,
       unit: "дней", reward: "📅 Дисциплина",
-      color: "#FF6B35", unlocked: effectiveTradeDays >= 15,
+      color: "var(--c-warn)", unlocked: effectiveTradeDays >= 15,
     },
     {
       id: "profit", label: "Прибыльных дней", icon: TrendingUp, target: 5,
       current: profitDays,
       unit: "дней в плюс", reward: "📈 Бычий режим",
-      color: "#00D4A0", unlocked: profitDays >= 5,
+      color: "var(--c-up)", unlocked: profitDays >= 5,
     },
     {
       id: "streak", label: "Стрик активности", icon: Flame, target: 7,
       current: activityStreak,
       unit: "дней подряд", reward: "🔥 На волне",
-      color: "#f97316", unlocked: activityStreak >= 7,
+      color: "var(--c-warn)", unlocked: activityStreak >= 7,
     },
     {
       id: "hot_day", label: "Горячий день", icon: Star, target: 1,
       current: hotDays,
       unit: "дней 3%+", reward: "🌟 День охотника",
-      color: "#eab308", unlocked: hotDays >= 1,
+      color: "var(--c-gold)", unlocked: hotDays >= 1,
     },
     {
       id: "month_profit", label: "Месяц в плюс", icon: TrendingUp, target: 1,
       current: avgProfit > 0 ? 1 : 0,
       unit: "", reward: "📈 Победный месяц",
-      color: "#22c55e", unlocked: avgProfit > 0 && validPnl.length >= 5,
+      color: "var(--c-up)", unlocked: avgProfit > 0 && validPnl.length >= 5,
     },
   ];
 
@@ -534,7 +534,7 @@ export default function AnalyticsPage() {
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {/* Объём месяца */}
         <div className="card flex flex-col items-center gap-2 py-5">
-          <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)} color="#0AFFE0" size={72}>
+          <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)} color="var(--c-accent)" size={72}>
             <span className="font-mono text-[11px] font-bold text-text-primary leading-tight text-center">
               {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
             </span>
@@ -544,7 +544,7 @@ export default function AnalyticsPage() {
         </div>
         {/* Стрик активности */}
         <div className="card flex flex-col items-center gap-2 py-5">
-          <CircleProgress pct={(activityStreak / 7) * 100} color="#FF6B35" size={72}>
+          <CircleProgress pct={(activityStreak / 7) * 100} color="var(--c-warn)" size={72}>
             <Flame className="h-5 w-5 text-orange-400" />
             <span className="font-mono text-sm font-bold text-text-primary">{activityStreak}</span>
           </CircleProgress>
@@ -553,7 +553,7 @@ export default function AnalyticsPage() {
         </div>
         {/* Ср. доходность */}
         <div className="card flex flex-col items-center gap-2 py-5">
-          <CircleProgress pct={Math.min(Math.abs(avgProfit) / 5 * 100, 100)} color={avgProfit >= 0 ? "#00D4A0" : "#FF4757"} size={72}>
+          <CircleProgress pct={Math.min(Math.abs(avgProfit) / 5 * 100, 100)} color={avgProfit >= 0 ? "var(--c-up)" : "var(--c-down)"} size={72}>
             <span className={`font-mono text-sm font-bold ${avgProfit >= 0 ? "text-success" : "text-danger"}`}>
               {avgProfit >= 0 ? "+" : ""}{avgProfit.toFixed(2)}%
             </span>
@@ -563,7 +563,7 @@ export default function AnalyticsPage() {
         </div>
         {/* Дней торговали */}
         <div className="card flex flex-col items-center gap-2 py-5">
-          <CircleProgress pct={Math.min(((tradingDays > 0 ? tradingDays : activeDays) / 15) * 100, 100)} color="#FFD700" size={72}>
+          <CircleProgress pct={Math.min(((tradingDays > 0 ? tradingDays : activeDays) / 15) * 100, 100)} color="var(--c-gold)" size={72}>
             <Calendar className="h-4 w-4 text-accent-gold" />
             <span className="font-mono text-sm font-bold text-text-primary">{tradingDays > 0 ? tradingDays : activeDays}</span>
           </CircleProgress>
@@ -607,7 +607,7 @@ export default function AnalyticsPage() {
                   </div>
                   <div className="relative h-2 overflow-hidden rounded-full bg-bg-panel/60">
                     <div className="h-full rounded-full transition-all duration-1000"
-                      style={{ width: `${trackPct}%`, background: "linear-gradient(90deg, #f59e0b, #fde68a)" }} />
+                      style={{ width: `${trackPct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }} />
                   </div>
                   <p className="text-[10px] text-text-primary/25 text-right">{trackPct.toFixed(1)}% до следующей вехи</p>
                 </div>
@@ -874,7 +874,7 @@ export default function AnalyticsPage() {
                 <div className="relative mt-4 h-2.5 overflow-hidden rounded-full bg-bg-deep/40">
                   <div
                     className="h-full rounded-full shadow-[0_0_10px_rgba(255,200,0,0.5)] transition-all duration-700"
-                    style={{ width: `${pct}%`, background: "linear-gradient(90deg, #f59e0b, #fde68a)" }}
+                    style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }}
                   />
                 </div>
                 <p className="relative mt-1.5 text-right text-[10px] text-text-primary/30">{xpInLevel.toLocaleString("ru")} / {xpNeeded.toLocaleString("ru")} XP</p>

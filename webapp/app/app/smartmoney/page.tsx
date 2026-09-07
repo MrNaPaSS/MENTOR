@@ -172,7 +172,7 @@ function Section({icon,title,sub,badge,accent="cyan",delay=0,children}:{
   badge?:React.ReactNode; accent?:"cyan"|"gold"|"green";
   delay?:number; children:React.ReactNode;
 }) {
-  const ac = accent==="gold"?"#f0b90b":accent==="green"?"#0ecb81":"#0affe0";
+  const ac = accent==="gold"?"var(--c-gold)":accent==="green"?"var(--c-up)":"var(--c-accent)";
   return (
     <div className="sm-fade-up relative overflow-hidden rounded-2xl"
       style={{
@@ -276,7 +276,7 @@ function CotSection() {
             className="relative rounded-xl px-5 py-1.5 text-[12px] font-bold transition-all"
             style={{
               background: asset===a ? "rgba(240,185,11,0.14)" : "rgba(255,255,255,0.03)",
-              color: asset===a ? "#f0b90b" : "rgba(255,255,255,0.35)",
+              color: asset===a ? "var(--c-gold)" : "rgba(255,255,255,0.35)",
               border: asset===a ? "1px solid rgba(240,185,11,0.3)" : "1px solid rgba(255,255,255,0.06)",
               boxShadow: asset===a ? "0 0 16px rgba(240,185,11,0.15)" : "none",
             }}>
@@ -301,16 +301,16 @@ function CotSection() {
           <div className="grid grid-cols-3 gap-3">
             <KpiCard label="Хедж-фонды нетто" value={`${cur.nc_net>0?"+":""}${fmtK(cur.nc_net)}`}
               sub={`${cur.nc_net_chg>0?"+":""}${fmtK(cur.nc_net_chg)} нед.`}
-              color={cur.nc_net>0?"#0ecb81":"#f6465d"}
+              color={cur.nc_net>0?"var(--c-up)":"var(--c-down)"}
               bg={cur.nc_net>0?"rgba(14,203,129,0.07)":"rgba(246,70,93,0.07)"}
               border={cur.nc_net>0?"rgba(14,203,129,0.2)":"rgba(246,70,93,0.2)"} delay={0.05}/>
             <KpiCard label="Коммерческие нетто" value={`${cur.c_net>0?"+":""}${fmtK(cur.c_net)}`}
               sub={`${cur.c_net_chg>0?"+":""}${fmtK(cur.c_net_chg)} нед.`}
-              color={cur.c_net>0?"#0ecb81":"#f6465d"}
+              color={cur.c_net>0?"var(--c-up)":"var(--c-down)"}
               bg={cur.c_net>0?"rgba(14,203,129,0.07)":"rgba(246,70,93,0.07)"}
               border={cur.c_net>0?"rgba(14,203,129,0.2)":"rgba(246,70,93,0.2)"} delay={0.1}/>
             <KpiCard label="Открытый интерес" value={fmtK(cur.oi)}
-              color="#ffffff" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0.15}/>
+              color="var(--c-text)" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0.15}/>
           </div>
 
           {/* Position structure */}
@@ -318,8 +318,8 @@ function CotSection() {
             <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Структура позиций (% от ОИ)</div>
 
             {[
-              {label:"Lev. Money (хедж-фонды)", long:cur.nc_long_pct, short:cur.nc_short_pct, lc:"#0ecb81", sc:"#f6465d"},
-              {label:"Asset Manager (институт.)", long:cur.c_long_pct,  short:cur.c_short_pct,  lc:"#22c55e", sc:"#ef4444"},
+              {label:"Lev. Money (хедж-фонды)", long:cur.nc_long_pct, short:cur.nc_short_pct, lc:"var(--c-up)", sc:"var(--c-down)"},
+              {label:"Asset Manager (институт.)", long:cur.c_long_pct,  short:cur.c_short_pct,  lc:"var(--c-up)", sc:"var(--c-down)"},
             ].map((row,ri)=>(
               <div key={ri}>
                 <div className="flex items-center justify-between mb-1.5">
@@ -354,7 +354,7 @@ function CotSection() {
             <div className="flex items-end gap-1.5 rounded-xl bg-bg-panel/60 px-3 pb-2 pt-3" style={{height:80}}>
               {[...cot].reverse().map((row,i)=>{
                 const h = Math.max((Math.abs(row.nc_net)/maxNet)*62,4);
-                const color = row.nc_net>=0 ? "#0ecb81" : "#f6465d";
+                const color = row.nc_net>=0 ? "var(--c-up)" : "var(--c-down)";
                 return (
                   <div key={i} title={`${row.date}: ${row.nc_net>0?"+":""}${fmt(row.nc_net)}`}
                     className="group relative flex flex-1 flex-col items-center justify-end cursor-default" style={{height:68}}>
@@ -432,7 +432,7 @@ function MacroSection() {
           {items.map((item,i)=>{
             const pos = item.changePct>=0;
             const dec = item.key==="US10Y"||item.key==="VIX" ? 2 : item.price>1000 ? 1 : 2;
-            const color = pos ? "#0ecb81" : "#f6465d";
+            const color = pos ? "var(--c-up)" : "var(--c-down)";
             const meta  = MACRO_META[item.key]??{context:"",icon:"•"};
             return (
               <div key={item.key}
@@ -585,7 +585,7 @@ function EtfSection() {
                   <div className="text-right">
                     <div className="font-mono text-[11px] text-text-primary">{etf.price>0?`$${etf.price}`:"-"}</div>
                     {etf.price>0 && (
-                      <div className="font-mono text-[9px]" style={{color:pos?"#0ecb81":"#f6465d"}}>
+                      <div className="font-mono text-[9px]" style={{color:pos?"var(--c-up)":"var(--c-down)"}}>
                         {pos?"+":""}{etf.changePct.toFixed(2)}%
                       </div>
                     )}
@@ -594,7 +594,7 @@ function EtfSection() {
 
                 {/* animated share bar */}
                 <div className="mt-2.5">
-                  <AnimBar pct={etf.sharePct} color="#0ecb81" height={3} delay={i*0.05+0.1}/>
+                  <AnimBar pct={etf.sharePct} color="var(--c-up)" height={3} delay={i*0.05+0.1}/>
                 </div>
               </div>
             );
@@ -653,15 +653,15 @@ function DerivativesSection() {
 
         {/* KPI row */}
         <div className="mb-5 grid grid-cols-3 gap-3">
-          <KpiCard label="Суммарный OI" value={fmtB(totalOI)} color="#ffffff"
+          <KpiCard label="Суммарный OI" value={fmtB(totalOI)} color="var(--c-text)"
             bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0}/>
           <KpiCard label="Монет отслеживается" value={String(rows.length)}
-            color="#0affe0" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.05}/>
+            color="var(--c-accent)" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.05}/>
           <KpiCard
             label="Топ по OI"
             value={rows[0]?.sym??"-"}
             sub={rows[0]?.oi>0 ? fmtB(rows[0].oi) : undefined}
-            color="#f0b90b" bg="rgba(240,185,11,0.07)" border="rgba(240,185,11,0.18)" delay={0.1}/>
+            color="var(--c-gold)" bg="rgba(240,185,11,0.07)" border="rgba(240,185,11,0.18)" delay={0.1}/>
         </div>
 
         {/* Rows */}
@@ -676,7 +676,7 @@ function DerivativesSection() {
 
           {rows.map((r,i)=>{
             const fr = r.fr; const frPct = fr*100;
-            const frColor = fr>0.01?"#f6465d":fr>0?"#f59e0b":fr<-0.001?"#0ecb81":"#6b7280";
+            const frColor = fr>0.01?"var(--c-down)":fr>0?"var(--c-warn)":fr<-0.001?"var(--c-up)":"var(--c-muted)";
             const pct = (r as DerivRow & {pct24h?:number}).pct24h??0;
             const oiPct = r.oi/maxOI*100;
 
@@ -692,7 +692,7 @@ function DerivativesSection() {
                   <div className="font-bold text-[14px] text-text-primary">{r.sym}</div>
 
                   <div>
-                    <AnimBar pct={oiPct} color="#0affe0" height={5} delay={i*0.04}/>
+                    <AnimBar pct={oiPct} color="var(--c-accent)" height={5} delay={i*0.04}/>
                     <div className="mt-1 text-[8px] text-text-primary/20">{oiPct.toFixed(0)}% от макс.</div>
                   </div>
 
@@ -742,7 +742,7 @@ function FearGaugeSmall({val,color}:{val:number;color:string}) {
     <svg viewBox="0 0 124 62" className="w-full overflow-visible">
       <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
         fill="none" stroke="rgba(128,128,128,0.25)" strokeWidth="10" strokeLinecap="butt"/>
-      {[{from:0,to:.25,c:"#0ecb81"},{from:.25,to:.45,c:"#5ac87a"},{from:.45,to:.55,c:"#9ca3af"},{from:.55,to:.75,c:"#f0b90b"},{from:.75,to:1,c:"#f6465d"}]
+      {[{from:0,to:.25,c:"var(--c-up)"},{from:.25,to:.45,c:"var(--c-up)"},{from:.45,to:.55,c:"var(--c-muted)"},{from:.55,to:.75,c:"var(--c-gold)"},{from:.75,to:1,c:"var(--c-down)"}]
         .map((z,i)=>{
           const a1=Math.PI-z.from*Math.PI, a2=Math.PI-z.to*Math.PI;
           const x1=cx+r*Math.cos(a1),y1=cy-r*Math.sin(a1),x2=cx+r*Math.cos(a2),y2=cy-r*Math.sin(a2);
@@ -796,7 +796,7 @@ function OnchainSection() {
 
   const d = data;
   const fgVal   = d?.fearGreed.value??0;
-  const fgColor = fgVal>=75?"#f6465d":fgVal>=55?"#f0b90b":fgVal>=45?"#9ca3af":fgVal>=25?"#0affe0":"#0ecb81";
+  const fgColor = fgVal>=75?"var(--c-down)":fgVal>=55?"var(--c-gold)":fgVal>=45?"var(--c-muted)":fgVal>=25?"var(--c-accent)":"var(--c-up)";
   const altSeason = d ? Math.max(0,100-d.btcDom-d.ethDom) : 0;
 
   return (
@@ -825,10 +825,10 @@ function OnchainSection() {
             <div className="mb-3 text-[9px] uppercase tracking-widest text-text-primary/25">Доминация крипторынка</div>
             <div className="space-y-3">
               {[
-                {label:"BTC",    val:d.btcDom,    col:"#f0b90b"},
+                {label:"BTC",    val:d.btcDom,    col:"var(--c-gold)"},
                 {label:"ETH",    val:d.ethDom,    col:"#627eea"},
-                {label:"Stable", val:d.stableDom, col:"#26a17b"},
-                {label:"Альты",  val:altSeason,   col:"#0affe0"},
+                {label:"Stable", val:d.stableDom, col:"var(--c-up)"},
+                {label:"Альты",  val:altSeason,   col:"var(--c-accent)"},
               ].map((x,i)=>(
                 <div key={x.label}>
                   <div className="flex items-center justify-between mb-1">
@@ -848,14 +848,14 @@ function OnchainSection() {
             {label:"Капитализация",
               value: d.totalMcap>=1e12?`$${(d.totalMcap/1e12).toFixed(2)}T`:`$${(d.totalMcap/1e9).toFixed(0)}B`,
               sub:`${d.mcapChg24h>=0?"+":""}${d.mcapChg24h.toFixed(2)}% 24ч`,
-              color:d.mcapChg24h>=0?"#0ecb81":"#f6465d"},
+              color:d.mcapChg24h>=0?"var(--c-up)":"var(--c-down)"},
             {label:"Объём 24ч",
               value: d.vol24h>=1e12?`$${(d.vol24h/1e12).toFixed(2)}T`:`$${(d.vol24h/1e9).toFixed(0)}B`,
-              sub:"суммарный",color:"#9ca3af"},
+              sub:"суммарный",color:"var(--c-muted)"},
             {label:"Альт-сезон",
               value:`${altSeason.toFixed(1)}%`,
               sub:altSeason>40?"Сезон альтов":altSeason>25?"Смешанный":"Доминация BTC",
-              color:altSeason>30?"#0affe0":"#f0b90b"},
+              color:altSeason>30?"var(--c-accent)":"var(--c-gold)"},
           ].map((m,i)=>(
             <div key={m.label} className="sm-fade-up sm-hover rounded-2xl p-3.5"
               style={{
@@ -919,12 +919,12 @@ function FundingHeatmapSection() {
 
   function frTheme(fr:number) {
     // Пороги в decimal: 0.0003 = 0.03% per 8h (~33% APR) — перегрев
-    if(fr>0.0003)  return {color:"#f6465d",glow:"rgba(246,70,93,0.4)",  bg:"rgba(246,70,93,0.10)", border:"rgba(246,70,93,0.30)", label:"ПЕРЕГРЕВ",pulse:true};
-    if(fr>0.0001)  return {color:"#f59e0b",glow:"rgba(245,158,11,0.35)",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.22)",label:"ЛОНГИ",   pulse:false};
-    if(fr>0.000001)return {color:"#9ca3af",glow:"transparent",          bg:"rgba(255,255,255,0.03)",border:"rgba(255,255,255,0.07)",label:"НЕЙТР.", pulse:false};
-    if(fr>-0.000001)return{color:"#9ca3af",glow:"transparent",          bg:"rgba(255,255,255,0.03)",border:"rgba(255,255,255,0.07)",label:"НЕЙТР.", pulse:false};
-    if(fr>-0.0001) return {color:"#0ecb81",glow:"rgba(14,203,129,0.35)",bg:"rgba(14,203,129,0.08)",border:"rgba(14,203,129,0.22)",label:"ШОРТЫ",   pulse:false};
-    return               {color:"#0affe0",glow:"rgba(10,255,224,0.40)", bg:"rgba(10,255,224,0.10)",border:"rgba(10,255,224,0.30)",label:"ДИСКОНТ",pulse:true};
+    if(fr>0.0003)  return {color:"var(--c-down)",glow:"rgba(246,70,93,0.4)",  bg:"rgba(246,70,93,0.10)", border:"rgba(246,70,93,0.30)", label:"ПЕРЕГРЕВ",pulse:true};
+    if(fr>0.0001)  return {color:"var(--c-warn)",glow:"rgba(245,158,11,0.35)",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.22)",label:"ЛОНГИ",   pulse:false};
+    if(fr>0.000001)return {color:"var(--c-muted)",glow:"transparent",          bg:"rgba(255,255,255,0.03)",border:"rgba(255,255,255,0.07)",label:"НЕЙТР.", pulse:false};
+    if(fr>-0.000001)return{color:"var(--c-muted)",glow:"transparent",          bg:"rgba(255,255,255,0.03)",border:"rgba(255,255,255,0.07)",label:"НЕЙТР.", pulse:false};
+    if(fr>-0.0001) return {color:"var(--c-up)",glow:"rgba(14,203,129,0.35)",bg:"rgba(14,203,129,0.08)",border:"rgba(14,203,129,0.22)",label:"ШОРТЫ",   pulse:false};
+    return               {color:"var(--c-accent)",glow:"rgba(10,255,224,0.40)", bg:"rgba(10,255,224,0.10)",border:"rgba(10,255,224,0.30)",label:"ДИСКОНТ",pulse:true};
   }
 
   function fmtNext(ts:number) {
@@ -946,13 +946,13 @@ function FundingHeatmapSection() {
           {[
             {label:"Средний FR",
               value:`${avgFr>=0?"+":""}${(avgFr*100).toFixed(4)}%`,
-              color:avgFr>0.000001?"#f59e0b":avgFr<-0.000001?"#0ecb81":"#9ca3af",
+              color:avgFr>0.000001?"var(--c-warn)":avgFr<-0.000001?"var(--c-up)":"var(--c-muted)",
               bg:avgFr>0.000001?"rgba(245,158,11,0.07)":avgFr<-0.000001?"rgba(14,203,129,0.07)":"rgba(255,255,255,0.03)",
               border:avgFr>0.000001?"rgba(245,158,11,0.2)":avgFr<-0.000001?"rgba(14,203,129,0.2)":"rgba(255,255,255,0.07)"},
             {label:"Шорты платят", value:`${bullish} из ${rows.length}`,
-              color:"#0ecb81", bg:"rgba(14,203,129,0.07)", border:"rgba(14,203,129,0.2)"},
+              color:"var(--c-up)", bg:"rgba(14,203,129,0.07)", border:"rgba(14,203,129,0.2)"},
             {label:"Лонги платят", value:`${bearish} из ${rows.length}`,
-              color:"#f6465d", bg:"rgba(246,70,93,0.07)", border:"rgba(246,70,93,0.2)"},
+              color:"var(--c-down)", bg:"rgba(246,70,93,0.07)", border:"rgba(246,70,93,0.2)"},
           ].map((s,i)=>(
             <div key={s.label} className="sm-fade-up rounded-2xl px-4 py-3.5 text-center"
               style={{animationDelay:`${i*0.05}s`,background:s.bg,border:`1px solid ${s.border}`}}>
@@ -1004,7 +1004,7 @@ function FundingHeatmapSection() {
                 {/* 24h + next */}
                 <div className="mt-2.5 flex items-center justify-between">
                   <span className="font-mono text-[10px] font-semibold"
-                    style={{color:r.pct24h>=0?"#0ecb81":"#f6465d"}}>
+                    style={{color:r.pct24h>=0?"var(--c-up)":"var(--c-down)"}}>
                     {r.pct24h>=0?"+":""}{r.pct24h.toFixed(2)}%
                   </span>
                   {next && <span className="text-[8px] text-text-primary/20">через {next}</span>}
@@ -1053,13 +1053,13 @@ function GlobalMarketSection() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <KpiCard label="Капитализация" value={fmtMoney(g.total_market_cap_usd)}
             sub={g.active_cryptos ? `${fmt(g.active_cryptos)} монет` : undefined}
-            color="#ffffff" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0} />
+            color="var(--c-text)" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0} />
           <KpiCard label="BTC доминация" value={`${g.btc_dominance.toFixed(1)}%`}
-            color="#f0b90b" bg="rgba(240,185,11,0.07)" border="rgba(240,185,11,0.18)" delay={0.05} />
+            color="var(--c-gold)" bg="rgba(240,185,11,0.07)" border="rgba(240,185,11,0.18)" delay={0.05} />
           <KpiCard label="Объём 24ч" value={fmtMoney(g.total_volume_usd)}
-            color="#0affe0" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.1} />
+            color="var(--c-accent)" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.1} />
           <KpiCard label="Капа 24ч" value={`${pos ? "+" : ""}${g.market_cap_change_24h.toFixed(2)}%`}
-            color={pos ? "#0ecb81" : "#f6465d"}
+            color={pos ? "var(--c-up)" : "var(--c-down)"}
             bg={pos ? "rgba(14,203,129,0.07)" : "rgba(246,70,93,0.07)"}
             border={pos ? "rgba(14,203,129,0.2)" : "rgba(246,70,93,0.2)"} delay={0.15} />
         </div>
@@ -1082,8 +1082,8 @@ function TrendingSection() {
   }, []);
 
   const rankStyle = (i: number) =>
-    i === 0 ? { color: "#f0b90b", bg: "rgba(240,185,11,0.15)", bd: "rgba(240,185,11,0.4)" }
-    : i === 1 ? { color: "#cbd5e1", bg: "rgba(203,213,225,0.12)", bd: "rgba(203,213,225,0.3)" }
+    i === 0 ? { color: "var(--c-gold)", bg: "rgba(240,185,11,0.15)", bd: "rgba(240,185,11,0.4)" }
+    : i === 1 ? { color: "var(--c-muted)", bg: "rgba(203,213,225,0.12)", bd: "rgba(203,213,225,0.3)" }
     : i === 2 ? { color: "#d8895a", bg: "rgba(216,137,90,0.12)", bd: "rgba(216,137,90,0.3)" }
     : { color: "rgba(255,255,255,0.35)", bg: "rgba(255,255,255,0.04)", bd: "rgba(255,255,255,0.08)" };
 
@@ -1135,10 +1135,10 @@ function BtcNetworkSection() {
   const diffPos = (d?.difficulty_change_pct ?? 0) >= 0;
 
   const feeTiers = d ? [
-    { label: "Срочно", value: d.fees.fastest, color: "#f6465d" },
-    { label: "30 мин", value: d.fees.half_hour, color: "#f0b90b" },
-    { label: "1 час", value: d.fees.hour, color: "#0affe0" },
-    { label: "Эконом", value: d.fees.economy, color: "#0ecb81" },
+    { label: "Срочно", value: d.fees.fastest, color: "var(--c-down)" },
+    { label: "30 мин", value: d.fees.half_hour, color: "var(--c-gold)" },
+    { label: "1 час", value: d.fees.hour, color: "var(--c-accent)" },
+    { label: "Эконом", value: d.fees.economy, color: "var(--c-up)" },
   ] : [];
 
   return (
@@ -1166,12 +1166,12 @@ function BtcNetworkSection() {
           {/* KPI */}
           <div className="grid grid-cols-3 gap-3">
             <KpiCard label="Хешрейт" value={`${d.hash_rate_ehs.toFixed(0)}`} sub="EH/s"
-              color="#0affe0" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.05} />
+              color="var(--c-accent)" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.05} />
             <KpiCard label="Транзакций 24ч" value={fmtB(d.tx_count_24h).replace("$", "")}
-              color="#ffffff" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0.1} />
+              color="var(--c-text)" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0.1} />
             <KpiCard label="Сложность" value={`${diffPos ? "+" : ""}${d.difficulty_change_pct.toFixed(2)}%`}
               sub={`ретаргет ${d.retarget_progress_pct.toFixed(0)}%`}
-              color={diffPos ? "#0ecb81" : "#f6465d"}
+              color={diffPos ? "var(--c-up)" : "var(--c-down)"}
               bg={diffPos ? "rgba(14,203,129,0.07)" : "rgba(246,70,93,0.07)"}
               border={diffPos ? "rgba(14,203,129,0.2)" : "rgba(246,70,93,0.2)"} delay={0.15} />
           </div>
@@ -1211,10 +1211,10 @@ export default function SmartMoneyPage() {
             </div>
             <div className="ml-auto hidden sm:flex items-center gap-2">
               {[
-                {label:"COT", color:"#f0b90b"},
-                {label:"Макро", color:"#0affe0"},
-                {label:"ETF", color:"#0ecb81"},
-                {label:"Funding", color:"#f0b90b"},
+                {label:"COT", color:"var(--c-gold)"},
+                {label:"Макро", color:"var(--c-accent)"},
+                {label:"ETF", color:"var(--c-up)"},
+                {label:"Funding", color:"var(--c-gold)"},
               ].map(t=>(
                 <span key={t.label} className="rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider"
                   style={{color:t.color,background:`${t.color}12`,border:`1px solid ${t.color}25`}}>
