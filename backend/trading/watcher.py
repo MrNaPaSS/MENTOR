@@ -136,7 +136,10 @@ def decide(
         # момент нечего. Смотрим на заявки: цель, которой не стало в списке
         # висящих, исполнилась - снимать их мы к этому моменту ещё не начинали.
         away = [
-            t for t in takes if str(t.get("order_id") or "") not in open_plans
+            t
+            for i, t in enumerate(takes)
+            if str(t.get("order_id") or "") not in open_plans
+            and take_label(trade.client_id, i) not in open_plans
         ]
         fresh = [
             str(t.get("order_id") or "")
@@ -192,11 +195,14 @@ def decide(
     # Отмечаем сработавшими те цели, которых уже нет среди висящих заявок, — по
     # порядку и не больше, чем показал остаток позиции.
     filled: list[str] = []
-    for take in takes:
+    for i, take in enumerate(takes):
         if take.get("filled") or len(filled) >= hit - trade.takes_hit:
             continue
         order_id = str(take.get("order_id") or "")
-        if order_id and order_id not in open_plans:
+        if not order_id:
+            continue
+        # Ни по идентификатору, ни по нашей метке заявки нет - значит сработала.
+        if order_id not in open_plans and take_label(trade.client_id, i) not in open_plans:
             filled.append(order_id)
 
     prices = [float(t.get('price') or 0) for t in takes]
@@ -342,10 +348,10 @@ class PositionWatcher:
                 for t in json.loads(trade.tp_orders_json or "[]")
                 if not t.get("filled")
             }
-        return {
-            str(o.get("orderId") or o.get("algoId") or o.get("id") or "")
-            for o in orders
-        }
+        alive: set[str] = set()
+        for order in orders:
+            alive |= order_marks(order)
+        return alive
 
     async def _apply(
         self,
@@ -557,10 +563,10 @@ class PositionWatcher:
         Цели не трогаем: они тоже условные заявки, и снять их значит остаться
         без лестницы.
         """
-        takes = {
-            str(t.get("order_id") or "")
-            for t in json.loads(trade.tp_orders_json or "[]")
-        }
+        recorded = json.loads(trade.tp_orders_json or "[]")
+        takes = {str(t.get("order_id") or "") for t in recorded}
+        takes |= {take_label(trade.client_id, i) for i in range(len(recorded))}
+        takes.discard("")
         try:
             orders = await client.algo_orders(trade.symbol)
         except WeexTradeError as exc:
@@ -568,8 +574,9 @@ class PositionWatcher:
             return
 
         for order in orders:
+            marks = order_marks(order)
             order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
-            if not order_id or order_id == keep or order_id in takes:
+            if not order_id or keep in marks or marks & takes:
                 continue
 
             # Снимаем только то, что уверенно опознали как стоп. Раньше здесь
@@ -822,6 +829,31 @@ def split_ladder(
         price, size = plan[-1]
         plan[-1] = (price, floor_to_step(size + carry, step))
     return plan
+
+
+def take_label(client_id: str, index: int) -> str:
+    """Метка нашей заявки на цель: она уходит на биржу вместе с ордером.
+
+    Идентификатор, который биржа возвращает в ответе, приходит не всегда и не
+    в одном и том же поле - на этом мы уже теряли связь со своими заявками.
+    Метку же мы задаём сами, и по ней сделку узнать можно всегда.
+    """
+    return f"tp{index + 1}_{client_id}"[:32]
+
+
+def stop_label(client_id: str, takes_hit: int) -> str:
+    """Метка нашего стопа. Номер меняется с каждой взятой целью."""
+    return f"sl{takes_hit}_{client_id}"[:32]
+
+
+def order_marks(order: dict[str, Any]) -> set[str]:
+    """Всё, чем заявку можно опознать: идентификаторы биржи и наша метка."""
+    marks = {
+        str(order.get(name) or "")
+        for name in ("orderId", "algoId", "id", "clientAlgoId", "clientOid", "clientOrderId")
+    }
+    marks.discard("")
+    return marks
 
 
 def position_side(row: dict[str, Any] | None) -> str:

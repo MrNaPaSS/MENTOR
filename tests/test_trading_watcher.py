@@ -12,6 +12,7 @@ import json
 import pytest
 
 from backend.trading.watcher import (
+    take_label,
     MISSING_TOLERANCE,
     decide,
     position_size,
@@ -643,3 +644,28 @@ def test_forward_move_to_a_better_breakeven_happens():
     decision = decide(row, where, {"tp2", "tp3"}, 101.5, 0)
     assert decision.move_stop_to is not None
     assert decision.move_stop_to > 99.5
+
+
+# ── опознание своих заявок ──────────────────────────────────────────────────
+
+def test_our_orders_are_recognized_by_our_own_label():
+    """Идентификатор биржа возвращает не всегда - метку задаём мы сами.
+
+    На потерянной связи со своими заявками ломалось всё: цель считалась
+    взятой, потому что «не нашлась», стоп снимался как чужой, а сверка защиты
+    писала «целей нет» при живых целях.
+    """
+    from backend.trading.watcher import order_marks, stop_label, take_label
+
+    assert take_label("BTCUSDT-1", 0) == "tp1_BTCUSDT-1"
+    assert stop_label("BTCUSDT-1", 2) == "sl2_BTCUSDT-1"
+    assert order_marks({"clientAlgoId": "tp1_BTCUSDT-1", "orderId": ""}) == {"tp1_BTCUSDT-1"}
+
+
+def test_take_alive_under_its_label_is_not_counted_as_filled():
+    row = trade(status="open", qty=3.0)
+    # Биржа вернула заявки без идентификаторов, но с нашими метками.
+    plans = {take_label(row.client_id, i) for i in range(3)}
+    decision = decide(row, position("2.1"), plans, 101.5, 0)
+    # Объём упал, но заявка жива - значит цель не сработала, а лимитка добралась.
+    assert decision.filled_orders == []

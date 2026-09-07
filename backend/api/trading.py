@@ -33,7 +33,15 @@ from core.trading.position import (
     should_move_stop,
 )
 from core.weex import keys as keystore
-from backend.trading.watcher import fill_time, position_for, settle, split_ladder
+from backend.trading.watcher import (
+    fill_time,
+    order_marks,
+    position_for,
+    settle,
+    split_ladder,
+    stop_label,
+    take_label,
+)
 from core.weex.futures import (
     public_filters,
     Credentials,
@@ -188,7 +196,13 @@ async def plans(
         for row in live
         for t in json.loads(row.tp_orders_json or "[]")
     }
+    # И наши метки: идентификатор биржа возвращает не всегда, а метку мы задаём
+    # сами при постановке - по ней заявку узнать можно в любом случае.
+    for row in live:
+        count = len(json.loads(row.tp_orders_json or "[]")) or 3
+        mine_takes |= {take_label(row.client_id, i) for i in range(count)}
     mine_stops = {str(row.sl_order_id or "") for row in live}
+    mine_stops |= {stop_label(row.client_id, hit) for row in live for hit in range(4)}
     mine_takes.discard("")
     mine_stops.discard("")
 
@@ -198,15 +212,15 @@ async def plans(
     take_prices: list[float] = []
     unknown: list[str] = []
     for order in orders:
-        order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
+        marks = order_marks(order)
         kind = str(order.get("planType") or order.get("type") or "").lower()
         trigger = _trigger_price(order)
 
-        if order_id and order_id in mine_takes:
+        if marks & mine_takes:
             takes += 1
             if trigger:
                 take_prices.append(trigger)
-        elif order_id and order_id in mine_stops:
+        elif marks & mine_stops:
             stops += 1
             stop_price = trigger or stop_price
         elif "profit" in kind or kind.endswith("tp"):
