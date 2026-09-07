@@ -249,6 +249,29 @@ export function duck(ms = 900): void {
 }
 
 /**
+ * Форма волны прямо сейчас, разложенная по длине переданного массива.
+ *
+ * Значения от -1 до 1. Каждая точка - среднее по своему отрезку отсчётов, а не
+ * один взятый наугад: двадцать шесть точек из двухсот пятидесяти шести иначе
+ * скакали бы от кадра к кадру, и линия дрожала бы вместо того, чтобы двигаться.
+ *
+ * `false` означает, что слушать нечем - не играет или отсчётов не видно.
+ */
+export function waveform(into: Float32Array): boolean {
+  if (state.mode !== "playing" || !state.live || !analyser || !buf) return false;
+  analyser.getByteTimeDomainData(buf);
+  const step = buf.length / into.length;
+  for (let i = 0; i < into.length; i++) {
+    const from = Math.floor(i * step);
+    const to = Math.max(from + 1, Math.floor((i + 1) * step));
+    let sum = 0;
+    for (let j = from; j < to; j++) sum += (buf[j] - 128) / 128;
+    into[i] = sum / (to - from);
+  }
+  return true;
+}
+
+/**
  * Громкость текущего мгновения, 0..1.
  *
  * `null` означает, что слушать нечем: либо не играет, либо отсчётов не видно.

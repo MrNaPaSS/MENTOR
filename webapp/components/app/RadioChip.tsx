@@ -19,7 +19,6 @@ import { Loader2, Music, Pause, Play } from "lucide-react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import {
   STATIONS,
-  level,
   pick,
   restore,
   serverSnapshot,
@@ -27,14 +26,10 @@ import {
   snapshot,
   subscribe,
   toggle,
+  waveform,
 } from "@/lib/radio";
 
-/**
- * Пульс: ширина в пикселях - она же длина памяти, по столбику на кадр.
- *
- * Двадцать шесть кадров - меньше полусекунды звука. Больше растянуло бы линию
- * в неразборчивую щетину, меньше - и удар не успевает проехать по экрану.
- */
+/** Пульс: размер полоски в пикселях. */
 const PULSE_W = 26;
 const PULSE_H = 14;
 
@@ -67,10 +62,17 @@ export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
 
   // ── Пульс ────────────────────────────────────────────────────────────────
   //
-  // Линия кардиомонитора: каждый кадр справа дописывается громкость текущего
-  // мгновения, а вся память едет на пиксель влево. Столбиков эквалайзера здесь
-  // намеренно нет - в шапке с бегущей строкой и цифрами ещё один частокол
-  // читался бы как сбой, а одна живая линия читается как признак жизни.
+  // Линия стоит на месте, а шевелится её середина - как жилка под кожей. Форма
+  // волны приходит с ленты каждый кадр и умножается на оконный множитель: он
+  // равен нулю на краях, поэтому первая и последняя точка прибиты к базовому
+  // уровню, что бы ни играло.
+  //
+  // Раньше линия ехала влево: память сдвигалась на пиксель за кадр, и вместе с
+  // серединой двигались оба конца. Полоска в двадцать шесть пикселей от этого
+  // читалась как убегающий хвост, а не как признак жизни.
+  //
+  // Столбиков эквалайзера здесь намеренно нет - в шапке с бегущей строкой и
+  // цифрами ещё один частокол читался бы как сбой.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -82,7 +84,17 @@ export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
     canvas.height = PULSE_H * dpr;
     ctx.scale(dpr, dpr);
 
-    const history = new Float32Array(PULSE_W);
+    // Форма линии: то, что рисуем, и то, что пришло с ленты. Между ними
+    // сглаживание - без него линия дрожала бы, а не двигалась.
+    const shape = new Float32Array(PULSE_W);
+    const raw = new Float32Array(PULSE_W);
+    // Оконный множитель: ноль на краях, единица в середине. Он и прибивает
+    // концы линии к базовому уровню - что бы ни играло, начало и конец стоят
+    // на месте, а живёт только середина.
+    const taper = new Float32Array(PULSE_W);
+    for (let x = 0; x < PULSE_W; x++) {
+      taper[x] = Math.sin((Math.PI * x) / (PULSE_W - 1)) ** 2;
+    }
     const mid = PULSE_H / 2;
     const amp = mid - 1.5;
     const off = radio.mode === "off";
@@ -101,23 +113,28 @@ export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
         color = root.getPropertyValue(name).trim() || "#0affe0";
       }
 
-      const now = level();
-      let value = 0;
-      if (now !== null) value = now;
-      else if (!off) {
+      if (waveform(raw)) {
+        // Своя форма волны. Тянемся к ней, а не прыгаем: за кадр звук успевает
+        // измениться целиком, и без сглаживания вместо движения выходит рябь.
+        for (let x = 0; x < PULSE_W; x++) shape[x] += (raw[x] * 2.6 - shape[x]) * 0.35;
+      } else if (!off) {
         // Играем, но отсчётов не видим - ровное сердцебиение раз в секунду.
         // Врать про громкость нечем, а показать, что звук идёт, надо.
         const phase = (tick % 60) / 60;
-        value = phase < 0.12 ? Math.sin((phase / 0.12) * Math.PI) * 0.75 : 0;
+        const beat = phase < 0.12 ? Math.sin((phase / 0.12) * Math.PI) * 0.8 : 0;
+        for (let x = 0; x < PULSE_W; x++) shape[x] += (beat - shape[x]) * 0.35;
       }
-
-      history.copyWithin(0, 1);
-      history[PULSE_W - 1] = value;
+      // Выключено - форма так и остаётся нулевой, и линия выходит прямой.
+      // Отдельная ветка ей не нужна: эффект пересоздаётся на смене состояния, и
+      // массив приходит чистым.
 
       ctx.clearRect(0, 0, PULSE_W, PULSE_H);
       ctx.beginPath();
       for (let x = 0; x < PULSE_W; x++) {
-        const y = mid - history[x] * amp;
+        // Окно решает, насколько точке позволено отойти от базовой линии: на
+        // краях ноль, поэтому первая и последняя стоят ровно на ней.
+        const swing = Math.max(-1, Math.min(1, shape[x])) * taper[x];
+        const y = mid - swing * amp;
         if (x === 0) ctx.moveTo(x + 0.5, y);
         else ctx.lineTo(x + 0.5, y);
       }
