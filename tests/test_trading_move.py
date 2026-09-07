@@ -427,3 +427,50 @@ def test_stop_on_the_wrong_side_of_the_market_is_pulled_to_it(moving):
 
     # Ровно на шаг ниже рынка: в саму цену биржа тоже не пускает.
     assert exchange.plans[-1]["trigger_price"] == "80049.9"
+
+
+def test_a_target_can_be_moved_again_and_again(moving):
+    """Цель переносится сколько угодно раз, а не до первого раза.
+
+    Раньше цель искалась по месту в списке, отсортированном по цене. Перенос
+    менял цену - менялся и порядок, «третьей» становилась другая заявка, а
+    после нескольких переносов нужная не находилась вовсе.
+    """
+    client, exchange, session, live = moving
+    live.status = "open"
+    live.tp_orders_json = json.dumps(
+        [
+            {"price": 80_200.0, "order_id": "t1", "filled": False},
+            {"price": 80_400.0, "order_id": "t2", "filled": False},
+            {"price": 80_600.0, "order_id": "t3", "filled": False},
+        ]
+    )
+    session.commit()
+
+    exchange.position = {"symbol": "BTCUSDT", "positionSide": "LONG", "size": "0.03"}
+    exchange.plans_open = [
+        {"orderId": "t1", "planType": "TAKE_PROFIT", "triggerPrice": "80200", "quantity": "0.01"},
+        {"orderId": "t2", "planType": "TAKE_PROFIT", "triggerPrice": "80400", "quantity": "0.01"},
+        {"orderId": "t3", "planType": "TAKE_PROFIT", "triggerPrice": "80600", "quantity": "0.01"},
+    ]
+
+    # Третью цель тянем четыре раза подряд, в том числе ниже второй - туда, где
+    # порядок по цене перестаёт совпадать с порядком целей.
+    for price in (80_900.0, 80_300.0, 81_200.0, 80_250.0):
+        answer = move(client, take=price, take_index=2)
+        assert answer.status_code == 200, answer.json()
+
+        placed = exchange.plans[-1]
+        assert placed["plan_type"] == "TAKE_PROFIT"
+        assert float(placed["trigger_price"]) == price
+
+        # Новая заявка встала на место прежней третьей, а не завела четвёртую.
+        session.refresh(live)
+        recorded = json.loads(live.tp_orders_json)
+        assert len(recorded) == 3
+        assert recorded[2]["price"] == price
+        assert len([o for o in exchange.plans_open if "PROFIT" in o["planType"]]) == 3
+
+    # Первые две цели никто не трогал.
+    assert "t1" not in exchange.algo_cancelled
+    assert "t2" not in exchange.algo_cancelled

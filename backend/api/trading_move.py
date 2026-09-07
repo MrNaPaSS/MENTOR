@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -348,13 +349,33 @@ async def _move_open(
     if body.take is not None:
         take = round_to_tick(body.take, tick)
         _guard(live.side, live.entry, None, take)
-        # Цели по порядку в сторону прибыли: у лонга снизу вверх, у шорта
-        # сверху вниз. Трейдер тянет вторую цель - двигаться должна вторая.
-        ladder = sorted(takes, key=_trigger, reverse=live.side == "short")
-        if body.take_index >= len(ladder):
-            raise HTTPException(409, "Такой цели на бирже нет")
+        # Какую именно цель двигаем.
+        #
+        # Сначала по её собственному идентификатору: он записан у нас с той
+        # минуты, когда цель поставили, и не зависит ни от цены, ни от порядка.
+        # Раньше цель искалась только по месту в списке, отсортированном по
+        # цене, - и это ломалось само собой: перетащив третью цель ниже второй,
+        # трейдер менял их порядок, «третьей» становилась другая заявка, а
+        # после нескольких переносов не находилась вовсе. Отсюда и «после
+        # какого-то раза перестаёт переноситься».
+        #
+        # По месту ищем только если своего идентификатора нет - у цели, которую
+        # ставили не мы.
+        recorded = json.loads(live.tp_orders_json or "[]")
+        pending = [t for t in recorded if not t.get("filled")]
+        want = ""
+        if body.take_index < len(pending):
+            want = str(pending[body.take_index].get("order_id") or "")
 
-        old = ladder[body.take_index]
+        old = None
+        if want:
+            old = next((o for o in takes if want in order_marks(o)), None)
+        if old is None:
+            ladder = sorted(takes, key=_trigger, reverse=live.side == "short")
+            if body.take_index >= len(ladder):
+                raise HTTPException(409, "Такой цели на бирже нет")
+            old = ladder[body.take_index]
+
         size = _size(old)
         if size <= 0:
             raise HTTPException(409, "Биржа не назвала объём этой цели")
@@ -363,8 +384,20 @@ async def _move_open(
         # обе. И убеждаемся, что старая действительно ушла - «успешный» ответ на
         # неверный идентификатор выглядит точно так же, как настоящее снятие, и
         # именно так на позиции появлялась вторая цель.
-        cancel_plan_result = await cancel_plan(client, live.symbol, old)
-        if not cancel_plan_result or await plan_alive(client, live.symbol, order_marks(old)):
+        removed = await cancel_plan(client, live.symbol, old)
+        gone = bool(removed)
+        if gone:
+            # Список заявок биржа обновляет не мгновенно. Одна проверка сразу
+            # после снятия принимала эту задержку за «не сняли» и отказывала,
+            # хотя заявка уже уходила: даём ей второй взгляд через мгновение.
+            for pause in (0.0, 0.4):
+                if pause:
+                    await asyncio.sleep(pause)
+                if not await plan_alive(client, live.symbol, order_marks(old)):
+                    break
+            else:
+                gone = False
+        if not gone:
             raise HTTPException(
                 409,
                 "Биржа не сняла прежнюю цель - новую не ставим, "
@@ -394,16 +427,20 @@ async def _move_open(
         targets[body.take_index] = take
         live.targets_json = json.dumps(targets)
 
-        # Запоминаем новую заявку: по её идентификатору сопровождение узнаёт,
-        # что цель взята. Со старым оно ждало бы исполнения снятой.
-        recorded = json.loads(live.tp_orders_json or "[]")
-        while len(recorded) <= body.take_index:
-            recorded.append({"price": take, "order_id": "", "filled": False})
-        recorded[body.take_index] = {
-            "price": take,
-            "order_id": plan_order_id(placed),
-            "filled": False,
-        }
+        # Запоминаем новую заявку на месте прежней: по её идентификатору
+        # сопровождение узнаёт, что цель взята, и по нему же мы найдём эту цель
+        # при следующем переносе. Со старым оно ждало бы исполнения снятой.
+        fresh = {"price": take, "order_id": plan_order_id(placed), "filled": False}
+        at = next(
+            (i for i, t in enumerate(recorded) if want and str(t.get("order_id") or "") == want),
+            -1,
+        )
+        if at >= 0:
+            recorded[at] = fresh
+        else:
+            while len(recorded) <= body.take_index:
+                recorded.append({"price": take, "order_id": "", "filled": False})
+            recorded[body.take_index] = fresh
         live.tp_orders_json = json.dumps(recorded, ensure_ascii=False)
 
     return {

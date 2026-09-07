@@ -97,7 +97,21 @@ class FakeExchange:
 
             raise WeexTradeError("cannot set reduce only")
         self.plans.append(kw)
-        return [{"success": True, "orderId": f"p{len(self.plans)}"}]
+        order_id = f"p{len(self.plans)}"
+        # Поставленная заявка появляется в списке висящих - как на бирже. Пока
+        # её там не было, проверки «что реально стоит на позиции» проверяли
+        # пустоту.
+        self.plans_open = [
+            *self.plans_open,
+            {
+                "orderId": order_id,
+                "planType": kw.get("plan_type", ""),
+                "triggerPrice": kw.get("trigger_price", ""),
+                "quantity": kw.get("quantity", ""),
+                "clientAlgoId": kw.get("client_algo_id", ""),
+            },
+        ]
+        return [{"success": True, "orderId": order_id}]
 
     async def modify_tp_sl(self, **kw):
         self.modified.append(kw)
