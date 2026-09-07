@@ -66,7 +66,10 @@ export default function DragLevels({
 
   const [held, setHeld] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
-  const heldRef = useRef<{ id: string; price: number } | null>(null);
+  // Откуда взяли и куда довели. Обе цены нужны: пока уровень ведут, его цена
+  // снаружи уже меняется, и сравнивать конец пути с ней бессмысленно - они
+  // всегда равны, и на биржу не уходило ничего.
+  const heldRef = useRef<{ id: string; from: number; price: number } | null>(null);
 
   // Положение - покадрово, вместе с самим графиком. Раз в четверть секунды
   // полоска отставала бы от своей линии при перетаскивании графика.
@@ -96,7 +99,7 @@ export default function DragLevels({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    heldRef.current = { id: level.id, price: level.price };
+    heldRef.current = { id: level.id, from: level.price, price: level.price };
     setHeld(level.id);
   }
 
@@ -106,20 +109,21 @@ export default function DragLevels({
     if (!box) return;
     const price = toPrice(event.clientY - box.top);
     if (price === null || !(price > 0)) return;
-    heldRef.current = { id: level.id, price };
+    heldRef.current = { ...heldRef.current, price };
     level.onDrag(price);
   }
 
   function drop(event: React.PointerEvent<HTMLDivElement>, level: DragLevel) {
-    if (heldRef.current?.id !== level.id) return;
-    const price = heldRef.current.price;
+    const held = heldRef.current;
+    if (held?.id !== level.id) return;
     heldRef.current = null;
     setHeld(null);
     setOver(null);
     event.currentTarget.releasePointerCapture(event.pointerId);
     level.onHover?.(false);
-    // Отпустили ровно там, откуда взяли - на биржу ходить незачем.
-    if (price !== level.price) level.onDrop(price);
+    // Сравниваем с ценой, с которой взяли, а не с текущей: текущую мы сами же
+    // и меняли, пока вели, - они равны всегда, и заявка не уходила на биржу.
+    if (held.price !== held.from) level.onDrop(held.price);
   }
 
   return (
