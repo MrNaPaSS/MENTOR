@@ -1331,9 +1331,19 @@ export default function ScalpingPage() {
     // этом от собеседника. Заодно называем, что нашлось: без этих чисел причину
     // пустого снимка не отличить от причины пустого графика.
     if (taken.source === "empty") {
-      setOrderNote({ text: `Снимок пуст: холсты графика ${taken.layers}`, bad: true });
+      const why = taken.note ? ` · ${taken.note}` : "";
+      setOrderNote({ text: `Снимок пуст: холсты графика ${taken.layers}${why}`, bad: true });
       return;
     }
+
+    // Читать холсты браузер может и запрещать - защита от отпечатка в Brave, в
+    // Firefox с resistFingerprinting, в расширениях приватности. Картинка тогда
+    // собирается верно, а наружу уходит белый лист, и по самой картинке этого не
+    // понять. Снимок всё равно отдаём: вдруг ограничено только чтение.
+    const guard =
+      taken.source === "blocked"
+        ? " · браузер ограничивает чтение холста, и снимок может выйти пустым - отключите защиту от отпечатка для сайта"
+        : "";
 
     // Обещанием, а не готовой картинкой: право писать в буфер браузер даёт
     // только на свежее нажатие, и любое ожидание между кликом и записью его
@@ -1350,8 +1360,10 @@ export default function ScalpingPage() {
     if (action === "copy") {
       const done = await copyShot(building);
       setOrderNote({
-        text: done ? "Снимок в буфере обмена" : "Браузер не даёт копировать картинки - сохраните файлом",
-        bad: !done,
+        text: done
+          ? `Снимок в буфере обмена${guard}`
+          : "Браузер не даёт копировать картинки - сохраните файлом",
+        bad: !done || guard !== "",
       });
       return;
     }
@@ -1360,7 +1372,7 @@ export default function ScalpingPage() {
 
     if (action === "download") {
       await downloadShot(picture, `${base(symbol)}-${timeframe}`);
-      setOrderNote({ text: "Снимок сохранён", bad: false });
+      setOrderNote({ text: `Снимок сохранён${guard}`, bad: guard !== "" });
       return;
     }
 

@@ -78,14 +78,44 @@ export function backdrop(node: Element | null, theme: ShotTheme): string {
  * Источник называем вслух, потому что пустой снимок надо уметь объяснить: с
  * холстов страницы, из собственного снимка библиотеки - или ниоткуда.
  */
-export type ShotSource = "layers" | "library" | "empty";
+export type ShotSource = "layers" | "library" | "empty" | "blocked";
 
 export type ShotResult = {
   canvas: HTMLCanvasElement;
   source: ShotSource;
   /** Размеры найденных холстов - строкой, для честного сообщения трейдеру. */
   layers: string;
+  /** Что помешало, если помешало: текст ошибки от браузера. */
+  note: string;
 };
+
+/**
+ * Отдаёт ли браузер обратно ровно то, что мы нарисовали.
+ *
+ * Защита от отпечатка - в Brave, в Firefox с resistFingerprinting, в расширениях
+ * вроде Canvas Blocker - подменяет содержимое холста при чтении: либо портит
+ * младшие биты, либо возвращает пустоту. Снимок при этом собирается правильно, а
+ * наружу уходит белый лист, и понять это по картинке невозможно.
+ *
+ * Поэтому спрашиваем прямо: рисуем известный цвет на холсте два на два и читаем
+ * его назад. Не совпало - читать холсты нам не дают, и все дальнейшие проверки
+ * бессмысленны.
+ */
+export function canvasReadable(): boolean {
+  try {
+    const test = document.createElement("canvas");
+    test.width = 2;
+    test.height = 2;
+    const ctx = test.getContext("2d");
+    if (!ctx) return false;
+    ctx.fillStyle = "rgb(255, 128, 0)";
+    ctx.fillRect(0, 0, 2, 2);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    return r === 255 && g === 128 && b === 0 && a === 255;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Есть ли на холсте хоть что-то, кроме ровной заливки.
@@ -157,19 +187,28 @@ export function snapshot(
   const layers = Array.from(box.querySelectorAll("canvas")).filter(
     (canvas) => canvas.width > 0 && canvas.height > 0,
   );
-  const note = layers.map((c) => `${c.width}x${c.height}`).join(" ") || "нет";
+  const found = layers.map((c) => `${c.width}x${c.height}`).join(" ") || "нет";
+  let note = "";
 
   clear();
   for (const layer of layers) {
     const at = layer.getBoundingClientRect();
     try {
       ctx.drawImage(layer, at.left - frame.left, at.top - frame.top, at.width, at.height);
-    } catch {
+    } catch (error) {
       // Слой, закрытый для чтения, пропускаем: снимок без одного слоя лучше,
-      // чем ошибка вместо картинки.
+      // чем ошибка вместо картинки. Но первую причину запоминаем - молча
+      // потерянный слой не объяснить потом ни себе, ни трейдеру.
+      if (!note) note = String(error);
     }
   }
-  if (hasInk(out, ctx)) return { canvas: out, source: "layers", layers: note };
+
+  // Если читать холсты нам не дают, проверять нарисованное бессмысленно: любая
+  // проверка увидит подставленную пустоту. Отдаём картинку как есть и говорим
+  // трейдеру, где искать причину, если она окажется белой.
+  if (!canvasReadable()) return { canvas: out, source: "blocked", layers: found, note };
+
+  if (hasInk(out, ctx)) return { canvas: out, source: "layers", layers: found, note };
 
   let own: HTMLCanvasElement | null = null;
   try {
@@ -181,13 +220,13 @@ export function snapshot(
     clear();
     try {
       ctx.drawImage(own, 0, 0, frame.width, frame.height);
-    } catch {
-      // Ничего: ниже отдадим пустой снимок и скажем об этом вслух.
+    } catch (error) {
+      if (!note) note = String(error);
     }
-    if (hasInk(out, ctx)) return { canvas: out, source: "library", layers: note };
+    if (hasInk(out, ctx)) return { canvas: out, source: "library", layers: found, note };
   }
 
-  return { canvas: out, source: "empty", layers: note };
+  return { canvas: out, source: "empty", layers: found, note };
 }
 
 /**
