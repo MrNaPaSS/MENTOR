@@ -114,6 +114,8 @@ export type ExchangePlans = {
   take_prices: number[];
   /** Сколько целей было поставлено. Ноль - лестницы на бирже не было вовсе. */
   placed_takes: number;
+  /** Сколько целей сопровождение засчитало взятыми. */
+  takes_hit: number;
 };
 
 /**

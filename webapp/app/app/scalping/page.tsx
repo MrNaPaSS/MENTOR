@@ -1028,14 +1028,12 @@ export default function ScalpingPage() {
           list.map((t) => {
             if (t.symbol !== symbol || t.status !== "open") return t;
 
-            // Цели считаем взятыми только среди тех, что были поставлены.
-            // «В замысле три, на бирже ноль» - это чаще всего лестница, не
-            // вставшая вовсе, а не три сработавшие цели: так с графика
-            // пропадали цели сразу после входа, а бокс объявлял безубыток.
-            const hit =
-              body.placed_takes > 0
-                ? Math.max(t.takesHit, Math.max(0, body.placed_takes - body.takes))
-                : t.takesHit;
+            // Взятые цели берём тем числом, которое ведёт сопровождение.
+            // Вычитание «поставлено минус висит» врало: стоило бирже ответить
+            // непривычно и заявку не опознать, как терминал считал все цели
+            // взятыми - с графика пропадали и цели, и бокс, а сделка тут же
+            // объявлялась безубыточной.
+            const hit = Math.max(t.takesHit, body.takes_hit);
             const stop = at && at > 0 ? at : t.stop;
             if (hit === t.takesHit && Math.abs(stop - t.stop) < Math.max(stop, 1) * 0.00001) {
               return t;
