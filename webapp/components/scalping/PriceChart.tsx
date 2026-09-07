@@ -401,6 +401,53 @@ function riskFree(trade: ActiveTrade): boolean {
   return trade.side === "long" ? trade.stop >= trade.entry : trade.stop <= trade.entry;
 }
 
+/**
+ * Снимок графика: то, что нарисовано на экране.
+ *
+ * У библиотеки есть свой снимок, но он рисуется заново её же средствами - и в
+ * нём нет наших слоёв: объёмных свечей, боксов сделки, лент индикатора. На
+ * этой машине он к тому же приходит пустым вовсе.
+ *
+ * Поэтому берём холсты со страницы и складываем их в порядке наложения, как
+ * их видит трейдер. Считаем в экранных точках и один раз задаём плотность:
+ * пересчёт каждого слоя вручную - тот самый путь, на котором картинка уезжала
+ * за край.
+ */
+function snapshot(chart: IChartApi, box: HTMLDivElement): HTMLCanvasElement | null {
+  const layers = Array.from(box.querySelectorAll("canvas")).filter(
+    (canvas) => canvas.width > 0 && canvas.height > 0,
+  );
+  if (layers.length === 0) {
+    try {
+      return chart.takeScreenshot();
+    } catch {
+      return null;
+    }
+  }
+
+  const frame = box.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+
+  const out = document.createElement("canvas");
+  out.width = Math.round(frame.width * ratio);
+  out.height = Math.round(frame.height * ratio);
+
+  const ctx = out.getContext("2d");
+  if (!ctx) return null;
+  ctx.scale(ratio, ratio);
+
+  for (const layer of layers) {
+    const at = layer.getBoundingClientRect();
+    try {
+      ctx.drawImage(layer, at.left - frame.left, at.top - frame.top, at.width, at.height);
+    } catch {
+      // Слой, закрытый для чтения, пропускаем: снимок без одного слоя лучше,
+      // чем ошибка вместо картинки.
+    }
+  }
+  return out;
+}
+
 /** ATR последних баров: по нему предлагается стоп. */
 function currentAtr(candles: Candle[]): number {
   if (candles.length < 15) return 0;
@@ -818,7 +865,7 @@ function PriceChart({
 
     chartRef.current = chart;
     if (shotRef.current) {
-      shotRef.current.current = () => chartRef.current?.takeScreenshot() ?? null;
+      shotRef.current.current = () => snapshot(chart, box);
     }
     return () => {
       chart.remove();
