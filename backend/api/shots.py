@@ -150,7 +150,7 @@ def shot_page(shot_id: str, session=Depends(get_session)):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title} — NMNH</title>
+<title>{title} · NMNH</title>
 <meta property="og:type" content="website">
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{note or 'График из терминала NMNH'}">
