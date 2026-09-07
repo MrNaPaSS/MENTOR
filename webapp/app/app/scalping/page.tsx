@@ -985,9 +985,20 @@ export default function ScalpingPage() {
                   current.breakeven && position.breakeven && position.breakeven > 0
                     ? position.breakeven
                     : current.stop;
-                return qty === current.qty && stop === current.stop
-                  ? current
-                  : { ...current, qty, stop };
+                // Цена входа и плавающий результат - биржевые. Своя средняя
+                // берётся от задуманного уровня, а исполнилось по другой цене:
+                // у биржи +25, у нас +5.
+                const entry = position.entry && position.entry > 0 ? position.entry : current.entry;
+                const unrealized = position.unrealized ?? undefined;
+                if (
+                  qty === current.qty &&
+                  stop === current.stop &&
+                  entry === current.entry &&
+                  unrealized === current.unrealized
+                ) {
+                  return current;
+                }
+                return { ...current, qty, stop, entry, unrealized };
               }
 
               if (current.status === "open") {

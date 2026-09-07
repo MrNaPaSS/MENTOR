@@ -198,10 +198,17 @@ export async function positionOf(
     return null;
   };
 
+  // Средней цены входа в ответе WEEX нет - есть «сколько денег зашло» и «на
+  // какой объём». Отношение и есть средняя, и считать результат нужно от неё:
+  // от задуманного уровня цифра расходится с биржевой в разы.
+  const openValue = numeric("cumOpenValue", "openValue") ?? 0;
+  const openSize = numeric("cumOpenSize") ?? 0;
+  const average = openValue > 0 && openSize > 0 ? openValue / openSize : null;
+
   return {
     size: Math.abs(numeric("total", "size", "positionAmt", "available") ?? 0),
-    entry: numeric("averageOpenPrice", "entryPrice", "avgPrice"),
-    unrealized: numeric("unrealizedPnl", "unrealizedProfit", "unrealisedPnl"),
+    entry: numeric("averageOpenPrice", "entryPrice", "avgPrice") ?? average,
+    unrealized: numeric("unrealizePnl", "unrealizedPnl", "unrealizedProfit", "unrealisedPnl"),
     breakeven: numeric("breakEvenPrice", "breakevenPrice", "breakEven", "bePrice"),
   };
 }
