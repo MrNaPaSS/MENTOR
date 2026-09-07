@@ -401,6 +401,52 @@ function riskFree(trade: ActiveTrade): boolean {
   return trade.side === "long" ? trade.stop >= trade.entry : trade.stop <= trade.entry;
 }
 
+/**
+ * Снимок графика со всеми слоями.
+ *
+ * Библиотека умеет отдавать свой холст сама, но рисует в нём только то, что
+ * знает: наши примитивы - свечи по объёму, боксы сделок, ленты индикатора -
+ * живут отдельными холстами поверх, и снимок выходил пустым белым листом.
+ * Поэтому собираем всё, что реально видно: холсты складываются в порядке
+ * наложения, как их рисует браузер.
+ */
+function snapshot(chart: IChartApi, box: HTMLDivElement): HTMLCanvasElement | null {
+  const layers = Array.from(box.querySelectorAll("canvas")).filter(
+    (canvas) => canvas.width > 0 && canvas.height > 0,
+  );
+  if (layers.length === 0) return chart.takeScreenshot?.() ?? null;
+
+  // Каждый слой стоит на своём месте: холст свечей, холст ценовой шкалы и
+  // холст шкалы времени - разные элементы. Сложить их в одну точку значит
+  // получить кашу, поэтому берём положение каждого относительно контейнера.
+  const frame = box.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+
+  const out = document.createElement("canvas");
+  out.width = Math.round(frame.width * ratio);
+  out.height = Math.round(frame.height * ratio);
+
+  const ctx = out.getContext("2d");
+  if (!ctx) return chart.takeScreenshot?.() ?? null;
+
+  for (const layer of layers) {
+    const at = layer.getBoundingClientRect();
+    try {
+      ctx.drawImage(
+        layer,
+        Math.round((at.left - frame.left) * ratio),
+        Math.round((at.top - frame.top) * ratio),
+        Math.round(at.width * ratio),
+        Math.round(at.height * ratio),
+      );
+    } catch {
+      // Холст, который браузер не даёт прочитать, пропускаем: лучше снимок
+      // без одного слоя, чем ошибка вместо картинки.
+    }
+  }
+  return out;
+}
+
 /** ATR последних баров: по нему предлагается стоп. */
 function currentAtr(candles: Candle[]): number {
   if (candles.length < 15) return 0;
@@ -818,7 +864,7 @@ function PriceChart({
 
     chartRef.current = chart;
     if (shotRef.current) {
-      shotRef.current.current = () => chartRef.current?.takeScreenshot() ?? null;
+      shotRef.current.current = () => snapshot(chart, box);
     }
     return () => {
       chart.remove();
