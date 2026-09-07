@@ -36,9 +36,21 @@ export default function ScrollScene() {
     const light = document.documentElement.dataset.terminal === "light";
     const CYAN = new THREE.Color(light ? "#2962FF" : "#0AFFE0");
     const GOLD = new THREE.Color(light ? "#A97400" : "#FFD700");
-    const GREEN = new THREE.Color(light ? "#00A86B" : "#00D4A0");
-    const RED = new THREE.Color(light ? "#FF1A2E" : "#FF4757");
     const BLEND = light ? THREE.NormalBlending : THREE.AdditiveBlending;
+
+    // Свечи фона - те же, что в терминале: не зелёно-красные, а чёрно-белые.
+    //
+    // Цвет здесь ничего не значит: это фон, а не котировки, и зелёное с красным
+    // обещали смысл, которого нет. Растущая свеча полая, падающая залитая - так
+    // они нарисованы на белом графике терминала, и лендинг обещает ровно то,
+    // что человек увидит, когда войдёт.
+    //
+    // INK - обводка и фитили, FILL_DOWN - тело падающей. Тело растущей красят
+    // в цвет страницы: на белом оно сливается с фоном, на чёрном складывающее
+    // смешивание почти ничего не прибавляет, - в обоих случаях остаётся контур.
+    const INK = new THREE.Color(light ? "#000000" : "#E6EAF2");
+    const FILL_UP = new THREE.Color(light ? "#FFFFFF" : "#0A0A1A");
+    const FILL_DOWN = new THREE.Color(light ? "#000000" : "#E6EAF2");
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
@@ -83,28 +95,44 @@ export default function ScrollScene() {
     const spacing = 0.62;
     const bodyGeo = new THREE.BoxGeometry(0.34, 1, 0.34);
     const wickGeo = new THREE.BoxGeometry(0.05, 1, 0.05);
+    // Контур тела. Геометрия одна на все свечи, а рёбра висят внутри тела и
+    // тянутся вместе с ним: у полой свечи виден только он.
+    const edgeGeo = new THREE.EdgesGeometry(bodyGeo);
     const candles: {
-      body: THREE.Mesh; wick: THREE.Mesh; target: number; reveal: number; up: boolean;
+      body: THREE.Mesh;
+      wick: THREE.Mesh;
+      mats: THREE.Material[];
+      target: number;
+      reveal: number;
+      up: boolean;
     }[] = [];
     const floorY = -2.2;
 
     for (let i = 0; i < N; i++) {
       const up = Math.random() > 0.42;
-      const col = up ? GREEN : RED;
       const target = 0.5 + Math.random() * 3.2;
-      const mat = new THREE.MeshBasicMaterial({
-        color: col, transparent: true, opacity: light ? 0.5 : 0.78,
+      const bodyMat = new THREE.MeshBasicMaterial({
+        color: up ? FILL_UP : FILL_DOWN, transparent: true, opacity: light ? 0.5 : 0.78,
         blending: BLEND, depthWrite: false,
       });
-      const body = new THREE.Mesh(bodyGeo, mat);
-      const wick = new THREE.Mesh(wickGeo, mat);
+      const inkMat = new THREE.MeshBasicMaterial({
+        color: INK, transparent: true, opacity: light ? 0.5 : 0.78,
+        blending: BLEND, depthWrite: false,
+      });
+      const edgeMat = new THREE.LineBasicMaterial({
+        color: INK, transparent: true, opacity: light ? 0.5 : 0.78,
+        blending: BLEND, depthWrite: false,
+      });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.add(new THREE.LineSegments(edgeGeo, edgeMat));
+      const wick = new THREE.Mesh(wickGeo, inkMat);
       const x = (i - N / 2) * spacing;
       const z = -2 + Math.sin(i * 0.6) * 1.4;
       body.position.set(x, floorY, z);
       wick.position.set(x, floorY, z);
       wick.scale.y = target * 1.6;
       root.add(body, wick);
-      candles.push({ body, wick, target, reveal: i / N, up });
+      candles.push({ body, wick, mats: [bodyMat, inkMat, edgeMat], target, reveal: i / N, up });
     }
 
     // ── Неоновый «график» (плывущая линия) ──
@@ -176,7 +204,9 @@ export default function ScrollScene() {
         const h = Math.max(c.target * grow * breathe, 0.0001);
         c.body.scale.y = h;
         c.body.position.y = floorY + h / 2;
-        (c.body.material as THREE.Material).opacity = 0.25 + grow * 0.6;
+        // Тело, фитиль и контур гаснут вместе: разъехавшись, они дали бы
+        // висящий в воздухе контур без свечи.
+        for (const m of c.mats) m.opacity = 0.25 + grow * 0.6;
         c.wick.position.y = floorY + h / 2;
       }
 
@@ -202,11 +232,12 @@ export default function ScrollScene() {
       window.removeEventListener("pointermove", onPointer);
       bodyGeo.dispose();
       wickGeo.dispose();
+      edgeGeo.dispose();
       pGeo.dispose();
       lineGeo.dispose();
       pMat.dispose();
       lineMat.dispose();
-      candles.forEach((c) => (c.body.material as THREE.Material).dispose());
+      candles.forEach((c) => c.mats.forEach((m) => m.dispose()));
       (grid.material as THREE.Material).dispose();
       grid.geometry.dispose();
       renderer.dispose();
