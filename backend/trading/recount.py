@@ -30,9 +30,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import ssl
 from datetime import timedelta, timezone
 
 import aiohttp
+import certifi
 from sqlalchemy import select
 
 # Ради побочного действия: при импорте читается .env - адрес базы и ключ,
@@ -64,6 +66,9 @@ async def recount(days: int, apply: bool, student: int | None) -> int:
     init_engine()
     session = SessionLocal()
     changed = 0
+    # Сделки, до которых не дозвонились. Молчать о них нельзя: «менять нечего»
+    # при четырёх ошибках подряд читается как «всё в порядке».
+    failed = 0
     try:
         since = utcnow() - timedelta(days=days)
         query = (
@@ -92,7 +97,16 @@ async def recount(days: int, apply: bool, student: int | None) -> int:
         for one in trades:
             by_student.setdefault(one.student_id, []).append(one)
 
-        async with aiohttp.ClientSession() as http:
+        # Корневые сертификаты берём из certifi, а не из системного хранилища:
+        # на Windows Python до него не достаёт, и запрос к бирже падает с
+        # «unable to get local issuer certificate». Проверку не отключаем - в
+        # этих запросах ходят ключи от денег ученика, и подменённый сертификат
+        # означает, что их прочитает кто угодно по дороге. Тем же способом
+        # ходит сервер: см. `_get_session` в backend/api/trading.py.
+        context = ssl.create_default_context(cafile=certifi.where())
+        async with aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(ssl=context)
+        ) as http:
             # Клиент биржи просит не саму сессию, а способ её получить: он
             # переоткрывает её сам, если та закрылась посреди работы.
             async def http_session() -> aiohttp.ClientSession:
@@ -122,18 +136,25 @@ async def recount(days: int, apply: bool, student: int | None) -> int:
                     try:
                         changed += await _one(session, client, trade, reports, apply)
                     except WeexTradeError as exc:
+                        failed += 1
                         print(f"  {trade.symbol} {trade.client_id}: биржа молчит - {exc}")
                     except Exception as exc:  # noqa: BLE001 - одна сделка не мешает другим
+                        failed += 1
                         print(f"  {trade.symbol} {trade.client_id}: не вышло - {exc}")
 
+        print()
         if apply and changed:
             session.commit()
-            print(f"\nЗаписано изменений: {changed}")
+            print(f"Записано изменений: {changed}")
         elif changed:
-            print(f"\nИзменилось бы записей: {changed}. Это сухой прогон - ничего не записано.")
+            print(f"Изменилось бы записей: {changed}. Это сухой прогон - ничего не записано.")
             print("Чтобы записать: python -m backend.trading.recount --apply")
+        elif failed:
+            print("Ни одной сделки проверить не удалось - биржа не ответила.")
         else:
-            print("\nВсё сходится, менять нечего.")
+            print("Всё сходится, менять нечего.")
+        if failed:
+            print(f"Сделок, до которых не дозвонились: {failed}. Они остались как были.")
         return changed
     finally:
         session.close()
