@@ -81,6 +81,38 @@ describe("перетаскивание уровня", () => {
     expect(one.onDrop).not.toHaveBeenCalled();
   });
 
+  it("повели вбок - это протяжка, а не нажатие", () => {
+    // Ведя уровень строго вбок, цену не меняешь. Пока клик отличали по цене,
+    // такая протяжка засчитывалась нажатием и сама включала то, что на него
+    // повешено, - у ждущей заявки это закрепление разметки.
+    const one = level({ onClick: vi.fn() });
+    const { container } = render(
+      <DragLevels levels={[one]} toY={toY} toPrice={toPrice} format={String} />,
+    );
+    const node = strip(container);
+
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 100 });
+    fireEvent.pointerMove(node, { pointerId: 1, clientX: 90, clientY: 100 });
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 90, clientY: 100 });
+
+    expect(one.onClick).not.toHaveBeenCalled();
+  });
+
+  it("дрогнула рука - это всё ещё нажатие", () => {
+    const one = level({ onClick: vi.fn() });
+    const { container } = render(
+      <DragLevels levels={[one]} toY={toY} toPrice={toPrice} format={String} />,
+    );
+    const node = strip(container);
+
+    fireEvent.pointerDown(node, { pointerId: 1, clientX: 10, clientY: 100 });
+    fireEvent.pointerMove(node, { pointerId: 1, clientX: 11, clientY: 102 });
+    fireEvent.pointerUp(node, { pointerId: 1, clientX: 11, clientY: 102 });
+
+    expect(one.onClick).toHaveBeenCalled();
+    expect(one.onDrop).not.toHaveBeenCalled();
+  });
+
   it("без захвата движение мыши уровень не трогает", () => {
     const one = level();
     const { container } = render(

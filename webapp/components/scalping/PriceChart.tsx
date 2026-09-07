@@ -753,15 +753,19 @@ function PriceChart({
   shotRef.current = shot;
   const previewRef = useRef(preview);
   previewRef.current = preview;
-  // Закреплённая заявка: её разметка - бокс, стоп и цели - держится на графике,
-  // пока не сняли.
+  // Разметка ждущей заявки - бокс, стоп и цели - показывается двумя способами.
   //
-  // Только нажатием. По наведению разметка вспыхивала сама: курсор шёл к
-  // ценовой шкале справа, задевал линию ждущей заявки, и на графике появлялись
-  // чужие стопы и цели поверх той сделки, которая действительно идёт. Разметка
-  // видна в двух случаях: сделка открыта или заявку нажали.
+  // Наведение на её ярлык - предпросмотр: подержал курсор, посмотрел, что
+  // именно ждёт трейдер, увёл - разметка ушла. Нажатие закрепляет её насовсем:
+  // дальше уровни правят руками, а держать для этого курсор на месте нельзя.
+  //
+  // Наведение живёт только на ярлыке - видимой плашке, к которой ведут курсор
+  // намеренно. На самих линиях его нет: полоски захвата невидимы и тянутся во
+  // всю ширину, курсор задевал их по пути к ценовой шкале, и поверх идущей
+  // сделки сами собой вспыхивали чужие стопы с целями.
   const [pinned, setPinned] = useState<string | null>(null);
-  const shown = pinned;
+  const [peeked, setPeeked] = useState<string | null>(null);
+  const shown = pinned ?? peeked;
   const shownRef = useRef<string | null>(null);
   shownRef.current = shown;
 
@@ -1854,10 +1858,11 @@ function PriceChart({
               ref={(node) => {
                 labelsRef.current.set(t.id, node);
               }}
-              // Нажатие на «ждём вход» показывает, что именно ждёт трейдер:
-              // бокс риска, цели и стоп. Постоянно они не рисуются — позиции
-              // ещё нет, — и по наведению тоже: курсор проходит здесь по пути к
-              // ценовой шкале, и разметка вспыхивала сама собой.
+              // «Ждём вход» показывает, что именно ждёт трейдер: бокс риска,
+              // цели и стоп. Постоянно они не рисуются - позиции ещё нет.
+              // Наведение показывает их на посмотреть, нажатие закрепляет.
+              onMouseEnter={t.status === "planned" ? () => setPeeked(t.id) : undefined}
+              onMouseLeave={t.status === "planned" ? () => setPeeked(null) : undefined}
               onClick={
                 t.status === "planned"
                   ? () => setPinned((now) => (now === t.id ? null : t.id))
@@ -1866,11 +1871,19 @@ function PriceChart({
               // Справа, но с отступом от ценовой шкалы: плашка стоит на конце
               // своей линии, а не в начале графика, где под ней чужие свечи, и
               // при этом не наезжает на плашки цен. Вертикаль задаётся покадрово.
-              className="pointer-events-auto absolute right-28 top-0 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow"
+              className={`pointer-events-auto absolute right-28 top-0 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow${
+                // Курсор-палец у ждущей заявки: иначе о том, что плашка
+                // нажимается и закрепляет разметку, узнают только случайно.
+                t.status === "planned" ? " cursor-pointer" : ""
+              }`}
               style={{
                 visibility: "hidden",
                 borderColor:
-                  pinned === t.id ? "var(--pane-accent)" : "var(--pane-border)",
+                  pinned === t.id
+                    ? "var(--pane-accent)"
+                    : peeked === t.id
+                      ? "var(--pane-accent-soft)"
+                      : "var(--pane-border)",
                 background: "var(--pane-bg)",
                 color: "var(--pane-text)",
               }}
