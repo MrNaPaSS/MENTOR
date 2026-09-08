@@ -59,7 +59,18 @@ async def run() -> None:
             build_forum_router(config.forum_chat_id, config.api_url, config.service_api_key)
         )
     dp.include_router(build_mentor_router(config.admin_tg_id))
-    dp.include_router(build_student_router(config.admin_tg_id, config.weex_referral_link))
+    dp.include_router(
+        build_student_router(config.admin_tg_id, config.weex_referral_link, config.only_admin)
+    )
+    # Строкой в журнал, а не молча: замок на боте не виден снаружи никак,
+    # кроме тишины, а тишина бывает и от упавшего процесса. По этой строке
+    # сразу видно, какой код на сервере поднялся.
+    logger.info(
+        "Бот отвечает %s",
+        "только наставнику %s" % config.admin_tg_id
+        if config.only_admin
+        else "наставнику и впущенным ученикам",
+    )
 
     with SessionLocal() as session:
         interval = repo.load_settings(session).balance_sync_interval

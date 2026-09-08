@@ -40,6 +40,13 @@ class Config:
     api_url: str
     # Тот же общий секрет, которым представляется сервер академии.
     service_api_key: str
+    # Бот отвечает только наставнику.
+    #
+    # Пока школа не открыта, это единственный надёжный замок: запись
+    # «одобрен» заводится нажатием в админке и остаётся навсегда, и всякий,
+    # кого когда-то впустили на пробу, для базы свой. Открывается строкой
+    # BOT_ONLY_ADMIN=false, когда учеников пора пускать.
+    only_admin: bool
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -55,4 +62,5 @@ class Config:
             forum_bot_token=os.getenv("FORUM_BOT_TOKEN", "") or os.getenv("BOT_TOKEN", ""),
             api_url=os.getenv("NMNH_API_URL", "http://127.0.0.1:8000"),
             service_api_key=os.getenv("SERVICE_API_KEY", ""),
+            only_admin=os.getenv("BOT_ONLY_ADMIN", "true").lower() != "false",
         )

@@ -22,8 +22,32 @@ def env(tmp_path):
         repo.seed_settings(s)
     bot, session = make_bot()
     weex = get_weex_client(use_mock=True)
+    # Школа открыта: проверяем сам интерфейс ученика, а не замок на нём.
+    # Закрытый бот проверяется отдельно - там весь смысл в том, что ни один
+    # из этих хендлеров не срабатывает.
     dp = make_dispatcher(
-        bot, build_mentor_router(ADMIN), build_student_router(ADMIN), weex=weex
+        bot,
+        build_mentor_router(ADMIN),
+        build_student_router(ADMIN, only_admin=False),
+        weex=weex,
+    )
+    return dp, bot, session
+
+
+@pytest.fixture
+def env_closed(tmp_path):
+    """Бот, закрытый на всех, кроме наставника, - как он и поднимается по умолчанию."""
+    init_engine(f"sqlite:///{tmp_path}/closed.sqlite3")
+    create_all()
+    with SessionLocal() as s:
+        repo.seed_settings(s)
+    bot, session = make_bot()
+    weex = get_weex_client(use_mock=True)
+    dp = make_dispatcher(
+        bot,
+        build_mentor_router(ADMIN),
+        build_student_router(ADMIN, only_admin=True),
+        weex=weex,
     )
     return dp, bot, session
 
@@ -163,6 +187,29 @@ async def test_invited_student_keeps_his_start(env):
         s.commit()
     await feed_message(dp, bot, 779, "/start")
     assert any("Выберите язык" in t for t in session.texts())
+
+
+async def test_closed_bot_answers_nobody_but_the_mentor(env_closed):
+    """Закрытый бот молчит даже с одобренным учеником.
+
+    Замок стоит мимо базы намеренно: запись «одобрен» заводится нажатием в
+    админке и остаётся навсегда, и всякий, кого когда-то впустили на пробу,
+    для базы свой. Пока школа не открыта, свой в базе - это дыра.
+    """
+    dp, bot, session = env_closed
+    with SessionLocal() as s:
+        st = repo.get_or_create_student(s, tg_id=781, username="approved")
+        st.is_approved = True
+        st.is_active = True
+        s.commit()
+
+    await feed_message(dp, bot, 781, "/start")
+    await feed_message(dp, bot, 781, "/help")
+    assert session.texts() == []
+
+    # Наставнику закрытый бот отвечает как обычно - иначе он мёртв и для него.
+    await feed_message(dp, bot, ADMIN, "/students")
+    assert session.texts()
 
 
 async def test_student_help(env):

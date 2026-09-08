@@ -26,15 +26,19 @@ class Onboarding(StatesGroup):
     weex_uid = State()
 
 
-def build_student_router(admin_id: int, referral_link: str = "https://www.weex.com/ru/register?vipCode=kaktotakxme") -> Router:
+def build_student_router(
+    admin_id: int,
+    referral_link: str = "https://www.weex.com/ru/register?vipCode=kaktotakxme",
+    only_admin: bool = True,
+) -> Router:
     router = Router(name="student")
 
     # Бот закрыт: со всеми, кроме наставника и заведённых учеников, он молчит.
     # Фильтр стоит на роутере, а не в «старте»: чужому одинаково нечего делать
     # и в /help, и в /balance, а отвечающая на что угодно команда - это тот же
     # открытый вход, только сбоку.
-    router.message.filter(IsInvited(admin_id))
-    router.callback_query.filter(IsInvited(admin_id))
+    router.message.filter(IsInvited(admin_id, only_admin))
+    router.callback_query.filter(IsInvited(admin_id, only_admin))
 
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext):
