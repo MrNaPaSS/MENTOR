@@ -2980,29 +2980,34 @@ export default function ScalpingPage() {
                   </button>
                 </div>
 
-                {/* В полном экране шапки сайта нет, а знак нужен: он же и
-                    дорога назад - нажатие уводит на главную. */}
-                {full && (
-                  // Знак и радио вместе, как в шапке кабинета: в полном экране
-                  // её не видно, а музыку выключают чаще всего именно отсюда -
-                  // когда рынок пошёл и нужна тишина. Плеер общий, поэтому
-                  // кнопка здесь управляет тем же потоком, что и та.
-                  <div className="pointer-events-auto absolute left-1/2 flex -translate-x-1/2 items-center gap-2">
-                    <Logo
-                      href="/app/analysis"
-                      tone={paper === "light" ? "text-[var(--pane-text)]" : "text-text-primary"}
-                      className="text-base"
-                    />
-                    <RadioChip tone="pane" />
-                  </div>
-                )}
               </div>
 
               {/* Инструмент, цена и плита — отдельной строкой под таймфреймами.
                   Наложением поверх холста эта строка терялась: библиотека
                   графика рисует своим слоем, и спорить с ним ради трёх слов
                   незачем. */}
-              <div className="flex h-6 items-center gap-3 border-b border-[var(--pane-border)] px-3 font-mono text-[11px] tabular-nums">
+              <div className="relative flex h-7 items-center gap-3 border-b border-[var(--pane-border)] px-3 font-mono text-[11px] tabular-nums">
+                {/* В полном экране шапки сайта нет, а знак нужен: он же и
+                    дорога назад - нажатие уводит на главную. Вместе с ним
+                    радио: в шапке кабинета они стоят рядом, а музыку выключают
+                    чаще всего именно отсюда - когда рынок пошёл и нужна тишина.
+                    Плеер общий, кнопка здесь управляет тем же потоком.
+
+                    Стоят они в этой строке, а не над ней: там, посреди ряда
+                    разметки, на широком экране знак ложился прямо поверх
+                    кнопок слоёв и закрывал половину из них. Здесь середина
+                    свободна - слева монета с ценой, справа итог дня. */}
+                {full && (
+                  <div className="absolute left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
+                    <Logo
+                      href="/app/analysis"
+                      tone={paper === "light" ? "text-[var(--pane-text)]" : "text-text-primary"}
+                      className="text-sm"
+                    />
+                    <RadioChip tone="pane" />
+                  </div>
+                )}
+
                 <span className="text-[12px] font-semibold text-[var(--pane-text)]">
                   {base(symbol)}
                 </span>
