@@ -14,6 +14,21 @@
 
 import { visibleOn } from "@/lib/indicator/ink";
 
+/**
+ * Стандартная пара белого листа: фиолетовое против серого.
+ *
+ * У стандартных свечей на бумаге своих цветов нет - они чёрно-белые, - и
+ * терминалу вокруг доставалось зелёное с красным от темы. На белом эта пара
+ * кричит: ею залит весь экран, от строк стакана до лестницы разбора, и цифры
+ * поверх такой клумбы уже не читаются. Фиолетовое с серым разведены и по
+ * тону, и по светлоте: сторона видна с одного взгляда, а лист остаётся листом.
+ *
+ * Покупателю достаётся фиолетовый: он тяжелее и темнее, и объём читается как
+ * вес, а не как светофор.
+ */
+export const PAPER_BULL = "#6D4AFF";
+export const PAPER_BEAR = "#8A90A6";
+
 export const CHART_PAPERS = ["dark", "light"] as const;
 export type ChartPaper = (typeof CHART_PAPERS)[number];
 
@@ -329,15 +344,27 @@ export function paneInk(
   palette: ChartPaletteName,
   paper: ChartPaper,
 ): Record<string, string> {
-  if (palette === "default") return {};
+  if (palette === "default") {
+    // На тёмном листе у стандартных свечей рост зелёный, падение красное - те
+    // же цвета, что и у панелей темы. Подменять нечего.
+    if (paper !== "light") return {};
+    // На белом свечи чёрно-белые, и стакан из них не собрать - панели
+    // оставались зелёно-красными от темы. Своя пара: фиолетовое против серого.
+    // Зелёное с красным на бумаге кричит, а терминал залит ими целиком - от
+    // строк стакана до карточек сделок.
+    return inkVars(PAPER_BULL, PAPER_BEAR);
+  }
   const swatch = paletteSwatch(palette, paper);
   // Цвет палитры сначала доводится до видимости на своей бумаге. Пары
   // рисовались под свечи, а панели красятся ими же: у мегатрона рост на белом
   // белый, у вельвета белым выходит падение - на бумаге такая сторона стакана
   // исчезает целиком. Тон при этом остаётся прежним, палитра узнаётся.
   const back = paper === "light" ? "#ffffff" : "#181a20";
-  const bull = visibleOn(swatch.bull, back);
-  const bear = visibleOn(swatch.bear, back);
+  return inkVars(visibleOn(swatch.bull, back), visibleOn(swatch.bear, back));
+}
+
+/** Весь набор переменных панели от одной пары цветов. */
+function inkVars(bull: string, bear: string): Record<string, string> {
   return {
     "--pane-up": bull,
     "--pane-down": bear,

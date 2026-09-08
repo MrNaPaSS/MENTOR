@@ -88,6 +88,8 @@ import { atr, ema } from "@/lib/indicator/ta";
 import type { Candle } from "@/lib/indicator/types";
 import { buildShapes, type ChartLook } from "@/lib/indicator/shapes";
 import {
+  PAPER_BEAR,
+  PAPER_BULL,
   presetSkin,
   rgba,
   type ChartPaletteName,
@@ -106,7 +108,6 @@ import {
   type FootprintSkin,
 } from "./primitives/FootprintPrimitive";
 import { parseFootprint, type FootprintData } from "@/lib/indicator/footprint";
-import { PAPER_DOWN, PAPER_UP } from "@/lib/indicator/footprintLayout";
 import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
 import DragLevels, { type DragLevel } from "./DragLevels";
@@ -213,9 +214,12 @@ const BASE: Record<"dark" | "light", ChartPalette> = {
     // Объём серый: чёрно-белым свечам цветные столбики не пара.
     upVolume: "rgba(120,123,134,0.28)",
     downVolume: "rgba(0,0,0,0.35)",
-    // Зелёное и красное индикатора: GREEN = #00A86B, RED = #FF1A2E.
-    bidLine: "#00A86B",
-    askLine: "#FF1A2E",
+    // Пара белого листа: фиолетовое против серого. Зелёное с красным здесь
+    // спорит и со свечами, которые на бумаге чёрно-белые, и с терминалом
+    // вокруг - он на этом листе весь фиолетово-серый, вплоть до областей
+    // риска и цели ниже.
+    bidLine: PAPER_BULL,
+    askLine: PAPER_BEAR,
     emaFast: "#26A69A",
     emaSlow: "#FFA726",
     emaTrend: "#9E9E9E",
@@ -2026,9 +2030,10 @@ function PriceChart({
     const read = getComputedStyle(node);
     const pick = (name: string, fallback: string) =>
       read.getPropertyValue(name).trim() || fallback;
-    // Серо-фиолетовая пара - только для стандартных свечей белого листа.
-    // Пресет трейдер выбрал сам, и подменять его цвета своими значит решать
-    // за него: лестница обязана быть того же цвета, что и свечи под ней.
+    // Метка текущей цены берётся от свечей графика, а у стандартных на белом
+    // листе и рост, и падение обведены чёрным - плашка выходила одинаковой в
+    // обе стороны. Тогда берём пару самого листа, ту же, которой залит весь
+    // терминал вокруг.
     const plain = paper === "light" && preset === "default";
     footSkinRef.current = {
       bg: pick("--pane-bg", "#181a20"),
@@ -2040,14 +2045,8 @@ function PriceChart({
       // доводит до видимости на его бумаге. Брать их прямо у свечей нельзя -
       // у стандартной палитры и у мегатрона рост на белом белый, у вельвета
       // белым выходит падение, и сторона объёма исчезает целиком.
-      // На белом листе со стандартными свечами - своя пара: серое против
-      // фиолетового. Зелёное с красным на бумаге кричит, а лестница залита
-      // цветом целиком, и читать цифры поверх такой клумбы нельзя. У пресетов
-      // пара своя, ради неё их и выбирают, - её и берём.
-      up: plain ? PAPER_UP : visibleOn(pick("--pane-up", "#0ecb81"), pick("--pane-bg", "#181a20")),
-      down: plain
-        ? PAPER_DOWN
-        : visibleOn(pick("--pane-down", "#f6465d"), pick("--pane-bg", "#181a20")),
+      up: visibleOn(pick("--pane-up", "#0ecb81"), pick("--pane-bg", "#181a20")),
+      down: visibleOn(pick("--pane-down", "#f6465d"), pick("--pane-bg", "#181a20")),
       // Светлые чернила для тёмной ячейки. Берём фон тёмного листа, а не
       // белый: чистый белый на цветной подложке слепит.
       bright: "#f5f7fa",
@@ -2058,10 +2057,10 @@ function PriceChart({
       // на бумаге пропала бы совсем. Обводка берётся первой - она у свечи
       // есть всегда, а тело бывает пустым.
       dotUp: plain
-        ? PAPER_UP
+        ? PAPER_BULL
         : visibleOn(skinRef.current.upBorder || skinRef.current.up, pick("--pane-bg", "#181a20")),
       dotDown: plain
-        ? PAPER_DOWN
+        ? PAPER_BEAR
         : visibleOn(
             skinRef.current.downBorder || skinRef.current.down,
             pick("--pane-bg", "#181a20"),
