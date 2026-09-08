@@ -2,6 +2,7 @@
 import Script from "next/script";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
+import UiWatch from "@/components/log/UiWatch";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import DevBar from "@/components/dev/DevBar";
 import TelegramInit from "@/components/telegram/TelegramInit";
@@ -65,6 +66,7 @@ export default function RootLayout({
         <TelegramInit />
         {children}
         <ServiceWorkerRegister />
+        <UiWatch />
         <InstallPrompt />
         <DevBar />
       </body>

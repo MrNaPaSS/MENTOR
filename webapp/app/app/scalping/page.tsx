@@ -28,6 +28,7 @@ import {
   PanelRightOpen,
   Star,
   Camera,
+  ScrollText,
   Sun,
   Wifi,
   WifiOff,
@@ -58,6 +59,7 @@ import {
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
 import { play } from "@/lib/sound";
+import { asText as logText, clear as clearLog, record } from "@/lib/log";
 import { setSoundOn, useSoundOn } from "@/lib/notifySound";
 import {
   composeShot,
@@ -808,6 +810,30 @@ export default function ScalpingPage() {
   ]);
 
   /**
+   * Журнал действий - в буфер обмена.
+   *
+   * Именно текстом и именно в буфер: его вставляют в переписку, а не открывают
+   * в отдельном окне. Не дал браузер записать в буфер - показываем размер и
+   * складываем файлом, чтобы человеку было что приложить.
+   */
+  async function copyLog() {
+    const text = logText();
+    try {
+      await navigator.clipboard.writeText(text);
+      setOrderNote({ text: t.terminal.notes.logCopied(text.split("\n").length - 5), bad: false });
+    } catch {
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `nmnh-log-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.txt`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setOrderNote({ text: t.terminal.notes.logSaved, bad: false });
+    }
+  }
+
+  /**
    * Повторить чужую заявку у себя.
    *
    * Уровни берутся один в один - вход, стоп и цели, - а объём считается по
@@ -828,6 +854,7 @@ export default function ScalpingPage() {
 
       const qty = (margin * shared.leverage) / shared.entry;
       if (!(qty > 0)) return;
+      record("copy.start", { symbol: shared.symbol, side: shared.side, entry: shared.entry, qty });
 
       // График переезжает на монету сделки: разметка должна встать там, где на
       // неё можно смотреть.
@@ -1214,6 +1241,7 @@ export default function ScalpingPage() {
     // исполнение. Отметку ставим до запроса и обновляем после ответа: круг
     // опроса мог уйти ещё до переноса, а вернуться уже после.
     movedRef.current.set(trade.id, Date.now());
+    record("level.move", { id: trade.id, kind, index, from: was, to: price });
     try {
       const body = await moveLevels({
         symbol: trade.symbol,
@@ -1236,6 +1264,7 @@ export default function ScalpingPage() {
       });
       if (!body) throw new Error(t.terminal.notes.serverSilent);
       movedRef.current.set(trade.id, Date.now());
+      record("level.moved", { id: trade.id, kind, entry: body.entry, stop: body.stop, takes: body.takes });
       dragTrade(
         trade,
         kind,
@@ -1320,11 +1349,22 @@ export default function ScalpingPage() {
     setDraft(null);
 
     setOrderNote({ text: t.terminal.notes.sendingOrder, bad: false });
+    record("order.send", {
+      id: next.id,
+      symbol: next.symbol,
+      side: next.side,
+      entry: next.entry,
+      stop: next.stop,
+      targets: next.targets,
+      qty: next.qty,
+      leverage: next.leverage,
+    });
     try {
       const result = await openPosition(next, true);
       // Ответа нет - значит запрос и не ушёл: сессия кончилась между открытием
       // окна и нажатием. Это отказ, а не тихий успех.
       if (!result) throw new Error(t.terminal.notes.orderRejected);
+      record("order.placed", { id: next.id, warning: result.warning || undefined });
       const id =
         typeof result.entry === "object" && result.entry
           ? String((result.entry as Record<string, unknown>).orderId ?? "")
@@ -1350,6 +1390,10 @@ export default function ScalpingPage() {
       //
       // Так же поступает и ручная лимитка: нарисованная заявка, которой нет на
       // бирже, хуже отсутствия заявки.
+      record("order.rejected", {
+        id: next.id,
+        why: err instanceof Error ? err.message : String(err),
+      });
       setTrades((list) => list.filter((t) => t.id !== next.id));
       setOrderNote({
         text: err instanceof Error ? err.message : t.terminal.notes.orderRejected,
@@ -1571,6 +1615,12 @@ export default function ScalpingPage() {
                   // случившийся на другой, он замечает лишь при возвращении:
                   // взяв «сейчас», сделка начиналась там, где на неё
                   // посмотрели, - бокс на графике вставал не у своей свечи.
+                  record("trade.opened", {
+                    id: current.id,
+                    symbol: current.symbol,
+                    size: position.size,
+                    entry: position.entry,
+                  });
                   return {
                     ...current,
                     status: "open",
@@ -1620,6 +1670,20 @@ export default function ScalpingPage() {
                 // сервере.
                 const seen = (missingRef.current.get(current.id) ?? 0) + 1;
                 missingRef.current.set(current.id, seen);
+                // Пишем каждый пустой ответ, а не только последний: по одной
+                // записи «закрыли» нельзя понять, что именно показывала биржа
+                // до этого - пустоту или чужую сторону.
+                record("position.missing", {
+                  id: current.id,
+                  symbol: current.symbol,
+                  side: current.side,
+                  seen,
+                  of: MISSING_TOLERANCE,
+                  rows: position.rows,
+                  matched: position.matched,
+                  takesHit: current.takesHit,
+                  targets: current.targets.length,
+                });
                 if (seen < MISSING_TOLERANCE) return current;
 
                 // Пишем сделку сразу и своей оценкой: сопровождение на сервере
@@ -1628,6 +1692,14 @@ export default function ScalpingPage() {
                 // попадёт в журнал вовсе, а именно так и терялись закрытые по
                 // стопу.
                 missingRef.current.delete(current.id);
+                record("trade.closed", {
+                  id: current.id,
+                  symbol: current.symbol,
+                  why: "позиции нет на бирже",
+                  at: dom?.mid ?? 0,
+                  takesHit: current.takesHit,
+                  targets: current.targets.length,
+                });
                 return closeManually(current, dom?.mid ?? 0, Date.now());
               }
               return current;
@@ -1731,6 +1803,19 @@ export default function ScalpingPage() {
                   Math.abs(price - t.targets[i]) < Math.max(price, 1) * 0.00001,
               );
             if (same) return t;
+            if (hit !== t.takesHit) {
+              record("takes.hit", {
+                id: t.id,
+                symbol: t.symbol,
+                was: t.takesHit,
+                now: hit,
+                gone,
+                quiet,
+                placed: body.placed_takes,
+                standing: Array.isArray(body.take_prices) ? body.take_prices.length : null,
+                serverSays: body.takes_hit,
+              });
+            }
             return { ...t, takesHit: hit, stop, targets, breakeven: hit > 0 };
           }),
         );
@@ -2717,6 +2802,24 @@ export default function ScalpingPage() {
                     className={`${CHIP} ${journalOpen ? CHIP_ON : CHIP_OFF}`}
                   >
                     <BookText className="h-3.5 w-3.5" />
+                  </button>
+
+                  {/* Журнал действий: всё, что нажимал трейдер, и все решения
+                      терминала - в буфер обмена одним нажатием. Долгое нажатие
+                      очищает: журнал накапливается неделями, и разбирать
+                      вчерашнее вместе с сегодняшним незачем. */}
+                  <button
+                    onClick={copyLog}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      clearLog();
+                      record("log.cleared");
+                      setOrderNote({ text: t.terminal.notes.logCleared, bad: false });
+                    }}
+                    title={t.terminal.logTitle}
+                    className={`${CHIP} ${CHIP_OFF}`}
+                  >
+                    <ScrollText className="h-3.5 w-3.5" />
                   </button>
 
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />

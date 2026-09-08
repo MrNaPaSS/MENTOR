@@ -40,6 +40,7 @@ export const terminal = {
   chatWidth: "Ширина чата · двойной клик сбрасывает",
   expandChat: "Открыть чат",
   collapseChat: "Свернуть чат",
+  logTitle: "Журнал действий · нажатие копирует, правая кнопка очищает",
   chartPaper: "Лист графика: белый или тёмный",
   chartPalette: "Палитра свечей",
   paletteDefault: "Стандартная",
@@ -111,6 +112,9 @@ export const terminal = {
     shotToChat: "Снимок ушёл в чат",
   linkFailed: "Ссылку получить не удалось",
     linkCopied: (link: string) => `Ссылка скопирована: ${link}`,
+    logCopied: (n: number) => `Журнал скопирован: ${n} записей`,
+    logSaved: "Буфер недоступен - журнал сохранён файлом",
+    logCleared: "Журнал очищен",
   },
 
   // ── Всплывающие события ──

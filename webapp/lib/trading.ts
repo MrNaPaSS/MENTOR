@@ -208,6 +208,17 @@ export type ExchangePosition = {
   unrealized: number | null;
   /** Цена безубытка по расчёту биржи: с комиссией, фандингом и реальным входом. */
   breakeven: number | null;
+  /**
+   * Сколько строк биржа вернула по этому инструменту и нашлась ли среди них
+   * наша сторона.
+   *
+   * Нужно журналу, а не разметке. Пустой ответ и ответ, в котором есть чужая
+   * сторона, приводят к одному и тому же нулю в объёме, но означают разное:
+   * первое - позиции нет, второе - мы смотрим не туда. Различить их потом, по
+   * жалобе «сделка закрылась сама», иначе нечем.
+   */
+  rows: number;
+  matched: boolean;
 };
 
 /**
@@ -279,7 +290,9 @@ export async function positionOf(
     ? mine.find((p) => sideOf(p).includes(side)) ??
       (mine.length === 1 && !sideOf(mine[0]) ? mine[0] : undefined)
     : mine[0];
-  if (!row) return { size: 0, entry: null, unrealized: null, breakeven: null };
+  if (!row) {
+    return { size: 0, entry: null, unrealized: null, breakeven: null, rows: mine.length, matched: false };
+  }
 
   const numeric = (...names: string[]) => {
     for (const name of names) {
@@ -297,6 +310,8 @@ export async function positionOf(
   const average = openValue > 0 && openSize > 0 ? openValue / openSize : null;
 
   return {
+    rows: mine.length,
+    matched: true,
     size: Math.abs(numeric("total", "size", "positionAmt", "available") ?? 0),
     entry: numeric("averageOpenPrice", "entryPrice", "avgPrice") ?? average,
     unrealized: numeric("unrealizePnl", "unrealizedPnl", "unrealizedProfit", "unrealisedPnl"),

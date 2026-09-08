@@ -36,6 +36,7 @@ export const terminal = {
   chatWidth: "Chat width · double click resets",
   expandChat: "Open chat",
   collapseChat: "Collapse chat",
+  logTitle: "Action log · click copies, right click clears",
   chartPaper: "Chart paper: light or dark",
   chartPalette: "Candle palette",
   paletteDefault: "Default",
@@ -104,6 +105,9 @@ export const terminal = {
     shotToChat: "Snapshot sent to the chat",
   linkFailed: "Couldn't get the link",
     linkCopied: (link: string) => `Link copied: ${link}`,
+    logCopied: (n: number) => `Log copied: ${n} entries`,
+    logSaved: "Clipboard unavailable - the log was saved to a file",
+    logCleared: "Log cleared",
   },
 
   events: {

@@ -449,6 +449,69 @@ async def positions(
         raise _fail(exc) from exc
 
 
+# Биржа отказывает в смене плеча, пока по монете есть заявка или позиция.
+# Слова в ответе у неё свои, поэтому узнаём отказ по признакам, а не по точному
+# тексту: важно не сообщение, а то, что менять плечо сейчас нельзя.
+_LEVERAGE_LOCKED = ("leverage", "плеч")
+_LEVERAGE_BUSY = ("open order", "position", "precondition", "заяв", "позиц")
+
+
+def _leverage_locked(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(w in text for w in _LEVERAGE_LOCKED) and any(w in text for w in _LEVERAGE_BUSY)
+
+
+async def _live_leverage(client, symbol: str) -> int | None:
+    """Какое плечо уже стоит на бирже по этой монете."""
+    try:
+        rows = await client.positions()
+    except Exception:
+        return None
+    for row in rows or []:
+        if str(row.get("symbol", "")).upper() != symbol.upper():
+            continue
+        for name in ("leverage", "isolatedLongLeverage", "longLeverage", "isolatedShortLeverage"):
+            try:
+                value = int(float(row.get(name)))
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                return value
+    return None
+
+
+async def _ensure_leverage(client, symbol: str, leverage: int) -> None:
+    """Поставить плечо, а если биржа не даёт - объяснить это словами.
+
+    «FAILED_PRECONDITION: You cannot adjust the leverage when there are open
+    orders» приходило трейдеру как есть, и выглядело это отказом в сделке по
+    непонятной причине. Причина же будничная: по монете уже стоит заявка или
+    позиция, и биржа держит плечо неизменным, пока они живы.
+
+    Отказ в сделке при этом оправдан не всегда. Если на бирже стоит ровно то
+    плечо, которое мы и просим, ставить его заново незачем - сделка уходит как
+    задумана. А вот если оно другое, продолжать нельзя: заявка встанет с чужим
+    плечом, то есть с другим риском, чем показано на графике.
+    """
+    try:
+        await client.set_leverage(symbol, leverage)
+        return
+    except WeexTradeError as exc:
+        if not _leverage_locked(exc):
+            raise
+
+    live = await _live_leverage(client, symbol)
+    if live is not None and live == int(leverage):
+        return
+
+    raise HTTPException(
+        409,
+        "Биржа не меняет плечо, пока по монете есть заявка или позиция."
+        + (f" Сейчас на ней плечо x{live}." if live else "")
+        + f" Отмените их или откройте сделку с тем же плечом (запрошено x{int(leverage)}).",
+    )
+
+
 @router.post("/open")
 async def open_position(
     body: OrderIn,
@@ -488,7 +551,7 @@ async def open_position(
     # Сорвались цели при уже открытой позиции — сделка есть, и объявлять её
     # неудачей нельзя: трейдер решит, что позиции нет, а она стоит на бирже.
     try:
-        await client.set_leverage(symbol, body.leverage)
+        await _ensure_leverage(client, symbol, body.leverage)
 
         entry_order = await client.place_order(
             symbol=symbol,
