@@ -27,11 +27,10 @@ import {
 } from "lucide-react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import FearGreedPane from "@/components/market/FearGreedPane";
-import ForexPane from "@/components/market/ForexPane";
 import FundingPane from "@/components/market/FundingPane";
 import GlobalStrip from "@/components/market/GlobalStrip";
 import MarketScreener from "@/components/market/MarketScreener";
-import OnChainPane from "@/components/market/OnChainPane";
+import BitcoinPane from "@/components/market/BitcoinPane";
 import TrendingPane from "@/components/market/TrendingPane";
 
 const SmartMoney = dynamic(() => import("@/app/app/smartmoney/page"), {
@@ -160,11 +159,8 @@ function PulseSection() {
     <div className="grid gap-3 lg:grid-cols-2">
       <FearGreedPane />
       <FundingPane />
-      <OnChainPane />
-      <div className="grid gap-3">
-        <TrendingPane />
-        <ForexPane />
-      </div>
+      <BitcoinPane />
+      <TrendingPane />
     </div>
   );
 }
