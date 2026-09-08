@@ -122,16 +122,27 @@ async def test_mentor_approve_and_reject(env):
 
 # ── Ученик ──
 
-async def test_stranger_cannot_start_the_bot(env):
-    """Бот закрыт: чужой «старт» не заводит ученика и не будит ментора."""
+async def test_stranger_gets_silence(env):
+    """Чужому бот не отвечает вовсе и записи о нём не заводит."""
     dp, bot, session = env
     await feed_message(dp, bot, 777, "/start")
-    texts = session.texts()
-    assert any("закрыт" in t.lower() for t in texts)
-    assert not any("Добро пожаловать" in t for t in texts)
-    assert not any("Новый пользователь" in t for t in texts)
+    await feed_message(dp, bot, 777, "/help", update_id=2)
+    assert session.texts() == []
     with SessionLocal() as s:
         assert repo.find_student(s, 777) is None
+
+
+async def test_started_once_is_not_yet_a_student(env):
+    """Запись, оставшаяся от прежнего «старта», доступа не даёт.
+
+    Раньше её заводило само нажатие, и в базе осели все, кто заглянул. Свой -
+    это впущенный ученик, а не строка в таблице.
+    """
+    dp, bot, session = env
+    with SessionLocal() as s:
+        repo.get_or_create_student(s, tg_id=776, username="curious")
+    await feed_message(dp, bot, 776, "/start")
+    assert session.texts() == []
 
 
 async def test_mentor_start_opens_onboarding(env):
@@ -143,17 +154,20 @@ async def test_mentor_start_opens_onboarding(env):
     assert any("Выберите язык" in t for t in texts)
 
 
-async def test_known_student_keeps_his_start(env):
-    """Заведённый ученик доходит до конца регистрации: он уже не с улицы."""
+async def test_invited_student_keeps_his_start(env):
+    """Впущенный ученик доходит до регистрации: он уже не с улицы."""
     dp, bot, session = env
     with SessionLocal() as s:
-        repo.get_or_create_student(s, tg_id=779, username="known")
+        st = repo.get_or_create_student(s, tg_id=779, username="known")
+        st.is_approved = True
+        s.commit()
     await feed_message(dp, bot, 779, "/start")
     assert any("Выберите язык" in t for t in session.texts())
 
 
 async def test_student_help(env):
     dp, bot, session = env
+    _approved_student(778, "helped")
     await feed_message(dp, bot, 778, "/help")
     assert any("Команды" in t for t in session.texts())
 
@@ -180,9 +194,17 @@ async def test_student_onboarding_flow(env):
 
 
 async def test_student_balance_requires_registration(env):
+    """Впущенному, но не дорегистрированному - подсказка; чужому - тишина."""
     dp, bot, session = env
+    with SessionLocal() as s:
+        st = repo.get_or_create_student(s, tg_id=901, username="half")
+        st.is_approved = True
+        s.commit()
     await feed_message(dp, bot, 901, "/balance")
     assert any("пройдите регистрацию" in t.lower() for t in session.texts())
+
+    await feed_message(dp, bot, 904, "/balance", update_id=2)
+    assert not any("пройдите регистрацию" in t.lower() for t in session.texts()[1:])
 
 
 async def test_student_balance_after_registration(env):

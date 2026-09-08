@@ -16,6 +16,7 @@ from core.models import utcnow
 from core.templates import fmt_money
 from core.weex.base import WeexClient
 from bot.keyboards import approve_keyboard, lang_keyboard, mode_keyboard
+from bot.middlewares.auth import IsInvited
 
 
 class Onboarding(StatesGroup):
@@ -28,23 +29,16 @@ class Onboarding(StatesGroup):
 def build_student_router(admin_id: int, referral_link: str = "https://www.weex.com/ru/register?vipCode=kaktotakxme") -> Router:
     router = Router(name="student")
 
+    # Бот закрыт: со всеми, кроме наставника и заведённых учеников, он молчит.
+    # Фильтр стоит на роутере, а не в «старте»: чужому одинаково нечего делать
+    # и в /help, и в /balance, а отвечающая на что угодно команда - это тот же
+    # открытый вход, только сбоку.
+    router.message.filter(IsInvited(admin_id))
+    router.callback_query.filter(IsInvited(admin_id))
+
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext):
         user = message.from_user
-
-        # Бот закрыт: регистрацию начинает наставник, а не любой, кто нашёл бота
-        # поиском. Незнакомому человеку не заводим даже запись - иначе список
-        # учеников зарастает теми, кто нажал «старт» из любопытства, а ментору
-        # на каждого уходит уведомление.
-        #
-        # Кто уже заведён, проходит дальше: у него /start - это продолжение
-        # своей же регистрации, а не вход с улицы.
-        with SessionLocal() as session:
-            known = repo.find_student(session, user.id) is not None
-        if not known and user.id != admin_id:
-            await message.answer("Бот закрыт. Доступ выдаёт наставник.")
-            return
-
         with SessionLocal() as session:
             student = repo.get_or_create_student(session, user.id, user.username)
             has_uid = bool(student.weex_uid)
