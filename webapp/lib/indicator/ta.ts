@@ -26,16 +26,37 @@ export function ema(source: number[], length: number): number[] {
   return out;
 }
 
-/** ta.sma: простая средняя скользящим окном. */
+/**
+ * ta.sma: простая средняя скользящим окном.
+ *
+ * Считает пропуски отдельно, а не складывает их с числами. Складывать нельзя:
+ * скользящая сумма идёт с нулевого элемента, и один NaN в начале отравляет её
+ * навсегда - вычитание того же NaN при выходе из окна ничего не исправляет.
+ *
+ * Это не мелочь. Средняя от осциллятора объёма считается по ряду, у которого
+ * начало пусто по построению (там ещё не набралась EMA), и без этой поправки
+ * средняя не появлялась ни разу за весь ряд.
+ *
+ * Окно, в котором есть хоть один пропуск, остаётся пропуском: средняя по
+ * неполным данным - это число, которое выглядит как настоящее.
+ */
 export function sma(source: number[], length: number): number[] {
   const out = new Array<number>(source.length).fill(Number.NaN);
   if (length <= 0) return out;
 
   let sum = 0;
+  let gaps = 0;
   for (let i = 0; i < source.length; i++) {
-    sum += source[i];
-    if (i >= length) sum -= source[i - length];
-    if (i >= length - 1) out[i] = sum / length;
+    if (Number.isFinite(source[i])) sum += source[i];
+    else gaps += 1;
+
+    if (i >= length) {
+      const left = source[i - length];
+      if (Number.isFinite(left)) sum -= left;
+      else gaps -= 1;
+    }
+
+    if (i >= length - 1 && gaps === 0) out[i] = sum / length;
   }
   return out;
 }

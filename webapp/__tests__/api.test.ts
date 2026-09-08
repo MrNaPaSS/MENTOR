@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { api } from "@/lib/api";
+import { api, authReq } from "@/lib/api";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -93,5 +93,40 @@ describe("api client", () => {
     expect(url).not.toContain("password=");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body).password).toBe("p@ss word");
+  });
+});
+
+describe("ответ без тела", () => {
+  // Удаление сообщения чата отвечает 204: тела нет, разбирать нечего. Прежде
+  // клиент всё равно звал json(), падал и сообщал об успехе как об отказе -
+  // удалённое сообщение возвращалось в ленту и висело до перезагрузки, хотя
+  // из базы уже исчезло.
+  it("204 - это удача, а не ошибка", async () => {
+    const mock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      headers: { get: () => null },
+      json: async () => {
+        throw new SyntaxError("Unexpected end of JSON input");
+      },
+    });
+    vi.stubGlobal("fetch", mock);
+
+    await expect(authReq("/api/chat/messages/1", "tok", { method: "DELETE" })).resolves
+      .toBeUndefined();
+  });
+
+  it("пустое тело с длиной ноль тоже не разбирается", async () => {
+    const mock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name === "Content-Length" ? "0" : null) },
+      json: async () => {
+        throw new SyntaxError("Unexpected end of JSON input");
+      },
+    });
+    vi.stubGlobal("fetch", mock);
+
+    await expect(authReq("/api/whatever", "tok")).resolves.toBeUndefined();
   });
 });

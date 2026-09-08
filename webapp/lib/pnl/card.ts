@@ -373,20 +373,45 @@ export function drawStamp(
   ctx.lineWidth = Math.max(1, w * 0.0018);
   ctx.strokeRect(-iw / 2 + ih * 0.12, -ih / 2 + ih * 0.12, iw - ih * 0.24, ih - ih * 0.24);
 
+  // Оттиск в две колонки: слева имя, справа две строки мелким.
+  //
+  // Прежде подпись «подтверждено терминалом» стояла под именем, а девиз -
+  // справа по центру, и на широкой рамке они налезали друг на друга: имя
+  // набрано крупно, и его хвост доставал до девиза. Замер ширины вместо
+  // подбора на глаз - потому что имя одно, а рамки у заготовок разные.
   ctx.fillStyle = ink;
   ctx.textBaseline = "middle";
+
+  const pad = ih * 0.34;
+  const left = -iw / 2 + pad;
+  const right = iw / 2 - pad;
+
   ctx.textAlign = "left";
   ctx.font = face(ih * 0.46, 800);
-  ctx.fillText("NMNH", -iw / 2 + ih * 0.34, -ih * 0.08);
+  const nameEnd = left + ctx.measureText("NMNH").width;
+  ctx.fillText("NMNH", left, 0);
 
-  ctx.font = face(ih * 0.17, 600);
-  ctx.globalAlpha = 0.75;
-  ctx.fillText(dict().pnlCard.stamp, -iw / 2 + ih * 0.34, ih * 0.26);
+  // Сколько места осталось правой колонке. Меньше трети рамки - строки
+  // ужимаются, но не наезжают: пустая рамка честнее нечитаемой.
+  const room = Math.max(0, right - nameEnd - ih * 0.3);
+  const creed = "TRADE · DISCIPLINE · PROFIT";
+  const note = dict().pnlCard.stamp;
+
+  let px = ih * 0.2;
+  for (let step = 0; step < 20; step += 1) {
+    ctx.font = face(px, 700);
+    if (ctx.measureText(creed).width <= room) break;
+    px *= 0.94;
+  }
 
   ctx.textAlign = "right";
-  ctx.font = face(ih * 0.2, 700);
+  ctx.globalAlpha = 0.75;
+  ctx.font = face(px * 0.82, 600);
+  ctx.fillText(note, right, -px * 0.7);
+
   ctx.globalAlpha = 0.85;
-  ctx.fillText("TRADE · DISCIPLINE · PROFIT", iw / 2 - ih * 0.3, 0);
+  ctx.font = face(px, 700);
+  ctx.fillText(creed, right, px * 0.62);
   ctx.restore();
 }
 

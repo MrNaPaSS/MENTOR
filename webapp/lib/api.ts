@@ -111,6 +111,16 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     const detail = await res.json().catch(() => ({}));
     throw new Error((detail as { detail?: string }).detail || `HTTP ${res.status}`);
   }
+
+  // Ответ без тела - это удача, а не ошибка.
+  //
+  // На удаление сервер отвечает 204: разбирать там нечего. Но `res.json()` на
+  // пустом теле бросает, и вызывающий читал успешное удаление как отказ -
+  // сообщение возвращалось в ленту и висело до перезагрузки страницы, хотя из
+  // базы уже исчезло.
+  if (res.status === 204 || res.headers?.get?.("Content-Length") === "0") {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
 }
 

@@ -334,8 +334,9 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
         )
     else:
         ink = (
-            '<span class="mark">NMNH<small>ПОДТВЕРЖДЕНО ТЕРМИНАЛОМ</small></span>'
-            '<span class="creed">TRADE · DISCIPLINE · PROFIT</span>'
+            '<span class="mark">NMNH</span>'
+            '<span class="creed"><small>ПОДТВЕРЖДЕНО ТЕРМИНАЛОМ</small>'
+            'TRADE · DISCIPLINE · PROFIT</span>'
         )
 
     return HTMLResponse(
@@ -420,9 +421,17 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     content: ""; position: absolute; inset: 1.4cqw;
     border: .18cqw solid var(--accent); opacity: .85;
   }}
+  /* Оттиск в две колонки: слева имя, справа две строки мелким. Подпись
+     «подтверждено терминалом» стоит над девизом, а не под именем: под именем
+     она удлиняла левую колонку, и та доставала до девиза. Здесь то же
+     разбиение, что рисует холст (drawStamp в webapp/lib/pnl/card.ts). */
   .mark {{ font-size: 5.5cqw; font-weight: 800; color: var(--accent); line-height: 1; }}
-  .mark small {{ display: block; font-size: .37em; font-weight: 600; opacity: .75; letter-spacing: .02em; }}
-  .creed {{ font-size: 2.4cqw; font-weight: 700; color: var(--accent); opacity: .85; }}
+  .creed {{
+    display: flex; flex-direction: column; align-items: flex-end; gap: .3cqw;
+    font-size: 2.4cqw; font-weight: 700; color: var(--accent); opacity: .85;
+    line-height: 1; text-align: right;
+  }}
+  .creed small {{ font-size: .82em; font-weight: 600; opacity: .85; letter-spacing: .02em; }}
 
   @keyframes slam {{
     0%   {{ transform: scale(2.4) rotate(-24deg); opacity: 0; }}

@@ -2298,12 +2298,16 @@ function PriceChart({
 
       {/* Показания индикатора - в правом нижнем углу, как в оригинале на
           TradingView. Именно там их ищет взгляд человека, пришедшего оттуда, и
-          именно там они не спорят с ценой: верх графика занят ею. */}
+          именно там они не спорят с ценой: верх графика занят ею.
+
+          Отступы не на глаз: справа за краем полотна идёт шкала цены, снизу -
+          шкала времени. Панель, положенная в самый угол, накрывала последние
+          цифры цены - ровно те, ради которых на график и смотрят. */}
       {score && (
         <button
           onClick={() => setScoreWide(keepScoreWide(!wideScore))}
           title={wideScore ? t.terminal.chart.scoreHide : t.terminal.chart.scoreShow}
-          className="pointer-events-auto absolute bottom-6 right-1 z-10 overflow-hidden rounded border text-left font-mono text-[10px] tabular-nums shadow transition-opacity duration-150 ease-out hover:opacity-80"
+          className="pointer-events-auto absolute bottom-10 right-16 z-10 overflow-hidden rounded border text-left font-mono text-[10px] tabular-nums shadow transition-opacity duration-150 ease-out hover:opacity-80"
           style={{ borderColor: "var(--pane-border)", background: "var(--pane-deep)" }}
         >
           {wideScore ? (
