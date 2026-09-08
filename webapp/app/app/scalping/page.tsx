@@ -113,6 +113,7 @@ import {
 } from "@/lib/trading";
 import {
   journalAvailable,
+  loadCalendar,
   loadWorkspace,
   saveTrade,
   saveWorkspace,
@@ -513,6 +514,9 @@ export default function ScalpingPage() {
   const [journalH, setJournalH] = useState(JOURNAL_LIMITS.def);
   // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
   const [journalKey, setJournalKey] = useState(0);
+  // Итог дня по журналу. null - журнал недоступен: ученик не вошёл в кабинет,
+  // и показывать ему чужой ноль незачем.
+  const [todayPnl, setTodayPnl] = useState<number | null>(null);
   // Сделка из журнала под курсором: её разметка показывается на графике.
   const [hovered, setHovered] = useState<JournalTrade | null>(null);
   // Сделка, открытая из журнала нажатием. Наведение показывает разметку, пока
@@ -2267,6 +2271,26 @@ export default function ScalpingPage() {
    * полусотне значило бы полсотни запросов на каждом круге. Позиции - биржевые:
    * они приходят одним ответом, и врать о них нельзя.
    */
+  // Итог дня из журнала. Перечитываем после каждой записанной сделки: цифра в
+  // строке над графиком должна отвечать на «сколько я сегодня», а не «сколько
+  // было на входе».
+  useEffect(() => {
+    let cancelled = false;
+    const now = new Date();
+    loadCalendar(now.getUTCFullYear(), now.getUTCMonth() + 1)
+      .then((body) => {
+        if (cancelled || !body) return;
+        const today = now.toISOString().slice(0, 10);
+        setTodayPnl(body.days.find((d) => d.date === today)?.pnl ?? 0);
+      })
+      .catch(() => {
+        // Журнал недоступен — строка просто останется без итога.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [journalKey]);
+
   const counts = useMemo(() => {
     const waiting = trades.filter((t) => t.status === "planned").length;
     const open = Object.values(liveSizes).filter((size) => size > 0).length;
@@ -3041,11 +3065,38 @@ export default function ScalpingPage() {
                   </span>
                 )}
 
+                {/* Итог дня. Раньше он висел поверх холста, в углу графика, и
+                    закрывал собой свечи; здесь ему место по смыслу - это тот
+                    же ряд про «что у меня сейчас», что цена и плита. Кнопкой,
+                    а не подписью: цифра дня - это вопрос «из чего она», и
+                    ответ на него в журнале. */}
+                {todayPnl !== null && (
+                  <button
+                    onClick={() => setJournalOpen((open) => !open)}
+                    title={journalOpen ? t.terminal.chart.closeJournal : t.terminal.chart.openJournal}
+                    className={`flex items-center gap-1 transition-opacity duration-150 ease-out hover:opacity-80 ${orderNote ? "" : "ml-auto"}`}
+                  >
+                    <span className="text-[var(--pane-muted)]">{t.terminal.chart.pnlToday}</span>
+                    <span className={todayPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
+                      {todayPnl >= 0 ? "+" : "-"}
+                      {Math.abs(todayPnl).toFixed(2)} $
+                    </span>
+                    {(counts.waiting > 0 || counts.open > 0) && (
+                      <>
+                        <span className="text-[var(--pane-border)]">·</span>
+                        <span className="text-[var(--pane-text-2)]" title={t.terminal.chart.ordersTitle}>
+                          {counts.waiting} / {counts.open}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                )}
+
                 {/* Баланс и монеты - из шапки сайта, которой в этом режиме
                     нет. Прижаты к правому краю: слева живёт рынок, справа
                     счёт, и путать их нельзя. */}
                 {full && (
-                  <span className={`flex items-center gap-3 ${orderNote ? "" : "ml-auto"}`}>
+                  <span className={`flex items-center gap-3 ${orderNote || todayPnl !== null ? "" : "ml-auto"}`}>
                     {coins !== null && (
                       <span className="text-[var(--pane-gold)]">{coins.toLocaleString("ru")} NMNH</span>
                     )}
@@ -3117,8 +3168,6 @@ export default function ScalpingPage() {
                   dragLevels={dragLevels}
                   orderChip={orderChip}
                   onAddAlert={addAlert}
-                  onOpenJournal={() => setJournalOpen((open) => !open)}
-                  counts={counts}
                   onAddOrder={startManual}
                   onAxisHeight={setAxisHeight}
                 />

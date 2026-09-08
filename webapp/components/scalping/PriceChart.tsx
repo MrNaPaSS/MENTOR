@@ -77,7 +77,7 @@ import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
 import DragLevels, { type DragLevel } from "./DragLevels";
 import OrderChipView, { type OrderChip } from "./OrderChip";
-import { loadCalendar, loadTrades, type JournalTrade } from "@/lib/journal";
+import { loadTrades, type JournalTrade } from "@/lib/journal";
 import {
   floatingAt,
   pendingTargets,
@@ -613,9 +613,7 @@ function PriceChart({
   onEmptyClick,
   onAddAlert,
   onAddOrder,
-  onOpenJournal,
   onAxisHeight,
-  counts,
 }: {
   symbol: string;
   interval: string;
@@ -720,7 +718,6 @@ function PriceChart({
    */
   onAddOrder?: (price: number, atr: number, side: "long" | "short") => void;
   /** Открыть журнал. Итог дня в углу - вопрос, а ответ на него в журнале. */
-  onOpenJournal?: () => void;
   /**
    * Высота шкалы времени в точках.
    *
@@ -729,13 +726,6 @@ function PriceChart({
    * обязаны кончаться на одной линии.
    */
   onAxisHeight?: (px: number) => void;
-  /**
-   * Сколько заявок ждёт и сколько позиций в работе - по всем монетам.
-   *
-   * Рядом с итогом дня, потому что это ответ на тот же вопрос: что у меня
-   * сейчас происходит. Открытая монета - одна, а идти может несколько.
-   */
-  counts?: { waiting: number; open: number };
 }) {
   const t = useT();
   const boxRef = useRef<HTMLDivElement>(null);
@@ -910,9 +900,6 @@ function PriceChart({
   // Цена меняется восемь раз в секунду, и кнопка, едущая вместе с ней, уходит
   // из-под курсора ровно в тот момент, когда по ней целятся.
   const plusHeldRef = useRef(false);
-  // Результат за сегодня по журналу. null — журнал недоступен: ученик не вошёл
-  // в кабинет, и показывать ему чужой ноль незачем.
-  const [todayPnl, setTodayPnl] = useState<number | null>(null);
   // Почему на графике нет свежих свечей. Пусто — всё в порядке.
   const [dataError, setDataError] = useState<string | null>(null);
   // Раскрытая свеча: время бара, по которому нажал трейдер. null — свернуты все.
@@ -2111,25 +2098,6 @@ function PriceChart({
     };
   }, [showJournal, journalKey, symbol, interval]);
 
-  // Итог дня из журнала. Перечитываем после каждой записанной сделки: цифра в
-  // углу должна отвечать на «сколько я сегодня», а не «сколько было на входе».
-  useEffect(() => {
-    let cancelled = false;
-    const now = new Date();
-    loadCalendar(now.getUTCFullYear(), now.getUTCMonth() + 1)
-      .then((body) => {
-        if (cancelled || !body) return;
-        const today = now.toISOString().slice(0, 10);
-        setTodayPnl(body.days.find((d) => d.date === today)?.pnl ?? 0);
-      })
-      .catch(() => {
-        // Журнал недоступен — угол просто останется пустым.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [journalKey]);
-
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.
   useEffect(() => {
@@ -2356,35 +2324,6 @@ function PriceChart({
             {dataError}
           </p>
         </div>
-      )}
-
-      {/* Итог дня: одна цифра в полосе над графиком, между чертой панели
-          инструментов и первой линией сетки. Всё остальное — в журнале. */}
-      {todayPnl !== null && (
-        // Кнопка, а не подпись: цифра дня - это вопрос «из чего она», и ответ
-        // на него в журнале. Идти за ним через панель инструментов незачем.
-        <button
-          onClick={onOpenJournal}
-          title={showJournal ? t.terminal.chart.closeJournal : t.terminal.chart.openJournal}
-          className="absolute right-16 top-0.5 z-10 font-mono text-[11px] tabular-nums transition-opacity duration-150 ease-out hover:opacity-80"
-        >
-          <span className="text-[var(--pane-muted)]">{t.terminal.chart.pnlToday}</span>
-          <span className={todayPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
-            {todayPnl >= 0 ? "+" : "-"}
-            {Math.abs(todayPnl).toFixed(2)} $
-          </span>
-          {counts && (counts.waiting > 0 || counts.open > 0) && (
-            <>
-              <span className="mx-1 text-[var(--pane-border)]">·</span>
-              <span
-                className="text-[var(--pane-text-2)]"
-                title={t.terminal.chart.ordersTitle}
-              >
-                {counts.waiting} / {counts.open}
-              </span>
-            </>
-          )}
-        </button>
       )}
 
       {/* Плюсик у текущей цены: два действия, которые нужны прямо на ней -
