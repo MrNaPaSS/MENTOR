@@ -62,11 +62,19 @@ class FakeExchange:
     async def cancel_algo_order(self, symbol, order_id):
         # Снятая заявка со списка уходит - как на бирже. Пока она оставалась в
         # ответе, проверка «действительно ли сняли» ничего не проверяла.
+        #
+        # Снимаем и по метке: у части условных заявок своего номера в списке
+        # нет вовсе, и биржа принимает снятие по той метке, которую мы задали
+        # при постановке.
         self.algo_cancelled.append(order_id)
         self.plans_open = [
             o
             for o in self.plans_open
-            if str(o.get("orderId") or o.get("algoId") or o.get("id") or "") != str(order_id)
+            if str(order_id)
+            not in {
+                str(o.get(name) or "")
+                for name in ("orderId", "algoId", "id", "clientAlgoId", "clientOid")
+            }
         ]
 
     async def cancel_all_algo(self, symbol):

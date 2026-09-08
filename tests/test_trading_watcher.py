@@ -512,6 +512,20 @@ def test_settle_of_a_short_counts_the_other_way():
     assert gross == pytest.approx(1000.0)
 
 
+def test_closed_size_counts_only_the_exit_fills():
+    """Объём выхода по отчёту. По нему видно, весь ли выход в отчёт попал."""
+    from backend.trading.watcher import closed_size
+
+    fills = [
+        {"side": "buy", "price": "100", "qty": "3"},
+        {"side": "sell", "price": "101", "qty": "1"},
+        {"side": "sell", "price": "95", "qty": "0.5"},
+    ]
+    assert closed_size(fills, "long") == pytest.approx(1.5)
+    # У шорта закрытие - это покупка.
+    assert closed_size(fills, "short") == pytest.approx(3.0)
+
+
 def test_fill_time_reads_any_of_the_names():
     from backend.trading.watcher import fill_time
 
@@ -585,6 +599,29 @@ def test_closing_does_not_invent_taken_targets():
     assert decision.closed is True
     assert decision.takes_hit == 2
     assert decision.filled_orders == ["tp3"]
+
+
+def test_an_empty_position_does_not_count_targets_before_the_close():
+    """Позиции не стало - это ещё не «взяты все цели».
+
+    Ликвидация уносит позицию целиком. На проходе, где остаток уже ноль, а
+    закрытие ещё не подтверждено паузой, счёт по остатку отвечал «взяты все
+    три»: доля закрытого объёма равна единице. Число записывалось в сделку и
+    оттуда уходило в журнал - у ликвидированной сделки стояли три цели при
+    убытке во весь депозит.
+    """
+    row = trade(takes_hit=0)
+    decision = decide(row, position(size="0"), ALL_PLANS, 95.0, MISSING_TOLERANCE - 1)
+    assert decision.closed is False
+    assert decision.takes_hit == 0
+    assert decision.filled_orders == []
+
+
+def test_an_empty_position_keeps_the_targets_already_taken():
+    """Взятое до ликвидации остаётся взятым: счёт не поднимаем и не обнуляем."""
+    row = trade(takes_hit=1, qty=2.1)
+    decision = decide(row, position(size="0"), ALL_PLANS, 95.0, MISSING_TOLERANCE - 1)
+    assert decision.takes_hit == 1
 
 
 def test_targets_are_counted_by_the_exit_price():

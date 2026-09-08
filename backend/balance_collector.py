@@ -11,10 +11,11 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
+from backend.trading.funds import balance_by_keys
 from core.db import SessionLocal
-from core.models import BalanceSnapshot, Student
+from core.models import BalanceSnapshot, Student, WeexCredential
 from core.weex.base import WeexClient
 
 logger = logging.getLogger("nmnh.balance")
@@ -39,11 +40,15 @@ async def snapshot_all(weex: WeexClient) -> int:
     saved = 0
 
     with SessionLocal() as session:
+        # Ученики, о балансе которых есть кого спросить: свои ключи биржи или
+        # UID у наставника. Раньше брались только те, у кого есть UID, и ученик
+        # с подключёнными ключами оставался без снимков вовсе.
+        keyed = select(WeexCredential.student_id).where(WeexCredential.is_active.is_(True))
         students = session.execute(
             select(Student)
             .where(Student.is_approved.is_(True))
             .where(Student.is_active.is_(True))
-            .where(Student.weex_uid.isnot(None))
+            .where(or_(Student.weex_uid.isnot(None), Student.id.in_(keyed)))
         ).scalars().all()
 
         if not students:
@@ -62,7 +67,10 @@ async def snapshot_all(weex: WeexClient) -> int:
             logger.warning("Не удалось получить объёмы торгов: %s", exc)
 
         for student in students:
-            uid = str(student.weex_uid).strip()
+            # Пустая строка, а не "None": с тех пор как в обход попали ученики
+            # без UID, str(None) превращался в строку и уходил на биржу как
+            # настоящий идентификатор.
+            uid = str(student.weex_uid).strip() if student.weex_uid else ""
             existing = session.execute(
                 select(BalanceSnapshot).where(
                     BalanceSnapshot.student_id == student.id,
@@ -72,11 +80,19 @@ async def snapshot_all(weex: WeexClient) -> int:
 
             # Баланс — только если снимка ещё нет
             if existing is None:
-                try:
-                    balance = await weex.get_affiliate_balance(uid)
-                except Exception as exc:
-                    logger.warning("Не удалось получить баланс uid=%s: %s", uid, exc)
-                    continue
+                # Сначала свои ключи ученика: они дают ту же цифру, что он
+                # видит в приложении биржи. Партнёрская ручка по UID - взгляд
+                # со стороны, и она остаётся запасной.
+                source = "api_keys"
+                balance = await balance_by_keys(session, student)
+
+                if balance is None and uid:
+                    source = "affiliate_api"
+                    try:
+                        balance = await weex.get_affiliate_balance(uid)
+                    except Exception as exc:
+                        logger.warning("Не удалось получить баланс uid=%s: %s", uid, exc)
+                        continue
 
                 if balance is None:
                     continue
@@ -85,12 +101,12 @@ async def snapshot_all(weex: WeexClient) -> int:
                     student_id=student.id,
                     date=today,
                     balance_usdt=balance,
-                    source="affiliate_api",
+                    source=source,
                 )
                 session.add(existing)
 
                 student.balance_usdt = balance
-                student.balance_source = "affiliate_api"
+                student.balance_source = source
                 saved += 1
 
             # Объём торгов — обновляем при каждом цикле (данные растут в течение дня)
@@ -122,11 +138,20 @@ async def snapshot_student(weex: WeexClient, student_id: int, weex_uid: str) -> 
         if existing:
             return False
 
-        try:
-            balance = await weex.get_affiliate_balance(weex_uid)
-        except Exception as exc:
-            logger.warning("Снимок при входе uid=%s: %s", weex_uid, exc)
-            return False
+        # Снимок дня - тем же порядком, что и везде: сначала свои ключи
+        # ученика, потом партнёрская ручка по UID. Иначе дневная точка на
+        # графике и цифра в углу экрана считались бы по разным источникам.
+        student = session.get(Student, student_id)
+        source = "api_keys"
+        balance = await balance_by_keys(session, student) if student else None
+
+        if balance is None and weex_uid:
+            source = "affiliate_api"
+            try:
+                balance = await weex.get_affiliate_balance(weex_uid)
+            except Exception as exc:
+                logger.warning("Снимок при входе uid=%s: %s", weex_uid, exc)
+                return False
 
         if balance is None:
             return False
@@ -135,7 +160,7 @@ async def snapshot_student(weex: WeexClient, student_id: int, weex_uid: str) -> 
             student_id=student_id,
             date=today,
             balance_usdt=balance,
-            source="affiliate_api",
+            source=source,
         ))
         session.commit()
 

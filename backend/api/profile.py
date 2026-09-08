@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 
 from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student
 from backend.api.journal import is_admin
+from backend.trading.funds import balance_by_keys
 from backend.config import BackendConfig
 from backend.deps import get_config, get_current_student, get_session, get_weex
 from backend.schemas import ProfileOut, ProfilePatch, AnalyticsMe
@@ -55,7 +56,21 @@ async def refresh_balance(
     session=Depends(get_session),
     weex=Depends(get_weex),
 ):
+    """Обновить баланс: сначала по ключам ученика, потом по UID.
+
+    Ключи дают ту же цифру, что ученик видит у себя в приложении биржи. Ручка
+    по UID - взгляд наставника со стороны: она приходит с задержкой и живёт
+    сборщиком, а не торговлей. Подключил ключи - значит дальше считаем по ним.
+    """
     fresh = session.get(Student, student.id)
+
+    balance = await balance_by_keys(session, fresh)
+    if balance is not None:
+        fresh.balance_usdt = balance
+        fresh.balance_source = "api_keys"
+        session.commit()
+        return _profile(fresh)
+
     if fresh.weex_uid:
         balance = await weex.get_affiliate_balance(fresh.weex_uid)
         if balance is not None:

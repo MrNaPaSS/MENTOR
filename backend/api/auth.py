@@ -19,6 +19,7 @@ from backend.config import BackendConfig
 from backend.deps import get_config, get_session, get_weex, get_notifier
 from backend.security import create_access_token, create_refresh_token, decode_token, TokenError
 from backend.balance_collector import snapshot_student
+from backend.trading.funds import balance_by_keys
 from backend.schemas import (
     RequestCodeIn, RequestCodeOut, VerifyIn, TokenPair, RefreshIn, DevLoginOut, DevTokens,
 )
@@ -193,8 +194,15 @@ async def login_by_uid(
     else:
         student.is_approved = True
         student.is_active = True
-        student.balance_usdt = balance
-        student.balance_source = "affiliate_api"
+        # Баланс по ключам ученика, если они уже подключены.
+        #
+        # UID здесь проверяется ради самого аффилиата - без него в кабинет не
+        # пускают, - но записывать его цифру поверх живой нельзя: вход в
+        # кабинет затирал бы то, что ученик видит в приложении биржи, оценкой
+        # со стороны. Ключей нет - по UID, как и раньше.
+        own = await balance_by_keys(session, student)
+        student.balance_usdt = own if own is not None else balance
+        student.balance_source = "api_keys" if own is not None else "affiliate_api"
     session.flush()
     record_login(session, student)
     session.commit()

@@ -287,6 +287,17 @@ class ChartShot(Base):
     note: Mapped[str] = mapped_column(String(140), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
+    # Что именно лежит по ссылке: снимок графика или карточка сделки. У них
+    # разные страницы - карточка печатается движением и получает печать, - и
+    # различать их надо до того, как страница начнёт собираться.
+    kind: Mapped[str] = mapped_column(String(8), default="chart")
+    # Сторона сделки у карточки: от неё зависят и заготовка, и цвет страницы.
+    side: Mapped[str] = mapped_column(String(5), default="")
+    # Чья это карточка. У снимка графика имя рисуется прямо в картинке и базе
+    # не нужно, а карточку печать заверяет - и подпись под ней должна быть
+    # текстом, чтобы её видел и тот, у кого картинки не загрузились.
+    owner: Mapped[str] = mapped_column(String(32), default="")
+
 
 class ScalpWorkspace(Base):
     """Сохранённый шаблон рабочего места скальпера.

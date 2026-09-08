@@ -60,6 +60,11 @@ RECORD_ATTEMPTS = 8
 
 MISSING_TOLERANCE = 2
 
+# Какую долю объёма отчёт об исполнениях должен покрыть, чтобы результату по
+# нему можно было верить. Не единица: биржа округляет объёмы своим шагом, и
+# точное равенство здесь давало бы ложную тревогу на каждой сделке.
+FILLS_ENOUGH = 0.99
+
 # Статусы биржи, означающие «ордер отработал».
 FILLED_STATES = {"FILLED", "FULLY_FILLED", "CLOSED", "DONE", "FINISHED"}
 
@@ -177,7 +182,22 @@ def decide(
     if size > float(trade.qty):
         return Decision(trade.takes_hit, size=size)
 
-    hit = max(trade.takes_hit, takes_filled(float(trade.qty), size, len(takes)))
+    # Остатка нет - по нему целей не считают.
+    #
+    # takes_filled() считает цели долей закрытого объёма, а при нулевом остатке
+    # эта доля равна единице: ответ «взяты все три». Так и выходило у
+    # ликвидации - позицию уносит биржа, разом и целиком, - и у стопа тоже, на
+    # том проходе, где остаток уже ноль, а закрытие ещё не подтверждено
+    # (MISSING_TOLERANCE). Число успевало записаться в сделку, а оттуда попасть
+    # в журнал: у сделки, не взявшей ни одной цели, стояли три.
+    #
+    # Ветка закрытия ниже об этом знает и счёт не поднимает; этот проход шёл
+    # мимо неё - до неё не хватало одного пустого ответа.
+    hit = (
+        trade.takes_hit
+        if size <= 0
+        else max(trade.takes_hit, takes_filled(float(trade.qty), size, len(takes)))
+    )
 
     state = Position(
         symbol=trade.symbol,
@@ -643,6 +663,33 @@ class PositionWatcher:
             # лонга, та и взята. Не получили исполнений - остаёмся при счётчике:
             # он хотя бы не пуст.
             hit = takes_from_fills(trade, fills)
+
+            # Весь ли выход попал в отчёт.
+            #
+            # Молчать об этом нельзя: трейдер сверяет журнал с приложением
+            # биржи, и число, посчитанное по половине исполнений, он читает как
+            # настоящее. Ликвидация на -531 записывалась как -199 - ровно
+            # потому, что закрытие в окно отчёта поместилось не целиком.
+            #
+            # Считать за биржу нечего: цены недостающих исполнений нам никто не
+            # назвал. Поэтому не выдумываем, а говорим вслух и выкладываем в
+            # журнал сервера всё, по чему считали.
+            done = closed_size(fills, trade.side)
+            if done < float(trade.qty) * FILLS_ENOUGH:
+                logger.warning(
+                    "Отчёт по %s (%s) неполон: закрыто %.6f из %.6f, "
+                    "результат %.4f посчитан по %d исполнениям - в журнале он "
+                    "будет меньше настоящего",
+                    trade.symbol,
+                    trade.client_id,
+                    done,
+                    float(trade.qty),
+                    gross - fee,
+                    len(fills),
+                )
+                for one in fills:
+                    logger.warning("  исполнение: %s", one)
+
             # По этим строкам разбирается любое расхождение с биржей: сколько
             # исполнений попало в счёт, за какое окно и что в них было.
             logger.info(
@@ -892,8 +939,12 @@ async def drop_old_stops(
 
     for order in orders:
         marks = order_marks(order)
+        # Номер только для журнала. Снимать заявку он не нужен: у части заявок
+        # своего номера в списке нет вовсе - есть лишь метка, которую мы сами и
+        # задали, - и такие раньше пропускались молча. Прежний стоп оставался
+        # висеть, а трейдеру предлагалось убрать его руками.
         order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
-        if not order_id or keep in marks or marks & takes:
+        if keep in marks or marks & takes:
             continue
 
         trigger = _first(order, ("triggerPrice", "stopPrice", "triggerPx", "planPrice", "price"))
@@ -916,11 +967,11 @@ async def drop_old_stops(
             )
             continue
         if await cancel_plan(client, trade.symbol, order):
-            logger.info("Снят прежний стоп %s по %s", order_id, trade.symbol)
+            logger.info("Снят прежний стоп %s по %s", order_id or "без номера", trade.symbol)
         else:
             logger.warning(
                 "Прежний стоп %s по %s остался висеть - на позиции их теперь два",
-                order_id,
+                order_id or sorted(marks),
                 trade.symbol,
             )
 
@@ -940,6 +991,30 @@ def _first(row: dict[str, Any], names: tuple[str, ...]) -> float | None:
 def fill_time(row: dict[str, Any]) -> int:
     value = _first(row, _TIME_FIELDS)
     return int(value) if value else 0
+
+
+def is_closing(row: dict[str, Any], side: str) -> bool:
+    """Закрывающее ли это исполнение: лонг закрывают продажей, шорт покупкой."""
+    direction = str(
+        next((row[name] for name in _SIDE_FIELDS if name in row), "")
+    ).lower()
+    if side == "long":
+        return "sell" in direction or "short" in direction
+    return "buy" in direction or "long" in direction
+
+
+def closed_size(fills: list[dict[str, Any]], side: str) -> float:
+    """Сколько объёма закрыто по отчёту об исполнениях.
+
+    Нужен, чтобы понять, весь ли выход в отчёт попал. Отчёт приходит окном -
+    последние сто исполнений по монете и не раньше входа, - а ликвидация
+    закрывает позицию разом и по частям, и часть исполнений в окно не
+    помещается. Результат тогда считается по тому, что видно, и в журнал
+    уходит убыток меньше настоящего.
+    """
+    return sum(
+        abs(_first(row, _SIZE_FIELDS) or 0.0) for row in fills if is_closing(row, side)
+    )
 
 
 def settle(
@@ -995,13 +1070,7 @@ def settle(
 
         # Закрывающее исполнение идёт против стороны сделки: лонг закрывают
         # продажей. Открывающие в результат не входят - они его создали.
-        direction = str(
-            next((row[name] for name in _SIDE_FIELDS if name in row), "")
-        ).lower()
-        closing = ("sell" in direction or "short" in direction) if long else (
-            "buy" in direction or "long" in direction
-        )
-        if closing and at > 0 and size > 0 and entry > 0:
+        if is_closing(row, side) and at > 0 and size > 0 and entry > 0:
             derived += (at - entry) * size if long else (entry - at) * size
 
     # Комиссия, которую биржа не назвала.

@@ -348,6 +348,42 @@ def test_exchange_made_stop_is_removed_by_side(moving):
     assert float(live.current_stop) == 79_950.0
 
 
+def test_a_stop_without_a_number_is_still_cancelled(moving):
+    """Прежний стоп снимается и тогда, когда номера у него нет - только метка.
+
+    Часть условных заявок биржа отдаёт без собственного номера: есть лишь
+    метка, которую мы сами задали при постановке. Такие пропускались молча, на
+    позиции оставалось два стопа, и терминал отвечал отказом со словами
+    «снимите лишний в приложении биржи» - то есть просил трейдера сделать
+    нашу работу в чужом приложении.
+    """
+    client, exchange, session, live = moving
+    live.status = "open"
+    session.commit()
+
+    exchange.position = {
+        "symbol": "BTCUSDT",
+        "positionSide": "LONG",
+        "size": "0.01",
+        "markPrice": "80050",
+    }
+    exchange.plans_open = [
+        {
+            "clientAlgoId": "sl0_BTCUSDT-1",
+            "planType": "STOP_LOSS",
+            "triggerPrice": "79900",
+            "quantity": "0.01",
+        },
+    ]
+
+    answer = move(client, stop=79_950.0)
+
+    assert answer.status_code == 200
+    assert "sl0_BTCUSDT-1" in exchange.algo_cancelled
+    session.refresh(live)
+    assert float(live.current_stop) == 79_950.0
+
+
 def test_target_above_market_is_never_taken_for_a_stop(moving):
     """Чужая цель выше рынка стопом не считается и под нож не идёт."""
     client, exchange, session, live = moving
