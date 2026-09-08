@@ -227,7 +227,14 @@ export function markRows(rows: FootprintRow[]): FootprintRow[] {
 export function stepForRows(tick: number, span: number, maxRows: number): number {
   if (!(tick > 0)) return 0;
   if (!(span > 0) || !(maxRows > 0)) return tick;
-  const factor = Math.max(1, Math.ceil(Number((span / (tick * maxRows)).toFixed(6))));
+  // Делим на строку меньше, чем просили. Корзин на отрезке всегда на одну
+  // больше, чем в него помещается шагов: границы корзин стоят на своих местах
+  // и с началом отрезка не совпадают, поэтому первый шаг почти всегда начат до
+  // него, а последний кончится после. Без этой поправки свеча, разошедшаяся на
+  // ровно двадцать восемь строк, показывала двадцать девять - и нижняя уезжала
+  // за край картинки.
+  const fits = Math.max(1, maxRows - 1);
+  const factor = Math.max(1, Math.ceil(Number((span / (tick * fits)).toFixed(6))));
   return Number((tick * factor).toPrecision(12));
 }
 

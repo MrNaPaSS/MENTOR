@@ -1998,7 +1998,10 @@ function PriceChart({
     if (skin) {
       footPrimRef.current?.setData(foot, barAt(dataRef.current, foot?.time), footGrow, skin);
     }
-  }, [foot, footGrow]);
+    // Свежая свеча - в зависимостях: тело и фитили на картинке двигаются с
+    // каждой сделкой, а профиль перезапрашивается раз в три секунды. Без этого
+    // свеча на разборе отставала бы от той, что стоит на графике.
+  }, [foot, footGrow, liveCandle]);
 
   // Точность ценовой шкалы - по шагу инструмента, а не по умолчанию в цент.
   useEffect(() => {
