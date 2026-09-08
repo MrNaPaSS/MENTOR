@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from core.models import ScalpTrade, ScalpWorkspace, Student, utcnow
+from core.models import iso, ScalpTrade, ScalpWorkspace, Student, utcnow
 from backend.config import BackendConfig
 from backend.deps import get_config, get_current_student, get_session
 
@@ -309,7 +309,7 @@ async def get_workspace(
         payload = json.loads(row.payload)
     except ValueError:
         payload = None
-    return {"payload": payload, "updated_at": row.updated_at.isoformat()}
+    return {"payload": payload, "updated_at": iso(row.updated_at)}
 
 
 @router.put("/workspace")
@@ -332,4 +332,4 @@ async def save_workspace(
     row.payload = raw
     row.updated_at = utcnow()
     session.commit()
-    return {"ok": True, "updated_at": row.updated_at.isoformat()}
+    return {"ok": True, "updated_at": iso(row.updated_at)}

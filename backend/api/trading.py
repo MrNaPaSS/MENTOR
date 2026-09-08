@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.deps import get_current_student, get_session
-from core.models import LiveTrade, ScalpTrade, Student, WeexCredential, utcnow
+from core.models import iso, LiveTrade, ScalpTrade, Student, WeexCredential, utcnow
 from core.trading.position import (
     Position,
     breakeven_price,
@@ -376,7 +376,7 @@ async def status(
         "enabled": keystore.enabled(),
         "connected": bool(row and row.is_active),
         "key_tail": row.key_tail if row else "",
-        "updated_at": row.updated_at.isoformat() if row else None,
+        "updated_at": iso(row.updated_at) if row else None,
     }
 
 

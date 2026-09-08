@@ -2506,13 +2506,13 @@ export default function ScalpingPage() {
           ? // Слой поверх всего: навигация сайта и его отступы остаются под
             // ним. Просить у браузера полный экран мало - без этого слоя
             // терминал всё равно сидел бы в шапке и нижней панели.
-            `${pane} fixed inset-0 z-[70] overflow-auto bg-bg-deep p-2`
+            `${pane} fixed inset-0 z-[70] overflow-y-auto overflow-x-hidden bg-bg-deep p-2`
           : // Отступы по краям - те же восемь точек, что и между панелями.
             // Кабинет держит по краям шестнадцать и двадцать четыре: остальным
             // разделам это к лицу, а терминалу нет - у него по краям пустые
             // поля, а в середине панели вплотную друг к другу. Снимаем отступ
             // кабинета своим отрицательным полем и задаём свой.
-            `${pane} -mx-4 px-2 md:-mx-6 lg:-mb-8 lg:pb-2`
+            `${pane} -mx-4 overflow-x-clip px-2 md:-mx-6 lg:-mb-8 lg:pb-2`
       }
     >
       {/* Уведомления поверх всего: лимитка срабатывает сама, и почти всегда
@@ -2527,20 +2527,25 @@ export default function ScalpingPage() {
           } as React.CSSProperties
         }
       >
-        {/* Свёрнутый скринер: язычок у самого края экрана.
-            Уехал за край на три четверти и возвращается под курсором. Место
-            свёрнутой панели - это место, отнятое у графика: полоса в тридцать
-            шесть точек ничего не показывает, но всю сессию стоит между
-            графиком и краем. Язычка хватает, чтобы помнить, где панель, а
-            выезжает он ровно тогда, когда за ним потянулись.
+        {/* Свёрнутый скринер: полоса на своём прежнем месте, наполовину
+            ушедшая за край.
 
-            Прятать совсем нельзя - трейдер не должен вспоминать, где была
-            панель; поэтому четверть остаётся видна всегда. */}
+            Место свёрнутой панели - это место, отнятое у графика: полоса
+            ничего не показывает, но всю сессию стоит между графиком и краем
+            экрана. Половину её мы у края и оставляем, а под курсором она
+            выезжает целиком.
+
+            Уезжает движением, а не полем: поле сдвинуло бы весь ряд, и график
+            подрагивал бы каждый раз, когда мимо проходит курсор.
+
+            Название и значок прижаты к внутреннему краю - к тому, что остаётся
+            на виду: полоса без подписи это просто выступ у края, о который
+            спотыкаются, не зная, что за ним. */}
         {!screenerOpen && (
           <button
             onClick={() => setScreenerOpen(true)}
             title={t.terminal.expandScreener}
-            className={`fixed left-0 top-1/2 z-[80] hidden w-9 -translate-x-[75%] -translate-y-1/2 flex-col items-center gap-2 rounded-r-xl border border-l-0 border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] shadow-lg transition-transform duration-300 ease-out hover:translate-x-0 hover:text-[var(--pane-text)] xl:flex`}
+            className={`hidden w-9 shrink-0 -translate-x-[18px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-1.5 text-[var(--pane-muted)] transition-transform duration-300 ease-out hover:translate-x-0 hover:text-[var(--pane-text)] xl:mr-2 xl:flex`}
             style={paneStyle}
           >
             <PanelLeftOpen className="h-4 w-4" />
@@ -3150,9 +3155,10 @@ export default function ScalpingPage() {
               <button
                 onClick={() => setChatOpen(true)}
                 title={t.terminal.expandChat}
-                // Язычок у правого края - тот же, что у скринера слева: за
-                // краем на три четверти, под курсором выезжает целиком.
-                className="fixed right-0 top-1/2 z-[80] hidden w-9 -translate-y-1/2 translate-x-[75%] flex-col items-center gap-2 rounded-l-xl border border-r-0 border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] shadow-lg transition-transform duration-300 ease-out hover:translate-x-0 hover:text-[var(--pane-text)] xl:flex"
+                // Полоса у правого края - зеркало скринера: половина за краем,
+                // под курсором выезжает целиком, название и значок прижаты к
+                // внутреннему краю, к тому, что видно всегда.
+                className="hidden w-9 shrink-0 translate-x-[18px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-1.5 text-[var(--pane-muted)] transition-transform duration-300 ease-out hover:translate-x-0 hover:text-[var(--pane-text)] xl:ml-2 xl:flex"
                 style={paneStyle}
               >
                 <PanelRightOpen className="h-4 w-4" />

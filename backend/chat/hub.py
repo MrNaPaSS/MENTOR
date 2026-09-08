@@ -17,6 +17,11 @@ from typing import Any, Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
+# Как часто окликать комнату. Двадцать пять секунд - меньше, чем держит
+# открытым молчащее соединение любой прокси на пути (у Cloudflare это сто), и
+# достаточно редко, чтобы не мешать разговору.
+SWEEP = 25.0
+
 
 class ChatHub:
     def __init__(self, members: Callable[[], Awaitable[int]] | None = None) -> None:
@@ -68,6 +73,47 @@ class ChatHub:
         async with self._lock:
             self._people.pop(ws, None)
         await self.broadcast("people", await self.presence())
+
+    async def sweep(self) -> None:
+        """Окликнуть комнату и убрать тех, кто не отозвался.
+
+        Присутствие врало в большую сторону: вкладку закрывают на ходу, ноутбук
+        усыпляют, сеть пропадает - и сокет остаётся у нас открытым, пока в него
+        не попробуют что-нибудь послать. В тихой комнате посылать нечего, и
+        «трое в чате» держалось часами после того, как все ушли.
+
+        Оклик заодно держит соединение живым: прокси на пути закрывают
+        молчащие сокеты, и без него разговор обрывался у тех, кто просто
+        смотрел на график.
+        """
+        async with self._lock:
+            targets = list(self._people.items())
+
+        dead = []
+        for ws, _ in targets:
+            try:
+                await ws.send_json({"event": "ping", "payload": {}})
+            except Exception:  # noqa: BLE001 - оборвался и оборвался
+                dead.append(ws)
+
+        if not dead:
+            return
+        async with self._lock:
+            for ws in dead:
+                self._people.pop(ws, None)
+        logger.info("Чат: ушло молча %d", len(dead))
+        await self.broadcast("people", await self.presence())
+
+    async def watch(self) -> None:
+        """Оклик по кругу. Живёт столько же, сколько само приложение."""
+        while True:
+            await asyncio.sleep(SWEEP)
+            try:
+                await self.sweep()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - комната важнее уборки
+                logger.warning("Чат: оклик не удался: %s", exc)
 
     async def broadcast(self, event: str, payload: dict) -> None:
         """Разослать всем в комнате.

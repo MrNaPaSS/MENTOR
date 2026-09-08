@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete as sql_delete
 
 from core import repo
-from core.models import BalanceSnapshot, CoinTransaction, SignalDelivery, Student
+from core.models import iso, BalanceSnapshot, CoinTransaction, SignalDelivery, Student
 from backend.deps import get_session, get_current_mentor
 from backend.schemas import StudentOut
 
@@ -18,7 +18,8 @@ router = APIRouter(prefix="/api/students", tags=["students"], dependencies=[Depe
 
 
 def _iso(value) -> str | None:
-    return value.isoformat() if value else None
+    """Время с меткой пояса: без неё браузер показывает вход двумя часами раньше."""
+    return iso(value)
 
 
 def _to_out(s: Student) -> StudentOut:

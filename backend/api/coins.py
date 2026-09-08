@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from core.models import CoinTransaction, Student
+from core.models import iso, CoinTransaction, Student
 from backend.config import BackendConfig
 from backend.deps import get_config, get_session, get_current_student
 from backend.schemas import (
@@ -121,7 +121,7 @@ def _tx_to_out(tx: CoinTransaction) -> CoinTxOut:
         amount=tx.amount,
         reason=tx.reason,
         ref=tx.ref,
-        created_at=tx.created_at.isoformat(),
+        created_at=iso(tx.created_at),
     )
 
 
@@ -374,5 +374,5 @@ def service_balance(
         tg_id=student.tg_id,
         weex_uid=student.weex_uid,
         created_via=student.created_via or "bot",
-        first_login_at=student.first_login_at.isoformat() if student.first_login_at else None,
+        first_login_at=iso(student.first_login_at),
     )

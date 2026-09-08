@@ -20,7 +20,7 @@ from sqlalchemy import select
 
 import logging
 
-from core.models import CoinTransaction, ShopItem, ShopOrder, Student
+from core.models import iso, CoinTransaction, ShopItem, ShopOrder, Student
 from backend.deps import get_session, get_current_student, get_current_mentor, get_config, get_notifier
 from backend.config import BackendConfig
 from backend.schemas import (
@@ -141,8 +141,8 @@ def _order_out(o: ShopOrder, *, with_student: bool = False) -> ShopOrderOut:
     out = ShopOrderOut(
         id=o.id, item_id=o.item_id, item_title=o.item_title, price=o.price,
         status=o.status, contact=o.contact, mentor_note=o.mentor_note,
-        created_at=o.created_at.isoformat(),
-        resolved_at=o.resolved_at.isoformat() if o.resolved_at else None,
+        created_at=iso(o.created_at),
+        resolved_at=iso(o.resolved_at),
     )
     if with_student and o.student is not None:
         out.student_id = o.student.id

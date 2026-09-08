@@ -31,6 +31,21 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def iso(value: datetime | None) -> str | None:
+    """Время строкой, всегда с меткой пояса.
+
+    Колонки объявлены `DateTime(timezone=True)`, но SQLite пояс не хранит и
+    отдаёт время голым. Голую строку браузер читает как своё местное: событие,
+    случившееся минуту назад, показывается на два часа раньше - ровно на
+    разницу с UTC, - и «зашёл только что» превращается в «2 часа назад».
+
+    С PostgreSQL метка приходит сама, и эта проверка ничего не меняет.
+    """
+    if value is None:
+        return None
+    return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).isoformat()
+
+
 class Student(Base):
     __tablename__ = "students"
 

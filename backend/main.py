@@ -97,9 +97,17 @@ def create_app(
             density_task = asyncio.create_task(run_density_watcher(density, _post))
         watcher.start()
         await forum.start()
+        # Оклик комнаты: без него список присутствующих врёт в большую сторону,
+        # а молчащие соединения закрывает прокси.
+        presence_task = asyncio.create_task(app.state.chat_hub.watch(), name="chat-sweep")
         try:
             yield
         finally:
+            presence_task.cancel()
+            try:
+                await presence_task
+            except asyncio.CancelledError:
+                pass
             if density_task:
                 density_task.cancel()
                 try:
