@@ -47,6 +47,7 @@ import {
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import { setTerminalTheme } from "@/lib/terminalTheme";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
+import ConnectDialog, { type ConnectNeed } from "@/components/scalping/ConnectDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
 import LevelMenu from "@/components/scalping/LevelMenu";
 import ManualOrderCard from "@/components/scalping/ManualOrderCard";
@@ -414,6 +415,8 @@ export default function ScalpingPage() {
   const [journalOpen, setJournalOpen] = useState(false);
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
+  // Чего не хватает, чтобы торговать. Null - всё на месте.
+  const [need, setNeed] = useState<ConnectNeed | null>(null);
   // Отчёт об ордере: текст и тон. Молчание после нажатия «Войти» — худшее из
   // возможных поведений: трейдер не знает, ушла заявка или нет.
   const [orderNote, setOrderNote] = useState<{ text: string; bad: boolean } | null>(null);
@@ -813,6 +816,35 @@ export default function ScalpingPage() {
   }
 
   /**
+   * Чего не хватает, чтобы считать сделку. `true` - окно уже показано.
+   *
+   * Спрашиваем до расчёта, а не после. Прежде терминал пускал считать и молчал
+   * до самого конца: трейдер набирал сумму, плечо, двигал стоп - и только на
+   * «Открыть» узнавал, что счёта нет. Расчёт при этом выглядел настоящим.
+   *
+   * Порядок именно такой: сперва вход в кабинет, потом ключи. Без входа
+   * подключать ключи некуда, и предлагать это первым значит звать в пустоту.
+   */
+  function blocked(): boolean {
+    if (!getAccessToken()) {
+      setNeed("login");
+      return true;
+    }
+    // Ключей нет - торговать нечем.
+    //
+    // Проверяем именно «знаем и их нет», а не «не знаем». Состояние счёта
+    // приезжает отдельным запросом, и в первые мгновения после открытия
+    // терминала оно пустое: отказать в расчёте тому, у кого ключи есть, было бы
+    // хуже, чем пропустить. Настоящая защита стоит на отправке ордера, а здесь
+    // речь о вежливости - сказать заранее, а не после минуты работы.
+    if (exchange && !exchange.connected) {
+      setNeed("keys");
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Открыть расчёт сделки от уровня.
    *
    * Сумму и плечо берём прошлые, стоп предлагаем по волатильности: график
@@ -820,6 +852,7 @@ export default function ScalpingPage() {
    * умолчанию. Все три поля трейдер всё равно правит в самом окне.
    */
   function openTrade(level: Wall, atr = 0) {
+    if (blocked()) return;
     setDraft({
       shelf: level,
       tick: dom?.tick ?? 0,
@@ -837,6 +870,7 @@ export default function ScalpingPage() {
    * что делает нажатие по графику, не приходится. Дальше уровни тянут мышью.
    */
   function startManual(price: number, atr: number, side: "long" | "short") {
+    if (blocked()) return;
     setManual(draftAt(price, chartPrice, atr, margin, leverage, side));
   }
 
@@ -2600,6 +2634,20 @@ export default function ScalpingPage() {
             setLevel(null);
           }}
           onCancel={() => setLevel(null)}
+        />
+      )}
+
+      {need && (
+        <ConnectDialog
+          need={need}
+          onConnect={() => {
+            setNeed(null);
+            // Полной перезагрузкой: уходим из терминала совсем, а он держит
+            // сокеты стакана и ленты - обрывать их всё равно придётся.
+            if (need === "login") window.location.href = "/login";
+            else setExchangeOpen(true);
+          }}
+          onClose={() => setNeed(null)}
         />
       )}
 
