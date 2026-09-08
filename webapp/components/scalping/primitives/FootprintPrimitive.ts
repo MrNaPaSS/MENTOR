@@ -1,19 +1,20 @@
-// Объём внутри свечи, нарисованный на самой свече.
+// Свеча, разобранная на след покупателя и след продавца.
 //
-// Панелью в углу это читалось как таблица: цифры есть, а к какой цене они
-// относятся - надо вспоминать. Здесь строки стоят на ценовой шкале графика:
-// строка объёма и есть та цена, на которой он прошёл, и уровень из соседней
-// свечи виден без единого движения глаз.
+// Свеча говорит, куда цена сходила, и молчит о том, чем ход подкреплён. Здесь
+// она нарисована крупно и неподвижно - своей меркой, а не меркой графика, - и
+// от неё в обе стороны расходятся следы: влево, красным, продали; вправо,
+// зелёным, купили. Длина следа - деньги на этой цене, густота - его же доля.
+// Свеча с одной плитой у низа и свеча, набранная ровным потоком, различаются с
+// одного взгляда, не читая ни одной цифры.
 //
-// Рисует холст, а не вёрстка. Строк два десятка, каждая с двумя числами и
-// подложкой, и всё это обязано ехать вместе с графиком на каждом кадре: React
-// на таком перерисовывается заметно, а холст - нет. Заодно лестница живёт в
-// том же слое, что свечи, и не спорит с ними за место.
+// Неподвижная мерка - главное здесь. Строки, привязанные к ценовой шкале,
+// тончают вместе с масштабом и на обычном зуме превращаются в серую щётку;
+// картинка же свечи обязана читаться всегда одинаково. Поэтому высота строки
+// задана в точках, а цены раскладываются внутри картинки сами.
 //
-// Укрупнение строк считается от масштаба графика: трейдер крутит колесо, и
-// строки собираются в более крупный шаг сами. Рукой его можно загрубить ещё -
-// множителем `grow`: на минутке биткойна триста шагов биржи, и даже на полном
-// экране читать их все незачем.
+// Рисует холст, а не вёрстка: два десятка строк со следами и цифрами едут
+// вместе с графиком на каждом кадре, и React на таком перерисовывается
+// заметно.
 
 import type {
   IChartApi,
@@ -28,15 +29,16 @@ import type {
 } from "lightweight-charts";
 
 import {
-  buildRows,
-  pickStep,
+  foldRows,
+  markRows,
+  stepForRows,
   type FootprintData,
-  type FootprintRow,
 } from "@/lib/indicator/footprint";
-import { withValueArea, type ValueArea } from "@/lib/indicator/valueArea";
+import { withValueArea } from "@/lib/indicator/valueArea";
 import { money, price as fmtPrice } from "@/lib/scalping";
+import type { Candle } from "@/lib/indicator/types";
 
-/** Цвета панели: холст не понимает переменных оформления, ему нужны значения. */
+/** Цвета картинки: холст не понимает переменных оформления, ему нужны значения. */
 export type FootprintSkin = {
   bg: string;
   border: string;
@@ -48,31 +50,32 @@ export type FootprintSkin = {
   accent: string;
 };
 
-/**
- * Ширины колонок в точках экрана.
- *
- * Цена шире сторон: у монет с мелким шагом в ней восемь знаков, и обрезанная
- * цена - это не цена. Метка справа - под три буквы VAH.
- */
-const PAD = 5;
-const COL_PRICE = 52;
-const COL_SIDE = 44;
-const COL_PROFILE = 26;
-const COL_TAG = 20;
-const WIDTH = PAD * 2 + COL_PRICE + COL_SIDE * 2 + COL_PROFILE + COL_TAG;
+/** Ширина следа в каждую сторону, точки. */
+const SIDE = 104;
+/** Ширина тела свечи. Уже - и она перестаёт быть свечой, шире - лезет в следы. */
+const CANDLE = 18;
+/** Колонка цены справа от следов. У монет с мелким шагом в цене восемь знаков. */
+const PRICE = 52;
+const GAP = 6;
+const PAD = 6;
+const WIDTH = PAD * 2 + SIDE * 2 + CANDLE + GAP + PRICE;
+
+/** Высота строки в точках. Ниже одиннадцати цифры в ней сливаются. */
+const ROW = 14;
+const ROW_MIN = 11;
 
 /**
- * Минимальная высота строки, точки.
+ * Сколько строк показывает картинка на обычной крупности.
  *
- * Строка - это строка текста: тоньше двенадцати точек цифры в ней сливаются в
- * серую полосу. По этому числу и решается, во сколько биржевых шагов собрать
- * строку на текущем масштабе.
+ * Свеча на триста биржевых шагов в столбик не влезает ни на каком экране, а
+ * прокручиваемая лента цифр перестаёт быть картинкой свечи. Ступени крупности
+ * делят это число: вдвое грубее - вдвое меньше строк, зато каждая весомее.
  */
-const MIN_ROW = 13;
+const ROWS = 28;
 
-/** Насколько густа подложка самой крупной ячейки свечи. */
-const HEAT_MAX = 0.55;
-const HEAT_MIN = 0.08;
+/** Насколько густ самый длинный след. Короткие остаются заметно бледнее. */
+const HEAT_MIN = 0.3;
+const HEAT_MAX = 0.6;
 
 type ReadyRow = {
   top: number;
@@ -80,23 +83,32 @@ type ReadyRow = {
   price: string;
   sell: string;
   buy: string;
+  sellLen: number;
+  buyLen: number;
   sellHeat: number;
   buyHeat: number;
   sellBold: boolean;
   buyBold: boolean;
-  share: number;
   poc: boolean;
   value: boolean;
   whale: boolean;
   tag: string;
 };
 
+type ReadyCandle = {
+  wickTop: number;
+  wickBottom: number;
+  bodyTop: number;
+  bodyBottom: number;
+  rising: boolean;
+};
+
 type Ready = {
   x: number;
+  y: number;
+  height: number;
   rows: ReadyRow[];
-  /** Цены границ области стоимости на экране: линии уходят от панели вправо. */
-  marks: { y: number; color: string; dashed: boolean }[];
-  right: number;
+  candle: ReadyCandle | null;
 } | null;
 
 class FootprintRenderer implements IPrimitivePaneRenderer {
@@ -121,107 +133,125 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
       const skin = this.skin;
       const line = Math.max(1, Math.round(hx));
       const x = Math.round(ready.x * hx);
+      const y = Math.round(ready.y * vy);
       const width = Math.round(WIDTH * hx);
-      const top = Math.round(ready.rows[0].top * vy);
-      const last = ready.rows[ready.rows.length - 1];
-      const bottom = Math.round((last.top + last.height) * vy);
+      const height = Math.round(ready.height * vy);
 
-      // Линии области стоимости уходят вправо от панели через весь холст:
-      // цену, на которой рынок стоял, ищут глазами не в свече, а там, куда он
-      // пришёл потом.
-      for (const mark of ready.marks) {
-        ctx.strokeStyle = mark.color;
-        ctx.lineWidth = line;
-        ctx.setLineDash(mark.dashed ? [3 * hx, 3 * hx] : []);
-        ctx.beginPath();
-        const y = Math.round(mark.y * vy) + 0.5;
-        ctx.moveTo(x + width, y);
-        ctx.lineTo(ready.right * hx, y);
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
+      // Ось свечи: от неё расходятся оба следа, и она же середина тела.
+      const axis = x + Math.round((PAD + SIDE + CANDLE / 2) * hx);
+      const bodyLeft = x + Math.round((PAD + SIDE) * hx);
+      const bodyRight = bodyLeft + Math.round(CANDLE * hx);
+      const priceLeft = bodyRight + Math.round((SIDE + GAP) * hx);
 
-      // Подложка: свечи под лестницей должны просвечивать, но не мешать
-      // читать. Прозрачнее - и цифры ложатся на фитили, плотнее - и панель
-      // становится тем же окном, только приклеенным к свече.
-      ctx.globalAlpha = 0.93;
+      // Подложка: свечи графика под картинкой должны просвечивать, но не
+      // мешать читать. Прозрачнее - и цифры ложатся на чужие фитили, плотнее -
+      // и картинка становится тем же окном, только приклеенным к свече.
+      ctx.globalAlpha = 0.92;
       ctx.fillStyle = skin.bg;
-      ctx.fillRect(x, top, width, bottom - top);
+      ctx.fillRect(x, y, width, height);
       ctx.globalAlpha = 1;
 
       const font = (size: number, bold = false) =>
         `${bold ? "700 " : ""}${Math.round(size * vy)}px ui-monospace, monospace`;
-      const sellX = x + Math.round((PAD + COL_PRICE) * hx);
-      const buyX = sellX + Math.round(COL_SIDE * hx);
-      const profX = buyX + Math.round(COL_SIDE * hx);
-      const tagX = profX + Math.round(COL_PROFILE * hx);
-
       ctx.textBaseline = "middle";
 
       for (const row of ready.rows) {
-        const y = Math.round(row.top * vy);
+        const top = Math.round(row.top * vy);
         const h = Math.max(line, Math.round(row.height * vy));
-        const middle = y + h / 2;
+        // Полторы точки зазора между строками: сплошная заливка от края до
+        // края превращает два десятка следов в один цветной прямоугольник.
+        const barTop = top + Math.round(1 * vy);
+        const barH = Math.max(line, h - Math.round(2 * vy));
+        const middle = top + h / 2;
 
-        // Тепловые ячейки сторон. Густота - это и есть ответ на «сколько»:
-        // цифру читают, когда уже увидели, где густо.
-        if (row.sellHeat > 0) {
+        if (row.sellLen > 0) {
           ctx.globalAlpha = row.sellHeat;
           ctx.fillStyle = skin.down;
-          ctx.fillRect(sellX, y, Math.round(COL_SIDE * hx), h);
+          const len = Math.max(line, Math.round(row.sellLen * hx));
+          ctx.fillRect(bodyLeft - len, barTop, len, barH);
         }
-        if (row.buyHeat > 0) {
+        if (row.buyLen > 0) {
           ctx.globalAlpha = row.buyHeat;
           ctx.fillStyle = skin.up;
-          ctx.fillRect(buyX, y, Math.round(COL_SIDE * hx), h);
+          ctx.fillRect(bodyRight, barTop, Math.max(line, Math.round(row.buyLen * hx)), barH);
         }
         ctx.globalAlpha = 1;
 
-        // Профиль строки: её оборот целиком. Внутри области стоимости цветом,
-        // снаружи серым - видно, где рынок стоял, а где пробежал на пустоте.
-        const bar = Math.max(line, Math.round(row.share * (COL_PROFILE - 4) * hx));
-        ctx.fillStyle = row.poc ? skin.gold : row.value ? skin.accent : skin.border;
-        ctx.fillRect(profX, y + h / 2 - line, bar, Math.max(line, 2 * line));
+        // Цифры у самой свечи, лицом наружу: след растёт от неё, и число
+        // стоит в его начале - там, где оно есть у каждой строки, даже самой
+        // короткой.
+        ctx.fillStyle = skin.text;
+        ctx.textAlign = "right";
+        ctx.font = font(10, row.sellBold);
+        ctx.fillText(row.sell, bodyLeft - Math.round(3 * hx), middle);
+        ctx.textAlign = "left";
+        ctx.font = font(10, row.buyBold);
+        ctx.fillText(row.buy, bodyRight + Math.round(3 * hx), middle);
 
+        // Цена справа. Крупная сделка - тем же жёлтым, что плита в стакане:
+        // это одно и то же событие, только уже прошедшее.
         ctx.textAlign = "right";
         ctx.font = font(10);
-        // Крупная сделка - тем же жёлтым, что плита в стакане: это одно и то
-        // же событие, только уже прошедшее.
         ctx.fillStyle = row.whale ? skin.gold : skin.muted;
-        ctx.fillText(row.price, x + Math.round((PAD + COL_PRICE - 4) * hx), middle);
-
-        // Чернила у чисел общие: сторону называет подложка, а красное на
-        // красном читается хуже, чем то же число обычным цветом панели.
-        ctx.fillStyle = skin.text;
-        ctx.font = font(10, row.sellBold);
-        ctx.fillText(row.sell, sellX + Math.round((COL_SIDE - 4) * hx), middle);
-        ctx.font = font(10, row.buyBold);
-        ctx.fillText(row.buy, buyX + Math.round((COL_SIDE - 4) * hx), middle);
+        ctx.fillText(row.price, priceLeft + Math.round((PRICE - 2) * hx), middle);
 
         if (row.tag) {
           ctx.textAlign = "left";
           ctx.font = font(8);
-          ctx.fillStyle = row.poc ? skin.gold : skin.muted;
-          ctx.fillText(row.tag, tagX, middle);
+          ctx.fillStyle = row.poc ? skin.gold : skin.accent;
+          ctx.fillText(row.tag, priceLeft - Math.round(1 * hx), middle);
+        }
+
+        // Граница области стоимости - чертой во всю картинку: по ней видно,
+        // где рынок согласился торговать, а где пробежал на пустоте.
+        if (row.tag && !row.poc) {
+          ctx.strokeStyle = skin.accent;
+          ctx.lineWidth = line;
+          ctx.setLineDash([3 * hx, 3 * hx]);
+          ctx.beginPath();
+          const edge = Math.round(top) + 0.5;
+          ctx.moveTo(x, edge);
+          ctx.lineTo(x + width, edge);
+          ctx.stroke();
+          ctx.setLineDash([]);
         }
 
         // Самая наторгованная цена - рамкой, а не заливкой: залитая строка
-        // перекрашивает под собой обе ячейки, и то, чем эта цена стала
+        // перекрашивает под собой оба следа, и то, чем эта цена стала
         // главной, на ней уже не разглядеть.
         if (row.poc) {
           ctx.strokeStyle = skin.gold;
           ctx.lineWidth = line;
-          ctx.strokeRect(x + 0.5 * line, y + 0.5 * line, width - line, h - line);
+          ctx.strokeRect(x + 0.5 * line, top + 0.5 * line, width - line, h - line);
         }
+      }
+
+      // Свеча поверх следов: она здесь предмет разговора, а следы - объяснение.
+      const candle = ready.candle;
+      if (candle) {
+        const color = candle.rising ? skin.up : skin.down;
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = line;
+        ctx.beginPath();
+        ctx.moveTo(axis, Math.round(candle.wickTop * vy));
+        ctx.lineTo(axis, Math.round(candle.wickBottom * vy));
+        ctx.stroke();
+
+        const bodyTop = Math.round(candle.bodyTop * vy);
+        const bodyH = Math.max(line, Math.round((candle.bodyBottom - candle.bodyTop) * vy));
+        ctx.fillRect(bodyLeft, bodyTop, bodyRight - bodyLeft, bodyH);
       }
 
       ctx.textAlign = "left";
       ctx.strokeStyle = skin.border;
       ctx.lineWidth = line;
-      ctx.strokeRect(x + 0.5 * line, top + 0.5 * line, width - line, bottom - top - line);
+      ctx.strokeRect(x + 0.5 * line, y + 0.5 * line, width - line, height - line);
     });
   }
 }
+
+const TAG = { vah: "VAH", poc: "", val: "VAL" } as const;
 
 class FootprintPaneView implements IPrimitivePaneView {
   private ready: Ready = null;
@@ -230,114 +260,138 @@ class FootprintPaneView implements IPrimitivePaneView {
 
   update() {
     this.ready = null;
+    this.source.box = null;
+
     const chart = this.source.chart;
     const series = this.source.series;
     const data = this.source.data;
     if (!chart || !series || !data || data.levels.length === 0) return;
 
+    const prices = data.levels.map((level) => level.price);
+    const lowest = Math.min(...prices);
+    const span = Math.max(...prices) - lowest;
+    // Крупность: ступень делит число строк, а не шаг цены. Так на любой монете
+    // «вдвое грубее» означает одно и то же - вдвое меньше строк.
+    const budget = Math.max(4, Math.round(ROWS / Math.max(1, this.source.grow)));
+    const step = stepForRows(data.tick, span, budget);
+    if (!(step > 0)) return;
+
+    const { rows } = withValueArea(markRows(foldRows(data.levels, step)));
+    if (rows.length === 0) return;
+
+    const pane = chart.paneSize();
+    // Строка ужимается, только если картинка не влезает в холст целиком:
+    // обрезанная снизу свеча врёт о том, где она кончилась.
+    const room = Math.max(1, pane.height - 24);
+    const rowHeight = Math.max(ROW_MIN, Math.min(ROW, room / rows.length));
+    const height = rowHeight * rows.length;
+
+    const peakSide = rows.reduce((acc, row) => Math.max(acc, row.buy, row.sell), 0);
+    // Границы картинки по цене: верх верхней строки и низ нижней. По ним же
+    // раскладывается свеча, иначе её тело разойдётся со следами.
+    const top = rows[0].price + step;
+    const bottom = rows[rows.length - 1].price;
+    const perPixel = top > bottom ? height / (top - bottom) : 0;
+
+    const ready: ReadyRow[] = rows.map((row, i) => ({
+      top: i * rowHeight,
+      height: rowHeight,
+      price: fmtPrice(row.price, data.tick),
+      sell: row.sell > 0 ? money(row.sell) : "·",
+      buy: row.buy > 0 ? money(row.buy) : "·",
+      sellLen: length(row.sell, peakSide),
+      buyLen: length(row.buy, peakSide),
+      sellHeat: heat(row.sell, peakSide),
+      buyHeat: heat(row.buy, peakSide),
+      sellBold: row.imbalance < 0,
+      buyBold: row.imbalance > 0,
+      poc: row.poc,
+      value: row.value,
+      whale: row.whale,
+      tag: row.edge ? TAG[row.edge] : "",
+    }));
+
+    const candle = this.source.candle;
+    const at = (price: number) => (top - price) * perPixel;
+    const shape: ReadyCandle | null =
+      candle && perPixel > 0
+        ? {
+            wickTop: at(candle.high),
+            wickBottom: at(candle.low),
+            bodyTop: at(Math.max(candle.open, candle.close)),
+            bodyBottom: at(Math.min(candle.open, candle.close)),
+            rising: candle.close >= candle.open,
+          }
+        : null;
+
+    // Где встанет картинка. Справа от своей свечи, если справа есть место:
+    // слева от неё история цены, ради которой на график и смотрят. Не влезла -
+    // уходит влево, и в любом случае целиком остаётся на холсте.
     const scale = chart.timeScale();
-    const x = scale.timeToCoordinate(data.time as UTCTimestamp);
-    if (x === null) return;
+    const anchor = scale.timeToCoordinate(data.time as UTCTimestamp);
+    if (anchor === null) return;
+    const spacing = scale.options().barSpacing;
+    let x = anchor + spacing;
+    if (x + WIDTH > pane.width - 4) x = anchor - spacing - WIDTH;
+    x = Math.max(4, Math.min(x, pane.width - WIDTH - 4));
 
-    // Цена одной точки экрана. Спрашиваем у самого ряда: масштаб он держит
-    // сам, и считать его по видимому диапазону значило бы разойтись с ним
-    // ровно на автоподгонке.
-    const near = series.coordinateToPrice(100);
-    const far = series.coordinateToPrice(200);
-    if (near === null || far === null) return;
-    const perPixel = Math.abs(Number(near) - Number(far)) / 100;
-    if (!(perPixel > 0)) return;
-
-    const minRow = MIN_ROW * Math.max(1, this.source.grow);
-    const step = pickStep(data.tick, perPixel, minRow);
-    const marked = buildRows(data, perPixel, minRow);
-    if (marked.length === 0 || !(step > 0)) return;
-
-    const { rows, area } = withValueArea(marked);
-    const peak = rows.reduce((acc, row) => Math.max(acc, row.buy, row.sell), 0);
-    const peakTotal = rows.reduce((acc, row) => Math.max(acc, row.total), 0);
-
-    const height = chart.paneSize().height;
-    const ready: ReadyRow[] = [];
-    for (const row of rows) {
-      const bottom = series.priceToCoordinate(row.price);
-      const top = series.priceToCoordinate(row.price + step);
-      if (bottom === null || top === null) continue;
-      // Строка целиком за краем холста - её не рисуем: она всё равно не видна,
-      // а холст на неё тратится.
-      if (bottom < 0 || top > height) continue;
-      ready.push({
-        top,
-        height: bottom - top,
-        price: fmtPrice(row.price, data.tick),
-        sell: row.sell > 0 ? money(row.sell) : "·",
-        buy: row.buy > 0 ? money(row.buy) : "·",
-        sellHeat: heat(row.sell, peak),
-        buyHeat: heat(row.buy, peak),
-        sellBold: row.imbalance < 0,
-        buyBold: row.imbalance > 0,
-        share: peakTotal > 0 ? row.total / peakTotal : 0,
-        poc: row.poc,
-        value: row.value,
-        whale: row.whale,
-        tag: row.edge ? TAG[row.edge] : "",
-      });
-    }
-    if (ready.length === 0) return;
+    const middle = series.priceToCoordinate((top + bottom) / 2);
+    const y = Math.max(
+      4,
+      Math.min((middle ?? pane.height / 2) - height / 2, pane.height - height - 4),
+    );
 
     this.ready = {
       x,
-      rows: ready,
-      marks: marks(series, area, this.source.skin),
-      right: scale.width(),
+      y,
+      height,
+      rows: ready.map((row) => ({ ...row, top: row.top + y })),
+      candle: shape ? shift(shape, y) : null,
     };
+    this.source.box = { x, y, width: WIDTH, height };
   }
 
   renderer() {
     return new FootprintRenderer(this.ready, this.source.skin);
   }
 
-  /** Поверх свечей: лестница - это то, из чего свеча собрана. */
+  /** Поверх свечей: картинка - это разбор одной из них, а не фон под ними. */
   zOrder() {
     return "top" as const;
   }
 }
 
-const TAG = { vah: "VAH", poc: "POC", val: "VAL" } as const;
+function shift(shape: ReadyCandle, by: number): ReadyCandle {
+  return {
+    wickTop: shape.wickTop + by,
+    wickBottom: shape.wickBottom + by,
+    bodyTop: shape.bodyTop + by,
+    bodyBottom: shape.bodyBottom + by,
+    rising: shape.rising,
+  };
+}
 
 /**
- * Густота подложки.
+ * Длина следа.
  *
  * Корнем от доли, а не долей: на свече, где одна плита вдесятеро больше
- * соседей, доля кладёт все остальные строки в один бледный тон, и лестница
- * перестаёт быть лестницей. Нижний край не нулевой - строка, где прошла хоть
- * одна сделка, обязана отличаться от пустой.
+ * соседей, доля оставляет от всех остальных следов по два пикселя, и картинка
+ * превращается в одну полосу посреди пустоты.
  */
+function length(value: number, peak: number): number {
+  if (!(peak > 0) || !(value > 0)) return 0;
+  return SIDE * Math.sqrt(value / peak);
+}
+
+/** Густота следа. Короткий обязан быть и бледнее: иначе длину не видно вовсе. */
 function heat(value: number, peak: number): number {
   if (!(peak > 0) || !(value > 0)) return 0;
   return HEAT_MIN + HEAT_MAX * Math.sqrt(value / peak);
 }
 
-/** Линии границ области стоимости. POC сплошной, края - пунктиром. */
-function marks(
-  series: ISeriesApi<SeriesType>,
-  area: ValueArea | null,
-  skin: FootprintSkin,
-): { y: number; color: string; dashed: boolean }[] {
-  if (!area) return [];
-  const out: { y: number; color: string; dashed: boolean }[] = [];
-  const put = (price: number, color: string, dashed: boolean) => {
-    const y = series.priceToCoordinate(price);
-    if (y !== null) out.push({ y, color, dashed });
-  };
-  put(area.vah, skin.accent, true);
-  put(area.val, skin.accent, true);
-  put(area.poc, skin.gold, false);
-  return out;
-}
-
 export class FootprintPrimitive implements ISeriesPrimitive<Time> {
   data: FootprintData | null = null;
+  candle: Candle | null = null;
   grow = 1;
   skin: FootprintSkin = {
     bg: "#181a20",
@@ -349,6 +403,8 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
     gold: "#f0b90b",
     accent: "#0affe0",
   };
+  /** Место картинки на холсте: по нему страница ставит подпись над ней. */
+  box: { x: number; y: number; width: number; height: number } | null = null;
   chart: IChartApi | null = null;
   series: ISeriesApi<SeriesType> | null = null;
 
@@ -367,8 +423,9 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
     this.requestUpdate = undefined;
   }
 
-  setData(data: FootprintData | null, grow: number, skin: FootprintSkin) {
+  setData(data: FootprintData | null, candle: Candle | null, grow: number, skin: FootprintSkin) {
     this.data = data;
+    this.candle = candle;
     this.grow = grow;
     this.skin = skin;
     this.requestUpdate?.();
@@ -376,6 +433,8 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
 
   clear() {
     this.data = null;
+    this.candle = null;
+    this.box = null;
     this.requestUpdate?.();
   }
 
@@ -388,8 +447,5 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
   }
 }
 
-/** Ширина лестницы в точках: по ней страница считает, куда встанет подпись. */
+/** Ширина картинки в точках: по ней страница равняет подпись над ней. */
 export const FOOTPRINT_WIDTH = WIDTH;
-
-/** Не используется примитивом, но нужен странице для той же арифметики строк. */
-export type { FootprintRow };

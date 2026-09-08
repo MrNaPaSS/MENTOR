@@ -283,6 +283,18 @@ const EMA_TREND = 50;
 
 export type { Candle };
 
+/**
+ * Свеча по времени бара.
+ *
+ * Картинка объёма рисует настоящую свечу - ту же, что стоит на графике, - а не
+ * собранную из строк профиля. Профиль знает только цены сделок, и открытие с
+ * закрытием по нему не восстановить: свеча вышла бы без тела.
+ */
+function barAt(bars: Candle[], time: number | undefined): Candle | null {
+  if (time === undefined) return null;
+  return bars.find((bar) => bar.time === time) ?? null;
+}
+
 export type Indicators = {
   volume: boolean;
   /**
@@ -957,10 +969,6 @@ function PriceChart({
   const [foot, setFoot] = useState<FootprintData | null>(null);
   const footRef = useRef<FootprintData | null>(null);
   footRef.current = foot;
-  // Верх лестницы: по нему покадрово встаёт подпись. Считаем на смене
-  // данных - в кадре перебирать три сотни строк ради одного максимума
-  // значит тратить его весь.
-  const footTopRef = useRef<number | null>(null);
   // Во сколько раз загрубить строки объёма сверх того, что уже собрал
   // масштаб графика. Читаем из хранилища при первой отрисовке: страница
   // собирается и на сервере, где хранилища нет.
@@ -1713,19 +1721,17 @@ function PriceChart({
         );
       }
 
-      // Подпись лестницы объёма: она стоит на свече, а свеча едет вместе
-      // с холстом - и по горизонтали тоже, в отличие от плашек позиций.
+      // Подпись над картинкой объёма. Место считает сам примитив: он же
+      // решает, справа от свечи ей встать или слева, и повторять эту
+      // арифметику здесь значило бы разойтись с ней на первом же краю холста.
       const label = footBarRef.current;
       if (label) {
-        const shot = footRef.current;
-        const top = footTopRef.current;
-        const at = shot ? chartRef.current?.timeScale().timeToCoordinate(shot.time as UTCTimestamp) ?? null : null;
-        const over = top === null ? null : series.priceToCoordinate(top);
-        if (at === null || over === null) {
+        const spot = footPrimRef.current?.box ?? null;
+        if (!spot) {
           label.style.visibility = "hidden";
         } else {
           label.style.visibility = "visible";
-          label.style.transform = `translate(${Math.max(0, at)}px, ${Math.max(0, over - label.offsetHeight - 2)}px)`;
+          label.style.transform = `translate(${spot.x}px, ${Math.max(0, spot.y - label.offsetHeight)}px)`;
         }
       }
 
@@ -1976,18 +1982,22 @@ function PriceChart({
       gold: pick("--pane-gold", "#f0b90b"),
       accent: pick("--pane-accent", "#0affe0"),
     };
-    footPrimRef.current?.setData(footRef.current, footGrowRef.current, footSkinRef.current);
+    footPrimRef.current?.setData(
+      footRef.current,
+      barAt(dataRef.current, footRef.current?.time),
+      footGrowRef.current,
+      footSkinRef.current,
+    );
   }, [paper, preset]);
 
   // Данные лестницы - в примитив. Он рисует их сам на каждом кадре графика,
   // React в этом больше не участвует: два десятка строк с цифрами, едущих
   // вместе с холстом, перерисовкой компонента не вытянуть.
   useEffect(() => {
-    footTopRef.current = foot?.levels.length
-      ? Math.max(...foot.levels.map((level) => level.price))
-      : null;
     const skin = footSkinRef.current;
-    if (skin) footPrimRef.current?.setData(foot, footGrow, skin);
+    if (skin) {
+      footPrimRef.current?.setData(foot, barAt(dataRef.current, foot?.time), footGrow, skin);
+    }
   }, [foot, footGrow]);
 
   // Точность ценовой шкалы - по шагу инструмента, а не по умолчанию в цент.
