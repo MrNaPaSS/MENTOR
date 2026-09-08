@@ -58,6 +58,7 @@ export default function DomTrader({
   onZoom,
   onPickLevel,
   onHoverLevel,
+  footerHeight,
   alerts,
 }: {
   frame: DomFrame;
@@ -73,6 +74,13 @@ export default function DomTrader({
   onHoverLevel?: (row: LadderRow | null) => void;
   /** Цены с отметками — их видно прямо в стакане. */
   alerts?: number[];
+  /**
+   * Высота подвала, точки. Приходит от графика - от высоты его шкалы времени.
+   *
+   * Обе панели стоят бок о бок, и низ у них обязан быть один. Своё число здесь
+   * означало бы разойтись при первой же смене шрифта на шкале.
+   */
+  footerHeight?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // До какого момента считаем, что стакан листают руками. Пока трейдер смотрит
@@ -240,7 +248,7 @@ export default function DomTrader({
             return items;
           })}
 
-          <TimeFooter columns={columns} />
+          <TimeFooter columns={columns} height={footerHeight} />
         </div>
       </div>
     </div>
@@ -422,10 +430,29 @@ function VolumeHeader({ columns }: { columns: ClusterColumn[] }) {
 }
 
 /** Подвал истории: время интервалов. */
-function TimeFooter({ columns }: { columns: ClusterColumn[] }) {
-  if (columns.length === 0) return null;
+/**
+ * Подвал стакана: время колонок кластеров.
+ *
+ * Рисуется всегда, даже когда колонок нет. Это не про время, а про низ панели:
+ * рядом стоит график, и его шкала времени кончается на своей линии. Пропадал
+ * подвал - стакан кончался выше графика, и две панели, стоящие бок о бок,
+ * заканчивались по-разному.
+ *
+ * Высота приходит от самого графика: её считает библиотека, от шрифта, и
+ * подобрать её числом здесь значит однажды разойтись при смене шрифта.
+ */
+function TimeFooter({
+  columns,
+  height,
+}: {
+  columns: ClusterColumn[];
+  height?: number;
+}) {
   return (
-    <div className="sticky bottom-0 z-20 flex bg-[var(--pane-deep)] font-mono text-[10px] text-[var(--pane-muted)] shadow-[0_-1px_0_var(--pane-border)]">
+    <div
+      className="sticky bottom-0 z-20 flex items-center bg-[var(--pane-deep)] font-mono text-[10px] text-[var(--pane-muted)] shadow-[0_-1px_0_var(--pane-border)]"
+      style={height ? { height } : undefined}
+    >
       <div className="flex-1" />
       {columns.map((column) => (
         <div key={column.start} className={`${COL_W} py-1 text-center`}>

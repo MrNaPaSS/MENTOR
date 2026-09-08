@@ -222,6 +222,11 @@ export interface Profile {
   turbo_leverage: number | null;
   balance_usdt: string | null;
   balance_source: string;
+  /**
+   * Аватарка из Telegram. Путь на сервере, к нему надо добавить API_URL:
+   * файлы отдаёт бэкенд, а сайт живёт на другом домене.
+   */
+  avatar_url?: string | null;
   /** Наставник: у него есть право править журнал. */
   is_admin?: boolean;
   /** Открыт ли скальпинг-терминал: раздел работает с живыми деньгами. */

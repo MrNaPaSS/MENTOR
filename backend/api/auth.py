@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import logging
 import os
 import re
 import secrets
 from datetime import datetime, timezone
+from pathlib import Path
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -334,7 +337,8 @@ async def tg_code(
     # Ученика заводим и связываем сразу, а не при вводе: тогда пароль,
     # доехавший до сайта, уже находит кого впустить, и связка UID с Telegram
     # не зависит от того, дошёл ли ученик до формы.
-    _link_student(session, body.tg_id, uid, body.username.strip())
+    student = _link_student(session, body.tg_id, uid, body.username.strip())
+    _save_avatar(student, body.avatar)
     session.commit()
 
     # Пока пароль жив, повторный запрос отдаёт **тот же** и не продлевает срок.
@@ -362,6 +366,54 @@ async def tg_code(
 
     logger.info("Пароль входа выдан ученику tg=%s", body.tg_id)
     return TgCodeOut(code=_pretty(fresh), expires_in=config.tg_code_ttl_seconds)
+
+
+# Куда кладём аватарки. Рядом с прочими загрузками: их уже раздаёт этот же
+# сервер по /uploads, и заводить второе место незачем.
+_AVATARS = Path(__file__).parent.parent.parent / "webapp" / "public" / "uploads" / "avatars"
+
+# Полмегабайта. Аватарка Telegram - это картинка на сто шестьдесят точек;
+# всё, что заметно больше, прислано не ботом или прислано зря.
+_AVATAR_MAX = 512 * 1024
+
+_AVATAR_URL = re.compile(r"^data:image/(png|jpe?g);base64,", re.IGNORECASE)
+
+
+def _save_avatar(student, payload: str) -> None:
+    """Сохранить аватарку ученика, если бот её прислал.
+
+    Ошибки глотаем молча с записью в журнал: аватарка - украшение подписи, и
+    ронять из-за неё выдачу пароля нельзя. Пустая строка ничего не затирает: в
+    Telegram аватарки может не быть или она закрыта настройками, и подставлять
+    вместо неё пустоту значит стереть ту, что была.
+    """
+    if not payload or student is None:
+        return
+    head = _AVATAR_URL.match(payload)
+    if head is None:
+        logger.warning("Аватарка ученика %s не в том виде", student.id)
+        return
+    try:
+        raw = base64.b64decode(_AVATAR_URL.sub("", payload.strip()), validate=True)
+    except (binascii.Error, ValueError):
+        logger.warning("Аватарка ученика %s не читается", student.id)
+        return
+    if not raw or len(raw) > _AVATAR_MAX:
+        logger.warning("Аватарка ученика %s не того размера: %d", student.id, len(raw))
+        return
+
+    kind = "png" if head.group(1).lower() == "png" else "jpg"
+    try:
+        _AVATARS.mkdir(parents=True, exist_ok=True)
+        name = f"{student.tg_id}.{kind}"
+        (_AVATARS / name).write_bytes(raw)
+    except OSError as exc:
+        logger.warning("Аватарка ученика %s не сохранена: %s", student.id, exc)
+        return
+
+    # Метка времени в адресе: файл перезаписывается под тем же именем, и без
+    # неё браузер показывал бы старую картинку из кеша.
+    student.avatar_url = f"/uploads/avatars/{name}?v={int(_now().timestamp())}"
 
 
 def _link_student(session, tg_id: int, weex_uid: str, username: str):

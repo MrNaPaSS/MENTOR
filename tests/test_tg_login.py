@@ -288,3 +288,60 @@ def test_closing_uid_login_does_not_lock_out_the_mentor(tmp_path):
     answer = client.post("/api/auth/mentor-login", json={"password": "mentor-pass"})
     assert answer.status_code == 200
     assert answer.json()["access_token"]
+
+
+# ── аватарка ─────────────────────────────────────────────────────────────────
+
+# Однопиксельный PNG: настоящая картинка, а не строка похожего вида.
+PIXEL = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+def test_avatar_from_telegram_is_saved(app, tmp_path):
+    app.post(
+        "/api/auth/tg/code",
+        headers={"X-Service-Key": KEY},
+        json={"tg_id": 111, "weex_uid": "8812345", "username": "k", "avatar": PIXEL},
+    )
+    with SessionLocal() as session:
+        student = session.execute(select(Student)).scalars().one()
+        assert student.avatar_url
+        assert student.avatar_url.startswith("/uploads/avatars/111.png")
+
+
+def test_an_empty_avatar_erases_nothing(app):
+    # В Telegram аватарки может не быть или она закрыта настройками.
+    app.post(
+        "/api/auth/tg/code",
+        headers={"X-Service-Key": KEY},
+        json={"tg_id": 111, "weex_uid": "8812345", "username": "k", "avatar": PIXEL},
+    )
+    ask(app)
+    with SessionLocal() as session:
+        assert session.execute(select(Student)).scalars().one().avatar_url
+
+
+def test_a_bad_avatar_does_not_break_the_password(app):
+    # Аватарка - украшение подписи. Ронять из-за неё выдачу пароля нельзя.
+    answer = app.post(
+        "/api/auth/tg/code",
+        headers={"X-Service-Key": KEY},
+        json={"tg_id": 111, "weex_uid": "8812345", "username": "k", "avatar": "мусор"},
+    )
+    assert answer.status_code == 200
+    with SessionLocal() as session:
+        assert session.execute(select(Student)).scalars().one().avatar_url is None
+
+
+def test_the_avatar_reaches_the_profile(app):
+    app.post(
+        "/api/auth/tg/code",
+        headers={"X-Service-Key": KEY},
+        json={"tg_id": 111, "weex_uid": "8812345", "username": "k", "avatar": PIXEL},
+    )
+    code = ask(app).json()["code"]
+    token = enter(app, code).json()["access_token"]
+    body = app.get("/api/profile", headers={"Authorization": f"Bearer {token}"}).json()
+    assert body["avatar_url"].startswith("/uploads/avatars/111.png")

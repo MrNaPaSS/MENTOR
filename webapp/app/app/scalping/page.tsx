@@ -172,7 +172,7 @@ const INDICATOR_LABELS: Record<Exclude<keyof Indicators, "heavy">, string> = {
 // что интерфейс услышал палец, не дожидаясь новых данных.
 const CHIP =
   "rounded px-1.5 py-0.5 text-[11px] transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]";
-const CHIP_ON = "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]";
+const CHIP_ON = "bg-[var(--pane-chip-faint)] text-[var(--pane-chip)]";
 const CHIP_OFF = "text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
 
 // Высота рабочей области: всё окно за вычетом шапки приложения. Заголовок
@@ -347,6 +347,10 @@ export default function ScalpingPage() {
   const [full, setFull] = useState(false);
   const { coins } = useCoins(full ? "full" : "windowed");
   const [balance, setBalance] = useState<string | null>(null);
+  // Высота шкалы времени графика. Её сообщает сам график - считает её
+  // библиотека, от шрифта, - а стакан по ней равняет свой подвал: две панели
+  // стоят бок о бок и обязаны кончаться на одной линии.
+  const [axisHeight, setAxisHeight] = useState(0);
 
   /**
    * Баланс счёта и имя для подписи на снимке.
@@ -2311,6 +2315,7 @@ export default function ScalpingPage() {
                     onPickLevel={setLevel}
                     onHoverLevel={hoverLevel}
                     alerts={alertPrices}
+                    footerHeight={axisHeight}
                   />
                 ) : (
                   <p className="grid h-full place-items-center text-sm text-[var(--pane-muted)]">
@@ -2664,6 +2669,7 @@ export default function ScalpingPage() {
                   onOpenJournal={() => setJournalOpen((open) => !open)}
                   counts={counts}
                   onAddOrder={startManual}
+                  onAxisHeight={setAxisHeight}
                 />
               </div>
             </section>

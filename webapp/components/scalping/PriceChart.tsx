@@ -480,6 +480,7 @@ function PriceChart({
   onAddAlert,
   onAddOrder,
   onOpenJournal,
+  onAxisHeight,
   counts,
 }: {
   symbol: string;
@@ -586,6 +587,14 @@ function PriceChart({
   /** Открыть журнал. Итог дня в углу - вопрос, а ответ на него в журнале. */
   onOpenJournal?: () => void;
   /**
+   * Высота шкалы времени в точках.
+   *
+   * Наружу её сообщает график, потому что считает её библиотека - от шрифта, -
+   * и заранее не знает никто. По ней стакан равняет свой низ: две панели рядом
+   * обязаны кончаться на одной линии.
+   */
+  onAxisHeight?: (px: number) => void;
+  /**
    * Сколько заявок ждёт и сколько позиций в работе - по всем монетам.
    *
    * Рядом с итогом дня, потому что это ответ на тот же вопрос: что у меня
@@ -608,6 +617,11 @@ function PriceChart({
   const smcRef = useRef<SmcResult | null>(null);
   const ceRef = useRef<ChandelierResult | null>(null);
   const lastTimeRef = useRef(0);
+  // Последняя сообщённая высота шкалы времени: сообщаем только смену, иначе
+  // покадровый цикл дёргал бы состояние страницы шестьдесят раз в секунду.
+  const axisRef = useRef(0);
+  const onAxisHeightRef = useRef(onAxisHeight);
+  onAxisHeightRef.current = onAxisHeight;
   // Читаем настройки из ref: загрузка данных не должна зависеть от
   // переключателей, иначе включение индикатора перезапрашивало бы свечи.
   const indicatorsRef = useRef(indicators);
@@ -1405,6 +1419,15 @@ function PriceChart({
       frame = requestAnimationFrame(draw);
       const series = candleRef.current;
       if (!series) return;
+
+      // Высота шкалы времени - наружу. По ней стакан равняет свой низ: обе
+      // панели обязаны кончаться на одной линии, а высоту шкалы библиотека
+      // считает сама, от шрифта, и заранее её не знает никто.
+      const axis = chartRef.current?.timeScale().height() ?? 0;
+      if (axis > 0 && axis !== axisRef.current) {
+        axisRef.current = axis;
+        onAxisHeightRef.current?.(axis);
+      }
 
       for (const active of tradeRef.current) {
         place(

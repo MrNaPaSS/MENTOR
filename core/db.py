@@ -112,10 +112,17 @@ def _add_missing_columns(conn, inspector, engine) -> None:
     """
     from sqlalchemy import text
 
-    from core.models import ChartShot, LiveTrade, ScalpTrade, ScalpWorkspace, WeexCredential
+    from core.models import (
+        ChartShot,
+        LiveTrade,
+        ScalpTrade,
+        ScalpWorkspace,
+        Student,
+        WeexCredential,
+    )
 
     tables = set(inspector.get_table_names())
-    for model in (ScalpTrade, ScalpWorkspace, WeexCredential, LiveTrade, ChartShot):
+    for model in (ScalpTrade, ScalpWorkspace, WeexCredential, LiveTrade, ChartShot, Student):
         table = model.__table__
         if table.name not in tables:
             continue

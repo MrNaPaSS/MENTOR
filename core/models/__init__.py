@@ -44,6 +44,10 @@ class Student(Base):
     language: Mapped[str] = mapped_column(String(2), default="ru")
     balance_usdt: Mapped[float | None] = mapped_column(Numeric(20, 8), nullable=True)
     balance_source: Mapped[str] = mapped_column(String(16), default="affiliate_api")
+    # Аватарка из Telegram. Путь к файлу, а не сама картинка: её отдаёт тот же
+    # сервер, что и снимки, и класть двоичные данные в строку рядом с балансом
+    # значит таскать их каждым запросом профиля.
+    avatar_url: Mapped[str | None] = mapped_column(String(256), nullable=True)
     balance_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False)

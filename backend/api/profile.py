@@ -23,6 +23,7 @@ def _profile(s: Student, admin: bool = False) -> ProfileOut:
         id=s.id, username=s.username, weex_uid=s.weex_uid, mode=s.mode,
         language=s.language, risk_percent=s.risk_percent, turbo_leverage=s.turbo_leverage,
         balance_usdt=s.balance_usdt, balance_source=s.balance_source,
+        avatar_url=s.avatar_url,
         is_admin=admin,
     )
 

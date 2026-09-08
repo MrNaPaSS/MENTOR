@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Key, LogOut, RefreshCw, ShieldCheck, TrendingUp, Zap } from "lucide-react";
-import { api, Profile } from "@/lib/api";
+import { api, API_URL, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -89,8 +89,20 @@ export default function ProfilePage() {
 
         {/* Avatar + info */}
         <div className="flex items-center gap-4">
-          <div className="relative grid h-16 w-16 shrink-0 place-items-center rounded-2xl border border-accent-cyan/30 bg-accent-cyan/10 text-2xl font-black text-accent-cyan">
-            {initial}
+          {/* Аватарка из Telegram, если она есть. Файл отдаёт бэкенд, поэтому
+              к пути добавляем API_URL: сайт живёт на другом домене. Нет
+              аватарки - остаётся буква, как было. */}
+          <div className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-accent-cyan/30 bg-accent-cyan/10 text-2xl font-black text-accent-cyan">
+            {p.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`${API_URL}${p.avatar_url}`}
+                alt={p.username || "аватар"}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              initial
+            )}
             {isAdmin && (
               <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-accent-gold">
                 <ShieldCheck className="h-3 w-3 text-bg-deep" />

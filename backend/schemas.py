@@ -133,6 +133,10 @@ class TgCodeIn(BaseModel):
     tg_id: int
     weex_uid: str = Field(min_length=1, max_length=64)
     username: str = Field(default="", max_length=64)
+    # Аватарка из Telegram, data-URL. Её приносит бот - у платформы нет ни
+    # токена бота, ни права спрашивать Telegram о человеке. Пусто - у ученика
+    # аватарки нет или она закрыта настройками, и это нормально.
+    avatar: str = Field(default="", max_length=2_000_000)
 
 
 class TgCodeOut(BaseModel):
@@ -225,6 +229,7 @@ class ProfileOut(BaseModel):
     turbo_leverage: Optional[int]
     balance_usdt: Optional[Decimal]
     balance_source: str
+    avatar_url: Optional[str] = None
     # Права наставника. Интерфейсу нужно знать их до отрисовки: кнопки, которой
     # у ученика быть не должно, он не нарисует и на мгновение.
     is_admin: bool = False
