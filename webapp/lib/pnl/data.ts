@@ -7,6 +7,7 @@
 // по-разному в окне и в ссылке.
 
 import { dict } from "@/lib/i18n";
+import type { SharedTrade } from "@/lib/chat/api";
 import type { JournalTrade } from "@/lib/journal";
 
 import { price, stamped, type CardData, type CardSide } from "./card";
@@ -43,6 +44,41 @@ export function cardFromTrade(trade: JournalTrade, owner?: string): CardData {
     ],
     footer: [t.stamped, stamped(trade.closed_at)],
     at: trade.closed_at,
+    owner: owner || undefined,
+  };
+}
+
+/**
+ * Сделка, показанная в чате, - в карточку.
+ *
+ * Отдельно от записи журнала: у той есть цена выхода и комиссия, а здесь снимок
+ * цифр на момент отправки. Идущая сделка попадает сюда с плавающим результатом,
+ * и это честно ровно настолько, насколько честна сама карточка: она заверяет
+ * момент, а не итог.
+ *
+ * Дата - закрытия у закрытой, сообщения у идущей. Заверять идущую сделку
+ * временем, которого ещё не было, нельзя.
+ */
+export function cardFromShared(trade: SharedTrade, at: string, owner?: string): CardData {
+  const t = dict().pnlCard;
+  const side = trade.side === "long" ? t.long : t.short;
+  const pnl = Number(trade.pnl ?? 0);
+  const margin = Number(trade.margin ?? 0);
+
+  return {
+    title: trade.symbol,
+    subtitle: `${side}   |   ${trade.leverage}x`,
+    side: trade.side as CardSide,
+    roi: margin > 0 ? (pnl / margin) * 100 : 0,
+    pnl,
+    rows: [
+      [t.entryPrice, price(trade.entry)],
+      // У идущей сделки выхода ещё нет: показываем стоп - то, чем она
+      // ограничена снизу, а не выдуманную цену закрытия.
+      [trade.state === "closed" ? t.exitPrice : t.stopPrice, price(trade.stop)],
+    ],
+    footer: [t.stamped, stamped(at)],
+    at,
     owner: owner || undefined,
   };
 }

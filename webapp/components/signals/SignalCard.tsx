@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { TrendingUp, TrendingDown, CandlestickChart, ExternalLink } from "lucide-react";
+import { TrendingUp, TrendingDown, CandlestickChart, ExternalLink, MessageSquare } from "lucide-react";
 import { SignalOut } from "@/lib/api";
 import { fmtUsd, isLong } from "@/lib/format";
 import ChartOverlay from "@/components/market/ChartOverlay";
@@ -229,6 +230,18 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
                 className="max-h-44 w-full rounded-xl border border-border object-cover transition-colors hover:border-border"
               />
             </a>
+          )}
+
+          {/* Обсуждение: сигнал вырос из заявки, показанной в чате, и там уже
+              лежит разговор о ней. */}
+          {s.chat_message_id && (
+            <Link
+              href={`/app/scalping?chat=${s.chat_message_id}`}
+              className="flex items-center gap-1.5 text-xs font-semibold text-accent-cyan transition-opacity hover:opacity-80"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              {t.signals.discussion}
+            </Link>
           )}
 
           <PriceTrack signal={s} currentPrice={currentPrice} />

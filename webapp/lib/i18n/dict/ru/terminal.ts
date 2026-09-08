@@ -364,6 +364,7 @@ export const pnlCard = {
   short: "Шорт",
   entryPrice: "Цена входа",
   exitPrice: "Цена выхода",
+  stopPrice: "Стоп",
   stamped: "Дата и время",
   trades: "Сделок",
   tradeWord: (n: number): string => (n % 10 === 1 && n % 100 !== 11 ? "сделка" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "сделки" : "сделок"),

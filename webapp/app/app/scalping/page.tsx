@@ -13,6 +13,7 @@
 
 import { useT } from "@/lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   BookText,
   CandlestickChart,
@@ -585,6 +586,19 @@ export default function ScalpingPage() {
   // точка непрочитанного загоралась бы только у того, кто и так в него смотрит.
   const chat = useSyncExternalStore(chatSubscribe, chatSnapshot, chatServer);
   useEffect(() => openChat(), []);
+
+  /**
+   * Сообщение чата из адреса: /app/scalping?chat=41.
+   *
+   * Так сюда приводит ссылка «обсуждение» в карточке сигнала. Панель при этом
+   * открывается сама - иначе человек попадает в терминал и не понимает, за чем
+   * его позвали.
+   */
+  const params = useSearchParams();
+  const chatFocus = Number(params.get("chat")) || null;
+  useEffect(() => {
+    if (chatFocus) setChatOpen(true);
+  }, [chatFocus]);
 
   const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort, shelf, interval: timeframe });
 
@@ -3123,6 +3137,7 @@ export default function ScalpingPage() {
                     symbol={symbol ?? undefined}
                     own={myShares}
                     onCopy={copyAllowed ? copyTrade : undefined}
+                    focus={chatFocus}
                     onClose={() => setChatOpen(false)}
                   />
                 </section>

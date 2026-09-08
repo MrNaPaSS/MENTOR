@@ -210,6 +210,13 @@ export interface SignalOut {
   target_audience: string;
   status: string;
   chart_url?: string | null;
+  /**
+   * Из какого сообщения чата вырос сигнал.
+   *
+   * По нему карточка рисует ссылку на обсуждение: там уже лежит разговор о
+   * сделке, и пересказывать его в карточке незачем.
+   */
+  chat_message_id?: number | null;
 }
 
 export interface Profile {

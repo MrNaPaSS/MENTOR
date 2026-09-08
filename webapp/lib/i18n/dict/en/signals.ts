@@ -1,4 +1,5 @@
 export const signals = {
+  discussion: "Discussion in chat",
   analysisTitle: "Analysis",
   analysisSubtitle: "Market breakdowns from the mentor",
   signalsSubtitle: "Signals sized to your deposit",

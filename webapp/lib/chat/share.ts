@@ -26,6 +26,7 @@ export function fromJournal(trade: JournalTrade): SharedTrade {
     margin: trade.margin,
     outcome: trade.outcome,
     fee: trade.fee,
+    closedAt: trade.closed_at,
   };
 }
 

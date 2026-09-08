@@ -355,6 +355,7 @@ export const pnlCard = {
   short: "Short",
   entryPrice: "Entry price",
   exitPrice: "Exit price",
+  stopPrice: "Stop",
   stamped: "Date and time",
   trades: "Trades",
   tradeWord: (n: number): string => (n === 1 ? "trade" : "trades"),

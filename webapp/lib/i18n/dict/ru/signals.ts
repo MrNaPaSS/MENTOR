@@ -1,6 +1,7 @@
 // Сигналы и анализы ментора: лента, карточка и подробности.
 
 export const signals = {
+  discussion: "Обсуждение в чате",
   analysisTitle: "Анализы",
   analysisSubtitle: "Разборы рынка от ментора",
   signalsSubtitle: "Сигналы, рассчитанные под ваш депозит",

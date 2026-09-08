@@ -55,6 +55,9 @@ import { preview, uploadPhoto, type LinkPreview } from "@/lib/chat/api";
 import { fromJournal } from "@/lib/chat/share";
 import { journalAvailable, loadTrades, type JournalTrade } from "@/lib/journal";
 import { firstLink, type LinkCard } from "@/lib/chat/link";
+import PnlCard from "@/components/scalping/PnlCard";
+import { cardFromShared } from "@/lib/pnl/data";
+import type { CardData } from "@/lib/pnl/card";
 
 /** Где показан чат: страницей кабинета или панелью терминала. */
 export type ChatTone = "site" | "pane";
@@ -243,9 +246,12 @@ function TradeCard({
   trade,
   skin,
   labels,
+  onOpen,
 }: {
   trade: SharedTrade;
   skin: Skin;
+  /** Нажатие по карточке. Нет - карточка просто показывается. */
+  onOpen?: () => void;
   labels: Record<
     "entry" | "stop" | "take" | "planned" | "open" | "closed" | "byStop" | "byTake" | "byHand" | "ofMargin",
     string
@@ -265,8 +271,16 @@ function TradeCard({
   const percent =
     result && trade.margin && trade.margin > 0 ? ((trade.pnl ?? 0) / trade.margin) * 100 : null;
 
+  const Box = onOpen ? "button" : "div";
+
   return (
-    <div className={`mt-1.5 overflow-hidden text-[11px] ${skin.card}`}>
+    <Box
+      onClick={onOpen}
+      title={onOpen ? undefined : undefined}
+      className={`mt-1.5 w-full overflow-hidden text-left text-[11px] ${skin.card} ${
+        onOpen ? "transition-opacity hover:opacity-90" : ""
+      }`}
+    >
       <div className="flex items-center gap-1.5 px-2.5 py-1.5">
         {trade.state === "planned" && <Clock className={`h-3 w-3 ${skin.muted}`} />}
         <span className="text-[12px] font-semibold">{trade.symbol.replace(/USDT$/i, "")}</span>
@@ -342,7 +356,7 @@ function TradeCard({
           </div>
         ))}
       </div>
-    </div>
+    </Box>
   );
 }
 
@@ -376,6 +390,7 @@ export default function ChatRoom({
   symbol,
   own = [],
   onCopy,
+  focus,
   onClose,
 }: {
   tone?: ChatTone;
@@ -390,6 +405,14 @@ export default function ChatRoom({
    * чата в кабинете: там нет ни графика, ни биржевого счёта.
    */
   onCopy?: (trade: SharedTrade) => void;
+  /**
+   * Показать это сообщение при открытии.
+   *
+   * Приходит из адреса, по которому ведёт ссылка «обсуждение» в карточке
+   * сигнала: человек пришёл смотреть конкретную заявку, и искать её в ленте
+   * глазами он не должен.
+   */
+  focus?: number | null;
   /** Кнопка сворачивания в шапке. Есть только у панели терминала. */
   onClose?: () => void;
 }) {
@@ -453,6 +476,17 @@ export default function ChatRoom({
     node.classList.add("chat-found");
     setTimeout(() => node?.classList.remove("chat-found"), 1200);
   }
+
+  // Сообщение из адреса. Ждём, пока приедет история: до неё прокручивать не к
+  // чему, а дочитывать вверх с пустой ленты бессмысленно.
+  const focused = useRef(0);
+  useEffect(() => {
+    if (!focus || focused.current === focus || state.messages.length === 0) return;
+    focused.current = focus;
+    void goToMessage(focus);
+    // goToMessage читает ленту сам и в зависимостях не нуждается.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, state.messages.length]);
 
   // Нажатие мимо закрывает меню скрепки. Меню, которое не уходит само, остаётся
   // висеть над лентой и закрывает собой разговор - а человек уже передумал
@@ -534,6 +568,8 @@ export default function ChatRoom({
 
   // Жалоба сервера на несобравшийся сигнал. Живёт до следующей отправки.
   const [signalNote, setSignalNote] = useState<string | null>(null);
+  // Открытая карточка результата. Null - окна нет.
+  const [card, setCard] = useState<CardData | null>(null);
   const mentor = Boolean(state.me?.mentor);
 
   const pinned = state.messages.find((m) => m.author.mentor);
@@ -646,6 +682,18 @@ export default function ChatRoom({
                 self={state.me?.id === m.author.id}
                 mentor={mentor}
                 onCopy={onCopy}
+                onCard={(trade) =>
+                  setCard(
+                    cardFromShared(
+                      trade,
+                      // Закрытую заверяет дата закрытия, идущую - время
+                      // сообщения: заверять её временем, которого ещё не было,
+                      // нельзя.
+                      trade.closedAt ?? new Date(m.at).toISOString(),
+                      m.author.name,
+                    ),
+                  )
+                }
                 onReply={() => setReplyTo(m)}
                 onGoTo={goToMessage}
                 skin={skin}
@@ -890,6 +938,8 @@ export default function ChatRoom({
         </button>
       </div>
       <p className={skin.note}>{state.live ? t.chat.hint : t.chat.note}</p>
+
+      {card && <PnlCard data={card} onClose={() => setCard(null)} />}
     </div>
   );
 }
@@ -905,6 +955,7 @@ function Bubble({
   self,
   mentor,
   onCopy,
+  onCard,
   onReply,
   onGoTo,
   skin,
@@ -917,6 +968,8 @@ function Bubble({
   /** Смотрит наставник: ему разрешено убирать чужое. */
   mentor: boolean;
   onCopy?: (trade: SharedTrade) => void;
+  /** Показать карточку результата этой сделки. */
+  onCard: (trade: SharedTrade) => void;
   onReply: () => void;
   onGoTo: (id: number) => void;
   skin: Skin;
@@ -960,19 +1013,7 @@ function Bubble({
             {message.author.mentor && <Crown className="mr-0.5 inline h-3 w-3" />}
             {message.author.name}
           </span>
-          <span className={skin.muted}>· {time}</span>
-          {message.edited > 0 && <span className={skin.muted}>· {t.chat.edited}</span>}
 
-          {/* Правка и уборка - в самой строке подписи, а не отдельным меню:
-              нажатий и так хватает, а прятать их за долгим нажатием значит
-              спрятать совсем. */}
-          <button
-            onClick={onReply}
-            title={t.chat.reply}
-            className={`ml-1 ${skin.muted} hover:opacity-80`}
-          >
-            <Reply className="h-3 w-3" />
-          </button>
           {/* Заявка ушла во вкладку «Сигналы»: видно, что разговором дело не
               ограничилось. */}
           {message.signalId ? (
@@ -980,6 +1021,10 @@ function Bubble({
               <Radio className="h-3 w-3" />
             </span>
           ) : null}
+
+          {/* Правка и уборка - в самой строке подписи, а не отдельным меню:
+              нажатий и так хватает, а прятать их за долгим нажатием значит
+              спрятать совсем. */}
           {canEdit && draft === null && (
             <button
               onClick={() => setDraft(message.text)}
@@ -993,7 +1038,7 @@ function Bubble({
             <button
               onClick={() => void drop(message.id)}
               title={self ? t.chat.removeMine : t.chat.removeTheirs}
-              className={`${skin.muted} hover:opacity-80`}
+              className={`${canEdit && draft === null ? "" : "ml-auto"} ${skin.muted} hover:opacity-80`}
             >
               <Trash2 className="h-3 w-3" />
             </button>
@@ -1070,7 +1115,19 @@ function Bubble({
 
         {message.attach?.kind === "trade" && (
           <>
-            <TradeCard trade={message.attach.trade} skin={skin} labels={labels} />
+            {/* Нажатие открывает карточку результата - ту же, которой делятся
+                из журнала. У ждущей заявки результата ещё нет, и открывать там
+                нечего: карточка с нулём обещала бы итог, которого не было. */}
+            <TradeCard
+              trade={message.attach.trade}
+              skin={skin}
+              labels={labels}
+              onOpen={
+                message.attach.trade.state === "planned"
+                  ? undefined
+                  : () => onCard(trade(message))
+              }
+            />
             {/* Повторить чужую заявку у себя. Только ждущую и только чужую: в
                 идущую сделку заходят по её цене, которой уже нет, а свою
                 собственную копировать незачем. */}
@@ -1085,6 +1142,23 @@ function Bubble({
             )}
           </>
         )}
+
+        {/* Подвал: «ответить» слева, время справа - у самой аватарки. Время
+            читают, дочитав реплику, а не до неё; отвечают - тоже после. */}
+        <div className="mt-0.5 flex items-center gap-2 text-[10px]">
+          <button
+            onClick={onReply}
+            title={t.chat.reply}
+            className={`flex items-center gap-0.5 ${skin.muted} hover:opacity-80`}
+          >
+            <Reply className="h-3 w-3" />
+            {t.chat.reply}
+          </button>
+          <span className={`ml-auto ${skin.muted}`}>
+            {message.edited > 0 && <span>{t.chat.edited} · </span>}
+            {time}
+          </span>
+        </div>
 
         {link && (
           <a
