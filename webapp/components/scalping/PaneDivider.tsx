@@ -6,6 +6,12 @@
 // иначе стоит увести курсор за пределы полоски — и панель отвязывается от
 // пальца. Ширина меняется 1:1 с движением, без анимации и без порогов: любое
 // сглаживание здесь читается как залипание.
+//
+// В ряду разделитель занимает две точки, а хватается за восемь: отрицательное
+// поле прячет шесть под соседние панели. Восемь точек пустоты между стаканом
+// и графиком - это восемь точек, на которые они разъехались; два пикселя
+// читаются как стык, а не как щель. Тянуть при этом двухпиксельную полоску
+// невозможно, поэтому место для пальца остаётся прежним.
 
 import { useRef } from "react";
 
@@ -56,7 +62,7 @@ export default function PaneDivider({
       className={
         horizontal
           ? "flex h-2 shrink-0 cursor-row-resize touch-none items-center justify-center"
-          : "hidden w-2 shrink-0 cursor-col-resize touch-none items-center justify-center xl:flex"
+          : "relative z-10 hidden w-2 -mx-[3px] shrink-0 cursor-col-resize touch-none items-center justify-center xl:flex"
       }
     >
       <span

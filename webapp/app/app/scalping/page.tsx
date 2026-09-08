@@ -2552,7 +2552,7 @@ export default function ScalpingPage() {
           <button
             onClick={() => setScreenerOpen(true)}
             title={t.terminal.expandScreener}
-            className={`hidden w-9 shrink-0 -translate-x-[18px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-0.5 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-mr-4 xl:flex`}
+            className={`hidden w-9 shrink-0 -translate-x-[18px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-0 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-mr-4 xl:flex`}
             style={paneStyle}
           >
             {/* Всё содержимое - в колонках одной ширины. Точка вдесятеро уже
@@ -3138,9 +3138,9 @@ export default function ScalpingPage() {
                     setOrderNote({ text: t.terminal.notes.logCleared, bad: false });
                   }}
                   title={t.terminal.logTitle}
-                  className="absolute bottom-2 right-2 z-20 rounded-md border border-[var(--pane-border)] bg-[var(--pane-bg)]/80 p-1.5 text-[var(--pane-muted)] opacity-40 backdrop-blur-sm transition-opacity duration-150 ease-out hover:opacity-100 hover:text-[var(--pane-text)]"
+                  className="absolute bottom-0.5 right-1.5 z-20 rounded border border-[var(--pane-border)] bg-[var(--pane-bg)]/80 p-1 text-[var(--pane-muted)] opacity-40 backdrop-blur-sm transition-opacity duration-150 ease-out hover:opacity-100 hover:text-[var(--pane-text)]"
                 >
-                  <ScrollText className="h-3.5 w-3.5" />
+                  <ScrollText className="h-3 w-3" />
                 </button>
               </div>
             </section>
@@ -3177,7 +3177,7 @@ export default function ScalpingPage() {
                 title={t.terminal.expandChat}
                 // Полоса у правого края - зеркало скринера: половина за краем,
                 // неподвижно, значок и название на видной части.
-                className="hidden w-9 shrink-0 translate-x-[18px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-0.5 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-ml-4 xl:flex"
+                className="hidden w-9 shrink-0 translate-x-[18px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-0 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-ml-4 xl:flex"
                 style={paneStyle}
               >
                 {/* Колонки одной ширины - как у скринера: иначе точка
