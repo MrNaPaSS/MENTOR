@@ -3255,6 +3255,8 @@ export default function ScalpingPage() {
           opposing={opposing}
           maxLeverage={limits?.max_leverage}
           takerFee={limits?.taker_fee}
+          maxQty={limits?.max_qty}
+          maxPosition={limits?.max_position}
         />
       )}
     </div>

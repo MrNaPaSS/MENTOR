@@ -15,7 +15,7 @@
 // разметка остаётся на графике.
 
 import { useT } from "@/lib/i18n";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 import { computeTrade, sideForShelf, DEFAULT_TAKES } from "@/lib/trade/plan";
@@ -32,8 +32,17 @@ export type TradeDraft = {
 // Частые значения под пальцем: скальпер работает одними и теми же суммами, и
 // набирать «50» с клавиатуры двадцать раз за сессию — потерянное время.
 const MARGINS = [10, 25, 50, 100, 250, 500];
+
+// Тысяча стоит отдельно: на монете с низким потолком заявки она не пройдёт, и
+// показывать кнопку, которая приведёт к отказу биржи, - значит ставить ловушку.
+const BIG_MARGIN = 1000;
+
 const LEVERAGES = [10, 25, 50, 100, 200, 400];
-const STOPS = [0.05, 0.1, 0.2, 0.5, 1];
+
+// Шаг стопа мельче у ближних значений и крупнее у дальних. Скальпер живёт в
+// диапазоне до трёх десятых процента, и там ему нужен выбор; дальше стоп ставят
+// редко, и лишние кнопки только удлиняют ряд.
+const STOPS = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1, 1.5];
 
 const FIELD =
   "w-full rounded-md border border-[var(--pane-border)] bg-[var(--pane-deep)] px-2.5 py-2 text-right font-mono text-[15px] " +
@@ -55,6 +64,8 @@ export default function TradeDialog({
   live = false,
   maxLeverage,
   takerFee,
+  maxQty,
+  maxPosition,
   opposing = 0,
 }: {
   draft: TradeDraft;
@@ -75,6 +86,14 @@ export default function TradeDialog({
   maxLeverage?: number;
   /** Комиссия тейкера этой монеты: по ней считаются подсказки в окне. */
   takerFee?: number;
+  /**
+   * Потолок одной заявки по монете и потолок всей позиции, в самой монете.
+   *
+   * Нужны кнопке крупной суммы: на дешёвой монете тысяча долларов с плечом
+   * упирается в этот потолок, и биржа откажет.
+   */
+  maxQty?: number;
+  maxPosition?: number;
   /**
    * Объём встречной позиции по этой монете.
    *
@@ -110,6 +129,23 @@ export default function TradeDialog({
     ? [...LEVERAGES.filter((l) => l < cap), cap].filter((l, i, all) => all.indexOf(l) === i)
     : LEVERAGES;
   const overLimit = cap !== null && draft.leverage > cap;
+
+  // Крупная сумма - только если она пройдёт на этой монете. Считаем так же, как
+  // считает сам расчёт сделки: объём есть сумма на плечо, делённая на цену.
+  //
+  // Потолка биржа называет два, и меньший из них и есть настоящий предел. Не
+  // назвала ни одного - показываем: запрещать по незнанию хуже, чем показать
+  // кнопку, на которую в редком случае ответит отказом биржа.
+  const margins = useMemo(() => {
+    const price = draft.shelf.price;
+    if (!(price > 0)) return MARGINS;
+
+    const caps = [maxQty, maxPosition].filter((v): v is number => Boolean(v && v > 0));
+    if (caps.length === 0) return [...MARGINS, BIG_MARGIN];
+
+    const qty = (BIG_MARGIN * draft.leverage) / price;
+    return qty <= Math.min(...caps) ? [...MARGINS, BIG_MARGIN] : MARGINS;
+  }, [draft.shelf.price, draft.leverage, maxQty, maxPosition]);
 
   // Плечо выше потолка монеты подводим к потолку, как только его узнали.
   // Вниз и только вниз: поднимать плечо за трейдера нельзя, это его риск.
@@ -228,7 +264,7 @@ export default function TradeDialog({
           <Field
             label={d.amount}
             value={draft.margin}
-            presets={MARGINS}
+            presets={margins}
             format={(v) => String(v)}
             onPick={(margin) => onChange({ ...draft, margin })}
           />
