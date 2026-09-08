@@ -148,6 +148,11 @@ export const terminal = {
   chart: {
     candlesUnavailable: (status: number) => `Candles unavailable (${status})`,
     footprintUnavailable: (status: number) => `Candle volume unavailable (${status})`,
+    footSell: "sold",
+    footBuy: "bought",
+    footClose: "Close the candle volume",
+    footPartial: "The candle is not fully broken down: it holds more trades than could be pulled",
+    footEmpty: "No trades in the candle yet",
     noServer: "No connection to the server",
     scoreHide: "Collapse the indicator readout",
     scoreShow: "Expand the indicator readout",

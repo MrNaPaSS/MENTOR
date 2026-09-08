@@ -71,10 +71,7 @@ import {
   type Shapes,
 } from "./primitives/ShapesPrimitive";
 import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
-import {
-  FootprintPrimitive,
-  type FootprintPalette,
-} from "./primitives/FootprintPrimitive";
+import { FootprintCard } from "./FootprintCard";
 import { parseFootprint, type FootprintData } from "@/lib/indicator/footprint";
 import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
@@ -750,7 +747,6 @@ function PriceChart({
   const emaTrendRef = useRef<ISeriesApi<"Line"> | null>(null);
   const shapesRef = useRef<ShapesPrimitive | null>(null);
   const heavyRef = useRef<VolumeCandlesPrimitive | null>(null);
-  const footRef = useRef<FootprintPrimitive | null>(null);
   const shapeDataRef = useRef<Shapes>(EMPTY_SHAPES);
   // Результат структурного движка держим отдельно: переключатели меняют набор
   // фигур, и пересчитывать структуру ради этого незачем.
@@ -777,29 +773,6 @@ function PriceChart({
   // Готовая палитра: лист и выбор свечей сходятся здесь один раз. Через useMemo,
   // потому что по ней сравниваются зависимости эффектов перекраски.
   const skin = useMemo(() => chartPalette(paper, preset), [paper, preset]);
-  // Палитра раскрытой свечи. Своих цветов у неё нет: покупки и продажи красятся
-  // тем же, чем свечи и стакан, — иначе одно и то же событие выглядело бы в
-  // двух местах экрана по-разному.
-  const footSkin = useMemo<FootprintPalette>(
-    () => ({
-      // Подложка глухая: под ней остаются соседние свечи, и полупрозрачная
-      // панель читалась бы вместе с ними.
-      panel: paper === "light" ? "rgba(255,255,255,0.94)" : "rgba(11,14,18,0.9)",
-      border: skin.border,
-      muted: skin.text,
-      up: skin.bidLine,
-      down: skin.askLine,
-      barBuy: skin.upVolume,
-      barSell: skin.downVolume,
-      poc: rgba(skin.gold, 0.14),
-      gold: skin.gold,
-      candleUp: skin.upWick,
-      candleDown: skin.downWick,
-    }),
-    [skin, paper],
-  );
-  const footSkinRef = useRef(footSkin);
-  footSkinRef.current = footSkin;
   const skinRef = useRef(skin);
   skinRef.current = skin;
   // Фигурам структуры нужен не готовый цвет, а сам выбор: лист красит подписи,
@@ -893,28 +866,6 @@ function PriceChart({
     });
   }, []);
 
-  /**
-   * Отдать примитиву раскрытую свечу.
-   *
-   * Свеча берётся из уже загруженного ряда, а не из ответа сервера: профиль
-   * знает только объёмы, а тело с фитилём рисуются по тем же числам, что и
-   * весь график. Иначе раскрытая свеча разошлась бы с соседними.
-   */
-  const paintFootprint = useCallback(() => {
-    const primitive = footRef.current;
-    if (!primitive) return;
-    const data = footDataRef.current;
-    if (!data) {
-      primitive.clear();
-      return;
-    }
-    const candle = dataRef.current.find((c) => c.time === data.time) ?? null;
-    // Время последней свечи: от неё панель отсчитывает пустое поле справа, в
-    // котором стоит.
-    const last = dataRef.current.at(-1)?.time ?? null;
-    primitive.setData(data, candle, last, footSkinRef.current);
-  }, []);
-
   const pushShapes = useCallback(() => {
     const parts = [shapeDataRef.current, tradeShapesRef.current, ghostShapesRef.current];
     const alive = parts.filter((p): p is Shapes => Boolean(p));
@@ -972,7 +923,7 @@ function PriceChart({
   const [openBar, setOpenBar] = useState<number | null>(null);
   const openBarRef = useRef<number | null>(null);
   openBarRef.current = openBar;
-  const footDataRef = useRef<FootprintData | null>(null);
+  const [foot, setFoot] = useState<FootprintData | null>(null);
   // Обработчик нажатия ставится один раз на всю жизнь графика, а таймфрейм
   // трейдер переключает — значит читаем его из ref, а не из замыкания.
   const intervalRef = useRef(interval);
@@ -1132,12 +1083,6 @@ function PriceChart({
     candleRef.current.attachPrimitive(shapesRef.current);
     heavyRef.current = new VolumeCandlesPrimitive();
     candleRef.current.attachPrimitive(heavyRef.current);
-    // Раскрытая свеча: объём внутри неё по ценам. Пустой примитив ничего не
-    // рисует, поэтому висит на ряду всегда — привязывать его по нажатию
-    // значило бы пересобирать ряд ради одного клика.
-    footRef.current = new FootprintPrimitive();
-    candleRef.current.attachPrimitive(footRef.current);
-
     // Нажатие по полке: библиотека не знает о ценовых линиях в момент клика,
     // поэтому ищем ближайшую сами — по расстоянию в пикселях, а не в цене. На
     // минутном графике цена шага и цена в двадцати пикселях различаются на
@@ -1170,14 +1115,7 @@ function PriceChart({
         return;
       }
 
-      // Кластерная панель стоит справа, в пустом поле: нажатие по ней сворачивает
-      // её обратно, а не проваливается на цену под ней.
       const scale = chart.timeScale();
-      if (openBarRef.current !== null && footRef.current?.hit(param.point.x, param.point.y)) {
-        setOpenBar(null);
-        return;
-      }
-
       // Нажатие по текущей цене раскрывает идущую свечу. Это главный жест
       // режима: цена стоит у правого края, панель встаёт рядом с ней — рука
       // тянется туда же, куда и взгляд.
@@ -1196,9 +1134,8 @@ function PriceChart({
         }
       }
 
-      // Нажатие по самой свече раскрывает её: справа встаёт колонка объёмов по
-      // ценам, а к свече от неё идёт пунктир. Проверяем и по горизонтали, и по
-      // вертикали: клик по пустому месту над свечой - это расчёт сделки от той
+      // Нажатие по самой свече раскрывает её: карточка объёма встаёт в углу
+      // графика. Проверяем и по горизонтали, и по вертикали: клик по пустому месту над свечой - это расчёт сделки от той
       // цены, и отбирать его у трейдера нельзя.
       const bar = barUnder(scale, series, param.point, dataRef.current);
       if (bar && FOOTPRINT_INTERVALS.has(intervalRef.current)) {
@@ -1229,7 +1166,6 @@ function PriceChart({
       emaTrendRef.current = null;
       shapesRef.current = null;
       heavyRef.current = null;
-      footRef.current = null;
       lineRef.current = null;
       tradeLinesRef.current = new Map();
       // Линии сделки из журнала живут на том же ряду: с его уходом ссылки на
@@ -1833,10 +1769,7 @@ function PriceChart({
     // Объёмная свеча толстеет прямо на глазах: объём в ней растёт с каждой
     // сделкой, и рисовать её прежней шириной значит отставать от рынка.
     if (cfg.heavy) paintCandles();
-    // Раскрытая свеча рисует своё тело сама - по тем же числам, что и график.
-    // Пока раскрыта текущая, они меняются каждый кадр.
-    if (openBarRef.current !== null) paintFootprint();
-  }, [liveCandle, interval, cfg.volume, cfg.heavy, paintCandles, paintFootprint]);
+  }, [liveCandle, interval, cfg.volume, cfg.heavy, paintCandles]);
 
   // Профиль раскрытой свечи.
   //
@@ -1845,8 +1778,7 @@ function PriceChart({
   // меняться ей уже нечем, и сервер отдаёт её из кэша.
   useEffect(() => {
     if (openBar === null) {
-      footDataRef.current = null;
-      footRef.current?.clear();
+      setFoot(null);
       return;
     }
 
@@ -1873,8 +1805,7 @@ function PriceChart({
         const body = await res.json();
         if (cancelled) return;
         setDataError(null);
-        footDataRef.current = parseFootprint(body);
-        paintFootprint();
+        setFoot(parseFootprint(body));
       } catch {
         if (!cancelled) setDataError(t.terminal.chart.noServer);
       }
@@ -1895,7 +1826,7 @@ function PriceChart({
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, [openBar, symbol, interval, paintFootprint, t]);
+  }, [openBar, symbol, interval, t]);
 
   // Смена монеты или таймфрейма сворачивает раскрытую свечу: её время на новом
   // ряду означает другую свечу, а на другой монете - вообще ничего.
@@ -1913,11 +1844,6 @@ function PriceChart({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [openBar]);
-
-  // Палитра сменилась - раскрытая свеча перекрашивается вместе с графиком.
-  useEffect(() => {
-    if (openBarRef.current !== null) paintFootprint();
-  }, [footSkin, paintFootprint]);
 
   // Точность ценовой шкалы - по шагу инструмента, а не по умолчанию в цент.
   useEffect(() => {
@@ -2432,14 +2358,15 @@ function PriceChart({
         </div>
       )}
 
-      {/* Итог дня: одна цифра в углу. Всё остальное — в журнале. */}
+      {/* Итог дня: одна цифра в полосе над графиком, между чертой панели
+          инструментов и первой линией сетки. Всё остальное — в журнале. */}
       {todayPnl !== null && (
         // Кнопка, а не подпись: цифра дня - это вопрос «из чего она», и ответ
         // на него в журнале. Идти за ним через панель инструментов незачем.
         <button
           onClick={onOpenJournal}
           title={showJournal ? t.terminal.chart.closeJournal : t.terminal.chart.openJournal}
-          className="absolute right-24 top-1 z-10 font-mono text-[11px] tabular-nums transition-opacity duration-150 ease-out hover:opacity-80"
+          className="absolute right-16 top-0.5 z-10 font-mono text-[11px] tabular-nums transition-opacity duration-150 ease-out hover:opacity-80"
         >
           <span className="text-[var(--pane-muted)]">{t.terminal.chart.pnlToday}</span>
           <span className={todayPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
@@ -2539,6 +2466,16 @@ function PriceChart({
         )}
       </div>
 
+      {/* Объём внутри свечи. Стоит справа и выше цены: у самой свечи карточка
+          закрывала бы то место графика, ради которого её и открыли, а цена
+          ходит понизу. Отступ справа - под ценовую шкалу, сверху - под строку
+          плашек заявок. */}
+      {foot && (
+        <div className="pointer-events-none absolute right-16 top-8 z-20 flex justify-end">
+          <FootprintCard data={foot} onClose={() => setOpenBar(null)} />
+        </div>
+      )}
+
       {/* Показания индикатора - в правом нижнем углу, как в оригинале на
           TradingView. Именно там их ищет взгляд человека, пришедшего оттуда, и
           именно там они не спорят с ценой: верх графика занят ею.
@@ -2552,7 +2489,7 @@ function PriceChart({
         <button
           onClick={() => setScoreWide(keepScoreWide(!wideScore))}
           title={wideScore ? t.terminal.chart.scoreHide : t.terminal.chart.scoreShow}
-          className="pointer-events-auto absolute bottom-8 right-14 z-10 overflow-hidden rounded border text-left font-mono text-[10px] tabular-nums shadow transition-opacity duration-150 ease-out hover:opacity-80"
+          className="pointer-events-auto absolute bottom-8 right-[60px] z-10 overflow-hidden rounded border text-left font-mono text-[10px] tabular-nums shadow transition-opacity duration-150 ease-out hover:opacity-80"
           style={{ borderColor: "var(--pane-border)", background: "var(--pane-deep)" }}
         >
           {wideScore ? (
