@@ -88,6 +88,22 @@ export type DomFrame = {
     close: number;
     volume: number;
   } | null;
+  /**
+   * Профиль разобранной свечи - строками на шаге биржи.
+   *
+   * Едет тем же кадром, что и стакан: сделки в живую свечу приходят каждую
+   * секунду, и лестница, обновляемая опросом раз в три секунды, стояла рядом
+   * с бурлящим стаканом мёртвой картинкой. Пусто - разбор закрыт или своя
+   * лента не застала эту свечу с начала; тогда её приносит REST.
+   */
+  foot: {
+    time: number;
+    seconds: number;
+    tick: number;
+    buy: number;
+    sell: number;
+    levels: [number, number, number][];
+  } | null;
 };
 
 export type SortKey =
@@ -131,6 +147,13 @@ type Options = {
   shelf: number;
   /** Таймфрейм графика: по нему сервер складывает живую свечу. */
   interval: string;
+  /**
+   * Начало разобранной свечи, секунды. Ноль - разбор закрыт.
+   *
+   * Профиль весит больше всего остального в кадре, и слать его, пока лестницу
+   * никто не открыл, незачем.
+   */
+  foot: number;
 };
 
 // Последний список монет держим в сессии вкладки: при возврате в раздел он
@@ -149,7 +172,7 @@ function cachedScreener(): ScreenerRow[] {
   }
 }
 
-export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval }: Options) {
+export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval, foot }: Options) {
   const [screener, setScreener] = useState<ScreenerRow[]>([]);
   const [dom, setDom] = useState<DomFrame | null>(null);
   const [connected, setConnected] = useState(false);
@@ -159,8 +182,8 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval }: Op
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Настройки читаем из ref: пересоздавать соединение при смене шага сетки
   // незачем, достаточно отправить команду.
-  const optsRef = useRef({ symbol, rows, agg, sort, shelf, interval });
-  optsRef.current = { symbol, rows, agg, sort, shelf, interval };
+  const optsRef = useRef({ symbol, rows, agg, sort, shelf, interval, foot });
+  optsRef.current = { symbol, rows, agg, sort, shelf, interval, foot };
 
   const send = useCallback((message: object) => {
     const ws = socketRef.current;
@@ -198,6 +221,7 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval }: Op
               interval: o.interval,
             }),
           );
+          if (o.foot > 0) ws.send(JSON.stringify({ action: "foot", time: o.foot }));
         }
       };
 
@@ -250,6 +274,13 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval }: Op
   useEffect(() => {
     send({ action: "sort", sort });
   }, [sort, send]);
+
+  // Какую свечу разобрал трейдер. Отдельной командой, а не в подписке на
+  // инструмент: лестницу открывают и закрывают чаще, чем меняют монету, а
+  // смена монеты стоит серверу удержания нового стакана.
+  useEffect(() => {
+    send({ action: "foot", time: foot });
+  }, [foot, send]);
 
   return { screener, dom, connected };
 }

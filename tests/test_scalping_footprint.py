@@ -268,3 +268,55 @@ def test_intervals_above_an_hour_are_not_served():
             "/api/scalping/footprint/btcusdt", params={"interval": "1d", "time": 0}
         )
     assert answer.status_code == 422
+
+
+# ── профиль в кадре стакана ─────────────────────────────────────────────────
+#
+# Живая свеча разбирается по своей ленте и уезжает клиенту тем же кадром, что
+# и стакан: опрос раз в три секунды оставлял лестницу мёртвой картинкой рядом
+# с бурлящим стаканом.
+
+
+def test_live_footprint_rides_along_with_the_dom_frame():
+    from backend.scalping.state import SymbolState
+    from backend.ws.scalping_hub import _live_foot
+
+    start = (int(time.time()) // 60) * 60
+    state = SymbolState(symbol="BTCUSDT")
+    state.clusters = ClusterHistory(tick=0.1)
+    state.clusters.add(start * 1000, 100.0, 1.0, True)
+    state.clusters.add(start * 1000 + 500, 100.1, 2.0, False)
+
+    shot = _live_foot(state, "1m", start)
+
+    assert shot is not None
+    assert shot["time"] == start
+    assert shot["buy"] == pytest.approx(100.0)
+    assert shot["sell"] == pytest.approx(200.2)
+    assert [row[0] for row in shot["levels"]] == [100.1, 100.0]
+
+
+def test_live_footprint_stays_silent_while_nobody_opened_the_ladder():
+    """Профиль тяжелее всего остального в кадре — без спроса его не шлём."""
+    from backend.scalping.state import SymbolState
+    from backend.ws.scalping_hub import _live_foot
+
+    start = (int(time.time()) // 60) * 60
+    state = SymbolState(symbol="BTCUSDT")
+    state.clusters = ClusterHistory(tick=0.1)
+    state.clusters.add(start * 1000, 100.0, 1.0, True)
+
+    assert _live_foot(state, "1m", 0) is None
+
+
+def test_live_footprint_gives_up_on_a_candle_the_tape_missed():
+    """Лента началась посреди свечи — половину объёма выдавать за целое нельзя."""
+    from backend.scalping.state import SymbolState
+    from backend.ws.scalping_hub import _live_foot
+
+    start = (int(time.time()) // 60) * 60
+    state = SymbolState(symbol="BTCUSDT")
+    state.clusters = ClusterHistory(tick=0.1)
+    state.clusters.add((start + 30) * 1000, 100.0, 1.0, True)
+
+    assert _live_foot(state, "1m", start) is None

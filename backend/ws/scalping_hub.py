@@ -18,6 +18,7 @@ import logging
 from dataclasses import asdict
 
 from backend.scalping.clusters import fit_to_rows
+from backend.scalping.footprint import build as build_footprint, from_columns
 from backend.scalping.ladder import DEFAULT_ROWS, build_ladder
 from backend.scalping.metrics import SHELF_MIN_NOTIONAL
 from backend.scalping.collector import KEEP_BAND_BP, ScalpingCollector
@@ -51,6 +52,9 @@ class Subscription:
         self.shelf: float = SHELF_MIN_NOTIONAL
         # Таймфрейм графика: по нему складывается живая свеча.
         self.interval: str = "1m"
+        # Начало разобранной свечи, секунды. Ноль - разбор закрыт, и профиль
+        # в кадр не кладём: это самая тяжёлая его часть, а смотрят её не всегда.
+        self.foot: int = 0
         self.screener: bool = True
 
 
@@ -123,6 +127,18 @@ class ScalpingHub:
         if old:
             await self.collector.unpin(old)
 
+    async def set_foot(self, ws, at: int) -> None:
+        """Какую свечу клиент разобрал на экране. Ноль - разбор закрыт.
+
+        Профиль живой свечи идёт в кадре стакана, а не отдельным опросом:
+        сделки в неё приходят каждую секунду, и лестница, обновляемая раз в
+        три секунды, стоит на экране мёртвой рядом с бурлящим стаканом.
+        """
+        async with self._lock:
+            sub = self._subs.get(ws)
+        if sub:
+            sub.foot = max(0, at)
+
     async def set_sort(self, ws, sort: str) -> None:
         async with self._lock:
             sub = self._subs.get(ws)
@@ -158,7 +174,7 @@ class ScalpingHub:
         # Десять человек на биткойне с одинаковыми настройками это один расчёт
         # лестницы за такт, а не десять: собрать стакан дороже, чем отправить.
         screener_cache: dict[str, dict] = {}
-        dom_cache: dict[tuple[str, int, int, float, str], dict | None] = {}
+        dom_cache: dict[tuple[str, int, int, float, str, int], dict | None] = {}
         dead: list[object] = []
 
         for ws, sub in targets:
@@ -170,7 +186,7 @@ class ScalpingHub:
                         screener_cache[sub.sort] = frame
                     await ws.send_json({"event": "screener", "payload": frame})
                 if sub.symbol:
-                    key = (sub.symbol, sub.rows, sub.agg, sub.shelf, sub.interval)
+                    key = (sub.symbol, sub.rows, sub.agg, sub.shelf, sub.interval, sub.foot)
                     if key in dom_cache:
                         dom = dom_cache[key]
                     else:
@@ -198,6 +214,10 @@ class ScalpingHub:
             state.book, rows=sub.rows, agg=sub.agg, whale_notional=sub.shelf
         )
         wall = biggest_wall(state)
+        # Срез кластеров снимаем один раз: он нужен и картинке слева от
+        # стакана, и разбору свечи, а стоит перебора всех цен за восемь минут -
+        # восемь раз в секунду это уже заметная работа.
+        columns = state.clusters.snapshot() if state.clusters else []
         return {
             "symbol": state.symbol,
             "tick": step,
@@ -213,10 +233,12 @@ class ScalpingHub:
                     state, band_bp=_shelf_band(state, sub.rows, step), min_notional=sub.shelf, step=step
                 )
             ],
-            "clusters": _clusters(state, ladder, step),
+            "clusters": _clusters(columns, ladder, step),
             # Живая свеча из ленты сделок: график рисует её сразу, не дожидаясь
             # следующего опроса истории.
             "candle": _live_candle(state, sub.interval),
+            # Профиль разобранной свечи, если она открыта на экране.
+            "foot": _live_foot(state, sub.interval, sub.foot, columns),
         }
 
 
@@ -271,12 +293,53 @@ def _live_candle(state, interval: str) -> dict | None:
     }
 
 
-def _clusters(state, ladder, step) -> list[dict]:
+def _live_foot(state, interval: str, at: int, columns: list | None = None) -> dict | None:
+    """Профиль разобранной свечи по своей ленте.
+
+    Считается из тех же кластеров, что и картинка слева от стакана, и стоит
+    ноль запросов к бирже - поэтому уезжает клиенту с каждым кадром, а не раз
+    в три секунды. Отдаём только свечу, которую лента застала целиком: с
+    половиной объёма лестница врёт молча, а REST в этом случае доберёт сделки
+    с биржи.
+    """
+    if at <= 0 or state.clusters is None or state.clusters.tick <= 0:
+        return None
+    seconds = INTERVAL_SECONDS.get(interval)
+    if not seconds:
+        return None
+    start = at - at % seconds
+    end = start + seconds
+    first = state.clusters.first_second
+    if not first or first > start:
+        return None
+    if columns is None:
+        columns = state.clusters.snapshot()
+    if not columns or columns[0].start > start:
+        return None
+
+    shot = build_footprint(
+        from_columns(columns, start, end),
+        time=start,
+        seconds=seconds,
+        tick=state.clusters.tick,
+    )
+    return {
+        "time": shot.time,
+        "seconds": shot.seconds,
+        "tick": shot.tick,
+        "buy": shot.buy,
+        "sell": shot.sell,
+        # Тройками - по той же причине, что и ячейки кластеров.
+        "levels": [[l.price, l.buy, l.sell] for l in shot.levels],
+    }
+
+
+def _clusters(columns: list, ladder, step) -> list[dict]:
     """История объёмов, схлопнутая под строки текущего экрана."""
-    if state.clusters is None:
+    if not columns:
         return []
     prices = [row.price for row in ladder]
-    columns = fit_to_rows(state.clusters.snapshot(), prices, step)
+    columns = fit_to_rows(columns, prices, step)
     return [
         {
             "start": column.start,

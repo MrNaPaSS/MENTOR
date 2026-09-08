@@ -118,6 +118,7 @@ export default function MarketScreener() {
     sort,
     shelf: 0,
     interval: "1m",
+    foot: 0,
   });
 
   const rows = useMemo(() => {

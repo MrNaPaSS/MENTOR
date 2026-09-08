@@ -106,6 +106,7 @@ import {
   type FootprintSkin,
 } from "./primitives/FootprintPrimitive";
 import { parseFootprint, type FootprintData } from "@/lib/indicator/footprint";
+import { PAPER_DOWN, PAPER_UP } from "@/lib/indicator/footprintLayout";
 import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
 import DragLevels, { type DragLevel } from "./DragLevels";
@@ -350,6 +351,14 @@ const FOOTPRINT_INTERVALS = new Set(["1m", "3m", "5m", "10m", "15m", "30m", "1h"
 
 /** Как часто перезапрашивать профиль текущей свечи. */
 const FOOTPRINT_REFRESH_MS = 3000;
+
+/**
+ * Сколько ждём живой профиль, прежде чем идти за ним на сервер.
+ *
+ * Кадр стакана идёт восемь раз в секунду; полсекунды тишины означают, что
+ * своя лента эту свечу не закрывает - тогда её досылает REST.
+ */
+const FOOTPRINT_LIVE_MS = 500;
 
 /** Насколько вертикально можно промахнуться мимо свечи, точки экрана. */
 const FOOTPRINT_HIT_PX = 6;
@@ -643,6 +652,8 @@ function PriceChart({
   preview,
   livePrice,
   liveCandle,
+  liveFoot,
+  onFootBar,
   onCloseTrade,
   showJournal,
   journalKey,
@@ -691,6 +702,24 @@ function PriceChart({
    * отставала от биржи ровно на это время — на скальпе это вечность.
    */
   liveCandle: Candle | null;
+  /**
+   * Профиль раскрытой свечи из ленты сделок - тем же кадром, что и стакан.
+   *
+   * Разбор свечи обязан бурлить так же, как стакан слева: сделки приходят в
+   * неё каждую секунду. Опрос раз в три секунды оставлял на экране мёртвую
+   * картинку, поэтому профиль живой свечи приезжает по тому же каналу.
+   * Пусто - своя лента эту свечу не застала, и её приносит REST.
+   */
+  liveFoot: {
+    time: number;
+    seconds: number;
+    tick: number;
+    buy: number;
+    sell: number;
+    levels: [number, number, number][];
+  } | null;
+  /** Какую свечу разобрали: серверу надо знать, чей профиль слать. */
+  onFootBar?: (time: number) => void;
   /** Закрыть сделку по нажатию на ярлык её позиции. */
   onCloseTrade?: (trade: ActiveTrade) => void;
   /** Показывать отработанные сетапы из журнала прямо на графике. */
@@ -967,13 +996,37 @@ function PriceChart({
   openBarRef.current = openBar;
   const followRef = useRef(false);
   followRef.current = followBar;
-  const [foot, setFoot] = useState<FootprintData | null>(null);
+  // Профиль с сервера по запросу: история и те свечи, которых своя лента не
+  // застала. Живая свеча приезжает кадром стакана и идёт впереди этого.
+  const [restFoot, setRestFoot] = useState<FootprintData | null>(null);
+  // Когда в последний раз пришёл живой профиль: пока он идёт, опрос молчит.
+  const liveFootAt = useRef(0);
+  const foot = useMemo(() => {
+    if (liveFoot && openBar !== null && liveFoot.time === openBar) {
+      return parseFootprint({
+        symbol,
+        interval,
+        time: liveFoot.time,
+        seconds: liveFoot.seconds,
+        tick: liveFoot.tick,
+        buy: liveFoot.buy,
+        sell: liveFoot.sell,
+        partial: false,
+        source: "tape",
+        levels: liveFoot.levels,
+      });
+    }
+    return restFoot;
+  }, [liveFoot, restFoot, openBar, symbol, interval]);
   const footRef = useRef<FootprintData | null>(null);
   footRef.current = foot;
   // Подпись над лестницей: время свечи, итоги и ступени укрупнения.
   // Положение задаётся покадрово - она стоит на свече, а свеча едет.
   const footBarRef = useRef<HTMLDivElement>(null);
+  // Строка разбора под курсором: её цена уходит уровнем через весь график.
+  const [footRow, setFootRow] = useState<{ price: number; total: number } | null>(null);
   const footPrimRef = useRef<FootprintPrimitive | null>(null);
+  const footLineRef = useRef<IPriceLine | null>(null);
   // Цвета для холста: переменных оформления он не понимает, ему нужны
   // значения, и снимать их можно только с живого узла страницы.
   const footSkinRef = useRef<FootprintSkin | null>(null);
@@ -1849,14 +1902,29 @@ function PriceChart({
     if (cfg.heavy) paintCandles();
   }, [liveCandle, interval, cfg.volume, cfg.heavy, paintCandles]);
 
-  // Профиль раскрытой свечи.
+  // Какую свечу разобрали - серверу. По ней он складывает живой профиль и
+  // кладёт его в кадр стакана: без этого он не знает, чей объём считать.
+  useEffect(() => {
+    onFootBar?.(openBar ?? 0);
+  }, [openBar, onFootBar]);
+
+  // Отметка живого профиля: пока он идёт, опрос сервера не нужен.
+  useEffect(() => {
+    if (liveFoot && openBar !== null && liveFoot.time === openBar) {
+      liveFootAt.current = Date.now();
+    }
+  }, [liveFoot, openBar]);
+
+  // Профиль раскрытой свечи - запросом к серверу.
   //
-  // Текущая свеча живёт: сделки в неё приходят каждую секунду, и профиль
-  // перезапрашивается, пока она не закроется. Закрытая приезжает один раз —
-  // меняться ей уже нечем, и сервер отдаёт её из кэша.
+  // Это запасной путь и путь в прошлое. Живую свечу разбирает своя лента, и её
+  // профиль приезжает кадром стакана восемь раз в секунду; сюда дело доходит,
+  // когда ленты на эту свечу не хватило - монету открыли посреди минуты или
+  // трейдер закрепил свечу из истории. Закрытая приезжает один раз: меняться
+  // ей уже нечем, и сервер отдаёт её из кэша.
   useEffect(() => {
     if (openBar === null) {
-      setFoot(null);
+      setRestFoot(null);
       return;
     }
 
@@ -1883,7 +1951,7 @@ function PriceChart({
         const body = await res.json();
         if (cancelled) return;
         setDataError(null);
-        setFoot(parseFootprint(body));
+        setRestFoot(parseFootprint(body));
       } catch {
         if (!cancelled) setDataError(t.terminal.chart.noServer);
       }
@@ -1891,7 +1959,9 @@ function PriceChart({
 
     void load();
     timer = setInterval(() => {
-      void load();
+      // Живой профиль приходит восемь раз в секунду и считается из той же
+      // ленты - спрашивать сервер поверх него значит греть биржу впустую.
+      if (Date.now() - liveFootAt.current > FOOTPRINT_LIVE_MS) void load();
       // Свеча закрылась - следующий запрос уже ничего не изменит. Один после
       // закрытия всё же делаем: последние сделки минуты приходят в неё же.
       if (timer && Date.now() / 1000 > openBar + seconds + 2) {
@@ -1956,6 +2026,7 @@ function PriceChart({
     const read = getComputedStyle(node);
     const pick = (name: string, fallback: string) =>
       read.getPropertyValue(name).trim() || fallback;
+    const light = paper === "light";
     footSkinRef.current = {
       bg: pick("--pane-bg", "#181a20"),
       border: pick("--pane-border", "#2b3139"),
@@ -1966,8 +2037,13 @@ function PriceChart({
       // доводит до видимости на его бумаге. Брать их прямо у свечей нельзя -
       // у стандартной палитры и у мегатрона рост на белом белый, у вельвета
       // белым выходит падение, и сторона объёма исчезает целиком.
-      up: visibleOn(pick("--pane-up", "#0ecb81"), pick("--pane-bg", "#181a20")),
-      down: visibleOn(pick("--pane-down", "#f6465d"), pick("--pane-bg", "#181a20")),
+      // На белом листе - своя пара: серое против фиолетового. Зелёное с
+      // красным на бумаге кричит, а лестница залита цветом целиком, и читать
+      // цифры поверх такой клумбы нельзя.
+      up: light ? PAPER_UP : visibleOn(pick("--pane-up", "#0ecb81"), pick("--pane-bg", "#181a20")),
+      down: light
+        ? PAPER_DOWN
+        : visibleOn(pick("--pane-down", "#f6465d"), pick("--pane-bg", "#181a20")),
       // Светлые чернила для тёмной ячейки. Берём фон тёмного листа, а не
       // белый: чистый белый на цветной подложке слепит.
       bright: "#f5f7fa",
@@ -1977,14 +2053,15 @@ function PriceChart({
       // до видимости: на белом листе тело роста белое, и точка такого цвета
       // на бумаге пропала бы совсем. Обводка берётся первой - она у свечи
       // есть всегда, а тело бывает пустым.
-      dotUp: visibleOn(
-        skinRef.current.upBorder || skinRef.current.up,
-        pick("--pane-bg", "#181a20"),
-      ),
-      dotDown: visibleOn(
-        skinRef.current.downBorder || skinRef.current.down,
-        pick("--pane-bg", "#181a20"),
-      ),
+      dotUp: light
+        ? PAPER_UP
+        : visibleOn(skinRef.current.upBorder || skinRef.current.up, pick("--pane-bg", "#181a20")),
+      dotDown: light
+        ? PAPER_DOWN
+        : visibleOn(
+            skinRef.current.downBorder || skinRef.current.down,
+            pick("--pane-bg", "#181a20"),
+          ),
     };
     footPrimRef.current?.setData(
       footRef.current,
@@ -2053,18 +2130,34 @@ function PriceChart({
       window.addEventListener("pointerup", drop);
     }
 
-    // Курсор-ладонь над телом: иначе о том, что картинку можно увести, узнают
-    // только случайно.
+    // Курсор-ладонь над колонкой цены: иначе о том, что картинку можно увести,
+    // узнают только случайно. Заодно ищем строку под курсором - её цену
+    // график проводит уровнем через всё поле.
     function onHover(event: PointerEvent) {
       if (event.buttons !== 0) return;
       box!.style.cursor = hit(event) ? "grab" : "";
+
+      const rect = box!.getBoundingClientRect();
+      const row =
+        footPrimRef.current?.at(event.clientX - rect.left, event.clientY - rect.top) ?? null;
+      footPrimRef.current?.setHover(row?.price ?? null);
+      setFootRow((now) =>
+        now?.price === row?.price && now?.total === row?.total ? now : row,
+      );
+    }
+
+    function onLeave() {
+      footPrimRef.current?.setHover(null);
+      setFootRow(null);
     }
 
     box.addEventListener("pointerdown", onDown, true);
     box.addEventListener("pointermove", onHover);
+    box.addEventListener("pointerleave", onLeave);
     return () => {
       box.removeEventListener("pointerdown", onDown, true);
       box.removeEventListener("pointermove", onHover);
+      box.removeEventListener("pointerleave", onLeave);
       box.style.cursor = "";
     };
   }, []);
@@ -2124,6 +2217,32 @@ function PriceChart({
       title: hoverLevel.label,
     });
   }, [hoverLevel, skin]);
+
+  // Цена строки разбора под курсором — линией через весь график.
+  //
+  // Своей линией, отдельно от уровня из стакана: там курсор на другой панели,
+  // и обе подсказки могут жить разом - трейдер сверяет плиту в книге с тем,
+  // сколько на этой цене реально прошло.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+
+    if (footLineRef.current) {
+      series.removePriceLine(footLineRef.current);
+      footLineRef.current = null;
+    }
+    if (!footRow || !(footRow.price > 0)) return;
+
+    footLineRef.current = series.createPriceLine({
+      price: footRow.price,
+      color: skinRef.current.gold,
+      lineWidth: 1,
+      // Пунктиром: это подсказка под курсором, а не уровень, на котором стоят.
+      lineStyle: 2,
+      axisLabelVisible: true,
+      title: money(footRow.total),
+    });
+  }, [footRow, skin]);
 
   // Сделка из журнала под курсором: как она шла и чем кончилась.
   //

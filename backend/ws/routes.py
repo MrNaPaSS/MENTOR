@@ -133,6 +133,7 @@ async def ws_scalping(websocket: WebSocket):
         {"action": "symbol", "symbol": "BTCUSDT", "rows": 40, "agg": 1}
         {"action": "symbol", "symbol": null}     — закрыть стакан
         {"action": "sort", "sort": "walls"}
+        {"action": "foot", "time": 1757320800}   — какая свеча разобрана
 
     Кадры уходят событиями ``screener`` и ``dom``.
     """
@@ -173,6 +174,10 @@ async def _handle_scalping_command(hub, websocket, message) -> None:
             ),
             interval=str(message.get("interval") or "1m")[:8],
         )
+    elif action == "foot":
+        # Разбор свечи открыт или закрыт. Ноль означает «закрыт»: профиль
+        # тяжелее всего остального в кадре, и слать его без нужды нельзя.
+        await hub.set_foot(websocket, _clamp(message.get("time"), 0, 0, 2 ** 40))
     elif action == "sort":
         sort = message.get("sort")
         if isinstance(sort, str) and sort in SORT_KEYS:

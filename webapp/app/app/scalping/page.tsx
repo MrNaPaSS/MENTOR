@@ -605,7 +605,19 @@ export default function ScalpingPage() {
     if (chatFocus) setChatOpen(true);
   }, [chatFocus]);
 
-  const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort, shelf, interval: timeframe });
+  // Свеча, разобранная на графике. Живёт здесь, а не в графике: профиль этой
+  // свечи приезжает кадром стакана, и сказать серверу, какую именно считать,
+  // может только тот, кто держит канал.
+  const [footBar, setFootBar] = useState(0);
+  const { screener, dom, connected } = useScalpingFeed({
+    symbol,
+    rows,
+    agg,
+    sort,
+    shelf,
+    interval: timeframe,
+    foot: footBar,
+  });
 
   // Цена для графика — три раза в секунду вместо восьми. Ярлык позиции и итог
   // сделки от этого не станут менее живыми, а перерисовку всего графика на
@@ -3161,6 +3173,8 @@ export default function ScalpingPage() {
                   preview={preview}
                   livePrice={chartPrice}
                   liveCandle={dom?.candle ?? null}
+                  liveFoot={dom?.foot ?? null}
+                  onFootBar={setFootBar}
                   onCloseTrade={(t) => {
                     setClosing(t);
                     setCloseOpen(true);

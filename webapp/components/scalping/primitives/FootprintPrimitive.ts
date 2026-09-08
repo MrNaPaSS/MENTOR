@@ -1,7 +1,9 @@
 // Свеча, разобранная на след покупателя и след продавца.
 //
 // Свеча говорит, куда цена сходила, и молчит о том, чем ход подкреплён. Здесь
-// она нарисована крупно и неподвижно - своей меркой, а не меркой графика.
+// она нарисована крупно - своей меркой, а не меркой графика, - и висит на
+// цене: строка, на которой рынок стоит сейчас, держится ровно на той высоте,
+// где эта цена проходит по шкале, и едет вместе с ней.
 // Посередине идут цены, по обе стороны от них - деньги: слева красным продали,
 // справа зелёным купили. Ячейка у цены есть всегда, а за её край уходит след,
 // длина которого и есть объём. Свеча с одной плитой у низа и свеча, набранная
@@ -10,18 +12,21 @@
 // Разметки свечи здесь нет намеренно: ни рамки тела, ни фитилей, ни подписей
 // краёв. Всё это картинка и так рассказывает строками - где прошли деньги,
 // там свеча и стояла, - а рамка поверх них только спорила с цифрами внутри
-// себя. От свечи осталась одна точка на текущей цене: она отвечает на
-// единственный вопрос, которого у строк нет, - где цена сейчас.
+// себя. От свечи осталась обведённая цена: та строка, на которой цена стоит
+// сейчас. Это единственный вопрос, которого у строк нет, и отвечает на него
+// не отдельная фигура, а сама цена в своей колонке.
 //
 // Растёт картинка сама. Только что открытая свеча стоит на одной цене - у неё
-// одна строка; за минуту их набирается десяток, за час - сотня, и они
-// собираются в более крупный шаг, чтобы остаться читаемыми. Ничего для этого
-// делать не надо: строки - это цены, на которых прошли сделки.
+// одна строка; за минуту их набирается десяток, за час - сотня. Строк ровно
+// столько, сколько цен свеча набрала: лестница прибавляет их сверху и снизу по
+// мере хода. Шаг укрупняется, только когда лестница перестаёт помещаться в
+// холст, - и тогда сотня строк собирается в то, что читается.
 //
-// Неподвижная мерка здесь главное. Строки, привязанные к ценовой шкале,
-// тончают вместе с масштабом и на обычном зуме превращаются в серую щётку;
-// картинка же обязана читаться всегда одинаково. Поэтому высота строки задана
-// в точках, а цены раскладываются внутри картинки сами.
+// Неподвижная мерка здесь главное - но мерка, а не место. Строки, привязанные
+// высотой к ценовой шкале, тончают вместе с масштабом и на обычном зуме
+// превращаются в серую щётку; картинка же обязана читаться всегда одинаково.
+// Поэтому высота строки задана в точках, а к шкале привязана одна точка -
+// текущая цена, за которую лестница и держится.
 //
 // Рисует холст, а не вёрстка: два десятка строк со следами и цифрами едут
 // вместе с графиком на каждом кадре, и React на таком перерисовывается
@@ -46,7 +51,7 @@ import {
   type FootprintData,
 } from "@/lib/indicator/footprint";
 import { withValueArea } from "@/lib/indicator/valueArea";
-import { ROWS, cellHeat, rowHeight, traceTail } from "@/lib/indicator/footprintLayout";
+import { ROW, ROWS_MIN, cellHeat, rowHeight, traceTail } from "@/lib/indicator/footprintLayout";
 import { readableInk } from "@/lib/indicator/ink";
 import { money, price as fmtPrice } from "@/lib/scalping";
 import type { Candle } from "@/lib/indicator/types";
@@ -92,6 +97,9 @@ const TAIL = 14;
 type ReadyRow = {
   top: number;
   height: number;
+  /** Цена строки числом - по ней график рисует уровень под курсором. */
+  value: number;
+  total: number;
   price: string;
   sell: string;
   buy: string;
@@ -111,8 +119,9 @@ type ReadyRow = {
 };
 
 type ReadyCandle = {
-  /** Где на картинке стоит текущая цена. */
-  dot: number;
+  /** Строка, на которой цена стоит сейчас: её цену и обводим. */
+  top: number;
+  height: number;
   rising: boolean;
 };
 
@@ -120,6 +129,8 @@ type Ready = {
   x: number;
   rows: ReadyRow[];
   candle: ReadyCandle | null;
+  /** Цена строки под курсором. null - курсор не на картинке. */
+  hover: number | null;
 } | null;
 
 /** Прямоугольник в точках экрана: место картинки и место её тела. */
@@ -237,6 +248,15 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
           ctx.textBaseline = "middle";
         }
 
+        // Строка под курсором: тонкая черта во всю ширину. Уровень этой цены
+        // в тот же момент проводится через весь график, и подсветка говорит,
+        // какая именно строка его дала.
+        if (ready.hover !== null && row.value === ready.hover) {
+          ctx.strokeStyle = skin.accent;
+          ctx.lineWidth = line;
+          ctx.strokeRect(x + 0.5 * line, top + 0.5 * line, width - line, h - line);
+        }
+
         // Самая наторгованная цена - рамкой вокруг ядра, а не заливкой:
         // залитая строка перекрашивает под собой оба следа, и то, чем эта цена
         // стала главной, на ней уже не разглядеть.
@@ -247,21 +267,22 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
         }
       }
 
-      // Текущая цена - точкой. Кружок поверх ячеек, с ободком цвета панели:
-      // без него точка сливается с густой ячейкой, на которой чаще всего и
-      // стоит - цена ходит там, где идут деньги.
+      // Текущая цена - обведённая. Не отдельная фигура поверх строк, а та же
+      // цена в своей колонке: рамка говорит «вот здесь рынок сейчас», ничего
+      // не закрывая и ни с чем не споря.
       const candle = ready.candle;
       if (candle) {
-        const at = Math.round(candle.dot * vy);
-        const radius = Math.max(line * 2, Math.round(3 * hx));
-        ctx.beginPath();
-        ctx.arc(axis, at, radius + line, 0, Math.PI * 2);
-        ctx.fillStyle = skin.bg;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(axis, at, radius, 0, Math.PI * 2);
-        ctx.fillStyle = candle.rising ? skin.dotUp : skin.dotDown;
-        ctx.fill();
+        const top = Math.round(candle.top * vy);
+        const h = Math.max(line, Math.round(candle.height * vy));
+        ctx.strokeStyle = candle.rising ? skin.dotUp : skin.dotDown;
+        ctx.lineWidth = Math.max(line, Math.round(1.5 * hx));
+        const inset = ctx.lineWidth / 2;
+        ctx.strokeRect(
+          priceLeft + inset,
+          top + Math.round(1 * vy) + inset,
+          priceRight - priceLeft - ctx.lineWidth,
+          Math.max(ctx.lineWidth, h - Math.round(2 * vy)) - ctx.lineWidth,
+        );
       }
 
       ctx.textAlign = "left";
@@ -271,6 +292,11 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
 
 class FootprintPaneView implements IPrimitivePaneView {
   private ready: Ready = null;
+
+  /** Готовая раскладка кадра: по ней страница ищет строку под курсором. */
+  get shot(): Ready {
+    return this.ready;
+  }
 
   constructor(private readonly source: FootprintPrimitive) {}
 
@@ -283,9 +309,18 @@ class FootprintPaneView implements IPrimitivePaneView {
     const data = this.source.data;
     if (!chart || !series || !data || data.levels.length === 0) return;
 
+    const chartPane = chart.paneSize();
+    // Строк ровно столько, сколько набрала свеча. Это и есть рост картинки:
+    // только что открытая стоит на одной цене - у неё одна строка, за минуту
+    // их набирается десяток. Укрупняем шаг, лишь когда лестница перестаёт
+    // помещаться в холст: ужимать строки нельзя - там цифры, а обрезать снизу
+    // значит соврать о том, где свеча кончилась.
+    const room = Math.max(1, chartPane.height - TAIL * 2 - 8);
+    const fits = Math.max(ROWS_MIN, Math.floor(room / ROW));
+
     const prices = data.levels.map((level) => level.price);
     const span = Math.max(...prices) - Math.min(...prices);
-    const step = stepForRows(data.tick, span, ROWS);
+    const step = stepForRows(data.tick, span, fits);
     if (!(step > 0)) return;
 
     const { rows } = withValueArea(markRows(foldRows(data.levels, step)));
@@ -293,23 +328,17 @@ class FootprintPaneView implements IPrimitivePaneView {
 
     const skin = this.source.skin;
 
-    const pane = chart.paneSize();
-    // Строка ужимается, только если картинка не влезает в холст целиком:
-    // обрезанная снизу свеча врёт о том, где она кончилась.
-    const room = Math.max(1, pane.height - TAIL * 2 - 8);
+    const pane = chartPane;
     const tall = rowHeight(rows.length, room);
     const height = tall * rows.length;
 
     const peak = rows.reduce((acc, row) => Math.max(acc, row.buy, row.sell), 0);
-    // Границы картинки по цене: верх верхней строки и низ нижней. По ним же
-    // раскладывается свеча, иначе её тело разойдётся со строками.
-    const top = rows[0].price + step;
-    const bottom = rows[rows.length - 1].price;
-    const perPixel = top > bottom ? height / (top - bottom) : 0;
 
     const laid: ReadyRow[] = rows.map((row, i) => ({
       top: i * tall,
       height: tall,
+      value: row.price,
+      total: row.total,
       price: fmtPrice(row.price, data.tick),
       sell: row.sell > 0 ? money(row.sell) : "·",
       buy: row.buy > 0 ? money(row.buy) : "·",
@@ -328,17 +357,31 @@ class FootprintPaneView implements IPrimitivePaneView {
       edge: row.edge === "vah" || row.edge === "val" ? row.edge : null,
     }));
 
+    // Строка, на которой цена стоит сейчас. Ищем ту, в чью корзину она попала;
+    // не попала ни в одну - берём ближайшую: последняя сделка бывает на пол-
+    // шага выше верхней строки, и остаться совсем без обводки хуже, чем
+    // обвести соседку.
     const candle = this.source.candle;
-    const shape: ReadyCandle | null =
-      candle && perPixel > 0
-        ? {
-            // Точка держится в пределах картинки: цена уходит за край строк на
-            // доли шага, и точка, вылезшая наружу, читалась бы отдельной
-            // фигурой, ничьей.
-            dot: Math.min(height, Math.max(0, (top - candle.close) * perPixel)),
-            rising: candle.close >= candle.open,
-          }
-        : null;
+    let shape: ReadyCandle | null = null;
+    let best = -1;
+    if (candle) {
+      let gap = Infinity;
+      best = 0;
+      rows.forEach((row, i) => {
+        const away =
+          candle.close >= row.price && candle.close < row.price + step
+            ? 0
+            : Math.min(
+                Math.abs(candle.close - row.price),
+                Math.abs(candle.close - (row.price + step)),
+              );
+        if (away < gap) {
+          gap = away;
+          best = i;
+        }
+      });
+      shape = { top: laid[best].top, height: laid[best].height, rising: candle.close >= candle.open };
+    }
 
     // Поле сверху и снизу: сверху под подпись, снизу чтобы нижняя строка не
     // упиралась в шкалу времени.
@@ -359,21 +402,44 @@ class FootprintPaneView implements IPrimitivePaneView {
     // свечи она при этом не теряет: сдвиг откладывается от её же места.
     x = Math.max(4, Math.min(x + this.source.shift.dx, pane.width - WIDTH - 4));
 
-    // По вертикали - вокруг середины своей свечи: разбор обязан стоять там же,
-    // где цена, о которой он рассказывает.
-    const middle = series.priceToCoordinate((top + bottom) / 2);
+    // По вертикали лестница висит на цене, а не стоит посреди своей свечи.
+    //
+    // Строка текущей цены встаёт ровно на ту высоту, где эта цена проходит по
+    // ценовой шкале, и держится на ней: цена пошла - лестница поехала следом,
+    // свеча разошлась шире - строки прибавились сверху или снизу. Без этого
+    // картинка жила отдельной жизнью: цифры внутри менялись, а сама она стояла
+    // колом посреди холста и с рынком уже ничем не была связана.
+    let hang: number | null = null;
+    if (candle && best >= 0) {
+      const at = series.priceToCoordinate(candle.close);
+      if (at !== null) {
+        // Внутри своей строки цена стоит на своём месте, а не в середине: иначе
+        // лестница прыгала бы на целую строку каждый раз, когда цена
+        // переступает границу корзины.
+        const part = Math.min(1, Math.max(0, (candle.close - rows[best].price) / step));
+        hang = at - (laid[best].top + laid[best].height * (1 - part));
+      }
+    }
+
+    // Зацепиться не за что - свеча из истории уехала со шкалы, цены под рукой
+    // нет: встаём серединой на середину профиля. Это по-прежнему то место, о
+    // котором картинка рассказывает.
+    const middle = series.priceToCoordinate(
+      (rows[0].price + step + rows[rows.length - 1].price) / 2,
+    );
     const y = Math.max(
       over,
       Math.min(
-        (middle ?? pane.height / 2) - height / 2 + this.source.shift.dy,
+        (hang ?? (middle ?? pane.height / 2) - height / 2) + this.source.shift.dy,
         pane.height - height - under,
       ),
     );
 
     this.ready = {
       x,
+      hover: this.source.hover,
       rows: laid.map((row) => ({ ...row, top: row.top + y })),
-      candle: shape ? { ...shape, dot: shape.dot + y } : null,
+      candle: shape ? { ...shape, top: shape.top + y } : null,
     };
     this.source.box = { x, y: y - over, width: WIDTH, height: height + over + under };
     // Ручка переноса - колонка цены: это ось картинки, единственная её полоса
@@ -425,6 +491,8 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
   body: FootprintBox | null = null;
   /** Насколько картинку увели от её свечи. */
   shift: { dx: number; dy: number } = { dx: 0, dy: 0 };
+  /** Цена строки под курсором. Живёт отдельно от данных: это про мышь. */
+  hover: number | null = null;
   chart: IChartApi | null = null;
   series: ISeriesApi<SeriesType> | null = null;
 
@@ -462,6 +530,30 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
   setShift(shift: { dx: number; dy: number }) {
     this.shift = shift;
     this.requestUpdate?.();
+  }
+
+  /** Подсветить строку под курсором. */
+  setHover(price: number | null) {
+    if (this.hover === price) return;
+    this.hover = price;
+    this.requestUpdate?.();
+  }
+
+  /**
+   * Строка под точкой экрана.
+   *
+   * Ищем по готовой раскладке, а не пересчитываем цены: раскладку примитив уже
+   * посчитал на этом кадре, и второй счёт разошёлся бы с нарисованным на
+   * границе строки - ровно там, где курсор чаще всего и стоит.
+   */
+  at(pointX: number, pointY: number): { price: number; total: number } | null {
+    const ready = this.view.shot;
+    if (!ready) return null;
+    if (pointX < ready.x || pointX > ready.x + WIDTH) return null;
+    const row = ready.rows.find(
+      (one) => pointY >= one.top && pointY < one.top + one.height,
+    );
+    return row ? { price: row.value, total: row.total } : null;
   }
 
   updateAllViews() {
