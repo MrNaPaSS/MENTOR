@@ -5,9 +5,15 @@ import { ChevronDown } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
 
+/**
+ * Тон вопроса. Не цвет, а имя: сам цвет берётся в globals.css - он разный на
+ * тёмной и светлой теме, и метка красит им четыре вещи с разной прозрачностью.
+ */
+type Tone = "cyan" | "mint" | "violet" | "amber";
+
 interface FaqItem {
   tag: string;
-  tagColor: string;
+  tone: Tone;
   q: string;
   a: string;
 }
@@ -15,55 +21,55 @@ interface FaqItem {
 const FAQS: FaqItem[] = [
   {
     tag: "Академия",
-    tagColor: "#06B6D4",
+    tone: "cyan",
     q: "Что такое NMNH?",
     a: "NMNH (No Money No Honey) - торговая академия с собственным терминалом, комьюнити и аналитикой. Это не канал с сигналами: терминал подключается к твоему счёту на бирже и сам ведёт открытую позицию.",
   },
   {
     tag: "Терминал",
-    tagColor: "#06B6D4",
+    tone: "cyan",
     q: "Чем это отличается от обычных сигналов?",
     a: "Сигнал в канале - картинка, остальное ты делаешь руками. Здесь он открывается в терминале: объём посчитан под депозит, стоп и цели встают на биржу вместе со входом, дальше сервер сам переносит стоп в безубыток.",
   },
   {
     tag: "Безопасность",
-    tagColor: "#00D4A0",
+    tone: "mint",
     q: "Безопасно ли давать API-ключи?",
     a: "Ключ создаётся только на торговлю, без права вывода - снять деньги по нему нельзя. На сервере ключи зашифрованы и в браузер не возвращаются. Отвязать можно в один клик.",
   },
   {
     tag: "Биржа",
-    tagColor: "#A855F7",
+    tone: "violet",
     q: "Работает только с WEEX?",
     a: "Да. На WEEX построены расчёт лимитов, комиссий и сопровождение сделок, и она же открывает доступ в академию.",
   },
   {
     tag: "Стоимость",
-    tagColor: "#00D4A0",
+    tone: "mint",
     q: "Сколько стоит доступ?",
     a: "Абсолютно бесплатно. Достаточно зарегистрироваться на WEEX через нашу партнёрскую ссылку - и доступ открывается автоматически.",
   },
   {
     tag: "Доступ",
-    tagColor: "#06B6D4",
+    tone: "cyan",
     q: "Как получить доступ?",
     a: "Зарегистрируйся на WEEX по партнёрской ссылке, введи свой WEEX UID в бот - и ты уже внутри. Никаких оплат, заявок и ожидания.",
   },
   {
     tag: "Возможности",
-    tagColor: "#A855F7",
+    tone: "violet",
     q: "Что входит в академию?",
     a: "Торговые сигналы с расчётом под твой депозит, собственный софт для анализа рынка, живое комьюнити трейдеров, разборы сделок и постоянное развитие.",
   },
   {
     tag: "Начало",
-    tagColor: "#F59E0B",
+    tone: "amber",
     q: "Нужен ли опыт в трейдинге?",
     a: "Нет. Академия подходит как новичкам, так и опытным трейдерам. Каждый сигнал уже содержит все параметры - остаётся только открыть сделку.",
   },
   {
     tag: "Приложение",
-    tagColor: "#00D4A0",
+    tone: "mint",
     q: "Есть ли мобильное приложение?",
     a: "Да - WebApp работает прямо в Telegram и полностью адаптирован под мобильные устройства. Открывай сделки, смотри сигналы и аналитику в один тап.",
   },
@@ -86,12 +92,9 @@ export default function Faq() {
           return (
             <Reveal key={i} delay={i * 0.04}>
               <div
-                className="group overflow-hidden rounded-2xl border backdrop-blur-md transition-all duration-300"
-                style={{
-                  borderColor: isOpen ? f.tagColor + "60" : "rgba(255,255,255,0.10)",
-                  background: isOpen ? "rgba(20,22,42,0.75)" : "rgba(15,16,32,0.55)",
-                  boxShadow: isOpen ? `0 0 0 1px ${f.tagColor}20` : "none",
-                }}
+                className="faq-item group overflow-hidden rounded-2xl border backdrop-blur-md"
+                data-tone={f.tone}
+                data-open={isOpen}
               >
                 <button
                   onClick={() => setOpen(isOpen ? null : i)}
@@ -100,27 +103,14 @@ export default function Faq() {
                 >
                   <div className="flex flex-col gap-2 min-w-0">
                     {/* Tag */}
-                    <span
-                      className="inline-flex w-fit items-center rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-                      style={{
-                        color: f.tagColor,
-                        background: f.tagColor + "18",
-                        border: `1px solid ${f.tagColor}30`,
-                      }}
-                    >
+                    <span className="faq-tag inline-flex w-fit items-center rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
                       {f.tag}
                     </span>
                     <span className="font-semibold leading-snug text-text-primary">{f.q}</span>
                   </div>
 
                   {/* Chevron */}
-                  <span
-                    className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-all duration-300"
-                    style={{
-                      background: isOpen ? f.tagColor + "20" : "rgba(255,255,255,0.05)",
-                      color: isOpen ? f.tagColor : "rgba(255,255,255,0.4)",
-                    }}
-                  >
+                  <span className="faq-chevron mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg">
                     <ChevronDown
                       className={`h-4 w-4 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}
                     />
@@ -135,10 +125,7 @@ export default function Faq() {
                   <div className="overflow-hidden">
                     <div className="px-5 pb-5">
                       {/* Separator */}
-                      <div
-                        className="mb-4 h-px"
-                        style={{ background: `linear-gradient(90deg, ${f.tagColor}40, transparent)` }}
-                      />
+                      <div className="faq-rule mb-4 h-px" />
                       <p className="text-sm leading-relaxed text-text-secondary">{f.a}</p>
                     </div>
                   </div>
@@ -152,11 +139,7 @@ export default function Faq() {
       {/* CTA */}
       <Reveal delay={0.5}>
         <div
-          className="mt-10 flex flex-col items-center gap-4 rounded-2xl border p-6 text-center sm:flex-row sm:text-left"
-          style={{
-            background: "linear-gradient(135deg, rgba(6,182,212,0.06) 0%, rgba(168,85,247,0.06) 100%)",
-            borderColor: "rgba(6,182,212,0.20)",
-          }}
+          className="faq-cta mt-10 flex flex-col items-center gap-4 rounded-2xl border p-6 text-center sm:flex-row sm:text-left"
         >
           <div className="flex-1">
             <p className="font-bold text-text-primary">Остался вопрос?</p>
