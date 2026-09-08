@@ -22,6 +22,7 @@ export const chat = {
   attachOrder: (coin: string) => `${coin} order`,
   groupRunning: "In the market",
   groupPending: "Resting orders",
+  openJournal: "Open the trade journal",
   groupJournal: "Trade journal",
   noJournal: "No closed trades yet",
   loading: "Reading the journal…",

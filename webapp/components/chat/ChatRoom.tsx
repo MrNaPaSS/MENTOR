@@ -28,6 +28,7 @@ import {
   Pencil,
   Trash2,
   Check,
+  ChevronRight,
 } from "lucide-react";
 import { SOCIAL_LINKS } from "@/lib/content";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
@@ -335,6 +336,7 @@ export default function ChatRoom({
   tone = "site",
   symbol,
   own = [],
+  onOpenJournal,
   onClose,
 }: {
   tone?: ChatTone;
@@ -342,6 +344,13 @@ export default function ChatRoom({
   symbol?: string;
   /** Свои сделки по всем монетам - идущие и ждущие входа: их прикладывают скрепкой. */
   own?: SharedTrade[];
+  /**
+   * Открыть журнал сделок.
+   *
+   * В меню скрепки видно двенадцать последних, а искать бывает нужно ту, что
+   * была в марте. Заголовок раздела и ведёт туда, где список полный.
+   */
+  onOpenJournal?: () => void;
   /** Кнопка сворачивания в шапке. Есть только у панели терминала. */
   onClose?: () => void;
 }) {
@@ -636,9 +645,23 @@ export default function ChatRoom({
             {/* Отработанные сделки: журнал прямо здесь, а не отдельной кнопкой
                 в самом журнале. Показать сделку хотят в разговоре - значит
                 искать её надо там, где пишут, а не там, где считают. */}
-            <p className={`px-3 pt-1.5 text-[10px] uppercase tracking-wide ${skin.muted}`}>
-              {t.chat.groupJournal}
-            </p>
+            {onOpenJournal ? (
+              <button
+                onClick={() => {
+                  onOpenJournal();
+                  setAttachMenu(false);
+                }}
+                title={t.chat.openJournal}
+                className={`flex w-full items-center gap-1 px-3 pt-1.5 text-left text-[10px] uppercase tracking-wide ${skin.muted} hover:opacity-80`}
+              >
+                {t.chat.groupJournal}
+                <ChevronRight className="h-3 w-3" />
+              </button>
+            ) : (
+              <p className={`px-3 pt-1.5 text-[10px] uppercase tracking-wide ${skin.muted}`}>
+                {t.chat.groupJournal}
+              </p>
+            )}
             {journal === null ? (
               <p className={`px-3 py-1 text-[11px] ${skin.muted}`}>{t.chat.loading}</p>
             ) : journal.length === 0 ? (

@@ -253,6 +253,18 @@ const STORAGE_KEY = "nmnh.scalping.panes";
  */
 const MISSING_TOLERANCE = 2;
 
+// Столько же выдержки - пропавшей с биржи цели. Перенос цели делается заменой:
+// прежняя условная заявка снимается, новая ставится, и между этими двумя
+// действиями лестница на бирже короче на одну. Без выдержки терминал принимал
+// эту дырку за исполнение и объявлял цель взятой - навсегда, потому что число
+// взятых только растёт.
+const TAKES_TOLERANCE = 2;
+
+// Сколько молчать про пропавшие цели после того, как трейдер сам подвинул
+// уровень. Замена на бирже занимает доли секунды, но ответ о заявках мог уйти
+// ещё до неё и вернуться уже после - двенадцати секунд хватает с запасом.
+const MOVE_QUIET_MS = 12000;
+
 /**
  * Когда перечитывать журнал после закрытия сделки, миллисекунды.
  *
@@ -1134,6 +1146,10 @@ export default function ScalpingPage() {
         : kind === "stop"
           ? trade.stop
           : trade.targets[trade.takesHit + index];
+    // Пока идёт замена заявки, лестница на бирже короче на одну - и это не
+    // исполнение. Отметку ставим до запроса и обновляем после ответа: круг
+    // опроса мог уйти ещё до переноса, а вернуться уже после.
+    movedRef.current.set(trade.id, Date.now());
     try {
       const body = await moveLevels({
         symbol: trade.symbol,
@@ -1155,6 +1171,7 @@ export default function ScalpingPage() {
             : { take: price }),
       });
       if (!body) throw new Error(t.terminal.notes.serverSilent);
+      movedRef.current.set(trade.id, Date.now());
       dragTrade(
         trade,
         kind,
@@ -1427,6 +1444,10 @@ export default function ScalpingPage() {
   // Сколько раз подряд биржа не показала позицию. Живёт между кругами опроса:
   // выдержка иначе не выдержка.
   const missingRef = useRef(new Map<string, number>());
+  // Сколько кругов подряд цели нет на бирже и когда трейдер последний раз
+  // двигал уровни этой сделки. Оба живут между кругами опроса.
+  const goneRef = useRef(new Map<string, number>());
+  const movedRef = useRef(new Map<string, number>());
   const watchKey = trades
     .filter((t) => t.symbol === symbol && t.status !== "closed")
     .map((t) => `${t.id}:${t.status}`)
@@ -1586,10 +1607,26 @@ export default function ScalpingPage() {
             //
             // Считаем так только когда лестница на бирже действительно была:
             // без неё «поставлено минус висит» врало и объявляло взятыми все.
-            const standing =
+            const gone =
               body.placed_takes > 0 && Array.isArray(body.take_prices)
                 ? Math.max(0, t.targets.length - body.take_prices.length)
                 : 0;
+
+            // И только если дырка в лестнице держится. Перенос цели делается
+            // заменой - прежняя заявка снимается, новая ставится, - и в этот
+            // миг целей на бирже действительно меньше. Раньше терминал принимал
+            // это за исполнение: трейдер двигал третью цель, а первые две
+            // объявлялись взятыми и с графика пропадали, хотя на бирже стояли
+            // обе. Ошибка была необратимой - число взятых только растёт.
+            const quiet = Date.now() - (movedRef.current.get(t.id) ?? 0) < MOVE_QUIET_MS;
+            let standing = 0;
+            if (gone > t.takesHit && !quiet) {
+              const seen = (goneRef.current.get(t.id) ?? 0) + 1;
+              goneRef.current.set(t.id, seen);
+              if (seen >= TAKES_TOLERANCE) standing = gone;
+            } else {
+              goneRef.current.delete(t.id);
+            }
             const hit = Math.min(
               t.targets.length,
               Math.max(t.takesHit, body.takes_hit, standing),
@@ -2913,6 +2950,7 @@ export default function ScalpingPage() {
                     tone="pane"
                     symbol={symbol ?? undefined}
                     own={myShares}
+                    onOpenJournal={() => setJournalOpen(true)}
                     onClose={() => setChatOpen(false)}
                   />
                 </section>
