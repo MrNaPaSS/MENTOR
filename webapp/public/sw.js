@@ -1,7 +1,10 @@
 // NMNH Service Worker - кэширование статики для быстрой загрузки (ТЗ §11).
 // Без офлайн-режима: кэшируем только успешные GET одного источника, навигации - из сети.
-
-const CACHE = "nmnh-static-v1";
+//
+// Версия в имени кэша не косметика: при её смене activate сносит всё прежнее.
+// Сборка меняет имена файлов, старые копии уже никто не спросит, а место они
+// занимают.
+const CACHE = "nmnh-static-v2";
 const STATIC = ["/icons/icon-192.png", "/icons/icon-512.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -27,17 +30,52 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") return;               // навигации - из сети (без офлайна)
   if (!/\/_next\/static\/|\/icons\/|\.(png|jpg|svg|woff2?|css|js)$/.test(url.pathname)) return;
 
-  // stale-while-revalidate для статики
-  event.respondWith(
-    caches.open(CACHE).then(async (cache) => {
-      const cached = await cache.match(request);
-      const network = fetch(request)
-        .then((res) => {
-          if (res && res.status === 200) cache.put(request, res.clone());
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
-  );
+  event.respondWith(serve(event, request));
 });
+
+/**
+ * Отдать файл: сначала копия, потом сеть.
+ *
+ * Важнее всего здесь то, чего эта функция не делает, - она никогда не отвечает
+ * пустотой. Прежняя версия при промахе кэша возвращала обещание сети, а оно на
+ * ошибке разрешалось в undefined: воркер падал сам, и браузер писал «перехватил
+ * запрос и столкнулся с неожиданной ошибкой» вместо честного 404. Один файл, не
+ * доехавший до сервера при выкладке, превращался в необъяснимую поломку всего
+ * кабинета - с ChunkLoadError и белым экраном.
+ *
+ * Ответ сервера отдаётся как есть, даже когда это 404. Пусть Next скажет, какой
+ * кусок он не смог загрузить и по какому адресу: по такой ошибке видно, что
+ * чинить, а по «что-то случилось в воркере» - нет.
+ */
+async function serve(event, request) {
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(request);
+
+  if (cached) {
+    // Файлы сборки неизменны по имени: имя меняется вместе с содержимым, и
+    // перепроверять нечего. Остальное обновляем фоном - копия уходит человеку
+    // сразу, свежее приедет к следующему разу.
+    if (!new URL(request.url).pathname.startsWith("/_next/static/")) {
+      event.waitUntil(revalidate(cache, request));
+    }
+    return cached;
+  }
+
+  try {
+    const network = await fetch(request);
+    if (network.status === 200) cache.put(request, network.clone()).catch(() => {});
+    return network;
+  } catch {
+    // Сети нет вовсе, копии тоже: честная сетевая ошибка вместо пустоты.
+    return Response.error();
+  }
+}
+
+async function revalidate(cache, request) {
+  try {
+    const fresh = await fetch(request);
+    if (fresh.status === 200) await cache.put(request, fresh.clone());
+  } catch {
+    // Молча: копия у человека уже есть, обновимся в другой раз.
+  }
+}
