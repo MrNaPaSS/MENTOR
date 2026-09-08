@@ -259,6 +259,30 @@ export function composeShot(chart: HTMLCanvasElement, meta: ShotMeta): HTMLCanva
   ctx.fillStyle = palette.bg;
   ctx.fillRect(left, top, chart.width, chart.height + head + foot);
 
+  // Бумага в клетку под графиком - светлая тема.
+  //
+  // На экране холст графика прозрачен, а клетку под ним рисует страница. В
+  // снимок попадает только холст, и без этих линий картинка выходила бы на
+  // пустом белом - расходясь с тем, что трейдер видел, когда её снимал.
+  // Шаг и цвет те же, что в PriceChart: менять их нужно в обоих местах сразу.
+  if (meta.theme === "light") {
+    const step = Math.round(48 * ratio);
+    ctx.save();
+    ctx.strokeStyle = "rgba(42,42,62,0.05)";
+    ctx.lineWidth = Math.max(1, Math.round(ratio));
+    ctx.beginPath();
+    for (let x = left; x <= left + chart.width; x += step) {
+      ctx.moveTo(Math.round(x) + 0.5, top + head);
+      ctx.lineTo(Math.round(x) + 0.5, top + head + chart.height);
+    }
+    for (let y = top + head; y <= top + head + chart.height; y += step) {
+      ctx.moveTo(left, Math.round(y) + 0.5);
+      ctx.lineTo(left + chart.width, Math.round(y) + 0.5);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // График - первым: он здесь главное, оформление вокруг него.
   ctx.drawImage(chart, left, top + head);
 

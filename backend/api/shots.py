@@ -511,7 +511,7 @@ def shot_page(shot_id: str, session=Depends(get_session)):
      свечи под ней должны просвечивать. */
   .stamp {{
     position: absolute; right: 3.5%; bottom: 7%;
-    width: 22%; aspect-ratio: 3.1 / 1;
+    width: 17.5%; aspect-ratio: 3.1 / 1;
     display: grid; place-items: center; pointer-events: none;
     animation: slam .42s cubic-bezier(.2,1.5,.35,1) 1.3s both;
     /* Смешивание задано здесь, а не на самом оттиске: поворот печати заводит
@@ -527,19 +527,19 @@ def shot_page(shot_id: str, session=Depends(get_session)):
      светлым, и читается всегда. */
   .ink {{
     position: relative; width: 100%; height: 100%;
-    border: .34cqw solid #fff;
+    border: .28cqw solid #fff;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: .35cqw; color: #fff;
   }}
   .ink::before {{
-    content: ""; position: absolute; inset: .9cqw;
-    border: .12cqw solid #fff; opacity: .8;
+    content: ""; position: absolute; inset: .72cqw;
+    border: .1cqw solid #fff; opacity: .8;
   }}
   .mark {{
-    font-size: 2.1cqw; font-weight: 800; letter-spacing: .02em; line-height: 1;
+    font-size: 1.7cqw; font-weight: 800; letter-spacing: .02em; line-height: 1;
   }}
   .creed {{
-    font-size: 1.05cqw; font-weight: 600; letter-spacing: .08em;
+    font-size: .86cqw; font-weight: 600; letter-spacing: .08em;
     opacity: .85; line-height: 1;
   }}
 
