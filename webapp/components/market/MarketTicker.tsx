@@ -221,7 +221,7 @@ const Pair = memo(function Pair({ row }: { row: ScreenerRow }) {
           : `${sym} - открыть график и стакан`
       }
       className="flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs transition-[background-color,transform] duration-150 ease-out hover:scale-[1.06] hover:bg-[var(--tick-hover)] motion-reduce:hover:scale-100"
-      style={heavy ? { background: "rgb(var(--accent-gold) / 0.12)" } : undefined}
+      style={heavy ? { background: "var(--tick-heavy)" } : undefined}
     >
       {/* Цветная точка = индикатор направления */}
       <span
@@ -230,7 +230,7 @@ const Pair = memo(function Pair({ row }: { row: ScreenerRow }) {
       />
       <span
         className="font-semibold"
-        style={{ color: heavy ? "rgb(var(--accent-gold))" : "var(--tick-symbol)" }}
+        style={{ color: heavy ? "var(--tick-heavy-ink)" : "var(--tick-symbol)" }}
       >
         {sym}
       </span>
@@ -250,7 +250,7 @@ const Pair = memo(function Pair({ row }: { row: ScreenerRow }) {
       {heavy && (
         <span
           className="font-mono text-[10px] font-bold tabular-nums"
-          style={{ color: "rgb(var(--accent-gold))" }}
+          style={{ color: "var(--tick-heavy-ink)" }}
         >
           {money(row.wall_notional)}
         </span>
