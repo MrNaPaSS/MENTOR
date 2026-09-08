@@ -42,6 +42,14 @@ QUEUE_MAX = 500
 
 TIMEOUT = 15
 
+# Сколько текста помещается под картинкой. Больше - Telegram отказывает всему
+# сообщению, поэтому длинное уходит текстом, а картинка остаётся ссылкой в нём.
+CAPTION_MAX = 1024
+
+# Подпись кнопки под картинкой. Ведёт на страницу карточки, а не сразу в
+# терминал: сначала человек смотрит, о чём речь, и только потом решает.
+CARD_BUTTON = "Открыть на NMNH.TRADE"
+
 # Как часто спрашивать у Telegram размер группы. Пять минут: число это меняется
 # за день на единицы, а спрашивать его на каждый вход в комнату значит слать в
 # Bot API запрос за запросом ради одной и той же цифры.
@@ -216,7 +224,26 @@ class ForumBridge:
             ]
         }
 
+    def _page_button(self, url: str) -> dict | None:
+        """Кнопка на страницу карточки. Пусто - страницы нет, вести некуда."""
+        if not str(url).lower().startswith(("http://", "https://")):
+            return None
+        return {"inline_keyboard": [[{"text": CARD_BUTTON, "url": url}]]}
+
     async def _send(self, job: dict) -> None:
+        # Картинка уходит картинкой.
+        #
+        # Ссылку на карточку Telegram должен был разворачивать сам, но
+        # предпросмотр собирает его обходчик и по своим правилам: не дотянулся,
+        # не уложился в вес, решил показать один заголовок - и в теме висит
+        # серый прямоугольник вместо карточки. Отправленная картинка так не
+        # подводит, а ссылка остаётся кнопкой под ней.
+        #
+        # Не ушла картинкой - уходит текстом: разговор важнее иллюстрации.
+        if job.get("photo") and len(job["html"]) <= CAPTION_MAX:
+            if await self._send_photo(job):
+                return
+
         payload: dict[str, Any] = {
             "chat_id": self.chat_id,
             "text": job["html"],
@@ -239,14 +266,46 @@ class ForumBridge:
         if job.get("reply_to"):
             payload["reply_parameters"] = {"message_id": int(job["reply_to"])}
 
-        keyboard = self._keyboard(job.get("symbol", ""), job.get("button", ""))
+        keyboard = self._buttons(job)
         if keyboard:
             payload["reply_markup"] = keyboard
 
         result = await self._call("sendMessage", payload)
+        self._note(job, result)
+
+    def _buttons(self, job: dict) -> dict | None:
+        """Кнопка под сообщением: на карточку, если она есть, иначе в терминал."""
+        return self._page_button(job.get("open", "")) or self._keyboard(
+            job.get("symbol", ""), job.get("button", "")
+        )
+
+    async def _send_photo(self, job: dict) -> bool:
+        """Отправить картинкой с подписью. Ложь - не вышло, пусть идёт текстом."""
+        payload: dict[str, Any] = {
+            "chat_id": self.chat_id,
+            "photo": job["photo"],
+            "caption": job["html"],
+            "parse_mode": "HTML",
+        }
+        if job.get("topic_id"):
+            payload["message_thread_id"] = int(job["topic_id"])
+        if job.get("reply_to"):
+            payload["reply_parameters"] = {"message_id": int(job["reply_to"])}
+
+        keyboard = self._buttons(job)
+        if keyboard:
+            payload["reply_markup"] = keyboard
+
+        result = await self._call("sendPhoto", payload)
+        if result is None:
+            return False
+        self._note(job, result)
+        return True
+
+    def _note(self, job: dict, result: dict | None) -> None:
+        """Запомнить связку с отправленным сообщением, если оно ушло."""
         if not result:
             return
-
         tg_id = result.get("message_id")
         if tg_id and job.get("message_id"):
             self._remember(int(job["message_id"]), int(tg_id))
@@ -255,6 +314,20 @@ class ForumBridge:
         tg_id = self._known(int(job["message_id"]))
         if tg_id is None:
             return
+        # У сообщения с картинкой правится подпись, а не текст: текста у него
+        # нет вовсе, и editMessageText на нём отказывает.
+        if job.get("preview"):
+            await self._call(
+                "editMessageCaption",
+                {
+                    "chat_id": self.chat_id,
+                    "message_id": tg_id,
+                    "caption": job["html"],
+                    "parse_mode": "HTML",
+                },
+            )
+            return
+
         await self._call(
             "editMessageText",
             {

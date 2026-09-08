@@ -319,3 +319,77 @@ async def test_forum_size_is_asked_once(monkeypatch):
 async def test_forum_size_without_bridge_is_zero():
     """Моста нет - числа нет. Выдумывать его нельзя: рядом стоит настоящее."""
     assert await ForumBridge("", 0, "").members() == 0
+
+
+# ── Карточка уходит картинкой ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_card_goes_as_a_picture(monkeypatch):
+    """Карточку отправляем картинкой, а не ссылкой на неё.
+
+    Предпросмотр собирает обходчик Telegram и по своим правилам: не дотянулся
+    или не уложился в вес - в теме висит серый прямоугольник. Отправленная
+    картинка так не подводит.
+    """
+    bridge = ForumBridge("token", FORUM, "https://www.nmnh.trade")
+    calls = []
+
+    async def fake(method, payload):
+        calls.append((method, payload))
+        return {"message_id": 7}
+
+    monkeypatch.setattr(bridge, "_call", fake)
+    monkeypatch.setattr(bridge, "_remember", lambda *_: None)
+    await bridge._send(
+        {
+            "op": "send",
+            "message_id": 1,
+            "html": "<b>Андрей</b>",
+            "photo": "https://api.nmnh.trade/abc12345.png",
+            "open": "https://api.nmnh.trade/abc12345",
+            "preview": True,
+        }
+    )
+
+    method, payload = calls[0]
+    assert method == "sendPhoto"
+    assert payload["photo"] == "https://api.nmnh.trade/abc12345.png"
+    assert payload["caption"] == "<b>Андрей</b>"
+    # Кнопка ведёт на страницу карточки: в терминал человек уйдёт уже с неё.
+    button = payload["reply_markup"]["inline_keyboard"][0][0]
+    assert button["url"] == "https://api.nmnh.trade/abc12345"
+
+
+@pytest.mark.asyncio
+async def test_words_go_as_words(monkeypatch):
+    """У разговора картинки нет - и сообщение остаётся сообщением."""
+    bridge = ForumBridge("token", FORUM, "https://www.nmnh.trade")
+    calls = []
+
+    async def fake(method, payload):
+        calls.append(method)
+        return {"message_id": 8}
+
+    monkeypatch.setattr(bridge, "_call", fake)
+    monkeypatch.setattr(bridge, "_remember", lambda *_: None)
+    await bridge._send({"op": "send", "message_id": 2, "html": "<b>Андрей</b> привет"})
+    assert calls == ["sendMessage"]
+
+
+@pytest.mark.asyncio
+async def test_picture_falls_back_to_words(monkeypatch):
+    """Telegram отказал картинке - сообщение всё равно уходит: разговор важнее."""
+    bridge = ForumBridge("token", FORUM, "https://www.nmnh.trade")
+    calls = []
+
+    async def fake(method, payload):
+        calls.append(method)
+        return None if method == "sendPhoto" else {"message_id": 9}
+
+    monkeypatch.setattr(bridge, "_call", fake)
+    monkeypatch.setattr(bridge, "_remember", lambda *_: None)
+    await bridge._send(
+        {"op": "send", "message_id": 3, "html": "<b>Андрей</b>", "photo": "https://x/y.png"}
+    )
+    assert calls == ["sendPhoto", "sendMessage"]

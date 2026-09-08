@@ -229,11 +229,10 @@ export async function uploadPhoto(file: File, symbol: string): Promise<ChatAttac
   });
   if (!body) return null;
 
-  return {
-    kind: "shot",
-    url: absolute(body.url),
-    image: `${API_URL}/${body.id}.png`,
-  };
+  // Картинка лежит рядом со страницей и тем же именем: адрес собираем от
+  // страницы, а не от адреса API - снимки могут отдаваться и своим именем.
+  const page = absolute(body.url);
+  return { kind: "shot", url: page, image: `${page}.png` };
 }
 
 /** Максимальная сторона: снимок с телефона в четыре тысячи точек чату не нужен. */

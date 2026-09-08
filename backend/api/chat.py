@@ -77,14 +77,23 @@ def _shot_symbol(session, url: str) -> str:
     return str(row.symbol) if row is not None else ""
 
 
+def _picture(attach: dict | None) -> str:
+    """Картинка за сообщением - та, которую в форуме показывают вместо текста.
+
+    Пусто, если её нет: у разговора словами, у сделки без собравшейся карточки.
+    Тогда сообщение уходит обычным текстом.
+    """
+    if not isinstance(attach, dict) or attach.get("kind") not in ("shot", "trade"):
+        return ""
+    if not str(attach.get("url", "")).lower().startswith(("http://", "https://")):
+        return ""
+    image = str(attach.get("image", "")) or f"{attach['url']}.png"
+    return image if image.lower().startswith(("http://", "https://")) else ""
+
+
 def _has_picture(attach: dict | None) -> bool:
-    """Есть ли за сообщением картинка, которую стоит развернуть превью."""
-    if not isinstance(attach, dict):
-        return False
-    url = str(attach.get("url", ""))
-    if not url.lower().startswith(("http://", "https://")):
-        return False
-    return attach.get("kind") in ("shot", "trade")
+    """Есть ли за сообщением картинка. Тонкая обёртка - её читают проверки."""
+    return bool(_picture(attach))
 
 
 def _to_forum(request: Request, message: ChatMessage, author: Student, session) -> None:
@@ -124,12 +133,20 @@ def _to_forum(request: Request, message: ChatMessage, author: Student, session) 
             # монете. Под «привет» она была бы украшением.
             "symbol": symbol,
             "button": TERMINAL_BUTTON if symbol else "",
-            # Картинка разворачивается сразу под сообщением. Ссылка на снимок
-            # или карточку - это и есть само сообщение: свёрнутая в строку, она
-            # требует нажатия, чтобы понять, о чём речь, и в ленте форума
-            # проходит мимо глаз. У обычного разговора превью по-прежнему нет -
-            # там ссылка это ссылка, а не картинка.
+            # Картинка уходит картинкой, а не ссылкой на неё.
+            #
+            # Ссылка на карточку - это и есть само сообщение: свёрнутая в
+            # строку, она требует нажатия, чтобы понять, о чём речь. Разворачивать
+            # её должен был предпросмотр Telegram, но он собирается его же
+            # обходчиком и по его же правилам: не дотянулся до картинки, не
+            # уложился в её вес, решил показать один заголовок - и в теме висит
+            # серый прямоугольник. Отправленная картинка так не подводит.
+            #
+            # Ссылка при этом остаётся - кнопкой под снимком: она ведёт на
+            # страницу карточки, а уже оттуда - в терминал на эту монету.
+            "photo": _picture(attach),
             "preview": _has_picture(attach),
+            "open": str(attach.get("url", "")) if _has_picture(attach) else "",
         }
     )
 
