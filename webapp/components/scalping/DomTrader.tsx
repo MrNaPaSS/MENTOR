@@ -224,7 +224,7 @@ export default function DomTrader({
           onHoverLevel?.(null);
         }}
         title={t.terminal.domWheelHint}
-        className="relative flex-1 overflow-auto font-mono"
+        className="no-scrollbar relative flex-1 overflow-auto font-mono"
       >
         <div className="w-full min-w-max">
           <VolumeHeader columns={columns} />

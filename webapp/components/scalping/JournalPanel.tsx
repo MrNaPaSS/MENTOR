@@ -230,7 +230,7 @@ export default function JournalPanel({
           {error}
         </p>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto px-3 py-2">
+        <div className="no-scrollbar min-h-0 flex-1 overflow-auto px-3 py-2">
           {summary && (
             <div className="mb-3 grid grid-cols-5 gap-2 font-mono tabular-nums">
               <Stat label={t.journal.statPnl} value={money(summary.pnl)} tone={tone(summary.pnl)} />

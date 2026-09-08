@@ -112,7 +112,7 @@ const SKIN: Record<
     pinnedIcon: "text-accent-gold",
     pinnedText: "text-sm text-text-secondary",
     pinnedName: "font-semibold text-accent-gold",
-    feed: "flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-border bg-bg-panel/40 p-4",
+    feed: "no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-border bg-bg-panel/40 p-4",
     stack: "mt-auto space-y-3",
     bubbleSelf: "bg-accent-cyan/15 text-text-primary ring-1 ring-accent-cyan/30",
     bubbleOther: "bg-bg-card text-text-primary ring-1 ring-border",
@@ -151,7 +151,7 @@ const SKIN: Record<
     pinnedIcon: "text-[var(--pane-gold)]",
     pinnedText: "text-[11px] leading-snug text-[var(--pane-text-2)]",
     pinnedName: "font-semibold text-[var(--pane-gold)]",
-    feed: "flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2",
+    feed: "no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2",
     stack: "mt-auto space-y-2",
     bubbleSelf:
       "bg-[var(--pane-accent)]/15 text-[var(--pane-text)] ring-1 ring-[var(--pane-accent)]/30",
@@ -846,7 +846,7 @@ export default function ChatRoom({
 
         {attachMenu && menu === "main" && (
           <div
-            className={`absolute bottom-full left-0 z-30 mb-1 max-h-72 w-56 overflow-y-auto py-1 shadow-xl ${skin.card}`}
+            className={`no-scrollbar absolute bottom-full left-0 z-30 mb-1 max-h-72 w-56 overflow-y-auto py-1 shadow-xl ${skin.card}`}
           >
             <button
               onClick={() => fileRef.current?.click()}
@@ -933,7 +933,7 @@ export default function ChatRoom({
               {t.chat.groupJournal}
             </button>
 
-            <div className="min-h-0 flex-1 overflow-y-auto py-1">
+            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto py-1">
               {journal === null ? (
                 <p className={`px-3 py-1.5 text-[11px] ${skin.muted}`}>{t.chat.loading}</p>
               ) : journal.length === 0 ? (
