@@ -7,8 +7,8 @@
 честной, но знаменатель приходит с биржи, и у ученика с несвежим снимком она
 давала +266% за день.
 
-Теперь и числитель, и знаменатель - из самих сделок, как на карточке одной
-сделки: сколько заработали на том, чем рисковали.
+Теперь это сумма процентов закрытых сделок - тех самых, что стоят на их
+карточках: три сделки на +12%, +21% и +5% дают в день +38%.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -101,12 +101,30 @@ def test_day_percent_comes_from_journal(ctx):
     _trade(sid, datetime(_Y, _M, 11, 10, 0, tzinfo=timezone.utc), "-20", "t2", margin="100")
 
     days = _cal(client, h, _Y, _M)
-    # 30 заработано на 200 залога.
-    assert days[f"{_Y:04d}-{_M:02d}-11"]["pnl_pct"] == pytest.approx(15.0)
+    # +50% и -20% на своих залогах дают в день +30%.
+    assert days[f"{_Y:04d}-{_M:02d}-11"]["pnl_pct"] == pytest.approx(30.0)
     assert days[f"{_Y:04d}-{_M:02d}-11"]["journal_pnl"] == pytest.approx(30.0)
     assert days[f"{_Y:04d}-{_M:02d}-11"]["journal_trades"] == 2
     # Соседний день сделок не забирает.
     assert days[f"{_Y:04d}-{_M:02d}-10"]["pnl_pct"] == pytest.approx(0.0)
+
+
+def test_day_percent_is_the_sum_of_trade_percents(ctx):
+    """День - сумма процентов сделок, а не общий доход на общий залог.
+
+    Это разные числа, когда залоги разные, и ученик видел на карточках именно
+    первые. Здесь +12%, +21% и +5% при залогах 100, 200 и 400: сумма даёт 38%,
+    а взвешивание по залогу - 11%, число, которого он нигде не встречал.
+    """
+    client = ctx
+    sid, h = _student(client)
+    at = datetime(_Y, _M, 20, 9, 0, tzinfo=timezone.utc)
+    _trade(sid, at, "12", "t1", margin="100")
+    _trade(sid, at, "42", "t2", margin="200")
+    _trade(sid, at, "20", "t3", margin="400")
+
+    days = _cal(client, h, _Y, _M)
+    assert days[f"{_Y:04d}-{_M:02d}-20"]["pnl_pct"] == pytest.approx(38.0)
 
 
 def test_percent_does_not_depend_on_balance(ctx):
@@ -114,7 +132,7 @@ def test_percent_does_not_depend_on_balance(ctx):
 
     Он приходит с биржи снимком раз в сутки, и у ученика с несвежим снимком
     делил дневную прибыль на чужую цифру: +474 на депозит в 177 давали +266%
-    за день. Считаем от того, чем рисковали, - это знает сам журнал.
+    за день. Считаем от залога сделки - его знает сам журнал.
     """
     client = ctx
     sid, h = _student(client)

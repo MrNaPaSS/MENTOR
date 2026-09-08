@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
 from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student
-from backend.trading.funds import trade_volume
+from backend.trading.funds import trade_roi, trade_volume
 from backend.api.journal import is_admin
 from backend.trading.funds import balance_by_keys
 from backend.config import BackendConfig
@@ -179,10 +179,10 @@ async def analytics_calendar(
         closed = t.closed_at if t.closed_at.tzinfo else t.closed_at.replace(tzinfo=timezone.utc)
         cell = journal_by_date.setdefault(
             closed.strftime("%Y-%m-%d"),
-            {"pnl": 0.0, "margin": 0.0, "volume": 0.0, "trades": 0},
+            {"pnl": 0.0, "roi": 0.0, "volume": 0.0, "trades": 0},
         )
         cell["pnl"] += float(t.pnl)
-        cell["margin"] += float(t.margin or 0)
+        cell["roi"] += trade_roi(float(t.pnl), float(t.margin or 0))
         cell["volume"] += trade_volume(
             float(t.qty or 0), float(t.entry or 0), float(t.exit_price or 0) or None
         )
@@ -190,9 +190,16 @@ async def analytics_calendar(
 
     # ── Строим список дней ──────────────────────────────────────────────────
     #
-    # Процент дня - доход от залога закрытых сделок: сколько заработали на том,
-    # чем рисковали. Так же считает и карточка одной сделки, и теперь клетка с
-    # ней сходится.
+    # Процент дня - сумма процентов закрытых сделок.
+    #
+    # Именно сумма, а не общий доход на общий залог. Это разные числа, когда
+    # залоги разные: три сделки на +12%, +21% и +5% дают в день +38%, и ровно
+    # эти три числа ученик видел на своих карточках. Взвешивание по залогу
+    # дало бы четвёртое, которого он нигде не встречал.
+    #
+    # Процент каждой сделки - от её залога, как на карточке: плечо превращает
+    # движение цены в проценты на залог, и меньшая цифра выглядела бы обманом
+    # в обратную сторону.
     #
     # Число прошло две ошибки, и обе стоит помнить. Сперва оно было разностью
     # соседних снимков баланса: снимок пишется первым прогоном сборщика после
@@ -211,13 +218,8 @@ async def analytics_calendar(
 
         cell = journal_by_date.get(date_str, {})
         day_pnl = float(cell.get("pnl", 0.0))
-        day_margin = float(cell.get("margin", 0.0))
         day_trades = int(cell.get("trades", 0))
-
-        # Залога нет - процентов тоже, а не бесконечность. Так же поступает
-        # карточка сделки: делить на ноль здесь нечего, а день без сделок и
-        # правда прошёл в ноль.
-        pnl_pct = day_pnl / day_margin * 100 if day_margin > 0 else 0.0
+        pnl_pct = float(cell.get("roi", 0.0))
 
         vol = volume_by_date.get(date_str, 0.0)
         days_out.append({
@@ -229,7 +231,6 @@ async def analytics_calendar(
             "trade_volume": vol,
             "has_deposit": date_str in deposit_dates,
             "journal_pnl": round(day_pnl, 2),
-            "journal_margin": round(day_margin, 2),
             "journal_volume": round(float(cell.get("volume", 0.0)), 2),
             "journal_trades": day_trades,
         })
