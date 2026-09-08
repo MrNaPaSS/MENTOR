@@ -99,6 +99,15 @@ const TAIL = 14;
 /** Насколько контур следа гуще своей заливки. */
 const EDGE = 0.3;
 
+/**
+ * Какую долю холста занимает лестница в полный рост.
+ *
+ * Остальное - её ход. Лестница держится за текущую цену, и подниматься с ней
+ * она может ровно на столько, сколько между её краем и краем поля: занявшая
+ * весь холст упирается в оба края сразу и стоит колом.
+ */
+const RIDE = 0.5;
+
 type ReadyRow = {
   top: number;
   height: number;
@@ -340,10 +349,15 @@ class FootprintPaneView implements IPrimitivePaneView {
     // Строк ровно столько, сколько набрала свеча. Это и есть рост картинки:
     // только что открытая стоит на одной цене - у неё одна строка, за минуту
     // их набирается десяток. Укрупняем шаг, лишь когда лестница перестаёт
-    // помещаться в холст: ужимать строки нельзя - там цифры, а обрезать снизу
-    // значит соврать о том, где свеча кончилась.
+    // помещаться в отведённое ей место: ужимать строки нельзя - там цифры, а
+    // обрезать снизу значит соврать о том, где свеча кончилась.
+    //
+    // Место это - половина холста, а не весь холст. Лестница висит на цене, и
+    // ехать за ней она может ровно настолько, насколько сама короче поля:
+    // разросшаяся во всю высоту упиралась в оба края разом и застывала на
+    // месте - цена улетала, а картинка оставалась стоять, где стояла.
     const room = Math.max(1, chartPane.height - TAIL * 2 - 8);
-    const fits = Math.max(ROWS_MIN, Math.floor(room / ROW));
+    const fits = Math.max(ROWS_MIN, Math.floor((room * RIDE) / ROW));
 
     const prices = data.levels.map((level) => level.price);
     const span = Math.max(...prices) - Math.min(...prices);
@@ -356,7 +370,7 @@ class FootprintPaneView implements IPrimitivePaneView {
     const skin = this.source.skin;
 
     const pane = chartPane;
-    const tall = rowHeight(rows.length, room);
+    const tall = rowHeight(rows.length, room * RIDE);
     const height = tall * rows.length;
 
     const peak = rows.reduce((acc, row) => Math.max(acc, row.buy, row.sell), 0);

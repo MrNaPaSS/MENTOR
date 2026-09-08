@@ -2026,7 +2026,10 @@ function PriceChart({
     const read = getComputedStyle(node);
     const pick = (name: string, fallback: string) =>
       read.getPropertyValue(name).trim() || fallback;
-    const light = paper === "light";
+    // Серо-фиолетовая пара - только для стандартных свечей белого листа.
+    // Пресет трейдер выбрал сам, и подменять его цвета своими значит решать
+    // за него: лестница обязана быть того же цвета, что и свечи под ней.
+    const plain = paper === "light" && preset === "default";
     footSkinRef.current = {
       bg: pick("--pane-bg", "#181a20"),
       border: pick("--pane-border", "#2b3139"),
@@ -2037,11 +2040,12 @@ function PriceChart({
       // доводит до видимости на его бумаге. Брать их прямо у свечей нельзя -
       // у стандартной палитры и у мегатрона рост на белом белый, у вельвета
       // белым выходит падение, и сторона объёма исчезает целиком.
-      // На белом листе - своя пара: серое против фиолетового. Зелёное с
-      // красным на бумаге кричит, а лестница залита цветом целиком, и читать
-      // цифры поверх такой клумбы нельзя.
-      up: light ? PAPER_UP : visibleOn(pick("--pane-up", "#0ecb81"), pick("--pane-bg", "#181a20")),
-      down: light
+      // На белом листе со стандартными свечами - своя пара: серое против
+      // фиолетового. Зелёное с красным на бумаге кричит, а лестница залита
+      // цветом целиком, и читать цифры поверх такой клумбы нельзя. У пресетов
+      // пара своя, ради неё их и выбирают, - её и берём.
+      up: plain ? PAPER_UP : visibleOn(pick("--pane-up", "#0ecb81"), pick("--pane-bg", "#181a20")),
+      down: plain
         ? PAPER_DOWN
         : visibleOn(pick("--pane-down", "#f6465d"), pick("--pane-bg", "#181a20")),
       // Светлые чернила для тёмной ячейки. Берём фон тёмного листа, а не
@@ -2053,10 +2057,10 @@ function PriceChart({
       // до видимости: на белом листе тело роста белое, и точка такого цвета
       // на бумаге пропала бы совсем. Обводка берётся первой - она у свечи
       // есть всегда, а тело бывает пустым.
-      dotUp: light
+      dotUp: plain
         ? PAPER_UP
         : visibleOn(skinRef.current.upBorder || skinRef.current.up, pick("--pane-bg", "#181a20")),
-      dotDown: light
+      dotDown: plain
         ? PAPER_DOWN
         : visibleOn(
             skinRef.current.downBorder || skinRef.current.down,
