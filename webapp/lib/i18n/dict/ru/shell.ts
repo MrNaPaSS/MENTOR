@@ -8,7 +8,6 @@ export const shell = {
     news: "ТВ",
     analytics: "Аналитика",
     shop: "Маркет",
-    calculator: "Калькулятор",
     profile: "Профиль",
   },
   coinsTitle: "NMNH монеты - за что начислены",

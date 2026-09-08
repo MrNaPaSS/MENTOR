@@ -11,7 +11,6 @@ import {
   User,
   LogOut,
   ChevronDown,
-  Calculator,
   ImageIcon,
   Coins,
   ShoppingBag,
@@ -48,7 +47,6 @@ const NAV = [
   { href: "/app/news", key: "news", icon: Tv, mobile: false },
   { href: "/app/analytics", key: "analytics", icon: BarChart3, mobile: false },
   { href: "/app/shop", key: "shop", icon: ShoppingBag, mobile: true },
-  { href: "/app/calculator", key: "calculator", icon: Calculator, mobile: false },
   { href: "/app/profile", key: "profile", icon: User, mobile: true },
 ] as const;
 

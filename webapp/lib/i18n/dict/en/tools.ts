@@ -4,8 +4,6 @@ export const tools = {
     eyebrow: "Calculator",
     title: "Size the position before you enter",
     subtitle: "Margin, size, risk and profit at every take-profit - instantly, for your deposit.",
-    appTitle: "Position calculator",
-    appSubtitle: "Work out margin, size, risk and profit at each TP before you enter the trade",
     info: [
       { title: "Moderate mode", text: "Leverage up to 25x, 1-5% risk per trade. Fixed stop, the goal is steady deposit growth." },
       { title: "Turbo mode", text: "Leverage up to 400x for aggressive trading. Small margin, large size - higher risk." },
