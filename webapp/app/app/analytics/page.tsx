@@ -582,7 +582,7 @@ export default function AnalyticsPage() {
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">Аналитика <span className="text-accent-cyan">&</span> Прогресс</h1>
-          <p className="text-sm text-text-muted mt-0.5">Реальные данные на основе снимков баланса и активности по сигналам</p>
+          <p className="text-sm text-text-muted mt-0.5">Реальные данные по закрытым сделкам, сигналам и обороту</p>
         </div>
         {tradeSummary && (
           <div className="hidden md:flex items-center gap-3 rounded-xl border border-accent-gold/20 bg-accent-gold/5 px-4 py-2">
@@ -638,8 +638,14 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Вехи объёма — горизонтальный трек */}
-      {tradeSummary && (() => {
+      {/* Вехи объёма — горизонтальный трек.
+
+          Показываем и на нуле. Раньше блок висел на tradeSummary, а он
+          приходил пустым, когда партнёрская ручка о торговле молчала - и в
+          разделе на месте пути трейдера не было вообще ничего. Путь с нулём и
+          первой вехой впереди говорит, куда идти; пустое место не говорит
+          ничего и читается как поломка. */}
+      {loaded && (() => {
         const nextIdx = VOLUME_MILESTONES.findIndex(m => totalVolume < m.vol);
         const nextM   = nextIdx >= 0 ? VOLUME_MILESTONES[nextIdx] : null;
         const prevM   = nextIdx > 0  ? VOLUME_MILESTONES[nextIdx - 1] : nextIdx === -1 ? VOLUME_MILESTONES[VOLUME_MILESTONES.length - 1] : null;
