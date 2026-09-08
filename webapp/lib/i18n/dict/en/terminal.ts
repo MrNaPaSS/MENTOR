@@ -152,6 +152,7 @@ export const terminal = {
     footBuy: "bought",
     footClose: "Close the candle volume",
     footWhale: "A big trade: well above its neighbours and its share of the candle",
+    footGrow: "Row size: how many times taller a row is than the default",
     footMove: "Drag by the header - the panel will stand where you want it",
     footLive: "Back to the current candle",
     footLiveTitle: "The candle is still running: the numbers are filling in",

@@ -12,7 +12,7 @@
 
 import { useT } from "@/lib/i18n";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell } from "lucide-react";
+import { Bell, Crosshair, X } from "lucide-react";
 import {
   CandlestickSeries,
   ColorType,
@@ -37,9 +37,33 @@ import { readout, tenth, type ScoreReadout } from "@/lib/indicator/score";
 // живёт раскладка кабинета, а это переключатель внутри самого графика.
 const SCORE_KEY = "nmnh.chart.score.wide";
 
-// Где стоит панель объёма свечи. Ключ отдельный от рабочего места: ширины
-// панелей общие на терминал, а это место внутри одного холста.
-const FOOT_SPOT_KEY = "nmnh.chart.foot.spot";
+// Насколько загрубить строки объёма рукой. Ключ отдельный от рабочего
+// места: ширины панелей общие на терминал, а это привычка чтения свечи.
+const FOOT_GROW_KEY = "nmnh.chart.foot.grow";
+
+// Во сколько раз строка выше обычной. Единица - строка текста, дальше
+// вдвое и вчетверо: шаг мельче между ними неразличим глазом, а список из
+// восьми ступеней в углу графика читать некогда.
+const FOOT_GROWS = [1, 2, 4] as const;
+
+function readGrow(): number {
+  try {
+    const saved = Number(localStorage.getItem(FOOT_GROW_KEY));
+    return FOOT_GROWS.includes(saved as (typeof FOOT_GROWS)[number]) ? saved : 1;
+  } catch {
+    // В приватном окне обращение к хранилищу бросает исключение.
+    return 1;
+  }
+}
+
+function keepGrow(grow: number): number {
+  try {
+    localStorage.setItem(FOOT_GROW_KEY, String(grow));
+  } catch {
+    // Не запомнилось - масштаб всё равно сменится на эту сессию.
+  }
+  return grow;
+}
 
 function readScoreWide(): boolean {
   try {
@@ -75,10 +99,13 @@ import {
   type Shapes,
 } from "./primitives/ShapesPrimitive";
 import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
-import { FootprintCard } from "./FootprintCard";
+import {
+  FOOTPRINT_WIDTH,
+  FootprintPrimitive,
+  type FootprintSkin,
+} from "./primitives/FootprintPrimitive";
 import { parseFootprint, type FootprintData } from "@/lib/indicator/footprint";
-import { clampSpot, keepSpot, readSpot, type Spot } from "@/lib/dragBox";
-import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
+import { clockLabel, money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
 import DragLevels, { type DragLevel } from "./DragLevels";
 import OrderChipView, { type OrderChip } from "./OrderChip";
@@ -928,10 +955,27 @@ function PriceChart({
   const followRef = useRef(false);
   followRef.current = followBar;
   const [foot, setFoot] = useState<FootprintData | null>(null);
-  // Куда трейдер поставил панель объёма. null — она ещё не переезжала и стоит
-  // там, где стояла всегда: справа и выше цены.
-  const [footSpot, setFootSpot] = useState<Spot | null>(null);
-  const footBoxRef = useRef<HTMLDivElement>(null);
+  const footRef = useRef<FootprintData | null>(null);
+  footRef.current = foot;
+  // Верх лестницы: по нему покадрово встаёт подпись. Считаем на смене
+  // данных - в кадре перебирать три сотни строк ради одного максимума
+  // значит тратить его весь.
+  const footTopRef = useRef<number | null>(null);
+  // Во сколько раз загрубить строки объёма сверх того, что уже собрал
+  // масштаб графика. Читаем из хранилища при первой отрисовке: страница
+  // собирается и на сервере, где хранилища нет.
+  const [footGrow, setFootGrow] = useState(1);
+  // Через ref: цвета снимаются на смене листа, и той отрисовке нужны
+  // сегодняшние данные, а не те, что были на сборке замыкания.
+  const footGrowRef = useRef(1);
+  footGrowRef.current = footGrow;
+  // Подпись над лестницей: время свечи, итоги и ступени укрупнения.
+  // Положение задаётся покадрово - она стоит на свече, а свеча едет.
+  const footBarRef = useRef<HTMLDivElement>(null);
+  const footPrimRef = useRef<FootprintPrimitive | null>(null);
+  // Цвета для холста: переменных оформления он не понимает, ему нужны
+  // значения, и снимать их можно только с живого узла страницы.
+  const footSkinRef = useRef<FootprintSkin | null>(null);
   // Обработчик нажатия ставится один раз на всю жизнь графика, а таймфрейм
   // трейдер переключает — значит читаем его из ref, а не из замыкания.
   const intervalRef = useRef(interval);
@@ -1091,6 +1135,9 @@ function PriceChart({
     candleRef.current.attachPrimitive(shapesRef.current);
     heavyRef.current = new VolumeCandlesPrimitive();
     candleRef.current.attachPrimitive(heavyRef.current);
+    // Объём внутри свечи: лестница цифр на самой свече, по ценовой шкале.
+    footPrimRef.current = new FootprintPrimitive();
+    candleRef.current.attachPrimitive(footPrimRef.current);
     // Нажатие по полке: библиотека не знает о ценовых линиях в момент клика,
     // поэтому ищем ближайшую сами — по расстоянию в пикселях, а не в цене. На
     // минутном графике цена шага и цена в двадцати пикселях различаются на
@@ -1177,6 +1224,7 @@ function PriceChart({
       emaTrendRef.current = null;
       shapesRef.current = null;
       heavyRef.current = null;
+      footPrimRef.current = null;
       lineRef.current = null;
       tradeLinesRef.current = new Map();
       // Линии сделки из журнала живут на том же ряду: с его уходом ссылки на
@@ -1665,6 +1713,22 @@ function PriceChart({
         );
       }
 
+      // Подпись лестницы объёма: она стоит на свече, а свеча едет вместе
+      // с холстом - и по горизонтали тоже, в отличие от плашек позиций.
+      const label = footBarRef.current;
+      if (label) {
+        const shot = footRef.current;
+        const top = footTopRef.current;
+        const at = shot ? chartRef.current?.timeScale().timeToCoordinate(shot.time as UTCTimestamp) ?? null : null;
+        const over = top === null ? null : series.priceToCoordinate(top);
+        if (at === null || over === null) {
+          label.style.visibility = "hidden";
+        } else {
+          label.style.visibility = "visible";
+          label.style.transform = `translate(${Math.max(0, at)}px, ${Math.max(0, over - label.offsetHeight - 2)}px)`;
+        }
+      }
+
       const price =
         livePriceRef.current > 0 ? livePriceRef.current : dataRef.current.at(-1)?.close ?? 0;
       const atPrice = price > 0 ? series.priceToCoordinate(price) : null;
@@ -1884,85 +1948,47 @@ function PriceChart({
     return () => window.removeEventListener("keydown", onKey);
   }, [openBar]);
 
-  // Место панели читаем один раз при первой отрисовке: хранилище - вещь
+  // Масштаб строк читаем один раз при первой отрисовке: хранилище - вещь
   // браузера, а страница собирается и на сервере, где его нет.
   useEffect(() => {
-    setFootSpot(readSpot(FOOT_SPOT_KEY));
+    setFootGrow(readGrow());
   }, []);
 
-  // Панель, оставленную у края, возвращаем на холст, когда холст стал меньше:
-  // свернули журнал, растянули стакан, вышли из полного экрана. Ухватить её
-  // за краем нечем - заголовок уехал вместе с ней.
+  // Цвета лестницы снимаем с живого узла страницы.
+  //
+  // Холст не понимает переменных оформления - ему нужны значения, а значения
+  // эти меняются вместе с листом графика и с темой кабинета. Снимаем их на
+  // смене листа, а не на каждом кадре: computed style стоит перерасчёта
+  // раскладки, и делать его шестьдесят раз в секунду ради семи цветов нельзя.
   useEffect(() => {
-    if (!foot) return;
-    const area = boxRef.current;
-    const card = footBoxRef.current;
-    if (!area) return;
-
-    const fit = () => {
-      if (!card) return;
-      setFootSpot((spot) => {
-        if (!spot) return spot;
-        const fixed = clampSpot(
-          spot,
-          { w: card.offsetWidth, h: card.offsetHeight },
-          { w: area.clientWidth, h: area.clientHeight },
-        );
-        return fixed.x === spot.x && fixed.y === spot.y ? spot : fixed;
-      });
+    const node = boxRef.current;
+    if (!node) return;
+    const read = getComputedStyle(node);
+    const pick = (name: string, fallback: string) =>
+      read.getPropertyValue(name).trim() || fallback;
+    footSkinRef.current = {
+      bg: pick("--pane-bg", "#181a20"),
+      border: pick("--pane-border", "#2b3139"),
+      text: pick("--pane-text", "#eaecef"),
+      muted: pick("--pane-muted", "#7a8290"),
+      up: pick("--pane-up", "#0ecb81"),
+      down: pick("--pane-down", "#f6465d"),
+      gold: pick("--pane-gold", "#f0b90b"),
+      accent: pick("--pane-accent", "#0affe0"),
     };
+    footPrimRef.current?.setData(footRef.current, footGrowRef.current, footSkinRef.current);
+  }, [paper, preset]);
 
-    fit();
-    // Холст меняет размер не только вместе с окном: журнал раскрывается,
-    // панели тянут за разделители. Наблюдатель ловит и то и другое.
-    const watch = new ResizeObserver(fit);
-    watch.observe(area);
-    return () => watch.disconnect();
-  }, [foot]);
-
-  // Перетаскивание панели объёма. Слушаем окно, а не саму панель: рука уводит
-  // курсор быстрее, чем браузер перерисовывает, и на резком движении панель
-  // отцеплялась бы от пальца.
-  const startFootDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    // Только левой кнопкой: правая на графике - это меню браузера, и таскать
-    // ею панель значит отобрать его.
-    if (event.button !== 0) return;
-    const area = boxRef.current;
-    const card = footBoxRef.current;
-    if (!area || !card) return;
-    event.preventDefault();
-
-    const areaRect = area.getBoundingClientRect();
-    const cardRect = card.getBoundingClientRect();
-    // За какое место панели взялись. Без этого она прыгает углом под курсор.
-    const grabX = event.clientX - cardRect.left;
-    const grabY = event.clientY - cardRect.top;
-    const size = { w: cardRect.width, h: cardRect.height };
-    const area2 = { w: areaRect.width, h: areaRect.height };
-    let last: Spot | null = null;
-
-    const move = (moved: PointerEvent) => {
-      last = clampSpot(
-        {
-          x: moved.clientX - areaRect.left - grabX,
-          y: moved.clientY - areaRect.top - grabY,
-        },
-        size,
-        area2,
-      );
-      setFootSpot(last);
-    };
-    const drop = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", drop);
-      // Запоминаем только состоявшийся перенос: нажатие без движения - это
-      // просто нажатие, и переписывать им прежнее место незачем.
-      if (last) keepSpot(FOOT_SPOT_KEY, last);
-    };
-
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", drop);
-  }, []);
+  // Данные лестницы - в примитив. Он рисует их сам на каждом кадре графика,
+  // React в этом больше не участвует: два десятка строк с цифрами, едущих
+  // вместе с холстом, перерисовкой компонента не вытянуть.
+  useEffect(() => {
+    footTopRef.current = foot?.levels.length
+      ? Math.max(...foot.levels.map((level) => level.price))
+      : null;
+    const skin = footSkinRef.current;
+    if (skin) footPrimRef.current?.setData(foot, footGrow, skin);
+  }, [foot, footGrow]);
 
   // Точность ценовой шкалы - по шагу инструмента, а не по умолчанию в цент.
   useEffect(() => {
@@ -2537,36 +2563,100 @@ function PriceChart({
         )}
       </div>
 
-      {/* Объём внутри свечи. Стоит справа и выше цены: у самой свечи карточка
-          закрывала бы то место графика, ради которого её и открыли, а цена
-          ходит понизу. Отступ справа - под ценовую шкалу, сверху - под строку
-          плашек заявок. */}
+      {/* Подпись над лестницей объёма.
+          
+          Сама лестница живёт на холсте, вместе со свечами: она про цену, и
+          место ей на ценовой шкале. А вот итоги свечи и ступени укрупнения -
+          это уже не рынок, а управление, и рисовать их на холсте значит
+          лишить трейдера возможности по ним нажать.
+          
+          Стоит подпись над верхней строкой лестницы и едет вместе с ней:
+          положение задаётся покадрово, как у плашек позиций. */}
       {foot && (
         <div
-          ref={footBoxRef}
-          className="pointer-events-none absolute z-20 flex justify-end"
-          // Пока панель не двигали, она стоит там же, где стояла всегда:
-          // справа и выше цены. Один раз перенесённая - там, куда её увели, и
-          // возвращать её на место при каждом открытии значит отменять выбор.
-          style={
-            footSpot
-              ? { left: footSpot.x, top: footSpot.y }
-              : { right: 64, top: 32 }
-          }
+          ref={footBarRef}
+          className="pointer-events-auto absolute left-0 top-0 z-20 flex items-center gap-2 rounded-t border border-b-0 px-1.5 py-0.5 font-mono text-[10px] tabular-nums shadow-sm"
+          style={{
+            visibility: "hidden",
+            minWidth: FOOTPRINT_WIDTH,
+            borderColor: "var(--pane-border)",
+            background: "var(--pane-bg)",
+            color: "var(--pane-text-2)",
+          }}
         >
-          <FootprintCard
-            data={foot}
-            live={pickedBar === null && followBar}
-            onLive={pickedBar === null ? undefined : () => {
-              setPickedBar(null);
-              setFollowBar(true);
+          <span className="flex items-center gap-1">
+            {clockLabel(foot.time)}
+            {/* Живая свеча ещё набирается: цифры в ней меняются на глазах, и
+                принимать их за итог нельзя. */}
+            {pickedBar === null && followBar && (
+              <span
+                title={t.terminal.chart.footLiveTitle}
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ background: "var(--pane-accent)" }}
+              />
+            )}
+          </span>
+
+          <span
+            style={{
+              color: foot.buy >= foot.sell ? "var(--pane-up)" : "var(--pane-down)",
             }}
-            onDragStart={startFootDrag}
-            onClose={() => {
+          >
+            Δ {foot.buy >= foot.sell ? "+" : "−"}
+            {money(Math.abs(foot.buy - foot.sell))}
+          </span>
+          <span
+            // «≈» вместо «Σ», когда свеча разобрана не целиком: цифра рядом
+            // всё равно меньше настоящей, и выдавать её за полную нельзя.
+            title={foot.partial ? t.terminal.chart.footPartial : undefined}
+            style={{ color: "var(--pane-muted)" }}
+          >
+            {foot.partial ? "≈" : "Σ"} {money(foot.buy + foot.sell)}
+          </span>
+
+          {/* Ступени укрупнения. Масштаб графика собирает строки сам, но
+              привычка чтения у каждого своя: кому-то нужна каждая цена, кому-то
+              картина крупными мазками. */}
+          <span className="flex items-center gap-0.5" title={t.terminal.chart.footGrow}>
+            {FOOT_GROWS.map((step) => (
+              <button
+                key={step}
+                onClick={() => setFootGrow(keepGrow(step))}
+                className="rounded px-1 transition-colors duration-150 ease-out"
+                style={{
+                  color: footGrow === step ? "var(--pane-chip)" : "var(--pane-muted)",
+                  background: footGrow === step ? "var(--pane-chip-faint)" : undefined,
+                }}
+              >
+                {step}×
+              </button>
+            ))}
+          </span>
+
+          {pickedBar !== null && (
+            <button
+              onClick={() => {
+                setPickedBar(null);
+                setFollowBar(true);
+              }}
+              title={t.terminal.chart.footLive}
+              className="transition-opacity duration-150 ease-out hover:opacity-70"
+              style={{ color: "var(--pane-muted)" }}
+            >
+              <Crosshair className="h-3 w-3" />
+            </button>
+          )}
+          <button
+            onClick={() => {
               setPickedBar(null);
               setFollowBar(false);
             }}
-          />
+            title={t.terminal.chart.footClose}
+            className="transition-opacity duration-150 ease-out hover:opacity-70"
+            style={{ color: "var(--pane-muted)" }}
+          >
+            <X className="h-3 w-3" />
+          </button>
         </div>
       )}
 
