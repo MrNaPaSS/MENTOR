@@ -2950,7 +2950,6 @@ export default function ScalpingPage() {
                     tone="pane"
                     symbol={symbol ?? undefined}
                     own={myShares}
-                    onOpenJournal={() => setJournalOpen(true)}
                     onClose={() => setChatOpen(false)}
                   />
                 </section>

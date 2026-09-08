@@ -29,6 +29,7 @@ import {
   Trash2,
   Check,
   ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
 import { SOCIAL_LINKS } from "@/lib/content";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
@@ -67,6 +68,7 @@ const SKIN: Record<
     pinnedText: string;
     pinnedName: string;
     feed: string;
+    stack: string;
     bubbleSelf: string;
     bubbleOther: string;
     nameMentor: string;
@@ -81,6 +83,7 @@ const SKIN: Record<
     up: string;
     down: string;
     divider: string;
+    edge: string;
     upBox: string;
     downBox: string;
     chip: string;
@@ -95,7 +98,8 @@ const SKIN: Record<
     pinnedIcon: "text-accent-gold",
     pinnedText: "text-sm text-text-secondary",
     pinnedName: "font-semibold text-accent-gold",
-    feed: "min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border border-border bg-bg-panel/40 p-4",
+    feed: "flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-border bg-bg-panel/40 p-4",
+    stack: "mt-auto space-y-3",
     bubbleSelf: "bg-accent-cyan/15 text-text-primary ring-1 ring-accent-cyan/30",
     bubbleOther: "bg-bg-card text-text-primary ring-1 ring-border",
     nameMentor: "text-accent-gold",
@@ -111,6 +115,7 @@ const SKIN: Record<
     up: "text-success",
     down: "text-danger",
     divider: "bg-border",
+    edge: "border-border",
     upBox: "bg-success/12 text-success ring-1 ring-success/25",
     downBox: "bg-danger/12 text-danger ring-1 ring-danger/25",
     chip: "bg-bg-deep/60 text-text-muted",
@@ -126,7 +131,8 @@ const SKIN: Record<
     pinnedIcon: "text-[var(--pane-gold)]",
     pinnedText: "text-[11px] leading-snug text-[var(--pane-text-2)]",
     pinnedName: "font-semibold text-[var(--pane-gold)]",
-    feed: "min-h-0 flex-1 space-y-2 overflow-y-auto px-2 py-2",
+    feed: "flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2",
+    stack: "mt-auto space-y-2",
     bubbleSelf:
       "bg-[var(--pane-accent)]/15 text-[var(--pane-text)] ring-1 ring-[var(--pane-accent)]/30",
     bubbleOther: "bg-[var(--pane-hover)] text-[var(--pane-text)] ring-1 ring-[var(--pane-border)]",
@@ -145,6 +151,7 @@ const SKIN: Record<
     up: "text-[var(--pane-up)]",
     down: "text-[var(--pane-down)]",
     divider: "bg-[var(--pane-border)]",
+    edge: "border-[var(--pane-border)]",
     upBox: "bg-[var(--pane-up)]/12 text-[var(--pane-up)] ring-1 ring-[var(--pane-up)]/25",
     downBox: "bg-[var(--pane-down)]/12 text-[var(--pane-down)] ring-1 ring-[var(--pane-down)]/25",
     chip: "bg-[var(--pane-hover)] text-[var(--pane-muted)]",
@@ -157,7 +164,7 @@ type Skin = (typeof SKIN)[ChatTone];
 // котором журнал открывается сам; в список берём последние сделки, потому что
 // показывают почти всегда свежую.
 const JOURNAL_DAYS = 90;
-const JOURNAL_SHOWN = 12;
+const JOURNAL_SHOWN = 60;
 
 /**
  * Какого дня сообщение. Ключом служит сама дата, а не её подпись: подпись
@@ -339,7 +346,6 @@ export default function ChatRoom({
   tone = "site",
   symbol,
   own = [],
-  onOpenJournal,
   onClose,
 }: {
   tone?: ChatTone;
@@ -347,13 +353,6 @@ export default function ChatRoom({
   symbol?: string;
   /** Свои сделки по всем монетам - идущие и ждущие входа: их прикладывают скрепкой. */
   own?: SharedTrade[];
-  /**
-   * Открыть журнал сделок.
-   *
-   * В меню скрепки видно двенадцать последних, а искать бывает нужно ту, что
-   * была в марте. Заголовок раздела и ведёт туда, где список полный.
-   */
-  onOpenJournal?: () => void;
   /** Кнопка сворачивания в шапке. Есть только у панели терминала. */
   onClose?: () => void;
 }) {
@@ -364,6 +363,11 @@ export default function ChatRoom({
   const [text, setText] = useState("");
   const [attach, setAttach] = useState<ChatAttach | null>(null);
   const [attachMenu, setAttachMenu] = useState(false);
+  // Меню скрепки в два уровня: сначала короткий список того, что под рукой, и
+  // строка «журнал сделок». По ней то же окно разворачивается в сам журнал -
+  // уводить человека из чата ради выбора сделки незачем, он в этот момент пишет
+  // сообщение.
+  const [menu, setMenu] = useState<"main" | "journal">("main");
   // Отработанные сделки для скрепки. Тянем при первом открытии меню, а не
   // при показе панели: журнал за три месяца ради кнопки, которую могут и не
   // нажать, - лишний запрос на каждое открытие чата.
@@ -388,11 +392,11 @@ export default function ChatRoom({
   }, [state.messages]);
 
   useEffect(() => {
-    if (!attachMenu || journal !== null || !journalAvailable()) return;
+    if (menu !== "journal" || journal !== null || !journalAvailable()) return;
     void loadTrades(JOURNAL_DAYS)
       .then((body) => setJournal(body?.trades ?? []))
       .catch(() => setJournal([]));
-  }, [attachMenu, journal]);
+  }, [menu, journal]);
 
   async function attachPhoto(file: File | undefined | null) {
     if (!file || !file.type.startsWith("image/")) return;
@@ -403,6 +407,13 @@ export default function ChatRoom({
     const uploaded = await uploadPhoto(file, symbol ?? "");
     setBusy(false);
     if (uploaded) setAttach(uploaded);
+  }
+
+  /** Выбрали, что приложить: меню закрывается и возвращается на первый уровень. */
+  function pick(next: ChatAttach) {
+    setAttach(next);
+    setAttachMenu(false);
+    setMenu("main");
   }
 
   async function submit() {
@@ -497,6 +508,10 @@ export default function ChatRoom({
       )}
 
       <div className={skin.feed}>
+        {/* Отступ сверху берёт на себя mt-auto: пока сообщений мало, они стоят
+            у самого поля ввода. Разговор читают снизу вверх, и начинать его в
+            середине пустого поля незачем. */}
+        <div className={skin.stack}>
         {state.more && (
           <button
             onClick={() => void older()}
@@ -538,6 +553,7 @@ export default function ChatRoom({
           );
         })}
         <div ref={endRef} />
+        </div>
       </div>
 
       {/* Приложенное - над строкой ввода, чтобы было видно, что уйдёт. */}
@@ -569,7 +585,10 @@ export default function ChatRoom({
           onChange={(e) => void attachPhoto(e.target.files?.[0])}
         />
         <button
-          onClick={() => setAttachMenu((v) => !v)}
+          onClick={() => {
+            setAttachMenu((v) => !v);
+            setMenu("main");
+          }}
           className={skin.ghost}
           title={t.chat.attach}
           aria-label={t.chat.attach}
@@ -577,9 +596,9 @@ export default function ChatRoom({
           <Paperclip className="h-4 w-4" />
         </button>
 
-        {attachMenu && (
+        {attachMenu && menu === "main" && (
           <div
-            className={`absolute bottom-full left-0 z-30 mb-1 max-h-60 w-56 overflow-y-auto py-1 shadow-xl ${skin.card}`}
+            className={`absolute bottom-full left-0 z-30 mb-1 max-h-72 w-56 overflow-y-auto py-1 shadow-xl ${skin.card}`}
           >
             <button
               onClick={() => fileRef.current?.click()}
@@ -588,6 +607,7 @@ export default function ChatRoom({
               <ImageIcon className="h-3.5 w-3.5" />
               {t.chat.attachPhoto}
             </button>
+
             {/* Идущие сделки - по всем монетам сразу. */}
             {running.length > 0 && (
               <>
@@ -597,10 +617,7 @@ export default function ChatRoom({
                 {running.map((trade, i) => (
                   <button
                     key={`open-${trade.symbol}-${i}`}
-                    onClick={() => {
-                      setAttach({ kind: "trade", trade });
-                      setAttachMenu(false);
-                    }}
+                    onClick={() => pick({ kind: "trade", trade })}
                     className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] ${skin.nameOther} hover:opacity-80`}
                   >
                     <Activity className="h-3.5 w-3.5" />
@@ -630,10 +647,7 @@ export default function ChatRoom({
               waiting.map((trade, i) => (
                 <button
                   key={`${trade.symbol}-${trade.entry}-${i}`}
-                  onClick={() => {
-                    setAttach({ kind: "trade", trade });
-                    setAttachMenu(false);
-                  }}
+                  onClick={() => pick({ kind: "trade", trade })}
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] ${skin.nameOther} hover:opacity-80`}
                 >
                   <Clock className="h-3.5 w-3.5" />
@@ -645,48 +659,63 @@ export default function ChatRoom({
               ))
             )}
 
-            {/* Отработанные сделки: журнал прямо здесь, а не отдельной кнопкой
-                в самом журнале. Показать сделку хотят в разговоре - значит
-                искать её надо там, где пишут, а не там, где считают. */}
-            {onOpenJournal ? (
-              <button
-                onClick={() => {
-                  onOpenJournal();
-                  setAttachMenu(false);
-                }}
-                title={t.chat.openJournal}
-                className={`flex w-full items-center gap-1 px-3 pt-1.5 text-left text-[10px] uppercase tracking-wide ${skin.muted} hover:opacity-80`}
-              >
-                {t.chat.groupJournal}
-                <ChevronRight className="h-3 w-3" />
-              </button>
-            ) : (
-              <p className={`px-3 pt-1.5 text-[10px] uppercase tracking-wide ${skin.muted}`}>
-                {t.chat.groupJournal}
-              </p>
-            )}
-            {journal === null ? (
-              <p className={`px-3 py-1 text-[11px] ${skin.muted}`}>{t.chat.loading}</p>
-            ) : journal.length === 0 ? (
-              <p className={`px-3 py-1 text-[11px] ${skin.muted}`}>{t.chat.noJournal}</p>
-            ) : (
-              journal.slice(0, JOURNAL_SHOWN).map((row) => (
-                <button
-                  key={row.id}
-                  onClick={() => {
-                    setAttach({ kind: "trade", trade: fromJournal(row) });
-                    setAttachMenu(false);
-                  }}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] ${skin.nameOther} hover:opacity-80`}
-                >
-                  <BookText className="h-3.5 w-3.5" />
-                  <span className="min-w-0 flex-1 truncate">
-                    {row.symbol.replace(/USDT$/i, "")}
-                  </span>
-                  <span className={row.pnl >= 0 ? skin.up : skin.down}>{money(row.pnl)}</span>
-                </button>
-              ))
-            )}
+            {/* Отработанные сделки живут за этой строкой: их сотни, и
+                вываливать их в общий список значит утопить в них то, что
+                под рукой. */}
+            <button
+              onClick={() => setMenu("journal")}
+              className={`mt-1 flex w-full items-center gap-1 border-t px-3 py-1.5 text-left text-[10px] uppercase tracking-wide ${skin.edge} ${skin.muted} hover:opacity-80`}
+            >
+              {t.chat.groupJournal}
+              <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+
+        {/* Второй уровень: тот же журнал, но целиком и в том же окне. */}
+        {attachMenu && menu === "journal" && (
+          <div
+            className={`absolute bottom-full left-0 z-30 mb-1 flex max-h-72 w-64 flex-col overflow-hidden shadow-xl ${skin.card}`}
+          >
+            <button
+              onClick={() => setMenu("main")}
+              className={`flex shrink-0 items-center gap-1 border-b px-3 py-1.5 text-left text-[10px] uppercase tracking-wide ${skin.edge} ${skin.muted} hover:opacity-80`}
+            >
+              <ChevronLeft className="h-3 w-3" />
+              {t.chat.groupJournal}
+            </button>
+
+            <div className="min-h-0 flex-1 overflow-y-auto py-1">
+              {journal === null ? (
+                <p className={`px-3 py-1.5 text-[11px] ${skin.muted}`}>{t.chat.loading}</p>
+              ) : journal.length === 0 ? (
+                <p className={`px-3 py-1.5 text-[11px] ${skin.muted}`}>{t.chat.noJournal}</p>
+              ) : (
+                journal.slice(0, JOURNAL_SHOWN).map((row) => (
+                  <button
+                    key={row.id}
+                    onClick={() => pick({ kind: "trade", trade: fromJournal(row) })}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] ${skin.nameOther} hover:opacity-80`}
+                  >
+                    <span className={row.side === "long" ? skin.up : skin.down}>
+                      {row.side === "long" ? "L" : "S"}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {row.symbol.replace(/USDT$/i, "")}
+                    </span>
+                    <span className={`shrink-0 text-[10px] ${skin.muted}`}>
+                      {new Date(row.closed_at).toLocaleDateString(intlLocale(locale), {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </span>
+                    <span className={`shrink-0 ${row.pnl >= 0 ? skin.up : skin.down}`}>
+                      {money(row.pnl)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         )}
 

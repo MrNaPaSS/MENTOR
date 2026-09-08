@@ -26,7 +26,6 @@ export const chat = {
   attachOrder: (coin: string) => `Заявку ${coin}`,
   groupRunning: "В рынке",
   groupPending: "Ждущие заявки",
-  openJournal: "Открыть журнал сделок",
   groupJournal: "Журнал сделок",
   noJournal: "Отработанных сделок нет",
   loading: "Читаем журнал…",
