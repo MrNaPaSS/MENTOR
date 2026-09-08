@@ -24,6 +24,18 @@ const MONTHS = [
   "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
 ];
 
+/**
+ * Опорная дата на месте.
+ *
+ * Кнопки сроков стоят на странице с первого кадра, а календарь приезжает
+ * запросом: до ответа опорной даты нет вовсе. Неделя считала из неё границы
+ * через Date, получала Invalid Date, и toISOString роняла всю аналитику
+ * клиентским исключением - пустой чёрный экран вместо страницы.
+ */
+function dated(iso: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso);
+}
+
 /** Дата календаря в числах. Разбором строки, а не через Date: пояс тут лишний. */
 function parts(iso: string): { y: number; m: number; d: number } {
   const [y, m, d] = iso.split("-").map(Number);
@@ -52,6 +64,7 @@ function week(iso: string): [string, string] {
 
 /** Дни срока - те, что вообще есть в календаре. */
 export function daysOf(all: CalendarDay[], span: Span, anchor: string): CalendarDay[] {
+  if (!dated(anchor)) return [];
   if (span === "day") return all.filter((d) => d.date === anchor);
   if (span === "month") return all;
   const [from, to] = week(anchor);
@@ -65,6 +78,7 @@ export function daysOf(all: CalendarDay[], span: Span, anchor: string): Calendar
  * результат, хотя означает, что данных нет.
  */
 export function periodOf(all: CalendarDay[], span: Span, anchor: string): Period | null {
+  if (!dated(anchor)) return null;
   const days = daysOf(all, span, anchor);
   // Тот же отбор, что и у полосы итогов под календарём.
   const counted = days.filter((d) => d.pnl_pct !== null && !d.estimated);
