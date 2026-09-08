@@ -243,15 +243,17 @@ export interface CalendarDay {
   date: string;
   signals: number;
   balance: number | null;
-  /** Прибыль дня по журналу, делённая на баланс на начало дня. */
+  /** Доход дня от залога закрытых сделок. День без сделок - ноль. */
   pnl_pct: number | null;
-  /** База процента - перенесённый баланс, а не снимок этого дня. */
-  estimated?: boolean;
   trades?: number;
   trade_volume?: number;
   has_deposit?: boolean;
   /** Прибыль дня по журналу, в USDT. */
   journal_pnl?: number;
+  /** Сумма залогов закрытых за день сделок - знаменатель процента. */
+  journal_margin?: number;
+  /** Оборот дня по журналу: вход и выход каждой закрытой сделки. */
+  journal_volume?: number;
   journal_trades?: number;
 }
 

@@ -9,7 +9,6 @@ function day(over: Partial<CalendarDay> & { date: string }): CalendarDay {
     signals: 0,
     balance: 1000,
     pnl_pct: 0,
-    estimated: false,
     journal_pnl: 0,
     journal_trades: 0,
     ...over,
@@ -51,18 +50,6 @@ describe("срок карточки", () => {
     expect(p.winDays).toBe(3);
     expect(p.tradeDays).toBe(4);
     expect(p.title).toBe("Сентябрь 2026");
-  });
-
-  it("день на оценке в сводку не идёт", () => {
-    // Его процент стоит на перенесённой базе, и сложить его с остальными -
-    // значит выдать оценку за факт. Полоса итогов отбирает так же.
-    const withGuess = [
-      ...MONTH,
-      day({ date: "2026-09-09", pnl_pct: 99, journal_pnl: 990, journal_trades: 9, estimated: true }),
-    ];
-    const p = periodOf(withGuess, "month", "2026-09-09")!;
-    expect(p.roi).toBeCloseTo(5.1, 6);
-    expect(p.trades).toBe(10);
   });
 
   it("пустой календарь не роняет страницу", () => {

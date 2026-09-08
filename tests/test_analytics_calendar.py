@@ -1,10 +1,14 @@
-"""Календарь аналитики: процент дня считается по журналу сделок.
+"""Календарь аналитики: процент дня - доход от залога закрытых сделок.
 
-Число в клетке - деньги, и ученик судит по нему о своей работе. До этих тестов
-оно бралось разностью соседних снимков баланса и отвечало не на тот вопрос:
-снимок пишется раз в сутки и в течение дня не меняется, поэтому сегодняшняя
-клетка стояла нулём при любом числе закрытых сделок, а завтрашняя показывала бы
-сегодняшний день.
+Число в клетке - деньги, и ученик судит по нему о своей работе. Оно прошло две
+ошибки. Сперва бралось разностью соседних снимков баланса: снимок пишется раз в
+сутки и в течение дня не меняется, поэтому сегодняшняя клетка стояла нулём при
+любом числе закрытых сделок. Потом - прибылью журнала от баланса: формула стала
+честной, но знаменатель приходит с биржи, и у ученика с несвежим снимком она
+давала +266% за день.
+
+Теперь и числитель, и знаменатель - из самих сделок, как на карточке одной
+сделки: сколько заработали на том, чем рисковали.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -53,12 +57,22 @@ def _snapshot(student_id: int, date: str, balance: str) -> None:
         s.commit()
 
 
-def _trade(student_id: int, closed: datetime, pnl: str, client_id: str) -> None:
+def _trade(
+    student_id: int,
+    closed: datetime,
+    pnl: str,
+    client_id: str,
+    margin: str = "100",
+    qty: str = "0.01",
+    entry: str = "79000",
+    exit_price: str | None = "78500",
+) -> None:
     with SessionLocal() as s:
         s.add(ScalpTrade(
             student_id=student_id, client_id=client_id, symbol="BTCUSDT", side="short",
-            entry=Decimal("79000"), stop=Decimal("80000"), exit_price=Decimal("78500"),
-            qty=Decimal("0.01"), margin=Decimal("100"), leverage=20,
+            entry=Decimal(entry), stop=Decimal("80000"),
+            exit_price=None if exit_price is None else Decimal(exit_price),
+            qty=Decimal(qty), margin=Decimal(margin), leverage=20,
             outcome="take", pnl=Decimal(pnl), closed_at=closed,
         ))
         s.commit()
@@ -80,18 +94,35 @@ def test_day_percent_comes_from_journal(ctx):
     client = ctx
     sid, h = _student(client)
     # Баланс на начало дня один и тот же оба дня: биржа о сделках терминала
-    # молчит. Раньше именно это и давало ноль.
+    # молчит. Первая версия этого числа именно поэтому и давала ноль.
     _snapshot(sid, f"{_Y:04d}-{_M:02d}-10", "1000")
     _snapshot(sid, f"{_Y:04d}-{_M:02d}-11", "1000")
-    _trade(sid, datetime(_Y, _M, 11, 9, 0, tzinfo=timezone.utc), "50", "t1")
-    _trade(sid, datetime(_Y, _M, 11, 10, 0, tzinfo=timezone.utc), "-20", "t2")
+    _trade(sid, datetime(_Y, _M, 11, 9, 0, tzinfo=timezone.utc), "50", "t1", margin="100")
+    _trade(sid, datetime(_Y, _M, 11, 10, 0, tzinfo=timezone.utc), "-20", "t2", margin="100")
 
     days = _cal(client, h, _Y, _M)
-    assert days[f"{_Y:04d}-{_M:02d}-11"]["pnl_pct"] == pytest.approx(3.0)
+    # 30 заработано на 200 залога.
+    assert days[f"{_Y:04d}-{_M:02d}-11"]["pnl_pct"] == pytest.approx(15.0)
     assert days[f"{_Y:04d}-{_M:02d}-11"]["journal_pnl"] == pytest.approx(30.0)
     assert days[f"{_Y:04d}-{_M:02d}-11"]["journal_trades"] == 2
     # Соседний день сделок не забирает.
     assert days[f"{_Y:04d}-{_M:02d}-10"]["pnl_pct"] == pytest.approx(0.0)
+
+
+def test_percent_does_not_depend_on_balance(ctx):
+    """Баланс на процент не влияет вовсе.
+
+    Он приходит с биржи снимком раз в сутки, и у ученика с несвежим снимком
+    делил дневную прибыль на чужую цифру: +474 на депозит в 177 давали +266%
+    за день. Считаем от того, чем рисковали, - это знает сам журнал.
+    """
+    client = ctx
+    sid, h = _student(client)
+    _snapshot(sid, f"{_Y:04d}-{_M:02d}-11", "177.80")
+    _trade(sid, datetime(_Y, _M, 11, 9, 0, tzinfo=timezone.utc), "474.15", "t1", margin="500")
+
+    days = _cal(client, h, _Y, _M)
+    assert days[f"{_Y:04d}-{_M:02d}-11"]["pnl_pct"] == pytest.approx(94.83)
 
 
 def test_day_without_trades_is_zero_not_balance_drift(ctx):
@@ -113,35 +144,78 @@ def test_first_day_of_month_counts_like_any_other(ctx):
     """
     client = ctx
     sid, h = _student(client)
-    _snapshot(sid, f"{_Y:04d}-{_M:02d}-01", "500")
-    _trade(sid, datetime(_Y, _M, 1, 12, 0, tzinfo=timezone.utc), "25", "t1")
+    _trade(sid, datetime(_Y, _M, 1, 12, 0, tzinfo=timezone.utc), "25", "t1", margin="500")
 
     days = _cal(client, h, _Y, _M)
     assert days[f"{_Y:04d}-{_M:02d}-01"]["pnl_pct"] == pytest.approx(5.0)
 
 
-def test_day_without_any_balance_has_no_percent(ctx):
-    """Без базы процента нет: делить прибыль не на что."""
+def test_day_needs_no_snapshot_at_all(ctx):
+    """Снимка баланса нет - процент всё равно есть.
+
+    Раньше без него делить было не на что и клетка оставалась пустой, хотя
+    сделки за день были и итог по ним известен.
+    """
     client = ctx
     sid, h = _student(client)
-    _trade(sid, datetime(_Y, _M, 5, 12, 0, tzinfo=timezone.utc), "25", "t1")
+    _trade(sid, datetime(_Y, _M, 5, 12, 0, tzinfo=timezone.utc), "25", "t1", margin="250")
 
     days = _cal(client, h, _Y, _M)
     cell = days[f"{_Y:04d}-{_M:02d}-05"]
-    assert cell["pnl_pct"] is None
-    # Сама прибыль при этом известна и не теряется.
+    assert cell["pnl_pct"] == pytest.approx(10.0)
     assert cell["journal_pnl"] == pytest.approx(25.0)
+    assert cell["balance"] is None
 
 
-def test_day_leaning_on_carried_balance_is_estimated(ctx):
-    """День без своего снимка опирается на перенесённый - и помечен."""
+def test_trade_without_margin_gives_zero_not_infinity(ctx):
+    """Залога нет - процентов тоже, а не бесконечность.
+
+    Так же считает и карточка одной сделки: делить на ноль здесь нечего.
+    """
     client = ctx
     sid, h = _student(client)
-    _snapshot(sid, f"{_Y:04d}-{_M:02d}-10", "1000")
-    _trade(sid, datetime(_Y, _M, 11, 12, 0, tzinfo=timezone.utc), "100", "t1")
+    _trade(sid, datetime(_Y, _M, 6, 12, 0, tzinfo=timezone.utc), "25", "t1", margin="0")
 
     days = _cal(client, h, _Y, _M)
-    cell = days[f"{_Y:04d}-{_M:02d}-11"]
-    assert cell["pnl_pct"] == pytest.approx(10.0)
-    assert cell["estimated"] is True
-    assert days[f"{_Y:04d}-{_M:02d}-10"]["estimated"] is False
+    assert days[f"{_Y:04d}-{_M:02d}-06"]["pnl_pct"] == pytest.approx(0.0)
+
+
+def test_day_volume_counts_both_legs(ctx):
+    """Оборот дня - вход и выход каждой сделки.
+
+    Биржа считает оборотом каждое исполнение, а круг из входа и выхода - это
+    два исполнения. Считаем так же, иначе вехи объёма окажутся вдвое дальше,
+    чем на самой бирже.
+    """
+    client = ctx
+    sid, h = _student(client)
+    _trade(
+        sid, datetime(_Y, _M, 12, 9, 0, tzinfo=timezone.utc), "50", "t1",
+        qty="2", entry="100", exit_price="110",
+    )
+
+    days = _cal(client, h, _Y, _M)
+    assert days[f"{_Y:04d}-{_M:02d}-12"]["journal_volume"] == pytest.approx(420.0)
+
+
+def test_open_trade_counts_the_leg_it_has(ctx):
+    """Выхода ещё нет - считаем вход, а не ноль."""
+    client = ctx
+    sid, h = _student(client)
+    _trade(
+        sid, datetime(_Y, _M, 13, 9, 0, tzinfo=timezone.utc), "0", "t1",
+        qty="2", entry="100", exit_price=None,
+    )
+
+    days = _cal(client, h, _Y, _M)
+    assert days[f"{_Y:04d}-{_M:02d}-13"]["journal_volume"] == pytest.approx(200.0)
+
+
+def test_quiet_day_has_no_volume(ctx):
+    """День без сделок - ноль оборота, а не пропуск."""
+    client = ctx
+    sid, h = _student(client)
+    _trade(sid, datetime(_Y, _M, 14, 9, 0, tzinfo=timezone.utc), "10", "t1")
+
+    days = _cal(client, h, _Y, _M)
+    assert days[f"{_Y:04d}-{_M:02d}-15"]["journal_volume"] == pytest.approx(0.0)

@@ -87,6 +87,19 @@ function getXpLevel(totalXp: number) {
   return { level: lvl, xpInLevel: totalXp - xpToLevel(lvl), xpNeeded: xpToLevel(lvl + 1) - xpToLevel(lvl) };
 }
 
+/**
+ * Оборот дня.
+ *
+ * Сперва цифра биржи, следом - журнал терминала. Биржа считает весь счёт, и её
+ * число полнее; но добраться до него удаётся не всегда - партнёрская ручка
+ * знает только тех, у кого заведён UID, а лента исполнений по ключам приходит
+ * без диапазона дат. Пока её нет, показываем то, что провёл терминал: иначе
+ * обнуляется всё, что на обороте стоит - дни торговли, стрик и объём месяца.
+ */
+function dayVolume(day: CalendarDay): number {
+  return (day.trade_volume ?? 0) || (day.journal_volume ?? 0);
+}
+
 // Сроки, за которые собирается карточка. Порядок - от короткого к длинному:
 // им же и пользуются, от «сегодня получилось» к «вот месяц».
 const SPANS: { id: Span; label: string }[] = [
@@ -117,19 +130,16 @@ function DayCell({ day, onClick, active, isToday }: {
   if (!day) return <div style={{ aspectRatio: "1" }} />;
 
   const pnl = day.pnl_pct;
-  const isEstimated = day.estimated === true;
-  const isPos = pnl !== null && !isEstimated && pnl > 0;
-  const isNeg = pnl !== null && !isEstimated && pnl < 0;
-  const hasReal = pnl !== null && !isEstimated;
-  const hasTrades = (day.trade_volume ?? 0) > 0;
+  const isPos = pnl !== null && pnl > 0;
+  const isNeg = pnl !== null && pnl < 0;
+  const hasReal = pnl !== null;
+  const hasTrades = dayVolume(day) > 0;
   const hasDeposit = day.has_deposit === true;
   const goalMet = day.signals > 0 && isPos;
 
   const intensity = hasReal ? Math.min(Math.abs(pnl!) / 6, 1) : 0;
   let bg = "rgba(255,255,255,0.015)";
-  if (isEstimated) {
-    bg = "rgba(255,255,255,0.018)";
-  } else if (isPos) {
+  if (isPos) {
     bg = `linear-gradient(145deg, rgba(0,212,160,${0.06 + intensity * 0.22}) 0%, rgba(0,212,160,${0.10 + intensity * 0.32}) 100%)`;
   } else if (isNeg) {
     bg = `linear-gradient(145deg, rgba(255,71,87,${0.05 + intensity * 0.18}) 0%, rgba(255,71,87,${0.09 + intensity * 0.28}) 100%)`;
@@ -165,12 +175,12 @@ function DayCell({ day, onClick, active, isToday }: {
       title={[
         day.date,
         hasDeposit ? "Депозит" : "",
-        hasTrades ? `Объём $${(day.trade_volume ?? 0).toLocaleString("ru", { maximumFractionDigits: 0 })}` : "",
+        hasTrades ? `Объём $${dayVolume(day).toLocaleString("ru", { maximumFractionDigits: 0 })}` : "",
         hasReal ? `PnL ${pnl!.toFixed(2)}%` : "",
       ].filter(Boolean).join(" · ")}
     >
       {/* Число месяца */}
-      <span className={`text-[10px] font-bold leading-none ${isToday ? "text-accent-cyan" : isEstimated ? "text-text-primary/20" : "text-text-primary/45"}`}>
+      <span className={`text-[10px] font-bold leading-none ${isToday ? "text-accent-cyan" : "text-text-primary/45"}`}>
         {dayNum}
       </span>
 
@@ -187,7 +197,7 @@ function DayCell({ day, onClick, active, isToday }: {
         {/* Объём — показывается всегда когда есть */}
         {hasTrades && (
           <span className="text-[8px] font-bold tabular-nums text-accent-gold/70 leading-none">
-            {fmtVolShort(day.trade_volume ?? 0)}
+            {fmtVolShort(dayVolume(day))}
           </span>
         )}
         {/* Сигналы без объёма */}
@@ -297,22 +307,22 @@ export default function AnalyticsPage() {
 
     const totalVol     = tradeSummary.total_volume ?? 0;
     const depTotal     = recentDeposits.reduce((s, d) => s + d.amount, 0);
-    const vProfitDays  = calData.filter(d => d.pnl_pct !== null && !d.estimated && d.pnl_pct > 0).length;
+    const vProfitDays  = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 0).length;
     const vHotDays     = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 3).length;
-    const vTradingDays = calData.filter(d => (d.trade_volume ?? 0) > 0).length;
+    const vTradingDays = calData.filter(d => dayVolume(d) > 0).length;
     const vActiveDays  = calData.filter(d => d.signals > 0).length;
     const vEffTrade    = vTradingDays > 0 ? vTradingDays : vActiveDays;
     const vGoalDays    = calData.filter(d => d.signals > 0 && d.pnl_pct !== null && d.pnl_pct > 0).length;
-    const vMonthVol    = calData.reduce((s, d) => s + (d.trade_volume ?? 0), 0);
+    const vMonthVol    = calData.reduce((s, d) => s + dayVolume(d), 0);
     const vStreak      = (() => {
       let s = 0;
       for (let i = calData.length - 1; i >= 0; i--) {
-        if ((calData[i].trade_volume ?? 0) > 0 || calData[i].signals > 0) s++;
+        if (dayVolume(calData[i]) > 0 || calData[i].signals > 0) s++;
         else break;
       }
       return s;
     })();
-    const vValidPnl    = calData.filter(d => d.pnl_pct !== null && !d.estimated);
+    const vValidPnl    = calData.filter(d => d.pnl_pct !== null);
     const vAvgProfit   = vValidPnl.length ? vValidPnl.reduce((a, d) => a + (d.pnl_pct ?? 0), 0) / vValidPnl.length : 0;
     const vSuperHot    = calData.some(d => d.pnl_pct !== null && d.pnl_pct >= 5);
     const vEpicDay     = calData.some(d => d.pnl_pct !== null && d.pnl_pct >= 10);
@@ -428,11 +438,11 @@ export default function AnalyticsPage() {
   while (cells.length % 7 !== 0) cells.push(null);
 
   // Статистика месяца
-  const profitDays   = calData.filter(d => d.pnl_pct !== null && !d.estimated && d.pnl_pct > 0).length;
-  const lossDays     = calData.filter(d => d.pnl_pct !== null && !d.estimated && d.pnl_pct < 0).length;
+  const profitDays   = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 0).length;
+  const lossDays     = calData.filter(d => d.pnl_pct !== null && d.pnl_pct < 0).length;
   const activeDays   = calData.filter(d => d.signals > 0).length;                        // дни с сигналами
-  const tradingDays  = calData.filter(d => (d.trade_volume ?? 0) > 0).length;            // дни с торговлей
-  const monthVolume  = calData.reduce((s, d) => s + (d.trade_volume ?? 0), 0);           // объём за месяц
+  const tradingDays  = calData.filter(d => dayVolume(d) > 0).length;                     // дни с торговлей
+  const monthVolume  = calData.reduce((s, d) => s + dayVolume(d), 0);                    // объём за месяц
   const totalVolume  = tradeSummary?.total_volume ?? 0;
   const goalDays     = calData.filter(d => d.signals > 0 && d.pnl_pct !== null && d.pnl_pct > 0).length;
 
@@ -440,13 +450,13 @@ export default function AnalyticsPage() {
   const activityStreak = (() => {
     let s = 0;
     for (let i = calData.length - 1; i >= 0; i--) {
-      if ((calData[i].trade_volume ?? 0) > 0 || calData[i].signals > 0) s++;
+      if (dayVolume(calData[i]) > 0 || calData[i].signals > 0) s++;
       else break;
     }
     return s;
   })();
 
-  const validPnl  = calData.filter(d => d.pnl_pct !== null && !d.estimated);
+  const validPnl  = calData.filter(d => d.pnl_pct !== null);
   const avgProfit = validPnl.length
     ? validPnl.reduce((a, d) => a + (d.pnl_pct ?? 0), 0) / validPnl.length : 0;
   const hotDays     = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 3).length;
@@ -557,7 +567,7 @@ export default function AnalyticsPage() {
   const noData = loaded && validPnl.length === 0 && activeDays === 0;
 
   // Лучший/худший день месяца
-  const realDays = calData.filter(d => d.pnl_pct !== null && !d.estimated);
+  const realDays = calData.filter(d => d.pnl_pct !== null);
   // Опорная дата сроков: выбранный день, а если не выбран - последний день
   // месяца, который вообще есть в календаре. Открытый месяц кончается сегодня,
   // так что для текущего это и будет сегодня.
@@ -815,9 +825,9 @@ export default function AnalyticsPage() {
                         ⚡ {selectedDay.signals} сигналов
                       </span>
                     )}
-                    {(selectedDay.trade_volume ?? 0) > 0 && (
+                    {dayVolume(selectedDay) > 0 && (
                       <span className="rounded-lg bg-accent-gold/10 px-2.5 py-1 text-[11px] font-semibold text-accent-gold">
-                        ↕ ${fmtDot(selectedDay.trade_volume ?? 0)} объём
+                        ↕ ${fmtDot(dayVolume(selectedDay))} объём
                       </span>
                     )}
                     {selectedDay.has_deposit && (
@@ -828,7 +838,7 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  {selectedDay.pnl_pct !== null && !selectedDay.estimated ? (
+                  {selectedDay.pnl_pct !== null ? (
                     <>
                       <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-success" : selectedDay.pnl_pct < 0 ? "text-danger" : "text-text-primary/40"}`}>
                         {selectedDay.pnl_pct > 0 ? "+" : ""}{selectedDay.pnl_pct.toFixed(2)}%

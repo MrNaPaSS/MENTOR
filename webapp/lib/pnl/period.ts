@@ -2,10 +2,8 @@
 
 // Итог за срок: день, неделя, месяц.
 //
-// Считается по тем же дням календаря, которые ученик видит на экране, и по тому
-// же правилу: день без своего снимка баланса в сводку не идёт - его процент
-// стоит на перенесённой базе, и складывать его с остальными значило бы выдавать
-// оценку за факт. Иначе карточка спорила бы с полосой «итог месяца» под
+// Складывается по тем же дням календаря, которые ученик видит на экране, и по
+// тому же правилу - иначе карточка спорила бы с полосой «итог месяца» под
 // календарём, а это одно и то же число.
 
 import type { CalendarDay } from "@/lib/api";
@@ -81,7 +79,7 @@ export function periodOf(all: CalendarDay[], span: Span, anchor: string): Period
   if (!dated(anchor)) return null;
   const days = daysOf(all, span, anchor);
   // Тот же отбор, что и у полосы итогов под календарём.
-  const counted = days.filter((d) => d.pnl_pct !== null && !d.estimated);
+  const counted = days.filter((d) => d.pnl_pct !== null);
   if (!counted.length) return null;
 
   const trades = counted.reduce((s, d) => s + (d.journal_trades ?? 0), 0);

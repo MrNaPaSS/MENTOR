@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
 from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student
+from backend.trading.funds import trade_volume
 from backend.api.journal import is_admin
 from backend.trading.funds import balance_by_keys
 from backend.config import BackendConfig
@@ -119,14 +120,6 @@ async def analytics_calendar(
         .order_by(BalanceSnapshot.date.asc())
     ).scalars().all()
 
-    prev_snap = session.execute(
-        select(BalanceSnapshot)
-        .where(BalanceSnapshot.student_id == student.id)
-        .where(BalanceSnapshot.date < f"{prefix}-01")
-        .order_by(BalanceSnapshot.date.desc())
-        .limit(1)
-    ).scalar_one_or_none()
-
     balance_by_date: dict[str, Decimal] = {s.date: Decimal(str(s.balance_usdt)) for s in snapshots}
 
     # ── DB: сигналы ─────────────────────────────────────────────────────────
@@ -167,15 +160,6 @@ async def analytics_calendar(
         if snap.futures_volume is not None or snap.spot_volume is not None:
             volume_by_date[snap.date] = float(snap.futures_volume or 0) + float(snap.spot_volume or 0)
 
-    # ── Заполняем дни до первого снимка текущим балансом ───────────────────
-    if snapshots:
-        first_snap_bal = Decimal(str(snapshots[0].balance_usdt))
-        first_snap_date = snapshots[0].date
-        for _d in range(1, last_day + 1):
-            _ds = f"{prefix}-{_d:02d}"
-            if _ds < first_snap_date and _ds not in balance_by_date:
-                balance_by_date[_ds] = first_snap_bal
-
     # ── Журнал скальпинга: прибыль по дням ──────────────────────────────────
     #
     # Календарь до этого знал только про изменение баланса на бирже, а оно
@@ -193,41 +177,47 @@ async def analytics_calendar(
     journal_by_date: dict[str, dict[str, float]] = {}
     for t in journal:
         closed = t.closed_at if t.closed_at.tzinfo else t.closed_at.replace(tzinfo=timezone.utc)
-        cell = journal_by_date.setdefault(closed.strftime("%Y-%m-%d"), {"pnl": 0.0, "trades": 0})
+        cell = journal_by_date.setdefault(
+            closed.strftime("%Y-%m-%d"),
+            {"pnl": 0.0, "margin": 0.0, "volume": 0.0, "trades": 0},
+        )
         cell["pnl"] += float(t.pnl)
+        cell["margin"] += float(t.margin or 0)
+        cell["volume"] += trade_volume(
+            float(t.qty or 0), float(t.entry or 0), float(t.exit_price or 0) or None
+        )
         cell["trades"] += 1
 
     # ── Строим список дней ──────────────────────────────────────────────────
     #
-    # Процент дня - прибыль по журналу, делённая на баланс на начало дня.
+    # Процент дня - доход от залога закрытых сделок: сколько заработали на том,
+    # чем рисковали. Так же считает и карточка одной сделки, и теперь клетка с
+    # ней сходится.
     #
-    # Раньше он считался разностью соседних снимков баланса, и это отвечало не
-    # на тот вопрос. Снимок пишется первым прогоном сборщика после полуночи и в
-    # течение суток не обновляется, поэтому сегодняшняя клетка стояла нулём,
-    # сколько бы сделок ни закрылось после, а завтра показывала бы сегодняшний
-    # день - число опаздывало на сутки. Хуже того, под клеткой всё это время
-    # лежал список сделок этого дня, и он с ней не сходился: список из журнала,
-    # число из баланса.
+    # Число прошло две ошибки, и обе стоит помнить. Сперва оно было разностью
+    # соседних снимков баланса: снимок пишется первым прогоном сборщика после
+    # полуночи и в течение суток не обновляется, поэтому сегодняшняя клетка
+    # стояла нулём при любом числе закрытых сделок. Потом - прибылью журнала от
+    # баланса: формула стала честной, но знаменатель по-прежнему приходил с
+    # биржи, и у ученика с несвежим снимком дневная прибыль делилась на чужую
+    # цифру - +474 на депозит в 177 давали +266% за день.
     #
-    # Знаменатель - тот же снимок: он и есть баланс на начало дня. Своего
-    # снимка у дня может не быть - тогда переносим последний известный; такой
-    # день помечен estimated, и в сводки месяца он не идёт.
-    snapshot_dates = {s.date for s in snapshots}
-    carried: Decimal | None = Decimal(str(prev_snap.balance_usdt)) if prev_snap else None
+    # Теперь баланса в расчёте нет вовсе. Он остаётся отдельной цифрой на
+    # бейдже дня, и врать ею он может только про себя.
     days_out = []
     for d in range(1, last_day + 1):
         date_str = f"{prefix}-{d:02d}"
         balance = balance_by_date.get(date_str)
-        is_real = date_str in snapshot_dates
-        base = balance if balance is not None else carried
 
         cell = journal_by_date.get(date_str, {})
         day_pnl = float(cell.get("pnl", 0.0))
+        day_margin = float(cell.get("margin", 0.0))
         day_trades = int(cell.get("trades", 0))
 
-        pnl_pct: float | None = None
-        if base is not None and base > 0:
-            pnl_pct = day_pnl / float(base) * 100
+        # Залога нет - процентов тоже, а не бесконечность. Так же поступает
+        # карточка сделки: делить на ноль здесь нечего, а день без сделок и
+        # правда прошёл в ноль.
+        pnl_pct = day_pnl / day_margin * 100 if day_margin > 0 else 0.0
 
         vol = volume_by_date.get(date_str, 0.0)
         days_out.append({
@@ -235,14 +225,13 @@ async def analytics_calendar(
             "signals": signals_by_date.get(date_str, 0),
             "balance": float(balance) if balance is not None else None,
             "pnl_pct": pnl_pct,
-            "estimated": not is_real and base is not None,
             "trades": 1 if vol > 0 else 0,        # был ли торговый объём за день
             "trade_volume": vol,
             "has_deposit": date_str in deposit_dates,
             "journal_pnl": round(day_pnl, 2),
+            "journal_margin": round(day_margin, 2),
+            "journal_volume": round(float(cell.get("volume", 0.0)), 2),
             "journal_trades": day_trades,
         })
-        if balance is not None:
-            carried = balance
 
     return {"days": days_out}
