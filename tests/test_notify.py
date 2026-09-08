@@ -82,6 +82,9 @@ def ctx(tmp_path, monkeypatch):
     config = BackendConfig(
         jwt_secret="s", access_ttl_seconds=900, refresh_ttl_seconds=86400,
         weex_use_mock=True, code_ttl_seconds=300, max_code_attempts=5, expose_codes=False,
+        # Эти тесты входят по UID. В работе этот путь выключен - кабинет
+        # открывается через бота академии, - здесь включаем его явно.
+        uid_login_enabled=True,
     )
     notifier = CollectingNotifier()
     app = create_app(config=config, weex=get_weex_client(use_mock=True), notifier=notifier)

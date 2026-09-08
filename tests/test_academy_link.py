@@ -20,6 +20,9 @@ def _config(**over) -> BackendConfig:
         jwt_secret="test-secret", access_ttl_seconds=900, refresh_ttl_seconds=86400,
         weex_use_mock=True, code_ttl_seconds=300, max_code_attempts=5, expose_codes=True,
         service_api_key=SERVICE_KEY,
+        # Часть тестов входит по UID: в работе этот путь выключен, здесь
+        # включаем явно, потому что проверяем именно его.
+        uid_login_enabled=True,
     )
     base.update(over)
     return BackendConfig(**base)

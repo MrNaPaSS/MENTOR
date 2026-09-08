@@ -19,6 +19,10 @@ def client(tmp_path, monkeypatch):
     config = BackendConfig(
         jwt_secret="test-secret", access_ttl_seconds=900, refresh_ttl_seconds=86400,
         weex_use_mock=True, code_ttl_seconds=300, max_code_attempts=5, expose_codes=True,
+        # Эти тесты - про вход по одному UID. В работе он выключен: кабинет
+        # открывается только через бота академии. Здесь включаем его явно,
+        # потому что проверяем именно его.
+        uid_login_enabled=True,
     )
     app = create_app(config=config, weex=get_weex_client(use_mock=True))
     return TestClient(app)

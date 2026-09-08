@@ -4,9 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
 import { loadDay, type JournalTrade } from "@/lib/journal";
+import PnlCard from "@/components/scalping/PnlCard";
+// Цены показываем тем же форматом, что и на самой карточке: цена выхода -
+// средняя по частям закрытия, и без округления она приезжает с десятком
+// знаков после точки.
+import { price as fmtPrice } from "@/lib/pnl/card";
+import { useTerminalTheme } from "@/lib/terminalTheme";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
-import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles } from "lucide-react";
+import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles, Share2 } from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
 function fmtDot(n: number, dec = 0): string {
@@ -244,6 +250,10 @@ export default function AnalyticsPage() {
   // undefined - спрашиваем, null - спросить не вышло, [] - сделок в этот день
   // не было. Три разных случая, и путать их нельзя.
   const [dayTrades, setDayTrades] = useState<JournalTrade[] | null | undefined>(null);
+  // Чья карточка открыта. Null - окна нет.
+  const [card, setCard] = useState<JournalTrade | null>(null);
+  const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
+  const [owner, setOwner] = useState<string | null>(null);
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
   const [currentBalance, setCurrentBalance] = useState<number | null>(null);
@@ -257,6 +267,9 @@ export default function AnalyticsPage() {
     api.analyticsMe(token).then(setAnalytics).catch(() => {});
     api.profile(token).then(p => {
       if (p.balance_usdt) setCurrentBalance(parseFloat(p.balance_usdt));
+      // Имя владельца - для подписи на карточке сделки: печать заверяет
+      // чью-то сделку, а не ничью.
+      setOwner(p.username ?? null);
     }).catch(() => {});
     api.tradesMe(token, 90).then(r => {
       setRecentDeposits((r.deposits || []).slice(0, 5));
@@ -834,6 +847,7 @@ export default function AnalyticsPage() {
                         <th className="py-1 text-right font-medium">Вход</th>
                         <th className="py-1 text-right font-medium">Выход</th>
                         <th className="py-1 text-right font-medium">Итог</th>
+                        <th className="py-1" />
                       </tr>
                     </thead>
                     <tbody className="font-mono tabular-nums">
@@ -855,9 +869,11 @@ export default function AnalyticsPage() {
                               {one.side === "long" ? "лонг" : "шорт"}
                             </span>
                           </td>
-                          <td className="py-1 text-right text-text-secondary">{one.entry}</td>
                           <td className="py-1 text-right text-text-secondary">
-                            {one.exit_price ?? "-"}
+                            {fmtPrice(one.entry)}
+                          </td>
+                          <td className="py-1 text-right text-text-secondary">
+                            {one.exit_price === null ? "-" : fmtPrice(one.exit_price)}
                           </td>
                           <td
                             className={`py-1 text-right font-semibold ${
@@ -871,6 +887,19 @@ export default function AnalyticsPage() {
                                 -{one.fee.toFixed(2)}
                               </span>
                             )}
+                          </td>
+                          {/* Карточка сделки - та же, что в журнале терминала.
+                              Здесь она нужна не меньше: аналитику открывают,
+                              чтобы посмотреть на свой день, и хорошим днём
+                              делятся ровно оттуда, где его увидели. */}
+                          <td className="py-1 pl-2 text-right">
+                            <button
+                              onClick={() => setCard(one)}
+                              title="Карточка сделки: скопировать, скачать, поделиться"
+                              className="text-text-primary/30 transition-colors duration-150 ease-out hover:text-accent-cyan"
+                            >
+                              <Share2 className="h-3.5 w-3.5" />
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -1108,6 +1137,14 @@ export default function AnalyticsPage() {
           })}
         </div>
       </div>
+
+      {/* Карточка сделки. Обёртка нужна ради палитры: окно красится
+          переменными панелей терминала, а на этой странице их нет. */}
+      {card && (
+        <div className={pane}>
+          <PnlCard trade={card} owner={owner ?? undefined} onClose={() => setCard(null)} />
+        </div>
+      )}
     </div>
   );
 }

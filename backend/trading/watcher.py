@@ -1015,6 +1015,24 @@ def _first(row: dict[str, Any], names: tuple[str, ...]) -> float | None:
     return None
 
 
+def _decimals(row: dict[str, Any]) -> int:
+    """Сколько знаков после точки у цены этого исполнения.
+
+    Считаем по строке, как её прислала биржа: там цена записана ровно с той
+    точностью, с какой инструмент торгуется.
+    """
+    for name in _PRICE_FIELDS:
+        if name not in row:
+            continue
+        text = str(row[name]).strip()
+        if "." not in text:
+            continue
+        tail = text.rsplit(".", 1)[1]
+        if tail.isdigit():
+            return len(tail)
+    return 2
+
+
 def fill_time(row: dict[str, Any]) -> int:
     value = _first(row, _TIME_FIELDS)
     return int(value) if value else 0
@@ -1158,7 +1176,15 @@ def settle(
     # возможна. А вот когда стороны названы и закрывающих среди них нет, выхода
     # действительно ещё не было, и цена входа вместо него - неправда.
     if exit_size > 0:
-        price = exit_value / exit_size
+        # Округляем до точности самих исполнений.
+        #
+        # Средняя по объёму получается делением, и в журнал уезжало
+        # 79138.4278620799 там, где биржа знает 79138.42: цена не может быть
+        # точнее тех цен, из которых её сложили. Точность берём по самой
+        # подробной из них - шага инструмента здесь нет, а выдумывать его
+        # значит однажды обрезать настоящий знак.
+        digits = max((_decimals(row) for row in fills if is_closing(row, side)), default=2)
+        price = round(exit_value / exit_size, digits)
     elif not sided:
         price = latest_price
     else:

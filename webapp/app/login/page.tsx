@@ -31,6 +31,21 @@ export default function LoginPage() {
   // человеком, а его ник попадает в подписи на карточках и снимках. Вход по
   // одному UID остаётся запасным и может быть закрыт на сервере.
   const [mode, setMode] = useState<"tg" | "uid">("tg");
+
+  /**
+   * Запасной вход по UID - только по прямому адресу `/login?uid=1`.
+   *
+   * Из интерфейса он убран: кабинет открывается через бота академии, и только
+   * так UID биржи связывается с человеком. Но совсем убирать его из страницы
+   * нельзя: если у кого-то не окажется tg_id ни на платформе, ни в боте,
+   * вернуть ему доступ к собственному счёту надо уметь переменной на сервере,
+   * а не пересборкой сайта. Ручки на сервере живут за тем же флагом.
+   */
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("uid") === "1") {
+      setMode("uid");
+    }
+  }, []);
   const [pass, setPass] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const [uid, setUid] = useState("");
@@ -219,17 +234,6 @@ export default function LoginPage() {
                 </button>
               )}
 
-              {/* Запасной путь. Он может быть закрыт на сервере - тогда сервер
-                  скажет об этом словами, и прятать ссылку заранее незачем. */}
-              <button
-                className="w-full text-center text-xs text-text-muted transition hover:text-text-primary"
-                onClick={() => {
-                  setMode("uid");
-                  setError(null);
-                }}
-              >
-                Войти по WEEX UID
-              </button>
             </div>
           ) : step === 1 ? (
             <div className="mt-6 space-y-4">
@@ -257,6 +261,10 @@ export default function LoginPage() {
               >
                 ← Войти через бота академии
               </button>
+              <p className="text-xs text-text-muted">
+                Этот путь оставлен на крайний случай. Обычный вход - паролем из
+                бота академии.
+              </p>
               <p className="text-xs text-text-muted">
                 Нет аккаунта WEEX?{" "}
                 <a

@@ -46,9 +46,14 @@ class BackendConfig:
     # любой живой пароль любого ученика, и перебор бьёт по этой ручке.
     tg_verify_max: int = 5
     tg_verify_window: int = 60
-    # Вход по одному UID, без Telegram. Выключается вместе с появлением входа
-    # через бота; флаг, а не удаление - ученика без tg_id иначе нечем вернуть.
-    uid_login_enabled: bool = True
+    # Вход по одному UID, без Telegram. Выключен: Telegram стал единственным
+    # способом попасть в кабинет - только через него UID биржи связывается с
+    # человеком, а его ник попадает в подписи на карточках и снимках.
+    #
+    # Флаг, а не удаление ручек. Если у кого-то не окажется tg_id ни в записи
+    # платформы, ни в боте, вернуть ему доступ к собственному счёту надо уметь
+    # одной переменной, а не деплоем посреди ночи.
+    uid_login_enabled: bool = False
     # Скальпинг: фоновый сбор стаканов с биржи. Выключен по умолчанию — это
     # постоянное соединение и заметный поток данных, включать осознанно.
     scalping_enabled: bool = False
@@ -103,7 +108,7 @@ class BackendConfig:
             tg_code_window=int(os.getenv("TG_CODE_WINDOW", "600") or "600"),
             tg_verify_max=int(os.getenv("TG_VERIFY_MAX", "5") or "5"),
             tg_verify_window=int(os.getenv("TG_VERIFY_WINDOW", "60") or "60"),
-            uid_login_enabled=os.getenv("UID_LOGIN_ENABLED", "true").lower() != "false",
+            uid_login_enabled=os.getenv("UID_LOGIN_ENABLED", "false").lower() == "true",
             allowed_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
             # dev-вход включён, если явно DEV_LOGIN=true, либо мы на моках WEEX (=dev),
             # и НЕ отключён явно DEV_LOGIN=false.

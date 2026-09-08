@@ -523,6 +523,32 @@ def test_exit_price_is_empty_without_closing_fills():
     assert price is None
 
 
+def test_exit_price_keeps_the_precision_of_the_fills():
+    """Средняя не бывает точнее цен, из которых её сложили.
+
+    Деление даёт 79138.4278620799 там, где биржа знает 79138.42 - и это число
+    уезжало в журнал, а оттуда на экран дня в аналитике.
+    """
+    from backend.trading.watcher import settle
+
+    fills = [
+        {"price": "79138.40", "qty": "1", "side": "buy", "realizedPnl": "1"},
+        {"price": "79138.45", "qty": "2", "side": "buy", "realizedPnl": "1"},
+    ]
+    _gross, _fee, price = settle(fills, entry=79200.0, side="short")
+    assert price == pytest.approx(79138.43)
+    assert str(price) == "79138.43"
+
+
+def test_exit_price_of_a_coin_with_many_digits_keeps_them():
+    # На PEPE шаг цены - восьмой знак: обрезать до двух значило бы показать ноль.
+    from backend.trading.watcher import settle
+
+    fills = [{"price": "0.00001234", "qty": "1", "side": "sell", "realizedPnl": "1"}]
+    _gross, _fee, price = settle(fills, entry=0.00001200, side="long")
+    assert price == pytest.approx(0.00001234)
+
+
 def test_exit_price_falls_back_to_the_latest_fill_without_sides():
     """Сторон в отчёте нет - берём самое позднее исполнение, а не первое.
 
