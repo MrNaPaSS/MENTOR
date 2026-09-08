@@ -9,6 +9,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 from typing import Optional
 
@@ -52,18 +53,48 @@ def decode_token(token: str, secret: str) -> dict:
     return payload
 
 
-def create_access_token(sub: str, role: str, secret: str, ttl_seconds: int) -> str:
+def create_access_token(
+    sub: str, role: str, secret: str, ttl_seconds: int, sid: Optional[str] = None
+) -> str:
     now = int(time.time())
-    return encode_token(
-        {"sub": str(sub), "role": role, "type": "access", "iat": now, "exp": now + ttl_seconds},
-        secret,
-    )
+    payload = {
+        "sub": str(sub),
+        "role": role,
+        "type": "access",
+        "iat": now,
+        "exp": now + ttl_seconds,
+    }
+    if sid:
+        payload["sid"] = sid
+    return encode_token(payload, secret)
 
 
-def create_refresh_token(sub: str, secret: str, ttl_seconds: int, role: str = "student") -> str:
-    """Refresh-токен несёт роль: без неё обновление сбрасывало ментора в ученика."""
+def create_refresh_token(
+    sub: str,
+    secret: str,
+    ttl_seconds: int,
+    role: str = "student",
+    sid: Optional[str] = None,
+) -> str:
+    """Refresh-токен несёт роль: без неё обновление сбрасывало ментора в ученика.
+
+    И метку сессии: по ней вход на новом устройстве закрывает прежний. Токен
+    подписан и не отзывается сам по себе - отозвать его можно только тем, что
+    у ученика в записи лежит другая метка.
+    """
     now = int(time.time())
-    return encode_token(
-        {"sub": str(sub), "role": role, "type": "refresh", "iat": now, "exp": now + ttl_seconds},
-        secret,
-    )
+    payload = {
+        "sub": str(sub),
+        "role": role,
+        "type": "refresh",
+        "iat": now,
+        "exp": now + ttl_seconds,
+    }
+    if sid:
+        payload["sid"] = sid
+    return encode_token(payload, secret)
+
+
+def new_session_id() -> str:
+    """Метка сессии. Новая на каждый вход - прежняя перестаёт подходить."""
+    return secrets.token_urlsafe(12)

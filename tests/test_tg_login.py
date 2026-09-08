@@ -345,3 +345,62 @@ def test_the_avatar_reaches_the_profile(app):
     token = enter(app, code).json()["access_token"]
     body = app.get("/api/profile", headers={"Authorization": f"Bearer {token}"}).json()
     assert body["avatar_url"].startswith("/uploads/avatars/111.png")
+
+
+# ── одна сессия на ученика ───────────────────────────────────────────────────
+
+def test_a_new_login_closes_the_previous_session(app):
+    """Вход на другом устройстве закрывает прежнее.
+
+    Кабинет - это терминал с чужими деньгами, и забытая вкладка на общем
+    компьютере не должна оставаться рабочей навсегда.
+    """
+    first = enter(app, ask(app).json()["code"]).json()
+    old = {"Authorization": f"Bearer {first['access_token']}"}
+    assert app.get("/api/profile", headers=old).status_code == 200
+
+    # Второй вход - как будто с другого устройства.
+    second = enter(app, ask(app).json()["code"]).json()
+    fresh = {"Authorization": f"Bearer {second['access_token']}"}
+
+    assert app.get("/api/profile", headers=fresh).status_code == 200
+    assert app.get("/api/profile", headers=old).status_code == 401
+
+
+def test_the_old_refresh_stops_working_too(app):
+    # Без этого правило ничего бы не значило: вытесненное устройство выписывало
+    # бы себе свежие access-токены по старому refresh.
+    first = enter(app, ask(app).json()["code"]).json()
+    enter(app, ask(app).json()["code"])
+
+    answer = app.post("/api/auth/refresh", json={"refresh_token": first["refresh_token"]})
+    assert answer.status_code == 401
+
+
+def test_refresh_keeps_the_session_alive(app):
+    # Обновление - продолжение того же входа, а не новый вход: оно не должно
+    # выбрасывать само себя.
+    tokens = enter(app, ask(app).json()["code"]).json()
+    again = app.post("/api/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    assert again.status_code == 200
+
+    headers = {"Authorization": f"Bearer {again.json()['access_token']}"}
+    assert app.get("/api/profile", headers=headers).status_code == 200
+    # И прежний access-токен той же сессии остаётся рабочим до своего срока.
+    old = {"Authorization": f"Bearer {tokens['access_token']}"}
+    assert app.get("/api/profile", headers=old).status_code == 200
+
+
+def test_tokens_from_before_the_rule_live_out_their_term(app):
+    """Метки нет в записи - токен доживает свой срок.
+
+    Иначе выкатка правила выбросила бы всех, кто в этот момент работал.
+    """
+    tokens = enter(app, ask(app).json()["code"]).json()
+    with SessionLocal() as session:
+        student = session.execute(select(Student)).scalars().one()
+        student.session_key = None
+        session.commit()
+
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+    assert app.get("/api/profile", headers=headers).status_code == 200

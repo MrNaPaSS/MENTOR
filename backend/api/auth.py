@@ -23,7 +23,13 @@ from pydantic import BaseModel
 from core import repo
 from backend.config import BackendConfig
 from backend.deps import get_config, get_session, get_weex, get_notifier
-from backend.security import create_access_token, create_refresh_token, decode_token, TokenError
+from backend.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    new_session_id,
+    TokenError,
+)
 from backend.balance_collector import snapshot_student
 from backend.trading.funds import balance_by_keys
 # Тот же ключ и та же сверка, что у начисления монет: обе ручки открыты одному
@@ -49,10 +55,32 @@ def record_login(session, student) -> None:
         student.first_login_at = now
     student.last_login_at = now
     student.login_count = (student.login_count or 0) + 1
+    # Один вход на ученика: новая метка закрывает прежнюю сессию. Заводится
+    # здесь, потому что через это место проходит каждый вход - и по паролю от
+    # бота, и по UID, и дев-вход.
+    student.session_key = new_session_id()
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _student_tokens(student, config: BackendConfig) -> TokenPair:
+    """Пара токенов ученика - с меткой его текущей сессии.
+
+    Метку кладём в оба токена: иначе refresh прежнего устройства продолжал бы
+    выписывать себе новые access-токены после чужого входа.
+    """
+    return TokenPair(
+        access_token=create_access_token(
+            student.id, "student", config.jwt_secret,
+            config.access_ttl_seconds, student.session_key,
+        ),
+        refresh_token=create_refresh_token(
+            student.id, config.jwt_secret, config.refresh_ttl_seconds,
+            "student", student.session_key,
+        ),
+    )
 
 
 def _uid_login_open(config: BackendConfig) -> None:
@@ -188,10 +216,7 @@ def verify(
     repo.delete_auth_code(session, uid)
     record_login(session, student)
     session.commit()
-    return TokenPair(
-        access_token=create_access_token(student.id, "student", config.jwt_secret, config.access_ttl_seconds),
-        refresh_token=create_refresh_token(student.id, config.jwt_secret, config.refresh_ttl_seconds),
-    )
+    return _student_tokens(student, config)
 
 
 @router.post("/login-by-uid", response_model=TokenPair)
@@ -240,10 +265,7 @@ async def login_by_uid(
     # Снимок баланса за сегодня (для PnL-календаря в аналитике).
     await snapshot_student(weex, student.id, uid)
 
-    return TokenPair(
-        access_token=create_access_token(student.id, "student", config.jwt_secret, config.access_ttl_seconds),
-        refresh_token=create_refresh_token(student.id, config.jwt_secret, config.refresh_ttl_seconds),
-    )
+    return _student_tokens(student, config)
 
 
 # ── Вход одноразовым паролем от бота академии ───────────────────────────────
@@ -482,18 +504,24 @@ def tg_verify(
 
     record_login(session, student)
     session.commit()
-    return TokenPair(
-        access_token=create_access_token(
-            student.id, "student", config.jwt_secret, config.access_ttl_seconds
-        ),
-        refresh_token=create_refresh_token(
-            student.id, config.jwt_secret, config.refresh_ttl_seconds
-        ),
-    )
+    return _student_tokens(student, config)
 
 
 @router.post("/refresh", response_model=TokenPair)
-def refresh(body: RefreshIn, config: BackendConfig = Depends(get_config)):
+def refresh(
+    body: RefreshIn,
+    config: BackendConfig = Depends(get_config),
+    session=Depends(get_session),
+):
+    """Обновить пару токенов.
+
+    Метку сессии здесь проверяем, а не заводим новую: обновление - это
+    продолжение того же входа, а не вход. Без проверки правило «один вход на
+    ученика» ничего бы не значило: устройство, вытесненное чужим входом,
+    продолжало бы выписывать себе свежие access-токены по старому refresh.
+    """
+    from core.models import Student as StudentModel
+
     try:
         payload = decode_token(body.refresh_token, config.jwt_secret)
     except TokenError as exc:
@@ -503,9 +531,26 @@ def refresh(body: RefreshIn, config: BackendConfig = Depends(get_config)):
     sub = payload["sub"]
     # У токенов, выданных до появления роли в refresh, её нет — определяем по sub.
     role = payload.get("role") or ("mentor" if sub == "mentor" else "student")
+
+    sid = payload.get("sid")
+    if role == "student":
+        student = session.get(StudentModel, int(sub))
+        if student is None or not student.is_active:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Пользователь не найден")
+        # Пустая метка в записи - вход, сделанный до появления правила: такой
+        # токен доживает свой срок, а первый новый вход заводит метку.
+        if student.session_key and sid != student.session_key:
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, "Вход выполнен на другом устройстве"
+            )
+
     return TokenPair(
-        access_token=create_access_token(sub, role, config.jwt_secret, config.access_ttl_seconds),
-        refresh_token=create_refresh_token(sub, config.jwt_secret, config.refresh_ttl_seconds, role),
+        access_token=create_access_token(
+            sub, role, config.jwt_secret, config.access_ttl_seconds, sid
+        ),
+        refresh_token=create_refresh_token(
+            sub, config.jwt_secret, config.refresh_ttl_seconds, role, sid
+        ),
     )
 
 
@@ -548,8 +593,14 @@ def dev_login(config: BackendConfig = Depends(get_config), session=Depends(get_s
             refresh_token=create_refresh_token("mentor", config.jwt_secret, config.refresh_ttl_seconds, "mentor"),
         ),
         student=DevTokens(
-            access_token=create_access_token(student.id, "student", config.jwt_secret, config.access_ttl_seconds),
-            refresh_token=create_refresh_token(student.id, config.jwt_secret, config.refresh_ttl_seconds),
+            access_token=create_access_token(
+                student.id, "student", config.jwt_secret,
+                config.access_ttl_seconds, student.session_key,
+            ),
+            refresh_token=create_refresh_token(
+                student.id, config.jwt_secret, config.refresh_ttl_seconds,
+                "student", student.session_key,
+            ),
         ),
         student_username=student.username or "dev_student",
     )

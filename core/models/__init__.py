@@ -48,6 +48,13 @@ class Student(Base):
     # сервер, что и снимки, и класть двоичные данные в строку рядом с балансом
     # значит таскать их каждым запросом профиля.
     avatar_url: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # Метка текущей сессии. Один вход на ученика: новый вход заводит новую
+    # метку, и токены прежнего устройства перестают подходить.
+    #
+    # Держать её приходится здесь, потому что токен подписан и сам по себе не
+    # отзывается: сервер не помнит, какие токены он выдал, и единственный
+    # способ закрыть чужой - хранить у ученика ту метку, которая сейчас верна.
+    session_key: Mapped[str | None] = mapped_column(String(32), nullable=True)
     balance_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
