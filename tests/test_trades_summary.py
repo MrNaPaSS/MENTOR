@@ -1,4 +1,4 @@
-"""Оборот в /api/trades/me: журнал подставляется, когда биржа молчит.
+"""Оборот в /api/trades/me: журнал как источник и как нижняя граница.
 
 Оборот брался только у биржи - партнёрская ручка по UID. Ученик без UID не
 проходил дальше раннего выхода, а если строки по его UID в отчёте не
@@ -120,3 +120,48 @@ def test_old_trades_fall_outside_the_window(ctx):
 
     r = client.get("/api/trades/me?days=30", headers=h)
     assert r.json()["summary"] is None
+
+
+# Партнёрская ручка знает только своих: у мока это свой список UID. Ученик с
+# таким UID проходит по ветке «строка нашлась», и на ней проверяется граница.
+MOCK_UID = "3066862000"
+
+
+def test_journal_is_the_floor_of_the_exchange_report(ctx):
+    """Отчёт биржи ниже журнала - берём журнал.
+
+    Эти сделки точно были: терминал сам их открывал и закрывал. На живом счёте
+    партнёрская ручка показывала 155 долларов там, где журнал насчитал почти
+    миллион, и рядом на экране стояли «объём месяца» из журнала и «путь
+    трейдера» из отчёта - второй выглядел сломанным.
+    """
+    client = ctx
+    sid, h = _student(client, MOCK_UID)
+    # Заведомо больше любого числа мока: у него потолок 250 000.
+    _trade(sid, "t1", qty="100", entry="79000", exit_price="79000")
+
+    r = client.get("/api/trades/me?days=90", headers=h)
+    summary = r.json()["summary"]
+    assert summary["futures_volume"] == pytest.approx(15_800_000.0)
+    # Спот терминал не ведёт и знать о нём не может - его цифра остаётся биржи.
+    assert summary["total_volume"] == pytest.approx(
+        15_800_000.0 + summary["spot_volume"]
+    )
+
+
+def test_exchange_report_wins_when_it_is_bigger(ctx):
+    """Биржа насчитала больше - её и показываем.
+
+    Она видит весь счёт, а журнал только то, что вёл терминал. Подменять
+    большее меньшим значило бы прятать работу ученика.
+    """
+    client = ctx
+    sid, h = _student(client, MOCK_UID)
+    _trade(sid, "t1", qty="0.001", entry="100", exit_price="100")
+
+    r = client.get("/api/trades/me?days=90", headers=h)
+    summary = r.json()["summary"]
+    # Журнал этой сделки - 0.2, и подменять им отчёт нельзя.
+    assert summary["futures_volume"] > 0.2
+    # Пополнения и комиссия остаются биржиными в любом случае.
+    assert summary["deposit_total"] > 0
