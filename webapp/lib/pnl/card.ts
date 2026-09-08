@@ -10,6 +10,12 @@
 // откроется сама; остальные заготовки той же стороны листаются стрелками -
 // карточку показывают другим, и выбор здесь бывает вкусовым.
 //
+// Лежат они в `public/cards`, а не в `public/pln`, хотя раньше жили там. В
+// `pln` наставник складывает скриншоты учеников: эту папку целиком показывает
+// лента «Реальные PnL» на лендинге, и оттуда же админка умеет удалять файлы.
+// Пустые бланки уезжали в ленту как чужие результаты, а один промах в админке
+// стирал заготовку насовсем.
+//
 // Всё остальное рисуется поверх, поэтому файл не знает
 // ни про React, ни про сеть: холст, кисть и арифметика. Так карточку можно
 // собрать где угодно - в окне журнала, при копировании в буфер, при
@@ -62,7 +68,7 @@ export const VARIANTS: readonly Variant[] = [
     id: "bull",
     side: "long",
     theme: "dark",
-    src: "/pln/card-long.jpg",
+    src: "/cards/card-long.jpg",
     // 640x852: рамка 20..391 x 23..112, панель 18..617 x 668..831.
     stamp: { x: 20 / 640, y: 23 / 852, w: 371 / 640, h: 89 / 852 },
     panel: { x: 18 / 640, y: 668 / 852, w: 599 / 640, h: 163 / 852 },
@@ -74,7 +80,7 @@ export const VARIANTS: readonly Variant[] = [
     id: "bear",
     side: "short",
     theme: "dark",
-    src: "/pln/card-short.jpg",
+    src: "/cards/card-short.jpg",
     stamp: { x: 20 / 638, y: 23 / 852, w: 371 / 638, h: 89 / 852 },
     panel: { x: 18 / 638, y: 668 / 852, w: 599 / 638, h: 163 / 852 },
     accent: "#FF3B4E",
@@ -85,7 +91,7 @@ export const VARIANTS: readonly Variant[] = [
     id: "chart-long",
     side: "long",
     theme: "light",
-    src: "/pln/card-long-light.jpg",
+    src: "/cards/card-long-light.jpg",
     // 587x781: рамка 20..359 x 19..103, панель 19..567 x 612..762.
     stamp: { x: 20 / 587, y: 19 / 781, w: 339 / 587, h: 84 / 781 },
     panel: { x: 19 / 587, y: 612 / 781, w: 548 / 587, h: 150 / 781 },
@@ -99,7 +105,7 @@ export const VARIANTS: readonly Variant[] = [
     id: "chart-short",
     side: "short",
     theme: "light",
-    src: "/pln/card-short-dark.jpg",
+    src: "/cards/card-short-dark.jpg",
     // 586x780: рамка 18..355 x 17..97, панель 16..565 x 592..741.
     stamp: { x: 18 / 586, y: 17 / 780, w: 337 / 586, h: 80 / 780 },
     panel: { x: 16 / 586, y: 592 / 780, w: 549 / 586, h: 149 / 780 },
@@ -114,7 +120,7 @@ export const VARIANTS: readonly Variant[] = [
     id: "neon-long",
     side: "long",
     theme: "dark",
-    src: "/pln/card-long-neon.jpg",
+    src: "/cards/card-long-neon.jpg",
     // 571x759: рамка 19..340 x 16..94, панель 16..555 x 595..731.
     stamp: { x: 19 / 571, y: 16 / 759, w: 321 / 571, h: 78 / 759 },
     panel: { x: 16 / 571, y: 595 / 759, w: 539 / 571, h: 136 / 759 },
@@ -127,7 +133,7 @@ export const VARIANTS: readonly Variant[] = [
     id: "neon-short",
     side: "short",
     theme: "dark",
-    src: "/pln/card-short-neon.jpg",
+    src: "/cards/card-short-neon.jpg",
     // 570x762: рамка 17..338 x 16..93, панель 14..553 x 596..730.
     stamp: { x: 17 / 570, y: 16 / 762, w: 321 / 570, h: 77 / 762 },
     panel: { x: 14 / 570, y: 596 / 762, w: 539 / 570, h: 134 / 762 },
@@ -139,7 +145,7 @@ export const VARIANTS: readonly Variant[] = [
     id: "mono",
     side: "long",
     theme: "dark",
-    src: "/pln/card-long-mono.jpg",
+    src: "/cards/card-long-mono.jpg",
     // 574x765: рамка 19..339 x 14..92, панель 12..561 x 594..733.
     stamp: { x: 19 / 574, y: 14 / 765, w: 320 / 574, h: 78 / 765 },
     panel: { x: 12 / 574, y: 594 / 765, w: 549 / 574, h: 139 / 765 },
