@@ -1204,8 +1204,11 @@ export default function ScalpingPage() {
     setOrderNote({ text: t.terminal.notes.sendingOrder, bad: false });
     try {
       const result = await openPosition(next, true);
+      // Ответа нет - значит запрос и не ушёл: сессия кончилась между открытием
+      // окна и нажатием. Это отказ, а не тихий успех.
+      if (!result) throw new Error(t.terminal.notes.orderRejected);
       const id =
-        result && typeof result.entry === "object" && result.entry
+        typeof result.entry === "object" && result.entry
           ? String((result.entry as Record<string, unknown>).orderId ?? "")
           : "";
       setOrderNote({
@@ -1218,6 +1221,18 @@ export default function ScalpingPage() {
         bad: false,
       });
     } catch (err) {
+      // Биржа отказала - убираем заявку и с графика.
+      //
+      // Причина у отказа чаще всего будничная: на счёте уже стоит предельное
+      // число заявок или запрошенное плечо по монете недоступно. Но заявка к
+      // этому моменту уже нарисована - её добавляют сразу, чтобы уровни встали
+      // на график, не дожидаясь ответа биржи. И если её не убрать, трейдер
+      // видит вход, ожидающий своей цены, которого на бирже нет: он ждёт
+      // исполнения и не ставит заявку заново, пока цена уходит.
+      //
+      // Так же поступает и ручная лимитка: нарисованная заявка, которой нет на
+      // бирже, хуже отсутствия заявки.
+      setTrades((list) => list.filter((t) => t.id !== next.id));
       setOrderNote({
         text: err instanceof Error ? err.message : t.terminal.notes.orderRejected,
         bad: true,
