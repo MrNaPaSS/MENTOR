@@ -350,6 +350,32 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
   .paper.hit {{ animation: feed 1.15s cubic-bezier(.22,.61,.36,1) .15s both, shock .18s ease-out 1.35s; }}
   @keyframes shock {{ 0%,100% {{ scale: 1; }} 40% {{ scale: 1.006; }} }}
 
+  /* Лист под светлой карточкой.
+     Заготовки бывают двух видов - на тёмной бумаге и на светлой, - а какая
+     пришла, страница не знает: в записи этого нет. Определяет скрипт внизу по
+     самой картинке. Тёмный лист вокруг белой карточки выглядит вырезанным из
+     другого приложения. */
+  :root[data-paper="light"] body {{
+    background: radial-gradient(120% 80% at 50% -10%, rgba(126,87,194,.06), transparent 60%), #f4f5f8;
+    color: #111418;
+  }}
+  :root[data-paper="light"] body::before {{
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      linear-gradient(to right, rgba(42,42,62,.055) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(42,42,62,.055) 1px, transparent 1px);
+    background-size: 48px 48px;
+    -webkit-mask-image: radial-gradient(75% 60% at 50% 38%, #000 35%, transparent 100%);
+    mask-image: radial-gradient(75% 60% at 50% 38%, #000 35%, transparent 100%);
+  }}
+  .slot, .window, .logo {{ position: relative; z-index: 1; }}
+  :root[data-paper="light"] .slot {{
+    box-shadow: 0 0 0 1px rgba(17,20,24,.1), 0 10px 26px rgba(17,20,24,.16);
+  }}
+  :root[data-paper="light"] .paper {{ box-shadow: 0 24px 60px rgba(17,20,24,.2); }}
+  :root[data-paper="light"] .logo {{ color: #111418; }}
+  :root[data-paper="light"] .logo:hover {{ color: #000; }}
+
   /* Под карточкой - только знак. Имя и время на ней уже нарисованы, и
      повторять их подписью значит спорить с самой карточкой. */
   .logo {{
@@ -406,6 +432,43 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     </div>
   </div>
   <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH.TRADE">NMNH.TRADE</span></a>
+<script>
+  // Тема карточки - по самой картинке.
+  //
+  // Заготовок две: на тёмной бумаге и на светлой. В записи это не хранится,
+  // поэтому смотрим на саму картинку - берём несколько точек по краям, где
+  // лежит бумага заготовки, а не текст и не печать. Картинка своя, с этого же
+  // адреса, поэтому холст не портится и пиксели читаются.
+  (function () {{
+    var img = document.querySelector(".paper img");
+    if (!img) return;
+    function decide() {{
+      try {{
+        var c = document.createElement("canvas");
+        c.width = c.height = 1;
+        var ctx = c.getContext("2d");
+        if (!ctx) return;
+        var spots = [[0.5, 0.04], [0.06, 0.5], [0.94, 0.5], [0.5, 0.96]];
+        var sum = 0;
+        for (var i = 0; i < spots.length; i++) {{
+          ctx.drawImage(
+            img,
+            Math.round(img.naturalWidth * spots[i][0]),
+            Math.round(img.naturalHeight * spots[i][1]),
+            1, 1, 0, 0, 1, 1
+          );
+          var px = ctx.getImageData(0, 0, 1, 1).data;
+          sum += (px[0] * 299 + px[1] * 587 + px[2] * 114) / 1000;
+        }}
+        if (sum / spots.length > 140) document.documentElement.dataset.paper = "light";
+      }} catch (e) {{
+        // Не прочиталось - остаёмся на тёмном листе, как было.
+      }}
+    }}
+    if (img.complete && img.naturalWidth) decide();
+    else img.addEventListener("load", decide);
+  }})();
+</script>
 </body>
 </html>"""
     )
