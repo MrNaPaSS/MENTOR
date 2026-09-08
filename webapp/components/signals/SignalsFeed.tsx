@@ -5,6 +5,7 @@ import { api, SignalOut } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import SignalCard from "@/components/signals/SignalCard";
 import { Search, Wallet, Radio } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 type StatusKey = "all" | "active" | "closed";
 
@@ -14,11 +15,11 @@ interface SegOption<T extends string> {
   dot?: string;
 }
 
-const STATUS_OPTIONS: SegOption<StatusKey>[] = [
-  { key: "all", label: "Все" },
-  { key: "active", label: "Активные", dot: "bg-success shadow-[0_0_6px] shadow-success/60" },
-  { key: "closed", label: "Закрытые", dot: "bg-text-muted" },
-];
+const STATUS_DOTS: Record<StatusKey, string | undefined> = {
+  all: undefined,
+  active: "bg-success shadow-[0_0_6px] shadow-success/60",
+  closed: "bg-text-muted",
+};
 
 function Segmented<T extends string>({
   options,
@@ -57,6 +58,7 @@ function Segmented<T extends string>({
  * Баланс подтягивается из профиля автоматически, пользователь может изменить его вручную.
  */
 export default function SignalsFeed() {
+  const t = useT();
   const [signals, setSignals] = useState<SignalOut[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<StatusKey>("all");
@@ -86,6 +88,12 @@ export default function SignalsFeed() {
 
   const activeCount = useMemo(() => signals.filter((s) => s.status === "active").length, [signals]);
 
+  const statusOptions: SegOption<StatusKey>[] = [
+    { key: "all", label: t.signals.filterAll, dot: STATUS_DOTS.all },
+    { key: "active", label: t.signals.filterActive, dot: STATUS_DOTS.active },
+    { key: "closed", label: t.signals.filterClosed, dot: STATUS_DOTS.closed },
+  ];
+
   return (
     <div className="space-y-5">
       {/* ── Панель управления ───────────────────────────────────── */}
@@ -93,7 +101,7 @@ export default function SignalsFeed() {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           {/* Фильтры */}
           <div className="flex flex-wrap items-center gap-2">
-            <Segmented options={STATUS_OPTIONS} value={filter} onChange={setFilter} />
+            <Segmented options={statusOptions} value={filter} onChange={setFilter} />
           </div>
 
           {/* Депозит для расчёта */}
@@ -101,7 +109,7 @@ export default function SignalsFeed() {
             <Wallet className="h-4 w-4 shrink-0 text-accent-cyan/70" />
             <div className="flex flex-col leading-tight">
               <span className="text-[9px] font-semibold uppercase tracking-wider text-text-muted">
-                Депозит для расчёта
+                {t.signals.depositForCalc}
               </span>
               <div className="flex items-baseline gap-1">
                 <span className="font-mono text-sm text-accent-cyan/60">$</span>
@@ -125,7 +133,7 @@ export default function SignalsFeed() {
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
           <input
             className="w-full rounded-xl border border-border bg-bg-panel/60 py-2.5 pl-10 pr-3 text-sm text-text-primary placeholder:text-text-muted outline-none transition focus:border-accent-cyan/40 focus:bg-bg-panel/60"
-            placeholder="Поиск по паре - BTC, ETH, SOL…"
+            placeholder={t.signals.searchPlaceholder}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -144,20 +152,20 @@ export default function SignalsFeed() {
       ) : visible.length === 0 ? (
         <div className="grid place-items-center rounded-2xl border border-border bg-bg-panel py-20 text-center text-text-muted">
           <Radio className="mb-3 h-10 w-10 opacity-20" />
-          <p className="font-medium">Сигналов не найдено</p>
+          <p className="font-medium">{t.signals.notFound}</p>
           <p className="mt-1 text-sm opacity-60">
-            {signals.length === 0 ? "Ментор ещё не опубликовал сигналы" : "Попробуйте изменить фильтры"}
+            {signals.length === 0 ? t.signals.noneYet : t.signals.changeFilters}
           </p>
         </div>
       ) : (
         <>
           <div className="flex items-center justify-between px-1">
             <span className="text-xs text-text-muted">
-              Показано <span className="font-semibold text-text-primary">{visible.length}</span>
+              {t.signals.shown} <span className="font-semibold text-text-primary">{visible.length}</span>
               {activeCount > 0 && (
                 <>
                   {" · "}
-                  <span className="text-success">{activeCount} активных</span>
+                  <span className="text-success">{t.signals.activeCount(activeCount)}</span>
                 </>
               )}
             </span>

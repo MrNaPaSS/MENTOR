@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/lib/api";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -93,11 +94,11 @@ const DEMO_COT: Record<"BTC"|"ETH", CotRow[]> = {
 };
 
 const DEMO_MACRO: MacroItem[] = [
-  {key:"DXY",   label:"Индекс доллара",  price:99.21,  change:-0.44, changePct:-0.44},
+  {key:"DXY",   label:"DXY",             price:99.21,  change:-0.44, changePct:-0.44},
   {key:"US10Y", label:"US 10Y Treasury", price:4.41,   change:0.03,  changePct:0.68},
   {key:"SPX",   label:"S&P 500",         price:5921.0, change:42.1,  changePct:0.72},
-  {key:"GOLD",  label:"Золото XAU/USD",  price:3247.5, change:18.3,  changePct:0.57},
-  {key:"OIL",   label:"Нефть WTI",       price:61.8,   change:-0.94, changePct:-1.50},
+  {key:"GOLD",  label:"XAU/USD",         price:3247.5, change:18.3,  changePct:0.57},
+  {key:"OIL",   label:"WTI",             price:61.8,   change:-0.94, changePct:-1.50},
   {key:"VIX",   label:"VIX",             price:17.2,   change:-0.80, changePct:-4.44},
 ];
 
@@ -144,11 +145,12 @@ async function fetchJson<T>(url:string, opts?:RequestInit): Promise<T|null> {
 
 /** Данные приходят с сервера и обновляются сами. */
 function LiveBadge() {
+  const t = useT();
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
       style={{ color: "var(--pane-up)" }}
-      title="Данные с источника"
+      title={t.smart.liveTitle}
     >
       <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--pane-up)" }} />
       Live
@@ -164,6 +166,7 @@ function LiveBadge() {
  * строят взгляд на неделю вперёд.
  */
 function DemoBadge() {
+  const t = useT();
   return (
     <span
       className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
@@ -172,7 +175,7 @@ function DemoBadge() {
         background: "var(--pane-gold-soft)",
         border: "1px solid var(--pane-gold)",
       }}
-      title="Источник не ответил: показан образец, а не настоящие данные"
+      title={t.smart.demoTitle}
     >
       Образец
     </span>
@@ -309,6 +312,7 @@ function AnimBar({
 // ── COT Section ───────────────────────────────────────────────────────────────
 
 function CotSection() {
+  const t = useT();
   const [asset,setAsset]   = useState<"BTC"|"ETH">("BTC");
   const [cot,setCot]       = useState<CotRow[]|null>(null);
   const [isDemo,setIsDemo] = useState(false);
@@ -332,9 +336,9 @@ function CotSection() {
 
   return (
     <Section icon={<Building2 className="h-4 w-4 text-[var(--pane-gold)]"/>}
-      title="Позиции крупных" accent="gold" delay={0}
+      title={t.smart.cot.title} accent="gold" delay={0}
       badge={isDemo ? <DemoBadge/> : undefined}
-      sub={isDemo ? "Отчёт CFTC не пришёл" : "Отчёт CFTC по бирже CME"}>
+      sub={isDemo ? t.smart.cot.subDemo : t.smart.cot.subLive}>
 
       {/* Asset toggle */}
       <div className="mb-5 flex items-center gap-1.5">
@@ -358,7 +362,7 @@ function CotSection() {
         {isDemo && (
           <div className="mb-4 flex items-center gap-2.5 rounded border border-[var(--pane-gold-soft)] bg-[var(--pane-deep)] px-4 py-2.5 text-[11px] text-[var(--pane-gold)]">
             <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 opacity-70"/>
-            CFTC API недоступен - ориентировочные данные на основе реальной структуры отчётов
+            {t.smart.cot.demoWarning}
           </div>
         )}
 
@@ -366,27 +370,27 @@ function CotSection() {
 
           {/* KPI row */}
           <div className="grid grid-cols-3 gap-3">
-            <KpiCard label="Хедж-фонды, нетто" value={`${cur.nc_net>0?"+":""}${fmtK(cur.nc_net)}`}
-              sub={`${cur.nc_net_chg>0?"+":""}${fmtK(cur.nc_net_chg)} нед.`}
+            <KpiCard label={t.smart.cot.hedgeFundsNet} value={`${cur.nc_net>0?"+":""}${fmtK(cur.nc_net)}`}
+              sub={`${cur.nc_net_chg>0?"+":""}${fmtK(cur.nc_net_chg)} ${t.smart.cot.weekShort}`}
               color={cur.nc_net>0?"var(--pane-up)":"var(--pane-down)"}
               bg={cur.nc_net>0?"var(--pane-up-faint)":"var(--pane-down-faint)"}
               border={cur.nc_net>0?"var(--pane-up-soft)":"var(--pane-down-soft)"} delay={0.05}/>
-            <KpiCard label="Хеджеры, нетто" value={`${cur.c_net>0?"+":""}${fmtK(cur.c_net)}`}
-              sub={`${cur.c_net_chg>0?"+":""}${fmtK(cur.c_net_chg)} нед.`}
+            <KpiCard label={t.smart.cot.hedgersNet} value={`${cur.c_net>0?"+":""}${fmtK(cur.c_net)}`}
+              sub={`${cur.c_net_chg>0?"+":""}${fmtK(cur.c_net_chg)} ${t.smart.cot.weekShort}`}
               color={cur.c_net>0?"var(--pane-up)":"var(--pane-down)"}
               bg={cur.c_net>0?"var(--pane-up-faint)":"var(--pane-down-faint)"}
               border={cur.c_net>0?"var(--pane-up-soft)":"var(--pane-down-soft)"} delay={0.1}/>
-            <KpiCard label="Открытый интерес" value={fmtK(cur.oi)}
+            <KpiCard label={t.smart.cot.openInterest} value={fmtK(cur.oi)}
               color="var(--pane-text)" bg="var(--pane-hover)" border="var(--pane-hover)" delay={0.15}/>
           </div>
 
           {/* Position structure */}
           <div className="rounded-lg border border-[var(--pane-border)] bg-[var(--pane-deep)] p-4 space-y-3">
-            <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">Из чего собран интерес, % от всего</div>
+            <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">{t.smart.cot.structure}</div>
 
             {[
-              {label:"Lev. Money (хедж-фонды)", long:cur.nc_long_pct, short:cur.nc_short_pct, lc:"var(--pane-up)", sc:"var(--pane-down)"},
-              {label:"Asset Manager (институт.)", long:cur.c_long_pct,  short:cur.c_short_pct,  lc:"var(--pane-up)", sc:"var(--pane-down)"},
+              {label:t.smart.cot.levMoney, long:cur.nc_long_pct, short:cur.nc_short_pct, lc:"var(--pane-up)", sc:"var(--pane-down)"},
+              {label:t.smart.cot.assetManager, long:cur.c_long_pct,  short:cur.c_short_pct,  lc:"var(--pane-up)", sc:"var(--pane-down)"},
             ].map((row,ri)=>(
               <div key={ri}>
                 <div className="flex items-center justify-between mb-1.5">
@@ -411,11 +415,11 @@ function CotSection() {
           <div>
             <div className="mb-3 flex items-center justify-between">
               <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)]">
-                Нетто позиция хедж-фондов - {cot.length} недель
+                {t.smart.cot.historyTitle(cot.length)}
               </div>
               <div className="flex items-center gap-3 text-[8px] text-[var(--pane-muted)]">
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{background:"var(--pane-up)"}}/>бычий</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{background:"var(--pane-down)"}}/>медвежий</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{background:"var(--pane-up)"}}/>{t.smart.cot.bullish}</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{background:"var(--pane-down)"}}/>{t.smart.cot.bearish}</span>
               </div>
             </div>
             <div className="flex items-end gap-1.5 rounded bg-[var(--pane-deep)] px-3 pb-2 pt-3" style={{height:80}}>
@@ -436,16 +440,16 @@ function CotSection() {
               })}
             </div>
             <div className="mt-1.5 flex justify-between text-[8px] text-[var(--pane-text)]/15">
-              <span>← старше</span><span>новее →</span>
+              <span>{t.smart.cot.older}</span><span>{t.smart.cot.newer}</span>
             </div>
           </div>
 
           {/* Insight box */}
           <div className="rounded border border-[var(--pane-gold-soft)] bg-[var(--pane-deep)] p-3.5 text-[10px] leading-relaxed text-[var(--pane-muted)]">
-            <span className="font-semibold text-[var(--pane-gold)]">Хедж-фонды в плюсе</span> - спекулянты стоят в лонг, и это бычий знак.{" "}
-            <span className="font-semibold text-[var(--pane-gold)]">Хеджеры</span> обычно стоят против них: они страхуют товар, а не ставят на цену.
-            {prev && (<>{" "}За неделю: <span className={signColor(cur.nc_net-prev.nc_net)}>{cur.nc_net>=prev.nc_net?"▲":"▼"} {Math.abs(cur.nc_net-prev.nc_net).toLocaleString()}</span>.</>)}
-            {" "}<span className="text-[var(--pane-muted)]">Отчёт выходит в пятницу и описывает позиции на прошлый вторник - он всегда с опозданием.</span>
+            <span className="font-semibold text-[var(--pane-gold)]">{t.smart.cot.insightBold}</span>{t.smart.cot.insightRest}
+            <span className="font-semibold text-[var(--pane-gold)]">{t.smart.cot.hedgersBold}</span>{t.smart.cot.hedgersRest}
+            {prev && (<>{" "}{t.smart.cot.weekChange} <span className={signColor(cur.nc_net-prev.nc_net)}>{cur.nc_net>=prev.nc_net?"▲":"▼"} {Math.abs(cur.nc_net-prev.nc_net).toLocaleString()}</span>.</>)}
+            {" "}<span className="text-[var(--pane-muted)]">{t.smart.cot.reportDelay}</span>
           </div>
 
         </div>
@@ -456,16 +460,13 @@ function CotSection() {
 
 // ── Macro Section ─────────────────────────────────────────────────────────────
 
-const MACRO_META: Record<string,{context:string;icon:string}> = {
-  DXY:  {context:"Сильный $ давит крипто",   icon:"💵"},
-  US10Y:{context:"Рост = риск-офф",          icon:"📈"},
-  SPX:  {context:"Корреляция с крипто ~0.6", icon:"📊"},
-  GOLD: {context:"Хедж от инфляции",         icon:"🥇"},
-  OIL:  {context:"Proxy на спрос",           icon:"🛢"},
-  VIX:  {context:">25 страх · <15 жадность", icon:"⚡"},
+/** Картинка у показателя. Подпись и пояснение переводятся - они в словаре. */
+const MACRO_ICONS: Record<string, string> = {
+  DXY: "💵", US10Y: "📈", SPX: "📊", GOLD: "🥇", OIL: "🛢", VIX: "⚡",
 };
 
 function MacroSection() {
+  const t = useT();
   const [items,setItems]   = useState<MacroItem[]|null>(null);
   const [isDemo,setIsDemo] = useState(false);
 
@@ -482,16 +483,16 @@ function MacroSection() {
 
   return (
     <Section icon={<BarChart3 className="h-4 w-4 text-[var(--pane-accent)]"/>}
-      title="Макро" accent="cyan" delay={0.05}
+      title={t.smart.macro.title} accent="cyan" delay={0.05}
       badge={isDemo ? <DemoBadge/> : undefined}
-      sub={isDemo ? "Источник не ответил" : "Индексы, ставки, сырьё"}>
+      sub={isDemo ? t.smart.sourceSilent : t.smart.macro.sub}>
 
       {!items ? <Skeleton rows={3}/> : <>
 
         {isDemo && (
           <div className="mb-4 flex items-center gap-2.5 rounded border border-[var(--pane-gold-soft)] bg-[var(--pane-deep)] px-4 py-2.5 text-[11px] text-[var(--pane-gold)]">
             <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 opacity-70"/>
-            Yahoo Finance недоступен - ориентировочные данные
+            {t.smart.macro.demoWarning}
           </div>
         )}
 
@@ -500,7 +501,9 @@ function MacroSection() {
             const pos = item.changePct>=0;
             const dec = item.key==="US10Y"||item.key==="VIX" ? 2 : item.price>1000 ? 1 : 2;
             const color = pos ? "var(--pane-up)" : "var(--pane-down)";
-            const meta  = MACRO_META[item.key]??{context:"",icon:"•"};
+            const labels = t.smart.macro.labels as Record<string, string>;
+            const contexts = t.smart.macro.context as Record<string, string>;
+            const icon = MACRO_ICONS[item.key] ?? "•";
             return (
               <div key={item.key}
                 className="sm-fade-up sm-hover group relative overflow-hidden rounded-lg p-4 cursor-default"
@@ -510,10 +513,10 @@ function MacroSection() {
                   border: `1px solid ${pos?"var(--pane-up-soft)":"var(--pane-down-soft)"}`,
                 }}>
                 {/* dim corner bg */}
-                <div className="pointer-events-none absolute right-2 bottom-2 text-[28px] opacity-[0.06] select-none">{meta.icon}</div>
+                <div className="pointer-events-none absolute right-2 bottom-2 text-[28px] opacity-[0.06] select-none">{icon}</div>
 
                 <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--pane-muted)]">{item.label}</span>
+                  <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--pane-muted)]">{labels[item.key] ?? item.label}</span>
                   <span className="font-mono text-[9px] font-bold" style={{color:"rgba(255,255,255,0.2)"}}>{item.key}</span>
                 </div>
 
@@ -533,7 +536,7 @@ function MacroSection() {
                   </span>
                 </div>
 
-                <div className="mt-2 text-[9px] text-[var(--pane-muted)]">{meta.context}</div>
+                <div className="mt-2 text-[9px] text-[var(--pane-muted)]">{contexts[item.key] ?? ""}</div>
               </div>
             );
           })}
@@ -546,6 +549,7 @@ function MacroSection() {
 // ── ETF Section ───────────────────────────────────────────────────────────────
 
 function EtfSection() {
+  const t = useT();
   const [data,setData]         = useState<typeof DEMO_ETF|null>(null);
   const [isDemo,setIsDemo]     = useState(false);
   const [btcPrice,setBtcPrice] = useState(0);
@@ -562,9 +566,9 @@ function EtfSection() {
 
   return (
     <Section icon={<DollarSign className="h-4 w-4 text-[var(--pane-up)]"/>}
-      title="Биткоин в фондах" accent="green" delay={0.3}
+      title={t.smart.etf.title} accent="green" delay={0.3}
       badge={isDemo ? <DemoBadge/> : <LiveBadge/>}
-      sub={isDemo ? "Источник не ответил" : "Спотовые ETF, отчётность фондов"}>
+      sub={isDemo ? t.smart.sourceSilent : t.smart.etf.sub}>
 
       {!data ? <Skeleton rows={5}/> : <div className="space-y-4">
 
@@ -575,17 +579,17 @@ function EtfSection() {
             style={{background:"radial-gradient(ellipse at 80% 50%,var(--pane-accent-faint),transparent 70%)"}} />
           <div className="relative flex flex-wrap items-center gap-6">
             <div>
-              <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">Всего BTC в ETF</div>
+              <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">{t.smart.etf.totalBtc}</div>
               <div className="font-mono text-[32px] font-black leading-none text-[var(--pane-gold)]">
                 ~{(data.total_btc/1000).toFixed(0)}<span className="text-[16px] font-semibold ml-1">K BTC</span>
               </div>
               <div className="mt-1 text-[10px] text-[var(--pane-muted)]">
-                {((data.total_btc/21_000_000)*100).toFixed(2)}% от максимальной эмиссии
+                {t.smart.etf.ofMaxSupply(((data.total_btc/21_000_000)*100).toFixed(2))}
               </div>
             </div>
             <div className="h-12 w-px bg-[var(--pane-deep)]"/>
             <div>
-              <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">Фондов</div>
+              <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">{t.smart.etf.funds}</div>
               <div className="font-mono text-[28px] font-black leading-none text-[var(--pane-text)]">{data.etfs.length}</div>
             </div>
             {btcPrice>0 && <>
@@ -598,9 +602,9 @@ function EtfSection() {
             {topEtf && <>
               <div className="h-12 w-px bg-[var(--pane-deep)]"/>
               <div>
-                <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">Лидер</div>
+                <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">{t.smart.etf.leader}</div>
                 <div className="font-mono text-[18px] font-black leading-none text-[var(--pane-text)]">{topEtf.ticker}</div>
-                <div className="text-[9px] text-[var(--pane-muted)]">{topEtf.sharePct}% доли</div>
+                <div className="text-[9px] text-[var(--pane-muted)]">{t.smart.etf.sharePct(topEtf.sharePct)}</div>
               </div>
             </>}
           </div>
@@ -611,11 +615,11 @@ function EtfSection() {
           {/* header */}
           <div className="grid px-3 text-[8px] uppercase tracking-widest text-[var(--pane-muted)]"
             style={{gridTemplateColumns:"28px 1fr 70px 60px 55px 80px"}}>
-            <span>#</span><span>Фонд</span>
+            <span>#</span><span>{t.smart.etf.colFund}</span>
             <span className="text-right">BTC</span>
-            <span className="text-right">Активы</span>
-            <span className="text-right">Доля</span>
-            <span className="text-right">Пай</span>
+            <span className="text-right">{t.smart.etf.colAssets}</span>
+            <span className="text-right">{t.smart.etf.colShare}</span>
+            <span className="text-right">{t.smart.etf.colUnit}</span>
           </div>
 
           {data.etfs.map((etf,i)=>{
@@ -668,7 +672,7 @@ function EtfSection() {
           })}
         </div>
 
-        <p className="text-[9px] text-[var(--pane-text)]/15">AUM и BTC холдинги - Nasdaq API. Цены ETF - Yahoo Finance. BTC/USD - CoinGecko.</p>
+        <p className="text-[9px] text-[var(--pane-text)]/15">{t.smart.etf.sources}</p>
       </div>}
     </Section>
   );
@@ -677,6 +681,7 @@ function EtfSection() {
 // ── Derivatives Section ───────────────────────────────────────────────────────
 
 function DerivativesSection() {
+  const t = useT();
   const [rows,setRows]         = useState<DerivRow[]>([]);
   const [loading,setLoading]   = useState(true);
   const [updatedAt,setUpdatedAt] = useState("");
@@ -704,7 +709,7 @@ function DerivativesSection() {
       setUpdatedAt(new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}));
       setLoading(false);
     };
-    load(); const t=setInterval(load,30_000); return ()=>clearInterval(t);
+    load(); const timer=setInterval(load,30_000); return ()=>clearInterval(timer);
   },[]);
 
   const totalOI = rows.reduce((s,r)=>s+r.oi,0);
@@ -712,20 +717,20 @@ function DerivativesSection() {
 
   return (
     <Section icon={<Activity className="h-4 w-4 text-[var(--pane-accent)]"/>}
-      title="Открытый интерес" accent="cyan" delay={0.2}
+      title={t.smart.oi.title} accent="cyan" delay={0.2}
       badge={<LiveBadge/>}
-      sub={updatedAt ? `Биржа WEEX, ${updatedAt}` : "спрашиваем биржу…"}>
+      sub={updatedAt ? t.smart.oi.subLive(updatedAt) : t.smart.oi.subAsking}>
 
       {loading ? <Skeleton rows={5}/> : <>
 
         {/* KPI row */}
         <div className="mb-5 grid grid-cols-3 gap-3">
-          <KpiCard label="Интерес всего" value={fmtB(totalOI)} color="var(--pane-text)"
+          <KpiCard label={t.smart.oi.totalOi} value={fmtB(totalOI)} color="var(--pane-text)"
             bg="var(--pane-hover)" border="var(--pane-hover)" delay={0}/>
-          <KpiCard label="Монет в списке" value={String(rows.length)}
+          <KpiCard label={t.smart.oi.coinsListed} value={String(rows.length)}
             color="var(--pane-accent)" bg="var(--pane-accent-faint)" border="var(--pane-accent-soft)" delay={0.05}/>
           <KpiCard
-            label="Больше всего"
+            label={t.smart.oi.biggest}
             value={rows[0]?.sym??"-"}
             sub={rows[0]?.oi>0 ? fmtB(rows[0].oi) : undefined}
             color="var(--pane-gold)" bg="var(--pane-accent-faint)" border="var(--pane-gold-soft)" delay={0.1}/>
@@ -735,10 +740,10 @@ function DerivativesSection() {
         <div className="space-y-2">
           <div className="grid px-3 text-[8px] uppercase tracking-widest text-[var(--pane-muted)]"
             style={{gridTemplateColumns:"48px 1fr 90px 80px 80px"}}>
-            <span>Пара</span><span>Доля интереса</span>
+            <span>{t.smart.oi.colPair}</span><span>{t.smart.oi.colShare}</span>
             <span className="text-right">OI</span>
-            <span className="text-right">Ставка 8ч</span>
-            <span className="text-right">24ч</span>
+            <span className="text-right">{t.smart.oi.colFunding}</span>
+            <span className="text-right">{t.smart.oi.col24h}</span>
           </div>
 
           {rows.map((r,i)=>{
@@ -760,7 +765,7 @@ function DerivativesSection() {
 
                   <div>
                     <AnimBar pct={oiPct} color="var(--pane-accent)" height={5} delay={i*0.04}/>
-                    <div className="mt-1 text-[8px] text-[var(--pane-muted)]">{oiPct.toFixed(0)}% от макс.</div>
+                    <div className="mt-1 text-[8px] text-[var(--pane-muted)]">{t.smart.oi.ofMax(oiPct.toFixed(0))}</div>
                   </div>
 
                   <div className="text-right font-mono text-[12px] text-[var(--pane-text-2)]">
@@ -772,7 +777,7 @@ function DerivativesSection() {
                       {fr>=0?"+":""}{frPct.toFixed(4)}%
                     </div>
                     <div className="mt-0.5 text-[8px] font-semibold text-[var(--pane-muted)]">
-                      {fr>0.01?"ПЕРЕГРЕВ":fr>0.001?"ЛОНГИ":fr<-0.001?"ШОРТЫ":"НЕЙТР."}
+                      {fr>0.01?t.smart.oi.overheated:fr>0.001?t.smart.oi.longs:fr<-0.001?t.smart.oi.shorts:t.smart.oi.neutral}
                     </div>
                   </div>
 
@@ -787,7 +792,7 @@ function DerivativesSection() {
         </div>
 
         <p className="mt-3 text-[8.5px] text-[var(--pane-text)]/15">
-          Funding {">"} 0% - лонги переплачивают (перегрев) · Funding {"<"} 0% - шорты платят лонгам (бычий сигнал)
+          {t.smart.oi.footnote}
         </p>
       </>}
     </Section>
@@ -797,6 +802,7 @@ function DerivativesSection() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SmartMoneyPage() {
+  const t = useT();
   const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
 
   return (
@@ -807,10 +813,10 @@ export default function SmartMoneyPage() {
       <div className={`${pane} space-y-3`}>
         <div className="flex items-baseline justify-between gap-3">
           <h1 className="text-[15px] font-semibold uppercase tracking-[0.16em] text-[var(--pane-text)]">
-            Smart Money
+            {t.smart.title}
           </h1>
           <p className="truncate text-[11px] text-[var(--pane-muted)]">
-            Позиции крупных, деривативы, макро и потоки в фонды
+            {t.smart.subtitle}
           </p>
         </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { TrendingUp, TrendingDown, X } from "lucide-react";
 import { isLong } from "@/lib/format";
@@ -14,6 +15,7 @@ interface Props {
 
 /** Полноэкранный график (Heikin-Ashi) + стакан, появляется анимацией переворота. */
 export default function ChartOverlay({ symbol, direction, onClose }: Props) {
+  const t = useT();
   const [show, setShow] = useState(false);
   const [bookRows, setBookRows] = useState(16);
   const bookRef = useRef<HTMLDivElement>(null);
@@ -90,10 +92,10 @@ export default function ChartOverlay({ symbol, direction, onClose }: Props) {
             </div>
             <button
               onClick={handleClose}
-              title="Закрыть (Esc)"
+              title={t.market.overlay.closeTitle}
               className="flex items-center gap-1.5 rounded-lg bg-bg-panel/60 px-3 py-1.5 text-[12px] font-semibold text-text-primary/70 ring-1 ring-inset ring-white/[0.08] transition hover:bg-bg-panel/60 hover:text-text-primary"
             >
-              Закрыть
+              {t.common.close}
               <X className="h-4 w-4" />
             </button>
           </div>

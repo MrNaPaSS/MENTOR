@@ -9,6 +9,7 @@
 // Цена показана в биткоинах, а не в долларах: источник считает её так, и
 // переводить самим значило бы выдавать свой пересчёт за его число.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type TrendingCoin } from "@/lib/api";
 import Pane, { PaneLabel, type PaneState } from "./Pane";
@@ -21,6 +22,7 @@ function btc(value: number): string {
 }
 
 export default function TrendingPane({ className = "" }: { className?: string }) {
+  const t = useT();
   const [coins, setCoins] = useState<TrendingCoin[]>([]);
   const [state, setState] = useState<PaneState>("loading");
 
@@ -44,10 +46,10 @@ export default function TrendingPane({ className = "" }: { className?: string })
 
   return (
     <Pane
-      title="Ищут чаще всего"
-      hint="Внимание приходит раньше объёма"
+      title={t.market.trending.title}
+      hint={t.market.trending.hint}
       state={state}
-      emptyNote="Список поиска недоступен"
+      emptyNote={t.market.trending.emptyNote}
       className={className}
     >
       <ol className="space-y-0.5">
@@ -68,7 +70,7 @@ export default function TrendingPane({ className = "" }: { className?: string })
             {c.rank !== null && (
               <span
                 className="shrink-0 rounded border border-[var(--pane-border)] px-1 font-mono text-[10px] tabular-nums text-[var(--pane-muted)]"
-                title="Место по капитализации"
+                title={t.market.trending.rankTitle}
               >
                 #{c.rank}
               </span>
@@ -80,7 +82,7 @@ export default function TrendingPane({ className = "" }: { className?: string })
         ))}
       </ol>
       <div className="mt-2 border-t border-[var(--pane-border)] pt-2 text-right">
-        <PaneLabel>цена в BTC</PaneLabel>
+        <PaneLabel>{t.market.trending.priceInBtc}</PaneLabel>
       </div>
     </Pane>
   );

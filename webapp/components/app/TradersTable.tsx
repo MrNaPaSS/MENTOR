@@ -12,6 +12,7 @@
 // обратное тоже верно: списки отвечают на разные вопросы, но строки в них одни
 // и те же, и держать их порознь значит заставлять сверять глазами.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { Coins, Crown, TrendingUp } from "lucide-react";
 import { api, type TraderRow } from "@/lib/api";
@@ -32,6 +33,7 @@ function money(value: number): string {
 }
 
 export default function TradersTable() {
+  const t = useT();
   const [sort, setSort] = useState<Sort>("volume");
   const [rows, setRows] = useState<TraderRow[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -59,9 +61,9 @@ export default function TradersTable() {
     <section className="card overflow-hidden p-0">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div>
-          <h3 className="text-sm font-semibold text-text-primary">Трейдеры за месяц</h3>
+          <h3 className="text-sm font-semibold text-text-primary">{t.tools.traders.title}</h3>
           <p className="text-[11px] text-text-muted">
-            Только торгующие по своим ключам · объём и результат с биржи
+            {t.tools.traders.subtitle}
           </p>
         </div>
 
@@ -69,8 +71,8 @@ export default function TradersTable() {
         <div className="flex gap-1 rounded-lg border border-border bg-bg-panel p-1">
           {(
             [
-              ["volume", "По обороту", <Coins key="v" className="h-3.5 w-3.5" />],
-              ["pnl", "По результату", <TrendingUp key="p" className="h-3.5 w-3.5" />],
+              ["volume", t.tools.traders.byVolume, <Coins key="v" className="h-3.5 w-3.5" />],
+              ["pnl", t.tools.traders.byPnl, <TrendingUp key="p" className="h-3.5 w-3.5" />],
             ] as const
           ).map(([key, label, icon]) => (
             <button
@@ -98,8 +100,7 @@ export default function TradersTable() {
       ) : rows.length === 0 ? (
         // Пусто - это не сбой, а положение дел: ключи ещё никто не подключил.
         <p className="px-4 py-8 text-center text-sm text-text-muted">
-          Пока никто не торгует по своим ключам. Подключите их в профиле - и
-          попадёте в таблицу.
+          {t.tools.traders.empty}
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -107,11 +108,11 @@ export default function TradersTable() {
             <thead>
               <tr className="text-[11px] uppercase tracking-wider text-text-muted">
                 <th className="px-4 py-2 text-left font-medium">#</th>
-                <th className="px-4 py-2 text-left font-medium">Трейдер</th>
-                <th className="px-4 py-2 text-right font-medium">Оборот</th>
-                <th className="px-4 py-2 text-right font-medium">Результат</th>
-                <th className="px-4 py-2 text-right font-medium">Сделок</th>
-                <th className="px-4 py-2 text-right font-medium">Точность</th>
+                <th className="px-4 py-2 text-left font-medium">{t.tools.traders.colTrader}</th>
+                <th className="px-4 py-2 text-right font-medium">{t.tools.traders.colVolume}</th>
+                <th className="px-4 py-2 text-right font-medium">{t.tools.traders.colPnl}</th>
+                <th className="px-4 py-2 text-right font-medium">{t.tools.traders.colTrades}</th>
+                <th className="px-4 py-2 text-right font-medium">{t.tools.traders.colAccuracy}</th>
               </tr>
             </thead>
             <tbody>
@@ -134,7 +135,7 @@ export default function TradersTable() {
                       )}
                     </td>
                     <td className="px-4 py-2 font-semibold text-text-primary">
-                      {row.username ?? "без имени"}
+                      {row.username ?? t.tools.traders.noName}
                     </td>
                     <td className="px-4 py-2 text-right font-mono text-text-secondary tabular-nums">
                       ${money(row.volume)}

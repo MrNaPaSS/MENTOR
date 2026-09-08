@@ -16,6 +16,7 @@
 // вообще, где сегодня работать, что делают крупные, как выглядит рынок целиком
 // и чего ждать по календарю.
 
+import { useT } from "@/lib/i18n";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -121,6 +122,7 @@ function WidgetPane({
   hint: string;
   children: React.ReactNode;
 }) {
+  const t = useT();
   return (
     <section className="overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)]">
       <header className="flex items-baseline justify-between gap-3 border-b border-[var(--pane-border)] px-3 py-2">
@@ -130,7 +132,7 @@ function WidgetPane({
         </div>
         <span
           className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-[var(--pane-muted)]"
-          title="Данные и рисование - TradingView"
+          title={t.market.tvNote}
         >
           TradingView
         </span>
@@ -144,12 +146,13 @@ function WidgetPane({
 
 type Section = "pulse" | "screener" | "smart" | "maps" | "calendar";
 
-const TABS: { key: Section; label: string; icon: React.ReactNode; hint: string }[] = [
-  { key: "pulse", label: "Пульс", icon: <Activity className="h-3.5 w-3.5" />, hint: "Настроение рынка и деньги за позиции" },
-  { key: "screener", label: "Скринер", icon: <Search className="h-3.5 w-3.5" />, hint: "Где сегодня работать" },
-  { key: "smart", label: "Smart Money", icon: <Building2 className="h-3.5 w-3.5" />, hint: "Что делают крупные" },
-  { key: "maps", label: "Карты", icon: <MapIcon className="h-3.5 w-3.5" />, hint: "Рынок целиком одной картинкой" },
-  { key: "calendar", label: "Календарь", icon: <CalendarDays className="h-3.5 w-3.5" />, hint: "События, двигающие рынок" },
+// Подписи и подсказки вкладок - в словаре, здесь порядок и картинки.
+const TABS: { key: Section; icon: React.ReactNode }[] = [
+  { key: "pulse", icon: <Activity className="h-3.5 w-3.5" /> },
+  { key: "screener", icon: <Search className="h-3.5 w-3.5" /> },
+  { key: "smart", icon: <Building2 className="h-3.5 w-3.5" /> },
+  { key: "maps", icon: <MapIcon className="h-3.5 w-3.5" /> },
+  { key: "calendar", icon: <CalendarDays className="h-3.5 w-3.5" /> },
 ];
 
 // ── Пульс ─────────────────────────────────────────────────────────────────────
@@ -168,11 +171,12 @@ function PulseSection() {
 // ── Карты ─────────────────────────────────────────────────────────────────────
 
 function MapsSection() {
+  const t = useT();
   return (
     <div className="space-y-3">
       <WidgetPane
-        title="Тепловая карта криптовалют"
-        hint="Размер - капитализация, цвет - изменение цены"
+        title={t.market.widgets.heatmap.title}
+        hint={t.market.widgets.heatmap.hint}
       >
         <TvWidget
           scriptName="embed-widget-crypto-coins-heatmap.js"
@@ -190,7 +194,7 @@ function MapsSection() {
       </WidgetPane>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <WidgetPane title="Валютные пары" hint="Кросс-курсы восьми основных валют">
+        <WidgetPane title={t.market.widgets.forex.title} hint={t.market.widgets.forex.hint}>
           <TvWidget
             scriptName="embed-widget-forex-cross-rates.js"
             config={{ currencies: ["EUR", "USD", "JPY", "GBP", "CHF", "AUD", "CAD", "NZD"] }}
@@ -198,7 +202,7 @@ function MapsSection() {
           />
         </WidgetPane>
 
-        <WidgetPane title="Фонды ETF" hint="Размер - активы под управлением, цвет - день">
+        <WidgetPane title={t.market.widgets.etf.title} hint={t.market.widgets.etf.hint}>
           <TvWidget
             scriptName="embed-widget-etf-heatmap.js"
             config={{ dataSource: "AllUSEtf", blockSize: "aum", blockColor: "change", hasTopBar: false }}
@@ -213,10 +217,11 @@ function MapsSection() {
 // ── Календарь ─────────────────────────────────────────────────────────────────
 
 function CalendarSection() {
+  const t = useT();
   return (
     <WidgetPane
-      title="Экономический календарь"
-      hint="Макроэкономические события: ставки, инфляция, занятость"
+      title={t.market.widgets.calendar.title}
+      hint={t.market.widgets.calendar.hint}
     >
       <TvWidget scriptName="embed-widget-events.js" config={{}} height={760} />
     </WidgetPane>
@@ -226,39 +231,40 @@ function CalendarSection() {
 // ── Страница ──────────────────────────────────────────────────────────────────
 
 export default function MarketPage() {
+  const t = useT();
   const [section, setSection] = useState<Section>("pulse");
   const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
-  const active = TABS.find((t) => t.key === section);
+  const active = t.market.tabs[section];
 
   return (
     <div className={`${pane} space-y-3`}>
       {/* Шапка раздела: имя и то, что сейчас открыто. */}
       <div className="flex items-baseline justify-between gap-3">
         <h1 className="text-[15px] font-semibold uppercase tracking-[0.16em] text-[var(--pane-text)]">
-          Рынок
+          {t.market.title}
         </h1>
-        <p className="truncate text-[11px] text-[var(--pane-muted)]">{active?.hint}</p>
+        <p className="truncate text-[11px] text-[var(--pane-muted)]">{active.hint}</p>
       </div>
 
       <GlobalStrip />
 
       {/* Вкладки сегментами, как переключатели в терминале. */}
       <nav className="no-scrollbar flex overflow-x-auto rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] p-0.5">
-        {TABS.map((t) => {
-          const on = section === t.key;
+        {TABS.map((tab) => {
+          const on = section === tab.key;
           return (
             <button
-              key={t.key}
-              onClick={() => setSection(t.key)}
-              title={t.hint}
+              key={tab.key}
+              onClick={() => setSection(tab.key)}
+              title={t.market.tabs[tab.key].hint}
               className="flex shrink-0 items-center gap-1.5 rounded px-3 py-1.5 text-[11px] font-semibold transition-colors duration-150"
               style={{
                 background: on ? "var(--pane-chip-faint)" : "transparent",
                 color: on ? "var(--pane-chip)" : "var(--pane-muted)",
               }}
             >
-              {t.icon}
-              {t.label}
+              {tab.icon}
+              {t.market.tabs[tab.key].label}
             </button>
           );
         })}

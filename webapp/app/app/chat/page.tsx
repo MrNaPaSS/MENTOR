@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Send, Crown, Pin } from "lucide-react";
 import { SOCIAL_LINKS } from "@/lib/content";
+import { intlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 
 interface Msg {
   id: number;
@@ -13,15 +14,19 @@ interface Msg {
   mentor?: boolean;
 }
 
-const SEED: Msg[] = [
-  { id: 1, author: "Ментор", text: "Сегодня работаем аккуратно - рынок волатильный. Стопы по сигналам выставлены.", time: "09:12", mentor: true },
-  { id: 2, author: "alex", text: "Взял BTC лонг по сигналу, спасибо 🙌", time: "09:20" },
-  { id: 3, author: "sasha", text: "Какой риск на сделку в умеренном?", time: "09:24" },
-  { id: 4, author: "Ментор", text: "1-5% от депозита, настраивается в профиле.", time: "09:26", mentor: true },
-];
+function seed(t: Dict): Msg[] {
+  return [
+    { id: 1, author: t.chat.mentor, text: t.chat.seed[0], time: "09:12", mentor: true },
+    { id: 2, author: "alex", text: t.chat.seed[1], time: "09:20" },
+    { id: 3, author: "sasha", text: t.chat.seed[2], time: "09:24" },
+    { id: 4, author: t.chat.mentor, text: t.chat.seed[3], time: "09:26", mentor: true },
+  ];
+}
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Msg[]>(SEED);
+  const t = useT();
+  const locale = useLocale();
+  const [messages, setMessages] = useState<Msg[]>(() => seed(t));
   const [text, setText] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -30,11 +35,17 @@ export default function ChatPage() {
   }, [messages]);
 
   function send() {
-    const t = text.trim();
-    if (!t) return;
+    const body = text.trim();
+    if (!body) return;
     setMessages((m) => [
       ...m,
-      { id: Date.now(), author: "Вы", text: t, time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }), self: true },
+      {
+        id: Date.now(),
+        author: t.chat.you,
+        text: body,
+        time: new Date().toLocaleTimeString(intlLocale(locale), { hour: "2-digit", minute: "2-digit" }),
+        self: true,
+      },
     ]);
     setText("");
   }
@@ -43,7 +54,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-[calc(100vh-9rem)] flex-col">
-      <h1 className="text-h2 mb-3 text-text-primary">Чат сообщества</h1>
+      <h1 className="text-h2 mb-3 text-text-primary">{t.chat.title}</h1>
 
       {/* Баннер Telegram */}
       <a
@@ -52,7 +63,7 @@ export default function ChatPage() {
         rel="noopener noreferrer"
         className="glass mb-3 flex items-center justify-between rounded-xl px-4 py-2.5 text-sm"
       >
-        <span className="text-text-secondary">Больше обсуждений в нашем Telegram-форуме</span>
+        <span className="text-text-secondary">{t.chat.telegramBanner}</span>
         <span className="text-accent-cyan">→</span>
       </a>
 
@@ -61,7 +72,7 @@ export default function ChatPage() {
         <div className="mb-3 flex items-start gap-2 rounded-xl border border-accent-gold/30 bg-accent-gold/[0.06] px-4 py-2.5">
           <Pin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-gold" />
           <p className="text-sm text-text-secondary">
-            <span className="font-semibold text-accent-gold">👑 Ментор:</span> {pinned.text}
+            <span className="font-semibold text-accent-gold">👑 {t.chat.mentor}:</span> {pinned.text}
           </p>
         </div>
       )}
@@ -93,17 +104,17 @@ export default function ChatPage() {
       <div className="mt-3 flex gap-2">
         <input
           className="input flex-1"
-          placeholder="Написать сообщение…"
+          placeholder={t.chat.placeholder}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
         />
-        <button className="btn-primary px-4" onClick={send} aria-label="Отправить">
+        <button className="btn-primary px-4" onClick={send} aria-label={t.chat.send}>
           <Send className="h-4 w-4" />
         </button>
       </div>
       <p className="mt-2 text-center text-[11px] text-text-muted">
-        Реалтайм-чат через WebSocket подключается. Сейчас сообщения локальные.
+        {t.chat.note}
       </p>
     </div>
   );

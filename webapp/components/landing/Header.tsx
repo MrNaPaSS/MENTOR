@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, X, ArrowRight } from "lucide-react";
 import Logo from "@/components/ui/Logo";
-import { NAV_LINKS } from "@/lib/content";
+import LocaleSwitch from "@/components/ui/LocaleSwitch";
+import { NAV_ANCHORS } from "@/lib/content";
+import { useT } from "@/lib/i18n";
 import { getAccessToken } from "@/lib/auth";
 
 export default function Header() {
+  const t = useT();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
@@ -41,30 +44,31 @@ export default function Header() {
 
         {/* Центральная навигация (десктоп) */}
         <nav className="hidden items-center gap-1 lg:flex">
-          {NAV_LINKS.map((l) => (
+          {NAV_ANCHORS.map((l) => (
             <a
               key={l.href}
               href={l.href}
               className="rounded-lg px-3 py-2 text-sm text-text-secondary transition hover:text-text-primary"
             >
-              {l.label}
+              {t.landing.nav[l.key]}
             </a>
           ))}
         </nav>
 
         {/* Действия справа */}
         <div className="hidden items-center gap-2 md:flex">
+          <LocaleSwitch />
           {authed ? (
             // С компьютера кабинет открывается терминалом: это рабочий стол
             // трейдера, с него начинается день. В меню телефона ниже дорога
             // ведёт в «Анализы» - три панели и стакан в сорок строк на ладони
             // не работают, и сам терминал с узкого экрана туда же и уводит.
             <Link href="/app/scalping" className="btn-primary">
-              Кабинет <ArrowRight className="h-4 w-4" />
+              {t.common.cabinet} <ArrowRight className="h-4 w-4" />
             </Link>
           ) : (
             <Link href="/login" className="btn-outline">
-              Войти
+              {t.common.login}
             </Link>
           )}
         </div>
@@ -73,7 +77,7 @@ export default function Header() {
         <button
           onClick={() => setOpen(true)}
           className="grid h-10 w-10 place-items-center rounded-lg text-text-primary ring-1 ring-border md:hidden"
-          aria-label="Меню"
+          aria-label={t.common.menu}
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -100,29 +104,31 @@ export default function Header() {
             <button
               onClick={() => setOpen(false)}
               className="grid h-10 w-10 place-items-center rounded-lg text-text-primary ring-1 ring-border"
-              aria-label="Закрыть"
+              aria-label={t.common.close}
             >
               <X className="h-5 w-5" />
             </button>
           </div>
-          {NAV_LINKS.map((l) => (
+          {NAV_ANCHORS.map((l) => (
             <a
               key={l.href}
               href={l.href}
               onClick={() => setOpen(false)}
               className="rounded-xl px-3 py-3 text-base text-text-secondary transition hover:bg-bg-panel/5 hover:text-text-primary"
             >
-              {l.label}
+              {t.landing.nav[l.key]}
             </a>
           ))}
+          <LocaleSwitch className="mt-4 self-start" />
+
           <div className="mt-auto">
             {authed ? (
               <Link href="/app/analysis" className="btn-primary w-full">
-                Кабинет <ArrowRight className="h-4 w-4" />
+                {t.common.cabinet} <ArrowRight className="h-4 w-4" />
               </Link>
             ) : (
               <Link href="/login" className="btn-primary w-full">
-                Войти
+                {t.common.login}
               </Link>
             )}
           </div>

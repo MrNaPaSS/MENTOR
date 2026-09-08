@@ -12,6 +12,7 @@
 // панель решала это по-своему, и «нет данных» выглядело как пустая панель -
 // то есть как будто раздел сломан.
 
+import { useT } from "@/lib/i18n";
 import type { ReactNode } from "react";
 
 /** Что показывает панель, пока цифр нет. */
@@ -98,7 +99,7 @@ export default function Pane({
   badge,
   state = "ready",
   /** Чем объяснить пустоту: у каждого показателя своя причина молчать. */
-  emptyNote = "Источник не ответил",
+  emptyNote,
   children,
   className = "",
 }: {
@@ -110,6 +111,7 @@ export default function Pane({
   children: ReactNode;
   className?: string;
 }) {
+  const t = useT();
   return (
     <section
       className={`flex flex-col overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] ${className}`}
@@ -129,7 +131,9 @@ export default function Pane({
       <div className="flex-1 p-3">
         {state === "loading" && <PaneSkeleton />}
         {state === "error" && (
-          <p className="py-6 text-center text-[11px] text-[var(--pane-muted)]">{emptyNote}</p>
+          <p className="py-6 text-center text-[11px] text-[var(--pane-muted)]">
+            {emptyNote ?? t.market.pane.emptyNote}
+          </p>
         )}
         {state === "ready" && children}
       </div>
@@ -160,17 +164,18 @@ function PaneSkeleton() {
  * те, и другие - а по несвежему фандингу входят в сделку.
  */
 export function LiveBadge({ live, label }: { live: boolean; label?: string }) {
+  const t = useT();
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
       style={{ color: live ? "var(--pane-up)" : "var(--pane-muted)" }}
-      title={live ? "Данные обновляются сами" : "Снимок на момент открытия"}
+      title={live ? t.market.pane.liveTitle : t.market.pane.snapshotTitle}
     >
       <span
         className={`h-1.5 w-1.5 rounded-full ${live ? "animate-pulse" : ""}`}
         style={{ background: live ? "var(--pane-up)" : "var(--pane-muted)" }}
       />
-      {label ?? (live ? "Live" : "Снимок")}
+      {label ?? (live ? "Live" : t.market.pane.snapshot)}
     </span>
   );
 }

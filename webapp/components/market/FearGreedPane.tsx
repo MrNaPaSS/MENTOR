@@ -11,17 +11,18 @@
 // именно ими о нём говорят вслух. Плавный градиент выглядел бы наряднее, но
 // по нему нельзя сказать, кончился страх или ещё нет.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type FearGreedPoint } from "@/lib/api";
 import Pane, { PaneLabel, type PaneState } from "./Pane";
 
 /** Пять зон индекса: границы и названия те же, что публикует источник. */
 const ZONES = [
-  { upto: 25, label: "Крайний страх", color: "var(--pane-down)" },
-  { upto: 45, label: "Страх", color: "#ff8c00" },
-  { upto: 55, label: "Нейтрально", color: "var(--pane-gold)" },
-  { upto: 75, label: "Жадность", color: "var(--pane-up)" },
-  { upto: 100, label: "Крайняя жадность", color: "var(--pane-accent)" },
+  { upto: 25, key: "extremeFear", color: "var(--pane-down)" },
+  { upto: 45, key: "fear", color: "#ff8c00" },
+  { upto: 55, key: "neutral", color: "var(--pane-gold)" },
+  { upto: 75, key: "greed", color: "var(--pane-up)" },
+  { upto: 100, key: "extremeGreed", color: "var(--pane-accent)" },
 ] as const;
 
 function zoneOf(value: number) {
@@ -64,7 +65,7 @@ function Gauge({ value }: { value: number }) {
         const y1 = cy - Math.sin(a1) * r;
         return (
           <path
-            key={z.label}
+            key={z.key}
             d={`M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`}
             fill="none"
             stroke={z.color}
@@ -91,6 +92,7 @@ function Gauge({ value }: { value: number }) {
 
 /** Месяц истории столбиками: слева месяц назад, справа сегодня. */
 function History({ points }: { points: FearGreedPoint[] }) {
+  const t = useT();
   // Источник отдаёт от свежего к старому - разворачиваем, время идёт вправо.
   const rows = [...points].reverse();
   return (
@@ -109,14 +111,14 @@ function History({ points }: { points: FearGreedPoint[] }) {
                 background: zone.color,
                 opacity: last ? 1 : 0.42,
               }}
-              title={`${v} - ${zone.label}`}
+              title={`${v} - ${t.market.fearGreed.levels[zone.key]}`}
             />
           );
         })}
       </div>
       <div className="mt-1.5 flex justify-between">
-        <PaneLabel>30 дней назад</PaneLabel>
-        <PaneLabel>сегодня</PaneLabel>
+        <PaneLabel>{t.market.fearGreed.daysAgo30}</PaneLabel>
+        <PaneLabel>{t.market.fearGreed.today}</PaneLabel>
       </div>
     </div>
   );
@@ -150,6 +152,7 @@ function Then({ label, now, then }: { label: string; now: number; then: number |
 }
 
 export default function FearGreedPane({ className = "" }: { className?: string }) {
+  const t = useT();
   const [data, setData] = useState<FearGreedPoint[]>([]);
   const [state, setState] = useState<PaneState>("loading");
 
@@ -176,10 +179,10 @@ export default function FearGreedPane({ className = "" }: { className?: string }
 
   return (
     <Pane
-      title="Страх и жадность"
-      hint="Настроение рынка от 0 до 100"
+      title={t.market.fearGreed.title}
+      hint={t.market.fearGreed.hint}
       state={now === null && state !== "loading" ? "error" : state}
-      emptyNote="Индекс сейчас недоступен"
+      emptyNote={t.market.fearGreed.emptyNote}
       className={className}
     >
       {now !== null && zone && (
@@ -197,15 +200,15 @@ export default function FearGreedPane({ className = "" }: { className?: string }
                 className="mt-1 truncate text-[12px] font-semibold"
                 style={{ color: zone.color }}
               >
-                {zone.label}
+                {t.market.fearGreed.levels[zone.key]}
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2 border-t border-[var(--pane-border)] pt-3">
-            <Then label="Вчера" now={now} then={valueOf(data[1])} />
-            <Then label="Неделю назад" now={now} then={valueOf(data[7])} />
-            <Then label="Месяц назад" now={now} then={valueOf(data[29])} />
+            <Then label={t.market.fearGreed.yesterday} now={now} then={valueOf(data[1])} />
+            <Then label={t.market.fearGreed.weekAgo} now={now} then={valueOf(data[7])} />
+            <Then label={t.market.fearGreed.monthAgo} now={now} then={valueOf(data[29])} />
           </div>
 
           {data.length > 2 && <History points={data} />}

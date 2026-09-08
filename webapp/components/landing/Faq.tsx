@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
+import { useT } from "@/lib/i18n";
 
 /**
  * Тон вопроса. Не цвет, а имя: сам цвет берётся в globals.css - он разный на
@@ -11,89 +12,31 @@ import Reveal from "@/components/ui/Reveal";
  */
 type Tone = "cyan" | "mint" | "violet" | "amber";
 
-interface FaqItem {
-  tag: string;
-  tone: Tone;
-  q: string;
-  a: string;
-}
-
-const FAQS: FaqItem[] = [
-  {
-    tag: "Академия",
-    tone: "cyan",
-    q: "Что такое NMNH?",
-    a: "NMNH (No Money No Honey) - торговая академия с собственным терминалом, комьюнити и аналитикой. Это не канал с сигналами: терминал подключается к твоему счёту на бирже и сам ведёт открытую позицию.",
-  },
-  {
-    tag: "Терминал",
-    tone: "cyan",
-    q: "Чем это отличается от обычных сигналов?",
-    a: "Сигнал в канале - картинка, остальное ты делаешь руками. Здесь он открывается в терминале: объём посчитан под депозит, стоп и цели встают на биржу вместе со входом, дальше сервер сам переносит стоп в безубыток.",
-  },
-  {
-    tag: "Безопасность",
-    tone: "mint",
-    q: "Безопасно ли давать API-ключи?",
-    a: "Ключ создаётся только на торговлю, без права вывода - снять деньги по нему нельзя. На сервере ключи зашифрованы и в браузер не возвращаются. Отвязать можно в один клик.",
-  },
-  {
-    tag: "Биржа",
-    tone: "violet",
-    q: "Работает только с WEEX?",
-    a: "Да. На WEEX построены расчёт лимитов, комиссий и сопровождение сделок, и она же открывает доступ в академию.",
-  },
-  {
-    tag: "Стоимость",
-    tone: "mint",
-    q: "Сколько стоит доступ?",
-    a: "Абсолютно бесплатно. Достаточно зарегистрироваться на WEEX через нашу партнёрскую ссылку - и доступ открывается автоматически.",
-  },
-  {
-    tag: "Доступ",
-    tone: "cyan",
-    q: "Как получить доступ?",
-    a: "Зарегистрируйся на WEEX по партнёрской ссылке, введи свой WEEX UID в бот - и ты уже внутри. Никаких оплат, заявок и ожидания.",
-  },
-  {
-    tag: "Возможности",
-    tone: "violet",
-    q: "Что входит в академию?",
-    a: "Торговые сигналы с расчётом под твой депозит, собственный софт для анализа рынка, живое комьюнити трейдеров, разборы сделок и постоянное развитие.",
-  },
-  {
-    tag: "Начало",
-    tone: "amber",
-    q: "Нужен ли опыт в трейдинге?",
-    a: "Нет. Академия подходит как новичкам, так и опытным трейдерам. Каждый сигнал уже содержит все параметры - остаётся только открыть сделку.",
-  },
-  {
-    tag: "Приложение",
-    tone: "mint",
-    q: "Есть ли мобильное приложение?",
-    a: "Да - WebApp работает прямо в Telegram и полностью адаптирован под мобильные устройства. Открывай сделки, смотри сигналы и аналитику в один тап.",
-  },
+/** Тон каждого вопроса - по порядку, как они идут в словаре. */
+const TONES: Tone[] = [
+  "cyan", "cyan", "mint", "violet", "mint", "cyan", "violet", "amber", "mint",
 ];
 
 export default function Faq() {
+  const t = useT();
   const [open, setOpen] = useState<number | null>(0);
 
   return (
     <section id="faq" className="mx-auto max-w-3xl px-4 py-20 md:px-6 md:py-28">
       <SectionHeading
-        eyebrow="FAQ"
-        title="Частые вопросы"
-        subtitle="Всё что нужно знать перед стартом - честно и без воды."
+        eyebrow={t.landing.faq.eyebrow}
+        title={t.landing.faq.title}
+        subtitle={t.landing.faq.subtitle}
       />
 
       <div className="mt-12 space-y-2.5">
-        {FAQS.map((f, i) => {
+        {t.landing.faq.items.map((f, i) => {
           const isOpen = open === i;
           return (
             <Reveal key={i} delay={i * 0.04}>
               <div
                 className="faq-item group overflow-hidden rounded-2xl border backdrop-blur-md"
-                data-tone={f.tone}
+                data-tone={TONES[i]}
                 data-open={isOpen}
               >
                 <button
@@ -142,9 +85,9 @@ export default function Faq() {
           className="faq-cta mt-10 flex flex-col items-center gap-4 rounded-2xl border p-6 text-center sm:flex-row sm:text-left"
         >
           <div className="flex-1">
-            <p className="font-bold text-text-primary">Остался вопрос?</p>
+            <p className="font-bold text-text-primary">{t.landing.faq.ctaTitle}</p>
             <p className="mt-1 text-sm text-text-secondary">
-              Напишите в Telegram - отвечаем в течение нескольких часов.
+              {t.landing.faq.ctaText}
             </p>
           </div>
           <a
@@ -153,7 +96,7 @@ export default function Faq() {
             rel="noopener noreferrer"
             className="shrink-0 rounded-xl bg-accent-cyan px-5 py-2.5 text-sm font-bold text-bg-deep transition hover:brightness-110"
           >
-            Написать в Telegram →
+            {t.landing.faq.ctaButton}
           </a>
         </div>
       </Reveal>

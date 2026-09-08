@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Wrench, User, Crown, X } from "lucide-react";
@@ -12,6 +13,7 @@ import { setMentorToken, setStudentTokens } from "@/lib/auth";
  * Бэкенд-эндпоинт /api/auth/dev-login сам отключён в проде.
  */
 export default function DevBar() {
+  const t = useT();
   const router = useRouter();
   const [show, setShow] = useState(false);
   const [open, setOpen] = useState(false);
@@ -42,7 +44,7 @@ export default function DevBar() {
         window.location.href = "/app/scalping";
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Dev-вход недоступен");
+      setError(e instanceof Error ? e.message : t.tools.dev.unavailable);
     } finally {
       setBusy(null);
     }
@@ -54,29 +56,29 @@ export default function DevBar() {
         <div className="glass w-60 rounded-2xl p-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-accent-gold">
-              <Wrench className="h-3.5 w-3.5" /> Dev-вход
+              <Wrench className="h-3.5 w-3.5" /> {t.tools.dev.title}
             </span>
-            <button onClick={() => setOpen(false)} className="text-text-muted hover:text-text-primary" aria-label="Закрыть">
+            <button onClick={() => setOpen(false)} className="text-text-muted hover:text-text-primary" aria-label={t.common.close}>
               <X className="h-4 w-4" />
             </button>
           </div>
           <div className="space-y-2">
             <button onClick={() => go("mentor")} disabled={!!busy} className="btn-gold w-full text-sm">
-              <Crown className="h-4 w-4" /> {busy === "mentor" ? "Вход…" : "Как ментор → /admin"}
+              <Crown className="h-4 w-4" /> {busy === "mentor" ? t.tools.dev.entering : t.tools.dev.asMentor}
             </button>
             <button onClick={() => go("student")} disabled={!!busy} className="btn-primary w-full text-sm">
-              <User className="h-4 w-4" /> {busy === "student" ? "Вход…" : "Как ученик → /app"}
+              <User className="h-4 w-4" /> {busy === "student" ? t.tools.dev.entering : t.tools.dev.asStudent}
             </button>
           </div>
           {error && <p className="mt-2 text-xs text-danger">⚠️ {error}</p>}
-          <p className="mt-2 text-[10px] text-text-muted">Только для разработки. В проде отключено.</p>
+          <p className="mt-2 text-[10px] text-text-muted">{t.tools.dev.note}</p>
         </div>
       ) : (
         <button
           onClick={() => setOpen(true)}
           className="glass flex h-11 w-11 items-center justify-center rounded-full text-accent-gold"
-          aria-label="Dev-вход"
-          title="Dev-вход"
+          aria-label={t.tools.dev.title}
+          title={t.tools.dev.title}
         >
           <Wrench className="h-5 w-5" />
         </button>

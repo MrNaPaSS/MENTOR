@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import { API_URL } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
-function PnlCard({ src }: { src: string }) {
+function PnlCard({ src, alt }: { src: string; alt: string }) {
   return (
     <div className="group relative w-[380px] shrink-0 overflow-hidden rounded-2xl border border-border bg-bg-deep shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-300 hover:-translate-y-1 hover:border-accent-cyan/25 hover:shadow-[0_12px_40px_rgba(10,255,224,0.07)]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
-        alt="PnL результат"
+        alt={alt}
         className="w-full transition-transform duration-500 group-hover:scale-[1.03]"
         loading="lazy"
       />
@@ -20,6 +21,7 @@ function PnlCard({ src }: { src: string }) {
 }
 
 export default function Testimonials() {
+  const t = useT();
   const [images, setImages] = useState<string[]>([]);
 
   useEffect(() => {
@@ -44,16 +46,16 @@ export default function Testimonials() {
     <section id="results" className="py-20 md:py-28">
       <div className="mx-auto max-w-6xl px-4 md:px-6">
         <SectionHeading
-          eyebrow="Результаты учеников"
-          title="Реальные PnL"
-          subtitle="Скриншоты с биржи. Публикуются с согласия учеников."
+          eyebrow={t.landing.results.eyebrow}
+          title={t.landing.results.title}
+          subtitle={t.landing.results.subtitle}
         />
       </div>
 
       <div className="group relative mt-14 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
         <div className="flex w-max gap-4 animate-marquee group-hover:[animation-play-state:paused]">
           {loop.map((src, i) => (
-            <PnlCard key={i} src={src} />
+            <PnlCard key={i} src={src} alt={t.landing.results.imageAlt} />
           ))}
         </div>
       </div>

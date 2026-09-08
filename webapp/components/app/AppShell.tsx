@@ -24,6 +24,7 @@ import { api, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { useCoins } from "@/lib/useCoins";
 import { fmtUsd, modeLabel } from "@/lib/format";
+import { adoptLocale, useIntlLocale, useT } from "@/lib/i18n";
 import MarketTicker from "@/components/market/MarketTicker";
 import Toasts from "@/components/scalping/Toasts";
 import {
@@ -36,19 +37,20 @@ import {
 } from "@/lib/tradeAlerts";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 
+// Названия разделов живут в словаре: здесь только порядок, адрес и картинка.
 const NAV = [
   // Терминал первым: это рабочий стол трейдера, с него начинается день,
   // и с него же открывается кабинет.
   // Дальше рынок и анализы, остальное — как было.
-  { href: "/app/scalping", label: "Терминал", icon: Waves, mobile: false },
-  { href: "/app/market", label: "Рынок", icon: Globe, mobile: true },
-  { href: "/app/analysis", label: "Анализы", icon: ImageIcon, mobile: true },
-  { href: "/app/news", label: "ТВ", icon: Tv, mobile: false },
-  { href: "/app/analytics", label: "Аналитика", icon: BarChart3, mobile: false },
-  { href: "/app/shop", label: "Маркет", icon: ShoppingBag, mobile: true },
-  { href: "/app/calculator", label: "Калькулятор", icon: Calculator, mobile: false },
-  { href: "/app/profile", label: "Профиль", icon: User, mobile: true },
-];
+  { href: "/app/scalping", key: "scalping", icon: Waves, mobile: false },
+  { href: "/app/market", key: "market", icon: Globe, mobile: true },
+  { href: "/app/analysis", key: "analysis", icon: ImageIcon, mobile: true },
+  { href: "/app/news", key: "news", icon: Tv, mobile: false },
+  { href: "/app/analytics", key: "analytics", icon: BarChart3, mobile: false },
+  { href: "/app/shop", key: "shop", icon: ShoppingBag, mobile: true },
+  { href: "/app/calculator", key: "calculator", icon: Calculator, mobile: false },
+  { href: "/app/profile", key: "profile", icon: User, mobile: true },
+] as const;
 
 const MODE_COLORS: Record<string, string> = {
   moderate: "text-accent-cyan border-accent-cyan/40 bg-accent-cyan/10",
@@ -59,6 +61,8 @@ const MODE_COLORS: Record<string, string> = {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const t = useT();
+  const numbers = useIntlLocale();
   const [ready, setReady] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   // Баланс монет обновляется сам: их начисляет ещё и академия — снаружи вкладки.
@@ -83,7 +87,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
     setReady(true);
     api.profile(token)
-      .then(setProfile)
+      .then((p) => {
+        setProfile(p);
+        // Язык человек выбирает один раз, а заходит с разных устройств:
+        // выбор приезжает вместе с профилем и включается сразу.
+        adoptLocale(p.language);
+      })
       .catch((err) => {
         console.error("Auth error, redirecting to login:", err);
         logout();
@@ -101,7 +110,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="grid min-h-screen place-items-center bg-bg-deep">
         <div className="flex flex-col items-center gap-4">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-accent-cyan/20 border-t-accent-cyan" />
-          <p className="text-sm text-text-muted">Загрузка платформы…</p>
+          <p className="text-sm text-text-muted">{t.common.loadingPlatform}</p>
         </div>
       </div>
     );
@@ -156,7 +165,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <span className="absolute inset-0 rounded-lg bg-accent-cyan/[0.08]" />
                   )}
                   <Icon className="relative h-4 w-4" />
-                  <span className="relative">{n.label}</span>
+                  <span className="relative">{t.shell.nav[n.key]}</span>
                   {active && (
                     <span className="absolute bottom-0 inset-x-3 h-px bg-accent-cyan" />
                   )}
@@ -176,11 +185,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 href="/app/analytics"
                 className="coin-chip hidden items-center gap-1.5 rounded-xl border px-3 py-1.5 sm:flex"
-                title="NMNH монеты - за что начислены"
+                title={t.shell.coinsTitle}
               >
                 <Coins className="h-3.5 w-3.5" />
                 <span className="font-mono text-sm font-bold tabular">
-                  {coins.toLocaleString("ru")}
+                  {coins.toLocaleString(numbers)}
                 </span>
                 <span className="text-[9px] font-bold opacity-60">NMNH</span>
               </Link>
@@ -201,7 +210,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* Выйти */}
             <button
               onClick={doLogout}
-              title="Выйти"
+              title={t.shell.logout}
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-text-muted transition hover:border-danger/40 hover:text-danger"
             >
               <LogOut className="h-4 w-4" />
@@ -241,7 +250,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <span className="absolute left-1/2 top-0 h-px w-8 -translate-x-1/2 bg-accent-cyan shadow-[0_0_8px_rgba(10,255,224,0.8)]" />
                 )}
                 <Icon className="h-5 w-5" />
-                {n.label}
+                {t.shell.nav[n.key]}
               </Link>
             );
           })}

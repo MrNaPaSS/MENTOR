@@ -11,6 +11,7 @@
 // назвала. Выдавать «0.0000%» за настоящую ставку нельзя - такие строки
 // показаны прочерком и уходят вниз списка.
 
+import { useT, type Dict } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type FundingRate } from "@/lib/api";
 import { base } from "@/lib/scalping";
@@ -24,13 +25,13 @@ type Row = {
 };
 
 /** Через сколько следующий расчёт: «3ч 12м». Прошедшее время - прочерк. */
-function untilLabel(next: number | null, now: number): string {
+function untilLabel(next: number | null, now: number, t: Dict): string {
   if (!next) return "-";
   const left = next - now;
-  if (left <= 0) return "скоро";
+  if (left <= 0) return t.market.funding.soon;
   const hours = Math.floor(left / 3_600_000);
   const minutes = Math.floor((left % 3_600_000) / 60_000);
-  return hours > 0 ? `${hours}ч ${minutes}м` : `${minutes}м`;
+  return t.market.funding.countdown(hours, minutes);
 }
 
 function parse(rates: FundingRate[]): Row[] {
@@ -50,6 +51,7 @@ function parse(rates: FundingRate[]): Row[] {
 }
 
 export default function FundingPane({ className = "" }: { className?: string }) {
+  const t = useT();
   const [rows, setRows] = useState<Row[]>([]);
   const [state, setState] = useState<PaneState>("loading");
   const [now, setNow] = useState(() => Date.now());
@@ -91,15 +93,15 @@ export default function FundingPane({ className = "" }: { className?: string }) 
 
   return (
     <Pane
-      title="Финансирование"
+      title={t.market.funding.title}
       hint={
         named > 0
-          ? `Лонги платят по ${longsPay} из ${named} инструментов`
-          : "Кто платит за удержание позиции"
+          ? t.market.funding.hintLongsPay(longsPay, named)
+          : t.market.funding.hintDefault
       }
-      badge={<LiveBadge live={state === "ready"} label="5 мин" />}
+      badge={<LiveBadge live={state === "ready"} label={t.market.funding.live5m} />}
       state={state}
-      emptyNote="Биржа не отдала ставки"
+      emptyNote={t.market.funding.emptyNote}
       className={className}
     >
       <div className="-mx-1 max-h-[320px] overflow-y-auto">
@@ -107,16 +109,16 @@ export default function FundingPane({ className = "" }: { className?: string }) 
           <thead className="sticky top-0 bg-[var(--pane-bg)]">
             <tr>
               <th className="px-1 pb-1.5 text-left">
-                <PaneLabel>Инструмент</PaneLabel>
+                <PaneLabel>{t.market.funding.colInstrument}</PaneLabel>
               </th>
               <th className="px-1 pb-1.5 text-right">
-                <PaneLabel>Ставка</PaneLabel>
+                <PaneLabel>{t.market.funding.colRate}</PaneLabel>
               </th>
               <th className="hidden px-1 pb-1.5 text-left sm:table-cell">
-                <PaneLabel>Перекос</PaneLabel>
+                <PaneLabel>{t.market.funding.colSkew}</PaneLabel>
               </th>
               <th className="px-1 pb-1.5 text-right">
-                <PaneLabel>Расчёт</PaneLabel>
+                <PaneLabel>{t.market.funding.colSettle}</PaneLabel>
               </th>
             </tr>
           </thead>
@@ -135,10 +137,10 @@ export default function FundingPane({ className = "" }: { className?: string }) 
                   className="border-t border-[var(--pane-border)] transition-colors hover:bg-[var(--pane-hover)]"
                   title={
                     unknown
-                      ? "Биржа не назвала ставку по этому инструменту"
+                      ? t.market.funding.noRateFor
                       : up
-                        ? "Ставка положительная: платят лонги"
-                        : "Ставка отрицательная: платят шорты"
+                        ? t.market.funding.longsPay
+                        : t.market.funding.shortsPay
                   }
                 >
                   <td className="px-1 py-1.5 font-mono text-[12px] font-semibold text-[var(--pane-text)]">
@@ -166,7 +168,7 @@ export default function FundingPane({ className = "" }: { className?: string }) 
                     </div>
                   </td>
                   <td className="px-1 py-1.5 text-right font-mono text-[11px] tabular-nums text-[var(--pane-muted)]">
-                    {untilLabel(r.next, now)}
+                    {untilLabel(r.next, now, t)}
                   </td>
                 </tr>
               );

@@ -5,8 +5,12 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { api, SignalOut } from "@/lib/api";
 import { fmtUsd, isLong, modeLabel } from "@/lib/format";
+import { useLocale, useT } from "@/lib/i18n";
+import { weexFuturesUrl } from "@/lib/content";
 
 function SignalDetailContent() {
+  const t = useT();
+  const locale = useLocale();
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
   const router = useRouter();
@@ -23,9 +27,9 @@ function SignalDetailContent() {
     return (
       <div className="space-y-4">
         <button onClick={() => router.back()} className="btn-ghost text-sm">
-          <ArrowLeft className="h-4 w-4" /> Назад
+          <ArrowLeft className="h-4 w-4" /> {t.common.back}
         </button>
-        <div className="card text-center text-text-muted">Сигнал не найден.</div>
+        <div className="card text-center text-text-muted">{t.signals.notFoundOne}</div>
       </div>
     );
   }
@@ -34,8 +38,8 @@ function SignalDetailContent() {
 
   const levels = signal
     ? [
-        { label: "Вход", value: signal.entry_price, tone: "text-text-primary" },
-        { label: "Стоп-лосс", value: signal.stop_loss, tone: "text-danger" },
+        { label: t.signals.entry, value: signal.entry_price, tone: "text-text-primary" },
+        { label: t.signals.stopLoss, value: signal.stop_loss, tone: "text-danger" },
         { label: "TP1", value: signal.tp1, tone: "text-success" },
         { label: "TP2", value: signal.tp2, tone: "text-success" },
         { label: "TP3", value: signal.tp3, tone: "text-success" },
@@ -45,7 +49,7 @@ function SignalDetailContent() {
   return (
     <div className="space-y-6">
       <button onClick={() => router.back()} className="btn-ghost text-sm">
-        <ArrowLeft className="h-4 w-4" /> К ленте
+        <ArrowLeft className="h-4 w-4" /> {t.signals.detailBackToFeed}
       </button>
 
       {!loaded || !signal ? (
@@ -59,12 +63,16 @@ function SignalDetailContent() {
               <span className="text-text-muted">x{signal.leverage}</span>
             </div>
             <span className={`badge-${signal.status === "active" ? "cyan" : "muted"}`}>
-              {signal.status === "active" ? "Активен" : "Закрыт"}
+              {signal.status === "active" ? t.signals.statusActive : t.signals.statusClosed}
             </span>
           </div>
 
           <div className="text-sm text-text-muted">
-            {modeLabel(signal.target_audience)} · вход {signal.entry_type === "market" ? "по рынку" : "лимит"} · маржа {signal.margin_type}
+            {t.signals.detailLine(
+              modeLabel(signal.target_audience, locale),
+              signal.entry_type === "market" ? t.signals.entryMarket : t.signals.entryLimit,
+              signal.margin_type
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -79,16 +87,16 @@ function SignalDetailContent() {
           </div>
 
           <a
-            href={`https://www.weex.com/ru/futures/${signal.symbol}`}
+            href={weexFuturesUrl(signal.symbol, locale)}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-primary w-full"
           >
-            Войти в сделку <ExternalLink className="h-4 w-4" />
+            {t.signals.enterTrade} <ExternalLink className="h-4 w-4" />
           </a>
 
           <p className="text-xs text-text-muted">
-            Расчёт под твой баланс приходит в Telegram-боте. Это не финансовый совет - торговля сопряжена с риском.
+            {t.signals.detailNote}
           </p>
         </div>
       )}

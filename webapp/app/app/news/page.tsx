@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { useT } from "@/lib/i18n";
 import { useState, useEffect, useRef } from "react";
 
 // ─── Каналы с настоящими YouTube Channel ID (не handle!) ───────────────────
@@ -53,6 +54,7 @@ type GridSize = 1 | 2 | 4 | 6;
 
 // ─── Компонент одного стрима ────────────────────────────────────────────────
 function LiveStream({ channelId, name, muted = true }: { channelId: string; name: string; muted?: boolean }) {
+  const t = useT();
   const [offline, setOffline] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -69,7 +71,7 @@ function LiveStream({ channelId, name, muted = true }: { channelId: string; name
       {!loaded && !offline && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-cyan/20 border-t-accent-cyan" />
-          <span className="text-xs text-text-muted">Загрузка эфира...</span>
+          <span className="text-xs text-text-muted">{t.news.loadingStream}</span>
         </div>
       )}
 
@@ -78,14 +80,14 @@ function LiveStream({ channelId, name, muted = true }: { channelId: string; name
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black">
           <span className="text-3xl">📡</span>
           <p className="text-sm font-semibold text-text-primary">{name}</p>
-          <p className="text-xs text-text-muted">Канал не в эфире прямо сейчас</p>
+          <p className="text-xs text-text-muted">{t.news.offline}</p>
           <a
             href={`https://www.youtube.com/@${channelId}/live`}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-1 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-text-primary hover:bg-red-500"
           >
-            ▶ Открыть на YouTube
+            {t.news.openOnYoutube}
           </a>
         </div>
       )}
@@ -141,6 +143,7 @@ function TradingViewNews() {
 interface NewsItem { title: string; url: string; source: string; publishedAt: string; body: string; }
 
 function CryptoNewsFeed() {
+  const t = useT();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -191,7 +194,7 @@ function CryptoNewsFeed() {
         </a>
       ))}
       {news.length === 0 && (
-        <p className="text-center text-sm text-text-muted py-8">Не удалось загрузить новости</p>
+        <p className="text-center text-sm text-text-muted py-8">{t.news.loadFailed}</p>
       )}
     </div>
   );
@@ -209,6 +212,7 @@ function LiveIndicator() {
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 export default function NewsPage() {
+  const t = useT();
   const [gridSize, setGridSize] = useState<GridSize>(4);
   const [activeIds, setActiveIds] = useState<string[]>(CHANNELS.slice(0, 4).map((c) => c.id));
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
@@ -249,7 +253,7 @@ export default function NewsPage() {
             <LiveIndicator />
           </div>
           <button onClick={() => setFullscreenId(null)} className="btn-outline px-3 py-1.5 text-xs">
-            ✕ Закрыть
+            {t.news.closeFullscreen}
           </button>
         </div>
         <div className="relative flex-1">
@@ -264,17 +268,17 @@ export default function NewsPage() {
       {/* Заголовок + табы */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-text-primary">Новости & ТВ</h1>
-          <p className="text-sm text-text-muted">Прямые эфиры, TradingView лента и крипто-новости</p>
+          <h1 className="text-2xl font-extrabold text-text-primary">{t.news.title}</h1>
+          <p className="text-sm text-text-muted">{t.news.subtitle}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Табы */}
           <div className="flex gap-1 rounded-xl border border-border bg-bg-panel p-1">
             {([
-              { key: "live", label: "📺 Live TV" },
-              { key: "feed", label: "📊 TV Timeline" },
-              { key: "crypto", label: "📰 Крипто" },
+              { key: "live", label: t.news.tabLive },
+              { key: "feed", label: t.news.tabFeed },
+              { key: "crypto", label: t.news.tabCrypto },
             ] as const).map(({ key, label }) => (
               <button
                 key={key}
@@ -314,8 +318,8 @@ export default function NewsPage() {
       {tab === "crypto" && (
         <div className="card">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-bold text-text-primary">Крипто-новости (English)</h2>
-            <span className="text-[10px] text-text-muted">источник: CryptoCompare</span>
+            <h2 className="text-base font-bold text-text-primary">{t.news.cryptoTitle}</h2>
+            <span className="text-[10px] text-text-muted">{t.news.cryptoSource}</span>
           </div>
           <CryptoNewsFeed />
         </div>
@@ -348,13 +352,13 @@ export default function NewsPage() {
 
           {/* Примечание о YouTube */}
           <div className="rounded-xl border border-accent-gold/20 bg-accent-gold/5 px-4 py-2 text-[11px] text-accent-gold">
-            ⚠ Если канал не в эфире - отображается заглушка с кнопкой открыть на YouTube. Работа зависит от расписания канала.
+            {t.news.youtubeNote}
           </div>
 
           {/* Сетка трансляций */}
           {visibleChannels.length === 0 ? (
             <div className="card grid place-items-center py-20 text-text-muted">
-              Выберите каналы выше
+              {t.news.pickChannels}
             </div>
           ) : (
             <div className={`grid gap-4 ${gridClass}`}>

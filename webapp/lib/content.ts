@@ -12,91 +12,42 @@ export const SOCIAL_LINKS = {
   threads: "https://threads.net/@nmnh",
 };
 
-export const NAV_LINKS = [
-  { label: "О проекте", href: "#about" },
-  { label: "Терминал", href: "#terminal" },
-  { label: "Как работает", href: "#how" },
-  { label: "Сигналы", href: "#signals" },
-  { label: "Результаты", href: "#results" },
-  { label: "FAQ", href: "#faq" },
-];
-
-export interface HowStep {
-  num: string;
-  title: string;
-  text: string;
-  icon: "wallet" | "bot" | "key" | "trending";
+/**
+ * Партнёрская ссылка на регистрацию с учётом языка.
+ *
+ * У биржи свой раздел на каждый язык, и «/ru/register» открывает англоязычному
+ * гостю русскую страницу - на первом же шаге, ещё до академии.
+ */
+export function weexRegisterUrl(locale: string): string {
+  const lang = locale === "en" ? "en" : "ru";
+  return `https://www.weex.com/${lang}/register?vipCode=kaktotakxme`;
 }
 
-export const HOW_STEPS: HowStep[] = [
-  {
-    num: "01",
-    title: "Регистрация на WEEX",
-    text: "Открой счёт по партнёрской ссылке и пополни депозит - это займёт пару минут.",
-    icon: "wallet",
-  },
-  {
-    num: "02",
-    title: "Вход через бота",
-    text: "Бот академии узнаёт тебя по WEEX UID и выдаёт пароль для входа в кабинет.",
-    icon: "bot",
-  },
-  {
-    num: "03",
-    title: "Подключение биржи",
-    text: "Создай на WEEX API-ключ без права вывода и вставь его в терминал - счёт на связи.",
-    icon: "key",
-  },
-  {
-    num: "04",
-    title: "Торгуй из терминала",
-    text: "Сигнал уже посчитан под депозит: жмёшь «Войти» - сервер ведёт сделку до конца.",
-    icon: "trending",
-  },
-];
-
-export interface Testimonial {
-  name: string;
-  mode: string;
-  quote: string;
-  pnl: string;
-  avatarSeed: string;
+/** Страница пары на бирже - на языке, которым человек пользуется. */
+export function weexFuturesUrl(symbol: string, locale: string): string {
+  const lang = locale === "en" ? "en" : "ru";
+  return `https://www.weex.com/${lang}/futures/${symbol}`;
 }
 
-export const TESTIMONIALS: Testimonial[] = [
-  {
-    name: "Артём К.",
-    mode: "Умеренный",
-    quote: "За 3 месяца поднял депозит с $500 до $1 340. Сигналы реально считаются под мой баланс.",
-    pnl: "+168%",
-    avatarSeed: "artem",
-  },
-  {
-    name: "Дмитрий В.",
-    mode: "Турбо",
-    quote: "Турбо-режим не для слабонервных, но риск под контролем - стоп всегда проставлен заранее.",
-    pnl: "+312%",
-    avatarSeed: "dmitry",
-  },
-  {
-    name: "Игорь С.",
-    mode: "Умеренный",
-    quote: "Раньше сливал на эмоциях. Теперь чёткий план входа и выхода в каждом сигнале.",
-    pnl: "+94%",
-    avatarSeed: "igor",
-  },
-  {
-    name: "Павел Р.",
-    mode: "Турбо",
-    quote: "Удобно, что весь расчёт уже готов - маржа, объём, риск. Просто открываю сделку.",
-    pnl: "+221%",
-    avatarSeed: "pavel",
-  },
-  {
-    name: "Сергей М.",
-    mode: "Умеренный",
-    quote: "Лидерборд мотивирует. Видно реальные результаты учеников, а не обещания.",
-    pnl: "+127%",
-    avatarSeed: "sergey",
-  },
-];
+/**
+ * Якоря лендинга. Подписи живут в словаре: разделы те же на любом языке,
+ * меняется только то, как они названы.
+ */
+export const NAV_ANCHORS = [
+  { key: "about", href: "#about" },
+  { key: "terminal", href: "#terminal" },
+  { key: "how", href: "#how" },
+  { key: "signals", href: "#signals" },
+  { key: "results", href: "#results" },
+  { key: "faq", href: "#faq" },
+] as const;
+
+export type NavAnchorKey = (typeof NAV_ANCHORS)[number]["key"];
+
+/** Шаги «как это работает»: номер и картинка. Текст - в словаре. */
+export const HOW_STEPS = [
+  { num: "01", icon: "wallet" },
+  { num: "02", icon: "bot" },
+  { num: "03", icon: "key" },
+  { num: "04", icon: "trending" },
+] as const;

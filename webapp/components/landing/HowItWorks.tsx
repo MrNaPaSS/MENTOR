@@ -1,7 +1,10 @@
-﻿import { Wallet, Bot, KeyRound, TrendingUp, type LucideIcon } from "lucide-react";
+﻿"use client";
+
+import { Wallet, Bot, KeyRound, TrendingUp, type LucideIcon } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
 import { HOW_STEPS } from "@/lib/content";
+import { useT } from "@/lib/i18n";
 
 const ICONS: Record<string, LucideIcon> = {
   wallet: Wallet,
@@ -24,12 +27,14 @@ const ICON_COLORS = [
 ];
 
 export default function HowItWorks() {
+  const t = useT();
+
   return (
     <section id="how" className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
       <SectionHeading
-        eyebrow="Как это работает"
-        title="От регистрации до первой сделки"
-        subtitle="Четыре шага - и терминал торгует на твоём биржевом счёте. Без оплат и заявок."
+        eyebrow={t.landing.how.eyebrow}
+        title={t.landing.how.title}
+        subtitle={t.landing.how.subtitle}
       />
 
       <div className="relative mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -40,6 +45,7 @@ export default function HowItWorks() {
 
         {HOW_STEPS.map((step, i) => {
           const Icon = ICONS[step.icon];
+          const copy = t.landing.how.steps[i];
           const col = ICON_COLORS[i % ICON_COLORS.length];
           const grad = GRADIENTS[i % GRADIENTS.length];
           return (
@@ -71,8 +77,8 @@ export default function HowItWorks() {
                     <Icon className="h-7 w-7" />
                   </span>
 
-                  <h3 className="mt-5 text-lg font-bold text-text-primary">{step.title}</h3>
-                  <p className="mt-2.5 flex-1 text-sm leading-relaxed text-text-secondary">{step.text}</p>
+                  <h3 className="mt-5 text-lg font-bold text-text-primary">{copy.title}</h3>
+                  <p className="mt-2.5 flex-1 text-sm leading-relaxed text-text-secondary">{copy.text}</p>
 
                   {/* Нижний акцент */}
                   <div className={`mt-5 h-0.5 w-8 rounded-full ${col.text} bg-current opacity-40 transition-all duration-300 group-hover:w-full group-hover:opacity-70`} />

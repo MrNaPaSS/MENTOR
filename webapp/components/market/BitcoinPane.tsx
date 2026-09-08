@@ -15,6 +15,7 @@
 // расхождение в полпроцента между «ценой на карточке» и ценой в терминале -
 // это вопрос, которого быть не должно.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type Derivatives, type OnChainStats } from "@/lib/api";
 import { money } from "@/lib/scalping";
@@ -76,6 +77,7 @@ function Stat({
 }
 
 export default function BitcoinPane({ className = "" }: { className?: string }) {
+  const t = useT();
   const [chain, setChain] = useState<OnChainStats | null>(null);
   const [deriv, setDeriv] = useState<Derivatives | null>(null);
   const [state, setState] = useState<PaneState>("loading");
@@ -126,18 +128,18 @@ export default function BitcoinPane({ className = "" }: { className?: string }) 
 
   return (
     <Pane
-      title="Биткоин"
-      hint="Цена, позиции и состояние сети"
-      badge={<LiveBadge live={!!deriv} label={deriv ? "30 сек" : "Нет цены"} />}
+      title={t.market.bitcoin.title}
+      hint={t.market.bitcoin.hint}
+      badge={<LiveBadge live={!!deriv} label={deriv ? t.market.bitcoin.live30s : t.market.bitcoin.noPrice} />}
       state={state}
-      emptyNote="Обозреватель сети не ответил"
+      emptyNote={t.market.bitcoin.emptyNote}
       className={className}
     >
       <div className="space-y-4">
         {/* Цена: то, ради чего смотрят первым делом. */}
         <div className="flex items-end justify-between gap-3">
           <div>
-            <PaneLabel>Цена на бирже</PaneLabel>
+            <PaneLabel>{t.market.bitcoin.exchangePrice}</PaneLabel>
             <div className="font-mono text-[26px] font-bold leading-none tabular-nums text-[var(--pane-text)]">
               {deriv?.lastPrice
                 ? `$${deriv.lastPrice.toLocaleString("en-US", { maximumFractionDigits: 1 })}`
@@ -155,7 +157,7 @@ export default function BitcoinPane({ className = "" }: { className?: string }) 
                       ? "var(--pane-down)"
                       : "var(--pane-muted)",
               }}
-              title="Изменение цены за сутки"
+              title={t.market.bitcoin.change24hTitle}
             >
               {change > 0 ? "+" : ""}
               {change.toFixed(2)}%
@@ -166,20 +168,20 @@ export default function BitcoinPane({ className = "" }: { className?: string }) 
         {/* Позиции: сколько денег стоит на этой цене и кто за них платит. */}
         <div className="grid grid-cols-2 gap-3 border-t border-[var(--pane-border)] pt-3">
           <Stat
-            label="Открытый интерес"
+            label={t.market.bitcoin.openInterest.label}
             value={deriv?.openInterestUsd ? `$${money(deriv.openInterestUsd)}` : "-"}
-            hint="Сколько денег стоит в незакрытых позициях по фьючерсу"
+            hint={t.market.bitcoin.openInterest.hint}
           />
           <Stat
-            label="Ставка 8ч"
+            label={t.market.bitcoin.funding8h}
             value={funding === null ? "-" : `${funding > 0 ? "+" : ""}${funding.toFixed(4)}%`}
             tone={funding === null ? "muted" : funding > 0 ? "down" : "up"}
             hint={
               funding === null
-                ? "Биржа не назвала ставку"
+                ? t.market.bitcoin.noRate
                 : funding > 0
-                  ? "Ставка положительная: платят лонги"
-                  : "Ставка отрицательная: платят шорты"
+                  ? t.market.bitcoin.longsPay
+                  : t.market.bitcoin.shortsPay
             }
           />
         </div>
@@ -189,34 +191,34 @@ export default function BitcoinPane({ className = "" }: { className?: string }) 
             {/* Сеть: комиссии за перевод прямо сейчас. */}
             <div className="border-t border-[var(--pane-border)] pt-3">
               <div className="mb-2">
-                <PaneLabel>Комиссия за перевод, сатоши за байт</PaneLabel>
+                <PaneLabel>{t.market.bitcoin.feeLabel}</PaneLabel>
               </div>
               <div className="grid grid-cols-4 gap-2">
-                <Fee label="Срочно" value={chain.fees.fastest} hint="Попасть в ближайший блок" />
-                <Fee label="Полчаса" value={chain.fees.half_hour} hint="Подтверждение примерно за полчаса" />
-                <Fee label="Час" value={chain.fees.hour} hint="Подтверждение примерно за час" />
-                <Fee label="Не срочно" value={chain.fees.economy} hint="Когда время не важно" />
+                <Fee label={t.market.bitcoin.feeFastest.label} value={chain.fees.fastest} hint={t.market.bitcoin.feeFastest.hint} />
+                <Fee label={t.market.bitcoin.feeHalfHour.label} value={chain.fees.half_hour} hint={t.market.bitcoin.feeHalfHour.hint} />
+                <Fee label={t.market.bitcoin.feeHour.label} value={chain.fees.hour} hint={t.market.bitcoin.feeHour.hint} />
+                <Fee label={t.market.bitcoin.feeEconomy.label} value={chain.fees.economy} hint={t.market.bitcoin.feeEconomy.hint} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 border-t border-[var(--pane-border)] pt-3">
               <Stat
-                label="Мощность сети"
+                label={t.market.bitcoin.hashrate.label}
                 value={chain.hash_rate_ehs.toLocaleString("ru-RU")}
                 unit="EH/s"
-                hint="Совокупная вычислительная мощность майнеров"
+                hint={t.market.bitcoin.hashrate.hint}
               />
               <Stat
-                label="Переводов за сутки"
+                label={t.market.bitcoin.txPerDay.label}
                 value={chain.tx_count_24h.toLocaleString("ru-RU")}
-                hint="Сколько транзакций сеть провела за сутки"
+                hint={t.market.bitcoin.txPerDay.hint}
               />
             </div>
 
             {/* Сложность: самый медленный показатель панели - и потому последний. */}
             <div className="border-t border-[var(--pane-border)] pt-3">
               <div className="flex items-baseline justify-between">
-                <PaneLabel>Пересчёт сложности</PaneLabel>
+                <PaneLabel>{t.market.bitcoin.retarget}</PaneLabel>
                 <span
                   className="font-mono text-[12px] font-semibold tabular-nums"
                   style={{
@@ -227,7 +229,7 @@ export default function BitcoinPane({ className = "" }: { className?: string }) 
                           ? "var(--pane-down)"
                           : "var(--pane-muted)",
                   }}
-                  title="Насколько изменится сложность добычи в конце периода"
+                  title={t.market.bitcoin.retargetTitle}
                 >
                   {diff > 0 ? "+" : ""}
                   {diff.toFixed(2)}%
@@ -237,7 +239,7 @@ export default function BitcoinPane({ className = "" }: { className?: string }) 
                 <PaneBar fill={chain.retarget_progress_pct / 100} tone="gold" />
               </div>
               <div className="mt-1 text-right text-[10px] text-[var(--pane-muted)]">
-                период пройден на {chain.retarget_progress_pct.toFixed(1)}%
+                {t.market.bitcoin.retargetProgress(chain.retarget_progress_pct.toFixed(1))}
               </div>
             </div>
           </>

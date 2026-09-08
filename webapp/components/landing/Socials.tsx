@@ -1,23 +1,28 @@
+"use client";
+
 import { SiTelegram } from "@icons-pack/react-simple-icons";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
 import { SOCIAL_LINKS } from "@/lib/content";
+import { useT } from "@/lib/i18n";
 
 const SOCIALS = [
-  { name: "КАНАЛ", href: SOCIAL_LINKS.telegram, Icon: SiTelegram },
-  { name: "АКАДЕМИЯ", href: "https://t.me/moneyhoney7_bot", Icon: SiTelegram },
-];
+  { key: "channel", href: SOCIAL_LINKS.telegram, Icon: SiTelegram },
+  { key: "academy", href: SOCIAL_LINKS.academyBot, Icon: SiTelegram },
+] as const;
 
 export default function Socials() {
+  const t = useT();
+
   return (
     <section className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
-      <SectionHeading eyebrow="Соцсети" title="Будь в курсе сделок" />
+      <SectionHeading eyebrow={t.landing.socials.eyebrow} title={t.landing.socials.title} />
 
       <div className="mt-12 flex justify-center gap-4">
         {SOCIALS.map((s, i) => {
           const { Icon } = s;
           return (
-            <Reveal key={s.name} delay={i * 0.1}>
+            <Reveal key={s.key} delay={i * 0.1}>
               <a
                 href={s.href}
                 target="_blank"
@@ -31,7 +36,7 @@ export default function Socials() {
                   <Icon className="h-6 w-6" />
                 </span>
                 <div className="text-base font-bold tracking-widest text-text-primary">
-                  {s.name}
+                  {t.landing.socials[s.key]}
                 </div>
               </a>
             </Reveal>

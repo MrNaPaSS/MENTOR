@@ -17,6 +17,7 @@
 // одинаковых половин, поэтому в конце пути вторая половина стоит ровно там,
 // откуда начинала первая, и возврат в ноль не виден.
 
+import { useT } from "@/lib/i18n";
 import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { Crown } from "lucide-react";
@@ -235,6 +236,7 @@ const Pair = memo(function Pair({
   row: ScreenerRow;
   crowned?: boolean;
 }) {
+  const t = useT();
   const pos = row.change_pct >= 0;
   const sym = row.symbol.replace(/USDT$/, "");
   // Крупная плита - золотом. Тем же цветом она отмечена в стакане и на
@@ -250,9 +252,9 @@ const Pair = memo(function Pair({
       onClick={() => askSymbol(row.symbol)}
       title={[
         sym,
-        crowned ? "самая крупная плита в списке" : null,
-        heavy ? `плита ${money(row.wall_notional)}` : null,
-        "открыть график и стакан",
+        crowned ? t.market.ticker.biggestWall : null,
+        heavy ? t.market.ticker.wall(money(row.wall_notional)) : null,
+        t.market.ticker.openChart,
       ]
         .filter(Boolean)
         .join(" · ")}

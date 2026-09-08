@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Crown, TrendingUp, Medal } from "lucide-react";
+import { useT } from "@/lib/i18n";
 import { api, LeaderboardRow } from "@/lib/api";
 import { fmtUsd, modeLabel } from "@/lib/format";
 
@@ -25,7 +26,10 @@ const MEDALS_DATA = [
   { emoji: "🥉", label: "3rd", color: "#CD7F32", shadow: "0 0 20px rgba(205,127,50,0.3)" },
 ];
 
-const PERIODS = ["Всё время", "Месяц", "Неделя"] as const;
+/** Период выборки. Ключ, а не подпись: подписи переводятся. */
+type Period = "all" | "month" | "week";
+
+const PERIODS: Period[] = ["all", "month", "week"];
 
 interface LeaderboardProps {
   limit?: number;
@@ -33,9 +37,16 @@ interface LeaderboardProps {
 }
 
 export default function Leaderboard({ limit, showHeading = true }: LeaderboardProps) {
+  const t = useT();
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [period, setPeriod] = useState<(typeof PERIODS)[number]>("Всё время");
+  const [period, setPeriod] = useState<Period>("all");
+
+  const periodLabel: Record<Period, string> = {
+    all: t.tools.leaderboard.periodAll,
+    month: t.tools.leaderboard.periodMonth,
+    week: t.tools.leaderboard.periodWeek,
+  };
 
   useEffect(() => {
     api.leaderboard()
@@ -58,7 +69,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
         {showHeading && (
           <div className="flex items-center gap-2">
             <Crown className="h-5 w-5 text-accent-gold" />
-            <h3 className="text-xl font-bold text-text-primary">Лидерборд</h3>
+            <h3 className="text-xl font-bold text-text-primary">{t.tools.leaderboard.heading}</h3>
           </div>
         )}
         <div className="flex gap-1 rounded-xl border border-border bg-bg-panel/60 p-1">
@@ -70,7 +81,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
                 period === p ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted hover:text-text-primary"
               }`}
             >
-              {p}
+              {periodLabel[p]}
             </button>
           ))}
         </div>
@@ -186,7 +197,7 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
       {/* Footer */}
       <div className="flex items-center gap-2 border-t border-border px-5 py-3 text-xs text-text-muted">
         <Medal className="h-3.5 w-3.5 text-accent-gold" />
-        Топ-3 отмечены медалями · Баланс USDT · Обновляется каждые 24ч
+        {t.tools.leaderboard.footnote}
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import { tradingStatus, type TradingStatus } from "@/lib/trading";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import { setTerminalTheme, useTerminalTheme } from "@/lib/terminalTheme";
 import { setSoundOn, useSoundOn } from "@/lib/notifySound";
+import { intlLocale, setLocale, useLocale, useT, type Locale } from "@/lib/i18n";
 
 const ADMIN_WEEX_UID = "6613031308";
 
@@ -20,6 +21,8 @@ const CARD = "rounded-3xl border border-border bg-bg-card/60 p-6";
 
 export default function ProfilePage() {
   const router = useRouter();
+  const t = useT();
+  const locale = useLocale();
   const [p, setP] = useState<Profile | null>(null);
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [saving, setSaving] = useState(false);
@@ -44,6 +47,19 @@ export default function ProfilePage() {
       .then(setExchange)
       .catch(() => {});
   }, []);
+
+  /**
+   * Сменить язык интерфейса.
+   *
+   * Локальный выбор переключается сразу, не дожидаясь ответа сервера: человек
+   * нажал на кнопку и вправе увидеть результат немедленно, а не через сетевую
+   * задержку. На сервер он уезжает тем же PATCH, что и остальные настройки -
+   * чтобы вернуться вместе с профилем на другом устройстве.
+   */
+  function changeLocale(next: Locale) {
+    setLocale(next);
+    void patch({ language: next });
+  }
 
   async function patch(body: Partial<Profile>) {
     const token = getAccessToken();
@@ -100,7 +116,7 @@ export default function ProfilePage() {
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={`${API_URL}${p.avatar_url}`}
-                alt={p.username || "аватар"}
+                alt={p.username || t.profile.avatarAlt}
                 className="h-full w-full object-cover"
               />
             ) : (
@@ -121,7 +137,7 @@ export default function ProfilePage() {
         {/* Balance */}
         <div className="mt-5 flex items-end justify-between">
           <div>
-            <div className="text-xs font-medium text-text-muted uppercase tracking-wider">Баланс</div>
+            <div className="text-xs font-medium text-text-muted uppercase tracking-wider">{t.profile.balance}</div>
             <div className="mt-1 font-mono text-3xl font-black tabular-nums text-text-primary">
               {fmtUsd(p.balance_usdt)}
               <span className="ml-1.5 text-base font-semibold text-text-muted">USDT</span>
@@ -131,10 +147,10 @@ export default function ProfilePage() {
                 что приложение биржи, другая приходит с задержкой. */}
             <div className="mt-0.5 text-[11px] text-text-muted">
               {p.balance_source === "api_keys"
-                ? "● По вашим ключам WEEX"
+                ? t.profile.balanceFromKeys
                 : p.balance_source === "affiliate_api"
-                  ? "● Синхронизировано с WEEX"
-                  : "● Введено вручную"}
+                  ? t.profile.balanceFromAffiliate
+                  : t.profile.balanceManual}
             </div>
           </div>
           <button
@@ -143,7 +159,7 @@ export default function ProfilePage() {
             className="flex items-center gap-1.5 rounded-xl border border-accent-cyan/25 bg-accent-cyan/10 px-3 py-2 text-xs font-semibold text-accent-cyan transition-all hover:bg-accent-cyan/15 disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            Обновить
+            {t.common.refresh}
           </button>
         </div>
       </div>
@@ -154,14 +170,14 @@ export default function ProfilePage() {
       <div className={CARD}>
         <div className="mb-4 flex items-center justify-between">
           <span className="text-sm font-semibold uppercase tracking-widest text-text-muted">
-            Биржевой счёт
+            {t.profile.exchangeTitle}
           </span>
           <span
             className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
               exchange?.connected ? "bg-success/10 text-success" : "bg-bg-panel text-text-muted"
             }`}
           >
-            {exchange?.connected ? "подключён" : "не подключён"}
+            {exchange?.connected ? t.profile.connected : t.profile.disconnected}
           </span>
         </div>
 
@@ -174,15 +190,19 @@ export default function ProfilePage() {
             <div className="mt-0.5 text-[12px] text-text-muted">
               {exchange?.connected ? (
                 <>
-                  Ключ ···{exchange.key_tail}
+                  {t.profile.keyTail(exchange.key_tail)}
                   {exchange.updated_at && (
-                    <> · с {new Date(exchange.updated_at).toLocaleDateString("ru")}</>
+                    <>
+                      {t.profile.keySince(
+                        new Date(exchange.updated_at).toLocaleDateString(intlLocale(locale))
+                      )}
+                    </>
                   )}
                 </>
               ) : exchange && !exchange.enabled ? (
-                "Хранилище ключей не настроено на сервере"
+                t.profile.vaultOff
               ) : (
-                "Без ключей торговля из терминала недоступна"
+                t.profile.noKeys
               )}
             </div>
           </div>
@@ -190,14 +210,12 @@ export default function ProfilePage() {
             onClick={() => setKeysOpen(true)}
             className="ml-auto shrink-0 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-text-secondary transition-colors hover:border-accent-cyan/40 hover:text-text-primary"
           >
-            {exchange?.connected ? "Изменить" : "Подключить"}
+            {exchange?.connected ? t.common.change : t.common.connect}
           </button>
         </div>
 
         <p className="mt-4 text-[11px] leading-relaxed text-text-muted">
-          Ключи хранятся зашифрованными и в браузер не возвращаются - только
-          последние символы для опознания. Создавайте их с правом на торговлю и
-          без права на вывод средств.
+          {t.profile.keysNote}
         </p>
       </div>
 
@@ -211,21 +229,21 @@ export default function ProfilePage() {
           мне турбо» и ставились наугад. Данные никуда не делись - ими
           по-прежнему пользуются рассылка сигналов и калькулятор. */}
       <div className={CARD}>
-        <div className="mb-5 text-sm font-semibold uppercase tracking-widest text-text-muted">Настройки</div>
+        <div className="mb-5 text-sm font-semibold uppercase tracking-widest text-text-muted">{t.profile.settings}</div>
 
         <div className="space-y-5">
 
           {/* Тема. Общая на весь кабинет: терминал светлеет вместе с шапкой и
               страницами, иначе панели выглядят вырезанными из другого
               приложения. */}
-          <SettingRow label="Тема оформления">
+          <SettingRow label={t.profile.theme}>
             <div
               className="flex rounded-xl p-1"
               style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
             >
               {([
-                ["light", "Светлая", Sun],
-                ["dark", "Тёмная", Moon],
+                ["light", t.profile.themeLight, Sun],
+                ["dark", t.profile.themeDark, Moon],
               ] as const).map(([value, label, Icon]) => {
                 const active = theme === value;
                 return (
@@ -248,17 +266,17 @@ export default function ProfilePage() {
           </SettingRow>
 
           {/* Язык */}
-          <SettingRow label="Язык интерфейса">
+          <SettingRow label={t.profile.language}>
             <div
               className="flex rounded-xl p-1"
               style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
             >
               {(["ru", "en"] as const).map((l) => {
-                const active = p.language === l;
+                const active = locale === l;
                 return (
                   <button
                     key={l}
-                    onClick={() => patch({ language: l })}
+                    onClick={() => changeLocale(l)}
                     disabled={saving}
                     className={`relative flex-1 rounded-lg py-2 text-sm font-bold uppercase tracking-wider transition-all duration-200 disabled:opacity-60 ${
                       active ? "bg-bg-panel text-accent-cyan" : "text-text-muted hover:text-text-secondary"
@@ -277,14 +295,14 @@ export default function ProfilePage() {
           {/* Звук событий. Настройка человека, а не страницы: раньше она жила
               внутри рабочего места терминала, и выключить её можно было только
               оттуда. */}
-          <SettingRow label="Звук событий">
+          <SettingRow label={t.profile.sound}>
             <div
               className="flex rounded-xl p-1"
               style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
             >
               {([
-                [true, "Вкл", Volume2],
-                [false, "Выкл", VolumeX],
+                [true, t.common.on, Volume2],
+                [false, t.common.off, VolumeX],
               ] as const).map(([value, label, Icon]) => {
                 const active = sound === value;
                 return (
@@ -308,11 +326,11 @@ export default function ProfilePage() {
 
           {/* Подпись на карточке. Отдельно от ника Telegram: тот переписывается
               при каждом входе, а карточку показывают другим. */}
-          <SettingRow label="Ник на карточке">
+          <SettingRow label={t.profile.cardName}>
             <div className="flex items-center gap-2">
               <input
                 defaultValue={p.card_name ?? ""}
-                placeholder={p.username || "как в Telegram"}
+                placeholder={p.username || t.profile.cardNamePlaceholder}
                 maxLength={32}
                 onBlur={(e) => {
                   const next = e.target.value.trim();
@@ -323,7 +341,7 @@ export default function ProfilePage() {
             </div>
           </SettingRow>
           <p className="-mt-2 text-right text-[11px] text-text-muted">
-            Пусто — подпись возьмётся из Telegram
+            {t.profile.cardNameHint}
           </p>
         </div>
       </div>
@@ -338,7 +356,7 @@ export default function ProfilePage() {
             <div className="grid h-9 w-9 place-items-center rounded-xl border border-accent-gold/30 bg-accent-gold/15">
               <ShieldCheck className="h-4 w-4 text-accent-gold" />
             </div>
-            <span className="font-bold text-text-primary">Админ панель</span>
+            <span className="font-bold text-text-primary">{t.profile.adminPanel}</span>
           </div>
           <span className="text-accent-gold">→</span>
         </Link>
@@ -349,7 +367,7 @@ export default function ProfilePage() {
         onClick={() => { logout(); router.push("/"); }}
         className="flex w-full items-center justify-center gap-2 rounded-3xl border border-danger/25 bg-danger/10 py-3.5 text-sm font-semibold text-danger transition-all duration-200 hover:bg-danger/15"
       >
-        <LogOut className="h-4 w-4" /> Выйти из аккаунта
+        <LogOut className="h-4 w-4" /> {t.profile.logoutAccount}
       </button>
 
       {/* Окно ключей - то же самое, что в терминале. Оно красится палитрой

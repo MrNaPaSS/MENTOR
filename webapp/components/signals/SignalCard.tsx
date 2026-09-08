@@ -5,6 +5,8 @@ import { TrendingUp, TrendingDown, CandlestickChart, ExternalLink } from "lucide
 import { SignalOut } from "@/lib/api";
 import { fmtUsd, isLong } from "@/lib/format";
 import ChartOverlay from "@/components/market/ChartOverlay";
+import { useLocale, useT } from "@/lib/i18n";
+import { weexFuturesUrl } from "@/lib/content";
 
 function tvImageUrl(url: string): string | null {
   const m = url.match(/tradingview\.com\/x\/([A-Za-z0-9]+)/);
@@ -169,6 +171,8 @@ interface Props {
 }
 
 export default function SignalCard({ signal: s, balance = 1000, currentPrice }: Props) {
+  const t = useT();
+  const locale = useLocale();
   const [chartOpen, setChartOpen] = useState(false);
 
   const calc = calcPosition(s, balance);
@@ -202,7 +206,7 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
             </div>
             <div className="flex flex-col leading-tight">
               <span className="font-mono text-[17px] font-extrabold tracking-tight text-text-primary">{s.symbol}</span>
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-text-primary/30">Плечо ×{s.leverage}</span>
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-text-primary/30">{t.signals.leverage(s.leverage)}</span>
             </div>
           </div>
           <div
@@ -231,8 +235,8 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
 
           {/* Levels */}
           <div className="grid grid-cols-4 divide-x divide-white/[0.05] overflow-hidden rounded-xl border border-border bg-bg-panel/60">
-            <Metric label="Вход" value={s.entry_price ? fmtUsd(parseFloat(s.entry_price), 4) : "-"} tone="text-text-primary" />
-            <Metric label="Стоп" value={s.stop_loss ? fmtUsd(parseFloat(s.stop_loss), 4) : "-"} tone="text-danger" />
+            <Metric label={t.signals.entry} value={s.entry_price ? fmtUsd(parseFloat(s.entry_price), 4) : "-"} tone="text-text-primary" />
+            <Metric label={t.signals.stop} value={s.stop_loss ? fmtUsd(parseFloat(s.stop_loss), 4) : "-"} tone="text-danger" />
             <Metric label="TP1" value={s.tp1 ? fmtUsd(parseFloat(s.tp1), 4) : "-"} tone="text-success" />
             <Metric label="TP2/3" value={(s.tp3 || s.tp2) ? fmtUsd(parseFloat(s.tp3 || s.tp2!), 4) : "-"} tone="text-accent-cyan" />
           </div>
@@ -241,10 +245,10 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
           {calc && (
             <div className="overflow-hidden rounded-xl border border-border bg-bg-panel/60">
               <div className="grid grid-cols-3 divide-x divide-white/[0.05]">
-                <Metric label="Маржа" value={`$${calc.margin.toFixed(0)}`} tone="text-text-primary/80" />
-                <Metric label="Риск" value={`-$${calc.risk.toFixed(0)}`} tone="text-danger" />
+                <Metric label={t.signals.margin} value={`$${calc.margin.toFixed(0)}`} tone="text-text-primary/80" />
+                <Metric label={t.signals.risk} value={`-$${calc.risk.toFixed(0)}`} tone="text-danger" />
                 <Metric
-                  label={calc.tp3_profit > 0 ? "Профит TP3" : calc.tp2_profit > 0 ? "Профит TP2" : "Профит TP1"}
+                  label={t.signals.profitTp(calc.tp3_profit > 0 ? 3 : calc.tp2_profit > 0 ? 2 : 1)}
                   value={`+$${bestProfit.toFixed(0)}`}
                   tone="text-success"
                 />
@@ -261,21 +265,21 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
           {/* Actions */}
           <div className="flex items-center gap-2 pt-0.5">
             <a
-              href={`https://www.weex.com/ru/futures/${s.symbol}`}
+              href={weexFuturesUrl(s.symbol, locale)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent-cyan py-2.5 text-[12px] font-bold tracking-wide text-bg-deep transition-all duration-200 hover:brightness-110"
             >
-              Войти в сделку
+              {t.signals.enterTrade}
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
             <button
               onClick={() => setChartOpen(true)}
-              title="Открыть график и стакан"
+              title={t.signals.chartTitle}
               className="flex items-center justify-center gap-1.5 rounded-xl bg-bg-panel/60 px-3.5 py-2.5 text-[12px] font-semibold text-text-primary/50 ring-1 ring-inset ring-white/[0.07] transition-all duration-150 hover:text-text-primary/80 hover:ring-white/[0.16]"
             >
               <CandlestickChart className="h-3.5 w-3.5" />
-              График
+              {t.signals.chart}
             </button>
           </div>
         </div>

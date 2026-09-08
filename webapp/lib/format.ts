@@ -1,4 +1,11 @@
 ﻿// Форматтеры значений (ТЗ §10.2 - числа моноширинным шрифтом, единый формат).
+//
+// Словами говорят не только числа: «5 мин назад», «умеренный», «академия» -
+// это тоже интерфейс, и на английском он обязан быть английским. Язык берётся
+// в момент вызова: форматтер зовут из компонента, который на смену языка уже
+// подписан, и второй подписки ему не нужно.
+
+import { dict, intlLocale, type Locale } from "@/lib/i18n";
 
 export function fmtUsd(
   v: string | number | null | undefined,
@@ -23,8 +30,9 @@ export function fmtRR(v: string | number): string {
   return `1:${Number(v).toFixed(1)}`;
 }
 
-export function modeLabel(mode: string): string {
-  return mode === "turbo" ? "ТУРБО" : "УМЕРЕННЫЙ";
+export function modeLabel(mode: string, locale?: Locale): string {
+  const t = dict(locale).format;
+  return mode === "turbo" ? t.modeTurbo : t.modeModerate;
 }
 
 export function isLong(direction: string): boolean {
@@ -38,39 +46,44 @@ export function maskUid(uid: string | null | undefined): string {
 }
 
 /** Когда это было, словами: «5 мин назад», «3 дня назад». */
-export function fmtAgo(iso: string | null | undefined, now = Date.now()): string {
-  if (!iso) return "никогда";
+export function fmtAgo(
+  iso: string | null | undefined,
+  now = Date.now(),
+  locale?: Locale
+): string {
+  const t = dict(locale).format.ago;
+  if (!iso) return t.never;
   const ts = Date.parse(iso);
   if (Number.isNaN(ts)) return "-";
 
   const sec = Math.floor((now - ts) / 1000);
-  if (sec < 0) return "только что";
-  if (sec < 60) return "только что";
-  if (sec < 3600) return `${Math.floor(sec / 60)} мин назад`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)} ч назад`;
+  if (sec < 60) return t.now;
+  if (sec < 3600) return t.minutes(Math.floor(sec / 60));
+  if (sec < 86400) return t.hours(Math.floor(sec / 3600));
 
   const days = Math.floor(sec / 86400);
-  if (days === 1) return "вчера";
-  if (days < 30) return `${days} дн назад`;
+  if (days === 1) return t.yesterday;
+  if (days < 30) return t.days(days);
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months} мес назад`;
-  return `${Math.floor(days / 365)} г назад`;
+  if (months < 12) return t.months(months);
+  return t.years(Math.floor(days / 365));
 }
 
 /** Дата и время для подсказки: 26.07.2026, 17:08. */
-export function fmtDateTime(iso: string | null | undefined): string {
+export function fmtDateTime(iso: string | null | undefined, locale?: Locale): string {
   if (!iso) return "-";
   const ts = Date.parse(iso);
   if (Number.isNaN(ts)) return "-";
-  return new Date(ts).toLocaleString("ru-RU", {
+  return new Date(ts).toLocaleString(intlLocale(locale), {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
 }
 
 /** Откуда появилась запись ученика. */
-export function sourceLabel(via: string): string {
-  if (via === "academy") return "академия";
-  if (via === "web") return "сайт";
-  return "бот";
+export function sourceLabel(via: string, locale?: Locale): string {
+  const t = dict(locale).format.source;
+  if (via === "academy") return t.academy;
+  if (via === "web") return t.web;
+  return t.bot;
 }

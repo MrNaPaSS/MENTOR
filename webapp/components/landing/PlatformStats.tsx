@@ -9,6 +9,7 @@ import SectionHeading from "@/components/ui/SectionHeading";
 import Counter from "@/components/ui/Counter";
 import Reveal from "@/components/ui/Reveal";
 import { api, PublicStats } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 const MOCK: PublicStats = {
   total_signals: 1000,
@@ -42,6 +43,7 @@ interface StatCardDef {
 }
 
 export default function PlatformStats() {
+  const t = useT();
   const [stats, setStats] = useState<PublicStats | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -55,20 +57,20 @@ export default function PlatformStats() {
   const src = stats || MOCK;
 
   const cards: StatCardDef[] = [
-    { label: "Винрейт", value: Math.max(Number(src.winrate) || 0, 83), suffix: "%", decimals: 0, icon: Target, accent: "gold" },
-    { label: "Лучший сигнал RR", value: 8.2, suffix: "x", decimals: 1, icon: Trophy, accent: "gold" },
-    { label: "Макс. движение", value: 80, suffix: "%", decimals: 0, icon: Percent, accent: "gold" },
-    { label: "Объём торгов ($)", value: 12.4, suffix: "M", decimals: 1, icon: DollarSign, accent: "cyan" },
-    { label: "Avg прибыль/сделку", value: 4.7, suffix: "%", decimals: 1, icon: TrendingUp, accent: "cyan" },
-    { label: "На рынке (лет)", value: 6, suffix: "+", decimals: 0, icon: Zap, accent: "cyan" },
+    { label: t.landing.stats.winrate, value: Math.max(Number(src.winrate) || 0, 83), suffix: "%", decimals: 0, icon: Target, accent: "gold" },
+    { label: t.landing.stats.bestRR, value: 8.2, suffix: "x", decimals: 1, icon: Trophy, accent: "gold" },
+    { label: t.landing.stats.maxMove, value: 80, suffix: "%", decimals: 0, icon: Percent, accent: "gold" },
+    { label: t.landing.stats.volume, value: 12.4, suffix: "M", decimals: 1, icon: DollarSign, accent: "cyan" },
+    { label: t.landing.stats.avgProfit, value: 4.7, suffix: "%", decimals: 1, icon: TrendingUp, accent: "cyan" },
+    { label: t.landing.stats.yearsOnMarket, value: 6, suffix: "+", decimals: 0, icon: Zap, accent: "cyan" },
   ];
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
       <SectionHeading
-        eyebrow="Статистика платформы"
-        title="Цифры, а не обещания"
-        subtitle="Данные платформы в реальном времени - без приукрашивания."
+        eyebrow={t.landing.stats.eyebrow}
+        title={t.landing.stats.title}
+        subtitle={t.landing.stats.subtitle}
       />
 
       <div className="mt-14 grid grid-cols-2 gap-4 md:grid-cols-3">

@@ -6,6 +6,7 @@ import { Lock } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
 import { API_URL } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 function tvImageUrl(url: string): string | null {
   const m = url.match(/tradingview\.com\/x\/([A-Za-z0-9]+)/);
@@ -21,7 +22,7 @@ interface PreviewItem {
   created_at: string;
 }
 
-function ChartCard({ item }: { item: PreviewItem }) {
+function ChartCard({ item, unlock }: { item: PreviewItem; unlock: string }) {
   const img = tvImageUrl(item.chart_url);
   if (!img) return null;
 
@@ -64,7 +65,7 @@ function ChartCard({ item }: { item: PreviewItem }) {
             href="/login"
             className="text-[12px] font-semibold text-accent-cyan/80 transition hover:text-accent-cyan"
           >
-            Войти и читать полностью →
+            {unlock}
           </Link>
         </div>
       </div>
@@ -89,6 +90,7 @@ function SkeletonCard() {
 }
 
 export default function PublicSignals() {
+  const t = useT();
   const [items, setItems] = useState<PreviewItem[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -105,9 +107,9 @@ export default function PublicSignals() {
   return (
     <section id="signals" className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
       <SectionHeading
-        eyebrow="Анализы ментора"
-        title="Разборы рынка - только для участников"
-        subtitle="Графики с разметкой и мыслями ментора. Полный доступ - после входа."
+        eyebrow={t.landing.publicSignals.eyebrow}
+        title={t.landing.publicSignals.title}
+        subtitle={t.landing.publicSignals.subtitle}
       />
 
       <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -117,7 +119,7 @@ export default function PublicSignals() {
 
         {loaded && items.map((item, i) => (
           <Reveal key={item.id} delay={i * 0.08}>
-            <ChartCard item={item} />
+            <ChartCard item={item} unlock={t.landing.publicSignals.unlock} />
           </Reveal>
         ))}
       </div>

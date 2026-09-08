@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/lib/api";
 
@@ -68,6 +69,7 @@ interface Props {
 }
 
 export default function OrderBook({ symbol, rows = 14, compact = false }: Props) {
+  const t = useT();
   const [tab, setTab] = useState<Tab>("book");
   const [data, setData] = useState<{ bids: unknown[]; asks: unknown[] } | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -135,7 +137,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
             tab === "book" ? "text-text-primary" : "text-text-muted hover:text-text-primary"
           }`}
         >
-          Книга ордеров
+          {t.market.orderBook.book}
         </span>
         <span
           onClick={() => setTab("trades")}
@@ -143,7 +145,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
             tab === "trades" ? "text-text-primary" : "text-text-muted hover:text-text-primary"
           }`}
         >
-          Сделки
+          {t.market.orderBook.trades}
         </span>
       </div>
 
@@ -181,8 +183,8 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
 
         {/* Column labels */}
         <div className="flex items-center border-b border-border/30 font-mono" style={{ height: 24 }}>
-          <span className="w-[28%] pl-3 text-[9px] uppercase tracking-wider text-text-muted">Время</span>
-          <span className="w-[28%] text-right text-[9px] uppercase tracking-wider text-text-muted">Цена</span>
+          <span className="w-[28%] pl-3 text-[9px] uppercase tracking-wider text-text-muted">{t.market.orderBook.time}</span>
+          <span className="w-[28%] text-right text-[9px] uppercase tracking-wider text-text-muted">{t.market.orderBook.price}</span>
           <span className="w-[22%] text-right text-[9px] uppercase tracking-wider text-text-muted">{ticker}</span>
           <span className="w-[22%] pr-3 text-right text-[9px] uppercase tracking-wider text-text-muted">USDT</span>
         </div>
@@ -191,7 +193,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
         <div className="flex flex-1 flex-col overflow-hidden">
           {trades.length === 0 ? (
             <div className="flex flex-1 items-center justify-center text-[11px] text-text-muted">
-              Загрузка…
+              {t.common.loading}
             </div>
           ) : (
             trades.map((t, i) => (
@@ -310,13 +312,13 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
       {/* Колонки */}
       <div className="flex items-center border-b border-border/30 font-mono" style={{ height: 24 }}>
         <span className="w-[42%] pl-3 text-[9px] uppercase tracking-wider text-text-muted">
-          Цена (USDT)
+          {t.market.orderBook.priceUsdt}
         </span>
         <span className="w-[30%] text-right text-[9px] uppercase tracking-wider text-text-muted">
-          Сумма ({ticker})
+          {t.market.orderBook.amount(ticker)}
         </span>
         <span className="w-[28%] pr-3 text-right text-[9px] uppercase tracking-wider text-text-muted">
-          Всего ({ticker})
+          {t.market.orderBook.total(ticker)}
         </span>
       </div>
 
@@ -343,7 +345,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
           {priceDir === "up" && <span className="text-[10px] text-success">▲</span>}
           {priceDir === "down" && <span className="text-[10px] text-danger">▼</span>}
         </div>
-        <span className="text-[9px] text-text-muted">Спред {spread}</span>
+        <span className="text-[9px] text-text-muted">{t.market.orderBook.spread(spread)}</span>
       </div>
 
       {/* Биды */}

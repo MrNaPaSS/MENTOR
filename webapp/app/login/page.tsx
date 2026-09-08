@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ArrowLeft, ShieldCheck, AlertTriangle, Loader2, Send } from "lucide-react";
 import Logo from "@/components/ui/Logo";
+import LocaleSwitch from "@/components/ui/LocaleSwitch";
 import { api } from "@/lib/api";
 import { setStudentTokens } from "@/lib/auth";
-import { SOCIAL_LINKS } from "@/lib/content";
+import { SOCIAL_LINKS, weexRegisterUrl } from "@/lib/content";
+import { useLocale, useT } from "@/lib/i18n";
 
 const OTP_LEN = 6;
 
@@ -27,6 +29,8 @@ function prettyPass(value: string): string {
 
 export default function LoginPage() {
   const router = useRouter();
+  const t = useT();
+  const locale = useLocale();
   // Telegram - основной путь: только через него UID биржи связывается с
   // человеком, а его ник попадает в подписи на карточках и снимках. Вход по
   // одному UID остаётся запасным и может быть закрыт на сервере.
@@ -88,9 +92,9 @@ export default function LoginPage() {
       const res = await api.requestCode(uid.trim());
       setStep(2);
       setResend(60);
-      if (res.code) setHint(`DEV: код ${res.code}`);
+      if (res.code) setHint(`DEV: ${res.code}`);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "UID не найден в системе");
+      setError(e instanceof Error ? e.message : t.auth.uidNotFound);
     } finally {
       setLoading(false);
     }
@@ -105,7 +109,7 @@ export default function LoginPage() {
       setSuccess(true);
       setTimeout(() => window.location.href = "/app/scalping", 700);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Неверный код");
+      setError(e instanceof Error ? e.message : t.auth.wrongCode);
       setLoading(false);
     }
   }
@@ -124,7 +128,7 @@ export default function LoginPage() {
     } catch (e: unknown) {
       // Причину сервер не уточняет намеренно: «истёк» и «нет такого» -
       // подсказка тому, кто перебирает.
-      setError(e instanceof Error ? e.message : "Пароль не подошёл");
+      setError(e instanceof Error ? e.message : t.auth.passFailed);
       setLoading(false);
     }
   }
@@ -162,26 +166,27 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute inset-0 bg-grid-faint [background-size:48px_48px] opacity-40 [mask-image:radial-gradient(60%_50%_at_50%_40%,black,transparent)]" />
 
       <div className="relative w-full max-w-md">
-        <div className="mb-6 flex justify-center">
+        <div className="mb-6 flex items-center justify-center gap-3">
           <Logo />
+          <LocaleSwitch />
         </div>
 
         <div className="rounded-2xl border border-border bg-bg-card/80 p-7 shadow-card backdrop-blur-xl">
-          <h1 className="text-2xl font-bold text-text-primary">Вход в NMNH Platform</h1>
+          <h1 className="text-2xl font-bold text-text-primary">{t.auth.title}</h1>
           <p className="mt-1 text-sm text-text-muted">
             {mode === "tg"
-              ? "Пароль выдаёт бот академии"
+              ? t.auth.subtitleTg
               : step === 1
-                ? "Авторизация по WEEX UID"
-                : "Подтверди вход кодом из Telegram"}
+                ? t.auth.subtitleUid
+                : t.auth.subtitleCode}
           </p>
 
           {mode === "tg" ? (
             <div className="mt-6 space-y-4">
               <ol className="space-y-1.5 text-sm text-text-secondary">
-                <li>1. Откройте бота академии и нажмите «Войти на сайт».</li>
-                <li>2. Бот проверит счёт и пришлёт пароль на пять минут.</li>
-                <li>3. Введите его здесь.</li>
+                {t.auth.steps.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
               </ol>
 
               <a
@@ -190,11 +195,11 @@ export default function LoginPage() {
                 rel="noopener noreferrer"
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-text-primary transition-colors hover:border-accent-cyan/40"
               >
-                <Send className="h-4 w-4" /> Открыть бота академии
+                <Send className="h-4 w-4" /> {t.auth.openBot}
               </a>
 
               <label className="block text-sm text-text-secondary">
-                Пароль из бота
+                {t.auth.passLabel}
                 <input
                   className={`input mt-1.5 text-center font-mono text-2xl tracking-[0.2em] ${
                     success ? "border-success" : error ? "border-danger" : ""
@@ -217,12 +222,12 @@ export default function LoginPage() {
                 />
               </label>
               <p className="text-xs text-text-muted">
-                Черту и регистр можно не соблюдать.
+                {t.auth.passHint}
               </p>
 
               {success ? (
                 <div className="flex items-center justify-center gap-2 text-sm font-medium text-success">
-                  <ShieldCheck className="h-5 w-5" /> Успешно! Перенаправляем…
+                  <ShieldCheck className="h-5 w-5" /> {t.auth.success}
                 </div>
               ) : (
                 <button
@@ -230,7 +235,7 @@ export default function LoginPage() {
                   onClick={() => void enterByPass(pass)}
                   disabled={loading || cleanPass(pass).length < PASS_LEN}
                 >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Войти"}
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t.auth.enter}
                 </button>
               )}
 
@@ -238,7 +243,7 @@ export default function LoginPage() {
           ) : step === 1 ? (
             <div className="mt-6 space-y-4">
               <label className="block text-sm text-text-secondary">
-                Ваш WEEX UID
+                {t.auth.uidLabel}
                 <input
                   className="input mt-1.5 font-mono text-lg"
                   placeholder="123456789"
@@ -250,7 +255,7 @@ export default function LoginPage() {
                 />
               </label>
               <p className="text-xs text-text-muted">
-                Где взять UID: WEEX → Профиль → UID (числовой идентификатор аккаунта).
+                {t.auth.uidHint}
               </p>
               <button
                 className="text-left text-xs text-accent-cyan transition hover:underline"
@@ -259,21 +264,20 @@ export default function LoginPage() {
                   setError(null);
                 }}
               >
-                ← Войти через бота академии
+                {t.auth.uidBackToBot}
               </button>
               <p className="text-xs text-text-muted">
-                Этот путь оставлен на крайний случай. Обычный вход - паролем из
-                бота академии.
+                {t.auth.uidFallbackNote}
               </p>
               <p className="text-xs text-text-muted">
-                Нет аккаунта WEEX?{" "}
+                {t.auth.noAccount}{" "}
                 <a
-                  href="https://www.weex.com/ru/register?vipCode=kaktotakxme"
+                  href={weexRegisterUrl(locale)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-accent-cyan underline-offset-2 hover:underline"
                 >
-                  Зарегистрироваться →
+                  {t.auth.registerLink}
                 </a>
               </p>
               <button
@@ -281,13 +285,13 @@ export default function LoginPage() {
                 onClick={requestCode}
                 disabled={loading || !uid}
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Получить код <ArrowRight className="h-4 w-4" /></>}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{t.auth.requestCode} <ArrowRight className="h-4 w-4" /></>}
               </button>
             </div>
           ) : (
             <div className="mt-6 space-y-5 animate-slide-down">
               <p className="text-sm text-text-secondary">
-                Код отправлен в Telegram бот{" "}
+                {t.auth.codeSentTo}{" "}
                 <span className="font-semibold text-accent-cyan">@nmnh_bot</span>
               </p>
               {hint && <p className="text-xs text-accent-gold">{hint}</p>}
@@ -314,7 +318,7 @@ export default function LoginPage() {
 
               {success ? (
                 <div className="flex items-center justify-center gap-2 text-sm font-medium text-success">
-                  <ShieldCheck className="h-5 w-5" /> Успешно! Перенаправляем…
+                  <ShieldCheck className="h-5 w-5" /> {t.auth.success}
                 </div>
               ) : (
                 <button
@@ -322,7 +326,7 @@ export default function LoginPage() {
                   onClick={() => verify(code)}
                   disabled={loading || code.length < OTP_LEN}
                 >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Войти"}
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t.auth.enter}
                 </button>
               )}
 
@@ -335,14 +339,14 @@ export default function LoginPage() {
                     setError(null);
                   }}
                 >
-                  <ArrowLeft className="h-4 w-4" /> Изменить UID
+                  <ArrowLeft className="h-4 w-4" /> {t.auth.changeUid}
                 </button>
                 <button
                   className="text-accent-cyan disabled:text-text-muted"
                   onClick={requestCode}
                   disabled={resend > 0}
                 >
-                  {resend > 0 ? `Отправить повторно (${resend}с)` : "Отправить повторно"}
+                  {resend > 0 ? t.auth.resendIn(resend) : t.auth.resend}
                 </button>
               </div>
             </div>

@@ -1,0 +1,77 @@
+export const tools = {
+  calculator: {
+    badge: "Free tool",
+    eyebrow: "Calculator",
+    title: "Size the position before you enter",
+    subtitle: "Margin, size, risk and profit at every take-profit - instantly, for your deposit.",
+    appTitle: "Position calculator",
+    appSubtitle: "Work out margin, size, risk and profit at each TP before you enter the trade",
+    info: [
+      { title: "Moderate mode", text: "Leverage up to 25x, 1-5% risk per trade. Fixed stop, the goal is steady deposit growth." },
+      { title: "Turbo mode", text: "Leverage up to 400x for aggressive trading. Small margin, large size - higher risk." },
+      { title: "Adaptive stop", text: "In turbo the stop is automatically kept clear of the liquidation price - so it always triggers." },
+    ],
+    disclaimer:
+      "This calculation is for information only and is not financial advice. Leveraged trading carries the risk of losing your deposit.",
+
+    error: "Calculation error",
+    depositWeex: "Deposit (WEEX)",
+    deposit: "Deposit ($)",
+    pair: "Trading pair",
+    entryPrice: "Entry price ($)",
+    fetchPrice: "Fetch the current price",
+    leverage: "Leverage",
+    calculating: "Calculating…",
+    calculate: "Calculate",
+    emptyTitle: "Fill in the parameters",
+    emptyHint: "Margin · size · risk · targets will appear here",
+    margin: "Margin",
+    positionSize: "Position size",
+    riskWithStop: (pct: string) => `Risk (stop ${pct}%)`,
+    stopPrice: "Stop price",
+  },
+
+  leaderboard: {
+    badge: "Updated in real time",
+    eyebrow: "Leaderboard",
+    title: "The platform's best traders",
+    subtitle: "Real results from students trading the signals. The top 3 are marked with medals.",
+    disclaimer: "These results reflect the trading of specific students and do not guarantee future returns.",
+    heading: "Leaderboard",
+    footnote: "Top 3 marked with medals · USDT balance · Updated every 24h",
+    periodAll: "All time",
+    periodMonth: "Month",
+    periodWeek: "Week",
+  },
+
+  traders: {
+    title: "Traders this month",
+    subtitle: "Only those trading on their own API keys · volume and result from the exchange",
+    byVolume: "By volume",
+    byPnl: "By result",
+    empty: "Nobody is trading on their own keys yet. Connect yours in the profile and you'll appear in this table.",
+    colTrader: "Trader",
+    colVolume: "Volume",
+    colPnl: "Result",
+    colTrades: "Trades",
+    colAccuracy: "Accuracy",
+    noName: "no name",
+  },
+
+  install: {
+    title: "Install NMNH",
+    iosHint: "“Share” → “Add to Home Screen”",
+    iosPrefix: "Tap",
+    hint: "Quick access from your home screen",
+    action: "Install",
+  },
+
+  dev: {
+    unavailable: "Dev login unavailable",
+    title: "Dev login",
+    asMentor: "As mentor → /admin",
+    asStudent: "As student → /app",
+    entering: "Signing in…",
+    note: "Development only. Disabled in production.",
+  },
+};

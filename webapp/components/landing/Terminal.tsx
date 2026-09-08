@@ -25,67 +25,22 @@ import {
 import Link from "next/link";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
-import { SOCIAL_LINKS } from "@/lib/content";
-
-/** Чем сигнальный канал заканчивается - и с чего терминал только начинается. */
-const CHANNEL_LIMITS = [
-  "Скрин с уровнями - считай сам",
-  "Пришёл ночью - вход упущен",
-  "Стоп перенести некому",
-  "Статистики нет",
-];
-
-const TERMINAL_GAINS = [
-  "Объём и риск - под твой депозит",
-  "Заявка на биржу в один клик",
-  "Сервер ведёт позицию, пока ты спишь",
-  "Журнал считает по отчётам биржи",
-];
+import { weexRegisterUrl } from "@/lib/content";
+import { useLocale, useT } from "@/lib/i18n";
 
 interface Feature {
   icon: LucideIcon;
-  title: string;
-  text: string;
   accent: "cyan" | "gold" | "violet" | "green";
 }
 
+/** Возможности терминала: картинка и цвет. Заголовки и текст - в словаре. */
 const FEATURES: Feature[] = [
-  {
-    icon: KeyRound,
-    title: "Твой счёт, твоя биржа",
-    text: "Подключение по API за минуту. Деньги остаются на твоём счёте WEEX.",
-    accent: "cyan",
-  },
-  {
-    icon: AlignJustify,
-    title: "Стакан и лента",
-    text: "Плотности, кластеры и скринер по всему рынку - вживую.",
-    accent: "violet",
-  },
-  {
-    icon: MousePointerClick,
-    title: "Уровни тянутся мышью",
-    text: "Перетащил стоп на графике - заявка на бирже переехала следом.",
-    accent: "gold",
-  },
-  {
-    icon: Scale,
-    title: "Риск считается за тебя",
-    text: "Шаг лота, потолок плеча и комиссия монеты учтены до входа.",
-    accent: "green",
-  },
-  {
-    icon: Radar,
-    title: "Сопровождение 24/7",
-    text: "Взята цель - стоп уходит в безубыток. Это делает сервер, а не вкладка.",
-    accent: "cyan",
-  },
-  {
-    icon: BookText,
-    title: "Журнал сделок",
-    text: "Результат, комиссия и цели - по исполнениям с биржи.",
-    accent: "gold",
-  },
+  { icon: KeyRound, accent: "cyan" },
+  { icon: AlignJustify, accent: "violet" },
+  { icon: MousePointerClick, accent: "gold" },
+  { icon: Scale, accent: "green" },
+  { icon: Radar, accent: "cyan" },
+  { icon: BookText, accent: "gold" },
 ];
 
 const ACCENTS: Record<Feature["accent"], { ring: string; text: string; glow: string }> = {
@@ -96,38 +51,26 @@ const ACCENTS: Record<Feature["accent"], { ring: string; text: string; glow: str
 };
 
 /** Три вопроса про безопасность, которые задают до того, как введут ключ. */
-const SAFETY = [
-  {
-    icon: Lock,
-    title: "Ключи шифруются",
-    text: "Хранятся на сервере и в браузер не возвращаются.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Без права вывода",
-    text: "Ключ только на торговлю - снять деньги по нему нельзя.",
-  },
-  {
-    icon: X,
-    title: "Отвязать в один клик",
-    text: "Или отзови ключ на стороне биржи - в любой момент.",
-  },
-];
+const SAFETY_ICONS = [Lock, ShieldCheck, X];
 
 export default function Terminal() {
+  const t = useT();
+  const locale = useLocale();
+  const copy = t.landing.terminal;
+
   return (
     <section id="terminal" className="relative mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
       <div className="pointer-events-none absolute inset-x-0 top-1/4 -z-10 h-72 bg-radial-cyan opacity-40" />
 
       <SectionHeading
-        eyebrow="Терминал академии"
+        eyebrow={copy.eyebrow}
         title={
           <>
-            Это не сигналы.{" "}
-            <span className="text-accent-cyan text-glow-cyan">Это твоё рабочее место.</span>
+            {copy.titleTop}{" "}
+            <span className="text-accent-cyan text-glow-cyan">{copy.titleAccent}</span>
           </>
         }
-        subtitle="Сигнал открывается в один клик: риск посчитан, стоп и цели уже на бирже, позицию дальше ведёт сервер."
+        subtitle={copy.subtitle}
       />
 
       {/* Сравнение: канал против терминала */}
@@ -140,13 +83,13 @@ export default function Terminal() {
               </span>
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-text-muted">
-                  Как у всех
+                  {copy.channelEyebrow}
                 </div>
-                <div className="font-bold text-text-secondary">Канал с сигналами</div>
+                <div className="font-bold text-text-secondary">{copy.channelTitle}</div>
               </div>
             </div>
             <ul className="mt-5 space-y-3">
-              {CHANNEL_LIMITS.map((item) => (
+              {copy.channelLimits.map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-sm text-text-muted">
                   <X className="mt-0.5 h-4 w-4 shrink-0 opacity-50" />
                   <span className="line-through decoration-white/15">{item}</span>
@@ -166,7 +109,7 @@ export default function Terminal() {
             }}
           >
             <span className="badge-cyan absolute right-5 top-5">
-              <Sparkles className="h-3 w-3" /> Бесплатно
+              <Sparkles className="h-3 w-3" /> {copy.usBadge}
             </span>
             <div className="flex items-center gap-2.5">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/30">
@@ -174,13 +117,13 @@ export default function Terminal() {
               </span>
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-cyan">
-                  Как у нас
+                  {copy.usEyebrow}
                 </div>
-                <div className="font-bold text-text-primary">Терминал NMNH</div>
+                <div className="font-bold text-text-primary">{copy.usTitle}</div>
               </div>
             </div>
             <ul className="mt-5 space-y-3">
-              {TERMINAL_GAINS.map((item) => (
+              {copy.usGains.map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-sm text-text-primary">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent-cyan" />
                   <span>{item}</span>
@@ -196,8 +139,9 @@ export default function Terminal() {
         {FEATURES.map((f, i) => {
           const a = ACCENTS[f.accent];
           const Icon = f.icon;
+          const text = copy.features[i];
           return (
-            <Reveal as="article" key={f.title} delay={(i % 3) * 0.1}>
+            <Reveal as="article" key={text.title} delay={(i % 3) * 0.1}>
               <div
                 className="group h-full rounded-2xl border border-white/[0.07] p-5 transition-all duration-500 hover:-translate-y-1.5 hover:border-white/15"
                 style={{
@@ -209,8 +153,8 @@ export default function Terminal() {
                 >
                   <Icon className="h-5 w-5" />
                 </span>
-                <h3 className="mt-4 font-bold text-text-primary">{f.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-secondary">{f.text}</p>
+                <h3 className="mt-4 font-bold text-text-primary">{text.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-secondary">{text.text}</p>
               </div>
             </Reveal>
           );
@@ -220,8 +164,8 @@ export default function Terminal() {
       {/* Безопасность: три возражения, которые снимаются до ввода ключа */}
       <Reveal delay={0.1}>
         <div className="mt-4 grid gap-px overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.06] sm:grid-cols-3">
-          {SAFETY.map((s) => {
-            const Icon = s.icon;
+          {copy.safety.map((s, i) => {
+            const Icon = SAFETY_ICONS[i];
             return (
               <div key={s.title} className="bg-bg-deep/80 p-5">
                 <div className="flex items-center gap-2 text-accent-cyan">
@@ -245,22 +189,22 @@ export default function Terminal() {
           }}
         >
           <div>
-            <p className="text-xl font-black text-text-primary">Доступ к терминалу - бесплатно</p>
+            <p className="text-xl font-black text-text-primary">{copy.ctaTitle}</p>
             <p className="mt-1.5 text-sm text-text-secondary">
-              Открывает регистрация на WEEX по нашей ссылке. Подписок и оплат нет.
+              {copy.ctaText}
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap justify-center gap-3">
             <Link href="/login" className="btn-primary">
-              Открыть терминал
+              {copy.ctaPrimary}
             </Link>
             <a
-              href={SOCIAL_LINKS.weexAffiliate}
+              href={weexRegisterUrl(locale)}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-outline"
             >
-              Счёт на WEEX
+              {copy.ctaSecondary}
             </a>
           </div>
         </div>

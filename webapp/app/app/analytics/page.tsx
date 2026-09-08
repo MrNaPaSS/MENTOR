@@ -1,5 +1,6 @@
 ﻿"use client";
 // v8
+import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
@@ -30,23 +31,21 @@ function fmtVolShort(n: number): string {
 
 // Вехи объёма для наград
 const VOLUME_MILESTONES = [
-  { vol: 50_000,     label: "50K",  emoji: "🥉", title: "Старт",          reward: "common"    as const },
-  { vol: 100_000,    label: "100K", emoji: "🥈", title: "Набираю обороты", reward: "rare"      as const },
-  { vol: 500_000,    label: "500K", emoji: "🥇", title: "Серьёзный",       reward: "epic"      as const },
-  { vol: 1_000_000,  label: "1M",   emoji: "💎", title: "Миллионер",       reward: "legendary" as const },
-  { vol: 5_000_000,  label: "5M",   emoji: "👑", title: "Легенда NMNH",    reward: "legendary" as const },
-  { vol: 10_000_000, label: "10M",  emoji: "🚀", title: "К звёздам",       reward: "legendary" as const },
-  { vol: 25_000_000, label: "25M",  emoji: "⚡", title: "Элита",           reward: "legendary" as const },
+  { vol: 50_000,     label: "50K",  emoji: "🥉", key: "m50k"  as const, reward: "common"    as const },
+  { vol: 100_000,    label: "100K", emoji: "🥈", key: "m100k" as const, reward: "rare"      as const },
+  { vol: 500_000,    label: "500K", emoji: "🥇", key: "m500k" as const, reward: "epic"      as const },
+  { vol: 1_000_000,  label: "1M",   emoji: "💎", key: "m1m"   as const, reward: "legendary" as const },
+  { vol: 5_000_000,  label: "5M",   emoji: "👑", key: "m5m"   as const, reward: "legendary" as const },
+  { vol: 10_000_000, label: "10M",  emoji: "🚀", key: "m10m"  as const, reward: "legendary" as const },
+  { vol: 25_000_000, label: "25M",  emoji: "⚡", key: "m25m"  as const, reward: "legendary" as const },
 ];
 
 interface Goal {
-  id: string;
-  label: string;
+  /** Ключ подписи в словаре: название цели и награда переводятся. */
+  id: keyof Dict["analytics"]["goals"] & string;
   icon: typeof Trophy;
   target: number;
   current: number;
-  unit: string;
-  reward: string;
   color: string;
   unlocked: boolean;
 }
@@ -54,9 +53,8 @@ interface Goal {
 type AchCategory = "all" | "volume" | "discipline" | "performance" | "deposit" | "special";
 
 interface Achievement {
-  id: string;
-  title: string;
-  desc: string;
+  /** Ключ подписи в словаре: имя достижения и описание переводятся. */
+  id: keyof Dict["analytics"]["achievements"]["items"];
   icon: typeof Trophy;
   earned: boolean;
   rarity: "common" | "rare" | "epic" | "legendary";
@@ -66,10 +64,10 @@ interface Achievement {
 }
 
 const RARITY_STYLES = {
-  common: { border: "border-border", glow: "", badge: "bg-bg-panel/10 text-text-primary", label: "Обычная" },
-  rare: { border: "border-blue-400/40", glow: "shadow-[0_0_12px_rgba(96,165,250,0.2)]", badge: "bg-blue-400/20 text-blue-400", label: "Редкая" },
-  epic: { border: "border-purple-400/40", glow: "shadow-[0_0_12px_rgba(167,139,250,0.25)]", badge: "bg-purple-400/20 text-purple-400", label: "Эпическая" },
-  legendary: { border: "border-accent-gold/40", glow: "shadow-[0_0_16px_rgba(255,215,0,0.25)]", badge: "bg-accent-gold/20 text-accent-gold", label: "Легендарная" },
+  common: { border: "border-border", glow: "", badge: "bg-bg-panel/10 text-text-primary" },
+  rare: { border: "border-blue-400/40", glow: "shadow-[0_0_12px_rgba(96,165,250,0.2)]", badge: "bg-blue-400/20 text-blue-400" },
+  epic: { border: "border-purple-400/40", glow: "shadow-[0_0_12px_rgba(167,139,250,0.25)]", badge: "bg-purple-400/20 text-purple-400" },
+  legendary: { border: "border-accent-gold/40", glow: "shadow-[0_0_16px_rgba(255,215,0,0.25)]", badge: "bg-accent-gold/20 text-accent-gold" },
 };
 
 const RARITY_COINS: Record<string, number> = {
@@ -102,23 +100,16 @@ function dayVolume(day: CalendarDay): number {
 
 // Сроки, за которые собирается карточка. Порядок - от короткого к длинному:
 // им же и пользуются, от «сегодня получилось» к «вот месяц».
-const SPANS: { id: Span; label: string }[] = [
-  { id: "day",   label: "день"   },
-  { id: "week",  label: "неделю" },
-  { id: "month", label: "месяц"  },
-];
+const SPANS: Span[] = ["day", "week", "month"];
 
-const ACH_CATEGORIES: { id: AchCategory; label: string; icon: React.ElementType }[] = [
-  { id: "all",         label: "Все",        icon: Trophy        },
-  { id: "volume",      label: "Объём",      icon: BarChart2     },
-  { id: "discipline",  label: "Дисциплина", icon: CalendarDays  },
-  { id: "performance", label: "Результаты", icon: TrendingUp    },
-  { id: "deposit",     label: "Депозиты",   icon: Wallet        },
-  { id: "special",     label: "Особые",     icon: Sparkles      },
+const ACH_CATEGORIES: { id: AchCategory; icon: React.ElementType }[] = [
+  { id: "all",         icon: Trophy        },
+  { id: "volume",      icon: BarChart2     },
+  { id: "discipline",  icon: CalendarDays  },
+  { id: "performance", icon: TrendingUp    },
+  { id: "deposit",     icon: Wallet        },
+  { id: "special",     icon: Sparkles      },
 ];
-
-const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-const MONTHS_RU = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 
 // ─── Ячейка дня ─────────────────────────────────────────────────────────────
 function DayCell({ day, onClick, active, isToday }: {
@@ -127,6 +118,8 @@ function DayCell({ day, onClick, active, isToday }: {
   active: boolean;
   isToday?: boolean;
 }) {
+  const t = useT();
+  const numbers = useIntlLocale();
   if (!day) return <div style={{ aspectRatio: "1" }} />;
 
   const pnl = day.pnl_pct;
@@ -174,8 +167,12 @@ function DayCell({ day, onClick, active, isToday }: {
       className={`group relative flex flex-col rounded-xl border transition-all duration-150 hover:scale-[1.06] hover:z-10 hover:border-border ${borderCls} p-1.5`}
       title={[
         day.date,
-        hasDeposit ? "Депозит" : "",
-        hasTrades ? `Объём $${dayVolume(day).toLocaleString("ru", { maximumFractionDigits: 0 })}` : "",
+        hasDeposit ? t.analytics.calendar.deposit : "",
+        hasTrades
+          ? t.analytics.calendar.volume(
+              dayVolume(day).toLocaleString(numbers, { maximumFractionDigits: 0 })
+            )
+          : "",
         hasReal ? `PnL ${pnl!.toFixed(2)}%` : "",
       ].filter(Boolean).join(" · ")}
     >
@@ -260,6 +257,14 @@ function CircleProgress({ pct, color, size = 80, children }: { pct: number; colo
 
 // ─── Main ──────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
+  const t = useT();
+  const locale = useLocale();
+  const numbers = intlLocale(locale);
+  const spanLabel: Record<Span, string> = {
+    day: t.analytics.summary.spanDay,
+    week: t.analytics.summary.spanWeek,
+    month: t.analytics.summary.spanMonth,
+  };
   const today = new Date();
   const [analytics, setAnalytics] = useState<AnalyticsMe | null>(null);
   const [year, setYear] = useState(today.getFullYear());
@@ -477,39 +482,33 @@ export default function AnalyticsPage() {
   const effectiveTradeDays = tradingDays;
   const goals: Goal[] = [
     {
-      id: "volume", label: "Объём за месяц", icon: BarChart2, target: 250_000,
+      id: "volume", icon: BarChart2, target: 250_000,
       current: Math.round(monthVolume > 0 ? monthVolume : totalVolume / 3),
-      unit: "USDT", reward: "💹 Активный трейдер",
       color: "var(--c-accent)", unlocked: (monthVolume > 0 ? monthVolume : totalVolume / 3) >= 250_000,
     },
     {
-      id: "trading_days", label: "Дней торговали", icon: Calendar, target: 15,
+      id: "trading_days", icon: Calendar, target: 15,
       current: effectiveTradeDays,
-      unit: "дней", reward: "📅 Дисциплина",
       color: "var(--c-warn)", unlocked: effectiveTradeDays >= 15,
     },
     {
-      id: "profit", label: "Прибыльных дней", icon: TrendingUp, target: 5,
+      id: "profit", icon: TrendingUp, target: 5,
       current: profitDays,
-      unit: "дней в плюс", reward: "📈 Бычий режим",
       color: "var(--c-up)", unlocked: profitDays >= 5,
     },
     {
-      id: "streak", label: "Стрик активности", icon: Flame, target: 7,
+      id: "streak", icon: Flame, target: 7,
       current: activityStreak,
-      unit: "дней подряд", reward: "🔥 На волне",
       color: "var(--c-warn)", unlocked: activityStreak >= 7,
     },
     {
-      id: "hot_day", label: "Горячий день", icon: Star, target: 1,
+      id: "hot_day", icon: Star, target: 1,
       current: hotDays,
-      unit: "дней 3%+", reward: "🌟 День охотника",
       color: "var(--c-gold)", unlocked: hotDays >= 1,
     },
     {
-      id: "month_profit", label: "Месяц в плюс", icon: TrendingUp, target: 1,
+      id: "month_profit", icon: TrendingUp, target: 1,
       current: avgProfit > 0 ? 1 : 0,
-      unit: "", reward: "📈 Победный месяц",
       color: "var(--c-up)", unlocked: avgProfit > 0 && validPnl.length >= 5,
     },
   ];
@@ -521,46 +520,46 @@ export default function AnalyticsPage() {
 
   const achievements: Achievement[] = [
     // ── Объём ────────────────────────────────────────────────────────────
-    { id: "vol_10k",  title: "Первые 10K",    desc: "Суммарный объём 10 000 USDT",    icon: BarChart2,  earned: totalVolume >= 10_000,    rarity: "common",    category: "volume",      xp: 10  },
-    { id: "vol_50k",  title: "Старт",         desc: "Суммарный объём 50 000 USDT",    icon: BarChart2,  earned: totalVolume >= 50_000,    rarity: "common",    category: "volume",      xp: 25  },
-    { id: "vol_100k", title: "Набираю обороты",desc: "Суммарный объём 100 000 USDT",  icon: BarChart2,  earned: totalVolume >= 100_000,   rarity: "rare",      category: "volume",      xp: 50  },
-    { id: "vol_500k", title: "Серьёзный",     desc: "Суммарный объём 500 000 USDT",   icon: BarChart2,  earned: totalVolume >= 500_000,   rarity: "rare",      category: "volume",      xp: 100 },
-    { id: "vol_1m",   title: "Миллионер",     desc: "Суммарный объём 1 000 000 USDT", icon: Trophy,     earned: totalVolume >= 1_000_000,  rarity: "epic",      category: "volume",      xp: 200 },
-    { id: "vol_5m",   title: "Легенда NMNH",  desc: "Суммарный объём 5 000 000 USDT", icon: Trophy,     earned: totalVolume >= 5_000_000,  rarity: "epic",      category: "volume",      xp: 400 },
-    { id: "vol_10m",  title: "К звёздам",     desc: "Суммарный объём 10 000 000 USDT",icon: Star,       earned: totalVolume >= 10_000_000, rarity: "legendary", category: "volume",      xp: 750 },
-    { id: "vol_25m",  title: "Элита",         desc: "Суммарный объём 25 000 000 USDT",icon: Star,       earned: totalVolume >= 25_000_000, rarity: "legendary", category: "volume",      xp: 1500 },
+    { id: "vol_10k",    icon: BarChart2,  earned: totalVolume >= 10_000,    rarity: "common",    category: "volume",      xp: 10  },
+    { id: "vol_50k",    icon: BarChart2,  earned: totalVolume >= 50_000,    rarity: "common",    category: "volume",      xp: 25  },
+    { id: "vol_100k",  icon: BarChart2,  earned: totalVolume >= 100_000,   rarity: "rare",      category: "volume",      xp: 50  },
+    { id: "vol_500k",   icon: BarChart2,  earned: totalVolume >= 500_000,   rarity: "rare",      category: "volume",      xp: 100 },
+    { id: "vol_1m", icon: Trophy,     earned: totalVolume >= 1_000_000,  rarity: "epic",      category: "volume",      xp: 200 },
+    { id: "vol_5m", icon: Trophy,     earned: totalVolume >= 5_000_000,  rarity: "epic",      category: "volume",      xp: 400 },
+    { id: "vol_10m",icon: Star,       earned: totalVolume >= 10_000_000, rarity: "legendary", category: "volume",      xp: 750 },
+    { id: "vol_25m",icon: Star,       earned: totalVolume >= 25_000_000, rarity: "legendary", category: "volume",      xp: 1500 },
     // ── Дисциплина ───────────────────────────────────────────────────────
-    { id: "first_trade",  title: "Первый шаг",      desc: "Первый торговый день",             icon: Calendar, earned: effectiveTradeDays >= 1,  rarity: "common",    category: "discipline", xp: 10  },
-    { id: "streak_3",     title: "Трёхдневка",      desc: "3 дня активности подряд",           icon: Flame,    earned: activityStreak >= 3,      rarity: "common",    category: "discipline", xp: 20  },
-    { id: "streak_7",     title: "Недельный стрик", desc: "7 дней активности подряд",          icon: Flame,    earned: activityStreak >= 7,      rarity: "rare",      category: "discipline", xp: 60  },
-    { id: "streak_14",    title: "Двухнедельник",   desc: "14 дней активности подряд",         icon: Flame,    earned: activityStreak >= 14,     rarity: "epic",      category: "discipline", xp: 150 },
-    { id: "streak_30",    title: "Железный трейдер",desc: "30 дней активности подряд",         icon: Trophy,   earned: activityStreak >= 30,     rarity: "legendary", category: "discipline", xp: 500 },
-    { id: "days_15",      title: "Полмесяца",       desc: "15 торговых дней в месяце",         icon: Calendar, earned: effectiveTradeDays >= 15, rarity: "rare",      category: "discipline", xp: 75  },
-    { id: "days_20",      title: "Настоящий трейдер",desc: "20 торговых дней в месяце",        icon: Calendar, earned: effectiveTradeDays >= 20, rarity: "epic",      category: "discipline", xp: 150 },
-    { id: "days_25",      title: "Профессионал",    desc: "25 торговых дней в месяце",         icon: Trophy,   earned: effectiveTradeDays >= 25, rarity: "legendary", category: "discipline", xp: 300 },
+    { id: "first_trade",             icon: Calendar, earned: effectiveTradeDays >= 1,  rarity: "common",    category: "discipline", xp: 10  },
+    { id: "streak_3",           icon: Flame,    earned: activityStreak >= 3,      rarity: "common",    category: "discipline", xp: 20  },
+    { id: "streak_7",          icon: Flame,    earned: activityStreak >= 7,      rarity: "rare",      category: "discipline", xp: 60  },
+    { id: "streak_14",         icon: Flame,    earned: activityStreak >= 14,     rarity: "epic",      category: "discipline", xp: 150 },
+    { id: "streak_30",         icon: Trophy,   earned: activityStreak >= 30,     rarity: "legendary", category: "discipline", xp: 500 },
+    { id: "days_15",         icon: Calendar, earned: effectiveTradeDays >= 15, rarity: "rare",      category: "discipline", xp: 75  },
+    { id: "days_20",        icon: Calendar, earned: effectiveTradeDays >= 20, rarity: "epic",      category: "discipline", xp: 150 },
+    { id: "days_25",         icon: Trophy,   earned: effectiveTradeDays >= 25, rarity: "legendary", category: "discipline", xp: 300 },
     // ── Результаты ───────────────────────────────────────────────────────
-    { id: "first_profit", title: "Первый плюс",    desc: "Первый прибыльный день",            icon: TrendingUp, earned: profitDays >= 1,            rarity: "common",    category: "performance", xp: 15  },
-    { id: "profit_5",     title: "5 побед",         desc: "5 прибыльных дней в месяце",       icon: TrendingUp, earned: profitDays >= 5,            rarity: "rare",      category: "performance", xp: 60  },
-    { id: "profit_10",    title: "10 побед",        desc: "10 прибыльных дней в месяце",      icon: TrendingUp, earned: profitDays >= 10,           rarity: "epic",      category: "performance", xp: 200 },
-    { id: "hot_day_3",    title: "Горячий день",    desc: "День с прибылью 3%+",              icon: Star,       earned: hotDays >= 1,               rarity: "rare",      category: "performance", xp: 50  },
-    { id: "hot_day_5",    title: "Раскалённый день",desc: "День с прибылью 5%+",              icon: Star,       earned: superHotDay,                rarity: "epic",      category: "performance", xp: 100 },
-    { id: "hot_day_10",   title: "Снайпер",         desc: "День с прибылью 10%+",             icon: Zap,        earned: epicDay,                    rarity: "legendary", category: "performance", xp: 300 },
-    { id: "month_plus",   title: "Месяц в плюс",   desc: "Средний PnL месяца положительный", icon: TrendingUp, earned: avgProfit > 0 && validPnl.length >= 5, rarity: "epic", category: "performance", xp: 150 },
-    { id: "goal_days_10", title: "Ударник",         desc: "10 дней с выполненными целями",    icon: Target,     earned: goalDays >= 10,             rarity: "epic",      category: "performance", xp: 175 },
+    { id: "first_profit",            icon: TrendingUp, earned: profitDays >= 1,            rarity: "common",    category: "performance", xp: 15  },
+    { id: "profit_5",       icon: TrendingUp, earned: profitDays >= 5,            rarity: "rare",      category: "performance", xp: 60  },
+    { id: "profit_10",      icon: TrendingUp, earned: profitDays >= 10,           rarity: "epic",      category: "performance", xp: 200 },
+    { id: "hot_day_3",              icon: Star,       earned: hotDays >= 1,               rarity: "rare",      category: "performance", xp: 50  },
+    { id: "hot_day_5",              icon: Star,       earned: superHotDay,                rarity: "epic",      category: "performance", xp: 100 },
+    { id: "hot_day_10",             icon: Zap,        earned: epicDay,                    rarity: "legendary", category: "performance", xp: 300 },
+    { id: "month_plus", icon: TrendingUp, earned: avgProfit > 0 && validPnl.length >= 5, rarity: "epic", category: "performance", xp: 150 },
+    { id: "goal_days_10",    icon: Target,     earned: goalDays >= 10,             rarity: "epic",      category: "performance", xp: 175 },
     // ── Депозиты ─────────────────────────────────────────────────────────
-    { id: "dep_first",  title: "Первый депозит",  desc: "Первое пополнение счёта",           icon: ArrowDownCircle, earned: recentDeposits.length > 0,    rarity: "common",    category: "deposit", xp: 10  },
-    { id: "dep_500",    title: "Инвестор",        desc: "Пополнения от 500 USDT",            icon: Coins,          earned: depositTotal >= 500,          rarity: "rare",      category: "deposit", xp: 40  },
-    { id: "dep_1k",     title: "Серьёзный капитал",desc: "Пополнения от 1 000 USDT",         icon: Coins,          earned: depositTotal >= 1_000,        rarity: "rare",      category: "deposit", xp: 80  },
-    { id: "dep_5k",     title: "Фонд менеджер",   desc: "Пополнения от 5 000 USDT",         icon: Coins,          earned: depositTotal >= 5_000,        rarity: "epic",      category: "deposit", xp: 200 },
-    { id: "dep_10k",    title: "Кит",             desc: "Пополнения от 10 000 USDT",        icon: Trophy,         earned: depositTotal >= 10_000,       rarity: "legendary", category: "deposit", xp: 500 },
-    { id: "dep_3plus",  title: "Регулярный",      desc: "3 и более пополнений",             icon: ArrowDownCircle, earned: recentDeposits.length >= 3,  rarity: "rare",      category: "deposit", xp: 50  },
+    { id: "dep_first",           icon: ArrowDownCircle, earned: recentDeposits.length > 0,    rarity: "common",    category: "deposit", xp: 10  },
+    { id: "dep_500",            icon: Coins,          earned: depositTotal >= 500,          rarity: "rare",      category: "deposit", xp: 40  },
+    { id: "dep_1k",         icon: Coins,          earned: depositTotal >= 1_000,        rarity: "rare",      category: "deposit", xp: 80  },
+    { id: "dep_5k",         icon: Coins,          earned: depositTotal >= 5_000,        rarity: "epic",      category: "deposit", xp: 200 },
+    { id: "dep_10k",        icon: Trophy,         earned: depositTotal >= 10_000,       rarity: "legendary", category: "deposit", xp: 500 },
+    { id: "dep_3plus",             icon: ArrowDownCircle, earned: recentDeposits.length >= 3,  rarity: "rare",      category: "deposit", xp: 50  },
     // ── Особые ───────────────────────────────────────────────────────────
-    { id: "joined",       title: "Добро пожаловать",desc: "Вступил в сообщество NMNH",        icon: Gift,   earned: true,                       rarity: "common",    category: "special", xp: 5   },
-    { id: "level_5",      title: "Уровень 5",      desc: "Достигни уровня трейдера 5",       icon: Star,   earned: xpLevel >= 5,               rarity: "rare",      category: "special", xp: 0   },
-    { id: "level_10",     title: "Уровень 10",     desc: "Достигни уровня трейдера 10",      icon: Trophy, earned: xpLevel >= 10,              rarity: "epic",      category: "special", xp: 0   },
-    { id: "level_20",     title: "Уровень 20",     desc: "Достигни уровня трейдера 20",      icon: Trophy, earned: xpLevel >= 20,              rarity: "legendary", category: "special", xp: 0   },
-    { id: "all_goals",    title: "Перфекционист",  desc: "Выполни все цели месяца",          icon: Target, earned: goals.every(g => g.unlocked), rarity: "epic",     category: "special", xp: 250 },
-    { id: "vol_250k_mo",  title: "Месячный рекорд",desc: "Объём за месяц 250K USDT",        icon: BarChart2, earned: (monthVolume > 0 ? monthVolume : 0) >= 250_000, rarity: "epic", category: "special", xp: 200 },
+    { id: "joined",        icon: Gift,   earned: true,                       rarity: "common",    category: "special", xp: 5   },
+    { id: "level_5",       icon: Star,   earned: xpLevel >= 5,               rarity: "rare",      category: "special", xp: 0   },
+    { id: "level_10",      icon: Trophy, earned: xpLevel >= 10,              rarity: "epic",      category: "special", xp: 0   },
+    { id: "level_20",      icon: Trophy, earned: xpLevel >= 20,              rarity: "legendary", category: "special", xp: 0   },
+    { id: "all_goals",          icon: Target, earned: goals.every(g => g.unlocked), rarity: "epic",     category: "special", xp: 250 },
+    { id: "vol_250k_mo",        icon: BarChart2, earned: (monthVolume > 0 ? monthVolume : 0) >= 250_000, rarity: "epic", category: "special", xp: 200 },
   ];
 
   function prevMonth() {
@@ -590,14 +589,14 @@ export default function AnalyticsPage() {
       {/* Заголовок */}
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">Аналитика <span className="text-accent-cyan">&</span> Прогресс</h1>
-          <p className="text-sm text-text-muted mt-0.5">Реальные данные по закрытым сделкам, сигналам и обороту</p>
+          <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">{t.analytics.title} <span className="text-accent-cyan">{t.analytics.titleAnd}</span> {t.analytics.titleTail}</h1>
+          <p className="text-sm text-text-muted mt-0.5">{t.analytics.subtitle}</p>
         </div>
         {tradeSummary && (
           <div className="hidden md:flex items-center gap-3 rounded-xl border border-accent-gold/20 bg-accent-gold/5 px-4 py-2">
             <span className="text-lg">🏆</span>
             <div>
-              <p className="font-mono text-xs text-text-primary/40 leading-none">Всего объёма</p>
+              <p className="font-mono text-xs text-text-primary/40 leading-none">{t.analytics.totalVolume}</p>
               <p className="font-mono text-base font-extrabold text-accent-gold leading-tight">${fmtDot(Math.round(totalVolume))}</p>
             </div>
           </div>
@@ -614,8 +613,8 @@ export default function AnalyticsPage() {
               {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
             </span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">Объём месяца</span>
-          <span className="text-[10px] text-accent-cyan">цель: 250K</span>
+          <span className="text-xs text-text-muted">{t.analytics.kpi.monthVolume}</span>
+          <span className="text-[10px] text-accent-cyan">{t.analytics.kpi.monthVolumeGoal}</span>
         </div>
         {/* Стрик активности */}
         <div className="card flex flex-col items-center gap-2 py-5">
@@ -623,8 +622,8 @@ export default function AnalyticsPage() {
             <Flame className="h-5 w-5 text-orange-400" />
             <span className="font-mono text-sm font-bold text-text-primary">{activityStreak}</span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">Стрик активности</span>
-          <span className="text-[10px] text-orange-400">цель: 7 дней</span>
+          <span className="text-xs text-text-muted">{t.analytics.kpi.streak}</span>
+          <span className="text-[10px] text-orange-400">{t.analytics.kpi.streakGoal}</span>
         </div>
         {/* Ср. доходность */}
         <div className="card flex flex-col items-center gap-2 py-5">
@@ -633,8 +632,8 @@ export default function AnalyticsPage() {
               {avgProfit >= 0 ? "+" : ""}{avgProfit.toFixed(2)}%
             </span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">Ср. доходность/день</span>
-          <span className="text-[10px] text-text-muted">за {validPnl.length} дней</span>
+          <span className="text-xs text-text-muted">{t.analytics.kpi.avgDaily}</span>
+          <span className="text-[10px] text-text-muted">{t.analytics.kpi.overDays(validPnl.length)}</span>
         </div>
         {/* Дней торговали */}
         <div className="card flex flex-col items-center gap-2 py-5">
@@ -642,8 +641,8 @@ export default function AnalyticsPage() {
             <Calendar className="h-4 w-4 text-accent-gold" />
             <span className="font-mono text-sm font-bold text-text-primary">{tradingDays}</span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">Дней торговали</span>
-          <span className="text-[10px] text-accent-gold">цель: 15 дней</span>
+          <span className="text-xs text-text-muted">{t.analytics.kpi.tradingDays}</span>
+          <span className="text-[10px] text-accent-gold">{t.analytics.kpi.tradingDaysGoal}</span>
         </div>
       </div>
 
@@ -668,8 +667,8 @@ export default function AnalyticsPage() {
             <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-border">
               <BarChart2 className="h-4 w-4 text-accent-gold" />
               <div>
-                <h2 className="text-sm font-bold text-text-primary leading-none">Путь трейдера</h2>
-                <p className="text-[10px] text-text-primary/30 mt-0.5">Суммарный объём на WEEX</p>
+                <h2 className="text-sm font-bold text-text-primary leading-none">{t.analytics.path.title}</h2>
+                <p className="text-[10px] text-text-primary/30 mt-0.5">{t.analytics.path.subtitle}</p>
               </div>
               <div className="ml-auto text-right">
                 <span className="font-mono text-base font-extrabold text-accent-gold">${fmtDot(Math.round(totalVolume))}</span>
@@ -683,14 +682,14 @@ export default function AnalyticsPage() {
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[10px]">
                     <span className="text-text-primary/30">{prevM ? prevM.label : "0"}</span>
-                    <span className="text-text-primary/50">до <span className="text-accent-gold font-bold">{nextM.label}</span> осталось <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
+                    <span className="text-text-primary/50">{t.analytics.path.toNext} <span className="text-accent-gold font-bold">{nextM.label}</span> {t.analytics.path.left} <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
                     <span className="text-accent-gold font-bold">{nextM.label}</span>
                   </div>
                   <div className="relative h-2 overflow-hidden rounded-full bg-bg-panel/60">
                     <div className="h-full rounded-full transition-all duration-1000"
                       style={{ width: `${trackPct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }} />
                   </div>
-                  <p className="text-[10px] text-text-primary/25 text-right">{trackPct.toFixed(1)}% до следующей вехи</p>
+                  <p className="text-[10px] text-text-primary/25 text-right">{t.analytics.path.pctToNext(trackPct.toFixed(1))}</p>
                 </div>
               )}
 
@@ -749,7 +748,7 @@ export default function AnalyticsPage() {
               >‹</button>
               <div className="text-center">
                 <h2 className="text-xl font-extrabold tracking-tight text-text-primary">
-                  {MONTHS_RU[month]} <span className="text-text-muted font-medium">{year}</span>
+                  {t.analytics.calendar.months[month]} <span className="text-text-muted font-medium">{year}</span>
                 </h2>
               </div>
               <button
@@ -762,19 +761,19 @@ export default function AnalyticsPage() {
             {/* Статспиллы */}
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               <span className="flex items-center gap-1 rounded-full bg-success/10 px-3 py-1 text-[11px] font-semibold text-success">
-                ↑ {profitDays} в плюс
+                {t.analytics.calendar.profitDays(profitDays)}
               </span>
               <span className="flex items-center gap-1 rounded-full bg-danger/10 px-3 py-1 text-[11px] font-semibold text-danger">
-                ↓ {lossDays} в минус
+                {t.analytics.calendar.lossDays(lossDays)}
               </span>
               {tradingDays > 0 && (
                 <span className="flex items-center gap-1 rounded-full bg-accent-gold/10 px-3 py-1 text-[11px] font-semibold text-accent-gold">
-                  ↕ {tradingDays} сделок
+                  {t.analytics.calendar.tradeDays(tradingDays)}
                 </span>
               )}
               {activeDays > 0 && (
                 <span className="flex items-center gap-1 rounded-full bg-accent-cyan/10 px-3 py-1 text-[11px] font-semibold text-accent-cyan">
-                  ⚡ {activeDays} сигналов
+                  {t.analytics.calendar.signalDays(activeDays)}
                 </span>
               )}
             </div>
@@ -794,7 +793,7 @@ export default function AnalyticsPage() {
           <div className="p-4">
             {/* Дни недели */}
             <div className="mb-2 grid grid-cols-7 gap-1.5">
-              {WEEKDAYS.map(d => (
+              {t.analytics.calendar.weekdays.map(d => (
                 <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest text-text-primary/20">{d}</div>
               ))}
             </div>
@@ -814,10 +813,10 @@ export default function AnalyticsPage() {
 
             {/* Легенда */}
             <div className="mt-4 flex flex-wrap justify-center gap-4 text-[10px] text-text-primary/30">
-              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-accent-cyan" />Сигнал</span>
-              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-accent-gold" />Сделка</span>
-              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-success" />Депозит</span>
-              <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full bg-success text-[7px] font-bold text-black flex items-center justify-center">✓</span>Цель</span>
+              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-accent-cyan" />{t.analytics.calendar.legendSignal}</span>
+              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-accent-gold" />{t.analytics.calendar.legendTrade}</span>
+              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-success" />{t.analytics.calendar.legendDeposit}</span>
+              <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full bg-success text-[7px] font-bold text-black flex items-center justify-center">✓</span>{t.analytics.calendar.legendGoal}</span>
             </div>
           </div>
 
@@ -827,7 +826,7 @@ export default function AnalyticsPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-text-primary">
-                    {new Date(selectedDay.date + "T12:00:00").toLocaleDateString("ru", { weekday: "long", day: "numeric", month: "long" })}
+                    {new Date(selectedDay.date + "T12:00:00").toLocaleDateString(numbers, { weekday: "long", day: "numeric", month: "long" })}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedDay.balance !== null && (
@@ -837,17 +836,17 @@ export default function AnalyticsPage() {
                     )}
                     {selectedDay.signals > 0 && (
                       <span className="rounded-lg bg-accent-cyan/10 px-2.5 py-1 text-[11px] font-semibold text-accent-cyan">
-                        ⚡ {selectedDay.signals} сигналов
+                        {t.analytics.calendar.daySignals(selectedDay.signals)}
                       </span>
                     )}
                     {dayVolume(selectedDay) > 0 && (
                       <span className="rounded-lg bg-accent-gold/10 px-2.5 py-1 text-[11px] font-semibold text-accent-gold">
-                        ↕ ${fmtDot(dayVolume(selectedDay))} объём
+                        {t.analytics.calendar.dayVolume(fmtDot(dayVolume(selectedDay)))}
                       </span>
                     )}
                     {selectedDay.has_deposit && (
                       <span className="rounded-lg bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success">
-                        +$ Пополнение
+                        {t.analytics.calendar.dayDeposit}
                       </span>
                     )}
                   </div>
@@ -859,11 +858,11 @@ export default function AnalyticsPage() {
                         {selectedDay.pnl_pct > 0 ? "+" : ""}{selectedDay.pnl_pct.toFixed(2)}%
                       </p>
                       {selectedDay.signals > 0 && selectedDay.pnl_pct > 0 && (
-                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">✓ Цель</span>
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">{t.analytics.calendar.dayGoal}</span>
                       )}
                     </>
                   ) : (
-                    <p className="text-xs text-text-primary/20">Нет снимка</p>
+                    <p className="text-xs text-text-primary/20">{t.analytics.calendar.noSnapshot}</p>
                   )}
                 </div>
               </div>
@@ -883,11 +882,11 @@ export default function AnalyticsPage() {
                   <table className="w-full whitespace-nowrap text-[11px]">
                     <thead>
                       <tr className="text-[10px] uppercase tracking-wider text-text-primary/30">
-                        <th className="py-1 text-left font-medium">Время</th>
-                        <th className="py-1 text-left font-medium">Монета</th>
-                        <th className="py-1 text-right font-medium">Вход</th>
-                        <th className="py-1 text-right font-medium">Выход</th>
-                        <th className="py-1 text-right font-medium">Итог</th>
+                        <th className="py-1 text-left font-medium">{t.analytics.trades.time}</th>
+                        <th className="py-1 text-left font-medium">{t.analytics.trades.coin}</th>
+                        <th className="py-1 text-right font-medium">{t.analytics.trades.entry}</th>
+                        <th className="py-1 text-right font-medium">{t.analytics.trades.exit}</th>
+                        <th className="py-1 text-right font-medium">{t.analytics.trades.result}</th>
                         <th className="py-1" />
                       </tr>
                     </thead>
@@ -895,7 +894,7 @@ export default function AnalyticsPage() {
                       {dayTrades.map((one) => (
                         <tr key={one.id} className="border-t border-border/40">
                           <td className="py-1 text-text-primary/40">
-                            {new Date(one.closed_at).toLocaleTimeString("ru", {
+                            {new Date(one.closed_at).toLocaleTimeString(numbers, {
                               hour: "2-digit",
                               minute: "2-digit",
                             })}
@@ -907,7 +906,7 @@ export default function AnalyticsPage() {
                                 one.side === "long" ? "text-success" : "text-danger"
                               }`}
                             >
-                              {one.side === "long" ? "лонг" : "шорт"}
+                              {one.side === "long" ? t.analytics.trades.long : t.analytics.trades.short}
                             </span>
                           </td>
                           <td className="py-1 text-right text-text-secondary">
@@ -936,7 +935,7 @@ export default function AnalyticsPage() {
                           <td className="py-1 pl-2 text-right">
                             <button
                               onClick={() => setCard(cardFromTrade(one, owner ?? undefined))}
-                              title="Карточка сделки: скопировать, скачать, поделиться"
+                              title={t.analytics.trades.cardTitle}
                               className="text-text-primary/30 transition-colors duration-150 ease-out hover:text-accent-cyan"
                             >
                               <Share2 className="h-3.5 w-3.5" />
@@ -949,7 +948,7 @@ export default function AnalyticsPage() {
                 </div>
               ) : dayTrades && dayTrades.length === 0 ? (
                 <p className="mt-3 text-[11px] text-text-primary/30">
-                  Сделок в этот день не было
+                  {t.analytics.trades.none}
                 </p>
               ) : null}
             </div>
@@ -963,19 +962,19 @@ export default function AnalyticsPage() {
                   <p className={`font-mono text-base font-extrabold ${totalPnl >= 0 ? "text-success" : "text-danger"}`}>
                     {totalPnl >= 0 ? "+" : ""}{totalPnl.toFixed(1)}%
                   </p>
-                  <p className="text-[10px] text-text-primary/30">итог месяца</p>
+                  <p className="text-[10px] text-text-primary/30">{t.analytics.summary.monthResult}</p>
                 </div>
                 <div>
                   <p className="font-mono text-base font-extrabold text-success">
                     {bestDay ? `+${bestDay.pnl_pct!.toFixed(1)}%` : "-"}
                   </p>
-                  <p className="text-[10px] text-text-primary/30">лучший день</p>
+                  <p className="text-[10px] text-text-primary/30">{t.analytics.summary.bestDay}</p>
                 </div>
                 <div>
                   <p className="font-mono text-base font-extrabold text-danger">
                     {worstDay && worstDay.pnl_pct! < 0 ? `${worstDay.pnl_pct!.toFixed(1)}%` : "-"}
                   </p>
-                  <p className="text-[10px] text-text-primary/30">худший день</p>
+                  <p className="text-[10px] text-text-primary/30">{t.analytics.summary.worstDay}</p>
                 </div>
               </div>
             </div>
@@ -988,9 +987,9 @@ export default function AnalyticsPage() {
               обведена в сетке над кнопками, а не последние семь суток. */}
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
             <span className="text-[10px] uppercase tracking-wider text-text-primary/30">
-              Карточка за
+              {t.analytics.summary.cardFor}
             </span>
-            {SPANS.map(({ id, label }) => {
+            {SPANS.map((id) => {
               const ready = periodOf(calData, id, anchor);
               return (
                 <button
@@ -1000,12 +999,12 @@ export default function AnalyticsPage() {
                   title={
                     ready
                       ? `${ready.title}: ${ready.roi >= 0 ? "+" : ""}${ready.roi.toFixed(2)}%`
-                      : "За этот срок нечего показать"
+                      : t.analytics.summary.nothingToShow
                   }
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[11px] font-semibold text-text-secondary transition-colors duration-150 ease-out hover:border-accent-cyan/40 hover:text-accent-cyan disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-border disabled:hover:text-text-secondary"
                 >
                   <Share2 className="h-3 w-3" />
-                  {label}
+                  {spanLabel[id]}
                 </button>
               );
             })}
@@ -1024,18 +1023,16 @@ export default function AnalyticsPage() {
             const xp = volXp + streakXp + goalXp + hotXp + profitXp + tradeDayXp;
             const { level, xpInLevel, xpNeeded } = getXpLevel(xp);
             const pct = Math.min(100, (xpInLevel / xpNeeded) * 100);
-            const levelTitles: Record<number, string> = {
-              1: "Новичок", 2: "Начинающий", 3: "Трейдер", 4: "Уверенный",
-              5: "Опытный", 7: "Профи", 10: "Эксперт", 15: "Мастер", 20: "Легенда",
-            };
-            const levelTitle = Object.entries(levelTitles).reverse().find(([l]) => level >= +l)?.[1] ?? "Новичок";
+            const levelTitles = t.analytics.level.titles;
+            const levelTitle = Object.entries(levelTitles).reverse().find(([l]) => level >= +l)?.[1] ?? levelTitles[1];
+            const xpSources = t.analytics.level.sources;
             const breakdown = [
-              { icon: BarChart2,    label: "Объём",       val: volXp,      color: "text-accent-cyan", bg: "bg-accent-cyan/10" },
-              { icon: Flame,        label: "Стрик",       val: streakXp,   color: "text-orange-400",  bg: "bg-orange-400/10" },
-              { icon: Zap,          label: "Горячие дни", val: hotXp,      color: "text-accent-gold", bg: "bg-accent-gold/10" },
-              { icon: TrendingUp,   label: "Прибыль",     val: profitXp,   color: "text-success",     bg: "bg-success/10" },
-              { icon: CalendarDays, label: "Дни",         val: tradeDayXp, color: "text-blue-400",    bg: "bg-blue-400/10" },
-              { icon: Target,       label: "Цели",        val: goalXp,     color: "text-purple-400",  bg: "bg-purple-400/10" },
+              { icon: BarChart2,    label: xpSources.volume,  val: volXp,      color: "text-accent-cyan", bg: "bg-accent-cyan/10" },
+              { icon: Flame,        label: xpSources.streak,  val: streakXp,   color: "text-orange-400",  bg: "bg-orange-400/10" },
+              { icon: Zap,          label: xpSources.hotDays, val: hotXp,      color: "text-accent-gold", bg: "bg-accent-gold/10" },
+              { icon: TrendingUp,   label: xpSources.profit,  val: profitXp,   color: "text-success",     bg: "bg-success/10" },
+              { icon: CalendarDays, label: xpSources.days,    val: tradeDayXp, color: "text-blue-400",    bg: "bg-blue-400/10" },
+              { icon: Target,       label: xpSources.goals,   val: goalXp,     color: "text-purple-400",  bg: "bg-purple-400/10" },
             ];
             return (
               <div className="relative overflow-hidden rounded-xl border border-border bg-bg-card p-5">
@@ -1045,12 +1042,12 @@ export default function AnalyticsPage() {
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-gold/15 text-accent-gold">
                       <Star className="h-4 w-4" />
                     </div>
-                    <h2 className="text-base font-bold text-text-primary">Уровень трейдера</h2>
+                    <h2 className="text-base font-bold text-text-primary">{t.analytics.level.title}</h2>
                   </div>
                   {coinsBalance !== null && (
                     <div className="flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-accent-gold/10 px-2.5 py-1">
                       <Coins className="h-3.5 w-3.5 text-accent-gold" />
-                      <span className="font-mono text-sm font-extrabold text-accent-gold">{coinsBalance.toLocaleString("ru")}</span>
+                      <span className="font-mono text-sm font-extrabold text-accent-gold">{coinsBalance.toLocaleString(numbers)}</span>
                       <span className="text-[9px] font-bold text-accent-gold/50">NMNH</span>
                     </div>
                   )}
@@ -1060,17 +1057,17 @@ export default function AnalyticsPage() {
                 <div className="relative mt-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex h-14 w-14 flex-col items-center justify-center rounded-2xl border border-accent-gold/30 bg-gradient-to-br from-accent-gold/20 to-accent-gold/5 shadow-[0_4px_16px_-6px_rgba(255,200,0,0.5)]">
-                      <span className="text-[8px] font-bold uppercase tracking-wider text-accent-gold/60 leading-none">ур.</span>
+                      <span className="text-[8px] font-bold uppercase tracking-wider text-accent-gold/60 leading-none">{t.analytics.level.short}</span>
                       <span className="font-mono text-2xl font-black text-accent-gold leading-none">{level}</span>
                     </div>
                     <div>
                       <p className="text-sm font-bold text-text-primary">{levelTitle}</p>
-                      <p className="mt-0.5 text-[11px] text-text-primary/40">осталось {Math.max(0, xpNeeded - xpInLevel).toLocaleString("ru")} XP до ур. {level + 1}</p>
+                      <p className="mt-0.5 text-[11px] text-text-primary/40">{t.analytics.level.toNext(Math.max(0, xpNeeded - xpInLevel).toLocaleString(numbers), level + 1)}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="font-mono text-2xl font-extrabold leading-none text-text-primary">{xp.toLocaleString("ru")}</span>
-                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-text-primary/30">всего XP</p>
+                    <span className="font-mono text-2xl font-extrabold leading-none text-text-primary">{xp.toLocaleString(numbers)}</span>
+                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-text-primary/30">{t.analytics.level.totalXp}</p>
                   </div>
                 </div>
 
@@ -1081,7 +1078,7 @@ export default function AnalyticsPage() {
                     style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }}
                   />
                 </div>
-                <p className="relative mt-1.5 text-right text-[10px] text-text-primary/30">{xpInLevel.toLocaleString("ru")} / {xpNeeded.toLocaleString("ru")} XP</p>
+                <p className="relative mt-1.5 text-right text-[10px] text-text-primary/30">{xpInLevel.toLocaleString(numbers)} / {xpNeeded.toLocaleString(numbers)} XP</p>
 
                 {/* Разбивка XP */}
                 <div className="relative mt-4 grid grid-cols-2 gap-2">
@@ -1102,7 +1099,7 @@ export default function AnalyticsPage() {
           <div className="card space-y-4">
             <div className="flex items-center gap-2">
               <Target className="h-4 w-4 text-accent-cyan" />
-              <h2 className="text-base font-bold text-text-primary">Цели месяца</h2>
+              <h2 className="text-base font-bold text-text-primary">{t.analytics.goalsTitle}</h2>
             </div>
 
             {goals.map((goal) => {
@@ -1112,7 +1109,7 @@ export default function AnalyticsPage() {
                 <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-success/[0.04]" : "border-border bg-bg-panel/60"}`}>
                   <div className="flex items-center gap-2 mb-1.5">
                     <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: goal.color }} />
-                    <span className="text-[11px] font-semibold text-text-primary flex-1 min-w-0 truncate">{goal.label}</span>
+                    <span className="text-[11px] font-semibold text-text-primary flex-1 min-w-0 truncate">{t.analytics.goals[goal.id].label}</span>
                     {goal.unlocked
                       ? <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
                       : <span className="font-mono text-[10px] text-text-primary/30 shrink-0">{goal.current}/{goal.target}</span>
@@ -1122,7 +1119,7 @@ export default function AnalyticsPage() {
                     <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
                   </div>
                   {goal.unlocked && (
-                    <p className="mt-1 text-[9px] text-success/70 truncate">{goal.reward}</p>
+                    <p className="mt-1 text-[9px] text-success/70 truncate">{t.analytics.goals[goal.id].reward}</p>
                   )}
                 </div>
               );
@@ -1137,7 +1134,7 @@ export default function AnalyticsPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Trophy className="h-4 w-4 text-accent-gold" />
-            <h2 className="text-base font-bold text-text-primary">Достижения</h2>
+            <h2 className="text-base font-bold text-text-primary">{t.analytics.achievements.title}</h2>
           </div>
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs text-accent-gold font-bold">{achievements.filter(a => a.earned).length}/{achievements.length}</span>
@@ -1157,7 +1154,7 @@ export default function AnalyticsPage() {
               <button key={cat.id} onClick={() => setAchCategory(cat.id)}
                 className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-accent-gold/10 text-accent-gold" : "border-border bg-bg-panel/60 text-text-primary/40 hover:text-text-primary/70"}`}>
                 <cat.icon className="h-3 w-3 shrink-0" />
-                <span>{cat.label}</span>
+                <span>{t.analytics.achievements.categories[cat.id]}</span>
                 <span className={`font-mono text-[9px] ${achCategory === cat.id ? "text-accent-gold/60" : "text-text-primary/20"}`}>{count}/{total}</span>
               </button>
             );
@@ -1184,12 +1181,12 @@ export default function AnalyticsPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-text-primary">{ach.title}</h3>
+                      <h3 className="text-sm font-bold text-text-primary">{t.analytics.achievements.items[ach.id].title}</h3>
                       <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${r.badge}`}>
-                        {r.label}
+                        {t.analytics.rarity[ach.rarity]}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-[11px] text-text-muted">{ach.desc}</p>
+                    <p className="mt-0.5 text-[11px] text-text-muted">{t.analytics.achievements.items[ach.id].desc}</p>
                     <div className="mt-1.5 flex items-center gap-1">
                       <Coins className="h-3 w-3 text-accent-gold/70" />
                       <span className="font-mono text-[10px] font-bold text-accent-gold/80">

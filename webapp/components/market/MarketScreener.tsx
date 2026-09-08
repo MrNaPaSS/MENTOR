@@ -14,6 +14,7 @@
 // Строка ведёт в терминал на эту же монету: скринер отвечает на вопрос «где
 // сегодня работать», и ответ должен открываться в один клик.
 
+import { useT, type Dict } from "@/lib/i18n";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowDown, Search } from "lucide-react";
@@ -30,38 +31,32 @@ import { LiveBadge, PaneLabel } from "./Pane";
 
 type Column = {
   key: SortKey | null;
-  label: string;
+  /** Ключ подписи в словаре. */
+  text: keyof Dict["market"]["screener"]["cols"];
   align: "left" | "right" | "center";
-  hint: string;
   /** Прячется на узких экранах: колонка полезная, но не первая по важности. */
   wide?: boolean;
 };
 
+/**
+ * Колонки таблицы. Ключ подписи, а не сама подпись: заголовок и подсказку
+ * берём из словаря в момент отрисовки.
+ */
 const COLUMNS: Column[] = [
-  { key: null, label: "Монета", align: "left", hint: "Инструмент и его цена" },
-  { key: "change", label: "Изм. 24ч", align: "right", hint: "Изменение цены за сутки" },
-  { key: "volume", label: "Оборот 24ч", align: "right", hint: "Сколько наторговали за сутки" },
-  {
-    key: "walls",
-    label: "Плита",
-    align: "right",
-    hint: "Крупная заявка рядом с ценой и её удаление в базисных пунктах",
-  },
-  { key: "imbalance", label: "Перевес", align: "center", hint: "Чья сторона стакана плотнее" },
-  {
-    key: "delta",
-    label: "Дельта",
-    align: "right",
-    hint: "Покупки минус продажи по рынку за минуту",
-    wide: true,
-  },
-  { key: "range", label: "Ход", align: "right", hint: "Размах цены за минуту, базисные пункты", wide: true },
-  { key: "spread", label: "Спред", align: "right", hint: "Разница лучших цен, базисные пункты", wide: true },
-  { key: null, label: "Сделок/мин", align: "right", hint: "Частота сделок по рынку", wide: true },
+  { key: null, text: "coin", align: "left" },
+  { key: "change", text: "change", align: "right" },
+  { key: "volume", text: "volume", align: "right" },
+  { key: "walls", text: "wall", align: "right" },
+  { key: "imbalance", text: "imbalance", align: "center" },
+  { key: "delta", text: "delta", align: "right", wide: true },
+  { key: "range", text: "range", align: "right", wide: true },
+  { key: "spread", text: "spread", align: "right", wide: true },
+  { key: null, text: "trades", align: "right", wide: true },
 ];
 
 /** Перевес стакана словом и цветом: цифра 1.8 сама по себе ничего не значит. */
 function Imbalance({ ratio }: { ratio: number }) {
+  const t = useT();
   if (!Number.isFinite(ratio) || ratio <= 0) {
     return <span className="text-[var(--pane-muted)]">-</span>;
   }
@@ -78,7 +73,7 @@ function Imbalance({ ratio }: { ratio: number }) {
             : "var(--pane-down)"
           : "var(--pane-muted)",
       }}
-      title={bids ? "Плотнее сторона покупателей" : "Плотнее сторона продавцов"}
+title={bids ? t.market.screener.bidsDenser : t.market.screener.asksDenser}
     >
       {bids ? "▲" : "▼"}
       {force.toFixed(1)}
@@ -88,6 +83,7 @@ function Imbalance({ ratio }: { ratio: number }) {
 
 /** Плита: сумма и на сколько она отстоит от цены. */
 function Wall({ row }: { row: ScreenerRow }) {
+  const t = useT();
   if (!row.wall_notional || !row.wall_side) {
     return <span className="text-[var(--pane-muted)]">-</span>;
   }
@@ -98,8 +94,8 @@ function Wall({ row }: { row: ScreenerRow }) {
       style={{ color: bid ? "var(--pane-up)" : "var(--pane-down)" }}
       title={
         bid
-          ? "Крупная заявка на покупку под ценой"
-          : "Крупная заявка на продажу над ценой"
+          ? t.market.screener.bigBid
+          : t.market.screener.bigAsk
       }
     >
       {money(row.wall_notional)}
@@ -109,6 +105,7 @@ function Wall({ row }: { row: ScreenerRow }) {
 }
 
 export default function MarketScreener() {
+  const t = useT();
   const [sort, setSort] = useState<SortKey>("volume");
   const [query, setQuery] = useState("");
 
@@ -133,9 +130,9 @@ export default function MarketScreener() {
     <section className="overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)]">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--pane-border)] px-3 py-2">
         <div>
-          <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">Скринер рынка</h2>
+          <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.market.screener.title}</h2>
           <p className="text-[10px] text-[var(--pane-muted)]">
-            {rows.length} инструментов · метрики считает наш сервер
+            {t.market.screener.subtitle(rows.length)}
           </p>
         </div>
 
@@ -145,11 +142,11 @@ export default function MarketScreener() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Монета"
+              placeholder={t.market.screener.searchPlaceholder}
               className="w-24 bg-transparent font-mono text-[11px] uppercase text-[var(--pane-text)] outline-none placeholder:normal-case placeholder:text-[var(--pane-muted)]"
             />
           </label>
-          <LiveBadge live={connected} label={connected ? "Поток идёт" : "Нет связи"} />
+          <LiveBadge live={connected} label={connected ? t.market.screener.streamOn : t.market.screener.streamOff} />
         </div>
       </header>
 
@@ -162,8 +159,8 @@ export default function MarketScreener() {
                 const clickable = c.key !== null;
                 return (
                   <th
-                    key={c.label}
-                    title={c.hint}
+                    key={c.text}
+                    title={t.market.screener.cols[c.text].hint}
                     className={`px-2 py-2 ${c.wide ? "hidden lg:table-cell" : ""} ${
                       c.align === "right"
                         ? "text-right"
@@ -181,7 +178,7 @@ export default function MarketScreener() {
                       }`}
                       style={{ color: active ? "var(--pane-chip)" : undefined }}
                     >
-                      <PaneLabel>{c.label}</PaneLabel>
+                      <PaneLabel>{t.market.screener.cols[c.text].label}</PaneLabel>
                       {active && <ArrowDown className="h-2.5 w-2.5" />}
                     </button>
                   </th>
@@ -203,7 +200,7 @@ export default function MarketScreener() {
                       href={`/app/scalping?symbol=${r.symbol}`}
                       onClick={() => askSymbol(r.symbol)}
                       className="flex items-baseline gap-2"
-                      title="Открыть в терминале"
+                      title={t.market.screener.openInTerminal}
                     >
                       <span className="font-mono text-[12px] font-semibold text-[var(--pane-text)]">
                         {base(r.symbol)}
@@ -214,9 +211,9 @@ export default function MarketScreener() {
                       {!r.live && (
                         <span
                           className="text-[9px] uppercase text-[var(--pane-muted)]"
-                          title="По этой монете поток молчит"
+                          title={t.market.screener.quietTitle}
                         >
-                          тихо
+                          {t.market.screener.quiet}
                         </span>
                       )}
                     </Link>
@@ -278,9 +275,9 @@ export default function MarketScreener() {
           <p className="py-10 text-center text-[11px] text-[var(--pane-muted)]">
             {connected
               ? query
-                ? "Такой монеты в списке нет"
-                : "Ждём первый кадр от сервера..."
-              : "Нет связи с потоком биржи"}
+                ? t.market.screener.notInList
+                : t.market.screener.waitingFrame
+              : t.market.screener.noStream}
           </p>
         )}
       </div>

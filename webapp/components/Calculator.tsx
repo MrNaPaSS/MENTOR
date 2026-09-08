@@ -4,11 +4,14 @@ import { useState, useEffect } from "react";
 import { TrendingUp, TrendingDown, RefreshCw, AlertTriangle, ChevronRight } from "lucide-react";
 import { api, CalcResponse } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
+import { useT } from "@/lib/i18n";
 import { fmtUsd } from "@/lib/format";
 
 const MAX_LEV = 400;
 
 export default function Calculator() {
+  const t = useT();
+  const c = t.tools.calculator;
   const [balance, setBalance] = useState("1000");
   const [balanceFromProfile, setBalanceFromProfile] = useState(false);
   const [entry, setEntry] = useState("100");
@@ -49,7 +52,7 @@ export default function Calculator() {
       const res = await api.calculate({ mode: "turbo", balance, entry_price: entry, direction, leverage });
       setResult(res);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Ошибка расчёта");
+      setError(e instanceof Error ? e.message : t.tools.calculator.error);
     } finally {
       setLoading(false);
     }
@@ -103,7 +106,7 @@ export default function Calculator() {
           {/* Balance + Pair */}
           <div className="grid grid-cols-2 gap-3">
             <Field
-              label={balanceFromProfile ? "Депозит (WEEX)" : "Депозит ($)"}
+              label={balanceFromProfile ? c.depositWeex : c.deposit}
               accent={balanceFromProfile}
             >
               <input
@@ -113,7 +116,7 @@ export default function Calculator() {
                 onChange={(e) => { setBalance(e.target.value); setBalanceFromProfile(false); }}
               />
             </Field>
-            <Field label="Торговая пара">
+            <Field label={c.pair}>
               <input
                 className="input font-mono uppercase"
                 value={pair}
@@ -123,7 +126,7 @@ export default function Calculator() {
           </div>
 
           {/* Entry price */}
-          <Field label="Цена входа ($)">
+          <Field label={c.entryPrice}>
             <div className="flex gap-2">
               <input
                 className="input font-mono"
@@ -140,7 +143,7 @@ export default function Calculator() {
                   border: "1px solid rgb(var(--accent-cyan) / 0.28)",
                   color: "var(--c-accent)",
                 }}
-                aria-label="Получить текущую цену"
+                aria-label={c.fetchPrice}
               >
                 <RefreshCw className={`h-4 w-4 ${priceLoading ? "animate-spin" : ""}`} />
               </button>
@@ -150,7 +153,7 @@ export default function Calculator() {
           {/* Leverage slider */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm font-medium text-text-secondary">Плечо</span>
+              <span className="text-sm font-medium text-text-secondary">{c.leverage}</span>
               <span
                 className="rounded-lg px-2.5 py-1 font-mono text-sm font-bold"
                 style={{
@@ -192,7 +195,7 @@ export default function Calculator() {
             style={{ background: "linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent) 100%)" }}
           >
             <span className="flex items-center justify-center gap-2">
-              {loading ? "Считаем…" : <>Рассчитать <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></>}
+              {loading ? c.calculating : <>{c.calculate} <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></>}
             </span>
           </button>
         </div>
@@ -224,26 +227,26 @@ export default function Calculator() {
               >
                 <TrendingUp className="h-7 w-7" style={{ color: "var(--c-accent)", opacity: 0.5 }} />
               </div>
-              <p className="font-semibold text-text-primary opacity-40">Заполни параметры</p>
-              <p className="mt-1 text-xs text-text-muted opacity-60">Маржа · объём · риск · тейки появятся здесь</p>
+              <p className="font-semibold text-text-primary opacity-40">{c.emptyTitle}</p>
+              <p className="mt-1 text-xs text-text-muted opacity-60">{c.emptyHint}</p>
             </div>
           ) : (
             <div className="space-y-4">
 
               {/* Top metrics */}
               <div className="grid grid-cols-2 gap-3">
-                <ResultCard label="Маржа" value={`$${fmtUsd(result.margin_usd)}`} accent="cyan" />
-                <ResultCard label="Объём позиции" value={`$${fmtUsd(result.position_size)}`} accent="cyan" />
+                <ResultCard label={c.margin} value={`$${fmtUsd(result.margin_usd)}`} accent="cyan" />
+                <ResultCard label={c.positionSize} value={`$${fmtUsd(result.position_size)}`} accent="cyan" />
               </div>
 
               {/* Risk + SL row */}
               <div className="grid grid-cols-2 gap-3">
                 <ResultCard
-                  label={`Риск (стоп ${Number(result.sl_percent).toFixed(1)}%)`}
+                  label={c.riskWithStop(Number(result.sl_percent).toFixed(1))}
                   value={`$${fmtUsd(result.risk_usd)}`}
                   accent={riskPct > 5 ? "danger" : "neutral"}
                 />
-                <ResultCard label="Цена стопа" value={`$${fmtUsd(result.sl_price, 4)}`} accent="neutral" />
+                <ResultCard label={c.stopPrice} value={`$${fmtUsd(result.sl_price, 4)}`} accent="neutral" />
               </div>
 
               {/* TP rows */}
