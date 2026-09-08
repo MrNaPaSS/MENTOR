@@ -460,6 +460,29 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     display: flex; flex-direction: column; align-items: center; gap: 18px;
   }}
 
+  /* Лист под светлым снимком.
+     Снимок бывает и на белом, и на чёрном, а тема в записи не хранится - её
+     определяет скрипт внизу по самой картинке. Тёмный лист вокруг белого
+     графика выглядел вырезанным из другого приложения; здесь под ним та же
+     бумага в клетку, что на странице входа. */
+  :root[data-paper="light"] body {{
+    background:
+      linear-gradient(to right, rgba(42,42,62,.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(42,42,62,.05) 1px, transparent 1px),
+      radial-gradient(120% 80% at 50% -10%, rgba(126,87,194,.07), transparent 60%),
+      #f4f5f8;
+    background-size: 48px 48px, 48px 48px, auto, auto;
+    color: #111418;
+  }}
+  :root[data-paper="light"] .slot {{
+    background: linear-gradient(180deg, #e6e8ee, #cfd3dc);
+    box-shadow: 0 0 0 1px rgba(17,20,24,.08), 0 10px 30px rgba(17,20,24,.12);
+  }}
+  :root[data-paper="light"] .paper {{ box-shadow: 0 24px 60px rgba(17,20,24,.18); }}
+  :root[data-paper="light"] .note {{ color: #4a5058; }}
+  :root[data-paper="light"] .logo {{ color: #111418; }}
+  :root[data-paper="light"] .logo:hover {{ color: #000; }}
+
   /* Верхней шторки нет намеренно. Пара, таймфрейм, автор и время нарисованы в
      самой картинке - подпись над ней повторяла их слово в слово. */
 
@@ -608,6 +631,36 @@ def shot_page(shot_id: str, session=Depends(get_session)):
   </div>
   {caption}
   <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH.TRADE">NMNH.TRADE</span></a>
+<script>
+  // Тема снимка - по самой картинке.
+  //
+  // В записи её нет, а лист вокруг должен быть той же светлости, что и график:
+  // тёмная страница вокруг белого графика выглядит вырезанной из другого
+  // приложения. Смотрим на угол картинки: там поле графика, без свечей и
+  // подписей. Картинка своя, с этого же адреса, поэтому холст не портится и
+  // пиксель читается.
+  (function () {{
+    var img = document.querySelector(".paper img");
+    if (!img) return;
+    function decide() {{
+      try {{
+        var c = document.createElement("canvas");
+        c.width = c.height = 1;
+        var ctx = c.getContext("2d");
+        if (!ctx) return;
+        // Берём точку внутри поля, отступив от краёв: по самому краю идёт рамка.
+        ctx.drawImage(img, Math.round(img.naturalWidth * 0.5), Math.round(img.naturalHeight * 0.12), 1, 1, 0, 0, 1, 1);
+        var px = ctx.getImageData(0, 0, 1, 1).data;
+        var light = (px[0] * 299 + px[1] * 587 + px[2] * 114) / 1000 > 140;
+        if (light) document.documentElement.dataset.paper = "light";
+      }} catch (e) {{
+        // Не прочиталось - остаёмся на тёмном листе, как было.
+      }}
+    }}
+    if (img.complete && img.naturalWidth) decide();
+    else img.addEventListener("load", decide);
+  }})();
+</script>
 </body>
 </html>"""
     )
