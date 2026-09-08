@@ -89,11 +89,11 @@ async def _cached(key: str, factory):
         _cache_locks.pop(key, None)
 
 
-async def _fetch_weex_data(weex, days: int):
-    """Single unified WEEX data fetch shared by overview and referrals.
+async def _fetch_base(weex, days: int):
+    """Список рефералов, их обороты и комиссии за период.
 
-    Fetches uids + trade + commission + balances in one cache entry (10 min TTL).
-    Eliminates duplicate WEEX calls when both endpoints are hit simultaneously.
+    Три запроса к WEEX разом, один кэш на десять минут. Балансов здесь нет
+    намеренно - за ними ходят отдельно и только те, кому они нужны.
     """
     start, end = _period(days)
     uid_start = end - 85 * _DAY_MS
@@ -104,11 +104,21 @@ async def _fetch_weex_data(weex, days: int):
             weex.get_channel_trade_asset_all(start, end),
             weex.get_affiliate_commission_all(start, end),
         )
-        uids = [r["uid"] for r in trade]
-        balances = await _fetch_balances(weex, uids)
-        return all_uids, trade, comm, balances
+        return all_uids, trade, comm
 
-    return await _cached(f"raw:{days}", build)
+    return await _cached(f"base:{days}", build)
+
+
+async def _fetch_weex_data(weex, days: int):
+    """То же самое плюс балансы рефералов.
+
+    Балансы стоят дорого: WEEX отдаёт их по одному uid за запрос, а рефералов
+    сотни - при трёх одновременных это десятки секунд ожидания. Поэтому они
+    отделены от остального: сводке они не нужны вовсе, а таблице нужны.
+    """
+    all_uids, trade, comm = await _fetch_base(weex, days)
+    balances = await _fetch_balances(weex, [r["uid"] for r in trade])
+    return all_uids, trade, comm, balances
 
 
 class AffiliateOverview(BaseModel):
@@ -141,7 +151,10 @@ class ReferralRow(BaseModel):
 @router.get("/overview", response_model=AffiliateOverview)
 async def overview(days: int = 30, weex=Depends(get_weex)):
     days = max(1, min(days, 90))
-    all_uids, records, comm_items, _ = await _fetch_weex_data(weex, days)
+    # Без балансов: сводке они не нужны, а ждать из-за них минуту - нужно ещё
+    # меньше. Раньше эта ручка тянула их вместе со всем остальным и молча
+    # выбрасывала.
+    all_uids, records, comm_items = await _fetch_base(weex, days)
     start, _ = _period(days)
     # Count registrations that actually fall inside the requested period
     new_referrals = sum(1 for u in all_uids if int(u.get("registerTime") or 0) >= start)

@@ -44,30 +44,36 @@ export default function AdminDashboard() {
   const [sortField, setSortField] = useState<SortField>("futures_volume");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
-  // Загрузка основной платформы — каждый запрос независимо, чтобы один сбой не блокировал остальные
+  // Загрузка основной платформы — каждый запрос независимо, чтобы один сбой не
+  // блокировал остальные.
+  //
+  // Признак загрузки ждёт только своих: учеников и статистику платформы. Их
+  // отдаёт наша база за миллисекунды, а числа партнёрки приезжают из WEEX и
+  // могут ехать секундами. Раньше счётчик ждал все четыре ответа, и на месте
+  // числа учеников стоял прочерк до тех пор, пока не ответит биржа. У блоков
+  // партнёрки свои заглушки - им общий признак не нужен.
   useEffect(() => {
     let done = 0;
-    const finish = () => { done++; if (done >= 4) setLoaded(true); };
+    const finish = () => { done++; if (done >= 2) setLoaded(true); };
 
     api.publicStats().then(setStats).catch(() => {}).finally(finish);
     api.students(token).then(setStudents).catch(() => {}).finally(finish);
-    api.affiliateMentorBalance(token).then(setMentorBal).catch(() => {}).finally(finish);
-    api.affiliateOverview(token, 2).then(setToday).catch(() => {}).finally(finish);
+    api.affiliateMentorBalance(token).then(setMentorBal).catch(() => {});
+    api.affiliateOverview(token, 2).then(setToday).catch(() => {});
   }, [token]);
 
-  // Загрузка партнерской статистики WEEX - сброс при смене периода
+  // Загрузка партнерской статистики WEEX - сброс при смене периода.
+  //
+  // Двумя независимыми запросами, а не одним Promise.all. Сводка приходит от
+  // WEEX тремя запросами, а таблица рефералов вдобавок тянет баланс каждого -
+  // по одному запросу на человека. Связанные вместе, они заставляли пустой
+  // дашборд ждать самый долгий из двух: цифры были готовы через секунду, а на
+  // экране не появлялось ничего, пока не досчитается таблица.
   useEffect(() => {
     setAff(null);
     setRefs([]);
-    Promise.all([api.affiliateOverview(token, days), api.affiliateReferrals(token, days)])
-      .then(([o, r]) => {
-        setAff(o);
-        setRefs(r);
-      })
-      .catch(() => {
-        setAff(null);
-        setRefs([]);
-      });
+    api.affiliateOverview(token, days).then(setAff).catch(() => setAff(null));
+    api.affiliateReferrals(token, days).then(setRefs).catch(() => setRefs([]));
   }, [token, days]);
 
   const activeStudentsCount = useMemo(() => students.filter((s) => s.is_active && s.is_approved).length, [students]);
@@ -328,7 +334,7 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-cyan/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Новых рефералов</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-text-primary">
-              {!loaded && !today ? <span className="skeleton inline-block h-7 w-8" /> : (today?.referrals ?? 0)}
+              {!today ? <span className="skeleton inline-block h-7 w-8" /> : (today?.referrals ?? 0)}
             </p>
           </div>
           {/* Активных трейдеров */}
@@ -336,7 +342,7 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-cyan/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Торговали сегодня</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-accent-cyan">
-              {!loaded && !today ? <span className="skeleton inline-block h-7 w-8" /> : (today?.active_traders ?? 0)}
+              {!today ? <span className="skeleton inline-block h-7 w-8" /> : (today?.active_traders ?? 0)}
             </p>
           </div>
           {/* Депозиты */}
@@ -344,7 +350,7 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-success/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Депозиты</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-success">
-              {!loaded && !today ? <span className="skeleton inline-block h-7 w-16" /> : `$${fmtUsd(today?.total_deposit ?? 0)}`}
+              {!today ? <span className="skeleton inline-block h-7 w-16" /> : `$${fmtUsd(today?.total_deposit ?? 0)}`}
             </p>
           </div>
           {/* Объём торговли */}
@@ -352,7 +358,7 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-gold/60 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Объём торгов</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-accent-gold">
-              {!loaded && !today
+              {!today
                 ? <span className="skeleton inline-block h-7 w-20" />
                 : `$${fmtUsd(Number(today?.total_futures_volume ?? 0) + Number(today?.total_spot_volume ?? 0))}`}
             </p>
@@ -362,7 +368,7 @@ export default function AdminDashboard() {
             <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-accent-gold/80 to-transparent" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-gold/70">Мой доход</p>
             <p className="mt-1.5 font-mono text-2xl font-bold text-accent-gold">
-              {!loaded && !today ? <span className="skeleton inline-block h-7 w-14" /> : `$${fmtUsd(today?.total_commission ?? 0)}`}
+              {!today ? <span className="skeleton inline-block h-7 w-14" /> : `$${fmtUsd(today?.total_commission ?? 0)}`}
             </p>
           </div>
         </div>
