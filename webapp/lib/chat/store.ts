@@ -16,19 +16,23 @@
 
 import { API_URL } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
+
+import { cardLink } from "./card";
 import {
   edit as editMessage,
   history,
   normalize,
   remove as removeMessage,
   send as sendMessage,
+  threads as loadThreads,
   type ChatAttach,
   type ChatAuthor,
   type ChatMessage,
+  type ChatThread,
   type SendExtras,
 } from "./api";
 
-export type { ChatAttach, ChatAuthor, ChatMessage, ChatQuote, SharedTrade } from "./api";
+export type { ChatAttach, ChatAuthor, ChatMessage, ChatQuote, ChatThread, SharedTrade } from "./api";
 export type { SendExtras } from "./api";
 
 export type ChatState = {
@@ -43,6 +47,10 @@ export type ChatState = {
   unread: number;
   /** Живой канал открыт. Нет - лента остаётся, но новое не приедет. */
   live: boolean;
+  /** Ветки разговора: те же, что темы форума. */
+  threads: ChatThread[];
+  /** Открытая ветка. Ноль - веток ещё не привезли. */
+  thread: number;
 };
 
 const EMPTY: ChatState = {
@@ -52,6 +60,8 @@ const EMPTY: ChatState = {
   more: false,
   unread: 0,
   live: false,
+  threads: [],
+  thread: 0,
 };
 
 let state: ChatState = EMPTY;
@@ -137,9 +147,15 @@ function connect() {
       const message = normalize(frame.payload as never);
       // Своё сообщение уже лежит в ленте: его положил ответ на отправку.
       if (state.messages.some((m) => m.id === message.id)) return;
+
+      // Сокет приносит все ветки сразу - комната одна. В ленту кладём только
+      // открытую: подмешать чужую значит показать разговор, которого на этой
+      // вкладке не начинали. Но счётчик непрочитанного растёт от любой - иначе
+      // сообщение в соседней ветке останется незамеченным навсегда.
+      const mine = !state.thread || (message.threadId ?? 0) === state.thread;
       set({
-        messages: [...state.messages, message],
-        unread: reading ? 0 : state.unread + 1,
+        messages: mine ? [...state.messages, message] : state.messages,
+        unread: reading && mine ? 0 : state.unread + 1,
       });
     }
   };
@@ -171,6 +187,16 @@ function host(author: ChatAuthor): ChatAuthor {
 export function open(): () => void {
   users += 1;
   if (users === 1) {
+    // Ветки тянем один раз вместе с историей: переключатель обязан появиться
+    // сразу, а не после первого сообщения.
+    void loadThreads().then((rows) => {
+      if (rows.length === 0) return;
+      const chosen = state.thread || (rows.find((r) => r.default) ?? rows[0]).id;
+      set({ threads: rows, thread: chosen });
+      // История приезжала до того, как стало известно, какая ветка открыта:
+      // перечитываем её уже по ветке.
+      void reload(chosen);
+    });
     void history().then(({ messages, more }) => {
       // История приходит один раз: если пока её везли, сокет успел принести
       // новое, дописываем его следом, а не затираем.
@@ -193,6 +219,24 @@ export function open(): () => void {
   };
 }
 
+/**
+ * Перечитать ленту выбранной ветки.
+ *
+ * Целиком, а не дописыванием: у каждой ветки свой разговор, и склеивать их в
+ * одну ленту - это чат, в котором ответы стоят под чужими вопросами.
+ */
+async function reload(thread: number): Promise<void> {
+  const { messages, more } = await history(undefined, thread);
+  set({ messages, more });
+}
+
+/** Открыть другую ветку. */
+export function openThread(thread: number): void {
+  if (thread === state.thread) return;
+  set({ thread, messages: [], more: false, unread: 0 });
+  void reload(thread);
+}
+
 /** Панель открыта: считать пришедшее прочитанным. */
 export function setReading(value: boolean): void {
   reading = value;
@@ -203,7 +247,7 @@ export function setReading(value: boolean): void {
 export async function older(): Promise<void> {
   const oldest = state.messages[0];
   if (!oldest || !state.more) return;
-  const { messages, more } = await history(oldest.id);
+  const { messages, more } = await history(oldest.id, state.thread || null);
   if (messages.length === 0) {
     set({ more: false });
     return;
@@ -223,7 +267,23 @@ export async function post(
   attach?: ChatAttach | null,
   extras: SendExtras = {},
 ): Promise<string | null> {
-  const message = await sendMessage(text, attach, extras);
+  // Карточка собирается здесь, а не там, где сделку выбирают: путей к отправке
+  // несколько - панель чата, терминал, журнал, - и повторять сборку в каждом
+  // значит однажды забыть её в одном.
+  //
+  // Ждём её до отправки намеренно: сообщение должно уйти в форум уже со
+  // ссылкой. Дослать её потом означало бы править в Telegram сообщение,
+  // которое там уже прочли.
+  let ready = attach ?? null;
+  if (ready?.kind === "trade" && !ready.url) {
+    const card = await cardLink(ready.trade, state.me?.name ?? "");
+    if (card) ready = { ...ready, url: card.url, image: card.image };
+  }
+
+  const message = await sendMessage(text, ready, {
+    ...extras,
+    threadId: extras.threadId ?? (state.thread || null),
+  });
   if (!message) return null;
   if (!state.messages.some((m) => m.id === message.id)) {
     set({ messages: [...state.messages, message] });

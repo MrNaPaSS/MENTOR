@@ -65,6 +65,22 @@ class BackendConfig:
     density_topic_id: int = 0
     density_min_notional: float = 5_000_000.0
     density_symbols: tuple = ("BTCUSDT",)
+    # ── Мост чата с форумом ────────────────────────────────────────────────
+    #
+    # Ноль означает «моста нет»: сообщения живут только на сайте. Так и должно
+    # быть до тех пор, пока адрес не выверен - молчащий мост безопаснее
+    # болтливого, а разослать разговор учеников не в ту группу необратимо.
+    forum_chat_id: int = 0
+    # Токен бота, который пишет в форум. Отдельно от BOT_TOKEN: админом группы
+    # стоит бот академии, а сигналы ученикам рассылает наш - это разные боты, и
+    # писать в тему может только тот, кого туда пустили.
+    #
+    # Пусто - берётся BOT_TOKEN: если оба бота однажды сольются в одного,
+    # настройку не придётся менять.
+    forum_bot_token: str = ""
+    # Адрес сайта для ссылок наружу: кнопка «перейти к терминалу» под
+    # сообщением в форуме ведёт по нему.
+    site_url: str = "https://www.nmnh.trade"
 
 
     @staticmethod
@@ -100,6 +116,9 @@ class BackendConfig:
                 for s in os.getenv("DENSITY_SYMBOLS", "BTCUSDT").split(",")
                 if s.strip()
             ),
+            forum_chat_id=int(os.getenv("FORUM_CHAT_ID", "0") or "0"),
+            forum_bot_token=os.getenv("FORUM_BOT_TOKEN", "") or os.getenv("BOT_TOKEN", ""),
+            site_url=(os.getenv("SITE_URL", "https://www.nmnh.trade") or "").rstrip("/"),
             rate_limit_max=int(os.getenv("RATE_LIMIT_MAX", "10")),
             rate_limit_window=int(os.getenv("RATE_LIMIT_WINDOW", "900")),
             service_api_key=os.getenv("SERVICE_API_KEY", ""),

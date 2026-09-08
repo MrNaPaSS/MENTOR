@@ -13,7 +13,7 @@
 // Сообщения, присутствие и история живут на сервере; здесь только показ и
 // отправка. Склад с живым каналом - в lib/chat/store.
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   Send,
   Crown,
@@ -44,6 +44,7 @@ import {
   post,
   older,
   setReading,
+  openThread,
   serverSnapshot,
   snapshot,
   subscribe,
@@ -90,6 +91,9 @@ const SKIN: Record<
     down: string;
     divider: string;
     edge: string;
+    /** Кнопка ветки: открытой и всех остальных. */
+    threadOn: string;
+    threadOff: string;
     upDot: string;
     downDot: string;
     pendingDot: string;
@@ -126,6 +130,8 @@ const SKIN: Record<
     down: "text-danger",
     divider: "bg-border",
     edge: "border-border",
+    threadOn: "bg-accent-cyan/15 text-text-primary ring-1 ring-accent-cyan/30",
+    threadOff: "hover:bg-white/[0.06] hover:text-text-primary",
     upDot: "bg-success",
     downDot: "bg-danger",
     pendingDot: "border-warning",
@@ -166,6 +172,9 @@ const SKIN: Record<
     down: "text-[var(--pane-down)]",
     divider: "bg-[var(--pane-border)]",
     edge: "border-[var(--pane-border)]",
+    threadOn:
+      "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)] ring-1 ring-[var(--pane-accent-soft)]",
+    threadOff: "hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]",
     upDot: "bg-[var(--pane-up)]",
     downDot: "bg-[var(--pane-down)]",
     pendingDot: "border-[var(--pane-gold)]",
@@ -420,6 +429,9 @@ export default function ChatRoom({
   const locale = useLocale();
   const skin = SKIN[tone];
   const state = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  // Кто сейчас в комнате - набором, а не поиском по списку на каждое
+  // сообщение: в ленте их сотни, а присутствующих десяток.
+  const here = useMemo(() => new Set(state.people.map((p) => p.id)), [state.people]);
   const [text, setText] = useState("");
   const [attach, setAttach] = useState<ChatAttach | null>(null);
   const [attachMenu, setAttachMenu] = useState(false);
@@ -625,6 +637,32 @@ export default function ChatRoom({
         )}
       </div>
 
+      {/* Ветки разговора - те же, что темы в форуме. Строкой, а не списком в
+          меню: ветка это не настройка, а место, где сейчас идёт разговор, и
+          прятать её за нажатием значит прятать сам разговор.
+
+          При одной ветке строки нет вовсе: выбирать не из чего, а полоса
+          отнимает у ленты высоту. */}
+      {state.threads.length > 1 && (
+        <div className="flex gap-1 overflow-x-auto px-2 py-1.5">
+          {state.threads.map((branch) => (
+            <button
+              key={branch.id}
+              onClick={() => openThread(branch.id)}
+              title={branch.forum ? t.chat.threadInForum : undefined}
+              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] transition-colors duration-150 ease-out ${
+                branch.id === state.thread
+                  ? skin.threadOn
+                  : `${skin.muted} ${skin.threadOff}`
+              }`}
+            >
+              {branch.title}
+              {branch.closed && " ·"}
+            </button>
+          ))}
+        </div>
+      )}
+
       <a
         href={SOCIAL_LINKS.telegram}
         target="_blank"
@@ -680,6 +718,7 @@ export default function ChatRoom({
               <Bubble
                 message={m}
                 self={state.me?.id === m.author.id}
+                online={here.has(m.author.id)}
                 mentor={mentor}
                 onCopy={onCopy}
                 onCard={(trade) =>
@@ -944,6 +983,49 @@ export default function ChatRoom({
   );
 }
 
+/**
+ * Текст, в который вшиты ссылки.
+ *
+ * Из форума сообщения приходят именно такими: наставник пишет «BTC 1m», а
+ * адрес графика спрятан в этих знаках и в самом тексте не виден. Отрезки
+ * считаются по знакам - так их и присылает Telegram.
+ *
+ * Наложившиеся отрезки пропускаем: ссылка внутри ссылки невозможна, а попытка
+ * её нарисовать даёт разъехавшуюся разметку.
+ */
+function Woven({
+  text,
+  links,
+}: {
+  text: string;
+  links: { offset: number; length: number; url: string }[];
+}) {
+  if (links.length === 0) return <>{text}</>;
+
+  const parts: React.ReactNode[] = [];
+  let at = 0;
+  for (const link of [...links].sort((a, b) => a.offset - b.offset)) {
+    const start = link.offset;
+    const end = Math.min(start + link.length, text.length);
+    if (start < at || start >= text.length) continue;
+    if (start > at) parts.push(text.slice(at, start));
+    parts.push(
+      <a
+        key={`${start}-${link.url}`}
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline decoration-dotted underline-offset-2 hover:opacity-80"
+      >
+        {text.slice(start, end)}
+      </a>,
+    );
+    at = end;
+  }
+  if (at < text.length) parts.push(text.slice(at));
+  return <>{parts}</>;
+}
+
 /** Сделка из сообщения. Отдельной строкой - разбирать вложение дважды незачем. */
 function trade(message: ChatMessage): SharedTrade {
   return (message.attach as { kind: "trade"; trade: SharedTrade }).trade;
@@ -953,6 +1035,7 @@ function trade(message: ChatMessage): SharedTrade {
 function Bubble({
   message,
   self,
+  online,
   mentor,
   onCopy,
   onCard,
@@ -965,6 +1048,14 @@ function Bubble({
 }: {
   message: ChatMessage;
   self: boolean;
+  /**
+   * Автор сейчас в комнате.
+   *
+   * Считается по списку присутствующих, а не по свежести сообщения: человек,
+   * написавший минуту назад и закрывший вкладку, ответа уже не увидит, и
+   * зелёная точка у его ника обещала бы разговор, которого не будет.
+   */
+  online: boolean;
   /** Смотрит наставник: ему разрешено убирать чужое. */
   mentor: boolean;
   onCopy?: (trade: SharedTrade) => void;
@@ -1005,6 +1096,14 @@ function Bubble({
       {!self && <Avatar src={message.author.avatar} name={message.author.name} size={size} />}
       <div className={`max-w-[85%] rounded-2xl px-3 py-1.5 ${self ? skin.bubbleSelf : skin.bubbleOther}`}>
         <div className="mb-0.5 flex items-center gap-1 text-[11px]">
+          {/* Точка присутствия. Стоит перед ником, а не после: по ней взгляд
+              решает, стоит ли ждать ответа, ещё до того, как прочтёт имя. */}
+          <span
+            title={online ? t.chat.online : t.chat.away}
+            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+              online ? "bg-emerald-400" : "bg-current opacity-25"
+            }`}
+          />
           <span
             className={`font-semibold ${
               message.author.mentor ? skin.nameMentor : self ? skin.nameSelf : skin.nameOther
@@ -1095,7 +1194,7 @@ function Bubble({
                 tone === "pane" ? "break-words text-[12px] leading-snug" : "break-words text-sm"
               }
             >
-              {message.text}
+              <Woven text={message.text} links={message.links ?? []} />
             </p>
           )
         )}

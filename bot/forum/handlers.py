@@ -1,94 +1,176 @@
-"""Обработчик форумной группы: посты ментора -> сайт."""
+"""Мост из торгового форума в общий чат сайта.
+
+Бот сидит в форумной группе и видит её обновления - Telegram отдаёт их только
+тем, кто там состоит. Поэтому пересылкой занимается он, а сайт принимает уже
+разобранное.
+
+Почему бот не пишет прямо в базу, хотя база у них общая. Сообщение в чате -
+это не только строка в таблице, но и рассылка всем, кто сейчас в комнате;
+сокеты живут в процессе бэкенда, и запись мимо него означала бы сообщение,
+которое появится у людей только после перезагрузки страницы.
+
+Обратное направление - «сайт -> форум» - живёт не здесь, а в
+``backend/chat/forum.py``: там уже есть очередь под частоту, с которой группа
+принимает сообщения, и знание о том, какое сообщение чата какому сообщению
+форума соответствует.
+
+Отдельно про анонимность. Бот стоит в группе анонимным админом и пишет от
+имени самой группы; такие сообщения приходят с ``sender_chat`` вместо автора.
+Разбирать их как чей-то разговор нельзя - и не нужно: наши же сообщения
+возвращаются к нам именно так.
+"""
 
 from __future__ import annotations
 
-import re
-import uuid
+import base64
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
 
-from aiogram import Bot, Router
-from aiogram.filters import Filter
+import aiohttp
+from aiogram import Bot, F, Router
 from aiogram.types import Message
-
-from core.db import SessionLocal
-from core.models import Broadcast
 
 logger = logging.getLogger("nmnh.forum")
 
-UPLOADS_DIR = Path(__file__).parent.parent.parent / "webapp" / "public" / "uploads"
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+ENDPOINT = "/api/chat/forum"
+TIMEOUT = 20
 
-TV_RE = re.compile(r"tradingview\.com/x/([A-Za-z0-9]+)")
+# Столько же принимает сам чат. Режем здесь, чтобы не гонять простыню по сети
+# ради отказа на той стороне.
+MAX_TEXT = 2000
+
+# Фотографию берём не самую крупную из присланных: в теме их до пяти размеров,
+# и крупнейшая бывает в несколько мегабайт, а ленте чата хватает средней.
+MAX_PHOTO_BYTES = 4 * 1024 * 1024
 
 
-def _tv_image_url(text: str) -> str | None:
-    m = TV_RE.search(text or "")
-    if not m:
+def links_of(message: Message) -> list[dict]:
+    """Спрятанные в тексте ссылки.
+
+    Это то, ради чего мост читает разметку, а не ищет адреса регуляркой. Когда
+    наставник пишет «BTC 1m» со вшитой ссылкой, в тексте приходит только
+    «BTC 1m» - самого адреса там нет. Он лежит отдельным отрезком с типом
+    ``text_link``, началом, длиной и адресом.
+
+    Ссылки, набранные текстом, сюда не берём: они и так видны, и сайт подсветит
+    их сам.
+    """
+    entities = message.entities or message.caption_entities or []
+    out = []
+    for item in entities:
+        if item.type != "text_link" or not item.url:
+            continue
+        out.append({"offset": item.offset, "length": item.length, "url": item.url})
+    # Больше десяти сайт не примет: сообщение, где ссылка на каждом слове, - не
+    # сообщение.
+    return out[:10]
+
+
+async def photo_of(message: Message, bot: Bot) -> str:
+    """Фотография сообщения в base64. Пусто - её нет или она не забралась."""
+    if not message.photo:
+        return ""
+
+    sizes = sorted(message.photo, key=lambda p: p.file_size or 0)
+    fits = [p for p in sizes if (p.file_size or 0) <= MAX_PHOTO_BYTES]
+    chosen = fits[-1] if fits else sizes[0]
+
+    try:
+        handle = await bot.get_file(chosen.file_id)
+        buffer = await bot.download_file(handle.file_path)
+        data = buffer.read()
+    except Exception as exc:  # noqa: BLE001 - чужой файл может не отдаться
+        logger.warning("Фотография из форума не забралась: %s", exc)
+        return ""
+    return base64.b64encode(data).decode("ascii")
+
+
+def reply_to_of(message: Message) -> int | None:
+    """На какое сообщение это ответ.
+
+    В темах форума Telegram проставляет ответ и первому сообщению темы - там
+    он указывает на саму тему, а не на чью-то реплику. За ответ это не
+    считаем: иначе каждое сообщение в ветке оказалось бы ответом на её
+    заголовок.
+    """
+    origin = message.reply_to_message
+    if origin is None:
         return None
-    id_ = m.group(1)
-    return f"https://s3.tradingview.com/snapshots/{id_[0].lower()}/{id_}.png"
+    if message.message_thread_id and origin.message_id == message.message_thread_id:
+        return None
+    return origin.message_id
 
 
-class IsForumPost(Filter):
-    def __init__(self, chat_id: int, admin_id: int):
-        self.chat_id = chat_id
-        self.admin_id = admin_id
+def payload_of(message: Message, text: str, photo: str, edited: bool) -> dict:
+    author = message.from_user
+    name = " ".join(p for p in (author.first_name, author.last_name) if p).strip()
+    return {
+        "tg_chat_id": message.chat.id,
+        "tg_message_id": message.message_id,
+        "topic_id": message.message_thread_id,
+        "author": {
+            "tg_id": author.id,
+            "name": name or (author.username or ""),
+            "username": author.username or "",
+        },
+        "text": text,
+        "links": links_of(message),
+        "photo": photo,
+        "reply_to_tg_message_id": reply_to_of(message),
+        "edited": edited,
+    }
 
-    async def __call__(self, message: Message) -> bool:
-        return (
-            message.chat.id == self.chat_id
-            and message.from_user is not None
-            and message.from_user.id == self.admin_id
-        )
+
+async def send_to_site(api_url: str, service_key: str, payload: dict) -> None:
+    """Отдать сообщение сайту. Неудача не роняет бота и не повторяется.
+
+    Повтор здесь был бы вреден: пока он идёт, разговор ушёл вперёд, и
+    досланное сообщение встанет в ленту не на своё место. Потерянное сообщение
+    честнее переставленного.
+    """
+    url = f"{api_url.rstrip('/')}{ENDPOINT}"
+    try:
+        timeout = aiohttp.ClientTimeout(total=TIMEOUT)
+        async with aiohttp.ClientSession(timeout=timeout) as http:
+            async with http.post(
+                url, json=payload, headers={"X-Service-Key": service_key}
+            ) as res:
+                if res.status >= 400:
+                    body = (await res.text())[:200]
+                    logger.warning("Сайт отказал (%s): %s", res.status, body)
+                    return
+    except Exception as exc:  # noqa: BLE001 - соседняя система может всё
+        logger.warning("Сайт недоступен: %s", exc)
+        return
+    logger.info("Из форума: сообщение %s ушло на сайт", payload["tg_message_id"])
 
 
-def build_forum_router(forum_chat_id: int, admin_tg_id: int) -> Router:
+def build_forum_router(forum_chat_id: int, api_url: str, service_key: str) -> Router:
+    """Роутер форума. Без адреса группы или ключа - пустой и молчащий.
+
+    Молчащий по умолчанию намеренно: пока адрес не выверен, разослать чужой
+    разговор в чат необратимо.
+    """
     router = Router(name="forum")
+    if not forum_chat_id or not api_url or not service_key:
+        logger.info("Мост с форумом выключен: не хватает настроек")
+        return router
 
-    if not forum_chat_id:
-        return router  # форум не настроен
-
-    f = IsForumPost(forum_chat_id, admin_tg_id)
-
-    @router.message(f)
+    @router.message(F.chat.id == forum_chat_id)
+    @router.edited_message(F.chat.id == forum_chat_id)
     async def on_forum_message(message: Message, bot: Bot) -> None:
-        text = message.caption or message.text or ""
-        chart_url: str | None = None
-
-        # Фото из Telegram - скачиваем
-        if message.photo:
-            photo = message.photo[-1]
-            file = await bot.get_file(photo.file_id)
-            ext = ".jpg"
-            filename = f"{uuid.uuid4().hex}{ext}"
-            dest = UPLOADS_DIR / filename
-            await bot.download_file(file.file_path, destination=dest)
-            chart_url = f"/uploads/{filename}"
-
-        # TradingView ссылка в тексте/подписи
-        elif _tv_image_url(text):
-            tv_match = TV_RE.search(text)
-            if tv_match:
-                chart_url = f"https://www.tradingview.com/x/{tv_match.group(1)}/"
-
-        # Игнорируем если нет ни фото ни ссылки ни текста
-        if not text.strip() and not chart_url:
+        # От имени группы пишет анонимный админ - и это же наши собственные
+        # сообщения, вернувшиеся обновлением. Автора у них нет, и разговором
+        # они не являются.
+        if message.from_user is None or message.from_user.is_bot:
             return
 
-        with SessionLocal() as session:
-            record = Broadcast(
-                text=text.strip(),
-                chart_url=chart_url,
-                audience="all",
-                sent_count=0,
-                created_at=datetime.now(timezone.utc),
-            )
-            session.add(record)
-            session.commit()
+        text = (message.text or message.caption or "")[:MAX_TEXT]
+        photo = await photo_of(message, bot)
+        # Служебные записи о входе, закреплении и переименовании темы.
+        if not text.strip() and not photo:
+            return
 
-        logger.info("Forum post saved: chart=%s text=%.40s", chart_url, text)
-        await message.react([])  # можно добавить реакцию если нужно
+        edited = message.edit_date is not None
+        await send_to_site(api_url, service_key, payload_of(message, text, photo, edited))
 
     return router

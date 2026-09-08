@@ -393,6 +393,75 @@ class ChatMessage(Base):
     # чужого ответа вслед за своим сообщением - способ переписать разговор
     # задним числом.
     reply_to_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # В какой ветке написано. Пусто - общая лента: так лежат сообщения,
+    # написанные до появления веток, и терять их из-за новой колонки нельзя.
+    thread_id: Mapped[int | None] = mapped_column(BigInteger, index=True, nullable=True)
+    # Ссылки, вшитые в текст: строкой JSON, списком отрезков
+    # ``[{"offset": 0, "length": 3, "url": "..."}]``.
+    #
+    # Отдельно от вложения, потому что это не вложение: в сообщении «BTC 1m»
+    # ссылка спрятана в первых трёх знаках, а само сообщение остаётся текстом.
+    # Форма повторяет то, как эти отрезки приходят из Telegram, - иначе перевод
+    # в обе стороны пришлось бы писать дважды и по-разному.
+    links_json: Mapped[str] = mapped_column(Text, default="")
+
+
+class ChatThread(Base):
+    """Ветка чата - она же тема форума в Telegram.
+
+    Одна запись описывает обе стороны разговора: как ветка называется у нас и
+    каким числом её знает Telegram. Держать это в настройках нельзя - темы
+    заводят и переименовывают на ходу, а перезапускать сервер ради нового
+    раздела никто не станет.
+
+    Номер темы может быть пустым: ветка, заведённая на сайте, живёт до первого
+    сообщения в форум, и только тогда у неё появляется тема.
+    """
+
+    __tablename__ = "chat_threads"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    # message_thread_id темы. Уникален: две ветки на одну тему означали бы, что
+    # одно и то же сообщение из форума ляжет в чат дважды.
+    tg_topic_id: Mapped[int | None] = mapped_column(
+        BigInteger, unique=True, index=True, nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(64), default="")
+    # Порядок в списке веток. Считать его по времени создания неверно: «вопрос
+    # ответ» заводят позже «крипто трейда», а стоять он должен там, где решили.
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    # Куда попадает сообщение, написанное без выбранной ветки. Ровно одна.
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Ветка закрыта: читать можно, писать нельзя. Соответствует закрытой теме.
+    closed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ChatBridge(Base):
+    """Связка сообщения чата с сообщением в форуме.
+
+    Нужна не для порядка, а чтобы разговор не пошёл по кругу. Сообщение,
+    отправленное нами в тему, прилетает боту обратно обновлением, и без этой
+    таблицы оно легло бы в чат вторым экземпляром, снова уехало в форум - и так
+    до предела частоты.
+
+    Отсекать по «это писал бот» нельзя: в группе могут работать другие боты, и
+    их сообщения в чат как раз нужны.
+
+    Заодно по ней синхронизируются правки и удаления: чтобы поправить
+    сообщение в Telegram, надо знать его номер, а он известен только отсюда.
+    """
+
+    __tablename__ = "chat_bridge"
+    __table_args__ = (UniqueConstraint("tg_chat_id", "tg_message_id", name="uq_bridge_tg"),)
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    # Сообщение чата. Без внешнего ключа: связка переживает удаление обеих
+    # сторон и служит памятью о том, что этот номер уже был обработан.
+    message_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    tg_chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    tg_message_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class ScalpWorkspace(Base):

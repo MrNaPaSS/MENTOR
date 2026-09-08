@@ -46,7 +46,13 @@ export type SharedTrade = {
 
 export type ChatAttach =
   | { kind: "shot"; url: string; image: string }
-  | { kind: "trade"; trade: SharedTrade };
+  /**
+   * Сделка. `url` и `image` - выложенная карточка: страница с печатью и её
+   * картинка. Их может не быть: карточка собирается холстом, а он подводит -
+   * не загрузилась заготовка, закрыли вкладку, - и сделка в этом случае
+   * остаётся в ленте живой карточкой, просто без ссылки наружу.
+   */
+  | { kind: "trade"; trade: SharedTrade; url?: string; image?: string };
 
 /** Снимок того, на что отвечают: ник, начало текста и вид вложения. */
 export type ChatQuote = {
@@ -56,6 +62,18 @@ export type ChatQuote = {
   attach?: "shot" | "trade" | null;
   /** Оригинал удалён: цитата остаётся, но перестаёт быть нажимаемой. */
   deleted?: boolean;
+};
+
+/** Ветка разговора - она же тема форума в Telegram. */
+export type ChatThread = {
+  id: number;
+  title: string;
+  /** Ветка закрыта: читать можно, писать нельзя. */
+  closed: boolean;
+  /** Ветка по умолчанию: в неё попадает написанное без выбора. */
+  default: boolean;
+  /** У ветки есть тема в форуме - написанное уйдёт и туда. */
+  forum: boolean;
 };
 
 export type ChatMessage = {
@@ -71,13 +89,18 @@ export type ChatMessage = {
   reply?: ChatQuote | null;
   /** Заявка ушла во вкладку «Сигналы». */
   signalId?: number | null;
+  /** В какой ветке написано. Пусто - в общей ленте, до появления веток. */
+  threadId?: number | null;
+  /** Отрезки текста со спрятанными ссылками: «BTC 1m» с адресом внутри. */
+  links?: { offset: number; length: number; url: string }[];
 };
 
-type RawMessage = Omit<ChatMessage, "at" | "edited" | "author" | "signalId"> & {
+type RawMessage = Omit<ChatMessage, "at" | "edited" | "author" | "signalId" | "threadId"> & {
   at: string;
   edited: string | null;
   author: ChatAuthor;
   signal_id: number | null;
+  thread_id: number | null;
 };
 
 /** Аватарка приходит путём на бэкенде, а сайт живёт на другом домене. */
@@ -92,6 +115,8 @@ export function normalize(raw: RawMessage): ChatMessage {
     edited: raw.edited ? new Date(raw.edited).getTime() : 0,
     author: withHost(raw.author),
     signalId: raw.signal_id ?? null,
+    threadId: raw.thread_id ?? null,
+    links: raw.links ?? [],
   };
 }
 
@@ -102,12 +127,25 @@ function request<T>(path: string, init?: RequestInit): Promise<T | null> {
 }
 
 /** Страница истории. `before` - читать то, что старше этого сообщения. */
-export async function history(before?: number): Promise<{ messages: ChatMessage[]; more: boolean }> {
+export async function history(
+  before?: number,
+  thread?: number | null,
+): Promise<{ messages: ChatMessage[]; more: boolean }> {
+  const query = new URLSearchParams();
+  if (before) query.set("before", String(before));
+  if (thread) query.set("thread", String(thread));
+  const tail = query.toString();
   const body = await request<{ messages: RawMessage[]; more: boolean }>(
-    `/api/chat/messages${before ? `?before=${before}` : ""}`,
+    `/api/chat/messages${tail ? `?${tail}` : ""}`,
   );
   if (!body) return { messages: [], more: false };
   return { messages: body.messages.map(normalize), more: body.more };
+}
+
+/** Ветки разговора. Пустой список - веток нет, чат остаётся общей лентой. */
+export async function threads(): Promise<ChatThread[]> {
+  const body = await request<{ threads: ChatThread[] }>("/api/chat/threads");
+  return body?.threads ?? [];
 }
 
 /** Чем сообщение может быть, кроме текста и вложения. */
@@ -117,6 +155,8 @@ export type SendExtras = {
   /** Показать заявку во вкладке «Сигналы». Право проверяет сервер. */
   asSignal?: boolean;
   audience?: "all" | "moderate" | "turbo";
+  /** В какую ветку пишем. Пусто - сервер положит в ветку по умолчанию. */
+  threadId?: number | null;
 };
 
 export async function send(
@@ -132,6 +172,7 @@ export async function send(
       reply_to: extras.replyTo ?? null,
       as_signal: Boolean(extras.asSignal),
       audience: extras.audience ?? "all",
+      thread_id: extras.threadId ?? null,
     }),
   });
   if (!body) return null;

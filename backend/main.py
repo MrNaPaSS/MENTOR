@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.chat import ChatHub
+from backend.chat import ChatHub, ForumBridge
 from core.db import init_engine, create_all, SessionLocal
 from core import repo
 from core.weex import get_weex_client
@@ -24,6 +24,7 @@ from backend.api import shots
 from backend.api import trading as trading_api
 from backend.api import auth, market, market_data, market_extra, signals, stats, students, profile, admin_affiliate, institutional, broadcast, pnl, trades, journal, trading, coins, shop
 from backend.api import chat as chat_api
+from backend.api import chat_bridge as chat_bridge_api
 from backend.api import scalping as scalping_api
 from backend.api import trading_move
 from backend.ws import ConnectionManager
@@ -72,6 +73,11 @@ def create_app(
     # иначе закрытая вкладка означала бы сделку без сопровождения.
     watcher = PositionWatcher(SessionLocal, trading_api._get_session)
 
+    # Мост чата с форумом. Пишет в Telegram отдельной очередью, потому что
+    # группа принимает ограниченное число сообщений в минуту, а чат об этом
+    # знать не должен. Без адреса группы молчит и ничего не занимает.
+    forum = ForumBridge(config.forum_bot_token, config.forum_chat_id, config.site_url)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         collector.start()
@@ -90,6 +96,7 @@ def create_app(
 
             density_task = asyncio.create_task(run_density_watcher(density, _post))
         watcher.start()
+        await forum.start()
         try:
             yield
         finally:
@@ -100,6 +107,7 @@ def create_app(
                 except asyncio.CancelledError:
                     pass
             await watcher.stop()
+            await forum.stop()
             await trading_api.close_session()
             if scalping_hub:
                 await scalping_hub.stop()
@@ -119,6 +127,7 @@ def create_app(
     # сами сообщения - в базе. Перезапуск сервера теряет только список
     # присутствующих, и он соберётся заново с первым же подключением.
     app.state.chat_hub = ChatHub()
+    app.state.forum = forum
     app.state.price_collector = collector
     app.state.scalping = scalping
     app.state.scalping_hub = scalping_hub
@@ -174,6 +183,7 @@ def create_app(
     app.include_router(shop.router)
     app.include_router(shop.admin_router)
     app.include_router(chat_api.router)
+    app.include_router(chat_bridge_api.router)
     app.include_router(scalping_api.router)
     app.include_router(ws_routes.router)
     # Короткий путь снимка - последним: он живёт в корне и ловит одиночный

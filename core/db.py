@@ -53,6 +53,7 @@ def create_all() -> None:
     engine = get_engine()
     Base.metadata.create_all(engine)
     _migrate_add_columns(engine)
+    _seed_chat_threads(engine)
     _seed_shop_items(engine)
     _normalize_shop_dashes(engine)
     _apply_shop_catalog_v2(engine)
@@ -114,7 +115,9 @@ def _add_missing_columns(conn, inspector, engine) -> None:
 
     from core.models import (
         ChartShot,
+        ChatBridge,
         ChatMessage,
+        ChatThread,
         LiveTrade,
         Signal,
         ScalpTrade,
@@ -130,7 +133,9 @@ def _add_missing_columns(conn, inspector, engine) -> None:
         WeexCredential,
         LiveTrade,
         ChartShot,
+        ChatBridge,
         ChatMessage,
+        ChatThread,
         Signal,
         Student,
     ):
@@ -156,6 +161,45 @@ def _add_missing_columns(conn, inspector, engine) -> None:
             logging.getLogger("nmnh.db").info(
                 "Добавлена колонка %s.%s", table.name, column.name
             )
+
+
+# Ветки чата - они же темы торгового форума в Telegram.
+# Кортеж: (название, номер темы, порядок, ветка по умолчанию)
+_DEFAULT_CHAT_THREADS = [
+    ("Крипто трейд", 10, 10, True),
+    ("Фулдилка", 14, 20, False),
+    ("Вопрос - ответ", 8, 30, False),
+    ("Марафон", 32281, 40, False),
+]
+
+
+def _seed_chat_threads(engine) -> None:
+    """Завести ветки чата, если их ещё нет.
+
+    Сеем по номеру темы, а не «если таблица пуста»: ветку могли завести на
+    сайте раньше, чем дошли руки до этого списка, и стирать её новым разделом
+    нельзя. Название существующей не трогаем - его правят в форуме.
+    """
+    from sqlalchemy import inspect, select
+    from sqlalchemy.orm import Session
+    from core.models import ChatThread
+
+    if "chat_threads" not in inspect(engine).get_table_names():
+        return
+
+    with Session(engine) as session:
+        known = set(
+            session.execute(select(ChatThread.tg_topic_id)).scalars()
+        )
+        added = [
+            ChatThread(title=title, tg_topic_id=topic, position=order, is_default=default)
+            for title, topic, order, default in _DEFAULT_CHAT_THREADS
+            if topic not in known
+        ]
+        if not added:
+            return
+        session.add_all(added)
+        session.commit()
 
 
 # Стартовый каталог магазина — вставляется один раз, если таблица пуста.

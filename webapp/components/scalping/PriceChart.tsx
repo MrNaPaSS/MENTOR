@@ -30,6 +30,30 @@ import {
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
 import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
+import { readout, tenth, type ScoreReadout } from "@/lib/indicator/score";
+
+// Свёрнута ли панель показаний. Ключ свой, отдельно от рабочего места: там
+// живёт раскладка кабинета, а это переключатель внутри самого графика.
+const SCORE_KEY = "nmnh.chart.score.wide";
+
+function readScoreWide(): boolean {
+  try {
+    // Умолчание - развёрнута: подписи нужны тому, кто видит панель впервые.
+    return localStorage.getItem(SCORE_KEY) !== "0";
+  } catch {
+    // В приватном окне обращение к хранилищу бросает исключение.
+    return true;
+  }
+}
+
+function keepScoreWide(wide: boolean): boolean {
+  try {
+    localStorage.setItem(SCORE_KEY, wide ? "1" : "0");
+  } catch {
+    // Не запомнилось - переключатель всё равно сработает на эту сессию.
+  }
+  return wide;
+}
 import { computeChandelier, type ChandelierResult } from "@/lib/indicator/chandelier";
 import { atr, ema } from "@/lib/indicator/ta";
 import type { Candle } from "@/lib/indicator/types";
@@ -673,6 +697,14 @@ function PriceChart({
   // Результат структурного движка держим отдельно: переключатели меняют набор
   // фигур, и пересчитывать структуру ради этого незачем.
   const smcRef = useRef<SmcResult | null>(null);
+  // Показания индикатора в углу графика: балл и объём на последней свече.
+  // Ref рядом с состоянием - по нему сравниваются числа без перерисовки.
+  const scoreRef = useRef<ScoreReadout | null>(null);
+  const [score, setScore] = useState<ScoreReadout | null>(null);
+  // Панель развёрнута или свёрнута в одну строку. Держим здесь, а не в
+  // рабочем месте: это про сам график, а не про раскладку кабинета, и тянуть
+  // ради переключателя ещё одно поле через всю страницу незачем.
+  const [wideScore, setScoreWide] = useState(readScoreWide);
   const ceRef = useRef<ChandelierResult | null>(null);
   const lastTimeRef = useRef(0);
   // Последняя сообщённая высота шкалы времени: сообщаем только смену, иначе
@@ -1112,6 +1144,21 @@ function PriceChart({
       );
       pushShapes();
       smcRef.current = smc;
+      // Показания панели в углу. Ставим их в состояние только когда числа
+      // изменились: свечи приезжают постоянно, а балл держится минутами, и
+      // перерисовывать из-за него всю разметку вокруг холста незачем.
+      const now = readout(candles);
+      const was = scoreRef.current;
+      if (
+        was === null ||
+        was.long !== now.long ||
+        was.short !== now.short ||
+        tenth(was.vo) !== tenth(now.vo) ||
+        tenth(was.voSma) !== tenth(now.voSma)
+      ) {
+        scoreRef.current = now;
+        setScore(now);
+      }
       lastTimeRef.current = candles[candles.length - 1]?.time ?? 0;
 
 
@@ -2248,6 +2295,57 @@ function PriceChart({
           </div>
         )}
       </div>
+
+      {/* Показания индикатора - в правом нижнем углу, как в оригинале на
+          TradingView. Именно там их ищет взгляд человека, пришедшего оттуда, и
+          именно там они не спорят с ценой: верх графика занят ею. */}
+      {score && (
+        <button
+          onClick={() => setScoreWide(keepScoreWide(!wideScore))}
+          title={wideScore ? t.terminal.chart.scoreHide : t.terminal.chart.scoreShow}
+          className="pointer-events-auto absolute bottom-6 right-1 z-10 overflow-hidden rounded border text-left font-mono text-[10px] tabular-nums shadow transition-opacity duration-150 ease-out hover:opacity-80"
+          style={{ borderColor: "var(--pane-border)", background: "var(--pane-deep)" }}
+        >
+          {wideScore ? (
+            <>
+              <div className="flex">
+                <span
+                  className="px-1.5 py-0.5"
+                  style={{ background: "var(--pane-bg)", color: "var(--pane-muted)" }}
+                >
+                  BM Score
+                </span>
+                <span className="px-1.5 py-0.5" style={{ color: "var(--pane-text)" }}>
+                  <span style={{ color: "var(--pane-up)" }}>L:{score.long}</span>
+                  {"  "}
+                  <span style={{ color: "var(--pane-down)" }}>S:{score.short}</span>
+                </span>
+              </div>
+              <div className="flex" style={{ borderTop: "1px solid var(--pane-border)" }}>
+                <span
+                  className="px-1.5 py-0.5"
+                  style={{ background: "var(--pane-bg)", color: "var(--pane-muted)" }}
+                >
+                  VO / SMA
+                </span>
+                <span className="px-1.5 py-0.5" style={{ color: "var(--pane-text-2)" }}>
+                  {tenth(score.vo)} / {tenth(score.voSma)}
+                </span>
+              </div>
+            </>
+          ) : (
+            /* Свёрнутый вид: те же числа без подписей. Подписи нужны один раз -
+               чтобы понять, что это; дальше они занимают угол графика впустую. */
+            <span className="flex items-center gap-1 px-1.5 py-0.5">
+              <span style={{ color: "var(--pane-up)" }}>{score.long}</span>
+              <span style={{ color: "var(--pane-muted)" }}>/</span>
+              <span style={{ color: "var(--pane-down)" }}>{score.short}</span>
+              <span style={{ color: "var(--pane-muted)" }}>·</span>
+              <span style={{ color: "var(--pane-text-2)" }}>{tenth(score.vo)}</span>
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Время до закрытия свечи — под ценой, у самой шкалы. Скальперу важно,
           сколько осталось: свеча закрывается, и уровень подтверждается или нет. */}

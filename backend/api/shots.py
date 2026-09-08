@@ -42,6 +42,16 @@ api_router = APIRouter(prefix="/api/shots", tags=["shots"])
 
 BASE_URL = (os.getenv("SHOTS_BASE_URL", "") or "").rstrip("/")
 
+# Куда ведёт кнопка со страницы карточки. Отдельно от BASE_URL: картинки отдаёт
+# бэкенд, а терминал живёт на сайте, и это разные адреса.
+SITE_URL = (os.getenv("SITE_URL", "https://www.nmnh.trade") or "").rstrip("/")
+
+
+def _terminal_url(symbol: str) -> str:
+    """Ссылка в терминал на эту монету. Пусто - монета невнятная."""
+    clean = "".join(c for c in (symbol or "").upper() if c.isalnum())
+    return f"{SITE_URL}/app/scalping?symbol={clean}" if clean and SITE_URL else ""
+
 # Идентификатор снимка: буквы, цифры, дефис и подчёркивание. Ограничение нужно
 # не для красоты - без него путь в корне перехватывал бы чужие адреса.
 _DIR = Path(__file__).parent.parent.parent / "webapp" / "public" / "uploads" / "shots"
@@ -135,6 +145,10 @@ class CardIn(BaseModel):
     raw: str = Field(min_length=64)
     symbol: str = Field(min_length=1, max_length=32)
     side: str = Field(pattern="^(long|short)$")
+    # Какой бланк напечатан: итог сделки или сигнал. Печать у них разная -
+    # у итога наборная, у сигнала оттиск логотипа, - и страница обязана знать
+    # об этом до того, как начнёт собираться.
+    kind: str = Field(default="pnl", pattern="^(pnl|signal)$")
     owner: str = Field(default="", max_length=32)
     note: str = Field(default="", max_length=140)
     # Куда странице ставить печать и каким цветом. Числами, а не именем
@@ -177,7 +191,7 @@ def save_card(
             symbol=body.symbol.upper(),
             interval="",
             note=body.note.strip(),
-            kind="pnl",
+            kind=body.kind,
             side=body.side,
             owner=body.owner.strip(),
             card_json=body.card.model_dump_json() if body.card else "",
@@ -185,6 +199,52 @@ def save_card(
     )
     session.commit()
     return {"id": card_id, "url": f"{BASE_URL}/{card_id}"}
+
+
+# Первые байты JPEG. Так фотография из Telegram отличается от чего угодно
+# другого, что прислали под её видом.
+JPEG_MAGIC = bytes([0xFF, 0xD8, 0xFF])
+
+
+def save_photo(data: bytes, symbol: str = "", note: str = "") -> str:
+    """Сохранить пришедшую снаружи фотографию и вернуть её идентификатор.
+
+    Нужна мосту с форумом: фотографию из темы бот забирает у Telegram, а жить
+    она должна там же, где снимки с терминала, - их отдаёт этот сервер, и
+    браузер ученика достаёт их без всякого токена.
+
+    Отдельно от ``save_shot``: та ручка живёт под входом ученика и принимает
+    только PNG с холста, а из Telegram приходит JPEG и приходит от сервера.
+    """
+    if data.startswith(PNG_MAGIC):
+        ext = "png"
+    elif data.startswith(JPEG_MAGIC):
+        ext = "jpg"
+    else:
+        raise HTTPException(400, "Ожидается PNG или JPEG")
+    if len(data) > MAX_BYTES:
+        raise HTTPException(413, "Картинка слишком большая")
+
+    shot_id = secrets.token_urlsafe(9)[:12]
+    _DIR.mkdir(parents=True, exist_ok=True)
+    (_DIR / f"{shot_id}.{ext}").write_bytes(data)
+    return f"{shot_id}.{ext}"
+
+
+@router.get("/{shot_id}.jpg", include_in_schema=False)
+def shot_photo(shot_id: str):
+    """Фотография, пришедшая из форума. Открыта всем, как и снимки.
+
+    Записи в таблице у неё нет: подписывать её нечем - ни монеты, ни таймфрейма
+    из чужого сообщения не известно, - а страницы у неё и не должно быть. В
+    ленте она открывается сама собой.
+    """
+    if not _ID_OK.match(shot_id):
+        raise HTTPException(404, "Снимок не найден")
+    path = _DIR / f"{shot_id}.jpg"
+    if not path.exists():
+        raise HTTPException(404, "Снимок не найден")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.get("/{shot_id}.png", include_in_schema=False)
@@ -257,6 +317,26 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     title = f"{symbol} · NMNH"
     image = f"{BASE_URL}/{shot.id}.png"
     paper = f"{BASE_URL}/{shot.id}-raw.png"
+
+    # Кнопка в терминал. Появляется последней, когда лист уже напечатан:
+    # предлагать действие раньше, чем человек прочёл карточку, - это торопить
+    # его решение, а решение здесь про деньги.
+    go = _terminal_url(shot.symbol)
+    button = (
+        f'<a class="go" href="{go}">Перейти к терминалу</a>' if go else ""
+    )
+
+    # Оттиск. У сигнала это тот же логотип, который холст ставит на скачиваемую
+    # картинку, - иначе страница и картинка заверялись бы разными печатями.
+    if shot.kind == "signal":
+        ink = (
+            '<img class="graffiti" src="' + SITE_URL + '/cards/signal-stamp.png" alt="NMNH">'
+        )
+    else:
+        ink = (
+            '<span class="mark">NMNH<small>ПОДТВЕРЖДЕНО ТЕРМИНАЛОМ</small></span>'
+            '<span class="creed">TRADE · DISCIPLINE · PROFIT</span>'
+        )
 
     return HTMLResponse(
         f"""<!doctype html>
@@ -422,8 +502,34 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
   }}
 
   /* Кому движение мешает - лист уже лежит, печать уже стоит. */
+  /* Оттиск-логотип у карточки сигнала: он светлый, потому что рамка под ним
+     на бланке тёмная. Тот же файл холст ставит на скачиваемую картинку. */
+  .graffiti {{
+    width: 82%; height: auto; object-fit: contain;
+    filter: brightness(0) invert(1) drop-shadow(0 0 6px var(--accent));
+    opacity: .95;
+  }}
+
+  /* Кнопка в терминал: появляется после того, как лист напечатан. */
+  .go {{
+    position: relative; z-index: 2;
+    display: inline-block; padding: 11px 22px; border-radius: 999px;
+    background: var(--accent); color: #05070a;
+    font-weight: 700; font-size: 13px; letter-spacing: .02em;
+    text-decoration: none; white-space: nowrap;
+    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+    transition: transform .15s ease-out, filter .15s ease-out;
+    animation: offer .5s ease-out 1.5s both;
+  }}
+  .go:hover {{ transform: translateY(-1px); filter: brightness(1.08); }}
+  .go:active {{ transform: translateY(0) scale(.985); }}
+  @keyframes offer {{
+    from {{ opacity: 0; transform: translateY(8px); }}
+    to   {{ opacity: 1; transform: translateY(0); }}
+  }}
+
   @media (prefers-reduced-motion: reduce) {{
-    .paper, .paper.hit, .stamp, .slot::after,
+    .paper, .paper.hit, .stamp, .slot::after, .go,
     .glitch::before, .glitch::after {{ animation: none; }}
   }}
 </style>
@@ -434,13 +540,11 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     <div class="paper hit">
       <img src="{paper}" alt="{title}">
       <div class="stamp">
-        <div class="ink">
-          <span class="mark">NMNH<small>ПОДТВЕРЖДЕНО ТЕРМИНАЛОМ</small></span>
-          <span class="creed">TRADE · DISCIPLINE · PROFIT</span>
-        </div>
+        <div class="ink">{ink}</div>
       </div>
     </div>
   </div>
+  {button}
   <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH.TRADE">NMNH.TRADE</span></a>
 </body>
 </html>"""
@@ -467,7 +571,7 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     note = escape(shot.note or "")
 
     # Карточка сделки живёт своей страницей: у неё и движение своё, и печать.
-    if shot.kind == "pnl":
+    if shot.kind in ("pnl", "signal"):
         return _card_page(shot)
 
     title = f"{symbol} · {interval}"

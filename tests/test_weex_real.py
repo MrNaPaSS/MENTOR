@@ -52,7 +52,11 @@ class FakeResp:
     async def __aexit__(self, *a):
         return False
 
-    async def json(self):
+    async def json(self, content_type=None):
+        # Подпись повторяет вызов из клиента: он читает ответ как
+        # ``json(content_type=None)``, потому что WEEX отдаёт JSON под чужим
+        # заголовком. Заглушка без этого аргумента молча превращала любой
+        # ответ в ошибку разбора, и проверялся разбор пустоты, а не данных.
         return self._payload
 
 

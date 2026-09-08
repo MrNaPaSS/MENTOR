@@ -42,7 +42,11 @@ const LEVERAGES = [10, 25, 50, 100, 200, 400];
 // Шаг стопа мельче у ближних значений и крупнее у дальних. Скальпер живёт в
 // диапазоне до трёх десятых процента, и там ему нужен выбор; дальше стоп ставят
 // редко, и лишние кнопки только удлиняют ряд.
-const STOPS = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1, 1.5];
+//
+// Ровно восемь - чтобы лечь двумя рядами по четыре. Девятое значение висело
+// одиноким хвостом под ними и сбивало взгляд с сетки; полтора процента при этом
+// набирается руками так же быстро, как нажимается.
+const STOPS = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 1];
 
 const FIELD =
   "w-full rounded-md border border-[var(--pane-border)] bg-[var(--pane-deep)] px-2.5 py-2 text-right font-mono text-[15px] " +
@@ -286,6 +290,7 @@ export default function TradeDialog({
             label={d.stopPct}
             value={draft.stopPct}
             presets={STOPS}
+            columns={4}
             format={(v) => String(v)}
             onPick={(stopPct) => onChange({ ...draft, stopPct })}
           />
@@ -400,6 +405,7 @@ function Field({
   label,
   value,
   presets,
+  columns,
   format,
   onPick,
   inputRef,
@@ -407,6 +413,15 @@ function Field({
   label: string;
   value: number;
   presets: number[];
+  /**
+   * Разложить готовые значения сеткой по столько в ряд.
+   *
+   * Без него кнопки переносятся сами и встают неровно: у чисел разная ширина, и
+   * ряд из «0.05» и «1» ломается там, где кончится место, а не там, где кончится
+   * смысл. Сетка держит колонки на месте, и цену стопа выбирают по положению,
+   * не перечитывая подписи.
+   */
+  columns?: number;
   format: (value: number) => string;
   onPick: (value: number) => void;
   inputRef?: React.RefObject<HTMLInputElement>;
@@ -440,7 +455,11 @@ function Field({
         }}
         className={FIELD}
       />
-      <div className="mt-1.5 flex flex-wrap gap-1">
+      <div
+        className={
+          columns === 4 ? "mt-1.5 grid grid-cols-4 gap-1" : "mt-1.5 flex flex-wrap gap-1"
+        }
+      >
         {presets.map((preset) => (
           <button
             key={preset}

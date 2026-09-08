@@ -17,6 +17,7 @@ from core import repo
 from core.db import SessionLocal
 from core.weex import get_weex_client
 from bot.config import Config
+from bot.forum.handlers import build_forum_router
 from bot.mentor import build_mentor_router
 from bot.student import build_student_router
 from bot.scheduler import start_scheduler
@@ -45,6 +46,14 @@ async def run() -> None:
     dp["weex"] = weex  # инъекция в хендлеры по имени аргумента
 
     # Порядок важен: команды ментора (с фильтром по ID) — первыми.
+    #
+    # Форум идёт перед ними обоими: сообщения торговой группы не должны
+    # разбираться ни как команда ментора, ни как реплика ученика в личке. Свой
+    # фильтр по адресу группы у него уже есть, чужие сообщения он пропускает
+    # дальше нетронутыми.
+    dp.include_router(
+        build_forum_router(config.forum_chat_id, config.api_url, config.service_api_key)
+    )
     dp.include_router(build_mentor_router(config.admin_tg_id))
     dp.include_router(build_student_router(config.admin_tg_id, config.weex_referral_link))
 
