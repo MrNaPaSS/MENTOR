@@ -2527,16 +2527,20 @@ export default function ScalpingPage() {
           } as React.CSSProperties
         }
       >
-        {/* Свёрнутый скринер: узкая полоса, по которой его видно и можно
-            вернуть. Прятать совсем нельзя - трейдер не должен вспоминать, где
-            была панель. */}
+        {/* Свёрнутый скринер: язычок у самого края экрана.
+            Уехал за край на три четверти и возвращается под курсором. Место
+            свёрнутой панели - это место, отнятое у графика: полоса в тридцать
+            шесть точек ничего не показывает, но всю сессию стоит между
+            графиком и краем. Язычка хватает, чтобы помнить, где панель, а
+            выезжает он ровно тогда, когда за ним потянулись.
+
+            Прятать совсем нельзя - трейдер не должен вспоминать, где была
+            панель; поэтому четверть остаётся видна всегда. */}
         {!screenerOpen && (
           <button
             onClick={() => setScreenerOpen(true)}
             title={t.terminal.expandScreener}
-            // Отступ справа — тот же, что даёт разделитель у открытого
-            // скринера: свёрнутая полоса не должна прилипать к стакану.
-            className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:mr-2 xl:flex`}
+            className={`fixed left-0 top-1/2 z-[80] hidden w-9 -translate-x-[75%] -translate-y-1/2 flex-col items-center gap-2 rounded-r-xl border border-l-0 border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] shadow-lg transition-transform duration-300 ease-out hover:translate-x-0 hover:text-[var(--pane-text)] xl:flex`}
             style={paneStyle}
           >
             <PanelLeftOpen className="h-4 w-4" />
@@ -3146,7 +3150,9 @@ export default function ScalpingPage() {
               <button
                 onClick={() => setChatOpen(true)}
                 title={t.terminal.expandChat}
-                className="hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:ml-2 xl:flex"
+                // Язычок у правого края - тот же, что у скринера слева: за
+                // краем на три четверти, под курсором выезжает целиком.
+                className="fixed right-0 top-1/2 z-[80] hidden w-9 -translate-y-1/2 translate-x-[75%] flex-col items-center gap-2 rounded-l-xl border border-r-0 border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] shadow-lg transition-transform duration-300 ease-out hover:translate-x-0 hover:text-[var(--pane-text)] xl:flex"
                 style={paneStyle}
               >
                 <PanelRightOpen className="h-4 w-4" />
