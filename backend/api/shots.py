@@ -288,11 +288,9 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.6);
     position: relative; z-index: 3;
   }}
-  /* Внутри щели - тусклый блик, а не бирюзовая подсветка: это прорезь в
-     корпусе, из которой идёт лист, и светиться ей незачем. */
   .slot::after {{
     content: ""; position: absolute; inset: 3px 10px auto; height: 2px;
-    border-radius: 2px; background: rgba(255,255,255,.18);
+    border-radius: 2px; background: var(--accent); opacity: .5;
     animation: warm 1.1s ease-out both;
   }}
   @keyframes warm {{ 0% {{ opacity: 0; }} 25% {{ opacity: 1; }} 100% {{ opacity: .5; }} }}
@@ -488,7 +486,10 @@ def shot_page(shot_id: str, session=Depends(get_session)):
   :root[data-paper="light"] .slot {{
     box-shadow: 0 0 0 1px rgba(17,20,24,.1), 0 10px 26px rgba(17,20,24,.16);
   }}
-  :root[data-paper="light"] .paper {{ box-shadow: 0 24px 60px rgba(17,20,24,.18); }}
+  :root[data-paper="light"] .paper {{
+    border-color: rgba(17,20,24,.14);
+    box-shadow: 0 24px 60px rgba(17,20,24,.18);
+  }}
   :root[data-paper="light"] .note {{ color: #4a5058; }}
   :root[data-paper="light"] .logo {{ color: #111418; }}
   :root[data-paper="light"] .logo:hover {{ color: #000; }}
@@ -504,18 +505,25 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.6);
     position: relative; z-index: 3;
   }}
+  /* Внутри щели - тусклый блик, а не бирюзовая подсветка: это прорезь в
+     корпусе, из которой идёт лист, и светиться ей незачем. */
   .slot::after {{
     content: ""; position: absolute; inset: 3px 10px auto; height: 2px;
-    border-radius: 2px; background: var(--accent); opacity: .5;
+    border-radius: 2px; background: rgba(255,255,255,.18);
     animation: warm 1.1s ease-out both;
   }}
-  @keyframes warm {{ 0% {{ opacity: 0; }} 25% {{ opacity: .9; }} 100% {{ opacity: .35; }} }}
+  @keyframes warm {{ 0% {{ opacity: 0; }} 25% {{ opacity: 1; }} 100% {{ opacity: .5; }} }}
 
   /* Окно, из которого лист выезжает: оно и обрезает его сверху. */
   .window {{ width: min(1200px, 96vw); margin-top: -10px; overflow: hidden; padding-top: 10px; }}
 
+  /* Рамка обязательна.
+     Лист без неё сливается с листом страницы, а скруглённые углы на этом фоне
+     читаются не как скругление, а как обрезанные - будто картинку подрезали.
+     Обводка возвращает краю форму. */
   .paper {{
     position: relative; container-type: inline-size;
+    border: 1px solid rgba(255,255,255,.1);
     border-radius: 10px; overflow: hidden;
     box-shadow: 0 24px 60px rgba(0,0,0,.65);
     animation: feed .95s cubic-bezier(.16,.84,.3,1) .1s both;
