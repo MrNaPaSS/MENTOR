@@ -2307,7 +2307,7 @@ function PriceChart({
         <button
           onClick={() => setScoreWide(keepScoreWide(!wideScore))}
           title={wideScore ? t.terminal.chart.scoreHide : t.terminal.chart.scoreShow}
-          className="pointer-events-auto absolute bottom-10 right-16 z-10 overflow-hidden rounded border text-left font-mono text-[10px] tabular-nums shadow transition-opacity duration-150 ease-out hover:opacity-80"
+          className="pointer-events-auto absolute bottom-7 right-16 z-10 overflow-hidden rounded border text-left font-mono text-[10px] tabular-nums shadow transition-opacity duration-150 ease-out hover:opacity-80"
           style={{ borderColor: "var(--pane-border)", background: "var(--pane-deep)" }}
         >
           {wideScore ? (

@@ -100,7 +100,21 @@ def test_waiting_order_has_no_result():
          "entry": 3120.5, "stop": 3080.0, "targets": [3200.0]}
     )
     assert "ждёт входа" in card
-    assert "$" not in card.split("<code>")[0]
+    assert "$" not in card
+
+
+def test_prices_stay_on_the_card_and_not_in_the_message():
+    """Цены рисует карточка. Столбик тех же чисел под ней их не уточняет."""
+    card = trade_html(
+        {"symbol": "BTCUSDT", "side": "short", "leverage": 200, "state": "planned",
+         "entry": 78794.5, "stop": 79188.47, "targets": [78400.53, 78006.55]},
+        url="https://api.nmnh.trade/7N3UyD0CnU4y",
+    )
+    assert len(card.splitlines()) == 1
+    # «Вход» на месте только как состояние заявки - «ждёт входа»; цифр нет.
+    for gone in ("794", "188", "400", "стоп", "цель"):
+        assert gone not in card
+    assert "×200" in card
 
 
 def test_open_trade_shows_result_and_link():

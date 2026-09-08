@@ -17,26 +17,9 @@ from typing import Any
 # оно занимает место подписи, а не сообщения.
 LINK_LABEL = "график"
 
-# Кружки под целями: сколько взято и сколько осталось.
-HIT = "\u25cf"
-MISS = "\u25cb"
-
-
 def esc(value: Any) -> str:
     """Обезвредить чужой текст перед разметкой."""
     return html.escape(str(value), quote=False)
-
-
-def money(value: float | int | None, decimals: int = 2) -> str:
-    """Цена с пробелами по тысячам - так же, как на карточке в чате."""
-    if value is None:
-        return "—"
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return "—"
-    whole = f"{number:,.{decimals}f}".replace(",", "\u202f")
-    return whole
 
 
 def link_ranges(links_json: str) -> list[dict]:
@@ -144,24 +127,6 @@ def trade_html(trade: dict, url: str = "") -> str:
             share = f" · {pnl / margin * 100:+.1f} % от маржи"
         lines.append("")
         lines.append(f"<b>{pnl:+.2f} $</b>{share}")
-
-    rows = [f"вход  {money(trade.get('entry'))}"]
-    if trade.get("stop"):
-        rows.append(f"стоп  {money(trade.get('stop'))}")
-
-    targets = [t for t in (trade.get("targets") or []) if isinstance(t, (int, float)) and t > 0]
-    try:
-        taken = max(0, int(trade.get("takesHit") or 0))
-    except (TypeError, ValueError):
-        taken = 0
-    for target in targets:
-        rows.append(f"цель  {money(target)}")
-
-    lines.append("")
-    lines.append("<code>" + esc("\n".join(rows)) + "</code>")
-
-    if targets:
-        lines.append("".join(HIT if i < taken else MISS for i in range(len(targets))))
 
     return "\n".join(lines)
 
