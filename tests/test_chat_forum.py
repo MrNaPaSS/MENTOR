@@ -108,7 +108,6 @@ def test_prices_stay_on_the_card_and_not_in_the_message():
     card = trade_html(
         {"symbol": "BTCUSDT", "side": "short", "leverage": 200, "state": "planned",
          "entry": 78794.5, "stop": 79188.47, "targets": [78400.53, 78006.55]},
-        url="https://api.nmnh.trade/7N3UyD0CnU4y",
     )
     assert len(card.splitlines()) == 1
     # «Вход» на месте только как состояние заявки - «ждёт входа»; цифр нет.
@@ -117,14 +116,26 @@ def test_prices_stay_on_the_card_and_not_in_the_message():
     assert "×200" in card
 
 
-def test_open_trade_shows_result_and_link():
+def test_open_trade_shows_result():
     card = trade_html(
         {"symbol": "BTCUSDT", "side": "short", "leverage": 100, "state": "open",
          "entry": 78647.3, "stop": 78820.3, "targets": [78474.28], "pnl": 16.59, "margin": 100.0},
-        url="https://www.nmnh.trade/s/abc",
     )
     assert "+16.59 $" in card
-    assert '<a href="https://www.nmnh.trade/s/abc">' in card
+
+
+def test_signal_is_one_bold_line_without_sign_or_link():
+    """Сигнал - одна строка жирным. Ни значка, ни ссылки, ни подписи школой.
+
+    Читают его с телефона одним взглядом, и всё, что стоит выше монеты со
+    стороной, этот взгляд задерживает.
+    """
+    trade = {"symbol": "BTCUSDT", "side": "short", "leverage": 200, "state": "planned"}
+    out = message_html("NMNH", "", [], {"kind": "trade", "trade": trade,
+                                        "url": "https://www.nmnh.trade/s/abc"})
+    assert out == "<b>BTC · SHORT · ×200 · ждёт входа</b>"
+    assert "NMNH" not in out
+    assert "<a href" not in out
 
 
 def test_author_is_signed_because_the_bot_writes():

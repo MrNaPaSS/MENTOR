@@ -37,6 +37,10 @@ import { readout, tenth, type ScoreReadout } from "@/lib/indicator/score";
 // живёт раскладка кабинета, а это переключатель внутри самого графика.
 const SCORE_KEY = "nmnh.chart.score.wide";
 
+// Где стоит панель объёма свечи. Ключ отдельный от рабочего места: ширины
+// панелей общие на терминал, а это место внутри одного холста.
+const FOOT_SPOT_KEY = "nmnh.chart.foot.spot";
+
 function readScoreWide(): boolean {
   try {
     // Умолчание - развёрнута: подписи нужны тому, кто видит панель впервые.
@@ -73,6 +77,7 @@ import {
 import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
 import { FootprintCard } from "./FootprintCard";
 import { parseFootprint, type FootprintData } from "@/lib/indicator/footprint";
+import { clampSpot, keepSpot, readSpot, type Spot } from "@/lib/dragBox";
 import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
 import DragLevels, { type DragLevel } from "./DragLevels";
@@ -902,15 +907,31 @@ function PriceChart({
   const plusHeldRef = useRef(false);
   // Почему на графике нет свежих свечей. Пусто — всё в порядке.
   const [dataError, setDataError] = useState<string | null>(null);
-  // Раскрытая свеча: время бара, по которому нажал трейдер. null — свернуты все.
+  // Раскрытая свеча. Раскрыта всегда одна: две колонки на минутном графике
+  // перекрыли бы половину окна, а сравнивают их всё равно по одной — смотрят,
+  // где объём встал плитой, а где размазался.
   //
-  // Раскрыта всегда одна. Две раскрытые колонки на минутном графике перекрыли
-  // бы половину окна, а сравнивают их всё равно по одной: смотрят, где объём
-  // встал плитой, а где размазался.
-  const [openBar, setOpenBar] = useState<number | null>(null);
+  // Раскрывается она двумя разными жестами, и путать их нельзя. Нажатие по
+  // текущей цене открывает панель на живой свече, и дальше она идёт за
+  // рынком сама: закрылась минута — панель показывает следующую, не спрашивая.
+  // Нажатие по любой свече в истории закрепляет именно её: разбор прошлого
+  // ходить за временем не должен.
+  const [followBar, setFollowBar] = useState(false);
+  const [pickedBar, setPickedBar] = useState<number | null>(null);
+  // Начало идущей свечи, секунды. Тикает само: живая панель обязана перейти на
+  // новую свечу ровно тогда, когда её открыла биржа, а не когда трейдер
+  // случайно шевельнул график.
+  const [liveBar, setLiveBar] = useState<number | null>(null);
+  const openBar = pickedBar ?? (followBar ? liveBar : null);
   const openBarRef = useRef<number | null>(null);
   openBarRef.current = openBar;
+  const followRef = useRef(false);
+  followRef.current = followBar;
   const [foot, setFoot] = useState<FootprintData | null>(null);
+  // Куда трейдер поставил панель объёма. null — она ещё не переезжала и стоит
+  // там, где стояла всегда: справа и выше цены.
+  const [footSpot, setFootSpot] = useState<Spot | null>(null);
+  const footBoxRef = useRef<HTMLDivElement>(null);
   // Обработчик нажатия ставится один раз на всю жизнь графика, а таймфрейм
   // трейдер переключает — значит читаем его из ref, а не из замыкания.
   const intervalRef = useRef(interval);
@@ -1116,7 +1137,10 @@ function PriceChart({
           param.point.x > liveX &&
           Math.abs(liveY - param.point.y) <= FOOTPRINT_HIT_PX
         ) {
-          setOpenBar((now) => (now === live.time ? null : live.time));
+          // Живая панель, а не снимок этой минуты: трейдер, нажавший по цене,
+          // просит показать, что происходит сейчас, - и через минуту тоже.
+          setPickedBar(null);
+          setFollowBar((now) => !now);
           return;
         }
       }
@@ -1126,7 +1150,7 @@ function PriceChart({
       // цены, и отбирать его у трейдера нельзя.
       const bar = barUnder(scale, series, param.point, dataRef.current);
       if (bar && FOOTPRINT_INTERVALS.has(intervalRef.current)) {
-        setOpenBar((now) => (now === bar.time ? null : bar.time));
+        setPickedBar((now) => (now === bar.time ? null : bar.time));
         return;
       }
 
@@ -1815,10 +1839,36 @@ function PriceChart({
     };
   }, [openBar, symbol, interval, t]);
 
-  // Смена монеты или таймфрейма сворачивает раскрытую свечу: её время на новом
-  // ряду означает другую свечу, а на другой монете - вообще ничего.
+  // Начало идущей свечи. Считаем по часам, а не по последнему бару графика:
+  // свечи приезжают раз в пять секунд, и панель на живой свече отставала бы от
+  // рынка на эти пять секунд ровно в тот момент, когда открывается новая.
+  //
+  // Секундный шаг здесь не расточительство: это одно деление в минуту, а
+  // граница свечи - единственное, что панель обязана поймать вовремя.
   useEffect(() => {
-    setOpenBar(null);
+    // Пока трейдер разбирает свечу из истории, часы не тикают: панель всё
+    // равно показывает не их, а перерисовка раз в секунду ради невидимого
+    // числа - это работа впустую.
+    if (!followBar || pickedBar !== null) {
+      setLiveBar(null);
+      return;
+    }
+    const seconds = INTERVAL_SECONDS[interval] ?? 60;
+    const put = () => {
+      const now = Math.floor(Date.now() / 1000);
+      setLiveBar(now - (now % seconds));
+    };
+    put();
+    const timer = setInterval(put, 1000);
+    return () => clearInterval(timer);
+  }, [followBar, pickedBar, interval]);
+
+  // Смена монеты или таймфрейма отпускает закреплённую свечу: её время на новом
+  // ряду означает другую свечу, а на другой монете - вообще ничего. Живую
+  // панель это не трогает: «покажи, что сейчас» на новой монете значит то же
+  // самое, и закрывать её ради смены инструмента незачем.
+  useEffect(() => {
+    setPickedBar(null);
   }, [symbol, interval]);
 
   // Escape - тот же выход, что и нажатие по колонке. Раскрытая свеча закрывает
@@ -1826,11 +1876,93 @@ function PriceChart({
   useEffect(() => {
     if (openBar === null) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpenBar(null);
+      if (event.key !== "Escape") return;
+      setPickedBar(null);
+      setFollowBar(false);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [openBar]);
+
+  // Место панели читаем один раз при первой отрисовке: хранилище - вещь
+  // браузера, а страница собирается и на сервере, где его нет.
+  useEffect(() => {
+    setFootSpot(readSpot(FOOT_SPOT_KEY));
+  }, []);
+
+  // Панель, оставленную у края, возвращаем на холст, когда холст стал меньше:
+  // свернули журнал, растянули стакан, вышли из полного экрана. Ухватить её
+  // за краем нечем - заголовок уехал вместе с ней.
+  useEffect(() => {
+    if (!foot) return;
+    const area = boxRef.current;
+    const card = footBoxRef.current;
+    if (!area) return;
+
+    const fit = () => {
+      if (!card) return;
+      setFootSpot((spot) => {
+        if (!spot) return spot;
+        const fixed = clampSpot(
+          spot,
+          { w: card.offsetWidth, h: card.offsetHeight },
+          { w: area.clientWidth, h: area.clientHeight },
+        );
+        return fixed.x === spot.x && fixed.y === spot.y ? spot : fixed;
+      });
+    };
+
+    fit();
+    // Холст меняет размер не только вместе с окном: журнал раскрывается,
+    // панели тянут за разделители. Наблюдатель ловит и то и другое.
+    const watch = new ResizeObserver(fit);
+    watch.observe(area);
+    return () => watch.disconnect();
+  }, [foot]);
+
+  // Перетаскивание панели объёма. Слушаем окно, а не саму панель: рука уводит
+  // курсор быстрее, чем браузер перерисовывает, и на резком движении панель
+  // отцеплялась бы от пальца.
+  const startFootDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    // Только левой кнопкой: правая на графике - это меню браузера, и таскать
+    // ею панель значит отобрать его.
+    if (event.button !== 0) return;
+    const area = boxRef.current;
+    const card = footBoxRef.current;
+    if (!area || !card) return;
+    event.preventDefault();
+
+    const areaRect = area.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    // За какое место панели взялись. Без этого она прыгает углом под курсор.
+    const grabX = event.clientX - cardRect.left;
+    const grabY = event.clientY - cardRect.top;
+    const size = { w: cardRect.width, h: cardRect.height };
+    const area2 = { w: areaRect.width, h: areaRect.height };
+    let last: Spot | null = null;
+
+    const move = (moved: PointerEvent) => {
+      last = clampSpot(
+        {
+          x: moved.clientX - areaRect.left - grabX,
+          y: moved.clientY - areaRect.top - grabY,
+        },
+        size,
+        area2,
+      );
+      setFootSpot(last);
+    };
+    const drop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", drop);
+      // Запоминаем только состоявшийся перенос: нажатие без движения - это
+      // просто нажатие, и переписывать им прежнее место незачем.
+      if (last) keepSpot(FOOT_SPOT_KEY, last);
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", drop);
+  }, []);
 
   // Точность ценовой шкалы - по шагу инструмента, а не по умолчанию в цент.
   useEffect(() => {
@@ -2410,8 +2542,31 @@ function PriceChart({
           ходит понизу. Отступ справа - под ценовую шкалу, сверху - под строку
           плашек заявок. */}
       {foot && (
-        <div className="pointer-events-none absolute right-16 top-8 z-20 flex justify-end">
-          <FootprintCard data={foot} onClose={() => setOpenBar(null)} />
+        <div
+          ref={footBoxRef}
+          className="pointer-events-none absolute z-20 flex justify-end"
+          // Пока панель не двигали, она стоит там же, где стояла всегда:
+          // справа и выше цены. Один раз перенесённая - там, куда её увели, и
+          // возвращать её на место при каждом открытии значит отменять выбор.
+          style={
+            footSpot
+              ? { left: footSpot.x, top: footSpot.y }
+              : { right: 64, top: 32 }
+          }
+        >
+          <FootprintCard
+            data={foot}
+            live={pickedBar === null && followBar}
+            onLive={pickedBar === null ? undefined : () => {
+              setPickedBar(null);
+              setFollowBar(true);
+            }}
+            onDragStart={startFootDrag}
+            onClose={() => {
+              setPickedBar(null);
+              setFollowBar(false);
+            }}
+          />
         </div>
       )}
 

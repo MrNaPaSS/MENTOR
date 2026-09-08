@@ -151,6 +151,11 @@ export const terminal = {
     footSell: "sold",
     footBuy: "bought",
     footClose: "Close the candle volume",
+    footMove: "Drag by the header - the panel will stand where you want it",
+    footLive: "Back to the current candle",
+    footLiveTitle: "The candle is still running: the numbers are filling in",
+    footValueTitle:
+      "Value area: the prices that took seventy percent of the candle's turnover",
     footPartial: "The candle is not fully broken down: it holds more trades than could be pulled",
     footEmpty: "No trades in the candle yet",
     noServer: "No connection to the server",

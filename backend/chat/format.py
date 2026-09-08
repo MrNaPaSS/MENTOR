@@ -88,12 +88,13 @@ def text_html(text: str, links: list[dict]) -> str:
 # перестаёт читаться с одного взгляда.
 
 
-def trade_html(trade: dict, url: str = "") -> str:
+def trade_html(trade: dict) -> str:
     """Сделка или заявка так, как она выглядит в форуме.
 
-    ``url`` - выложенная карточка. Если он есть, первая строка становится
-    спрятанной ссылкой на неё: «BTC · SHORT · ×100» нажимается и открывает
-    заверенный печатью бланк, а сообщение остаётся коротким.
+    Одна строка жирным - «BTC · SHORT · ×200 · ждёт входа», и всё. Ни значка
+    перед ней, ни ссылки под ней: сигнал читают с телефона одним взглядом, а
+    цветной кружок и подчёркнутая ссылка тянут этот взгляд на себя, ничего к
+    сигналу не добавляя. Направление сказано словом, состояние - тоже.
     """
     symbol = esc(str(trade.get("symbol", "")).upper().replace("USDT", "") or "?")
     side = "SHORT" if str(trade.get("side", "")).lower() == "short" else "LONG"
@@ -104,18 +105,15 @@ def trade_html(trade: dict, url: str = "") -> str:
     except (TypeError, ValueError):
         leverage = 1
 
-    mark = "\U0001f534" if side == "SHORT" else "\U0001f7e2"
     if state == "planned":
-        mark, note = "\u23f3", "ждёт входа"
+        note = "ждёт входа"
     elif state == "open":
         note = "в рынке"
     else:
         note = "закрыта"
 
-    head = f"<b>{symbol}</b> · {side} · ×{leverage} · {note}"
-    if url.lower().startswith(("http://", "https://")):
-        head = f'<a href="{html.escape(url, quote=True)}">{head}</a>'
-    lines = [f"{mark} {head}"]
+    head = f"<b>{symbol} · {side} · ×{leverage} · {note}</b>"
+    lines = [head]
 
     # Результат показываем только там, где он есть. У ждущей заявки его нет, и
     # нуль на её месте обещал бы итог, которого не было.
@@ -143,8 +141,12 @@ def message_html(author: str, text: str, links: list[dict], attach: dict | None)
 
     kind = str((attach or {}).get("kind", ""))
     if kind == "trade" and isinstance(attach.get("trade"), dict):
-        card = trade_html(attach["trade"], str(attach.get("url", "")))
-        return f"{head}\n{body}\n\n{card}" if body else f"{head}\n\n{card}"
+        # Сигнал идёт без подписи. Имя школы над каждой заявкой не сообщает
+        # ничего: канал у сигнала один, и все, кто его читает, и так знают,
+        # чей он. А строка сверху отодвигает вниз то единственное, ради чего
+        # сообщение открыли, - монету, сторону и состояние.
+        card = trade_html(attach["trade"])
+        return f"{body}\n\n{card}" if body else card
 
     if kind == "shot":
         # Снимок уходит спрятанной ссылкой: подписью служит сам текст
