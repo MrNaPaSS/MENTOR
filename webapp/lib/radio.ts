@@ -136,6 +136,7 @@ function teardown(): void {
     // элемент ошибку, а она у нас означает "поток не пошёл, пробуй иначе".
     audio.onplaying = null;
     audio.onerror = null;
+    audio.onended = null;
     audio.pause();
     // Пустой src рвёт соединение. На одной паузе поток продолжал бы качаться
     // в фоне - мегабайты в час за музыку, которую никто не слушает.
@@ -180,7 +181,13 @@ function loudness(): number {
   return Date.now() < duckUntil ? state.volume * DUCK_TO : state.volume;
 }
 
-function start(index: number, cors: boolean): void {
+/**
+ * Включить станцию.
+ *
+ * `tried` - те, что в этой попытке уже не пошли: по ним не ходим второй раз,
+ * иначе перебор зациклится на мёртвом списке.
+ */
+function start(index: number, cors: boolean, tried: Set<number> = new Set()): void {
   teardown();
   const element = new Audio();
   element.preload = "none";
@@ -193,19 +200,44 @@ function start(index: number, cors: boolean): void {
   emit({ station: index, mode: "loading", live: false });
 
   element.onplaying = () => emit({ mode: "playing" });
-  element.onerror = () => {
-    // Поток не пошёл. С CORS он падает целиком, если станция не отдала
-    // заголовки, - тогда пробуем ещё раз без него: музыка важнее картинки.
-    if (cors) start(index, false);
-    else emit({ mode: "off", live: false });
-  };
+
+  /**
+   * Станция не пошла.
+   *
+   * Сначала та же, но без CORS: с ним поток падает целиком, если станция не
+   * отдала заголовки, - музыка важнее пульса. Не помогло - идём к следующей
+   * станции списка.
+   *
+   * Молча выключаться нельзя. Станция может умолкнуть на неделю, а человек
+   * жмёт пуск и не понимает, сломано радио или у него звук выключен. Играет
+   * соседняя - вопрос снимается сам.
+   */
+  function failed() {
+    if (cors) {
+      start(index, false, tried);
+      return;
+    }
+    const dead = new Set(tried).add(index);
+    // Следующая по кругу, начиная от той, что не пошла.
+    for (let step = 1; step <= STATIONS.length; step++) {
+      const next = (index + step) % STATIONS.length;
+      if (!dead.has(next)) {
+        start(next, true, dead);
+        return;
+      }
+    }
+    // Не отвечает ни одна - дело не в станции, а в связи.
+    emit({ mode: "off", live: false });
+  }
+
+  element.onerror = failed;
+  // Живой поток не кончается сам. Кончился - станция оборвалась, и это тот же
+  // отказ, только посреди песни.
+  element.onended = failed;
 
   const live = cors ? graph(element) : false;
   emit({ live });
-  element.play().catch(() => {
-    if (cors) start(index, false);
-    else emit({ mode: "off", live: false });
-  });
+  element.play().catch(failed);
 }
 
 export function toggle(): void {
@@ -221,6 +253,7 @@ export function pick(index: number): void {
   emit({ station: index });
   save();
   // Станцию меняют обычно на ходу - переключаем, не заставляя жать пуск.
+  // Перебор начинается заново: выбор руками отменяет прошлые неудачи.
   if (state.mode !== "off") start(index, true);
 }
 

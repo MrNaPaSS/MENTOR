@@ -118,6 +118,74 @@ describe("радио в шапке", () => {
   });
 });
 
+describe("станция не отвечает", () => {
+  /** Включить радио на свежем движке и вернуть список открытых адресов. */
+  async function playWith(fails: (url: string) => boolean) {
+    const asked: string[] = [];
+    const Real = window.Audio;
+    window.Audio = function (...args: ConstructorParameters<typeof Audio>) {
+      const one = new Real(...args);
+      // Отказ приходит не сразу: браузер сперва берётся за поток.
+      const src = Object.getOwnPropertyDescriptor(
+        HTMLMediaElement.prototype,
+        "src",
+      );
+      Object.defineProperty(one, "src", {
+        configurable: true,
+        get: () => src?.get?.call(one),
+        set(value: string) {
+          asked.push(value);
+          src?.set?.call(one, value);
+          if (fails(value)) setTimeout(() => one.onerror?.(new Event("error")), 0);
+        },
+      });
+      return one;
+    } as unknown as typeof Audio;
+
+    try {
+      const radio = await import("@/lib/radio");
+      const { default: RadioChip } = await import("@/components/app/RadioChip");
+      render(<RadioChip />);
+      fireEvent.click(playButton());
+      // Ждём, пока перебор осядет: каждый отказ приходит своим тиком, и
+      // фиксированный срок обрывал цепочку на середине.
+      let quiet = 0;
+      for (let i = 0; i < 60 && quiet < 3; i++) {
+        const before = asked.length;
+        await new Promise((done) => setTimeout(done, 10));
+        quiet = asked.length === before ? quiet + 1 : 0;
+      }
+      return { asked, radio };
+    } finally {
+      window.Audio = Real;
+    }
+  }
+
+  it("молчит станция по умолчанию - включается следующая", async () => {
+    const { asked, radio } = await playWith((url) => url.includes("mini-192"));
+
+    // К мёртвой сходили дважды: с проверкой доступа и без неё.
+    expect(asked.filter((u) => u.includes("mini-192"))).toHaveLength(2);
+    // И ушли к соседней по списку.
+    expect(asked.at(-1)).not.toContain("mini-192");
+    expect(radio.snapshot().mode).not.toBe("off");
+  });
+
+  it("не отвечает ни одна - выключаемся, а не ходим по кругу", async () => {
+    const { asked, radio } = await playWith(() => true);
+
+    // Каждую станцию пробуем ровно дважды: с CORS и без.
+    expect(asked).toHaveLength(radio.STATIONS.length * 2);
+    expect(radio.snapshot().mode).toBe("off");
+  });
+
+  it("выбор станции руками отменяет прошлые неудачи", async () => {
+    const { radio } = await playWith((url) => url.includes("mini-192"));
+    // Мёртвую выбирают снова - к ней и идём, а не считаем её вычеркнутой.
+    expect(() => radio.pick(0)).not.toThrow();
+  });
+});
+
 describe("уведомление и музыка", () => {
   it("сигнал терминала приглушает радио, а потом отпускает", async () => {
     // Движок держит свой <audio> при себе и наружу не отдаёт. Перехватываем
