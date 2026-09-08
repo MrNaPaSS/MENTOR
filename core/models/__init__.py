@@ -221,6 +221,32 @@ class AuthCode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class TgAuthCode(Base):
+    """Одноразовый пароль входа, выданный ботом академии.
+
+    Отдельная таблица, а не расширение `auth_codes`. Там ключ - `weex_uid`, и
+    код проверяется вместе с ним; здесь ключ - `tg_id`, а пароль предъявляют
+    сам по себе. Смешать два способа входа в одной таблице значит однажды
+    выдать токен не тому.
+
+    Хранится хеш, а не пароль. Пароль живёт пять минут, база - годы, и утечка
+    дампа не должна означать возможность войти. Соли нет намеренно: пароль
+    случаен и короткоживущ, а искать по хешу надо по индексу.
+    """
+
+    __tablename__ = "tg_auth_codes"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    tg_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    code_hash: Mapped[str] = mapped_column(String(64), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    attempts: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ScalpTrade(Base):
     """Сделка из журнала скальпинг-терминала.
 

@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import os
+import re
 import secrets
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from core import repo
@@ -20,8 +23,12 @@ from backend.deps import get_config, get_session, get_weex, get_notifier
 from backend.security import create_access_token, create_refresh_token, decode_token, TokenError
 from backend.balance_collector import snapshot_student
 from backend.trading.funds import balance_by_keys
+# Тот же ключ и та же сверка, что у начисления монет: обе ручки открыты одному
+# и тому же боту, и второй секрет рядом защиты не добавит.
+from backend.api.coins import require_service_key
 from backend.schemas import (
     RequestCodeIn, RequestCodeOut, VerifyIn, TokenPair, RefreshIn, DevLoginOut, DevTokens,
+    TgCodeIn, TgCodeOut, TgVerifyIn,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -43,6 +50,22 @@ def record_login(session, student) -> None:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _uid_login_open(config: BackendConfig) -> None:
+    """Пустить, только если вход по одному UID ещё разрешён.
+
+    Вход через бота академии делает Telegram единственным способом попасть в
+    кабинет: только через него UID биржи связывается с человеком. Старые ручки
+    остаются в коде за флагом, а не удаляются: если у кого-то нет ни `tg_id` в
+    записи, ни записи в боте, вернуть ему доступ надо уметь одной переменной, а
+    не деплоем посреди ночи.
+    """
+    if not config.uid_login_enabled:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Вход по UID закрыт: войдите через бота академии",
+        )
 
 
 def _seed_demo(session, demo_student) -> None:
@@ -95,6 +118,7 @@ async def request_code(
     session=Depends(get_session),
     notifier=Depends(get_notifier),
 ):
+    _uid_login_open(config)
     uid = body.weex_uid.strip()
     # UID должен существовать в WEEX и принадлежать одобренному ученику.
     balance = await weex.get_affiliate_balance(uid)
@@ -131,6 +155,7 @@ def verify(
     config: BackendConfig = Depends(get_config),
     session=Depends(get_session),
 ):
+    _uid_login_open(config)
     uid = body.weex_uid.strip()
     row = repo.get_active_auth_code(session, uid)
     if row is None:
@@ -174,6 +199,7 @@ async def login_by_uid(
     weex=Depends(get_weex),
 ):
     """Вход по WEEX UID: если аффилиат ментора — авто-регистрация и выдача токенов."""
+    _uid_login_open(config)
     from core.models import Student as StudentModel
 
     uid = body.weex_uid.strip()
@@ -214,6 +240,203 @@ async def login_by_uid(
     return TokenPair(
         access_token=create_access_token(student.id, "student", config.jwt_secret, config.access_ttl_seconds),
         refresh_token=create_refresh_token(student.id, config.jwt_secret, config.refresh_ttl_seconds),
+    )
+
+
+# ── Вход одноразовым паролем от бота академии ───────────────────────────────
+
+logger = logging.getLogger("nmnh.auth")
+
+# Алфавит пароля без похожих начертаний: ни I, ни O, ни нуля с единицей.
+# Пароль набирают руками с экрана телефона, и «O или 0» - это не опечатка
+# ученика, а наша ошибка.
+_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+_CODE_LEN = 8
+
+# Что выбрасываем при вводе: человек не обязан помнить, где черта и какой
+# регистр. Всё, кроме букв и цифр, - оформление.
+_NOISE = re.compile(r"[^A-Z0-9]")
+
+
+def _make_code() -> str:
+    """Новый пароль. 32^8 - около сорока бит, перебор упирается в ограничитель."""
+    return "".join(secrets.choice(_ALPHABET) for _ in range(_CODE_LEN))
+
+
+def _pretty(code: str) -> str:
+    """Пароль для показа: с чертой посередине его легче прочесть и набрать."""
+    half = len(code) // 2
+    return f"{code[:half]}-{code[half:]}"
+
+
+def _normalize(code: str) -> str:
+    return _NOISE.sub("", code.strip().upper())
+
+
+def _digest(code: str) -> str:
+    """Хеш пароля. В базе лежит он, а не сам пароль."""
+    return hashlib.sha256(_normalize(code).encode("utf-8")).hexdigest()
+
+
+def _aware(at: datetime | None) -> datetime:
+    """Время из базы - всегда с зоной.
+
+    SQLite хранит дату строкой и пояс теряет. Наивную дату `timestamp()` считает
+    по местному времени, и срок пароля уезжал на разницу поясов: у нас он
+    оказывался истёкшим в тот же миг, как его выдали.
+    """
+    if at is None:
+        return _now()
+    return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+
+
+@router.post("/tg/code", response_model=TgCodeOut)
+async def tg_code(
+    body: TgCodeIn,
+    request: Request,
+    _: None = Depends(require_service_key),
+    config: BackendConfig = Depends(get_config),
+    session=Depends(get_session),
+    weex=Depends(get_weex),
+):
+    """Выдать боту одноразовый пароль для его ученика.
+
+    Пропуск проверяет бот - он единственный, кто знает, подтверждён ли счёт.
+    Здесь только выдача: пришёл с сервисным ключом и с UID - значит проверку
+    уже прошёл.
+
+    Повторный запрос до истечения срока отдаёт **тот же** пароль и не продлевает
+    его. Ученик нажал кнопку дважды - он ждёт один пароль, а не гадает, какой из
+    двух рабочий.
+    """
+    uid = body.weex_uid.strip()
+    if not uid:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен weex_uid")
+
+    # Счёт выдач - по ученику, а не по адресу: ходит бот, и адрес у всех
+    # запросов один. Ограничитель живёт на приложении, а не на функции: на
+    # функции он был бы общим на весь процесс и не знал бы про настройки.
+    limiter = getattr(request.app.state, "tg_code_limiter", None)
+    if limiter is not None and not limiter.allow(f"tg:{body.tg_id}"):
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS, "Слишком часто. Попробуйте позже."
+        )
+
+    # Аффилиата спрашиваем здесь, а не на вводе: там ученик ждёт ответа, и
+    # лишний поход на биржу заметен. Биржа не ответила - пароль всё равно
+    # выдаём: связь с ней рвётся, а вход из-за этого падать не должен, и
+    # отметки бота в этом случае достаточно.
+    try:
+        await weex.get_affiliate_balance(uid)
+    except Exception as exc:  # noqa: BLE001 - причина в журнале, вход важнее
+        logger.warning("UID %s при выдаче пароля не проверен: %s", uid, exc)
+
+    # Ученика заводим и связываем сразу, а не при вводе: тогда пароль,
+    # доехавший до сайта, уже находит кого впустить, и связка UID с Telegram
+    # не зависит от того, дошёл ли ученик до формы.
+    _link_student(session, body.tg_id, uid, body.username.strip())
+    session.commit()
+
+    # Пока пароль жив, повторный запрос отдаёт **тот же** и не продлевает срок.
+    #
+    # Ученик нажал кнопку дважды - он ждёт один пароль. Выдать второй и погасить
+    # первый нельзя: первый он мог уже скопировать, и тот умрёт у него в руках -
+    # это ровно то непонимание, которого мы избегаем.
+    #
+    # В базе лежит только хеш, поэтому сам пароль на время его жизни держим в
+    # памяти процесса. Она переживает пять минут, а дамп базы - годы: то, ради
+    # чего заведён хеш, этим не нарушается. Перезапустился сервер - кеш пуст,
+    # ученик просит заново и получает новый.
+    cache = getattr(request.app.state, "tg_code_cache", None)
+    alive = repo.active_tg_code(session, body.tg_id)
+    if alive is not None and cache is not None:
+        kept = cache.get(body.tg_id)
+        left = int((_aware(alive.expires_at) - _now()).total_seconds())
+        if kept and _digest(kept) == alive.code_hash and left > 0:
+            return TgCodeOut(code=_pretty(kept), expires_in=left)
+
+    fresh = _make_code()
+    repo.create_tg_code(session, body.tg_id, _digest(fresh), config.tg_code_ttl_seconds)
+    if cache is not None:
+        cache[body.tg_id] = fresh
+
+    logger.info("Пароль входа выдан ученику tg=%s", body.tg_id)
+    return TgCodeOut(code=_pretty(fresh), expires_in=config.tg_code_ttl_seconds)
+
+
+def _link_student(session, tg_id: int, weex_uid: str, username: str):
+    """Найти ученика по любому из ключей, завести при отсутствии и связать оба.
+
+    Ник пишем **всегда**, а не только при заведении: в Telegram его меняют, а
+    он потом стоит в подписи на карточке сделки и в углу снимка графика.
+    Пустой ник ничего не затирает - в Telegram он не обязателен, и у части
+    учеников его нет вовсе.
+    """
+    from core.models import Student as StudentModel
+
+    student = repo.get_student_by_weex_uid(session, weex_uid)
+    if student is None:
+        student = session.query(StudentModel).filter(StudentModel.tg_id == tg_id).one_or_none()
+
+    if student is None:
+        student = StudentModel(
+            tg_id=tg_id,
+            weex_uid=weex_uid,
+            username=username or None,
+            created_via="academy",
+        )
+        session.add(student)
+    else:
+        # Второй ключ мог появиться позже - дописываем, чтобы две записи на
+        # одного человека не разошлись.
+        if student.tg_id is None:
+            student.tg_id = tg_id
+        if not student.weex_uid:
+            student.weex_uid = weex_uid
+        if username:
+            student.username = username
+
+    # Счёт подтвердил бот - той самой отметкой, по которой он открывает курсы.
+    # Источник другой, чем у входа по UID, факт тот же.
+    student.is_approved = True
+    student.is_active = True
+    session.flush()
+    return student
+
+
+@router.post("/tg/verify", response_model=TokenPair)
+def tg_verify(
+    body: TgVerifyIn,
+    config: BackendConfig = Depends(get_config),
+    session=Depends(get_session),
+):
+    """Впустить по одноразовому паролю.
+
+    Причину неудачи не уточняем. «Пароль истёк» и «пароля нет» - разные ответы
+    для того, кто перебирает, и одинаковые для того, кто просто ошибся.
+    """
+    from core.models import Student as StudentModel
+
+    tg_id = repo.take_tg_code(session, _digest(body.code))
+    if tg_id is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Пароль не подошёл")
+
+    student = session.query(StudentModel).filter(StudentModel.tg_id == tg_id).one_or_none()
+    if student is None:
+        # Ученика заводит выдача пароля, и к этому моменту он есть всегда.
+        # Если его нет - расходится не вход, а база; молчать об этом нельзя.
+        logger.error("Пароль погашен, а ученика tg=%s нет", tg_id)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Пароль не подошёл")
+
+    record_login(session, student)
+    session.commit()
+    return TokenPair(
+        access_token=create_access_token(
+            student.id, "student", config.jwt_secret, config.access_ttl_seconds
+        ),
+        refresh_token=create_refresh_token(
+            student.id, config.jwt_secret, config.refresh_ttl_seconds
+        ),
     )
 
 

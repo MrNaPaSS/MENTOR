@@ -122,6 +122,30 @@ class VerifyIn(BaseModel):
     code: str
 
 
+class TgCodeIn(BaseModel):
+    """Запрос бота академии: кому выдать пароль.
+
+    Бот зовёт ручку только после своей проверки и передаёт то, что при ней
+    узнал. `weex_uid` обязателен: без него платформа не знает, к какому счёту
+    привязывать ученика, а связка с биржей - то, ради чего кабинет и есть.
+    """
+
+    tg_id: int
+    weex_uid: str = Field(min_length=1, max_length=64)
+    username: str = Field(default="", max_length=64)
+
+
+class TgCodeOut(BaseModel):
+    code: str
+    expires_in: int
+
+
+class TgVerifyIn(BaseModel):
+    """Ввод ученика на странице входа. Дефис и регистр здесь не важны."""
+
+    code: str = Field(min_length=1, max_length=32)
+
+
 class TokenPair(BaseModel):
     access_token: str
     refresh_token: str

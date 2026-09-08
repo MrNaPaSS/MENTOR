@@ -120,7 +120,24 @@ def create_app(
     # Rate limiting на /api/auth/* (ТЗ §4.3, A-08).
     limiter = RateLimiter(config.rate_limit_max, config.rate_limit_window)
     app.state.rate_limiter = limiter
-    app.add_middleware(AuthRateLimitMiddleware, limiter=limiter)
+    # Выдача одноразового пароля считается по ученику, а не по адресу: за
+    # паролями ходит бот, и адрес у всех его запросов один.
+    app.state.tg_code_limiter = RateLimiter(config.tg_code_max, config.tg_code_window)
+    # Живые пароли: в базе только хеш, а повторный запрос обязан отдать тот же
+    # пароль. Держим его здесь на время жизни - память переживает пять минут,
+    # дамп базы живёт годами.
+    app.state.tg_code_cache = {}
+    # Проверка одноразового пароля - отдельным, узким счётом: он проверяется
+    # сам по себе, и перебор бьёт именно сюда.
+    app.add_middleware(
+        AuthRateLimitMiddleware,
+        limiter=limiter,
+        tight={
+            "/api/auth/tg/verify": RateLimiter(
+                config.tg_verify_max, config.tg_verify_window
+            )
+        },
+    )
 
     app.add_middleware(
         CORSMiddleware,

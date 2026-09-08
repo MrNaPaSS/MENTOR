@@ -2,15 +2,36 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ArrowLeft, ShieldCheck, AlertTriangle, Loader2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, ShieldCheck, AlertTriangle, Loader2, Send } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import { api } from "@/lib/api";
 import { setStudentTokens } from "@/lib/auth";
+import { SOCIAL_LINKS } from "@/lib/content";
 
 const OTP_LEN = 6;
 
+/** Длина одноразового пароля от бота академии, без черты. */
+const PASS_LEN = 8;
+
+/** Что в пароле значимо: буквы и цифры. Черта и регистр - оформление. */
+function cleanPass(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, PASS_LEN);
+}
+
+/** Показываем с чертой посередине: так его легче прочесть и набрать. */
+function prettyPass(value: string): string {
+  const clean = cleanPass(value);
+  const half = PASS_LEN / 2;
+  return clean.length > half ? `${clean.slice(0, half)}-${clean.slice(half)}` : clean;
+}
+
 export default function LoginPage() {
   const router = useRouter();
+  // Telegram - основной путь: только через него UID биржи связывается с
+  // человеком, а его ник попадает в подписи на карточках и снимках. Вход по
+  // одному UID остаётся запасным и может быть закрыт на сервере.
+  const [mode, setMode] = useState<"tg" | "uid">("tg");
+  const [pass, setPass] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const [uid, setUid] = useState("");
   const [digits, setDigits] = useState<string[]>(Array(OTP_LEN).fill(""));
@@ -74,6 +95,25 @@ export default function LoginPage() {
     }
   }
 
+  /** Войти одноразовым паролем от бота академии. */
+  async function enterByPass(value: string) {
+    const clean = cleanPass(value);
+    if (clean.length < PASS_LEN) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const tokens = await api.loginByTgCode(clean);
+      setStudentTokens(tokens.access_token, tokens.refresh_token);
+      setSuccess(true);
+      setTimeout(() => (window.location.href = "/app/scalping"), 700);
+    } catch (e: unknown) {
+      // Причину сервер не уточняет намеренно: «истёк» и «нет такого» -
+      // подсказка тому, кто перебирает.
+      setError(e instanceof Error ? e.message : "Пароль не подошёл");
+      setLoading(false);
+    }
+  }
+
   function setDigit(i: number, val: string) {
     const clean = val.replace(/\D/g, "");
     if (!clean && val !== "") return;
@@ -114,10 +154,84 @@ export default function LoginPage() {
         <div className="rounded-2xl border border-border bg-bg-card/80 p-7 shadow-card backdrop-blur-xl">
           <h1 className="text-2xl font-bold text-text-primary">Вход в NMNH Platform</h1>
           <p className="mt-1 text-sm text-text-muted">
-            {step === 1 ? "Авторизация по WEEX UID" : "Подтверди вход кодом из Telegram"}
+            {mode === "tg"
+              ? "Пароль выдаёт бот академии"
+              : step === 1
+                ? "Авторизация по WEEX UID"
+                : "Подтверди вход кодом из Telegram"}
           </p>
 
-          {step === 1 ? (
+          {mode === "tg" ? (
+            <div className="mt-6 space-y-4">
+              <ol className="space-y-1.5 text-sm text-text-secondary">
+                <li>1. Откройте бота академии и нажмите «Войти на сайт».</li>
+                <li>2. Бот проверит счёт и пришлёт пароль на пять минут.</li>
+                <li>3. Введите его здесь.</li>
+              </ol>
+
+              <a
+                href={SOCIAL_LINKS.academyBot}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-text-primary transition-colors hover:border-accent-cyan/40"
+              >
+                <Send className="h-4 w-4" /> Открыть бота академии
+              </a>
+
+              <label className="block text-sm text-text-secondary">
+                Пароль из бота
+                <input
+                  className={`input mt-1.5 text-center font-mono text-2xl tracking-[0.2em] ${
+                    success ? "border-success" : error ? "border-danger" : ""
+                  }`}
+                  placeholder="K7M4-QP2X"
+                  autoComplete="one-time-code"
+                  spellCheck={false}
+                  value={prettyPass(pass)}
+                  disabled={loading || success}
+                  onChange={(e) => {
+                    const clean = cleanPass(e.target.value);
+                    setPass(clean);
+                    setError(null);
+                    // Набрал целиком - входим сами: лишнее нажатие здесь ничего
+                    // не решает, пароль либо подошёл, либо нет.
+                    if (clean.length === PASS_LEN) void enterByPass(clean);
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && void enterByPass(pass)}
+                  autoFocus
+                />
+              </label>
+              <p className="text-xs text-text-muted">
+                Черту и регистр можно не соблюдать.
+              </p>
+
+              {success ? (
+                <div className="flex items-center justify-center gap-2 text-sm font-medium text-success">
+                  <ShieldCheck className="h-5 w-5" /> Успешно! Перенаправляем…
+                </div>
+              ) : (
+                <button
+                  className="btn-primary w-full"
+                  onClick={() => void enterByPass(pass)}
+                  disabled={loading || cleanPass(pass).length < PASS_LEN}
+                >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Войти"}
+                </button>
+              )}
+
+              {/* Запасной путь. Он может быть закрыт на сервере - тогда сервер
+                  скажет об этом словами, и прятать ссылку заранее незачем. */}
+              <button
+                className="w-full text-center text-xs text-text-muted transition hover:text-text-primary"
+                onClick={() => {
+                  setMode("uid");
+                  setError(null);
+                }}
+              >
+                Войти по WEEX UID
+              </button>
+            </div>
+          ) : step === 1 ? (
             <div className="mt-6 space-y-4">
               <label className="block text-sm text-text-secondary">
                 Ваш WEEX UID
@@ -134,6 +248,15 @@ export default function LoginPage() {
               <p className="text-xs text-text-muted">
                 Где взять UID: WEEX → Профиль → UID (числовой идентификатор аккаунта).
               </p>
+              <button
+                className="text-left text-xs text-accent-cyan transition hover:underline"
+                onClick={() => {
+                  setMode("tg");
+                  setError(null);
+                }}
+              >
+                ← Войти через бота академии
+              </button>
               <p className="text-xs text-text-muted">
                 Нет аккаунта WEEX?{" "}
                 <a

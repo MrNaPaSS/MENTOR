@@ -34,19 +34,39 @@ class RateLimiter:
 
 
 class AuthRateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, limiter: RateLimiter, prefix: str = "/api/auth"):
+    """Общий предел на весь префикс входа плюс отдельные - на узкие места.
+
+    Одного предела на префикс мало. Вход по UID перебирают редко: код там
+    проверяется вместе с введённым счётом. Одноразовый пароль от бота
+    проверяется сам по себе - подходит любой живой пароль любого ученика, - и
+    по этой ручке перебор бьёт всерьёз. Ей нужен свой, более узкий счёт.
+    """
+
+    def __init__(
+        self,
+        app,
+        limiter: RateLimiter,
+        prefix: str = "/api/auth",
+        tight: dict[str, RateLimiter] | None = None,
+    ):
         super().__init__(app)
         self.limiter = limiter
         self.prefix = prefix
+        # Путь → свой ограничитель. Проходить надо оба: узкий не отменяет общий.
+        self.tight = tight or {}
 
     async def dispatch(self, request, call_next):
         if request.method != "OPTIONS" and request.url.path.startswith(self.prefix):
             # Разрешаем дев-вход без лимитов (для удобства разработки и тестирования)
             if request.url.path == f"{self.prefix}/dev-login":
                 return await call_next(request)
-            
+
             ip = request.client.host if request.client else "unknown"
-            if not self.limiter.allow(f"{ip}:{request.url.path}"):
+            narrow = self.tight.get(request.url.path)
+            allowed = self.limiter.allow(f"{ip}:{request.url.path}")
+            if allowed and narrow is not None:
+                allowed = narrow.allow(f"{ip}:{request.url.path}")
+            if not allowed:
                 return JSONResponse(
                     {"detail": "Слишком много попыток. Попробуйте позже."},
                     status_code=429,

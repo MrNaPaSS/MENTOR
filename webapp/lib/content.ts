@@ -4,6 +4,9 @@ export const SOCIAL_LINKS = {
   weexAffiliate: "https://www.weex.com/ru/register?vipCode=kaktotakxme",
   telegram: "https://t.me/+81HEkQveJic2YmEy",
   telegramBot: "https://t.me/nmnh_bot",
+  // Бот академии: он же выдаёт одноразовый пароль для входа на сайт. Это не
+  // сигнальный бот - у них разные роли и разные записи об учениках.
+  academyBot: "https://t.me/moneyhoney7_bot",
   youtube: "https://youtube.com/@nmnh",
   tiktok: "https://tiktok.com/@nmnh",
   threads: "https://threads.net/@nmnh",

@@ -11,7 +11,15 @@ from typing import Optional
 from sqlalchemy import select
 
 from core.db import SessionLocal
-from core.models import Student, Signal, SignalDelivery, SettingRow, AuthCode, utcnow
+from core.models import (
+    AuthCode,
+    SettingRow,
+    Signal,
+    SignalDelivery,
+    Student,
+    TgAuthCode,
+    utcnow,
+)
 from core.settings import Settings, DEFAULT_SETTINGS
 
 
@@ -149,6 +157,92 @@ def delete_auth_code(session, weex_uid: str) -> None:
     session.commit()
 
 
+# ── Одноразовые пароли от бота академии ──
+
+def purge_expired_tg_codes(session) -> int:
+    """Убрать протухшие пароли. Возвращает, сколько убрано.
+
+    Зовётся при выдаче нового: своей задачи по расписанию ради уборки заводить
+    незачем, а пароли выдают ровно тогда, когда таблица и растёт.
+    """
+    removed = (
+        session.query(TgAuthCode)
+        .filter(TgAuthCode.expires_at < utcnow())
+        .delete(synchronize_session=False)
+    )
+    return int(removed or 0)
+
+
+def active_tg_code(session, tg_id: int) -> TgAuthCode | None:
+    """Живой пароль этого ученика, если он ещё не истёк и не был предъявлен."""
+    now = utcnow()
+    return session.execute(
+        select(TgAuthCode)
+        .where(TgAuthCode.tg_id == tg_id)
+        .where(TgAuthCode.used_at.is_(None))
+        .where(TgAuthCode.expires_at > now)
+        .order_by(TgAuthCode.expires_at.desc())
+    ).scalars().first()
+
+
+def create_tg_code(session, tg_id: int, code_hash: str, ttl_seconds: int) -> TgAuthCode:
+    """Записать новый пароль ученика.
+
+    Прежние его пароли гасим: живым остаётся один, иначе «тот же пароль при
+    повторном запросе» превращается в «любой из выданных за десять минут».
+    """
+    from datetime import timedelta
+
+    purge_expired_tg_codes(session)
+    session.query(TgAuthCode).filter(TgAuthCode.tg_id == tg_id).delete(
+        synchronize_session=False
+    )
+    row = TgAuthCode(
+        tg_id=tg_id,
+        code_hash=code_hash,
+        expires_at=utcnow() + timedelta(seconds=ttl_seconds),
+    )
+    session.add(row)
+    session.commit()
+    return row
+
+
+def take_tg_code(session, code_hash: str) -> int | None:
+    """Погасить пароль и вернуть, чей он. `None` - не подошёл.
+
+    Гашение идёт условием внутри самого UPDATE, а не проверкой в коде: два
+    одновременных запроса с одним паролем прошли бы проверку оба, и токены
+    получили бы двое. Условие `used_at IS NULL` в WHERE отдаёт строку ровно
+    одному - второму база ответит «изменено 0 строк».
+    """
+    now = utcnow()
+    row = session.execute(
+        select(TgAuthCode).where(TgAuthCode.code_hash == code_hash)
+    ).scalars().first()
+    if row is None:
+        return None
+
+    changed = (
+        session.query(TgAuthCode)
+        .filter(TgAuthCode.id == row.id)
+        .filter(TgAuthCode.used_at.is_(None))
+        .filter(TgAuthCode.expires_at > now)
+        .update({TgAuthCode.used_at: now}, synchronize_session=False)
+    )
+    if not changed:
+        # Пароль есть, но уже мёртв: истёк или предъявлен. Считаем это ошибкой
+        # ввода - по счётчику видно, что по чужому паролю кто-то стучится.
+        session.query(TgAuthCode).filter(TgAuthCode.id == row.id).update(
+            {TgAuthCode.attempts: TgAuthCode.attempts + 1}, synchronize_session=False
+        )
+        session.commit()
+        return None
+
+    tg_id = int(row.tg_id)
+    session.commit()
+    return tg_id
+
+
 __all__ = [
     "load_settings",
     "seed_settings",
@@ -160,5 +254,9 @@ __all__ = [
     "create_signal",
     "record_delivery",
     "set_balance",
+    "create_tg_code",
+    "take_tg_code",
+    "active_tg_code",
+    "purge_expired_tg_codes",
     "SessionLocal",
 ]

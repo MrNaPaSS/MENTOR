@@ -371,6 +371,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ weex_uid, code }),
     }),
+  /**
+   * Вход одноразовым паролем от бота академии.
+   *
+   * UID сюда не идёт: пароль выдан конкретному ученику, и платформа сама
+   * знает, чей он. Дефис и регистр не важны - набирают руками.
+   */
+  loginByTgCode: (code: string) =>
+    req<{ access_token: string; refresh_token: string }>("/api/auth/tg/verify", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
   mentorLogin: (password: string) =>
     req<{ access_token: string; refresh_token: string }>(
       `/api/auth/mentor-login`,

@@ -34,6 +34,21 @@ class BackendConfig:
     # Общий секрет для служебных вызовов от сервера академии (заголовок X-Service-Key).
     # Пустая строка = ручка выключена: без явно заданного ключа её открывать нельзя.
     service_api_key: str = ""
+    # Вход одноразовым паролем от бота академии.
+    #
+    # Срок отдельный от кода по UID: там шесть цифр рядом с уже введённым
+    # счётом, здесь восемь знаков, которые проверяются сами по себе.
+    tg_code_ttl_seconds: int = 300
+    # Выдач пароля одному ученику за окно: он жмёт кнопку, а не перебирает.
+    tg_code_max: int = 3
+    tg_code_window: int = 600
+    # Проверок пароля с одного адреса. Узкий предел именно здесь: подходит
+    # любой живой пароль любого ученика, и перебор бьёт по этой ручке.
+    tg_verify_max: int = 5
+    tg_verify_window: int = 60
+    # Вход по одному UID, без Telegram. Выключается вместе с появлением входа
+    # через бота; флаг, а не удаление - ученика без tg_id иначе нечем вернуть.
+    uid_login_enabled: bool = True
     # Скальпинг: фоновый сбор стаканов с биржи. Выключен по умолчанию — это
     # постоянное соединение и заметный поток данных, включать осознанно.
     scalping_enabled: bool = False
@@ -83,6 +98,12 @@ class BackendConfig:
             rate_limit_max=int(os.getenv("RATE_LIMIT_MAX", "10")),
             rate_limit_window=int(os.getenv("RATE_LIMIT_WINDOW", "900")),
             service_api_key=os.getenv("SERVICE_API_KEY", ""),
+            tg_code_ttl_seconds=int(os.getenv("TG_CODE_TTL", "300") or "300"),
+            tg_code_max=int(os.getenv("TG_CODE_MAX", "3") or "3"),
+            tg_code_window=int(os.getenv("TG_CODE_WINDOW", "600") or "600"),
+            tg_verify_max=int(os.getenv("TG_VERIFY_MAX", "5") or "5"),
+            tg_verify_window=int(os.getenv("TG_VERIFY_WINDOW", "60") or "60"),
+            uid_login_enabled=os.getenv("UID_LOGIN_ENABLED", "true").lower() != "false",
             allowed_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
             # dev-вход включён, если явно DEV_LOGIN=true, либо мы на моках WEEX (=dev),
             # и НЕ отключён явно DEV_LOGIN=false.
