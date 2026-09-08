@@ -413,6 +413,19 @@ export default function ScalpingPage() {
   // курсор на строке; нажатие оставляет её на графике и увозит его к тому
   // времени, когда сделка шла.
   const [picked, setPicked] = useState<JournalTrade | null>(null);
+
+  // Разметка из журнала живёт вместе с журналом.
+  //
+  // Панель закрывают тем же движением, каким убирают с графика показанную
+  // сделку, - а бокс оставался висеть: строка под курсором исчезала вместе с
+  // панелью, и `onHover(null)` от неё уже не приходил, а выбранную нажатием
+  // снять было и вовсе нечем. Гасим обе на закрытии, в одном месте: закрыть
+  // журнал можно и кнопкой в панели, и ярлыком на графике, и чипом в шапке.
+  useEffect(() => {
+    if (journalOpen) return;
+    setPicked(null);
+    setHovered(null);
+  }, [journalOpen]);
   // Строка стакана под курсором: график проводит по ней линию. Держим только
   // цену, сторону и подпись — сама строка меняется восемь раз в секунду, и
   // хранить её значило бы перерисовывать график с той же частотой.
@@ -1231,10 +1244,18 @@ export default function ScalpingPage() {
       // Не спросили - считаем, что стоят все ждущие: показать заявку ждущей
       // лишние три секунды не страшно, а открыть несуществующую - страшно.
       let resting = new Set(watching.filter((t) => t.status === "planned").map((t) => t.id));
+      // Когда вход состоялся на самом деле - по сделкам сервера.
+      const opened = new Map<string, number>();
       try {
         const body = await plansOf(symbol!);
         if (cancelled) return;
-        if (body) resting = new Set(body.resting);
+        if (body) {
+          resting = new Set(body.resting);
+          for (const [id, at] of Object.entries(body.opened ?? {})) {
+            const ms = at ? new Date(at).getTime() : NaN;
+            if (Number.isFinite(ms)) opened.set(id, ms);
+          }
+        }
       } catch {
         // Биржа не ответила - остаёмся при осторожном предположении.
       }
@@ -1254,7 +1275,16 @@ export default function ScalpingPage() {
                 // стоящая, к чужой позиции отношения не имеет.
                 if (current.status === "planned") {
                   if (resting.has(current.id)) return current;
-                  return { ...current, status: "open", openedAt: Date.now() };
+                  // Время входа - серверное, а «сейчас» только если сервер его
+                  // ещё не записал. Терминал следит за одной монетой, и вход,
+                  // случившийся на другой, он замечает лишь при возвращении:
+                  // взяв «сейчас», сделка начиналась там, где на неё
+                  // посмотрели, - бокс на графике вставал не у своей свечи.
+                  return {
+                    ...current,
+                    status: "open",
+                    openedAt: opened.get(current.id) ?? Date.now(),
+                  };
                 }
                 // Объём и безубыток берём биржевые: по ним считается результат
                 // на экране и туда же сопровождение переставляет стоп. Наша
@@ -1344,10 +1374,42 @@ export default function ScalpingPage() {
               Math.max(t.takesHit, body.takes_hit, standing),
             );
             const stop = at && at > 0 ? at : t.stop;
-            if (hit === t.takesHit && Math.abs(stop - t.stop) < Math.max(stop, 1) * 0.00001) {
-              return t;
-            }
-            return { ...t, takesHit: hit, stop, breakeven: hit > 0 };
+
+            // Цены целей - тоже с биржи, а не по замыслу.
+            //
+            // Отсюда брались только стоп и число взятых, а сами цели график
+            // рисовал по расчёту сделки. Цель, переехавшую на бирже, он
+            // показывал на старом месте: в терминале «тейк 2» стоял на 78996,
+            // а на бирже на 78860 - и трейдер вёл сделку по цене, которой на
+            // бирже нет.
+            //
+            // Порядок восстанавливаем по стороне: биржа отдаёт цены по
+            // возрастанию, у лонга цели идут вверх от входа, у шорта вниз.
+            // Раскладываем оставшиеся от ближней к дальней - в том же порядке,
+            // в каком они лежат в замысле.
+            //
+            // Только когда цен ровно столько, сколько целей впереди. Меньше -
+            // значит часть лестницы на бирже не стоит, и раскладывать не по
+            // чему: подставить две цены на три цели значит соврать о том,
+            // какая из них где.
+            const ahead = t.targets.length - hit;
+            const live =
+              Array.isArray(body.take_prices) && body.take_prices.length === ahead
+                ? [...body.take_prices].sort((a, b) =>
+                    t.side === "long" ? a - b : b - a,
+                  )
+                : null;
+            const targets = live ? [...t.targets.slice(0, hit), ...live] : t.targets;
+
+            const same =
+              hit === t.takesHit &&
+              Math.abs(stop - t.stop) < Math.max(stop, 1) * 0.00001 &&
+              targets.every(
+                (price, i) =>
+                  Math.abs(price - t.targets[i]) < Math.max(price, 1) * 0.00001,
+              );
+            if (same) return t;
+            return { ...t, takesHit: hit, stop, targets, breakeven: hit > 0 };
           }),
         );
       } catch {
@@ -2375,6 +2437,28 @@ export default function ScalpingPage() {
                         стоп не на бирже
                       </span>
                     )}
+                    {/* Цены целей график берёт с биржи. Когда разложить их по
+                        целям нельзя - на бирже их другое число, - он рисует
+                        замысел, и об этом надо сказать: молча показанная цель
+                        по цене, которой на бирже нет, хуже отсутствия цели.
+                        Только при одной открытой сделке: на двух биржа отдаёт
+                        общий список, и он не сойдётся никогда. */}
+                    {plans.takes > 0 &&
+                      (() => {
+                        const open = mine.filter((t) => t.status === "open");
+                        return (
+                          open.length === 1 &&
+                          open[0].targets.length - open[0].takesHit !==
+                            (plans.take_prices?.length ?? 0)
+                        );
+                      })() && (
+                        <span
+                          className="text-[var(--pane-down)]"
+                          title="На бирже целей другое число, чем на графике: разложить их по целям нечем, и цены показаны по замыслу сделки"
+                          >
+                          цели с биржи не сошлись
+                        </span>
+                      )}
                   </>
                 )}
 
@@ -2551,6 +2635,7 @@ export default function ScalpingPage() {
                 setPicked(t);
                 if (t.symbol !== symbol) setSymbol(t.symbol);
               }}
+              owner={author ?? undefined}
               onClose={() => setJournalOpen(false)}
             />
           </section>

@@ -8,6 +8,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fmtUsd, maskUid } from "@/lib/format";
 import { tradingStatus, type TradingStatus } from "@/lib/trading";
+import ExchangeDialog from "@/components/scalping/ExchangeDialog";
+import { useTerminalTheme } from "@/lib/terminalTheme";
 
 const ADMIN_WEEX_UID = "6613031308";
 
@@ -21,6 +23,13 @@ export default function ProfilePage() {
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Окно ключей открывается прямо здесь. Раньше кнопка уводила в терминал:
+  // человек спрашивал «подключено ли» на этой странице, а отвечать на это его
+  // отправляли в другой раздел и искать там нужную кнопку.
+  const [keysOpen, setKeysOpen] = useState(false);
+  // Окно красится палитрой панелей терминала, а она живёт на классе. Без него
+  // переменные не подставятся, и окно выйдет бесцветным.
+  const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
 
   useEffect(() => {
     const token = getAccessToken();
@@ -48,6 +57,15 @@ export default function ProfilePage() {
     setRefreshing(true);
     try { setP(await api.refreshBalance(token)); }
     finally { setRefreshing(false); }
+  }
+
+  /** Ключи подключили или сменили: и состояние счёта, и баланс теперь другие. */
+  async function afterKeys() {
+    setKeysOpen(false);
+    tradingStatus()
+      .then(setExchange)
+      .catch(() => {});
+    await refreshBalance();
   }
 
   if (!p) {
@@ -93,8 +111,15 @@ export default function ProfilePage() {
               {fmtUsd(p.balance_usdt)}
               <span className="ml-1.5 text-base font-semibold text-text-muted">USDT</span>
             </div>
+            {/* Откуда цифра. Ключи ученика и партнёрская ручка по UID - разные
+                источники, и разница между ними видна: одна показывает то же,
+                что приложение биржи, другая приходит с задержкой. */}
             <div className="mt-0.5 text-[11px] text-text-muted">
-              {p.balance_source === "affiliate_api" ? "● Синхронизировано с WEEX" : "● Введено вручную"}
+              {p.balance_source === "api_keys"
+                ? "● По вашим ключам WEEX"
+                : p.balance_source === "affiliate_api"
+                  ? "● Синхронизировано с WEEX"
+                  : "● Введено вручную"}
             </div>
           </div>
           <button
@@ -146,12 +171,12 @@ export default function ProfilePage() {
               )}
             </div>
           </div>
-          <Link
-            href="/app/scalping"
+          <button
+            onClick={() => setKeysOpen(true)}
             className="ml-auto shrink-0 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-text-secondary transition-colors hover:border-accent-cyan/40 hover:text-text-primary"
           >
             {exchange?.connected ? "Изменить" : "Подключить"}
-          </Link>
+          </button>
         </div>
 
         <p className="mt-4 text-[11px] leading-relaxed text-text-muted">
@@ -268,6 +293,22 @@ export default function ProfilePage() {
       >
         <LogOut className="h-4 w-4" /> Выйти из аккаунта
       </button>
+
+      {/* Окно ключей - то же самое, что в терминале. Оно красится палитрой
+          панелей, а она живёт на классе: без обёртки переменные не подставятся
+          и окно выйдет бесцветным. */}
+      {keysOpen && (
+        <div className={pane}>
+          <ExchangeDialog
+            status={
+              exchange ?? { enabled: false, connected: false, key_tail: "", updated_at: null }
+            }
+            reachable={exchange !== null}
+            onClose={() => setKeysOpen(false)}
+            onSaved={() => void afterKeys()}
+          />
+        </div>
+      )}
     </div>
   );
 }

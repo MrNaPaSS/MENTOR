@@ -12,7 +12,8 @@
 // по-разному на сетке.
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Trash2, X } from "lucide-react";
+import { RefreshCw, Share2, Trash2, X } from "lucide-react";
+import PnlCard from "./PnlCard";
 import {
   loadCalendar,
   loadTrades,
@@ -97,6 +98,7 @@ export default function JournalPanel({
   refreshKey,
   onHover,
   onPick,
+  owner,
   onClose,
 }: {
   /** Показать только этот инструмент. Пусто — все. */
@@ -114,8 +116,12 @@ export default function JournalPanel({
    * только сам график.
    */
   onPick?: (trade: JournalTrade) => void;
+  /** Имя владельца: печать на карточке заверяет чью-то сделку, а не ничью. */
+  owner?: string;
   onClose: () => void;
 }) {
+  // Чья карточка открыта. Null - окна нет.
+  const [card, setCard] = useState<JournalTrade | null>(null);
   const now = new Date();
   const [year, setYear] = useState(now.getUTCFullYear());
   const [month, setMonth] = useState(now.getUTCMonth() + 1);
@@ -301,6 +307,7 @@ export default function JournalPanel({
                   <th>Выход</th>
                   <th>Цели</th>
                   <th className="text-right">Итог</th>
+                  <th />
                   {mentor && <th />}
                 </tr>
               </thead>
@@ -353,6 +360,22 @@ export default function JournalPanel({
                         </span>
                       )}
                     </td>
+                    {/* Карточка сделки: та самая, которой делятся в чате.
+                        Отдельной кнопкой, а не по строке - нажатие по строке
+                        уже занято графиком, и отбирать его нельзя: «почему
+                        так вышло» спрашивают чаще, чем «покажи всем». */}
+                    <td className="pl-2 text-right">
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setCard(t);
+                        }}
+                        title="Карточка сделки: скопировать, скачать, поделиться"
+                        className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
+                      >
+                        <Share2 className="h-3 w-3" />
+                      </button>
+                    </td>
                     {/* Убрать запись может только наставник: журнал - это
                         статистика, и право стереть из неё неудачную сделку
                         обесценивает её целиком. */}
@@ -374,6 +397,8 @@ export default function JournalPanel({
           )}
         </div>
       )}
+
+      {card && <PnlCard trade={card} owner={owner} onClose={() => setCard(null)} />}
     </div>
   );
 }

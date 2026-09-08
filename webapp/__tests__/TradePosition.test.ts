@@ -9,6 +9,7 @@ import {
   floatingAt,
   pendingTargets,
   pnlAt,
+  riskEdge,
   wasEntered,
   type ActiveTrade,
 } from "@/lib/trade/position";
@@ -370,5 +371,23 @@ describe("что попадает в журнал", () => {
   it("зашедшая и закрытая руками — была", () => {
     const open = advanceQuote(planned(), { bid: 99.9, ask: 100 }, 1);
     expect(wasEntered(closeManually(open, 100.5, 2))).toBe(true);
+  });
+});
+
+describe("дальний край риска", () => {
+  it("подтянутый стоп не сужает риск", () => {
+    // Стоп после цели подтянули к входу и даже за него: бокс обязан
+    // помнить, на что трейдер шёл, когда входил.
+    expect(riskEdge({ ...long(), stop: 99.5 })).toBe(99);
+    expect(riskEdge({ ...long(), stop: 100.4 })).toBe(99);
+    expect(riskEdge({ ...short(), stop: 100.5 })).toBe(101);
+    expect(riskEdge({ ...short(), stop: 99.6 })).toBe(101);
+  });
+
+  it("отодвинутый стоп расширяет риск", () => {
+    // Стоп дальше задуманного - это не память о риске, а риск прямо
+    // сейчас: бокс прежней ширины показывал бы убыток меньше возможного.
+    expect(riskEdge({ ...long(), stop: 98 })).toBe(98);
+    expect(riskEdge({ ...short(), stop: 103 })).toBe(103);
   });
 });

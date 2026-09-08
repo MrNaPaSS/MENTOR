@@ -362,3 +362,131 @@
     animation: none !important;
   }
 }
+
+/* ── Карточка сделки ───────────────────────────────────────────────────────
+   Лист выезжает из принтера, сверху падает печать.
+
+   Движение здесь не украшение: печать, которая просто проявляется на плакате,
+   читается как наклейка, а лист, вышедший из принтера и получивший оттиск, -
+   как заверенный документ. Карточка им и является.
+
+   Те же правила повторены в backend/api/shots.py: страницу по ссылке отдаёт
+   сервер готовым HTML, ему наши классы недоступны. Меняя доли печати, править
+   надо оба места и drawStamp() в webapp/lib/pnl/card.ts. */
+.pnl-window {
+  overflow: hidden;
+  padding-top: 10px;
+  margin-top: -10px;
+}
+.pnl-paper {
+  position: relative;
+  container-type: inline-size;
+  transform-origin: 50% 0;
+  animation: pnl-feed 1.15s cubic-bezier(0.22, 0.61, 0.36, 1) 0.15s both,
+    pnl-shock 0.18s ease-out 1.35s;
+}
+.pnl-paper img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* Лист идёт рывками - валик тянет его не ровно. */
+@keyframes pnl-feed {
+  0% { transform: translateY(-101%) rotate(0.6deg); }
+  18% { transform: translateY(-78%) rotate(-0.5deg); }
+  36% { transform: translateY(-52%) rotate(0.4deg); }
+  54% { transform: translateY(-28%) rotate(-0.3deg); }
+  72% { transform: translateY(-11%) rotate(0.2deg); }
+  88% { transform: translateY(-2%) rotate(-0.1deg); }
+  100% { transform: translateY(0) rotate(0); }
+}
+/* Удар печати отдаётся в лист - коротко и почти незаметно. */
+@keyframes pnl-shock {
+  0%, 100% { scale: 1; }
+  40% { scale: 1.006; }
+}
+
+/* Доли рамки на заготовке: 20..391 по горизонтали и 23..112 по вертикали при
+   размере 640x852. */
+.pnl-stamp {
+  position: absolute;
+  left: 3.13%;
+  top: 2.7%;
+  width: 57.97%;
+  height: 10.45%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: pnl-slam 0.42s cubic-bezier(0.2, 1.5, 0.35, 1) 1.35s both;
+}
+.pnl-ink {
+  position: relative;
+  width: 92%;
+  height: 86%;
+  border: 0.5cqw solid var(--pnl-accent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.6cqw;
+  opacity: 0.9;
+}
+.pnl-ink::before {
+  content: "";
+  position: absolute;
+  inset: 1.4cqw;
+  border: 0.18cqw solid var(--pnl-accent);
+  opacity: 0.85;
+}
+.pnl-mark {
+  font-size: 5.5cqw;
+  font-weight: 800;
+  color: var(--pnl-accent);
+  line-height: 1;
+}
+.pnl-mark small {
+  display: block;
+  font-size: 0.37em;
+  font-weight: 600;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+}
+.pnl-creed {
+  font-size: 2.4cqw;
+  font-weight: 700;
+  color: var(--pnl-accent);
+  opacity: 0.85;
+}
+@keyframes pnl-slam {
+  0% { transform: scale(2.4) rotate(-24deg); opacity: 0; }
+  60% { opacity: 1; }
+  100% { transform: scale(1) rotate(-4.5deg); opacity: 1; }
+}
+
+/* Щель принтера: без неё движение читается как «картинка приехала». */
+.pnl-slot {
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #12161b, #04060a);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 30px rgba(0, 0, 0, 0.6);
+  position: relative;
+  z-index: 3;
+}
+.pnl-slot::after {
+  content: "";
+  position: absolute;
+  inset: 3px 10px auto;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--pnl-accent);
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pnl-paper,
+  .pnl-stamp {
+    animation: none;
+  }
+  .pnl-stamp {
+    transform: rotate(-4.5deg);
+  }
+}
