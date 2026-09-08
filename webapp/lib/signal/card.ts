@@ -60,7 +60,7 @@ function frame(x: number, y: number, w: number, h: number): Frame {
 // не как подпись под парой; там же под ним пусто, и число не спорит ни с чем.
 const COMMON = {
   pair: frame(88, 345, 390, 86),
-  leverage: frame(1090, 348, 330, 96),
+  leverage: frame(1090, 326, 330, 96),
   entry: frame(97, 556, 382, 72),
   stop: frame(558, 556, 373, 72),
   target: frame(1009, 556, 361, 72),
