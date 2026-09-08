@@ -2506,13 +2506,13 @@ export default function ScalpingPage() {
           ? // Слой поверх всего: навигация сайта и его отступы остаются под
             // ним. Просить у браузера полный экран мало - без этого слоя
             // терминал всё равно сидел бы в шапке и нижней панели.
-            `${pane} fixed inset-0 z-[70] overflow-auto bg-bg-deep p-2`
+            `${pane} fixed inset-0 z-[70] overflow-y-auto overflow-x-hidden bg-bg-deep p-2`
           : // Отступы по краям - те же восемь точек, что и между панелями.
             // Кабинет держит по краям шестнадцать и двадцать четыре: остальным
             // разделам это к лицу, а терминалу нет - у него по краям пустые
             // поля, а в середине панели вплотную друг к другу. Снимаем отступ
             // кабинета своим отрицательным полем и задаём свой.
-            `${pane} -mx-4 px-2 md:-mx-6 lg:-mb-8 lg:pb-2`
+            `${pane} -mx-4 overflow-x-clip px-2 md:-mx-6 lg:-mb-8 lg:pb-2`
       }
     >
       {/* Уведомления поверх всего: лимитка срабатывает сама, и почти всегда
@@ -2531,17 +2531,21 @@ export default function ScalpingPage() {
             вернуть. Прятать совсем нельзя - трейдер не должен вспоминать, где
             была панель.
 
-            Стоит она неподвижно. Полоса, которая уезжает и выезжает под
-            курсором, тянет взгляд на себя каждый раз, когда мимо проходит
-            рука, - а смотреть в этот момент нужно на цену.
+            Две пятых её уходят за край экрана и там и остаются. Неподвижно:
+            полоса, которая выезжает под курсором, тянет взгляд на себя каждый
+            раз, когда мимо проходит рука, - а смотреть в этот момент нужно на
+            цену. Место, которое она перестала занимать, забирает отрицательное
+            поле - иначе между ней и стаканом остался бы зазор в ушедшую
+            часть.
 
-            Отступ справа - тот же, что даёт разделитель у открытого скринера,
-            только вдвое уже: свёрнутой полосе стоять поодаль незачем. */}
+            Значок и название прижаты к внутреннему краю - к той части, что
+            видна: полоса без подписи это просто выступ у края, о который
+            спотыкаются, не зная, что за ним. */}
         {!screenerOpen && (
           <button
             onClick={() => setScreenerOpen(true)}
             title={t.terminal.expandScreener}
-            className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:mr-1 xl:flex`}
+            className={`hidden w-9 shrink-0 -translate-x-[14px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-1.5 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-mr-3 xl:flex`}
             style={paneStyle}
           >
             <PanelLeftOpen className="h-4 w-4" />
@@ -3153,9 +3157,9 @@ export default function ScalpingPage() {
               <button
                 onClick={() => setChatOpen(true)}
                 title={t.terminal.expandChat}
-                // Полоса у правого края - зеркало скринера: такая же узкая,
-                // такая же неподвижная и с таким же узким отступом.
-                className="hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:ml-1 xl:flex"
+                // Полоса у правого края - зеркало скринера: две пятых за краем,
+                // неподвижно, значок и название на видной части.
+                className="hidden w-9 shrink-0 translate-x-[14px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-1.5 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-ml-3 xl:flex"
                 style={paneStyle}
               >
                 <PanelRightOpen className="h-4 w-4" />
