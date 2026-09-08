@@ -46,6 +46,7 @@ import {
 } from "@/lib/shot";
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import { setTerminalTheme } from "@/lib/terminalTheme";
+import { onSymbolAsked, symbolFromUrl } from "@/lib/openSymbol";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import ConnectDialog, { type ConnectNeed } from "@/components/scalping/ConnectDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
@@ -616,14 +617,10 @@ export default function ScalpingPage() {
     // из бегущей строки, из чужого сообщения, из закладки на конкретную пару.
     // Рабочее место при этом не переписывается: вернувшись сюда без адреса,
     // трейдер найдёт ту монету, с которой работал.
-    try {
-      const asked = new URLSearchParams(window.location.search).get("symbol");
-      if (asked && /^[A-Z0-9]{2,20}$/.test(asked.toUpperCase())) {
-        setSymbol(asked.toUpperCase());
-        setScreenerOpen(false);
-      }
-    } catch {
-      // Адрес без параметров - открываемся как обычно.
+    const asked = symbolFromUrl();
+    if (asked) {
+      setSymbol(asked);
+      setScreenerOpen(false);
     }
     hydrated.current = true;
     if (!journalAvailable()) return;
@@ -632,6 +629,13 @@ export default function ScalpingPage() {
       .then((body) => {
         if (!cancelled && body?.payload) {
           applyWorkspace(body.payload as Partial<Workspace>);
+          // Рабочее место приезжает с сервера через мгновение после открытия и
+          // несёт в себе прошлую монету. Просьбу из адреса оно перебивало:
+          // терминал открывался на нужной паре и тут же сам уходил на другую.
+          if (asked) {
+            setSymbol(asked);
+            setScreenerOpen(false);
+          }
         }
       })
       .catch(() => {
@@ -641,6 +645,11 @@ export default function ScalpingPage() {
       cancelled = true;
     };
   }, [applyWorkspace]);
+
+  // Нажали пару в бегущей строке, не выходя из терминала. Адрес при этом
+  // меняется, а страница остаётся прежней - чтение адреса при появлении здесь
+  // уже не сработает, поэтому монета приходит событием.
+  useEffect(() => onSymbolAsked((next) => selectSymbol(next)), []);
 
   useEffect(() => {
     if (!hydrated.current) return;

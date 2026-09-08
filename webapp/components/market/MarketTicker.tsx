@@ -11,6 +11,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { askSymbol } from "@/lib/openSymbol";
 
 const SYMBOLS = [
   "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
@@ -121,6 +122,10 @@ function Pair({ t }: { t: Ticker }) {
     // трейдера при этом не переписывается.
     <Link
       href={`/app/scalping?symbol=${t.symbol}`}
+      // Адрес открывает терминал с другой страницы, событие - когда терминал
+      // уже на экране: переход внутри приложения страницу не пересоздаёт, и
+      // адрес там прочитать некому.
+      onClick={() => askSymbol(t.symbol)}
       title={`${sym} - открыть график и стакан`}
       className="flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs transition-[background-color,transform] duration-150 ease-out hover:scale-[1.06] hover:bg-[var(--tick-hover)] motion-reduce:hover:scale-100"
     >
