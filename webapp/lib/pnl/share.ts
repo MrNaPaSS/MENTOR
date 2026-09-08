@@ -11,6 +11,7 @@
 import { authReq, API_URL } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 
+import { resultInk } from "./card";
 import type { CardData, Variant } from "./card";
 
 function toBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
@@ -86,7 +87,7 @@ export async function share(
       // сервере, и они бы разошлись при первой же новой картинке.
       card: {
         variant: variant.id,
-        ink: variant.ink,
+        ink: resultInk(variant.paper, data.pnl),
         stamp: variant.stamp,
       },
     }),

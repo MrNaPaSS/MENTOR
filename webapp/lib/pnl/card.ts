@@ -262,6 +262,8 @@ export function drawStamp(
   w: number,
   h: number,
   variant: Variant,
+  /** Цвет оттиска. Приходит снаружи: он зависит от результата, а не от бланка. */
+  ink: string,
 ): void {
   const box = {
     x: variant.stamp.x * w,
@@ -279,13 +281,13 @@ export function drawStamp(
 
   const iw = box.w * 0.92;
   const ih = box.h * 0.86;
-  ctx.strokeStyle = variant.ink;
+  ctx.strokeStyle = ink;
   ctx.lineWidth = Math.max(2, w * 0.005);
   ctx.strokeRect(-iw / 2, -ih / 2, iw, ih);
   ctx.lineWidth = Math.max(1, w * 0.0018);
   ctx.strokeRect(-iw / 2 + ih * 0.12, -ih / 2 + ih * 0.12, iw - ih * 0.24, ih - ih * 0.24);
 
-  ctx.fillStyle = variant.ink;
+  ctx.fillStyle = ink;
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
   ctx.font = face(ih * 0.46, 800);
@@ -439,7 +441,7 @@ export function paint(
     panel.y + panel.h * 0.904,
   );
 
-  if (stamp) drawStamp(ctx, w, h, variant);
+  if (stamp) drawStamp(ctx, w, h, variant, resultInk(variant.paper, data.pnl));
 }
 
 /** Загрузить заготовку. Отдельно от рисования: это единственная сеть здесь. */
