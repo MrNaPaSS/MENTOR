@@ -77,17 +77,29 @@ describe("цена на карточке", () => {
 });
 
 describe("заготовка карточки", () => {
-  it("выбирается темой и стороной, без спроса", () => {
-    expect(variantFor("dark", "long").id).toBe("bull");
-    expect(variantFor("dark", "short").id).toBe("bear");
-    expect(variantFor("light", "long").id).toBe("chart-long");
-    expect(variantFor("light", "short").id).toBe("chart-short");
+  it("по умолчанию берётся заготовка своей темы и своей стороны", () => {
+    // Заготовок на сторону теперь несколько - их перебирают стрелками, - и
+    // проверять здесь имя конкретной значит переписывать тест на каждую новую.
+    // Важно другое: без спроса подставляется подходящая.
+    for (const theme of ["dark", "light"] as const) {
+      for (const side of ["long", "short"] as const) {
+        const picked = variantFor(theme, side);
+        expect(picked.side).toBe(side);
+        expect(picked.theme).toBe(theme);
+      }
+    }
   });
 
-  it("на каждое сочетание темы и стороны есть ровно одна", () => {
+  it("на каждое сочетание темы и стороны есть хотя бы одна", () => {
     const seen = VARIANTS.map((v) => `${v.theme}:${v.side}`);
-    expect(new Set(seen).size).toBe(seen.length);
-    expect(seen.length).toBe(4);
+    expect(new Set(seen).size).toBe(4);
+  });
+
+  it("опознаватели не повторяются", () => {
+    // По опознавателю выбирают заготовку стрелками и по нему же React отличает
+    // листы друг от друга: два одинаковых - и переключение встанет.
+    const ids = VARIANTS.map((v) => v.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("место под печать совпадает с рамкой на своей заготовке", () => {
@@ -103,11 +115,23 @@ describe("заготовка карточки", () => {
     expect((box("chart-short").y + box("chart-short").h) * 780).toBeCloseTo(97, 6);
   });
 
-  it("светлое полотно только у светлого лонга", () => {
+  it("надпись не сливается со своим полотном", () => {
     // От яркости полотна зависят чернила: на белой карточке белый текст
     // невидим, и перепутать здесь значит отдать пустой лист.
-    const light = VARIANTS.filter((v) => v.paper === "light").map((v) => v.id);
-    expect(light).toEqual(["chart-long"]);
+    //
+    // Раньше здесь стоял список светлых заготовок. Он был верен, пока светлая
+    // была одна; теперь их несколько, и список пришлось бы править на каждую
+    // новую картинку. Проверяем то, ради чего он и стоял: цвет надписи
+    // отличается по светлоте от полотна, на котором она лежит.
+    const luma = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
+    };
+
+    for (const one of VARIANTS) {
+      if (one.paper === "light") expect(luma(one.accent)).toBeLessThan(170);
+      else expect(luma(one.accent)).toBeGreaterThan(80);
+    }
   });
 });
 
