@@ -387,3 +387,44 @@ def test_shot_refuses_what_is_not_a_picture(tmp_path, monkeypatch):
         )
         assert answer.status_code == 400
         assert list(tmp_path.iterdir()) == []
+
+
+def test_trades_of_one_day(client):
+    """Нажали на клетку календаря - получили сделки того дня, и только его.
+
+    День берётся целиком по UTC: календарь раскладывал их в том же поясе, и
+    сделка у границы суток иначе попала бы в соседнюю клетку. Крайние часы
+    поэтому и проверяются - полночь и без часа полночь.
+    """
+    day = datetime(2026, 9, 8, tzinfo=timezone.utc)
+    client.post("/api/journal/trades", json=trade(client_id="утро", pnl=10.0, closed_at=day))
+    client.post(
+        "/api/journal/trades",
+        json=trade(client_id="ночь", pnl=-4.0, outcome="stop", closed_at=day.replace(hour=23, minute=59)),
+    )
+    # Соседний день в выборку попасть не должен.
+    client.post(
+        "/api/journal/trades",
+        json=trade(client_id="завтра", pnl=99.0, closed_at=day + timedelta(days=1)),
+    )
+
+    body = client.get("/api/journal/trades?date=2026-09-08").json()
+
+    assert sorted(t["client_id"] for t in body["trades"]) == ["ночь", "утро"]
+    assert body["summary"]["count"] == 2
+    assert body["summary"]["pnl"] == pytest.approx(6.0)
+
+
+def test_day_ignores_the_window(client):
+    """День отменяет «последние N дней»: в календаре нажимают на клетку."""
+    old = datetime(2020, 1, 5, 12, tzinfo=timezone.utc)
+    client.post("/api/journal/trades", json=trade(client_id="давняя", closed_at=old))
+
+    body = client.get("/api/journal/trades?date=2020-01-05&days=30").json()
+
+    assert [t["client_id"] for t in body["trades"]] == ["давняя"]
+
+
+def test_bad_date_is_refused_not_guessed(client):
+    """Дата приходит из адреса: чужую строку не подставляем в запрос."""
+    assert client.get("/api/journal/trades?date=вчера").status_code == 422

@@ -71,6 +71,18 @@ export function loadTrades(days = 90, symbol?: string) {
   );
 }
 
+/**
+ * Сделки одного календарного дня.
+ *
+ * Отдельно от `loadTrades`: там окно «последние N дней» от сегодня, а в
+ * календаре нажимают на клетку - и клетка может быть в прошлом марте.
+ */
+export function loadDay(date: string) {
+  return request<{ trades: JournalTrade[]; summary: JournalSummary }>(
+    `/api/journal/trades?date=${encodeURIComponent(date)}`,
+  );
+}
+
 export function loadCalendar(year: number, month: number) {
   return request<{ days: JournalDay[]; total: number }>(
     `/api/journal/calendar?year=${year}&month=${month}`,

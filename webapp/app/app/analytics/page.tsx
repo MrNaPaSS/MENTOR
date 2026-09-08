@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
+import { loadDay, type JournalTrade } from "@/lib/journal";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
 import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles } from "lucide-react";
@@ -240,6 +241,9 @@ export default function AnalyticsPage() {
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
   const [calData, setCalData] = useState<CalendarDay[]>([]);
   const [loaded, setLoaded] = useState(false);
+  // undefined - спрашиваем, null - спросить не вышло, [] - сделок в этот день
+  // не было. Три разных случая, и путать их нельзя.
+  const [dayTrades, setDayTrades] = useState<JournalTrade[] | null | undefined>(null);
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
   const [currentBalance, setCurrentBalance] = useState<number | null>(null);
@@ -355,6 +359,29 @@ export default function AnalyticsPage() {
       window.dispatchEvent(new CustomEvent(COINS_EVENT, { detail: { balance: r.balance } }));
     }).catch(() => {});
   }, [tradeSummary, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Сделки выбранного дня. Спрашиваем только когда день выбрали: месяц целиком
+  // это сотни строк, из которых смотрят одну клетку.
+  useEffect(() => {
+    if (!selectedDay) {
+      setDayTrades(null);
+      return;
+    }
+    let cancelled = false;
+    setDayTrades(undefined);
+    loadDay(selectedDay.date)
+      .then((body) => {
+        if (!cancelled) setDayTrades(body?.trades ?? []);
+      })
+      .catch(() => {
+        // Журнал не ответил - показываем день без списка, а не пустой список:
+        // «сделок нет» и «не спросили» это разные вещи.
+        if (!cancelled) setDayTrades(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDay]);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -786,6 +813,75 @@ export default function AnalyticsPage() {
                   )}
                 </div>
               </div>
+
+              {/* Сделки этого дня.
+                  Календарь отвечает на вопрос «сколько», а список под ним - на
+                  вопрос «из чего»: одна клетка в плюс бывает и одной сделкой, и
+                  десятью, и это разные дни работы. */}
+              {dayTrades === undefined ? (
+                <div className="mt-3 space-y-1.5">
+                  {[...Array(2)].map((_, i) => (
+                    <div key={i} className="h-7 animate-pulse rounded-lg bg-bg-panel/60" />
+                  ))}
+                </div>
+              ) : dayTrades && dayTrades.length > 0 ? (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full whitespace-nowrap text-[11px]">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wider text-text-primary/30">
+                        <th className="py-1 text-left font-medium">Время</th>
+                        <th className="py-1 text-left font-medium">Монета</th>
+                        <th className="py-1 text-right font-medium">Вход</th>
+                        <th className="py-1 text-right font-medium">Выход</th>
+                        <th className="py-1 text-right font-medium">Итог</th>
+                      </tr>
+                    </thead>
+                    <tbody className="font-mono tabular-nums">
+                      {dayTrades.map((one) => (
+                        <tr key={one.id} className="border-t border-border/40">
+                          <td className="py-1 text-text-primary/40">
+                            {new Date(one.closed_at).toLocaleTimeString("ru", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td className="py-1 font-sans font-semibold text-text-primary">
+                            {one.symbol.replace(/USDT$/, "")}
+                            <span
+                              className={`ml-1.5 text-[10px] font-medium ${
+                                one.side === "long" ? "text-success" : "text-danger"
+                              }`}
+                            >
+                              {one.side === "long" ? "лонг" : "шорт"}
+                            </span>
+                          </td>
+                          <td className="py-1 text-right text-text-secondary">{one.entry}</td>
+                          <td className="py-1 text-right text-text-secondary">
+                            {one.exit_price ?? "-"}
+                          </td>
+                          <td
+                            className={`py-1 text-right font-semibold ${
+                              one.pnl >= 0 ? "text-success" : "text-danger"
+                            }`}
+                          >
+                            {one.pnl >= 0 ? "+" : "-"}
+                            {Math.abs(one.pnl).toFixed(2)} $
+                            {one.fee > 0 && (
+                              <span className="ml-1 text-[10px] font-normal text-text-primary/30">
+                                -{one.fee.toFixed(2)}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : dayTrades && dayTrades.length === 0 ? (
+                <p className="mt-3 text-[11px] text-text-primary/30">
+                  Сделок в этот день не было
+                </p>
+              ) : null}
             </div>
           )}
 

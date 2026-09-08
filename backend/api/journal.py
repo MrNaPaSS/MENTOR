@@ -113,18 +113,31 @@ def _row(trade: ScalpTrade) -> dict[str, Any]:
 async def list_trades(
     days: int = Query(90, ge=1, le=365),
     symbol: str | None = Query(None, max_length=32),
+    date: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
-    """Закрытые сделки за период, свежие первыми."""
-    since = utcnow() - timedelta(days=days)
+    """Закрытые сделки за период, свежие первыми.
+
+    `date` спрашивает один календарный день и отменяет `days`: в календаре
+    нажимают на клетку, а не на «последние девяносто дней». День берётся
+    целиком по UTC - в том же поясе, в котором календарь их и раскладывал, иначе
+    сделка на границе суток попала бы в соседнюю клетку.
+    """
     query = (
         select(ScalpTrade)
         .where(ScalpTrade.student_id == student.id)
-        .where(ScalpTrade.closed_at >= since)
         .order_by(ScalpTrade.closed_at.desc())
         .limit(MAX_TRADES)
     )
+    if date:
+        start = datetime.fromisoformat(date).replace(tzinfo=timezone.utc)
+        query = query.where(
+            ScalpTrade.closed_at >= start,
+            ScalpTrade.closed_at < start + timedelta(days=1),
+        )
+    else:
+        query = query.where(ScalpTrade.closed_at >= utcnow() - timedelta(days=days))
     if symbol:
         query = query.where(ScalpTrade.symbol == symbol.upper())
 
