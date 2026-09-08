@@ -15,6 +15,7 @@
 // Строки не переставляются при обновлении: высота фиксирована, ключ — цена.
 // Меняются только числа. Иначе на восьми кадрах в секунду таблица дрожала бы.
 
+import { useT } from "@/lib/i18n";
 import { memo, useEffect, useMemo, useRef } from "react";
 import { Bell } from "lucide-react";
 import {
@@ -82,6 +83,7 @@ export default function DomTrader({
    */
   footerHeight?: number;
 }) {
+  const t = useT();
   const scrollRef = useRef<HTMLDivElement>(null);
   // До какого момента считаем, что стакан листают руками. Пока трейдер смотрит
   // дальнюю плиту, дёргать прокрутку под ним нельзя.
@@ -221,7 +223,7 @@ export default function DomTrader({
           holdUntil.current = 0;
           onHoverLevel?.(null);
         }}
-        title="Колесо - прокрутка, Ctrl+колесо - масштаб"
+        title={t.terminal.domWheelHint}
         className="relative flex-1 overflow-auto font-mono"
       >
         <div className="w-full min-w-max">
@@ -291,6 +293,7 @@ const Row = memo(function Row({
   onHover?: (row: LadderRow | null) => void;
   alerted?: boolean;
 }) {
+  const t = useT();
   const isBid = row.bid > 0;
   const width = Math.min(100, (row.notional / bookScale) * 100);
   // Считать сделку есть от чего только там, где стоят заявки: пустая строка —
@@ -303,10 +306,8 @@ const Row = memo(function Row({
       onMouseEnter={row.notional > 0 ? () => onHover?.(row) : undefined}
       onMouseLeave={row.notional > 0 ? () => onHover?.(null) : undefined}
       title={
-        (pickable
-          ? "Сумма всех заявок в этом шаге цены." +
-            "\nНажмите: расчёт сделки или уведомление на этой цене"
-          : "") + (alerted ? "\nОтметка стоит: скажем, когда эту цену пересекут" : "")
+        (pickable ? t.terminal.domCellHint : "") +
+        (alerted ? t.terminal.domCellAlerted : "")
       }
       className={`flex items-center ${isBid ? "bg-[var(--pane-up-faint)]" : "bg-[var(--pane-down-faint)]"} ${
         pickable
@@ -398,6 +399,7 @@ function ClusterCell({ cell, scale }: { cell: [number, number] | undefined; scal
  * подписью оси, как на графике.
  */
 function VolumeHeader({ columns }: { columns: ClusterColumn[] }) {
+  const t = useT();
   return (
     // Высота фиксирована и равна строке тикера на графике: обе полосы идут
     // сразу под своими кнопками, и глаз читает их как одну линию.
@@ -423,7 +425,7 @@ function VolumeHeader({ columns }: { columns: ClusterColumn[] }) {
       <div
         className={`sticky right-0 ${BOOK_W} flex h-full items-center justify-end bg-[var(--pane-bg)] pr-2 text-[var(--pane-muted)]`}
       >
-        объём · цена
+        {t.terminal.domColumns}
       </div>
     </div>
   );

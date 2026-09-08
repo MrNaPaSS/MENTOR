@@ -10,69 +10,33 @@
 // заявки, ради которых раздел и сделан, затем давление и подвижность, и только
 // потом оборот. Сортировка — по клику на заголовок.
 
+import { useT } from "@/lib/i18n";
 import { memo } from "react";
 import { ArrowDown, Star } from "lucide-react";
 import {
   base,
   money,
   price as fmtPrice,
-  SORT_LABELS,
   type ScreenerRow,
   type SortKey,
 } from "@/lib/scalping";
 
 const COLUMNS: {
   key: SortKey | null;
-  label: string;
+  /** Ключ подписи в словаре. */
+  text: "coin" | "wall" | "imbalance" | "delta" | "range" | "spread" | "volume";
   width: string;
   align: string;
-  hint?: string;
 }[] = [
   // Монете отведено больше всех: в неё не влезали цены вроде 79 694.50 и
   // 0.026513, они обрезались многоточием и читать список было нельзя.
-  { key: null, label: "Монета", width: "w-[164px]", align: "text-left" },
-  {
-    key: "walls",
-    label: "Плита",
-    width: "w-[96px]",
-    align: "text-right",
-    hint: "Крупная заявка рядом с ценой и её удаление в базисных пунктах",
-  },
-  {
-    key: "imbalance",
-    label: "Перевес",
-    width: "w-[44px]",
-    align: "text-center",
-    hint: "Чья сторона стакана плотнее",
-  },
-  {
-    key: "delta",
-    label: "Дельта",
-    width: "w-[58px]",
-    align: "text-right",
-    hint: "Покупки минус продажи по рынку за минуту",
-  },
-  {
-    key: "range",
-    label: "Ход",
-    width: "w-[36px]",
-    align: "text-right",
-    hint: "Размах цены за минуту, базисные пункты",
-  },
-  {
-    key: "spread",
-    label: "Спред",
-    width: "w-[36px]",
-    align: "text-right",
-    hint: "Стоимость входа по рынку, базисные пункты",
-  },
-  {
-    key: "volume",
-    label: "Оборот",
-    width: "w-[52px]",
-    align: "text-right",
-    hint: "За сутки",
-  },
+  { key: null, text: "coin", width: "w-[164px]", align: "text-left" },
+  { key: "walls", text: "wall", width: "w-[96px]", align: "text-right" },
+  { key: "imbalance", text: "imbalance", width: "w-[44px]", align: "text-center" },
+  { key: "delta", text: "delta", width: "w-[58px]", align: "text-right" },
+  { key: "range", text: "range", width: "w-[36px]", align: "text-right" },
+  { key: "spread", text: "spread", width: "w-[36px]", align: "text-right" },
+  { key: "volume", text: "volume", width: "w-[52px]", align: "text-right" },
 ];
 
 type Props = {
@@ -104,6 +68,7 @@ export default function ScreenerTable({
   onSort,
   onSelect,
 }: Props) {
+  const t = useT();
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-fixed border-collapse whitespace-nowrap text-[11px] tabular-nums">
@@ -115,8 +80,8 @@ export default function ScreenerTable({
               const active = col.key && col.key === sort;
               return (
                 <th
-                  key={col.label}
-                  title={col.hint}
+                  key={col.text}
+                  title={col.text === "coin" ? undefined : t.domScreener[col.text].hint}
                   onClick={() => col.key && onSort(col.key)}
                   className={`sticky top-0 z-10 bg-[var(--pane-bg)] px-1.5 py-2 font-medium shadow-[0_1px_0_#2B3139] ${col.width} ${col.align} ${
                     col.key
@@ -125,7 +90,7 @@ export default function ScreenerTable({
                   } ${active ? "text-[var(--pane-accent)]" : ""}`}
                 >
                   <span className="inline-flex items-center gap-0.5">
-                    {col.label}
+                    {col.text === "coin" ? t.domScreener.coin : t.domScreener[col.text].label}
                     {active && <ArrowDown className="h-2.5 w-2.5" />}
                   </span>
                 </th>
@@ -149,7 +114,7 @@ export default function ScreenerTable({
       </table>
 
       {rows.length === 0 && (
-        <p className="py-10 text-center text-sm text-[var(--pane-muted)]">Собираем стаканы с биржи…</p>
+        <p className="py-10 text-center text-sm text-[var(--pane-muted)]">{t.domScreener.collecting}</p>
       )}
     </div>
   );
@@ -172,6 +137,7 @@ const Row = memo(function Row({
   onStar?: (symbol: string) => void;
   onSelect: (symbol: string) => void;
 }) {
+  const t = useT();
   return (
     <tr
       // Реакция на нажатие, а не на отпускание: подсветка должна появиться в тот
@@ -195,7 +161,7 @@ const Row = memo(function Row({
                 event.stopPropagation();
                 onStar(row.symbol);
               }}
-              title={starred ? "Убрать из избранного" : "В избранное"}
+              title={starred ? t.domScreener.unstar : t.domScreener.star}
               className={`shrink-0 self-center transition-colors duration-150 ease-out ${
                 starred
                   ? "text-[var(--pane-gold)]"
@@ -213,8 +179,8 @@ const Row = memo(function Row({
               aria-hidden
               title={
                 state === "open"
-                  ? "По этой монете открыта позиция"
-                  : "По этой монете ждёт заявка"
+                  ? t.domScreener.hasPosition
+                  : t.domScreener.hasOrder
               }
               className="h-1.5 w-1.5 shrink-0 self-center rounded-full border"
               style={{
@@ -295,13 +261,14 @@ function WallCell({ row }: { row: ScreenerRow }) {
 
 /** Перевес стакана одной полоской: влево продавцы, вправо покупатели. */
 function ImbalanceBar({ ratio }: { ratio: number }) {
+  const t = useT();
   const buy = Math.round(ratio * 100);
   return (
     <div
       // Полоса меняется несколько раз в секунду — анимировать её нельзя:
       // трейдер видел бы вчерашнее значение, догоняющее сегодняшнее.
       className="mx-auto flex h-2.5 w-11 overflow-hidden rounded-sm bg-[var(--pane-deep)]"
-      title={`${buy}% покупок`}
+      title={t.domScreener.buysPct(String(buy))}
     >
       <div className="bg-[var(--pane-up)]" style={{ width: `${buy}%` }} />
       <div className="bg-[var(--pane-down)]" style={{ width: `${100 - buy}%` }} />

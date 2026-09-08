@@ -14,6 +14,7 @@
 // через !important, а после каждого их обновления перебивать заново. От него
 // взято единственное, что там своё, - адреса потоков.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Loader2, Music, Pause, Play } from "lucide-react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -51,6 +52,7 @@ const SWING = 4.6;
 const SNAP = 0.55;
 
 export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
+  const t = useT();
   const theme = useTerminalTheme();
   const radio = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const [menu, setMenu] = useState(false);
@@ -191,7 +193,7 @@ export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
 
   const now = STATIONS[radio.station];
   const label =
-    radio.mode === "off" ? `Радио - ${now.name}` : `${now.name} - нажмите, чтобы выключить`;
+    radio.mode === "off" ? t.shell.radio.play(now.name) : t.shell.radio.stop(now.name);
 
   return (
     <div ref={boxRef} className="relative hidden items-center md:flex">
@@ -214,11 +216,11 @@ export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
           значками была бы третьим элементом там, где хватает двух. */}
       <button
         onClick={() => setMenu((v) => !v)}
-        title={`${now.name} - сменить станцию`}
+        title={t.shell.radio.change(now.name)}
         // Подпись называет станцию по имени: aria-label перекрывает title, и
         // без имени в озвучке оставалось бы «выбрать станцию» без ответа на
         // вопрос, какая играет сейчас.
-        aria-label={`Станция ${now.name} - сменить станцию`}
+        aria-label={t.shell.radio.changeAria(now.name)}
         className="rounded px-0.5 py-1 opacity-80 transition-opacity duration-150 hover:opacity-100"
       >
         <canvas ref={canvasRef} style={{ width: PULSE_W, height: PULSE_H }} className="block" />
@@ -253,7 +255,7 @@ export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
               pane ? "border-[var(--pane-border)]" : "border-border"
             }`}
           >
-            <span className={`text-[10px] uppercase tracking-wider ${idle}`}>звук</span>
+            <span className={`text-[10px] uppercase tracking-wider ${idle}`}>{t.shell.radio.volume}</span>
             <input
               type="range"
               min={0}
@@ -266,7 +268,7 @@ export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
               // умолчанию не сжимается меньше неё - от этого он и вылезал за
               // край ярлыка. w-full заставляет его брать ровно то, что дали.
               className="h-1 w-full min-w-0 shrink cursor-pointer"
-              aria-label="Громкость радио"
+              aria-label={t.shell.radio.volumeAria}
             />
           </div>
         </div>

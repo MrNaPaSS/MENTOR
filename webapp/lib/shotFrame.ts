@@ -187,7 +187,7 @@ export function snapshot(
   const layers = Array.from(box.querySelectorAll("canvas")).filter(
     (canvas) => canvas.width > 0 && canvas.height > 0,
   );
-  const found = layers.map((c) => `${c.width}x${c.height}`).join(" ") || "нет";
+  const found = layers.map((c) => `${c.width}x${c.height}`).join(" ") || "-";
   let note = "";
 
   clear();

@@ -11,6 +11,7 @@
 // один раз, когда линию отпустили: каждый кадр перетаскивания это запрос, и
 // биржа считает такое частотой запросов, а не торговлей.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 
 import type { LevelKind } from "@/lib/trade/manual";
@@ -61,6 +62,7 @@ export default function DragLevels({
   toPrice: (y: number) => number | null;
   format: (price: number) => string;
 }) {
+  const t = useT();
   const boxRef = useRef<HTMLDivElement>(null);
   const nodesRef = useRef(new Map<string, HTMLDivElement | null>());
   const levelsRef = useRef(levels);
@@ -175,7 +177,7 @@ export default function DragLevels({
             onPointerMove={(event) => drag(event, level)}
             onPointerUp={(event) => drop(event, level)}
             onPointerCancel={(event) => drop(event, level)}
-            title={`${level.title} ${format(level.price)} - потяните, чтобы перенести`}
+            title={t.terminal.levels.dragHint(level.title, format(level.price))}
             className={
               "pointer-events-auto absolute left-0 right-0 " +
               (held === level.id ? "cursor-grabbing" : "cursor-ns-resize")

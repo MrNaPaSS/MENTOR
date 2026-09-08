@@ -16,6 +16,7 @@
 // переживает переход между разделами, и уведомление, поднятое в терминале,
 // не пропадает от того, что трейдер ушёл в аналитику.
 
+import { dict } from "@/lib/i18n";
 import type { Toast } from "@/components/scalping/Toasts";
 import { readTrades } from "@/lib/tradeStore";
 import { openSizes, tradingStatus } from "@/lib/trading";
@@ -142,7 +143,8 @@ export function watchTrades(): () => void {
       const had = was[key] ?? 0;
       const now = sizes[key] ?? 0;
       const coin = trade.symbol.replace(/USDT$/, "");
-      const side = trade.side === "long" ? "лонг" : "шорт";
+      const t = dict().terminal.events;
+      const side = trade.side === "long" ? t.long : t.short;
 
       // Позиции не было - стала: лимитка исполнилась.
       if (trade.status === "planned" && had <= 0 && now > 0) {
@@ -150,8 +152,8 @@ export function watchTrades(): () => void {
         pushToast({
           id: `${trade.id}:in`,
           symbol: trade.symbol,
-          title: `${coin} - вход состоялся`,
-          text: `${side} · открыть терминал`,
+          title: t.entered(coin),
+          text: t.openTerminal(side),
           tone: trade.side === "long" ? "up" : "down",
         });
         continue;
@@ -164,8 +166,8 @@ export function watchTrades(): () => void {
         pushToast({
           id: `${trade.id}:out`,
           symbol: trade.symbol,
-          title: `${coin} - позиция закрыта`,
-          text: `${side} · итог в журнале`,
+          title: t.closedTitle(coin),
+          text: t.closedText(side),
           tone: "plain",
         });
       }

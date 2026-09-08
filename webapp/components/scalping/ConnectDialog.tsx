@@ -10,6 +10,7 @@
 // Поэтому окно встречает на входе и говорит одно: чего не хватает и куда
 // нажать. Кнопка ровно одна - выбор здесь не нужен, нужен следующий шаг.
 
+import { useT } from "@/lib/i18n";
 import { useEffect } from "react";
 import { KeyRound, LogIn, X } from "lucide-react";
 
@@ -30,6 +31,8 @@ export default function ConnectDialog({
   onConnect: () => void;
   onClose: () => void;
 }) {
+  const t = useT();
+  const d = t.dialogs.connect;
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -57,18 +60,18 @@ export default function ConnectDialog({
             </div>
             <div>
               <div className="text-[13px] font-semibold text-[var(--pane-text)]">
-                {login ? "Нужен вход в кабинет" : "Биржевой счёт не подключён"}
+                {login ? d.needLogin : d.noAccount}
               </div>
               <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
                 {login
-                  ? "Сделки считаются на вашем счёте, а его ещё нет"
-                  : "Считать сделку можно, а отправить её на биржу - нет"}
+                  ? d.needLoginSub
+                  : d.noAccountSub}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            title="Закрыть"
+            title={t.common.close}
             className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
           >
             <X className="h-4 w-4" />
@@ -78,8 +81,8 @@ export default function ConnectDialog({
         <div className="px-5 py-4">
           <p className="text-[12px] leading-relaxed text-[var(--pane-text-2)]">
             {login
-              ? "Войдите по UID WEEX - после этого можно подключить ключи и торговать прямо из терминала."
-              : "Подключите ключи WEEX с правом на торговлю и без права на вывод средств. Они хранятся зашифрованными и в браузер не возвращаются."}
+              ? d.loginText
+              : d.keysText}
           </p>
 
           <button
@@ -87,13 +90,13 @@ export default function ConnectDialog({
             className={`${BUTTON} mt-4 bg-[var(--pane-accent)] text-[var(--pane-deep)] hover:opacity-90`}
           >
             {login ? <LogIn className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
-            {login ? "Войти" : "Подключиться"}
+            {login ? t.common.login : d.connect}
           </button>
           <button
             onClick={onClose}
             className={`${BUTTON} mt-2 text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}
           >
-            Не сейчас
+            {d.later}
           </button>
         </div>
       </div>

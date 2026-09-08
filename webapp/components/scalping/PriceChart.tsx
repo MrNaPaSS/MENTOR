@@ -10,6 +10,7 @@
 // запросов ради средней линии не делаем. Полки приходят из стакана: это
 // единственное на графике, что берётся не из истории цены, а из живой книги.
 
+import { useT } from "@/lib/i18n";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import {
@@ -602,6 +603,7 @@ function PriceChart({
    */
   counts?: { waiting: number; open: number };
 }) {
+  const t = useT();
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -1062,7 +1064,7 @@ function PriceChart({
           // Причину называем словами. Пустой график молча — это то же самое,
           // что показать неверные данные: трейдер не знает, чему верить.
           const detail = await res.json().catch(() => null);
-          const text = String(detail?.detail || `Свечи недоступны (${res.status})`);
+          const text = String(detail?.detail || t.terminal.chart.candlesUnavailable(res.status));
           const seconds = Number(text.match(/через\s+(\d+)\s*с/)?.[1] ?? 0);
           if (seconds > 0) retryAfter.current = Date.now() + seconds * 1000;
           if (!cancelled) setDataError(text);
@@ -1075,7 +1077,7 @@ function PriceChart({
         draw(body.candles);
         if (fit) reframe(body.candles.length);
       } catch {
-        if (!cancelled) setDataError("Нет связи с сервером");
+        if (!cancelled) setDataError(t.terminal.chart.noServer);
       }
     }
 
@@ -1303,18 +1305,18 @@ function PriceChart({
       // Вход и стоп — разные цены даже в безубытке: биржа считает его с учётом
       // комиссии и реального исполнения, и это на десятки пунктов от входа.
       // Подпись «б/у» должна стоять там, где стоп стоит на самом деле.
-      line(`${trade.id}:entry`, trade.entry, palette.text, "вход", 0);
+      line(`${trade.id}:entry`, trade.entry, palette.text, t.terminal.levels.entry, 0);
       // Стоп за ценой входа - это уже не стоп, а безубыток, и на шкале он так
       // и подписан: трейдер читает подпись, а не сравнивает цены глазами.
-      if (riskFree(trade)) line(`${trade.id}:stop`, trade.stop, palette.mtf, "б/у", 2);
-      else line(`${trade.id}:stop`, trade.stop, palette.askLine, "стоп", 2);
+      if (riskFree(trade)) line(`${trade.id}:stop`, trade.stop, palette.mtf, t.terminal.levels.breakEven, 2);
+      else line(`${trade.id}:stop`, trade.stop, palette.askLine, t.terminal.levels.stop, 2);
 
       pendingTargets(trade).forEach((price, i) => {
         line(
           `${trade.id}:take${i}`,
           price,
           palette.bidLine,
-          `тейк ${trade.takesHit + i + 1}`,
+          t.terminal.levels.take(trade.takesHit + i + 1),
           2,
         );
       });
@@ -1745,18 +1747,18 @@ function PriceChart({
     };
 
     if (ghost) {
-      put("entry", ghost.entry, palette.text, "вход", false);
-      put("stop", ghost.stop, palette.askLine, "стоп", true);
+      put("entry", ghost.entry, palette.text, t.terminal.levels.entry, false);
+      put("stop", ghost.stop, palette.askLine, t.terminal.levels.stop, true);
       ghost.targets.forEach((price, i) => {
         // Невзятая цель пунктиром - тем же различием, что и у идущей сделки.
-        put(`take${i}`, price, palette.bidLine, `тейк ${i + 1}`, i >= ghost.takes_hit);
+        put(`take${i}`, price, palette.bidLine, t.terminal.levels.take(i + 1), i >= ghost.takes_hit);
       });
       if (ghost.exit_price) {
         put(
           "exit",
           ghost.exit_price,
           ghost.pnl >= 0 ? palette.bidLine : palette.askLine,
-          "выход",
+          t.terminal.levels.exit,
           false,
         );
       }
@@ -1792,26 +1794,26 @@ function PriceChart({
         if (candles.length === 0) return;
 
         const marks: SeriesMarker<Time>[] = [];
-        for (const t of body.trades) {
-          const opened = snapToBar(candles, t.opened_at);
-          const closed = snapToBar(candles, t.closed_at);
-          const win = t.pnl >= 0;
+        for (const row of body.trades) {
+          const opened = snapToBar(candles, row.opened_at);
+          const closed = snapToBar(candles, row.closed_at);
+          const win = row.pnl >= 0;
           if (opened !== null) {
             marks.push({
               time: opened as UTCTimestamp,
-              position: t.side === "long" ? "belowBar" : "aboveBar",
-              shape: t.side === "long" ? "arrowUp" : "arrowDown",
+              position: row.side === "long" ? "belowBar" : "aboveBar",
+              shape: row.side === "long" ? "arrowUp" : "arrowDown",
               color: THEMES[themeRef.current].mtf,
-              text: t.side === "long" ? "вход ↑" : "вход ↓",
+              text: row.side === "long" ? t.terminal.levels.entryUp : t.terminal.levels.entryDown,
             });
           }
           if (closed !== null) {
             marks.push({
               time: closed as UTCTimestamp,
-              position: t.side === "long" ? "aboveBar" : "belowBar",
+              position: row.side === "long" ? "aboveBar" : "belowBar",
               shape: "circle",
               color: win ? THEMES[themeRef.current].bidLine : THEMES[themeRef.current].askLine,
-              text: `${win ? "+" : "-"}${Math.abs(t.pnl).toFixed(2)}`,
+              text: `${win ? "+" : "-"}${Math.abs(row.pnl).toFixed(2)}`,
             });
           }
         }
@@ -1863,7 +1865,7 @@ function PriceChart({
       lineWidth: 1,
       lineStyle: 2,
       axisLabelVisible: true,
-      title: "плита",
+      title: t.terminal.levels.wall,
     });
   }, [wall?.price, wall?.side]);
 
@@ -1947,30 +1949,30 @@ function PriceChart({
           «ждём»: это тоже ответ, и он честнее пустого места. */}
       {trades
         .filter((t) => t.status !== "closed")
-        .map((t) => {
+        .map((row) => {
           // Главная цифра — по открытой позиции: ровно её показывает биржа, и с
           // ней трейдер сверяется глазами. Забранное по целям стоит рядом
           // отдельно: смешать их значит показать 219 там, где на счёт пришло 148.
           // Число биржи, когда оно есть: она считает от реальной средней и
           // своей цены маркировки, и спорить с ней своей арифметикой значит
           // показывать трейдеру не тот результат, что у него на счёте.
-          const floating = t.unrealized ?? floatingAt(t, livePrice);
-          const taken = t.realized;
-          const total = pnlAt(t, livePrice);
+          const floating = row.unrealized ?? floatingAt(row, livePrice);
+          const taken = row.realized;
+          const total = pnlAt(row, livePrice);
           return (
             <div
-              key={t.id}
+              key={row.id}
               ref={(node) => {
-                labelsRef.current.set(t.id, node);
+                labelsRef.current.set(row.id, node);
               }}
               // «Ждём вход» показывает, что именно ждёт трейдер: бокс риска,
               // цели и стоп. Постоянно они не рисуются - позиции ещё нет.
               // Наведение показывает их на посмотреть, нажатие закрепляет.
-              onMouseEnter={t.status === "planned" ? () => setPeeked(t.id) : undefined}
-              onMouseLeave={t.status === "planned" ? () => setPeeked(null) : undefined}
+              onMouseEnter={row.status === "planned" ? () => setPeeked(row.id) : undefined}
+              onMouseLeave={row.status === "planned" ? () => setPeeked(null) : undefined}
               onClick={
-                t.status === "planned"
-                  ? () => setPinned((now) => (now === t.id ? null : t.id))
+                row.status === "planned"
+                  ? () => setPinned((now) => (now === row.id ? null : row.id))
                   : undefined
               }
               // Справа, но с отступом от ценовой шкалы: плашка стоит на конце
@@ -1979,14 +1981,14 @@ function PriceChart({
               className={`pointer-events-auto absolute right-28 top-0 z-10 flex items-center gap-2 rounded border px-2 py-1 font-mono text-[11px] tabular-nums shadow${
                 // Курсор-палец у ждущей заявки: иначе о том, что плашка
                 // нажимается и закрепляет разметку, узнают только случайно.
-                t.status === "planned" ? " cursor-pointer" : ""
+                row.status === "planned" ? " cursor-pointer" : ""
               }`}
               style={{
                 visibility: "hidden",
                 borderColor:
-                  pinned === t.id
+                  pinned === row.id
                     ? "var(--pane-accent)"
-                    : peeked === t.id
+                    : peeked === row.id
                       ? "var(--pane-accent-soft)"
                       : "var(--pane-border)",
                 background: "var(--pane-bg)",
@@ -1994,32 +1996,31 @@ function PriceChart({
               }}
             >
               <span
-                className={t.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
+                className={row.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
               >
-                {t.side === "long" ? "LONG" : "SHORT"}
+                {row.side === "long" ? "LONG" : "SHORT"}
               </span>
-              {t.status === "planned" ? (
+              {row.status === "planned" ? (
                 <span
                   className="cursor-pointer text-[var(--pane-muted)]"
                   title={
-                    pinned === t.id
-                      ? "Нажмите, чтобы убрать разметку"
-                      : "Нажмите - закрепим бокс, стоп и цели, их можно будет двигать"
+                    pinned === row.id
+                      ? t.terminal.chart.unpinHint
+                      : t.terminal.chart.pinHint
                   }
                 >
-                  {pinned === t.id ? "правим" : "ждём вход"}
+                  {pinned === row.id ? t.terminal.chart.pinned : t.terminal.chart.waitingEntry}
                 </span>
               ) : (
                 <span
                   className={floating >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
                   title={
                     taken !== 0
-                      ? `По открытой позиции, как на бирже. Забрано по целям ${
-                          taken >= 0 ? "+" : "-"
-                        }${Math.abs(taken).toFixed(2)}, всего по сделке ${
-                          total >= 0 ? "+" : "-"
-                        }${Math.abs(total).toFixed(2)}`
-                      : "По открытой позиции - как на бирже"
+                      ? t.terminal.chart.pnlWithTaken(
+              `${taken >= 0 ? "+" : "-"}${Math.abs(taken).toFixed(2)}`,
+              `${total >= 0 ? "+" : "-"}${Math.abs(total).toFixed(2)}`
+            )
+                      : t.terminal.chart.pnlOpenOnly
                   }
                 >
                   {floating >= 0 ? "+" : "-"}
@@ -2027,8 +2028,8 @@ function PriceChart({
                 </span>
               )}
               <button
-                onClick={() => onCloseTrade?.(t)}
-                title="Закрыть сделку"
+                onClick={() => onCloseTrade?.(row)}
+                title={t.terminal.chart.closeTrade}
                 className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
               >
                 ✕
@@ -2057,7 +2058,7 @@ function PriceChart({
           <Bell className="h-3 w-3" />
           <button
             onClick={() => onRemoveAlert?.(alert.id)}
-            title="Убрать уведомление"
+            title={t.terminal.chart.removeAlert}
             className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
           >
             ✕
@@ -2082,10 +2083,10 @@ function PriceChart({
         // на него в журнале. Идти за ним через панель инструментов незачем.
         <button
           onClick={onOpenJournal}
-          title={showJournal ? "Закрыть журнал" : "Открыть журнал сделок"}
+          title={showJournal ? t.terminal.chart.closeJournal : t.terminal.chart.openJournal}
           className="absolute right-24 top-1 z-10 font-mono text-[11px] tabular-nums transition-opacity duration-150 ease-out hover:opacity-80"
         >
-          <span className="text-[var(--pane-muted)]">PnL сегодня </span>
+          <span className="text-[var(--pane-muted)]">{t.terminal.chart.pnlToday}</span>
           <span className={todayPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
             {todayPnl >= 0 ? "+" : "-"}
             {Math.abs(todayPnl).toFixed(2)} $
@@ -2095,7 +2096,7 @@ function PriceChart({
               <span className="mx-1 text-[var(--pane-border)]">·</span>
               <span
                 className="text-[var(--pane-text-2)]"
-                title="Ждут исполнения заявки · открыто позиций, по всем монетам"
+                title={t.terminal.chart.ordersTitle}
               >
                 {counts.waiting} / {counts.open}
               </span>
@@ -2133,7 +2134,7 @@ function PriceChart({
           }}
           // Подсказка только пока меню закрыто: открытое она перекрывает
           // собой, и пункт «открыть лонг» просто не виден.
-          title={plusMenu ? undefined : "Отметка или сделка на этой цене"}
+          title={plusMenu ? undefined : t.terminal.chart.plusTitle}
           className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border text-[13px] leading-none shadow transition-colors duration-150 ease-out"
           style={{
             borderColor: "var(--pane-border)",
@@ -2155,9 +2156,9 @@ function PriceChart({
                 // Цвета берём у интерфейса, а не у свечей: THEMES.up - это
                 // тело свечи, и на белой теме оно белое. Пункт «открыть лонг»
                 // оказывался белым по белому и не читался вовсе.
-                ["alert", "Добавить уведомление", "var(--pane-text-2)"],
-                ["long", "Открыть лонг отсюда", "var(--pane-up)"],
-                ["short", "Открыть шорт отсюда", "var(--pane-down)"],
+                ["alert", t.terminal.chart.plusAlert, "var(--pane-text-2)"],
+                ["long", t.terminal.chart.plusLong, "var(--pane-up)"],
+                ["short", t.terminal.chart.plusShort, "var(--pane-down)"],
               ] as const
             ).map(([action, label, color]) => (
               <button

@@ -9,6 +9,7 @@
 // Имя трейдера рисуется прямо в картинке и на сервере не хранится: подпись
 // нужна тому, кто смотрит, а базе о владельце знать незачем.
 
+import { dict } from "@/lib/i18n";
 import { authReq, API_URL } from "./api";
 import { getAccessToken } from "./auth";
 import type { ShotMeta } from "./shotFrame";
@@ -52,7 +53,7 @@ export function copy(picture: Promise<HTMLCanvasElement>): Promise<boolean> {
 
   const png = picture.then(async (canvas) => {
     const blob = await toBlob(canvas);
-    if (!blob) throw new Error("снимок не собрался");
+    if (!blob) throw new Error(dict().pnlCard.shotNotAssembled);
     return blob;
   });
 

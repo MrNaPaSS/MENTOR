@@ -11,6 +11,7 @@
 // таймфрейм и индикаторы у графика. Прошлая версия начиналась с семи
 // переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
+import { useT } from "@/lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   BookText,
@@ -116,7 +117,7 @@ import {
   type LadderRow,
   type Wall,
   useScalpingFeed,
-  SORT_LABELS,
+  SORT_KEYS,
   type SortKey,
   type VisibleSortKey,
 } from "@/lib/scalping";
@@ -158,15 +159,16 @@ const TIMEFRAMES = ["1m", "5m", "10m", "15m", "1h", "4h"];
 
 // Объёмных свечей здесь нет: это не слой поверх графика, а вид самих свечей,
 // и место ему рядом с выбором таймфрейма - там, где выбирают, как смотреть.
-const INDICATOR_LABELS: Record<Exclude<keyof Indicators, "heavy">, string> = {
-  trend: "Тренд",
-  structure: "Структура",
-  blocks: "Блоки",
+type LayerKey = Exclude<keyof Indicators, "heavy">;
+
+// Порядок кнопок разметки. Названия - в словаре, кроме тех, что не переводятся.
+const LAYER_ORDER: LayerKey[] = [
+  "trend", "structure", "blocks", "gaps", "shelves", "zones", "ema", "volume",
+];
+
+const UNTRANSLATED_LAYERS: Partial<Record<LayerKey, string>> = {
   gaps: "FVG",
-  shelves: "Полки",
-  zones: "Зоны",
   ema: "EMA",
-  volume: "Объём",
 };
 
 // Отклик на нажатие: 150 мс ease-out и лёгкое сжатие. Кнопка должна показать,
@@ -299,6 +301,8 @@ function readWorkspace(): Partial<Workspace> | null {
 }
 
 export default function ScalpingPage() {
+  const t = useT();
+  const layerLabels = t.terminal.layers;
   const [symbol, setSymbol] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("walls");
   const [agg, setAgg] = useState(10);
@@ -566,7 +570,7 @@ export default function ScalpingPage() {
     if (saved.indicators) {
       setIndicators({ ...DEFAULT_INDICATORS, ...saved.indicators });
     }
-    if (saved.sort && saved.sort in SORT_LABELS) setSort(saved.sort);
+    if (saved.sort && (SORT_KEYS as SortKey[]).includes(saved.sort)) setSort(saved.sort);
     if (saved.timeframe && TIMEFRAMES.includes(saved.timeframe)) {
       setTimeframe(saved.timeframe);
     }
@@ -799,17 +803,17 @@ export default function ScalpingPage() {
         if (result && typeof result.fee === "number") charged = result.fee;
         setOrderNote({
           text: result?.note
-            ? `Биржа: ${result.note}`
-            : `Закрыто ${result?.closed ?? 0} ${base(current.symbol)}` +
+            ? t.terminal.notes.exchangeNote(result.note)
+            : t.terminal.notes.closed(String(result?.closed ?? 0), base(current.symbol)) +
               (settled !== null
                 ? ` · ${settled >= 0 ? "+" : "-"}${Math.abs(settled).toFixed(2)} USD`
                 : "") +
-              (result?.fee ? `, комиссия ${result.fee.toFixed(2)}` : "") +
-              (result && result.remaining > 0 ? `, осталось ${result.remaining}` : ""),
+              (result?.fee ? t.terminal.notes.fee(result.fee.toFixed(2)) : "") +
+              (result && result.remaining > 0 ? t.terminal.notes.remaining(String(result.remaining)) : ""),
           bad: false,
         });
       } catch (err) {
-        const text = err instanceof Error ? err.message : "Биржа не закрыла позицию";
+        const text = err instanceof Error ? err.message : t.terminal.notes.closeFailed;
         // 428 — ключи не подключены: закрывать нечего, это не сбой.
         if (!text.includes("подключите") && !text.includes("428")) {
           setOrderNote({ text, bad: true });
@@ -901,14 +905,29 @@ export default function ScalpingPage() {
   }
 
   /**
-   * Начать ручную лимитку с цены.
+   * Расчёт сделки с цены под плюсиком.
    *
-   * Приходит из плюсика у текущей цены: два действия названы словами, и гадать,
-   * что делает нажатие по графику, не приходится. Дальше уровни тянут мышью.
+   * То же окно, что открывается от уровня в стакане: сумма, плечо, стоп и цели
+   * в одном месте. Своей карточки у плюсика больше нет - от места, откуда
+   * начали, расчёт зависеть не должен, а два разных окна для одной и той же
+   * сделки заставляли трейдера помнить, где какое.
+   *
+   * Полки здесь нет: цену назвали пальцем, а не нашли в стакане. Подставляем
+   * её саму нулевым объёмом - окно об этом знает и не пишет про заявки, которых
+   * на этой цене никто не ставил.
    */
   function startManual(price: number, atr: number, side: "long" | "short") {
-    if (blocked()) return;
-    setManual(draftAt(price, chartPrice, atr, margin, leverage, side));
+    openTrade(
+      {
+        price,
+        size: 0,
+        notional: 0,
+        side: side === "long" ? "bid" : "ask",
+        distance_bp: 0,
+        ratio: 0,
+      },
+      atr,
+    );
   }
 
   /** Отметка на цене из того же плюсика. */
@@ -918,7 +937,7 @@ export default function ScalpingPage() {
       ...list.filter((a) => !(a.symbol === symbol && Math.abs(a.price - price) < 1e-9)),
       { id: `${symbol}-${Date.now()}`, symbol, price },
     ]);
-    setOrderNote({ text: `Отметка на ${fmtPrice(price, limits?.tick ?? 0)}`, bad: false });
+    setOrderNote({ text: t.terminal.notes.alertAt(fmtPrice(price, limits?.tick ?? 0)), bad: false });
   }
 
   /**
@@ -931,7 +950,7 @@ export default function ScalpingPage() {
     if (!manual || !symbol) return;
     if (!exchange?.connected) {
       setOrderNote({
-        text: "Биржевой счёт не подключён - подключите ключи, чтобы торговать",
+        text: t.terminal.notes.notConnected,
         bad: true,
       });
       setExchangeOpen(true);
@@ -956,11 +975,14 @@ export default function ScalpingPage() {
     setMargin(manual.margin);
     setLeverage(manual.leverage);
 
-    setOrderNote({ text: "Отправляем лимитку…", bad: false });
+    setOrderNote({ text: t.terminal.notes.sendingLimit, bad: false });
     try {
       await openPosition(next, true);
       setOrderNote({
-        text: `Лимитка на бирже: ${next.side === "long" ? "лонг" : "шорт"} ${base(next.symbol)}`,
+        text: t.terminal.notes.limitPlaced(
+          next.side === "long" ? t.terminal.events.long : t.terminal.events.short,
+          base(next.symbol)
+        ),
         bad: false,
       });
     } catch (err) {
@@ -968,7 +990,7 @@ export default function ScalpingPage() {
       // которой нет на бирже, хуже отсутствия лимитки.
       setTrades((list) => list.filter((t) => t.id !== next.id));
       setOrderNote({
-        text: err instanceof Error ? err.message : "Биржа не приняла лимитку",
+        text: err instanceof Error ? err.message : t.terminal.notes.limitRejected,
         bad: true,
       });
     }
@@ -1061,7 +1083,7 @@ export default function ScalpingPage() {
             ? { stop: price }
             : { take: price }),
       });
-      if (!body) throw new Error("Сервер не ответил");
+      if (!body) throw new Error(t.terminal.notes.serverSilent);
       dragTrade(
         trade,
         kind,
@@ -1074,13 +1096,17 @@ export default function ScalpingPage() {
       );
       setOrderNote({
         text:
-          kind === "entry" ? "Лимитка перенесена" : kind === "stop" ? "Стоп перенесён" : "Цель перенесена",
+          kind === "entry"
+          ? t.terminal.notes.movedEntry
+          : kind === "stop"
+            ? t.terminal.notes.movedStop
+            : t.terminal.notes.movedTake,
         bad: false,
       });
     } catch (err) {
       dragTrade(trade, kind, index, was);
       setOrderNote({
-        text: err instanceof Error ? err.message : "Биржа не приняла перенос",
+        text: err instanceof Error ? err.message : t.terminal.notes.moveRejected,
         bad: true,
       });
     }
@@ -1118,7 +1144,7 @@ export default function ScalpingPage() {
     // трейдер видел позицию, стоп и цели.
     if (!exchange?.connected) {
       setOrderNote({
-        text: "Биржевой счёт не подключён - подключите ключи, чтобы торговать",
+        text: t.terminal.notes.notConnected,
         bad: true,
       });
       setExchangeOpen(true);
@@ -1141,7 +1167,7 @@ export default function ScalpingPage() {
     setTrades((list) => [...list, next]);
     setDraft(null);
 
-    setOrderNote({ text: "Отправляем ордер…", bad: false });
+    setOrderNote({ text: t.terminal.notes.sendingOrder, bad: false });
     try {
       const result = await openPosition(next, true);
       const id =
@@ -1150,15 +1176,16 @@ export default function ScalpingPage() {
           : "";
       setOrderNote({
         text: result?.warning
-          ? `Заявка на бирже · ${result.warning}`
-          : `Заявка на бирже: ${next.side === "long" ? "лонг" : "шорт"} ${base(next.symbol)}${
-              id ? ` · №${id}` : ""
-            }`,
+          ? t.terminal.notes.orderPlacedWarn(result.warning)
+          : t.terminal.notes.orderPlaced(
+              next.side === "long" ? t.terminal.events.long : t.terminal.events.short,
+              base(next.symbol)
+            ) + (id ? t.terminal.orderNumber(id) : ""),
         bad: false,
       });
     } catch (err) {
       setOrderNote({
-        text: err instanceof Error ? err.message : "Биржа не приняла ордер",
+        text: err instanceof Error ? err.message : t.terminal.notes.orderRejected,
         bad: true,
       });
     }
@@ -1549,11 +1576,11 @@ export default function ScalpingPage() {
   // о событиях второй.
   const heard = useRef(new Map<string, string>());
   useEffect(() => {
-    for (const t of trades) {
-      const stamp = `${t.status}:${t.takesHit}:${t.outcome ?? ""}`;
-      const previous = heard.current.get(t.id);
+    for (const row of trades) {
+      const stamp = `${row.status}:${row.takesHit}:${row.outcome ?? ""}`;
+      const previous = heard.current.get(row.id);
       if (previous === stamp) continue;
-      heard.current.set(t.id, stamp);
+      heard.current.set(row.id, stamp);
       if (previous === undefined) continue; // появление сделки - это не событие
 
       // Звук говорит, что что-то случилось; уведомление - что именно. Раньше
@@ -1562,49 +1589,49 @@ export default function ScalpingPage() {
       //
       // Опознаватели общие с опросом объёмов - вход и закрытие видят оба, и
       // второй заметивший ничего не добавит.
-      const coin = base(t.symbol);
-      const side = t.side === "long" ? "лонг" : "шорт";
+      const coin = base(row.symbol);
+      const side = row.side === "long" ? t.terminal.events.long : t.terminal.events.short;
       const wasTakes = Number(previous.split(":")[1] || 0);
-      if (t.status === "open" && t.takesHit > wasTakes) {
+      if (row.status === "open" && row.takesHit > wasTakes) {
         play("take");
         pushToast({
-          id: `${t.id}:take:${t.takesHit}`,
-          symbol: t.symbol,
-          title: `${coin} - взята цель ${t.takesHit}`,
+          id: `${row.id}:take:${row.takesHit}`,
+          symbol: row.symbol,
+          title: t.terminal.events.takeHit(coin, row.takesHit),
           text:
-            t.takesHit >= t.targets.length
-              ? `${side} · последняя`
-              : `${side} · осталось целей ${t.targets.length - t.takesHit}`,
+            row.takesHit >= row.targets.length
+              ? t.terminal.events.lastTake(side)
+              : t.terminal.events.takesLeft(side, row.targets.length - row.takesHit),
           tone: "up",
         });
-      } else if (t.status === "open") {
+      } else if (row.status === "open") {
         play("entry");
         pushToast({
-          id: `${t.id}:in`,
-          symbol: t.symbol,
-          title: `${coin} - вход состоялся`,
-          text: `${side} по ${fmtPrice(t.entry, limits?.tick ?? 0)}`,
-          tone: t.side === "long" ? "up" : "down",
+          id: `${row.id}:in`,
+          symbol: row.symbol,
+          title: t.terminal.events.entered(coin),
+          text: t.terminal.events.enteredAt(side, fmtPrice(row.entry, limits?.tick ?? 0)),
+          tone: row.side === "long" ? "up" : "down",
         });
-      } else if (t.status === "closed") {
+      } else if (row.status === "closed") {
         const done =
-          t.outcome === "take"
-            ? { sound: "profit" as const, title: "сделка отработала", tone: "up" as const }
-            : t.outcome === "stop"
-              ? { sound: "stop" as const, title: "сработал стоп", tone: "down" as const }
-              : { sound: "close" as const, title: "позиция закрыта", tone: "plain" as const };
+          row.outcome === "take"
+            ? { sound: "profit" as const, title: t.terminal.events.worked, tone: "up" as const }
+            : row.outcome === "stop"
+              ? { sound: "stop" as const, title: t.terminal.events.stopped, tone: "down" as const }
+              : { sound: "close" as const, title: t.terminal.events.closed, tone: "plain" as const };
         play(done.sound);
         pushToast({
-          id: `${t.id}:out`,
-          symbol: t.symbol,
+          id: `${row.id}:out`,
+          symbol: row.symbol,
           title: `${coin} - ${done.title}`,
-          text: `${side} · ${t.pnl >= 0 ? "+" : "-"}${Math.abs(t.pnl).toFixed(2)} $`,
+          text: `${side} · ${row.pnl >= 0 ? "+" : "-"}${Math.abs(row.pnl).toFixed(2)} $`,
           tone: done.tone,
         });
       }
     }
     // Забываем ушедшие: карта не должна расти вместе с историей за день.
-    const alive = new Set(trades.map((t) => t.id));
+    const alive = new Set(trades.map((one) => one.id));
     for (const id of heard.current.keys()) {
       if (!alive.has(id)) heard.current.delete(id);
     }
@@ -1684,7 +1711,7 @@ export default function ScalpingPage() {
     if (crossed.length === 0) return;
 
     for (const hit of crossed) {
-      const text = `${base(hit.symbol)} пересёк ${fmtPrice(hit.price, dom?.tick ?? 0)}`;
+      const text = t.terminal.events.crossed(base(hit.symbol), fmtPrice(hit.price, dom?.tick ?? 0));
       play("alert");
       setOrderNote({ text, bad: false });
       // Плашка внизу графика годится для ответа на нажатие, но отметку ставят
@@ -1692,14 +1719,14 @@ export default function ScalpingPage() {
       pushToast({
         id: `alert:${hit.id}`,
         symbol: hit.symbol,
-        title: `${base(hit.symbol)} - уровень пересечён`,
+        title: t.terminal.events.crossedTitle(base(hit.symbol)),
         text: fmtPrice(hit.price, dom?.tick ?? 0),
         tone: "plain",
       });
       // Вкладка может быть свёрнута — ради этого отметку и ставят.
       if (typeof Notification !== "undefined" && Notification.permission === "granted") {
         try {
-          new Notification("Уровень пересечён", { body: text, tag: hit.id });
+          new Notification(t.terminal.events.crossedNotification, { body: text, tag: hit.id });
         } catch {
           // Уведомление не показалось — звук и плашка уже сработали.
         }
@@ -1745,7 +1772,7 @@ export default function ScalpingPage() {
     return {
       price: manual.entry,
       side: manual.side,
-      text: `${qtyOf(manual).toFixed(4)} · риск -${riskOf(manual).toFixed(2)} $`,
+      text: t.terminal.events.draftPlaced(qtyOf(manual).toFixed(4), riskOf(manual).toFixed(2)),
       onDragStop: (price) =>
         setManual((draft) => (draft ? moveLevel(draft, "stop", price, step) : draft)),
       onDragTake: (price) =>
@@ -1791,15 +1818,15 @@ export default function ScalpingPage() {
         const key = `${trade.symbol}:${trade.side}`;
         const was = before[key] ?? 0;
         const now = sizes[key] ?? 0;
-        const side = trade.side === "long" ? "лонг" : "шорт";
+        const side = trade.side === "long" ? t.terminal.events.long : t.terminal.events.short;
 
         // Позиции не было - стала: лимитка исполнилась.
         if (trade.status === "planned" && was <= 0 && now > 0) {
           raise({
             id: `${trade.id}:in`,
             symbol: trade.symbol,
-            title: `${base(trade.symbol)} - вход состоялся`,
-            text: `${side} по ${fmtPrice(trade.entry, limits?.tick ?? 0)}`,
+            title: t.terminal.events.entered(base(trade.symbol)),
+            text: t.terminal.events.enteredAt(side, fmtPrice(trade.entry, limits?.tick ?? 0)),
             tone: trade.side === "long" ? "up" : "down",
           });
           play("entry");
@@ -1832,8 +1859,8 @@ export default function ScalpingPage() {
           raise({
             id: `${trade.id}:out`,
             symbol: trade.symbol,
-            title: `${base(trade.symbol)} - позиция закрыта`,
-            text: `${side} · итог в журнале`,
+            title: t.terminal.events.closedTitle(base(trade.symbol)),
+            text: t.terminal.events.closedText(side),
             tone: "plain",
           });
           play("order");
@@ -1961,7 +1988,12 @@ export default function ScalpingPage() {
         id: `manual:${kind}`,
         kind,
         price: kind === "entry" ? manual.entry : kind === "stop" ? manual.stop : manual.take,
-        title: kind === "entry" ? "вход" : kind === "stop" ? "стоп" : "цель",
+        title:
+          kind === "entry"
+            ? t.terminal.levels.entry
+            : kind === "stop"
+              ? t.terminal.levels.stop
+              : t.dialogs.manual.target,
         color:
           kind === "entry"
             ? "var(--pane-text)"
@@ -1986,7 +2018,7 @@ export default function ScalpingPage() {
           trade: trade.id,
           kind: "entry",
           price: trade.entry,
-          title: "лимит",
+          title: t.terminal.levels.limit,
           color: "var(--pane-text)",
           onDrag: (price) => dragTrade(trade, "entry", 0, price),
           onDrop: (price) => void dropTrade(trade, "entry", 0, price),
@@ -1997,7 +2029,7 @@ export default function ScalpingPage() {
         trade: trade.id,
         kind: "stop",
         price: trade.stop,
-        title: "стоп",
+        title: t.terminal.levels.stop,
         color: "var(--pane-down)",
         onDrag: (price) => dragTrade(trade, "stop", 0, price),
         onDrop: (price) => void dropTrade(trade, "stop", 0, price),
@@ -2008,7 +2040,7 @@ export default function ScalpingPage() {
           trade: trade.id,
           kind: "take",
           price,
-          title: `цель ${trade.takesHit + index + 1}`,
+          title: t.terminal.levels.target(trade.takesHit + index + 1),
           color: "var(--pane-up)",
           onDrag: (next) => dragTrade(trade, "take", index, next),
           onDrop: (next) => void dropTrade(trade, "take", index, next),
@@ -2058,7 +2090,7 @@ export default function ScalpingPage() {
     setShotMenu(false);
     const taken = shotRef.current?.();
     if (!taken || !symbol) {
-      setOrderNote({ text: "График ещё не готов к снимку", bad: true });
+      setOrderNote({ text: t.terminal.notes.chartNotReady, bad: true });
       return;
     }
 
@@ -2068,7 +2100,7 @@ export default function ScalpingPage() {
     // пустого снимка не отличить от причины пустого графика.
     if (taken.source === "empty") {
       const why = taken.note ? ` · ${taken.note}` : "";
-      setOrderNote({ text: `Снимок пуст: холсты графика ${taken.layers}${why}`, bad: true });
+      setOrderNote({ text: t.terminal.notes.shotEmpty(taken.layers, why), bad: true });
       return;
     }
 
@@ -2078,7 +2110,7 @@ export default function ScalpingPage() {
     // понять. Снимок всё равно отдаём: вдруг ограничено только чтение.
     const guard =
       taken.source === "blocked"
-        ? " · браузер ограничивает чтение холста, и снимок может выйти пустым - отключите защиту от отпечатка для сайта"
+        ? t.terminal.notes.shotGuard
         : "";
 
     // Обещанием, а не готовой картинкой: право писать в буфер браузер даёт
@@ -2097,8 +2129,8 @@ export default function ScalpingPage() {
       const done = await copyShot(building);
       setOrderNote({
         text: done
-          ? `Снимок в буфере обмена${guard}`
-          : "Браузер не даёт копировать картинки - сохраните файлом",
+          ? t.terminal.notes.shotCopied(guard)
+          : t.terminal.notes.shotCopyFailed,
         bad: !done || guard !== "",
       });
       return;
@@ -2108,26 +2140,26 @@ export default function ScalpingPage() {
 
     if (action === "download") {
       await downloadShot(picture, `${base(symbol)}-${timeframe}`);
-      setOrderNote({ text: `Снимок сохранён${guard}`, bad: guard !== "" });
+      setOrderNote({ text: t.terminal.notes.shotSaved(guard), bad: guard !== "" });
       return;
     }
 
-    setOrderNote({ text: "Выкладываем снимок…", bad: false });
+    setOrderNote({ text: t.terminal.notes.shotUploading, bad: false });
     try {
       const link = await shareShot(picture, { symbol, interval: timeframe, theme });
       if (!link) {
-        setOrderNote({ text: "Ссылку получить не удалось", bad: true });
+        setOrderNote({ text: t.terminal.notes.linkFailed, bad: true });
         return;
       }
       // Ссылку сразу в буфер: её для того и просят, чтобы отправить дальше.
       try {
         await navigator.clipboard.writeText(link);
-        setOrderNote({ text: `Ссылка скопирована: ${link}`, bad: false });
+        setOrderNote({ text: t.terminal.notes.linkCopied(link), bad: false });
       } catch {
         setOrderNote({ text: link, bad: false });
       }
     } catch {
-      setOrderNote({ text: "Ссылку получить не удалось", bad: true });
+      setOrderNote({ text: t.terminal.notes.linkFailed, bad: true });
     }
   }
 
@@ -2168,7 +2200,7 @@ export default function ScalpingPage() {
         {!screenerOpen && (
           <button
             onClick={() => setScreenerOpen(true)}
-            title="Развернуть скринер"
+            title={t.terminal.expandScreener}
             // Отступ справа — тот же, что даёт разделитель у открытого
             // скринера: свёрнутая полоса не должна прилипать к стакану.
             className={`hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:mr-2 xl:flex`}
@@ -2176,11 +2208,11 @@ export default function ScalpingPage() {
           >
             <PanelLeftOpen className="h-4 w-4" />
             <span
-              title={connected ? "Поток биржи идёт" : "Нет связи с потоком биржи"}
+              title={connected ? t.terminal.streamOn : t.terminal.streamOff}
               className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-[var(--pane-up)]" : "bg-[var(--pane-down)]"}`}
             />
             <span className="text-[11px]" style={{ writingMode: "vertical-rl" }}>
-              Скринер
+              {t.terminal.screenerTitle}
             </span>
           </button>
         )}
@@ -2191,23 +2223,23 @@ export default function ScalpingPage() {
           style={paneStyle}
         >
           <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-2 py-1.5">
-            <span className="text-xs font-semibold text-[var(--pane-text)]">Скринер</span>
+            <span className="text-xs font-semibold text-[var(--pane-text)]">{t.terminal.screenerTitle}</span>
             <div className="flex items-center gap-1">
               {/* Связь переехала сюда из заголовка страницы: строка заголовка
                   съедала полсотни пикселей высоты, а знать о разрыве потока
                   нужно постоянно. */}
               <span
-                title={connected ? "Поток биржи идёт" : "Нет связи с потоком биржи"}
+                title={connected ? t.terminal.streamOn : t.terminal.streamOff}
                 className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${
                   connected ? "text-[var(--pane-up)]" : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
                 }`}
               >
                 {connected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-                {connected ? "поток" : "нет связи"}
+                {connected ? t.terminal.streamShort : t.terminal.streamOffShort}
               </span>
               <button
                 onClick={() => setScreenerOpen(false)}
-                title="Свернуть скринер"
+                title={t.terminal.collapseScreener}
                 className={`${CHIP} ${CHIP_OFF}`}
               >
                 <PanelLeftClose className="h-3.5 w-3.5" />
@@ -2220,8 +2252,8 @@ export default function ScalpingPage() {
               onClick={() => setOnlyFavorites((v) => !v)}
               title={
                 onlyFavorites
-                  ? "Показать все монеты"
-                  : "Показать только избранные и те, по которым идут сделки"
+                  ? t.terminal.showAll
+                  : t.terminal.showOnlyMine
               }
               className={`${CHIP} mr-1 ${
                 onlyFavorites ? "text-[var(--pane-gold)]" : CHIP_OFF
@@ -2229,8 +2261,8 @@ export default function ScalpingPage() {
             >
               <Star className="h-3 w-3" fill={onlyFavorites ? "currentColor" : "none"} />
             </button>
-            <span className="mr-1 text-[11px] text-[var(--pane-muted)]">Сортировка:</span>
-            {(Object.keys(SORT_LABELS) as VisibleSortKey[]).map((key) => (
+            <span className="mr-1 text-[11px] text-[var(--pane-muted)]">{t.terminal.sorting}</span>
+            {SORT_KEYS.map((key) => (
               <button
                 key={key}
                 onClick={() => setSort(key)}
@@ -2238,7 +2270,7 @@ export default function ScalpingPage() {
                   sort === key ? CHIP_ON : "text-[var(--pane-text-2)] hover:text-[var(--pane-text)]"
                 }`}
               >
-                {SORT_LABELS[key]}
+                {t.domScreener.sortLabels[key]}
               </button>
             ))}
           </div>
@@ -2259,7 +2291,7 @@ export default function ScalpingPage() {
 
         {/* Свёрнутую панель тянуть не за что — разделитель не нужен. */}
         {screenerOpen && (
-          <PaneDivider onResize={resizeScreener} title="Ширина списка · двойной клик сбрасывает" />
+          <PaneDivider onResize={resizeScreener} title={t.terminal.screenerWidth} />
         )}
 
         {symbol ? (
@@ -2283,7 +2315,7 @@ export default function ScalpingPage() {
                     <button
                       key={step.agg}
                       onClick={() => setAgg(step.agg)}
-                      title={`Укрупнить шаг биржи в ${step.agg} раз: чем крупнее, тем шире охват и меньше подробностей`}
+                      title={t.terminal.aggTitle(step.agg)}
                       className={`${CHIP} ${agg === step.agg ? CHIP_ON : CHIP_OFF}`}
                     >
                       {step.label}
@@ -2292,7 +2324,7 @@ export default function ScalpingPage() {
                   {dom && dom.tick > 0 && (
                     <span
                       className="ml-1 max-w-[7rem] truncate font-mono text-[10px] text-[var(--pane-text-2)]"
-                      title={`Шаг цены в стакане: ${fmtPrice(dom.tick, dom.tick)}`}
+                      title={t.terminal.tickTitle(fmtPrice(dom.tick, dom.tick))}
                     >
                       = {fmtPrice(dom.tick, dom.tick)}
                     </span>
@@ -2303,7 +2335,7 @@ export default function ScalpingPage() {
                     <button
                       key={depth}
                       onClick={() => setRows(depth)}
-                      title={`Показывать ${depth} строк в каждую сторону от цены`}
+                      title={t.terminal.depthTitle(depth)}
                       className={`${CHIP} ${rows === depth ? CHIP_ON : CHIP_OFF}`}
                     >
                       {depth}
@@ -2324,13 +2356,13 @@ export default function ScalpingPage() {
                   />
                 ) : (
                   <p className="grid h-full place-items-center text-sm text-[var(--pane-muted)]">
-                    Собираем стакан {base(symbol)}…
+                    {t.terminal.collectingDom(base(symbol))}
                   </p>
                 )}
               </div>
             </section>
 
-            <PaneDivider onResize={resizeDom} title="Ширина стакана · двойной клик сбрасывает" />
+            <PaneDivider onResize={resizeDom} title={t.terminal.domWidth} />
 
             {/* График занимает всё оставшееся место. */}
             <section
@@ -2345,7 +2377,7 @@ export default function ScalpingPage() {
                     <button
                       key={tf}
                       onClick={() => setTimeframe(tf)}
-                      title="Таймфрейм"
+                      title={t.terminal.timeframe}
                       className={`${CHIP} ${timeframe === tf ? CHIP_ON : CHIP_OFF}`}
                     >
                       {tf}
@@ -2357,7 +2389,7 @@ export default function ScalpingPage() {
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
                   <button
                     onClick={() => toggle("heavy")}
-                    title="Объёмные свечи: толщина тела зависит от объёма - движение без денег видно сразу"
+                    title={t.terminal.volumeCandles}
                     className={`${CHIP} ${indicators.heavy ? CHIP_ON : CHIP_OFF}`}
                   >
                     <CandlestickChart className="h-3.5 w-3.5" />
@@ -2365,13 +2397,13 @@ export default function ScalpingPage() {
                 </div>
 
                 <div className="flex items-center gap-0.5">
-                  {(Object.keys(INDICATOR_LABELS) as (keyof typeof INDICATOR_LABELS)[]).map((key) => (
+                  {LAYER_ORDER.map((key) => (
                     <button
                       key={key}
                       onClick={() => toggle(key)}
                       className={`${CHIP} ${indicators[key] ? CHIP_ON : CHIP_OFF}`}
                     >
-                      {INDICATOR_LABELS[key]}
+                      {UNTRANSLATED_LAYERS[key] ?? (layerLabels as Record<string, string>)[key]}
                     </button>
                   ))}
                   {/* Порог полок стоит рядом с их переключателем: цифра без
@@ -2383,7 +2415,7 @@ export default function ScalpingPage() {
                         <button
                           key={step.value}
                           onClick={() => setShelf(step.value)}
-                          title={`Показывать полки от ${step.label} в стакане`}
+                          title={t.terminal.shelvesFrom(step.label)}
                           className={`${CHIP} ${shelf === step.value ? CHIP_ON : CHIP_OFF}`}
                         >
                           {step.label}
@@ -2397,10 +2429,10 @@ export default function ScalpingPage() {
                       onClick={() =>
                         setAlerts((list) => list.filter((a) => a.symbol !== symbol))
                       }
-                      title="Снять все отметки по этой монете"
+                      title={t.terminal.clearAlerts}
                       className={`${CHIP} text-[var(--pane-gold)] hover:bg-[var(--pane-bg)]`}
                     >
-                      отметки {alertPrices.length} ✕
+                      {t.terminal.alertsCount(alertPrices.length)}
                     </button>
                   )}
 
@@ -2412,10 +2444,10 @@ export default function ScalpingPage() {
                         setClosing(mine[mine.length - 1]);
                         setCloseOpen(true);
                       }}
-                      title="Зафиксировать позицию"
+                      title={t.terminal.closePosition}
                       className={`${CHIP} ${CHIP_ON}`}
                     >
-                      сделка ✕{mine.length > 1 ? ` (${mine.length})` : ""}
+                      {t.terminal.tradeChip} ✕{mine.length > 1 ? ` (${mine.length})` : ""}
                     </button>
                   )}
 
@@ -2427,7 +2459,7 @@ export default function ScalpingPage() {
                       // действия пользователя он играть не даёт.
                       if (next) play("order");
                     }}
-                    title={sound ? "Звук событий включён" : "Звук выключен"}
+                    title={sound ? t.terminal.soundOn : t.terminal.soundOff}
                     className={`${CHIP} ${sound ? CHIP_ON : CHIP_OFF}`}
                   >
                     {sound ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
@@ -2437,8 +2469,8 @@ export default function ScalpingPage() {
                     onClick={() => setExchangeOpen(true)}
                     title={
                       exchange?.connected
-                        ? `Биржа подключена (${exchange.key_tail})`
-                        : "Подключить биржевой счёт"
+                        ? t.terminal.exchangeConnected(exchange.key_tail)
+                        : t.terminal.connectExchange
                     }
                     className={`${CHIP} ${exchange?.connected ? CHIP_ON : CHIP_OFF}`}
                   >
@@ -2447,7 +2479,7 @@ export default function ScalpingPage() {
 
                   <button
                     onClick={() => setJournalOpen((v) => !v)}
-                    title="Журнал сделок"
+                    title={t.terminal.journalTitle}
                     className={`${CHIP} ${journalOpen ? CHIP_ON : CHIP_OFF}`}
                   >
                     <BookText className="h-3.5 w-3.5" />
@@ -2456,7 +2488,7 @@ export default function ScalpingPage() {
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
                   <button
                     onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-                    title="Тема графика"
+                    title={t.terminal.chartTheme}
                     className={`${CHIP} ${CHIP_OFF}`}
                   >
                     {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
@@ -2466,7 +2498,7 @@ export default function ScalpingPage() {
                   <div className="relative" ref={shotMenuRef}>
                     <button
                       onClick={() => setShotMenu((v) => !v)}
-                      title="Снимок графика"
+                      title={t.terminal.shotTitle}
                       className={`${CHIP} ${shotMenu ? CHIP_ON : CHIP_OFF}`}
                     >
                       <Camera className="h-3.5 w-3.5" />
@@ -2475,9 +2507,9 @@ export default function ScalpingPage() {
                       <div className="absolute right-0 top-7 z-30 w-44 overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] py-1 shadow-xl">
                         {(
                           [
-                            ["download", "Скачать картинкой"],
-                            ["copy", "Скопировать"],
-                            ["link", "Ссылка на снимок"],
+                            ["download", t.terminal.shotDownload],
+                            ["copy", t.terminal.shotCopy],
+                            ["link", t.terminal.shotLink],
                           ] as const
                         ).map(([action, label]) => (
                           <button
@@ -2494,7 +2526,7 @@ export default function ScalpingPage() {
 
                   <button
                     onClick={toggleFull}
-                    title={full ? "Свернуть - Esc" : "Во весь экран"}
+                    title={full ? t.terminal.collapseFull : t.terminal.expandFull}
                     className={`${CHIP} ${full ? CHIP_ON : CHIP_OFF}`}
                   >
                     {full ? (
@@ -2538,12 +2570,11 @@ export default function ScalpingPage() {
                   <span
                     className="cursor-help text-[var(--pane-gold)]"
                     title={
-                      "Самая крупная одиночная заявка в книге - одна цена биржи, а не строка стакана. " +
-                      "Строка складывает все заявки своего шага цены, поэтому в ней сумма больше."
+                      t.terminal.wallTitle
                     }
                   >
-                    плита {money(dom.wall.notional)} · {fmtPrice(dom.wall.price, dom.tick)} ·{" "}
-                    {dom.wall.side === "bid" ? "поддержка" : "сопротивление"}
+                    {t.terminal.wall(money(dom.wall.notional), fmtPrice(dom.wall.price, dom.tick))}
+                    {dom.wall.side === "bid" ? t.terminal.support : t.terminal.resistance}
                   </span>
                 )}
                 {/* Защита сверена с биржей: цели на графике и цели на бирже -
@@ -2551,13 +2582,13 @@ export default function ScalpingPage() {
                 {plans && mine.some((t) => t.status === "open") && (
                   <>
                     {plans.takes === 0 && mine.some((t) => t.targets.length > 0) && (
-                      <span className="text-[var(--pane-down)]" title="Биржа не приняла цели - на графике они есть, на счёте нет">
-                        цели не на бирже
+                      <span className="text-[var(--pane-down)]" title={t.terminal.targetsOffExchangeTitle}>
+                        {t.terminal.targetsOffExchange}
                       </span>
                     )}
                     {plans.stops === 0 && (
-                      <span className="text-[var(--pane-down)]" title="Стопа на бирже нет: позиция без защиты">
-                        стоп не на бирже
+                      <span className="text-[var(--pane-down)]" title={t.terminal.stopOffExchangeTitle}>
+                        {t.terminal.stopOffExchange}
                       </span>
                     )}
                     {/* Цены целей график берёт с биржи. Когда разложить их по
@@ -2577,9 +2608,9 @@ export default function ScalpingPage() {
                       })() && (
                         <span
                           className="text-[var(--pane-down)]"
-                          title="На бирже целей другое число, чем на графике: разложить их по целям нечем, и цены показаны по замыслу сделки"
+                          title={t.terminal.takesMismatchTitle}
                           >
-                          цели с биржи не сошлись
+                          {t.terminal.takesMismatch}
                         </span>
                       )}
                   </>
@@ -2683,7 +2714,7 @@ export default function ScalpingPage() {
             className={`grid flex-1 place-items-center rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-6 text-center text-sm text-[var(--pane-muted)]`}
             style={paneStyle}
           >
-            Выберите монету в списке - здесь появятся её стакан и график
+            {t.terminal.pickSymbol}
           </section>
         )}
       </div>
@@ -2756,7 +2787,7 @@ export default function ScalpingPage() {
         <>
           <PaneDivider
             onResize={resizeJournal}
-            title="Высота журнала · двойной клик сбрасывает"
+            title={t.terminal.journalHeight}
             horizontal
           />
           <section

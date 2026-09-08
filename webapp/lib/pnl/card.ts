@@ -25,6 +25,8 @@
 // а к нарисованным на ней рамкам: у разных заготовок и рамка печати, и нижняя
 // панель стоят по-разному, а раскладка обязана садиться на них, а не рядом.
 
+import { dict } from "@/lib/i18n";
+
 export type CardSide = "long" | "short";
 
 /** Прямоугольник в долях ширины и высоты заготовки. */
@@ -379,7 +381,7 @@ export function drawStamp(
 
   ctx.font = face(ih * 0.17, 600);
   ctx.globalAlpha = 0.75;
-  ctx.fillText("ПОДТВЕРЖДЕНО ТЕРМИНАЛОМ", -iw / 2 + ih * 0.34, ih * 0.26);
+  ctx.fillText(dict().pnlCard.stamp, -iw / 2 + ih * 0.34, ih * 0.26);
 
   ctx.textAlign = "right";
   ctx.font = face(ih * 0.2, 700);
@@ -532,7 +534,7 @@ export function loadBackdrop(variant: Variant): Promise<HTMLImageElement> {
     // перестаёт отдавать пиксели - а нам их читать и класть в буфер.
     image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Заготовка карточки не загрузилась"));
+    image.onerror = () => reject(new Error(dict().pnlCard.templateFailed));
     image.src = variant.src;
   });
 }
@@ -558,7 +560,7 @@ export async function render(
   canvas.width = image.naturalWidth * SCALE;
   canvas.height = image.naturalHeight * SCALE;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Холст недоступен");
+  if (!ctx) throw new Error(dict().pnlCard.canvasUnavailable);
   paint(ctx, image, canvas.width, canvas.height, data, variant, stamp);
   return canvas;
 }

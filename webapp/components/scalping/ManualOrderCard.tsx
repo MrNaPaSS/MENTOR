@@ -10,6 +10,7 @@
 // Окно перетаскивается за шапку. Оно стоит поверх графика, а закрывать собой
 // именно тот уровень, к которому трейдер тянется, ему нельзя.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { GripHorizontal, X } from "lucide-react";
 
@@ -68,6 +69,8 @@ export default function ManualOrderCard({
   onSubmit: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
+  const d = t.dialogs.manual;
   // Положение окна: справа сверху, дальше - куда перетащат. Держим в точках от
   // правого верхнего угла графика, чтобы окно не уезжало при смене размера.
   const [at, setAt] = useState(HOME);
@@ -171,21 +174,21 @@ export default function ManualOrderCard({
         <GripHorizontal className="h-3 w-3 shrink-0 text-[var(--pane-muted)]" />
         <button
           onClick={() => onChange(flip(draft))}
-          title="Развернуть сделку в другую сторону"
+          title={d.flip}
           className={`${CHIP} font-semibold ${
             long
               ? "bg-[var(--pane-up-faint)] text-[var(--pane-up)]"
               : "bg-[var(--pane-down-faint)] text-[var(--pane-down)]"
           }`}
         >
-          {long ? "ЛОНГ" : "ШОРТ"}
+          {long ? d.long : d.short}
         </button>
         <span className="font-mono text-[10px] tabular-nums text-[var(--pane-muted)]">
           ×{draft.leverage}
         </span>
         <button
           onClick={onCancel}
-          title="Убрать заявку (Esc)"
+          title={d.dismiss}
           className="ml-auto text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
         >
           <X className="h-3.5 w-3.5" />
@@ -196,14 +199,14 @@ export default function ManualOrderCard({
         {/* Цены: те же три уровня, что тянутся на графике. Здесь их можно
             набрать числом - в монете с мелким шагом так точнее. */}
         <PriceRow
-          label="вход"
+          label={d.entry}
           value={draft.entry}
           tick={tick}
           color="var(--pane-text)"
           onSet={(value) => onChange(moveLevel(draft, "entry", value, tick))}
         />
         <PriceRow
-          label="стоп"
+          label={d.stop}
           value={draft.stop}
           tick={tick}
           color="var(--pane-down)"
@@ -211,7 +214,7 @@ export default function ManualOrderCard({
           onSet={(value) => onChange(moveLevel(draft, "stop", value, tick))}
         />
         <PriceRow
-          label="цель"
+          label={d.target}
           value={draft.take}
           tick={tick}
           color="var(--pane-up)"
@@ -222,14 +225,14 @@ export default function ManualOrderCard({
         {/* Сумма и плечо готовыми значениями: скальпер работает одними и теми
             же, и набирать их с клавиатуры двадцать раз за сессию незачем. */}
         <Chips
-          label="сумма"
+          label={d.amount}
           values={margins}
           current={draft.margin}
           format={(v) => `${v}`}
           onPick={(value) => onChange({ ...draft, margin: value })}
         />
         <Chips
-          label="плечо"
+          label={d.leverage}
           values={leverages}
           current={draft.leverage}
           format={(v) => `×${v}`}
@@ -240,20 +243,20 @@ export default function ManualOrderCard({
           className="space-y-0.5 border-t pt-1.5 font-mono text-[10px] tabular-nums"
           style={{ borderColor: "var(--pane-border)" }}
         >
-          <Fact name="объём" value={qty > 0 ? qty.toFixed(6) : "-"} />
-          <Fact name="в позиции" value={`${(draft.margin * draft.leverage).toFixed(0)} $`} />
-          <Fact name="риск" value={`-${risk.toFixed(2)} $`} tone="down" />
-          <Fact name="цель" value={`+${reward.toFixed(2)} $`} tone="up" />
-          <Fact name="комиссия" value={`-${fee.toFixed(2)} $`} />
+          <Fact name={d.qty} value={qty > 0 ? qty.toFixed(6) : "-"} />
+          <Fact name={d.inPosition} value={`${(draft.margin * draft.leverage).toFixed(0)} $`} />
+          <Fact name={d.risk} value={`-${risk.toFixed(2)} $`} tone="down" />
+          <Fact name={d.reward} value={`+${reward.toFixed(2)} $`} tone="up" />
+          <Fact name={d.fee} value={`-${fee.toFixed(2)} $`} />
           <Fact
-            name="соотношение"
+            name={d.ratio}
             value={`${rr.toFixed(2)}R`}
             // Меньше единицы - берут меньше, чем рискуют. Молчать об этом
             // нельзя: такая сделка требует попадать чаще, чем ошибаться.
             tone={rr < 1 ? "down" : "up"}
           />
           <Fact
-            name="ликвидация"
+            name={d.liquidation}
             value={fmtPrice(liquidation, tick)}
             tone={doomed ? "down" : undefined}
           />
@@ -263,7 +266,7 @@ export default function ManualOrderCard({
             защита. Это не подсказка, а предупреждение, и молчать о нём нельзя. */}
         {doomed && (
           <p className="text-[10px] leading-tight text-[var(--pane-down)]">
-            Ликвидация ближе стопа - уменьшите плечо
+            {d.liqCloser}
           </p>
         )}
 
@@ -271,7 +274,7 @@ export default function ManualOrderCard({
             size» приходит уже после нажатия - сказать надо до. */}
         {overSize && (
           <p className="text-[10px] leading-tight text-[var(--pane-down)]">
-            Больше {ceiling.toFixed(0)} $ на ×{draft.leverage} биржа не примет
+            {d.ceiling(ceiling.toFixed(0), draft.leverage)}
           </p>
         )}
 
@@ -284,10 +287,10 @@ export default function ManualOrderCard({
             color: "var(--pane-deep)",
           }}
         >
-          Выставить {long ? "лонг" : "шорт"}
+          {d.place(long ? t.dialogs.trade.long : t.dialogs.trade.short)}
         </button>
         <p className="text-center text-[10px] leading-tight text-[var(--pane-muted)]">
-          Уровни тянутся прямо на графике
+          {d.dragHint}
         </p>
       </div>
     </div>

@@ -6,6 +6,7 @@
 // и переводить одно в другое лучше в одном месте - иначе доход посчитают
 // по-разному в окне и в ссылке.
 
+import { dict } from "@/lib/i18n";
 import type { JournalTrade } from "@/lib/journal";
 
 import { price, stamped, type CardData, type CardSide } from "./card";
@@ -26,7 +27,8 @@ export function roiOf(trade: JournalTrade): number {
 
 /** Запись журнала - в карточку. */
 export function cardFromTrade(trade: JournalTrade, owner?: string): CardData {
-  const side = trade.side === "long" ? "Лонг" : "Шорт";
+  const t = dict().pnlCard;
+  const side = trade.side === "long" ? t.long : t.short;
   return {
     title: trade.symbol,
     subtitle: `${side}   |   ${trade.leverage}x`,
@@ -36,10 +38,10 @@ export function cardFromTrade(trade: JournalTrade, owner?: string): CardData {
     // обещала бы больше, чем пришло на счёт.
     pnl: Number(trade.pnl),
     rows: [
-      ["Цена входа", price(Number(trade.entry))],
-      ["Цена выхода", trade.exit_price === null ? "-" : price(Number(trade.exit_price))],
+      [t.entryPrice, price(Number(trade.entry))],
+      [t.exitPrice, trade.exit_price === null ? "-" : price(Number(trade.exit_price))],
     ],
-    footer: ["Дата и время", stamped(trade.closed_at)],
+    footer: [t.stamped, stamped(trade.closed_at)],
     at: trade.closed_at,
     owner: owner || undefined,
   };
@@ -66,14 +68,6 @@ export type Period = {
 };
 
 /** Множественное число по-русски: 1 сделка, 2 сделки, 5 сделок. */
-function plural(n: number, one: string, few: string, many: string): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return many;
-  const mod10 = n % 10;
-  if (mod10 === 1) return one;
-  if (mod10 >= 2 && mod10 <= 4) return few;
-  return many;
-}
 
 function dotted(iso: string): string {
   const [y, m, d] = iso.split("-");
@@ -88,6 +82,7 @@ function dotted(iso: string): string {
  * наоборот. Прибыльный срок идёт на бычьи бланки, убыточный на медвежьи.
  */
 export function cardFromPeriod(period: Period, owner?: string): CardData {
+  const t = dict().pnlCard;
   const side: CardSide = period.pnl >= 0 ? "long" : "short";
   return {
     title: period.title,
@@ -96,14 +91,14 @@ export function cardFromPeriod(period: Period, owner?: string): CardData {
     roi: period.roi,
     pnl: period.pnl,
     rows: [
-      ["Сделок", `${period.trades} ${plural(period.trades, "сделка", "сделки", "сделок")}`],
+      [t.trades, `${period.trades} ${t.tradeWord(period.trades)}`],
       [
-        "Дней в плюс",
-        period.tradeDays > 0 ? `${period.winDays} из ${period.tradeDays}` : "-",
+        t.winDays,
+        period.tradeDays > 0 ? t.ofDays(period.winDays, period.tradeDays) : "-",
       ],
     ],
     footer: [
-      period.from === period.to ? "Дата" : "Период",
+      period.from === period.to ? t.date : t.period,
       period.from === period.to ? dotted(period.to) : `${dotted(period.from)} - ${dotted(period.to)}`,
     ],
     at: `${period.to}T12:00:00`,

@@ -15,6 +15,7 @@ import { shell } from "./shell";
 import { smart } from "./smart";
 import { shop } from "./shop";
 import { signals } from "./signals";
+import { dialogs, domScreener, journal, pnlCard, terminal } from "./terminal";
 import { tools } from "./tools";
 
 export const en: Dict = {
@@ -31,5 +32,10 @@ export const en: Dict = {
   shop,
   smart,
   signals,
+  dialogs,
+  domScreener,
+  journal,
+  pnlCard,
+  terminal,
   tools,
 };

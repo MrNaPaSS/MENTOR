@@ -7,6 +7,7 @@
 // проверяет их запросом баланса до сохранения — иначе неверный ключ всплыл бы
 // в момент ордера, то есть в самый неподходящий.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { balance as loadBalance, dropKeys, saveKeys, type TradingStatus } from "@/lib/trading";
@@ -55,6 +56,8 @@ export default function ExchangeDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useT();
+  const d = t.dialogs.exchange;
   const [apiKey, setApiKey] = useState("");
   const [secret, setSecret] = useState("");
   const [passphrase, setPassphrase] = useState("");
@@ -104,7 +107,7 @@ export default function ExchangeDialog({
       setReplacing(false);
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось подключить");
+      setError(err instanceof Error ? err.message : d.connectFailed);
     } finally {
       setBusy(false);
     }
@@ -116,7 +119,7 @@ export default function ExchangeDialog({
       await dropKeys();
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось отключить");
+      setError(err instanceof Error ? err.message : d.disconnectFailed);
     } finally {
       setBusy(false);
     }
@@ -134,13 +137,13 @@ export default function ExchangeDialog({
         <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
           <div>
             <p className="text-sm font-semibold text-[var(--pane-text)]">
-              Биржевой счёт WEEX{" "}
+              {d.title}{" "}
               <span className="font-mono text-[10px] font-normal text-[var(--pane-muted)]">{BUILD}</span>
             </p>
             <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
               {status.connected
-                ? `Ключ ${status.key_tail}`
-                : "Терминал сможет ставить ордера с вашего счёта"}
+                ? d.keyTail(status.key_tail)
+                : d.canPlace}
             </p>
           </div>
           <button
@@ -153,38 +156,35 @@ export default function ExchangeDialog({
 
         {!reachable ? (
           <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
-            Состояние счёта получить не удалось. Войдите в кабинет - торговый
-            раздел привязан к ученику; если вход выполнен, значит сервер сейчас
-            недоступен.
+            {d.unreachable}
           </p>
         ) : !status.enabled ? (
           <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
-            На сервере не задан ключ шифрования, и торговля выключена целиком.
-            Хранить ваши ключи открытым текстом мы не будем.
+            {d.vaultOff}
           </p>
         ) : status.connected && !replacing ? (
           <div className="space-y-3 px-5 py-5">
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-[var(--pane-up)]" />
               <span className="text-[13px] font-semibold text-[var(--pane-text)]">
-                Счёт подключён
+                {d.connected}
               </span>
             </div>
 
             <div className="space-y-1 font-mono text-[12px] tabular-nums">
               <div className="flex justify-between">
-                <span className="text-[var(--pane-muted)]">Ключ</span>
+                <span className="text-[var(--pane-muted)]">{d.key}</span>
                 <span className="text-[var(--pane-text-2)]">{status.key_tail}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[var(--pane-muted)]">Доступно</span>
+                <span className="text-[var(--pane-muted)]">{d.available}</span>
                 <span className="text-[var(--pane-text-2)]">
-                  {funds !== null ? `${funds} USDT` : checked ? "-" : "запрашиваем…"}
+                  {funds !== null ? `${funds} USDT` : checked ? "-" : d.asking}
                 </span>
               </div>
               {status.updated_at && (
                 <div className="flex justify-between">
-                  <span className="text-[var(--pane-muted)]">Подключён</span>
+                  <span className="text-[var(--pane-muted)]">{d.since}</span>
                   <span className="text-[var(--pane-text-2)]">
                     {new Date(status.updated_at).toLocaleString("ru", {
                       day: "2-digit",
@@ -198,15 +198,14 @@ export default function ExchangeDialog({
             </div>
 
             <p className="text-[11px] leading-snug text-[var(--pane-muted)]">
-              Терминал ставит ордера с этого счёта, когда включён боевой режим.
-              Ключ хранится зашифрованным и наружу не отдаётся.
+              {d.liveNote}
             </p>
 
             <button
               onClick={() => setReplacing(true)}
               className="text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
             >
-              Заменить ключи
+              {d.replaceKeys}
             </button>
           </div>
         ) : (
@@ -242,8 +241,7 @@ export default function ExchangeDialog({
             </label>
 
             <p className="text-[11px] leading-snug text-[var(--pane-muted)]">
-              Ключи хранятся зашифрованными и наружу не отдаются. Заводите ключ
-              только с правом торговли - вывод средств терминалу не нужен.
+              {d.keysNote}
             </p>
 
             {error && (
@@ -259,14 +257,14 @@ export default function ExchangeDialog({
               disabled={busy}
               className={`${BUTTON} text-[var(--pane-down)] hover:bg-[var(--pane-down-faint)] disabled:opacity-40`}
             >
-              Отключить
+              {d.disconnect}
             </button>
           ) : (
             <span />
           )}
           <div className="flex gap-2">
             <button onClick={onClose} className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}>
-              Закрыть
+              {t.common.close}
             </button>
             {(!status.connected || replacing) && (
               <button
@@ -274,7 +272,7 @@ export default function ExchangeDialog({
                 disabled={busy || !reachable || !status.enabled || !apiKey || !secret || !passphrase}
                 className={`${BUTTON} bg-[var(--pane-accent-faint)] text-[var(--pane-accent)] disabled:opacity-40`}
               >
-                {busy ? "Проверяем…" : "Подключить"}
+                {busy ? d.checking : t.common.connect}
               </button>
             )}
           </div>

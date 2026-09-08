@@ -177,7 +177,7 @@ function DemoBadge() {
       }}
       title={t.smart.demoTitle}
     >
-      Образец
+      {t.smart.demoBadge}
     </span>
   );
 }

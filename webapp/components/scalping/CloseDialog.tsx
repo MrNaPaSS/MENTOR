@@ -7,6 +7,7 @@
 // нему стоило бы трейдеру позиции. Теперь крестик открывает это окно, а долю
 // он выбирает сам — скальперы редко выходят разом.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { price as fmtPrice } from "@/lib/scalping";
@@ -36,6 +37,8 @@ export default function CloseDialog({
   onConfirm: (share: number) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
+  const d = t.dialogs.close;
   const [percent, setPercent] = useState(100);
 
   useEffect(() => {
@@ -76,7 +79,7 @@ export default function CloseDialog({
                   long ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
                 }`}
               >
-                {long ? "лонг" : "шорт"}
+                {long ? d.long : d.short}
               </span>
               <span className="font-mono text-[17px] font-semibold text-[var(--pane-text)]">
                 {fmtPrice(trade.entry, tick)}
@@ -84,8 +87,8 @@ export default function CloseDialog({
             </div>
             <p className="mt-1 text-[11px] text-[var(--pane-muted)]">
               {waiting
-                ? "Сделка ещё не вошла - фиксировать нечего, расчёт просто снимется"
-                : `В позиции ${trade.qty.toPrecision(4)} · сейчас ${fmtPrice(price, tick)}`}
+                ? d.notEntered
+                : d.inPosition(trade.qty.toPrecision(4), fmtPrice(price, tick))}
             </p>
           </div>
           <button
@@ -99,7 +102,7 @@ export default function CloseDialog({
         {!waiting && (
           <div className="px-5 py-4">
             <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-[11px] text-[var(--pane-muted)]">Закрыть долю позиции</span>
+              <span className="text-[11px] text-[var(--pane-muted)]">{d.partial}</span>
               <span className="font-mono text-[17px] font-semibold text-[var(--pane-text)]">
                 {percent}%
               </span>
@@ -132,52 +135,50 @@ export default function CloseDialog({
             </div>
 
             <div className="mt-4 space-y-1 border-t border-[var(--pane-border)] pt-3 font-mono text-[12px] tabular-nums">
-              <Line label="Закрываем" value={qty.toPrecision(4)} />
+              <Line label={d.closing} value={qty.toPrecision(4)} />
               <Line
-                label="Останется"
-                value={percent >= 100 ? "ничего" : (trade.qty - qty).toPrecision(4)}
+                label={d.remains}
+                value={percent >= 100 ? d.nothing : (trade.qty - qty).toPrecision(4)}
               />
               {trade.realized !== 0 && (
                 <Line
-                  label="Уже забрано"
+                  label={d.alreadyTaken}
                   value={`${trade.realized >= 0 ? "+" : "-"}${Math.abs(trade.realized).toFixed(2)} $`}
                   tone="text-[var(--pane-muted)]"
                 />
               )}
               <Line
-                label="Результат"
+                label={d.result}
                 value={`${part >= 0 ? "+" : "-"}${Math.abs(part).toFixed(2)} $`}
                 tone={part >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
               />
               <Line
-                label="Комиссия ≈"
+                label={d.fee}
                 value={`-${fee.toFixed(2)} $`}
                 tone="text-[var(--pane-muted)]"
               />
               <Line
-                label="На счёт ≈"
+                label={d.toAccount}
                 value={`${part - fee >= 0 ? "+" : "-"}${Math.abs(part - fee).toFixed(2)} $`}
                 tone={part - fee >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
               />
             </div>
 
             <p className="mt-3 text-[11px] leading-snug text-[var(--pane-muted)]">
-              Результат посчитан по цене маркировки. Выход по рынку идёт по
-              встречной стороне стакана, поэтому на счёт придёт немного меньше
-              даже этой оценки.
+              {d.note}
             </p>
           </div>
         )}
 
         <div className="flex items-center justify-end gap-2 border-t border-[var(--pane-border)] px-5 py-3">
           <button onClick={onCancel} className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}>
-            Отмена
+            {t.common.cancel}
           </button>
           <button
             onClick={() => onConfirm(share)}
             className={`${BUTTON} bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]`}
           >
-            {waiting ? "Снять расчёт" : "Зафиксировать"}
+            {waiting ? d.dropDraft : d.confirm}
           </button>
         </div>
       </div>

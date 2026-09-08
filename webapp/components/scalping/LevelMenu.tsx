@@ -9,6 +9,7 @@
 // Окно намеренно крошечное и без полей ввода: это развилка на два шага, а не
 // форма. Всё, что нужно решить дальше, спросит окно расчёта.
 
+import { useT } from "@/lib/i18n";
 import { useEffect } from "react";
 import { Bell, BellOff, Calculator } from "lucide-react";
 import { money, price as fmtPrice, type LadderRow } from "@/lib/scalping";
@@ -33,6 +34,8 @@ export default function LevelMenu({
   onAlert: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
+  const d = t.dialogs.level;
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") onCancel();
@@ -66,7 +69,7 @@ export default function LevelMenu({
             </span>
           </div>
           <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
-            {bid ? "заявки на покупку - поддержка" : "заявки на продажу - сопротивление"}
+            {bid ? d.bidSide : d.askSide}
           </p>
         </div>
 
@@ -75,10 +78,10 @@ export default function LevelMenu({
             <Calculator className="h-4 w-4 shrink-0 text-[var(--pane-accent)]" />
             <span>
               <span className="block text-[12px] font-semibold text-[var(--pane-text)]">
-                Расчёт сделки
+                {d.tradeDraft}
               </span>
               <span className="block text-[11px] text-[var(--pane-muted)]">
-                {bid ? "лонг от этого уровня" : "шорт от этого уровня"}
+                {bid ? d.longFrom : d.shortFrom}
               </span>
             </span>
           </button>
@@ -91,10 +94,10 @@ export default function LevelMenu({
             )}
             <span>
               <span className="block text-[12px] font-semibold text-[var(--pane-text)]">
-                {alerted ? "Убрать уведомление" : "Уведомление на пересечение"}
+                {alerted ? d.removeAlert : d.addAlert}
               </span>
               <span className="block text-[11px] text-[var(--pane-muted)]">
-                {alerted ? "цена больше не отслеживается" : "скажем, когда цена дойдёт сюда"}
+                {alerted ? d.removeAlertSub : d.addAlertSub}
               </span>
             </span>
           </button>
@@ -105,7 +108,7 @@ export default function LevelMenu({
             onClick={onCancel}
             className="rounded-md px-3 py-1.5 text-[12px] text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
           >
-            Отмена
+            {t.common.cancel}
           </button>
         </div>
       </div>

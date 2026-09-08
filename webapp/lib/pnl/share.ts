@@ -8,6 +8,7 @@
 // ожидании. Поэтому запись в буфер начинается сразу, а картинка доезжает
 // внутрь уже начатой записи.
 
+import { dict } from "@/lib/i18n";
 import { authReq, API_URL } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 
@@ -44,7 +45,7 @@ export function copy(picture: Promise<HTMLCanvasElement>): Promise<boolean> {
   }
   const png = picture.then(async (canvas) => {
     const blob = await toBlob(canvas);
-    if (!blob) throw new Error("карточка не собралась");
+    if (!blob) throw new Error(dict().pnlCard.notAssembled);
     return blob;
   });
   return navigator.clipboard

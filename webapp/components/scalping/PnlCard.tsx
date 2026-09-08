@@ -11,6 +11,7 @@
 // графиком, тёмная - со зверем. Отдельный выбор был бы ещё одной настройкой,
 // которую надо помнить, ради того, что уже решено темой.
 
+import { useT } from "@/lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Copy, Download, Link2, X } from "lucide-react";
 
@@ -35,6 +36,8 @@ export default function PnlCard({
   data: CardData;
   onClose: () => void;
 }) {
+  const t = useT();
+  const c = t.pnlCard;
   // Заготовки на выбор - те, что подходят стороне сделки.
   //
   // Открывается первая: порядок задан наставником, и первая в нём - лицо
@@ -104,14 +107,14 @@ export default function PnlCard({
     // Обещание, а не готовый холст: право писать в буфер браузер отбирает при
     // первом же ожидании после нажатия.
     copy(stamped()).then((ok) =>
-      setNote(ok ? "Карточка в буфере" : "Браузер не дал скопировать - сохраните файлом"),
+      setNote(ok ? c.copied : c.copyFailed),
     );
   }
 
   async function onDownload() {
     const name = `${data.title}-${data.side}-${data.at.slice(0, 10)}`;
     await download(await stamped(), name);
-    setNote("Файл сохранён");
+    setNote(c.saved);
   }
 
   async function onShare() {
@@ -126,7 +129,7 @@ export default function PnlCard({
         variant,
       );
       if (!url) {
-        setNote("Ссылку не удалось получить");
+        setNote(c.linkFailed);
         return;
       }
       setLink(url);
@@ -136,9 +139,9 @@ export default function PnlCard({
         () => true,
         () => false,
       );
-      setNote(ok ? "Ссылка скопирована" : "Ссылка готова - скопируйте её ниже");
+      setNote(ok ? c.linkCopied : c.linkReady);
     } catch {
-      setNote("Ссылку не удалось получить");
+      setNote(c.linkFailed);
     } finally {
       setBusy(false);
     }
@@ -172,7 +175,7 @@ export default function PnlCard({
       >
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-2.5 font-mono text-[12px] uppercase tracking-widest text-[var(--pane-muted)]">
-            Карточка сделки
+            {c.title}
             {/* Точки: сколько заготовок есть и на которой стоим. Без них
                 стрелки предлагают выбор неизвестной длины - непонятно, две их
                 там или десять и докуда листать. */}
@@ -192,14 +195,14 @@ export default function PnlCard({
                   />
                 ))}
                 <span className="sr-only">
-                  Заготовка {choices.indexOf(variant) + 1} из {choices.length}
+                  {c.variant(choices.indexOf(variant) + 1, choices.length)}
                 </span>
               </span>
             )}
           </span>
           <button
             onClick={onClose}
-            title="Закрыть"
+            title={t.common.close}
             className="rounded p-1 text-[var(--pane-muted)] transition-colors hover:text-[var(--pane-text)]"
           >
             <X className="h-4 w-4" />
@@ -230,7 +233,7 @@ export default function PnlCard({
               <div className="pnl-stamp">
                 <div className="pnl-ink">
                   <span className="pnl-mark">
-                    NMNH<small>ПОДТВЕРЖДЕНО ТЕРМИНАЛОМ</small>
+                    NMNH<small>{c.stamp}</small>
                   </span>
                   <span className="pnl-creed">TRADE · DISCIPLINE · PROFIT</span>
                 </div>
@@ -238,7 +241,7 @@ export default function PnlCard({
             </div>
           ) : (
             <div className="grid aspect-[640/852] place-items-center rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[12px] text-[var(--pane-muted)]">
-              {failed ? "Заготовка карточки не загрузилась" : "Печатаем..."}
+              {failed ? c.templateFailed : c.printing}
             </div>
           )}
         </div>
@@ -276,11 +279,11 @@ export default function PnlCard({
         )}
 
         <div className="flex gap-2">
-          <Action icon={<Copy className="h-4 w-4" />} label="Скопировать" onClick={onCopy} disabled={!paper} />
-          <Action icon={<Download className="h-4 w-4" />} label="Скачать" onClick={onDownload} disabled={!paper} />
+          <Action icon={<Copy className="h-4 w-4" />} label={c.copy} onClick={onCopy} disabled={!paper} />
+          <Action icon={<Download className="h-4 w-4" />} label={c.download} onClick={onDownload} disabled={!paper} />
           <Action
             icon={<Link2 className="h-4 w-4" />}
-            label={busy ? "Готовим..." : "Ссылка"}
+            label={busy ? c.preparing : c.link}
             onClick={onShare}
             disabled={!paper || busy}
           />
@@ -341,12 +344,13 @@ function Blank({
   onClick: () => void;
   className?: string;
 }) {
+  const t = useT();
   const Icon = side === "left" ? ChevronLeft : ChevronRight;
   return (
     <button
       onClick={onClick}
-      title="Другая заготовка"
-      aria-label={side === "left" ? "Предыдущая заготовка" : "Следующая заготовка"}
+      title={t.pnlCard.otherTemplate}
+      aria-label={side === "left" ? t.pnlCard.prevTemplate : t.pnlCard.nextTemplate}
       className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] transition-colors hover:border-[var(--pane-accent)] hover:text-[var(--pane-text)] ${className}`}
     >
       <Icon className="h-4 w-4" />

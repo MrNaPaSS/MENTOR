@@ -14,6 +14,7 @@
 // Уведомление само уходит через несколько секунд и убирается нажатием: висеть
 // над графиком дольше нужного ему нечего.
 
+import { useT } from "@/lib/i18n";
 import { useEffect } from "react";
 import { X } from "lucide-react";
 
@@ -48,6 +49,7 @@ export default function Toasts({
    */
   place?: "chart" | "shell";
 }) {
+  const t = useT();
   // Гасим по одному и по своему сроку: общий таймер снимал бы свежее
   // уведомление вместе со старым.
   useEffect(() => {
@@ -115,7 +117,7 @@ export default function Toasts({
                 event.stopPropagation();
                 onClose(item.id);
               }}
-              title="Убрать"
+              title={t.domScreener.dismiss}
               className="ml-1 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
             >
               <X className="h-3.5 w-3.5" />

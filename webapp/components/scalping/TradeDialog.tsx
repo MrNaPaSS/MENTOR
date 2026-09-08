@@ -14,6 +14,7 @@
 // «Войти» не отправляет ордер на биржу: сделка начинает ждать свою цену, а
 // разметка остаётся на графике.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
@@ -117,6 +118,45 @@ export default function TradeDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cap, draft.leverage]);
 
+  const t = useT();
+  const d = t.dialogs.trade;
+
+  /**
+   * Куда трейдер отодвинул окно.
+   *
+   * Расчёт закрывает середину экрана - ровно то место, где стоит цена, от
+   * которой его открыли. Трейдер правит сумму и стоп, глядя на график, а
+   * график в этот момент под окном. Сдвинуть его - единственный способ видеть
+   * оба; поэтому окно держится не на месте, а там, куда его увели.
+   *
+   * Смещение живёт до закрытия: следующий расчёт снова открывается по центру.
+   * Запоминать место надолго нечего - оно зависит от того, где сегодня стоит
+   * цена, а не от привычки.
+   */
+  const [shift, setShift] = useState({ x: 0, y: 0 });
+  const grab = useRef<{ x: number; y: number } | null>(null);
+
+  function startDrag(event: React.PointerEvent<HTMLDivElement>) {
+    // Тянут за шапку, но не за крестик: нажатие на него закрывает окно, и
+    // перехватывать его указатель нельзя.
+    if ((event.target as HTMLElement).closest("button")) return;
+    grab.current = { x: event.clientX - shift.x, y: event.clientY - shift.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const from = grab.current;
+    if (!from) return;
+    setShift({ x: event.clientX - from.x, y: event.clientY - from.y });
+  }
+
+  function endDrag(event: React.PointerEvent<HTMLDivElement>) {
+    grab.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
   const side = sideForShelf(draft.shelf.side);
   const long = side === "long";
   const tone = long ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]";
@@ -138,27 +178,46 @@ export default function TradeDialog({
     >
       <div
         onClick={(event) => event.stopPropagation()}
+        style={{ transform: `translate(${shift.x}px, ${shift.y}px)` }}
         className="w-[520px] max-w-full animate-dialog-in overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
       >
-        {/* Шапка: что за уровень и в какую сторону от него работаем. */}
-        <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
+        {/* Шапка: что за уровень и в какую сторону от него работаем.
+            Она же ручка окна - за неё его отодвигают от графика. */}
+        <div
+          onPointerDown={startDrag}
+          onPointerMove={onDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          // touchAction: без него палец на телефоне прокручивает страницу
+          // вместо того, чтобы вести окно.
+          style={{ touchAction: "none" }}
+          className={`flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4 select-none ${
+            grab.current ? "cursor-grabbing" : "cursor-grab"
+          }`}
+        >
           <div>
             <div className="flex items-baseline gap-2">
               <span className={`text-[11px] font-semibold uppercase ${tone}`}>
-                {long ? "лонг" : "шорт"}
+                {long ? d.long : d.short}
               </span>
               <span className="font-mono text-[19px] font-semibold text-[var(--pane-text)]">
                 {fmtPrice(draft.shelf.price, tick)}
               </span>
             </div>
+            {/* Откуда взялась цена. От полки в стакане - сколько там денег;
+                от плюсика на графике полки нет вовсе, и писать про заявки,
+                которых никто не ставил, значит выдумывать. */}
             <p className="mt-1 text-[11px] text-[var(--pane-muted)]">
-              {money(draft.shelf.notional)} в стакане -{" "}
-              {long ? "поддержка под ценой" : "сопротивление над ценой"}
+              {draft.shelf.notional > 0
+                ? d.shelf(money(draft.shelf.notional)) + (long ? d.shelfLong : d.shelfShort)
+                : long
+                  ? d.fromPriceLong
+                  : d.fromPriceShort}
             </p>
           </div>
           <button
             onClick={onCancel}
-            title="Отмена · Esc"
+            title={d.cancelEsc}
             className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
           >
             <X className="h-4 w-4" />
@@ -167,21 +226,21 @@ export default function TradeDialog({
 
         <div className="grid grid-cols-3 gap-4 px-5 py-4">
           <Field
-            label="Сумма, $"
+            label={d.amount}
             value={draft.margin}
             presets={MARGINS}
             format={(v) => String(v)}
             onPick={(margin) => onChange({ ...draft, margin })}
           />
           <Field
-            label={cap ? `Плечо (макс x${cap})` : "Плечо"}
+            label={cap ? d.leverageCap(cap) : d.leverage}
             value={draft.leverage}
             presets={leverages}
             format={(v) => `x${v}`}
             onPick={(leverage) => onChange({ ...draft, leverage })}
           />
           <Field
-            label="Стоп, %"
+            label={d.stopPct}
             value={draft.stopPct}
             presets={STOPS}
             format={(v) => String(v)}
@@ -192,76 +251,72 @@ export default function TradeDialog({
         {plan ? (
           <div className="border-t border-[var(--pane-border)] bg-[var(--pane-deep)]/40 px-5 py-4">
             <Row
-              label="Вход"
+              label={d.entry}
               price={fmtPrice(plan.entry, tick)}
               note={`${money(plan.notional)} · ${plan.qty.toPrecision(4)}`}
             />
             <Row
-              label="Стоп"
+              label={d.stop}
               price={fmtPrice(plan.stop, tick)}
-              note={`-${money(plan.risk)} · ${plan.riskPct.toFixed(1)}% от суммы`}
+              note={d.stopNote(money(plan.risk), plan.riskPct.toFixed(1))}
               tone="text-[var(--pane-down)]"
             />
             {plan.targets.map((target, i) => (
               <Row
                 key={target.r}
-                label={`Тейк ${i + 1}`}
+                label={d.take(i + 1)}
                 price={fmtPrice(target.price, tick)}
                 note={`+${money(target.profit)} · ${target.r}R`}
                 tone="text-[var(--pane-up)]"
               />
             ))}
             <Row
-              label="Комиссия ≈"
+              label={d.fee}
               price={money(plan.notional * (takerFee ?? TAKER_FEE) * 2)}
-              note="вход и выход"
+              note={d.feeNote}
               tone="text-[var(--pane-muted)]"
             />
             <Row
-              label="Ликвидация ≈"
+              label={d.liquidation}
               price={fmtPrice(plan.liquidation, tick)}
-              note={plan.liquidatedFirst ? "ближе стопа" : ""}
+              note={plan.liquidatedFirst ? d.liqCloser : ""}
               tone={plan.liquidatedFirst ? "text-[var(--pane-down)]" : "text-[var(--pane-muted)]"}
             />
 
             {opposing > 0 && (
               <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
-                По этой монете открыта встречная позиция {opposing}. Если счёт в
-                одностороннем режиме, эта заявка уменьшит её, а не создаст новую
-                сделку.
+                {d.opposing(String(opposing))}
               </p>
             )}
 
             {overLimit && (
               <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
-                По этой монете биржа держит максимум x{cap}. С плечом x{draft.leverage}
-                {" "}заявку она отклонит.
+                {d.capWarning(cap ?? 0, draft.leverage)}
               </p>
             )}
 
             {plan.liquidatedFirst && (
               <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
-                При таком плече позицию вынесет раньше, чем сработает стоп.
-                Уменьшите плечо или отодвиньте стоп.
+                {d.liqWarning}
               </p>
             )}
           </div>
         ) : (
           <p className="border-t border-[var(--pane-border)] px-5 py-6 text-center text-[12px] text-[var(--pane-muted)]">
-            Введите сумму, плечо и стоп - расчёт появится здесь
+            {d.fillHint}
           </p>
         )}
 
         <div className="flex items-center justify-between border-t border-[var(--pane-border)] px-5 py-3">
           <span className="text-[11px] text-[var(--pane-muted)]">
             {live ? (
-              <span className="text-warning">Заявка уйдёт на биржу</span>
+              <span className="text-warning">{d.willGoLive}</span>
             ) : (
               // Разметка без счёта - это рисование на графике, а не торговля.
               // Раньше окно её предлагало, и сделка выглядела открытой, хотя на
               // бирже не было ничего.
               <span className="text-[var(--pane-down)]">
-                Счёт не подключён - торговля недоступна
+                {d.notConnected}
               </span>
             )}
           </span>
@@ -270,7 +325,7 @@ export default function TradeDialog({
               onClick={onCancel}
               className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}
             >
-              Отмена
+              {t.common.cancel}
             </button>
             <button
               onClick={onConfirm}
@@ -279,7 +334,7 @@ export default function TradeDialog({
                 long ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]" : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
               } disabled:opacity-40`}
             >
-              Войти
+              {t.common.login}
             </button>
           </div>
         </div>

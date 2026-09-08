@@ -6,21 +6,14 @@
 // тому же правилу - иначе карточка спорила бы с полосой «итог месяца» под
 // календарём, а это одно и то же число.
 
+import { dict } from "@/lib/i18n";
 import type { CalendarDay } from "@/lib/api";
 
 import type { Period } from "./data";
 
 export type Span = "day" | "week" | "month";
 
-const MONTHS_OF = [
-  "января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря",
-];
 
-const MONTHS = [
-  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
-];
 
 /**
  * Опорная дата на месте.
@@ -93,6 +86,9 @@ export function periodOf(all: CalendarDay[], span: Span, anchor: string): Period
   const from = counted[0].date;
   const to = counted[counted.length - 1].date;
   const at = parts(anchor);
+  const t = dict().pnlCard;
+  const MONTHS_OF = t.monthsGenitive;
+  const MONTHS = t.monthsNominative;
 
   const title =
     span === "day"
@@ -108,7 +104,7 @@ export function periodOf(all: CalendarDay[], span: Span, anchor: string): Period
           })();
 
   const label =
-    span === "day" ? "Итог дня" : span === "week" ? "Итог недели" : "Итог месяца";
+    span === "day" ? t.dayResult : span === "week" ? t.weekResult : t.monthResult;
 
   return { title, label, roi, pnl, trades, winDays, tradeDays: tradeDays.length, from, to };
 }

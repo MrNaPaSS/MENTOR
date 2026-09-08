@@ -11,6 +11,7 @@
 // на весь месяц и десять подряд выглядят одинаково в сумме и совершенно
 // по-разному на сетке.
 
+import { useIntlLocale, useT, type Dict } from "@/lib/i18n";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
@@ -24,14 +25,6 @@ import {
   type JournalSummary,
   type JournalTrade,
 } from "@/lib/journal";
-
-const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-
-const OUTCOMES: Record<JournalTrade["outcome"], string> = {
-  take: "цель",
-  stop: "стоп",
-  manual: "руками",
-};
 
 function money(value: number): string {
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
@@ -65,10 +58,10 @@ function Takes({ trade }: { trade: JournalTrade }) {
 }
 
 /** Полный список целей с отметкой взятых — в подсказке, чтобы не растить таблицу. */
-function takesHint(trade: JournalTrade): string {
-  if (trade.targets.length === 0) return "Цели не выставлялись";
+function takesHint(trade: JournalTrade, t: Dict): string {
+  if (trade.targets.length === 0) return t.journal.noTargets;
   return trade.targets
-    .map((price, i) => `${i < trade.takes_hit ? "✓" : "·"} тейк ${i + 1}: ${price}`)
+    .map((price, i) => t.journal.takeLine(i < trade.takes_hit ? "✓" : "·", i + 1, String(price)))
     .join("\n");
 }
 
@@ -127,6 +120,8 @@ export default function JournalPanel({
   owner?: string;
   onClose: () => void;
 }) {
+  const t = useT();
+  const numbers = useIntlLocale();
   // Чья карточка открыта. Null - окна нет.
   const [card, setCard] = useState<JournalTrade | null>(null);
   const now = new Date();
@@ -173,9 +168,9 @@ export default function JournalPanel({
         setDays(cal.days);
         setTotal(cal.total);
       }
-      if (!list && !cal) setError("Журнал доступен после входа в кабинет");
+      if (!list && !cal) setError(t.journal.needLogin);
     } catch {
-      setError("Не удалось загрузить журнал");
+      setError(t.journal.loadFailed);
     } finally {
       setBusy(false);
     }
@@ -199,7 +194,7 @@ export default function JournalPanel({
   return (
     <div className="flex h-full flex-col text-[12px]">
       <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-3 py-2">
-        <span className="font-semibold text-[var(--pane-text)]">Журнал сделок</span>
+        <span className="font-semibold text-[var(--pane-text)]">{t.journal.title}</span>
         <div className="flex items-center gap-2">
           {symbol && (
             <button
@@ -210,19 +205,19 @@ export default function JournalPanel({
                   : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
               }`}
             >
-              только {symbol.replace(/USDT$/, "")}
+              {t.journal.onlyCoin(symbol.replace(/USDT$/, ""))}
             </button>
           )}
           <button
             onClick={reload}
-            title="Обновить"
+            title={t.journal.refresh}
             className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />
           </button>
           <button
             onClick={onClose}
-            title="Закрыть журнал"
+            title={t.journal.close}
             className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
           >
             <X className="h-4 w-4" />
@@ -238,16 +233,16 @@ export default function JournalPanel({
         <div className="min-h-0 flex-1 overflow-auto px-3 py-2">
           {summary && (
             <div className="mb-3 grid grid-cols-5 gap-2 font-mono tabular-nums">
-              <Stat label="Итог, $" value={money(summary.pnl)} tone={tone(summary.pnl)} />
-              <Stat label="Сделок" value={String(summary.count)} />
-              <Stat label="Прибыльных" value={`${summary.win_rate}%`} />
+              <Stat label={t.journal.statPnl} value={money(summary.pnl)} tone={tone(summary.pnl)} />
+              <Stat label={t.journal.statTrades} value={String(summary.count)} />
+              <Stat label={t.journal.statWinRate} value={`${summary.win_rate}%`} />
               <Stat
-                label="Лучшая"
+                label={t.journal.statBest}
                 value={summary.wins > 0 ? money(summary.best) : "-"}
                 tone={summary.wins > 0 ? tone(summary.best) : undefined}
               />
               <Stat
-                label="Худшая"
+                label={t.journal.statWorst}
                 value={summary.losses > 0 ? money(summary.worst) : "-"}
                 tone={summary.losses > 0 ? tone(summary.worst) : undefined}
               />
@@ -275,7 +270,7 @@ export default function JournalPanel({
             </div>
 
             <div className="grid grid-cols-7 gap-1 text-center">
-              {WEEKDAYS.map((w) => (
+              {t.journal.weekdays.map((w) => (
                 <span key={w} className="text-[10px] text-[var(--pane-muted)]">
                   {w}
                 </span>
@@ -283,7 +278,7 @@ export default function JournalPanel({
               {monthCells(year, month, days).map((cell, i) => (
                 <div
                   key={i}
-                  title={cell ? `${cell.trades} сделок · ${money(cell.pnl)} $` : undefined}
+                  title={cell ? t.journal.cellTitle(cell.trades, money(cell.pnl)) : undefined}
                   className={`rounded py-1 font-mono text-[10px] tabular-nums ${
                     cell === null
                       ? ""
@@ -302,36 +297,36 @@ export default function JournalPanel({
 
           {trades.length === 0 ? (
             <p className="py-6 text-center text-[var(--pane-muted)]">
-              Пока пусто. Закрытая сделка попадёт сюда сама.
+              {t.journal.empty}
             </p>
           ) : (
             <table className="w-full font-mono text-[11px] tabular-nums">
               <thead className="text-[10px] text-[var(--pane-muted)]">
                 <tr className="text-left">
-                  <th className="py-1">Дата</th>
-                  <th>Монета</th>
-                  <th>Вход</th>
-                  <th>Выход</th>
-                  <th>Цели</th>
-                  <th className="text-right">Итог</th>
+                  <th className="py-1">{t.journal.colDate}</th>
+                  <th>{t.journal.colCoin}</th>
+                  <th>{t.journal.colEntry}</th>
+                  <th>{t.journal.colExit}</th>
+                  <th>{t.journal.colTargets}</th>
+                  <th className="text-right">{t.journal.colResult}</th>
                   <th />
                   {mentor && <th />}
                 </tr>
               </thead>
               <tbody>
-                {trades.map((t) => (
+                {trades.map((row) => (
                   <tr
-                    key={t.id}
-                    onMouseEnter={() => onHover?.(t)}
+                    key={row.id}
+                    onMouseEnter={() => onHover?.(row)}
                     onMouseLeave={() => onHover?.(null)}
-                    onClick={() => onPick?.(t)}
-                    title="Открыть график сделки"
+                    onClick={() => onPick?.(row)}
+                    title={t.journal.openChart}
                     className={`border-t border-[var(--pane-border)] transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)] ${
                       onPick ? "cursor-pointer" : "cursor-default"
                     }`}
                   >
                     <td className="py-1 text-[var(--pane-muted)]">
-                      {new Date(t.closed_at).toLocaleString("ru", {
+                      {new Date(row.closed_at).toLocaleString(numbers, {
                         day: "2-digit",
                         month: "2-digit",
                         hour: "2-digit",
@@ -339,31 +334,30 @@ export default function JournalPanel({
                       })}
                     </td>
                     <td>
-                      <span className={t.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
-                        {t.symbol.replace(/USDT$/, "")}
+                      <span className={row.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
+                        {row.symbol.replace(/USDT$/, "")}
                       </span>{" "}
                       <span className="text-[10px] text-[var(--pane-muted)]">
-                        ×{t.leverage} · {OUTCOMES[t.outcome]}
+                        ×{row.leverage} · {t.journal.reasons[row.outcome]}
                       </span>
                     </td>
-                    <td className="text-[var(--pane-text-2)]">{t.entry}</td>
-                    <td className="text-[var(--pane-text-2)]">{t.exit_price ?? "-"}</td>
-                    <td title={takesHint(t)}>
-                      <Takes trade={t} />
+                    <td className="text-[var(--pane-text-2)]">{row.entry}</td>
+                    <td className="text-[var(--pane-text-2)]">{row.exit_price ?? "-"}</td>
+                    <td title={takesHint(row, t)}>
+                      <Takes trade={row} />
                     </td>
                     <td
-                      className={`text-right ${tone(t.pnl)}`}
+                      className={`text-right ${tone(row.pnl)}`}
                       title={
-                        t.fee
-                          ? `На счёт ${money(t.pnl)}. Биржа показывает результат до комиссии: ` +
-                            `${money(t.pnl + t.fee)}, комиссия ${t.fee.toFixed(2)}`
-                          : "Результат за вычетом комиссии - то, что пришло на счёт"
+                        row.fee
+                          ? t.journal.pnlWithFee(money(row.pnl), money(row.pnl + row.fee), row.fee.toFixed(2))
+                          : t.journal.pnlNet
                       }
                     >
-                      {money(t.pnl)}
-                      {t.fee > 0 && (
+                      {money(row.pnl)}
+                      {row.fee > 0 && (
                         <span className="ml-1 text-[10px] text-[var(--pane-muted)]">
-                          -{t.fee.toFixed(2)}
+                          -{row.fee.toFixed(2)}
                         </span>
                       )}
                     </td>
@@ -375,9 +369,9 @@ export default function JournalPanel({
                       <button
                         onClick={(event) => {
                           event.stopPropagation();
-                          setCard(t);
+                          setCard(row);
                         }}
-                        title="Карточка сделки: скопировать, скачать, поделиться"
+                        title={t.journal.cardTitle}
                         className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
                       >
                         <Share2 className="h-3 w-3" />
@@ -389,8 +383,8 @@ export default function JournalPanel({
                     {mentor && (
                       <td className="pl-2 text-right">
                         <button
-                          onClick={() => drop(t.id)}
-                          title="Удалить запись"
+                          onClick={() => drop(row.id)}
+                          title={t.journal.remove}
                           className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-down)]"
                         >
                           <Trash2 className="h-3 w-3" />

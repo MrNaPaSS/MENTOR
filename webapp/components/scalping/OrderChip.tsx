@@ -9,6 +9,7 @@
 //
 // Чип едет за своей ценой покадрово, вместе с графиком.
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 
 export type OrderChip = {
@@ -34,6 +35,7 @@ export default function OrderChipView({
   toY: (price: number) => number | null;
   toPrice: (y: number) => number | null;
 }) {
+  const t = useT();
   const boxRef = useRef<HTMLDivElement>(null);
   const nodeRef = useRef<HTMLDivElement>(null);
   const chipRef = useRef(chip);
@@ -95,7 +97,7 @@ export default function OrderChipView({
           color: "var(--pane-text)",
         }}
       >
-        <span style={{ color: tone }}>{long ? "ЛОНГ" : "ШОРТ"}</span>
+        <span style={{ color: tone }}>{long ? t.dialogs.manual.long : t.dialogs.manual.short}</span>
         <span className="text-[var(--pane-muted)]">{chip.text}</span>
 
         {/* Кнопки, которые ведут: нажал и потянул. Отдельного квадрата на своей
@@ -121,7 +123,7 @@ export default function OrderChipView({
         />
         <button
           onClick={chip.onCancel}
-          title="Убрать заявку"
+          title={t.dialogs.manual.removeOrder}
           className="px-0.5 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
         >
           ✕
@@ -144,10 +146,11 @@ function Handle({
   React.ComponentProps<"button">,
   "onPointerDown" | "onPointerMove" | "onPointerUp" | "onPointerCancel"
 >) {
+  const t = useT();
   return (
     <button
       {...events}
-      title={`${label} - потяните вверх или вниз`}
+      title={t.terminal.levels.dragChip(label)}
       className={
         "rounded-[3px] border px-1 leading-[14px] transition-colors duration-150 ease-out " +
         (active ? "cursor-grabbing" : "cursor-ns-resize")

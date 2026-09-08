@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 
 export interface PnLPoint {
@@ -22,6 +23,7 @@ export default function PnLChart({
   areaTop = "rgba(10,255,224,0.18)",
   areaBottom = "rgba(10,255,224,0.01)",
 }: Props) {
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
 
@@ -102,7 +104,7 @@ export default function PnLChart({
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center rounded-xl bg-bg-panel/40" style={{ height }}>
-        <p className="text-sm text-text-muted">Нет данных для построения графика</p>
+        <p className="text-sm text-text-muted">{t.shell.noChartData}</p>
       </div>
     );
   }
