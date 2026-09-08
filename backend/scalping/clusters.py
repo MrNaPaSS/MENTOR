@@ -74,6 +74,10 @@ class ClusterHistory:
     tick: float
     bucket_seconds: int = DEFAULT_BUCKET_SECONDS
     columns: int = DEFAULT_COLUMNS
+    # Секунда первой записанной сделки. По ней видно, с какого момента история
+    # полная: монету открыли в середине минуты, и профиль этой минуты у нас
+    # обрезан — отдавать его как полный значит занизить объём молча.
+    first_second: int = 0
     # Интервал → цена → [покупки, продажи]. OrderedDict, чтобы выбрасывать
     # самый старый интервал за одну операцию.
     _data: OrderedDict[int, dict[float, list[float]]] = field(default_factory=OrderedDict)
@@ -93,7 +97,11 @@ class ClusterHistory:
         if price <= 0 or qty <= 0 or self.tick <= 0:
             return
 
-        start = (ts_ms // 1000) // self.bucket_seconds * self.bucket_seconds
+        second = ts_ms // 1000
+        if self.first_second == 0 or second < self.first_second:
+            self.first_second = second
+
+        start = second // self.bucket_seconds * self.bucket_seconds
         column = self._data.get(start)
         if column is None:
             # Сделка из интервала, который уже вытеснен из истории.

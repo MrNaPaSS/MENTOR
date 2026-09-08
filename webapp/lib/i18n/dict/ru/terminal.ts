@@ -156,6 +156,7 @@ export const terminal = {
 
   chart: {
     candlesUnavailable: (status: number) => `Свечи недоступны (${status})`,
+    footprintUnavailable: (status: number) => `Объём свечи недоступен (${status})`,
     noServer: "Нет связи с сервером",
     /** Панель показаний индикатора в правом нижнем углу графика. */
     scoreHide: "Свернуть показания индикатора",

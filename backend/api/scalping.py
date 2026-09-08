@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import OrderedDict
 from dataclasses import asdict
 from typing import Any
 
@@ -17,7 +18,13 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from backend.scalping.clusters import fit_to_rows
 from backend.scalping.collector import ScalpingCollector
-from backend.scalping.ladder import DEFAULT_ROWS, MAX_ROWS, build_ladder
+from backend.scalping.footprint import (
+    build as build_footprint,
+    collect,
+    from_columns,
+    guess_tick,
+)
+from backend.scalping.ladder import DEFAULT_ROWS, MAX_ROWS, build_ladder, detect_tick
 from backend.scalping.metrics import SHELF_MAX_LIMIT, SHELF_MIN_LIMIT, SHELF_MIN_NOTIONAL
 from backend.scalping.state import (
     BAND_BP,
@@ -226,6 +233,176 @@ async def klines(
             )
         raise HTTPException(502, f"Свечи {sym} недоступны")
     return {"symbol": sym, "interval": interval, "candles": rows}
+
+
+# ── Профиль объёма внутри свечи ─────────────────────────────────────────────
+#
+# Трейдер нажимает на свечу и видит, из чего она собрана: сколько денег прошло
+# на каждой цене и куда били. Данные те же, что кормят кластеры у стакана, —
+# лента сделок; разница только в источнике за прошлое, которого в памяти нет.
+
+FOOTPRINT_INTERVALS = {
+    "1m": 60,
+    "3m": 180,
+    "5m": 300,
+    "10m": 600,
+    "15m": 900,
+    "30m": 1800,
+    "1h": 3600,
+}
+
+# Сколько страниц сделок готовы выкачать на одну свечу.
+#
+# Страница — тысяча сделок и двадцать единиц веса. Шести хватает на минуту
+# биткойна в час пик; что не влезло, помечается неполным — молча показать
+# половину объёма хуже, чем сказать, что он неполон.
+_FOOT_PAGES = 6
+
+# Свежесть кэша. Закрытая свеча не меняется никогда, поэтому живёт долго и
+# больше не стоит бирже ни одного запроса; текущая пересобирается почти сразу.
+_FOOT_LIVE_TTL = 2.0
+_FOOT_DONE_TTL = 900.0
+_FOOT_CACHE_MAX = 96
+_foot_cache: "OrderedDict[str, tuple[float, dict]]" = OrderedDict()
+
+
+def _foot_remember(key: str, payload: dict) -> None:
+    """Положить ответ в кэш, вытеснив самый старый.
+
+    Кэш ограничен: трейдер за сессию открывает сотни свечей, и без потолка
+    память росла бы вместе с их числом.
+    """
+    _foot_cache[key] = (time.monotonic(), payload)
+    _foot_cache.move_to_end(key)
+    while len(_foot_cache) > _FOOT_CACHE_MAX:
+        _foot_cache.popitem(last=False)
+
+
+async def _load_trades(
+    rest, symbol: str, start_ms: int, end_ms: int
+) -> tuple[list[tuple[float, float, bool]], bool]:
+    """Сделки за окно свечи постранично. Второе значение — окно неполно.
+
+    Продолжение берём по номеру сделки, а не по времени: в одну миллисекунду
+    попадает десяток сделок, и переход по времени терял бы часть из них на
+    каждой границе страниц.
+    """
+    out: list[tuple[float, float, bool]] = []
+    from_id: int | None = None
+
+    for _ in range(_FOOT_PAGES):
+        batch = await rest.agg_trades(symbol, start_ms, end_ms, from_id=from_id)
+        if not batch:
+            # Пустая страница — либо сделок больше нет, либо биржа отказала.
+            # Отличать их здесь незачем: и там, и там читать дальше нечего.
+            return out, False
+
+        last_id: int | None = None
+        done = False
+        for row in batch:
+            try:
+                ts = int(row["T"])
+                if ts >= end_ms:
+                    done = True
+                    break
+                last_id = int(row["a"])
+                if ts < start_ms:
+                    continue
+                # m=true — покупатель стоял лимитом, значит по рынку бил продавец.
+                out.append((float(row["p"]), float(row["q"]), not bool(row["m"])))
+            except (KeyError, TypeError, ValueError):
+                continue
+
+        if done or len(batch) < 1000 or last_id is None:
+            return out, False
+        from_id = last_id + 1
+
+    return out, True
+
+
+@router.get("/footprint/{symbol}")
+async def footprint(
+    request: Request,
+    symbol: str,
+    interval: str = Query("1m", pattern=r"^(1m|3m|5m|10m|15m|30m|1h)$"),
+    at: int = Query(..., alias="time", ge=0, description="Начало свечи, секунды"),
+) -> dict[str, Any]:
+    """Объём внутри одной свечи: строки профиля и итоги.
+
+    Крупнее часа профиля не даём: за сутки сделок миллионы, выкачивать их ради
+    картинки нечестно по отношению к лимиту биржи, а строки такой свечи всё
+    равно схлопнулись бы в неразличимую кашу.
+    """
+    collector = get_collector(request)
+    sym = symbol.upper()
+    seconds = FOOTPRINT_INTERVALS[interval]
+    start = at - at % seconds
+    end = start + seconds
+    now = int(time.time())
+    if start > now:
+        raise HTTPException(400, "Эта свеча ещё не началась")
+
+    state = collector.state.get(sym)
+    live = state.clusters if state else None
+
+    # Своя лента — первым делом: она не стоит бирже ни одного запроса, а на
+    # текущую свечу трейдер смотрит чаще всего.
+    if live is not None and live.tick > 0 and live.first_second and live.first_second <= start:
+        columns = live.snapshot()
+        if columns and columns[0].start <= start:
+            cells = from_columns(columns, start, end)
+            shot = build_footprint(
+                cells, time=start, seconds=seconds, tick=live.tick, partial=False
+            )
+            return _foot_payload(sym, interval, shot, source="tape")
+
+    key = f"{sym}:{interval}:{start}"
+    cached = _foot_cache.get(key)
+    ttl = _FOOT_LIVE_TTL if end > now else _FOOT_DONE_TTL
+    if cached and time.monotonic() - cached[0] < ttl:
+        _foot_cache.move_to_end(key)
+        return cached[1]
+
+    if collector.rest.blocked:
+        raise HTTPException(
+            503,
+            f"Биржа ограничила запросы, профиль появится через "
+            f"{collector.rest.blocked_for:.0f} с",
+        )
+
+    trades, partial = await _load_trades(collector.rest, sym, start * 1000, end * 1000)
+    if not trades:
+        # Пустая свеча бывает на неликвиде, и это ответ, а не ошибка: сделок в
+        # эту минуту не было вовсе.
+        shot = build_footprint({}, time=start, seconds=seconds, tick=0.0, partial=False)
+        return _foot_payload(sym, interval, shot, source="exchange")
+
+    tick = detect_tick(state.book) if state else 0.0
+    if tick <= 0:
+        tick = guess_tick([p for p, _, _ in trades])
+    cells = collect(trades, tick)
+    shot = build_footprint(cells, time=start, seconds=seconds, tick=tick, partial=partial)
+    payload = _foot_payload(sym, interval, shot, source="exchange")
+    _foot_remember(key, payload)
+    return payload
+
+
+def _foot_payload(symbol: str, interval: str, shot, source: str) -> dict[str, Any]:
+    """Ответ клиенту. Строки тройками — по той же причине, что и у кластеров:
+    ключи JSON обязаны быть строками, а str(1e-05) в Python и в JavaScript
+    выглядит по-разному, и ячейки монет с мелким шагом просто не нашлись бы."""
+    return {
+        "symbol": symbol,
+        "interval": interval,
+        "time": shot.time,
+        "seconds": shot.seconds,
+        "tick": shot.tick,
+        "buy": shot.buy,
+        "sell": shot.sell,
+        "partial": shot.partial,
+        "source": source,
+        "levels": [[l.price, l.buy, l.sell] for l in shot.levels],
+    }
 
 
 @router.get("/status")

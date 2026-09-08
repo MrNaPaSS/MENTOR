@@ -52,6 +52,7 @@ WEIGHT_WINDOW = 60.0
 WEIGHTS = {
     "/fapi/v1/depth": 10,       # при лимите до 500 уровней
     "/fapi/v1/klines": 2,
+    "/fapi/v1/aggTrades": 20,   # страница сделок, до тысячи штук
     "/fapi/v1/ticker/24hr": 40,  # сводка по всем инструментам
 }
 DEFAULT_WEIGHT = 5
@@ -157,6 +158,34 @@ class BinanceRest:
             "/fapi/v1/klines",
             {"symbol": symbol.upper(), "interval": interval, "limit": min(limit, 500)},
         )
+        return data if isinstance(data, list) else []
+
+    async def agg_trades(
+        self,
+        symbol: str,
+        start_ms: int,
+        end_ms: int,
+        limit: int = 1000,
+        from_id: int | None = None,
+    ) -> list[dict]:
+        """Страница сделок за окно: из них собирается профиль объёма свечи.
+
+        Дорогой запрос — двадцать единиц веса против двух у свечей, — поэтому
+        зовётся только по нажатию трейдера и только за прошлое: текущая свеча
+        собирается из ленты, которая и так идёт к нам потоком.
+
+        Биржа отдаёт не больше тысячи сделок за раз и требует, чтобы окно
+        `startTime`/`endTime` укладывалось в час. Продолжение берётся по
+        `fromId`: по времени продолжать нельзя — в одну миллисекунду попадает
+        десяток сделок, и часть из них терялась бы на каждой границе страниц.
+        """
+        params: dict[str, Any] = {"symbol": symbol.upper(), "limit": min(limit, 1000)}
+        if from_id is not None:
+            params["fromId"] = from_id
+        else:
+            params["startTime"] = int(start_ms)
+            params["endTime"] = int(end_ms)
+        data = await self._get("/fapi/v1/aggTrades", params)
         return data if isinstance(data, list) else []
 
     async def tickers_24h(self) -> list[dict]:
