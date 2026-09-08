@@ -162,18 +162,12 @@ export function FootprintCard({
       {area && (
         <div
           className="flex shrink-0 items-center justify-between border-b px-2 py-1"
-          style={{ borderColor: "var(--pane-border)" }}
+          style={{ borderColor: "var(--pane-border)", color: "var(--pane-muted)" }}
           title={t.terminal.chart.footValueTitle}
         >
-          <span style={{ color: "var(--pane-muted)" }}>
-            VAH {fmtPrice(area.vah, data.tick)}
-          </span>
-          <span style={{ color: "var(--pane-gold)" }}>
-            POC {fmtPrice(area.poc, data.tick)}
-          </span>
-          <span style={{ color: "var(--pane-muted)" }}>
-            VAL {fmtPrice(area.val, data.tick)}
-          </span>
+          <span>VAH {fmtPrice(area.vah, data.tick)}</span>
+          <span style={{ color: "var(--pane-gold)" }}>{fmtPrice(area.poc, data.tick)}</span>
+          <span>VAL {fmtPrice(area.val, data.tick)}</span>
         </div>
       )}
 
@@ -186,75 +180,46 @@ export function FootprintCard({
           rows.map((row) => (
             <div
               key={row.price}
-              className="relative grid grid-cols-[1fr_auto_1fr_46px] items-center gap-x-1 px-2 leading-[15px]"
+              className="grid grid-cols-[auto_1fr_1fr_34px_18px] items-stretch pl-2 pr-1 leading-[15px]"
               style={{
-                // Самая наторгованная цена свечи: к ней она и возвращается, и
-                // по ней ставят стоп.
-                background: row.poc ? "var(--pane-gold-soft)" : undefined,
+                // Самая наторгованная цена свечи — рамкой, а не заливкой.
+                // Залитая строка перекрашивает под собой обе ячейки, и то, чем
+                // эта цена стала главной, на ней уже не разглядеть.
+                boxShadow: row.poc ? "inset 0 0 0 1px var(--pane-gold)" : undefined,
               }}
             >
-              {/* Полосы объёма: растут от середины к краям, как в стакане.
-                  Занимают только колонки цифр - у профиля справа своя мерка,
-                  и заезжать под него полосам нельзя. */}
-              {peak > 0 && row.sell > 0 && (
-                <span
-                  className="pointer-events-none absolute inset-y-px left-0"
-                  style={{
-                    width: `${(row.sell / peak) * 40}%`,
-                    background: "var(--pane-down-faint)",
-                  }}
-                />
-              )}
-              {peak > 0 && row.buy > 0 && (
-                <span
-                  className="pointer-events-none absolute inset-y-px right-[46px]"
-                  style={{
-                    width: `${(row.buy / peak) * 40}%`,
-                    background: "var(--pane-up-faint)",
-                  }}
-                />
-              )}
-
+              {/* Цена слева, стороны рядом друг с другом. Разведённые ценой,
+                  они читаются как два списка чисел; сведённые - как лестница,
+                  на которой красное и зелёное сравниваются глазом, без счёта. */}
               <span
-                className="relative text-right"
-                style={{
-                  color: row.sell > 0 ? "var(--pane-down)" : "var(--pane-muted)",
-                  // Перевес агрессии по диагонали: сторона, которая передавила,
-                  // идёт жирным. Метка сбоку в строке высотой в пятнадцать
-                  // точек читалась бы как соринка.
-                  fontWeight: row.imbalance < 0 ? 700 : 400,
-                }}
-              >
-                {row.sell > 0 ? money(row.sell) : "·"}
-              </span>
-              <span
-                className="relative px-1"
-                style={{
-                  // Крупная сделка - тем же жёлтым, что плита в стакане: это
-                  // одно и то же событие, только уже прошедшее.
-                  color: row.whale ? "var(--pane-gold)" : "var(--pane-muted)",
-                }}
+                className="pr-1.5 text-right"
+                style={{ color: row.whale ? "var(--pane-gold)" : "var(--pane-muted)" }}
+                title={row.whale ? t.terminal.chart.footWhale : undefined}
               >
                 {fmtPrice(row.price, data.tick)}
               </span>
-              <span
-                className="relative"
-                style={{
-                  color: row.buy > 0 ? "var(--pane-up)" : "var(--pane-muted)",
-                  fontWeight: row.imbalance > 0 ? 700 : 400,
-                }}
-              >
-                {row.buy > 0 ? money(row.buy) : "·"}
-              </span>
 
-              {/* Профиль свечи: строка целиком, одной полосой. Внутри области
-                  стоимости - цветом, снаружи - серым: так с одного взгляда
-                  видно, где рынок стоял, а где пробежал на пустоте. */}
-              <span className="relative h-[15px]">
+              <Side
+                value={row.sell}
+                peak={peak}
+                tone="var(--pane-down)"
+                pressed={row.imbalance < 0}
+              />
+              <Side
+                value={row.buy}
+                peak={peak}
+                tone="var(--pane-up)"
+                pressed={row.imbalance > 0}
+              />
+
+              {/* Профиль: строка целиком, одной полосой. Внутри области
+                  стоимости цветом, снаружи серым - видно, где рынок стоял, а
+                  где пробежал на пустоте. */}
+              <span className="relative ml-1">
                 <span
-                  className="absolute inset-y-[3px] left-0 rounded-r-sm"
+                  className="absolute inset-y-[4px] left-0 rounded-r-[2px]"
                   style={{
-                    width: peakTotal > 0 ? `${Math.max(2, (row.total / peakTotal) * 100)}%` : 0,
+                    width: peakTotal > 0 ? `${Math.max(3, (row.total / peakTotal) * 100)}%` : 0,
                     background: row.poc
                       ? "var(--pane-gold)"
                       : row.value
@@ -262,21 +227,65 @@ export function FootprintCard({
                         : "var(--pane-border)",
                   }}
                 />
-                {row.edge && (
-                  <span
-                    className="absolute right-0 top-0 text-[8px] leading-[15px]"
-                    style={{
-                      color: row.edge === "poc" ? "var(--pane-gold)" : "var(--pane-text-2)",
-                    }}
-                  >
-                    {EDGE_LABEL[row.edge]}
-                  </span>
-                )}
+              </span>
+
+              <span
+                className="pl-0.5 text-[8px]"
+                style={{
+                  color: row.edge === "poc" ? "var(--pane-gold)" : "var(--pane-muted)",
+                }}
+              >
+                {row.edge ? EDGE_LABEL[row.edge] : ""}
               </span>
             </div>
           ))
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Сторона строки: число на тепловой подложке.
+ *
+ * Подложка, а не полоса от края: полоса переменной длины оставляет за собой
+ * рваный край, и два десятка таких краёв превращают панель в бахрому. Ячейка
+ * же читается как в стакане - чем гуще цвет, тем больше денег, - и цифры на
+ * ней стоят ровным столбцом.
+ *
+ * Густота идёт корнем, а не долей: на свече, где одна плита вдесятеро больше
+ * соседей, доля кладёт все остальные строки в один бледный тон, и лестница
+ * перестаёт быть лестницей.
+ */
+function Side({
+  value,
+  peak,
+  tone,
+  pressed,
+}: {
+  value: number;
+  peak: number;
+  tone: string;
+  /** Эта сторона передавила встречную по диагонали. */
+  pressed: boolean;
+}) {
+  const heat = peak > 0 && value > 0 ? 0.08 + 0.5 * Math.sqrt(value / peak) : 0;
+  return (
+    <span className="relative px-1 text-right">
+      {heat > 0 && (
+        <span className="absolute inset-x-0 inset-y-px" style={{ background: tone, opacity: heat }} />
+      )}
+      <span
+        className="relative"
+        style={{
+          // Чернила общие: сторону называет подложка, а красное на красном
+          // читается хуже, чем то же число обычным цветом панели.
+          color: value > 0 ? "var(--pane-text)" : "var(--pane-muted)",
+          fontWeight: pressed ? 700 : 400,
+        }}
+      >
+        {value > 0 ? money(value) : "·"}
+      </span>
+    </span>
   );
 }
