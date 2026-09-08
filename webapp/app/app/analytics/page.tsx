@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
+import TradersTable from "@/components/app/TradersTable";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
 import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles } from "lucide-react";
@@ -642,6 +643,11 @@ export default function AnalyticsPage() {
           </div>
         );
       })()}
+
+      {/* Таблица трейдеров: кто сколько наторговал за месяц.
+          Над календарём: календарь - про свой месяц, таблица - про то, как он
+          выглядит рядом с чужими, и второй вопрос возникает раньше. */}
+      <TradersTable />
 
       {/* Основной блок */}
       <div className="grid gap-5 xl:grid-cols-[1fr_340px]">

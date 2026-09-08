@@ -12,10 +12,10 @@
 // которую надо помнить, ради того, что уже решено темой.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Download, Link2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Download, Link2, X } from "lucide-react";
 
 import type { JournalTrade } from "@/lib/journal";
-import { loadBackdrop, render, resultInk, variantFor } from "@/lib/pnl/card";
+import { loadBackdrop, render, resultInk, variantFor, variantsFor } from "@/lib/pnl/card";
 import { cardFromTrade } from "@/lib/pnl/data";
 import { copy, download, share } from "@/lib/pnl/share";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -32,7 +32,19 @@ export default function PnlCard({
 }) {
   const data = useMemo(() => cardFromTrade(trade, owner), [trade, owner]);
   const theme = useTerminalTheme();
-  const variant = useMemo(() => variantFor(theme, data.side), [theme, data.side]);
+  // Заготовки на выбор - те, что подходят стороне сделки.
+  //
+  // По умолчанию берётся та, что под темой терминала: она уже сказала всё, что
+  // нужно, и заставлять выбирать при каждом открытии незачем. Но выбор бывает
+  // и вкусовым - карточку показывают другим, - поэтому рядом с ней стрелки.
+  const choices = useMemo(() => variantsFor(data.side), [data.side]);
+  const fallback = useMemo(() => variantFor(theme, data.side), [theme, data.side]);
+  const [pick, setPick] = useState<number | null>(null);
+  // Сменилась сторона или тема - выбор сбрасывается: он был про другой набор.
+  useEffect(() => setPick(null), [choices, fallback]);
+  const here = Math.max(0, choices.indexOf(fallback));
+  const variant =
+    pick === null ? fallback : choices[((pick % choices.length) + choices.length) % choices.length];
 
   // Лист без печати: её ставит разметка поверх, и она же движется. Картинка с
   // готовым оттиском собирается отдельно - для буфера, файла и ссылки.
@@ -161,6 +173,15 @@ export default function PnlCard({
         </div>
 
         <div className="pnl-slot" />
+        {/* Стрелки по бокам листа: заготовку выбирают глядя на неё, а не в
+            списке имён. Показываем их только когда есть из чего выбирать. */}
+        <div className="relative">
+          {choices.length > 1 && (
+            <>
+              <Blank side="left" onClick={() => setPick((now) => (now ?? here) - 1)} />
+              <Blank side="right" onClick={() => setPick((now) => (now ?? here) + 1)} />
+            </>
+          )}
         <div className="pnl-window">
           {paper ? (
             <div className="pnl-paper" key={variant.id}>
@@ -180,6 +201,7 @@ export default function PnlCard({
               {failed ? "Заготовка карточки не загрузилась" : "Печатаем..."}
             </div>
           )}
+        </div>
         </div>
 
         <div className="flex gap-2">
@@ -228,6 +250,28 @@ function Action({
     >
       {icon}
       {label}
+    </button>
+  );
+}
+
+/**
+ * Стрелка выбора заготовки.
+ *
+ * Поверх листа, а не под ним: место сбоку есть не всегда - окно бывает уже
+ * карточки, - а поверх она стоит там, где на неё смотрят.
+ */
+function Blank({ side, onClick }: { side: "left" | "right"; onClick: () => void }) {
+  const Icon = side === "left" ? ChevronLeft : ChevronRight;
+  return (
+    <button
+      onClick={onClick}
+      title="Другая заготовка"
+      aria-label={side === "left" ? "Предыдущая заготовка" : "Следующая заготовка"}
+      className={`absolute top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-[var(--pane-border)] bg-[var(--pane-bg)]/85 text-[var(--pane-text-2)] shadow-lg backdrop-blur-sm transition-colors hover:text-[var(--pane-text)] ${
+        side === "left" ? "left-1" : "right-1"
+      }`}
+    >
+      <Icon className="h-4 w-4" />
     </button>
   );
 }

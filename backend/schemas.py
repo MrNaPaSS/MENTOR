@@ -88,6 +88,23 @@ class LeaderboardRow(BaseModel):
     balance: Optional[Decimal]
 
 
+class TraderRow(BaseModel):
+    """Строка таблицы трейдеров: чем человек торговал и с каким результатом.
+
+    Только те, кто торгует по своим ключам: у остальных объём и результат
+    известны в лучшем случае со стороны, а места в таблице однажды дадут
+    награду - и раздавать её по чужой оценке нельзя.
+    """
+
+    rank: int
+    username: Optional[str]
+    mode: str
+    volume: float
+    pnl: float
+    trades: int
+    wins: int
+
+
 # ── Авторизация ──
 
 class RequestCodeIn(BaseModel):

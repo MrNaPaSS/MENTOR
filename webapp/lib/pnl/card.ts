@@ -138,6 +138,16 @@ export function resultInk(paper: "light" | "dark", pnl: number): string {
  * график, и переключать её отдельно значит держать в голове ещё одну
  * настройку. Тема уже сказала всё, что нужно.
  */
+/**
+ * Все заготовки для этой стороны сделки.
+ *
+ * Только для своей: на бланке нарисованы свечи, и лонг на медвежьем листе
+ * противоречил бы сам себе. Выбирать человеку даём между теми, что подходят.
+ */
+export function variantsFor(side: CardSide): Variant[] {
+  return VARIANTS.filter((v) => v.side === side);
+}
+
 export function variantFor(theme: CardTheme, side: CardSide): Variant {
   return (
     VARIANTS.find((v) => v.theme === theme && v.side === side) ??

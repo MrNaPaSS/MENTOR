@@ -135,6 +135,25 @@ export interface PublicStats {
   winrate: string | null;
 }
 
+/**
+ * Строка таблицы трейдеров.
+ *
+ * Только те, кто торгует по своим ключам: у остальных объём известен со
+ * стороны и с задержкой, а за места здесь однажды будут давать награды.
+ */
+export interface TraderRow {
+  rank: number;
+  username: string | null;
+  mode: string;
+  /** Оборот за окно, в деньгах. */
+  volume: number;
+  /** Результат за окно: сумма закрытых сделок журнала. */
+  pnl: number;
+  trades: number;
+  /** Из них прибыльных. */
+  wins: number;
+}
+
 export interface LeaderboardRow {
   rank: number;
   username: string | null;
@@ -316,6 +335,8 @@ export const api = {
   health: () => req<{ status: string }>("/api/health"),
   publicStats: () => req<PublicStats>("/api/stats/public"),
   leaderboard: () => req<LeaderboardRow[]>("/api/stats/leaderboard"),
+  traders: (sort: "volume" | "pnl", days = 30) =>
+    req<TraderRow[]>(`/api/stats/traders?sort=${sort}&days=${days}`),
   price: (symbol: string) =>
     req<{ symbol: string; price: string }>(`/api/market/price/${symbol}`),
   calculate: (body: CalcRequest) =>
