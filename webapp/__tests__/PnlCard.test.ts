@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { price, VARIANTS, variantFor } from "@/lib/pnl/card";
+import { price, resultInk, VARIANTS, variantFor } from "@/lib/pnl/card";
 import { cardFromTrade, roiOf } from "@/lib/pnl/data";
 import type { JournalTrade } from "@/lib/journal";
 
@@ -108,5 +108,26 @@ describe("заготовка карточки", () => {
     // невидим, и перепутать здесь значит отдать пустой лист.
     const light = VARIANTS.filter((v) => v.paper === "light").map((v) => v.id);
     expect(light).toEqual(["chart-long"]);
+  });
+});
+
+describe("цвет результата на карточке", () => {
+  it("плюс зелёный, минус красный - независимо от стороны", () => {
+    // Раньше цвет брался у стороны: убыточный лонг рисовался зелёным, потому
+    // что он лонг. На карточке, которую показывают другим, знак результата
+    // должен читаться с одного взгляда.
+    expect(resultInk("dark", 98.71)).toBe("#22E07A");
+    expect(resultInk("dark", -64.18)).toBe("#FF3B4E");
+  });
+
+  it("ноль считаем плюсом: безубыток - не потеря", () => {
+    expect(resultInk("dark", 0)).toBe("#22E07A");
+  });
+
+  it("на белой бумаге оттенки глубже", () => {
+    // Светлая мята на белом не читается, а числа - главное, что с карточки
+    // забирают глазами.
+    expect(resultInk("light", 1)).not.toBe(resultInk("dark", 1));
+    expect(resultInk("light", -1)).not.toBe(resultInk("dark", -1));
   });
 });

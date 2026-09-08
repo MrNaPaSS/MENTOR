@@ -113,6 +113,25 @@ export const VARIANTS: readonly Variant[] = [
 ] as const;
 
 /**
+ * Цвет результата: плюс зелёный, минус красный.
+ *
+ * Не цвет стороны. Сторона говорит, куда трейдер встал, а число под ней -
+ * сколько он на этом получил, и это разные вещи: убыточный лонг рисовался
+ * зелёным, потому что он лонг. На карточке, которую показывают другим,
+ * знак результата должен читаться с одного взгляда.
+ *
+ * Оттенки разные по бумаге: на белом светлая мята не читается, нужен глубже.
+ */
+const RESULT = {
+  dark: { up: "#22E07A", down: "#FF3B4E" },
+  light: { up: "#0F9E66", down: "#D6203A" },
+} as const;
+
+export function resultInk(paper: "light" | "dark", pnl: number): string {
+  return RESULT[paper][pnl >= 0 ? "up" : "down"];
+}
+
+/**
  * Заготовка под тему и сторону.
  *
  * Выбирать её человеку не даём: карточка - часть того же рабочего места, что и
@@ -315,11 +334,15 @@ export function paint(
   ctx.font = face(w * 0.062, 800);
   ctx.fillText(data.symbol, x, head + room * 0.19);
 
+  // Строка стороны - цветом заготовки: она про то, куда встали.
   ctx.fillStyle = variant.accent;
   ctx.font = face(w * 0.036, 600);
   const side = data.side === "long" ? "Лонг" : "Шорт";
   ctx.fillText(`${side}   |   ${data.leverage}x`, x, head + room * 0.27);
 
+  // А числа - цветом результата: плюс зелёный, минус красный, независимо от
+  // того, лонг это был или шорт.
+  ctx.fillStyle = resultInk(variant.paper, data.pnl);
   ctx.font = face(w * 0.098, 800);
   ctx.fillText(`${signed(data.roi, 2)}%`, x, head + room * 0.46);
 
