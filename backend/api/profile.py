@@ -24,7 +24,7 @@ def _profile(s: Student, admin: bool = False) -> ProfileOut:
         id=s.id, username=s.username, weex_uid=s.weex_uid, mode=s.mode,
         language=s.language, risk_percent=s.risk_percent, turbo_leverage=s.turbo_leverage,
         balance_usdt=s.balance_usdt, balance_source=s.balance_source,
-        avatar_url=s.avatar_url,
+        avatar_url=s.avatar_url, card_name=s.card_name,
         is_admin=admin,
     )
 
@@ -47,6 +47,11 @@ def patch_profile(
 ):
     fresh = session.get(Student, student.id)
     for field, value in body.model_dump(exclude_unset=True).items():
+        # Пустая подпись на карточке - это отказ от своего варианта: дальше её
+        # берут из ника Telegram. Хранить пустую строку вместо этого значит
+        # подписывать карточку пустотой.
+        if field == "card_name":
+            value = (value or "").strip() or None
         setattr(fresh, field, value)
     session.commit()
     return _profile(fresh)

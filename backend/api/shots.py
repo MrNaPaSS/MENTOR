@@ -260,7 +260,7 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
 
     return HTMLResponse(
         f"""<!doctype html>
-<html lang="ru">
+<html lang="ru" data-paper="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -358,10 +358,18 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
      пришла, страница не знает: в записи этого нет. Определяет скрипт внизу по
      самой картинке. Тёмный лист вокруг белой карточки выглядит вырезанным из
      другого приложения. */
+  /* Лист под карточкой - всегда светлый, в клетку.
+     Это та же бумага, что на странице снимка графика и на входе: ссылку
+     открывает посторонний, и он должен попадать в одно и то же место, а не в
+     разное в зависимости от того, чем поделились. Сама карточка при этом
+     какая есть - тёмная со зверем или светлая с графиком. */
   :root[data-paper="light"] body {{
     background: radial-gradient(120% 80% at 50% -10%, rgba(126,87,194,.06), transparent 60%), #f4f5f8;
     color: #111418;
   }}
+  /* Сетка отдельным слоем и с маской: она гаснет к краям, а не упирается в
+     них обрезанной клеткой. Слоем - потому что маска на самом теле съела бы и
+     содержимое. */
   :root[data-paper="light"] body::before {{
     content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
     background:
@@ -434,43 +442,6 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     </div>
   </div>
   <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH.TRADE">NMNH.TRADE</span></a>
-<script>
-  // Тема карточки - по самой картинке.
-  //
-  // Заготовок две: на тёмной бумаге и на светлой. В записи это не хранится,
-  // поэтому смотрим на саму картинку - берём несколько точек по краям, где
-  // лежит бумага заготовки, а не текст и не печать. Картинка своя, с этого же
-  // адреса, поэтому холст не портится и пиксели читаются.
-  (function () {{
-    var img = document.querySelector(".paper img");
-    if (!img) return;
-    function decide() {{
-      try {{
-        var c = document.createElement("canvas");
-        c.width = c.height = 1;
-        var ctx = c.getContext("2d");
-        if (!ctx) return;
-        var spots = [[0.5, 0.04], [0.06, 0.5], [0.94, 0.5], [0.5, 0.96]];
-        var sum = 0;
-        for (var i = 0; i < spots.length; i++) {{
-          ctx.drawImage(
-            img,
-            Math.round(img.naturalWidth * spots[i][0]),
-            Math.round(img.naturalHeight * spots[i][1]),
-            1, 1, 0, 0, 1, 1
-          );
-          var px = ctx.getImageData(0, 0, 1, 1).data;
-          sum += (px[0] * 299 + px[1] * 587 + px[2] * 114) / 1000;
-        }}
-        if (sum / spots.length > 140) document.documentElement.dataset.paper = "light";
-      }} catch (e) {{
-        // Не прочиталось - остаёмся на тёмном листе, как было.
-      }}
-    }}
-    if (img.complete && img.naturalWidth) decide();
-    else img.addEventListener("load", decide);
-  }})();
-</script>
 </body>
 </html>"""
     )

@@ -36,7 +36,8 @@ import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
 import type { ChartTheme } from "@/lib/indicator/shapes";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
-import { play, setMuted } from "@/lib/sound";
+import { play } from "@/lib/sound";
+import { setSoundOn, useSoundOn } from "@/lib/notifySound";
 import {
   composeShot,
   copy as copyShot,
@@ -269,7 +270,15 @@ type Workspace = {
   margin: number;
   leverage: number;
   journal: number;
-  sound: boolean;
+  /**
+   * Звук событий - остаток от прежнего места хранения.
+   *
+   * Настройка переехала в профиль: выключить её хочется оттуда, где собраны
+   * остальные, а рабочее место - про ширину панелей и набор индикаторов. Поле
+   * оставлено в типе, потому что оно лежит в уже сохранённых свёртках: по нему
+   * `notifySound` один раз считывает прежний выбор человека.
+   */
+  sound?: boolean;
   /** Последняя открытая монета: возврат в раздел не должен начинаться с нуля. */
   symbol: string | null;
   /** Отметки на ценах: пережидают перезагрузку вместе с остальными настройками. */
@@ -371,7 +380,8 @@ export default function ScalpingPage() {
     try {
       const body = await api.profile(token);
       setBalance(body.balance_usdt ?? "0");
-      setAuthor(body.username ?? null);
+      // Подпись на снимках и карточках: своя, если задана, иначе ник Telegram.
+      setAuthor(body.card_name || body.username || null);
     } catch {
       // Не ответил профиль - строка просто останется без баланса.
     }
@@ -438,7 +448,8 @@ export default function ScalpingPage() {
   const [closeOpen, setCloseOpen] = useState(false);
   // Звук событий сделки. Скальпер смотрит в стакан, а не в ярлык позиции:
   // цель может взяться, пока он разглядывает другую монету.
-  const [sound, setSound] = useState(true);
+  // Звук - общая настройка человека, из профиля. Здесь только кнопка к ней.
+  const sound = useSoundOn();
   const [journalH, setJournalH] = useState(JOURNAL_LIMITS.def);
   // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
   const [journalKey, setJournalKey] = useState(0);
@@ -573,10 +584,6 @@ export default function ScalpingPage() {
     if (typeof saved.journal === "number") {
       setJournalH(clamp(saved.journal, JOURNAL_LIMITS));
     }
-    if (typeof saved.sound === "boolean") {
-      setSound(saved.sound);
-      setMuted(!saved.sound);
-    }
     if (Array.isArray(saved.favorites)) {
       setFavorites(saved.favorites.filter((s) => typeof s === "string" && s));
     }
@@ -677,7 +684,6 @@ export default function ScalpingPage() {
       leverage,
       journal: journalH,
       symbol,
-      sound,
       alerts,
       favorites,
       onlyFavorites,
@@ -712,7 +718,6 @@ export default function ScalpingPage() {
     leverage,
     journalH,
     symbol,
-    sound,
     alerts,
     favorites,
     onlyFavorites,
@@ -2417,8 +2422,7 @@ export default function ScalpingPage() {
                   <button
                     onClick={() => {
                       const next = !sound;
-                      setSound(next);
-                      setMuted(!next);
+                      setSoundOn(next);
                       // Первое нажатие ещё и разрешает браузеру звук: до
                       // действия пользователя он играть не даёт.
                       if (next) play("order");

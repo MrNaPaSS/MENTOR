@@ -290,8 +290,9 @@ export default function AnalyticsPage() {
     api.profile(token).then(p => {
       if (p.balance_usdt) setCurrentBalance(parseFloat(p.balance_usdt));
       // Имя владельца - для подписи на карточке сделки: печать заверяет
-      // чью-то сделку, а не ничью.
-      setOwner(p.username ?? null);
+      // чью-то сделку, а не ничью. Своя подпись важнее ника Telegram: её
+      // ученик выбрал сам, а ник переписывается при каждом входе.
+      setOwner(p.card_name || p.username || null);
     }).catch(() => {});
     api.tradesMe(token, 90).then(r => {
       setRecentDeposits((r.deposits || []).slice(0, 5));

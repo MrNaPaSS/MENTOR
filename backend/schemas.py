@@ -230,6 +230,7 @@ class ProfileOut(BaseModel):
     balance_usdt: Optional[Decimal]
     balance_source: str
     avatar_url: Optional[str] = None
+    card_name: Optional[str] = None
     # Права наставника. Интерфейсу нужно знать их до отрисовки: кнопки, которой
     # у ученика быть не должно, он не нарисует и на мгновение.
     is_admin: bool = False
@@ -240,6 +241,9 @@ class ProfilePatch(BaseModel):
     language: Optional[str] = None
     risk_percent: Optional[Decimal] = None
     turbo_leverage: Optional[int] = None
+    # Имя на карточке сделки. Пустая строка возвращает подпись к нику из
+    # Telegram - это способ отказаться от своего варианта, а не ошибка ввода.
+    card_name: Optional[str] = Field(default=None, max_length=32)
 
 
 class AnalyticsMe(BaseModel):

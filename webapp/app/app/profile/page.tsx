@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Key, LogOut, RefreshCw, ShieldCheck, TrendingUp, Zap } from "lucide-react";
+import { Key, LogOut, Moon, RefreshCw, ShieldCheck, Sun, Volume2, VolumeX } from "lucide-react";
 import { api, API_URL, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { useRouter } from "next/navigation";
@@ -9,7 +9,8 @@ import Link from "next/link";
 import { fmtUsd, maskUid } from "@/lib/format";
 import { tradingStatus, type TradingStatus } from "@/lib/trading";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
-import { useTerminalTheme } from "@/lib/terminalTheme";
+import { setTerminalTheme, useTerminalTheme } from "@/lib/terminalTheme";
+import { setSoundOn, useSoundOn } from "@/lib/notifySound";
 
 const ADMIN_WEEX_UID = "6613031308";
 
@@ -29,7 +30,9 @@ export default function ProfilePage() {
   const [keysOpen, setKeysOpen] = useState(false);
   // Окно красится палитрой панелей терминала, а она живёт на классе. Без него
   // переменные не подставятся, и окно выйдет бесцветным.
-  const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
+  const theme = useTerminalTheme();
+  const pane = theme === "light" ? "pane-light" : "pane-dark";
+  const sound = useSoundOn();
 
   useEffect(() => {
     const token = getAccessToken();
@@ -198,36 +201,45 @@ export default function ProfilePage() {
         </p>
       </div>
 
-      {/* ── SETTINGS ── */}
+      {/* ── НАСТРОЙКИ ──
+          Здесь только то, что человек меняет про себя: как выглядит кабинет,
+          на каком языке, что звучит и как он подписан на карточках.
+
+          Режим торговли и риск на сделку отсюда убраны. Это не настройки
+          интерфейса, а параметры расчёта сигнала: их место рядом с самим
+          расчётом, а в списке личных предпочтений они читались как «сделай
+          мне турбо» и ставились наугад. Данные никуда не делись - ими
+          по-прежнему пользуются рассылка сигналов и калькулятор. */}
       <div className={CARD}>
         <div className="mb-5 text-sm font-semibold uppercase tracking-widest text-text-muted">Настройки</div>
 
         <div className="space-y-5">
 
-          {/* Mode */}
-          <SettingRow label="Режим торговли">
+          {/* Тема. Общая на весь кабинет: терминал светлеет вместе с шапкой и
+              страницами, иначе панели выглядят вырезанными из другого
+              приложения. */}
+          <SettingRow label="Тема оформления">
             <div
               className="flex rounded-xl p-1"
               style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
             >
-              {(["moderate", "turbo"] as const).map((m) => {
-                const active = p.mode === m;
-                const tone = m === "turbo" ? "text-danger" : "text-accent-cyan";
-                const bar = m === "turbo" ? "bg-danger" : "bg-accent-cyan";
-                const Icon = m === "turbo" ? Zap : TrendingUp;
+              {([
+                ["light", "Светлая", Sun],
+                ["dark", "Тёмная", Moon],
+              ] as const).map(([value, label, Icon]) => {
+                const active = theme === value;
                 return (
                   <button
-                    key={m}
-                    onClick={() => patch({ mode: m })}
-                    disabled={saving}
-                    className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-all duration-200 disabled:opacity-60 ${
-                      active ? `bg-bg-panel ${tone}` : "text-text-muted hover:text-text-secondary"
+                    key={value}
+                    onClick={() => setTerminalTheme(value)}
+                    className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-all duration-200 ${
+                      active ? "bg-bg-panel text-accent-cyan" : "text-text-muted hover:text-text-secondary"
                     }`}
                   >
                     <Icon className="h-3.5 w-3.5" />
-                    {m === "turbo" ? "Турбо" : "Умеренный"}
+                    {label}
                     {active && (
-                      <span className={`absolute inset-x-3 bottom-0 h-[2px] rounded-full ${bar}`} />
+                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-accent-cyan" />
                     )}
                   </button>
                 );
@@ -235,7 +247,7 @@ export default function ProfilePage() {
             </div>
           </SettingRow>
 
-          {/* Language */}
+          {/* Язык */}
           <SettingRow label="Язык интерфейса">
             <div
               className="flex rounded-xl p-1"
@@ -262,23 +274,57 @@ export default function ProfilePage() {
             </div>
           </SettingRow>
 
-          {/* Risk % */}
-          {p.mode === "moderate" && (
-            <SettingRow label="Риск на сделку (%)">
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={5}
-                  defaultValue={p.risk_percent ? Number(p.risk_percent) : 2}
-                  onBlur={(e) => patch({ risk_percent: e.target.value as unknown as string })}
-                  className="input w-20 text-center font-mono font-bold"
-                  style={{ fontSize: "1rem" }}
-                />
-                <span className="text-sm text-text-muted">от 1 до 5</span>
-              </div>
-            </SettingRow>
-          )}
+          {/* Звук событий. Настройка человека, а не страницы: раньше она жила
+              внутри рабочего места терминала, и выключить её можно было только
+              оттуда. */}
+          <SettingRow label="Звук событий">
+            <div
+              className="flex rounded-xl p-1"
+              style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
+            >
+              {([
+                [true, "Вкл", Volume2],
+                [false, "Выкл", VolumeX],
+              ] as const).map(([value, label, Icon]) => {
+                const active = sound === value;
+                return (
+                  <button
+                    key={label}
+                    onClick={() => setSoundOn(value)}
+                    className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-all duration-200 ${
+                      active ? "bg-bg-panel text-accent-cyan" : "text-text-muted hover:text-text-secondary"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                    {active && (
+                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-accent-cyan" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </SettingRow>
+
+          {/* Подпись на карточке. Отдельно от ника Telegram: тот переписывается
+              при каждом входе, а карточку показывают другим. */}
+          <SettingRow label="Ник на карточке">
+            <div className="flex items-center gap-2">
+              <input
+                defaultValue={p.card_name ?? ""}
+                placeholder={p.username || "как в Telegram"}
+                maxLength={32}
+                onBlur={(e) => {
+                  const next = e.target.value.trim();
+                  if (next !== (p.card_name ?? "")) patch({ card_name: next });
+                }}
+                className="input w-44 text-center font-mono"
+              />
+            </div>
+          </SettingRow>
+          <p className="-mt-2 text-right text-[11px] text-text-muted">
+            Пусто — подпись возьмётся из Telegram
+          </p>
         </div>
       </div>
 

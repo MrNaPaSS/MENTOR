@@ -55,6 +55,10 @@ class Student(Base):
     # отзывается: сервер не помнит, какие токены он выдал, и единственный
     # способ закрыть чужой - хранить у ученика ту метку, которая сейчас верна.
     session_key: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Имя на карточке сделки. Отдельно от `username`: тот приходит из Telegram
+    # и переписывается при каждом входе, а карточку показывают другим, и
+    # подписывать её ученик вправе так, как хочет. Пусто - берётся ник.
+    card_name: Mapped[str | None] = mapped_column(String(32), nullable=True)
     balance_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
