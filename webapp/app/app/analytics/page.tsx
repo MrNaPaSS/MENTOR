@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
-import TradersTable from "@/components/app/TradersTable";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
 import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles } from "lucide-react";
@@ -644,10 +643,13 @@ export default function AnalyticsPage() {
         );
       })()}
 
-      {/* Таблица трейдеров: кто сколько наторговал за месяц.
-          Над календарём: календарь - про свой месяц, таблица - про то, как он
-          выглядит рядом с чужими, и второй вопрос возникает раньше. */}
-      <TradersTable />
+      {/* Таблица трейдеров пока скрыта.
+          Сама она готова - и ручка, и вёрстка, - но объём в ней считается по
+          дневным снимкам, а те у ученика с ключами набираются по ленте
+          исполнений: у неё нет диапазона дат, и за месяц цифра выходит меньше
+          настоящей. Показывать таблицу, по которой будут раздавать награды, с
+          заведомо неполным оборотом нельзя. Вернуть её - убрать эту заглушку.
+          <TradersTable /> */}
 
       {/* Основной блок */}
       <div className="grid gap-5 xl:grid-cols-[1fr_340px]">

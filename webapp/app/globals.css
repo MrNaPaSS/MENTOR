@@ -507,6 +507,14 @@
   position: relative;
   z-index: 3;
 }
+/* Лист уже напечатан: дальше он только меняется.
+   Печать - событие первого показа; на смене заготовки прогонять принтер заново
+   значит превращать движение в помеху тому, кто выбирает. */
+.pnl-still .pnl-paper,
+.pnl-still .pnl-stamp {
+  animation: none;
+}
+
 .pnl-slot::after {
   content: "";
   position: absolute;

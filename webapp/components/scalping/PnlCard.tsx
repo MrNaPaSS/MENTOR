@@ -40,8 +40,16 @@ export default function PnlCard({
   const choices = useMemo(() => variantsFor(data.side), [data.side]);
   const fallback = useMemo(() => variantFor(theme, data.side), [theme, data.side]);
   const [pick, setPick] = useState<number | null>(null);
+  // Печать листа - событие, а не переход. Она играет один раз, при открытии
+  // окна или переходе по ссылке; смена заготовки стрелками - это выбор, и
+  // прогонять принтер заново на каждый выбор значит превращать движение в
+  // помеху. Нажали стрелку - дальше лист просто меняется.
+  const [still, setStill] = useState(false);
   // Сменилась сторона или тема - выбор сбрасывается: он был про другой набор.
-  useEffect(() => setPick(null), [choices, fallback]);
+  useEffect(() => {
+    setPick(null);
+    setStill(false);
+  }, [choices, fallback]);
   const here = Math.max(0, choices.indexOf(fallback));
   const variant =
     pick === null ? fallback : choices[((pick % choices.length) + choices.length) % choices.length];
@@ -57,7 +65,6 @@ export default function PnlCard({
 
   useEffect(() => {
     let dropped = false;
-    setPaper(null);
     setFailed(false);
     backdrop.current = null;
     loadBackdrop(variant)
@@ -156,12 +163,35 @@ export default function PnlCard({
       }
     >
       <div
-        className="my-auto flex w-full max-w-[420px] flex-col items-stretch gap-3"
+        className="my-auto flex w-full max-w-[420px] flex-col items-stretch gap-3 sm:max-w-[520px]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <span className="font-mono text-[12px] uppercase tracking-widest text-[var(--pane-muted)]">
+          <span className="flex items-center gap-2.5 font-mono text-[12px] uppercase tracking-widest text-[var(--pane-muted)]">
             Карточка сделки
+            {/* Точки: сколько заготовок есть и на которой стоим. Без них
+                стрелки предлагают выбор неизвестной длины - непонятно, две их
+                там или десять и докуда листать. */}
+            {choices.length > 1 && (
+              <span className="flex items-center gap-1.5">
+                {choices.map((one, i) => (
+                  <span
+                    key={one.id}
+                    aria-hidden
+                    className="h-1.5 w-1.5 rounded-full transition-colors duration-150"
+                    style={{
+                      background:
+                        one.id === variant.id
+                          ? "var(--pane-accent)"
+                          : "var(--pane-border)",
+                    }}
+                  />
+                ))}
+                <span className="sr-only">
+                  Заготовка {choices.indexOf(variant) + 1} из {choices.length}
+                </span>
+              </span>
+            )}
           </span>
           <button
             onClick={onClose}
@@ -172,19 +202,25 @@ export default function PnlCard({
           </button>
         </div>
 
-        <div className="pnl-slot" />
-        {/* Стрелки по бокам листа: заготовку выбирают глядя на неё, а не в
-            списке имён. Показываем их только когда есть из чего выбирать. */}
-        <div className="relative">
+        <div className="pnl-slot mx-auto w-full max-w-[420px]" />
+        {/* Стрелки стоят сбоку от листа, а не на нём: карточку показывают
+            другим, и кнопка поверх неё читается как часть картинки. Место под
+            них есть на широком окне; на узком они уходят под лист - иначе
+            съели бы его ширину, а лист здесь главное. */}
+        <div className="flex items-center gap-2">
           {choices.length > 1 && (
-            <>
-              <Blank side="left" onClick={() => setPick((now) => (now ?? here) - 1)} />
-              <Blank side="right" onClick={() => setPick((now) => (now ?? here) + 1)} />
-            </>
+            <Blank
+              side="left"
+              className="hidden sm:grid"
+              onClick={() => {
+                setStill(true);
+                setPick((now) => (now ?? here) - 1);
+              }}
+            />
           )}
-        <div className="pnl-window">
+        <div className={`pnl-window mx-auto w-full max-w-[420px]${still ? " pnl-still" : ""}`}>
           {paper ? (
-            <div className="pnl-paper" key={variant.id}>
+            <div className="pnl-paper">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={paper} alt={`${data.symbol} ${data.side}`} />
               <div className="pnl-stamp">
@@ -202,7 +238,38 @@ export default function PnlCard({
             </div>
           )}
         </div>
+          {choices.length > 1 && (
+            <Blank
+              side="right"
+              className="hidden sm:grid"
+              onClick={() => {
+                setStill(true);
+                setPick((now) => (now ?? here) + 1);
+              }}
+            />
+          )}
         </div>
+
+        {/* На узком окне стрелки перебираются под лист: там они не отнимают у
+            него ширину. */}
+        {choices.length > 1 && (
+          <div className="flex justify-center gap-3 sm:hidden">
+            <Blank
+              side="left"
+              onClick={() => {
+                setStill(true);
+                setPick((now) => (now ?? here) - 1);
+              }}
+            />
+            <Blank
+              side="right"
+              onClick={() => {
+                setStill(true);
+                setPick((now) => (now ?? here) + 1);
+              }}
+            />
+          </div>
+        )}
 
         <div className="flex gap-2">
           <Action icon={<Copy className="h-4 w-4" />} label="Скопировать" onClick={onCopy} disabled={!paper} />
@@ -255,21 +322,28 @@ function Action({
 }
 
 /**
- * Стрелка выбора заготовки.
+ * Стрелка выбора заготовки. Стоит рядом с листом, а не поверх него.
  *
- * Поверх листа, а не под ним: место сбоку есть не всегда - окно бывает уже
- * карточки, - а поверх она стоит там, где на неё смотрят.
+ * Показывать её или прятать решает то место, куда её поставили: сбоку от листа
+ * она нужна на широком окне, под листом - на узком. Сама кнопка о ширине не
+ * знает - иначе одна и та же вёрстка отвечала бы за две разные раскладки.
  */
-function Blank({ side, onClick }: { side: "left" | "right"; onClick: () => void }) {
+function Blank({
+  side,
+  onClick,
+  className = "",
+}: {
+  side: "left" | "right";
+  onClick: () => void;
+  className?: string;
+}) {
   const Icon = side === "left" ? ChevronLeft : ChevronRight;
   return (
     <button
       onClick={onClick}
       title="Другая заготовка"
       aria-label={side === "left" ? "Предыдущая заготовка" : "Следующая заготовка"}
-      className={`absolute top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-[var(--pane-border)] bg-[var(--pane-bg)]/85 text-[var(--pane-text-2)] shadow-lg backdrop-blur-sm transition-colors hover:text-[var(--pane-text)] ${
-        side === "left" ? "left-1" : "right-1"
-      }`}
+      className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] transition-colors hover:border-[var(--pane-accent)] hover:text-[var(--pane-text)] ${className}`}
     >
       <Icon className="h-4 w-4" />
     </button>
