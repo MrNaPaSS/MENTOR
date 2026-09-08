@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { SiTelegram } from "@icons-pack/react-simple-icons";
 import Logo from "@/components/ui/Logo";
 import { NAV_LINKS, SOCIAL_LINKS } from "@/lib/content";
@@ -31,11 +30,6 @@ export default function Footer() {
                   </a>
                 </li>
               ))}
-              <li>
-                <Link href="/calculator" className="text-text-secondary transition hover:text-text-primary">
-                  Калькулятор
-                </Link>
-              </li>
             </ul>
           </div>
 

@@ -11,7 +11,6 @@ import {
   User,
   LogOut,
   ChevronDown,
-  Calculator,
   ImageIcon,
   Coins,
   ShoppingBag,
@@ -37,7 +36,6 @@ const NAV = [
   { href: "/app/news", label: "ТВ", icon: Tv, mobile: false },
   { href: "/app/analytics", label: "Аналитика", icon: BarChart3, mobile: false },
   { href: "/app/shop", label: "Маркет", icon: ShoppingBag, mobile: true },
-  { href: "/app/calculator", label: "Калькулятор", icon: Calculator, mobile: false },
   { href: "/app/profile", label: "Профиль", icon: User, mobile: true },
 ];
 
@@ -144,10 +142,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3">
             {/* Монеты NMNH */}
             {coins !== null && (
+              // Монеты ведут в аналитику, а не в маркет: там видно, за что они
+              // начислены и что осталось сделать до следующей награды. Маркет
+              // отвечает на вопрос «на что потратить», а нажимают на счётчик,
+              // чтобы понять, откуда он взялся.
               <Link
-                href="/app/shop"
+                href="/app/analytics"
                 className="hidden items-center gap-1.5 rounded-xl border border-accent-gold/30 bg-accent-gold/10 px-3 py-1.5 transition hover:border-accent-gold/50 sm:flex"
-                title="NMNH монеты - потратить в маркете"
+                title="NMNH монеты - за что начислены"
               >
                 <Coins className="h-3.5 w-3.5 text-accent-gold" />
                 <span className="font-mono text-sm font-bold text-accent-gold tabular">

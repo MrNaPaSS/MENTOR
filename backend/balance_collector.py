@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import or_, select
 
-from backend.trading.funds import balance_by_keys
+from backend.trading.funds import balance_by_keys, futures_volume_by_keys
 from core.db import SessionLocal
 from core.models import BalanceSnapshot, Student, WeexCredential
 from core.weex.base import WeexClient
@@ -110,13 +110,48 @@ async def snapshot_all(weex: WeexClient) -> int:
                 saved += 1
 
             # Объём торгов — обновляем при каждом цикле (данные растут в течение дня)
+            #
+            # Порядок тот же, что и с балансом: свои ключи ученика первыми.
+            # Партнёрская ручка по UID - взгляд со стороны, она приходит с
+            # задержкой; ключи показывают то же, что ученик видит у себя.
+            #
+            # С одной оговоркой. Лента исполнений приходит пачкой последних
+            # сделок, без диапазона дат: если пачка заполнена целиком, за её
+            # краем могли остаться сделки того же дня, и оборот выйдет
+            # занижённым. Тогда предпочитаем партнёрскую цифру - она считает
+            # день полностью.
             vol_row = volume_by_uid.get(uid)
-            if vol_row and existing is not None:
-                try:
-                    existing.futures_volume = float(vol_row.get("futuresTradingAmount") or 0)
-                    existing.spot_volume = float(vol_row.get("spotTradingAmount") or 0)
-                except (TypeError, ValueError):
-                    pass
+            if existing is not None:
+                # Спот виден только партнёрской ручке: ключи заведены под
+                # фьючерсы, и другого счёта этот клиент не видит.
+                if vol_row:
+                    try:
+                        existing.spot_volume = float(vol_row.get("spotTradingAmount") or 0)
+                    except (TypeError, ValueError):
+                        pass
+
+                futures: float | None = None
+                by_keys = await futures_volume_by_keys(session, student, today)
+                if by_keys is not None and by_keys[1]:
+                    futures = by_keys[0]
+                elif vol_row:
+                    try:
+                        futures = float(vol_row.get("futuresTradingAmount") or 0)
+                    except (TypeError, ValueError):
+                        futures = None
+                elif by_keys is not None:
+                    # Отчёт неполон, а сверить не с чем: UID у ученика нет.
+                    # Занижённый оборот честнее пустого - но скажем об этом в
+                    # журнал, чтобы расхождение с биржей не искали вслепую.
+                    futures = by_keys[0]
+                    logger.info(
+                        "Оборот ученика %s посчитан по неполной ленте исполнений: %.2f",
+                        student.id,
+                        futures,
+                    )
+
+                if futures is not None:
+                    existing.futures_volume = futures
 
         session.commit()
 
