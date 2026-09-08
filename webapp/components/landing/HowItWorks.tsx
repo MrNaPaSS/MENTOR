@@ -1,4 +1,4 @@
-﻿import { Wallet, Bot, Calculator, TrendingUp, type LucideIcon } from "lucide-react";
+﻿import { Wallet, Bot, KeyRound, TrendingUp, type LucideIcon } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
 import { HOW_STEPS } from "@/lib/content";
@@ -6,7 +6,7 @@ import { HOW_STEPS } from "@/lib/content";
 const ICONS: Record<string, LucideIcon> = {
   wallet: Wallet,
   bot: Bot,
-  calculator: Calculator,
+  key: KeyRound,
   trending: TrendingUp,
 };
 
@@ -29,7 +29,7 @@ export default function HowItWorks() {
       <SectionHeading
         eyebrow="Как это работает"
         title="От регистрации до первой сделки"
-        subtitle="Четыре шага - и ты получаешь сигналы, рассчитанные под твой депозит."
+        subtitle="Четыре шага - и терминал торгует на твоём биржевом счёте. Без оплат и заявок."
       />
 
       <div className="relative mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">

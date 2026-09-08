@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, ExternalLink, Send } from "lucide-react";
+import { ArrowRight, Check, ExternalLink, Send } from "lucide-react";
 import { SOCIAL_LINKS } from "@/lib/content";
 
 export default function Hero() {
@@ -15,25 +15,46 @@ export default function Hero() {
 
       <div className="relative mx-auto grid max-w-6xl gap-10 px-4 md:px-6">
         <div className="max-w-3xl">
-          <h1 className="text-h1 text-text-primary">
-            <span className="glitch" data-text="Торгуй как профи.">
-              Торгуй как профи.
+          <span className="eyebrow">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-glow-cyan" />
+            Торговый терминал академии NMNH
+          </span>
+
+          <h1 className="mt-4 text-h1 text-text-primary">
+            <span className="glitch" data-text="Это не сигналы.">
+              Это не сигналы.
             </span>
             <br />
-            <span className="text-accent-cyan text-glow-cyan">Учись у лучших.</span>
+            <span className="text-accent-cyan text-glow-cyan">Это торговый терминал.</span>
           </h1>
 
           <p className="mt-5 max-w-xl text-lg text-text-secondary">
-            Персональные сигналы под твой депозит. Реальный расчёт. Реальный результат.
+            Подключается к твоему счёту на бирже по API. Стакан, график, расчёт риска и
+            заявка - в одном окне. Сигналы приходят внутрь терминала уже посчитанными под
+            твой депозит.
           </p>
 
-          <div className="mt-10 flex flex-wrap items-center gap-3">
+          {/* Три возражения, которые снимаются до первого клика. */}
+          <ul className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-text-muted">
+            {[
+              "Бесплатно, без подписок",
+              "Деньги остаются на твоей бирже",
+              "Ключи без права вывода",
+            ].map((item) => (
+              <li key={item} className="inline-flex items-center gap-2">
+                <Check className="h-4 w-4 text-accent-cyan" />
+                {item}
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-8 flex flex-wrap items-center gap-3">
             {/* Primary CTA */}
             <Link
               href="/login"
               className="inline-flex items-center gap-2 rounded-full bg-accent-cyan px-7 py-3 text-[15px] font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-cyan/90 active:scale-[0.97]"
             >
-              Начать обучение <ArrowRight className="h-[15px] w-[15px]" />
+              Открыть терминал <ArrowRight className="h-[15px] w-[15px]" />
             </Link>
 
             {/* WEEX */}

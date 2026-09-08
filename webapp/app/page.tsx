@@ -1,6 +1,7 @@
 import Header from "@/components/landing/Header";
 import ScrollSceneMount from "@/components/landing/ScrollSceneMount";
 import Hero from "@/components/landing/Hero";
+import Terminal from "@/components/landing/Terminal";
 import HowItWorks from "@/components/landing/HowItWorks";
 import PublicSignals from "@/components/landing/PublicSignals";
 import PlatformStats from "@/components/landing/PlatformStats";
@@ -16,6 +17,7 @@ export default function Home() {
       <Header />
       <main>
         <Hero />
+        <Terminal />
         <HowItWorks />
         <PublicSignals />
         <PlatformStats />
