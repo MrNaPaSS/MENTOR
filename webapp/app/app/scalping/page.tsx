@@ -25,12 +25,15 @@ import {
   VolumeX,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRightOpen,
   Star,
   Camera,
   Sun,
   Wifi,
   WifiOff,
 } from "lucide-react";
+import ChatRoom from "@/components/chat/ChatRoom";
+import { fromActive, fromJournal, share as shareToChat } from "@/lib/chat/share";
 import PaneDivider from "@/components/scalping/PaneDivider";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
@@ -80,7 +83,7 @@ import type { OrderChip } from "@/components/scalping/OrderChip";
 import { draftAt, moveLevel, qtyOf, riskOf, type ManualDraft } from "@/lib/trade/manual";
 import Logo from "@/components/ui/Logo";
 import RadioChip from "@/components/app/RadioChip";
-import { api } from "@/lib/api";
+import { api, API_URL } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { useCoins } from "@/lib/useCoins";
 import { fmtUsd } from "@/lib/format";
@@ -220,6 +223,9 @@ function paneHeight(
 const PANE_LIMITS = {
   screener: { def: 500, min: 360, max: 900 },
   dom: { def: 620, min: 320, max: 1200 },
+  // Чат уже остальных: это лента коротких реплик, а не таблица. Шире 640 он
+  // начинает отбирать место у графика, ради которого трейдер здесь и сидит.
+  chat: { def: 340, min: 260, max: 640 },
 };
 
 const STORAGE_KEY = "nmnh.scalping.panes";
@@ -276,6 +282,8 @@ type Workspace = {
   palette: ChartPaletteName;
   screener: number;
   dom: number;
+  /** Ширина чата справа от графика. */
+  chat: number;
   indicators: Indicators;
   sort: SortKey;
   timeframe: string;
@@ -409,6 +417,7 @@ export default function ScalpingPage() {
       setBalance(body.balance_usdt ?? "0");
       // Подпись на снимках и карточках: своя, если задана, иначе ник Telegram.
       setAuthor(body.card_name || body.username || null);
+      setAvatar(body.avatar_url ? `${API_URL}${body.avatar_url}` : null);
     } catch {
       // Не ответил профиль - строка просто останется без баланса.
     }
@@ -540,6 +549,13 @@ export default function ScalpingPage() {
   const [screenerOpen, setScreenerOpen] = useState(true);
   const [screenerW, setScreenerW] = useState(PANE_LIMITS.screener.def);
   const [domW, setDomW] = useState(PANE_LIMITS.dom.def);
+  // Чат закрыт на старте: день начинается с рынка, а не с разговора. Открытый
+  // держится до конца сессии, ширина переживает перезагрузку.
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatW, setChatW] = useState(PANE_LIMITS.chat.def);
+  // Фотография из Telegram: ею подписаны сообщения в чате. Путь приходит от
+  // бэкенда, а сайт живёт на другом домене - отсюда и API_URL.
+  const [avatar, setAvatar] = useState<string | null>(null);
 
   const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort, shelf, interval: timeframe });
 
@@ -597,6 +613,7 @@ export default function ScalpingPage() {
       setScreenerW(clamp(saved.screener, PANE_LIMITS.screener));
     }
     if (typeof saved.dom === "number") setDomW(clamp(saved.dom, PANE_LIMITS.dom));
+    if (typeof saved.chat === "number") setChatW(clamp(saved.chat, PANE_LIMITS.chat));
     // Индикаторы сливаем с умолчаниями: если в новой версии появился
     // переключатель, которого в сохранённом наборе нет, он не должен пропасть.
     if (saved.indicators) {
@@ -711,6 +728,7 @@ export default function ScalpingPage() {
       palette,
       screener: screenerW,
       dom: domW,
+      chat: chatW,
       indicators,
       sort,
       timeframe,
@@ -746,6 +764,7 @@ export default function ScalpingPage() {
     palette,
     screenerW,
     domW,
+    chatW,
     indicators,
     sort,
     timeframe,
@@ -773,6 +792,14 @@ export default function ScalpingPage() {
   function resizeJournal(delta: number) {
     setJournalH((h) =>
       Number.isNaN(delta) ? JOURNAL_LIMITS.def : clamp(h - delta, JOURNAL_LIMITS),
+    );
+  }
+
+  // Разделитель у чата слева от него: тянем вправо - чат становится уже,
+  // поэтому знак смещения обратный, как и у журнала.
+  function resizeChat(delta: number) {
+    setChatW((w) =>
+      Number.isNaN(delta) ? PANE_LIMITS.chat.def : clamp(w - delta, PANE_LIMITS.chat),
     );
   }
 
@@ -2007,6 +2034,27 @@ export default function ScalpingPage() {
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
 
   /**
+   * Ждущие входа заявки - их прикладывают к сообщению скрепкой.
+   *
+   * Снимком, а не ссылкой: заявку через минуту переставят или отменят, а в
+   * ленте должно остаться то, что человек показал.
+   */
+  const pendingShares = useMemo(
+    () => mine.filter((t) => t.status === "planned").map(fromActive),
+    [mine],
+  );
+
+  /** Сделка из журнала - в чат. Панель при этом открывается сама. */
+  const shareJournal = useCallback(
+    (row: JournalTrade) => {
+      shareToChat(fromJournal(row), author || t.chat.you);
+      setChatOpen(true);
+    },
+    [author, t.chat.you],
+  );
+
+
+  /**
    * Сколько заявок ждёт и сколько позиций в работе - по всем монетам.
    *
    * Заявки свои: на бирже они лежат по одной монете, и спрашивать их по всем
@@ -2259,6 +2307,7 @@ export default function ScalpingPage() {
           {
             "--screener-w": `${screenerW}px`,
             "--dom-w": `${domW}px`,
+            "--chat-w": `${chatW}px`,
           } as React.CSSProperties
         }
       >
@@ -2826,6 +2875,44 @@ export default function ScalpingPage() {
                 />
               </div>
             </section>
+
+            {/* Чат справа от графика - той же жизнью, что и скринер слева:
+                открывается, тянется за разделитель, сворачивается в полосу.
+                Свёрнутый прячется не совсем: полоса у правого края говорит, где
+                он был, - иначе панель ищут заново каждый раз.
+
+                Только на широком экране. Ниже xl терминал складывается в
+                колонку, и лента разговора между графиком и журналом оказалась
+                бы там, где её никто не ждёт; для узкого экрана есть страница
+                чата в кабинете. */}
+            {chatOpen ? (
+              <>
+                <PaneDivider onResize={resizeChat} title={t.terminal.chatWidth} />
+                <section
+                  className={`${pane} hidden shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] xl:flex xl:w-[var(--chat-w)]`}
+                  style={paneStyle}
+                >
+                  <ChatRoom
+                    tone="pane"
+                    me={{ name: author || t.chat.you, avatar }}
+                    pending={pendingShares}
+                    onClose={() => setChatOpen(false)}
+                  />
+                </section>
+              </>
+            ) : (
+              <button
+                onClick={() => setChatOpen(true)}
+                title={t.terminal.expandChat}
+                className="hidden w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:ml-2 xl:flex"
+                style={paneStyle}
+              >
+                <PanelRightOpen className="h-4 w-4" />
+                <span className="text-[11px]" style={{ writingMode: "vertical-rl" }}>
+                  {t.chat.title}
+                </span>
+              </button>
+            )}
           </>
         ) : (
           <section
@@ -2921,6 +3008,7 @@ export default function ScalpingPage() {
                 if (t.symbol !== symbol) setSymbol(t.symbol);
               }}
               owner={author ?? undefined}
+              onShare={shareJournal}
               onClose={() => setJournalOpen(false)}
             />
           </section>
