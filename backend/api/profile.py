@@ -198,34 +198,51 @@ async def analytics_calendar(
         cell["trades"] += 1
 
     # ── Строим список дней ──────────────────────────────────────────────────
-    prev_balance: Decimal | None = Decimal(str(prev_snap.balance_usdt)) if prev_snap else None
-    first_snapshot_seen = False
+    #
+    # Процент дня - прибыль по журналу, делённая на баланс на начало дня.
+    #
+    # Раньше он считался разностью соседних снимков баланса, и это отвечало не
+    # на тот вопрос. Снимок пишется первым прогоном сборщика после полуночи и в
+    # течение суток не обновляется, поэтому сегодняшняя клетка стояла нулём,
+    # сколько бы сделок ни закрылось после, а завтра показывала бы сегодняшний
+    # день - число опаздывало на сутки. Хуже того, под клеткой всё это время
+    # лежал список сделок этого дня, и он с ней не сходился: список из журнала,
+    # число из баланса.
+    #
+    # Знаменатель - тот же снимок: он и есть баланс на начало дня. Своего
+    # снимка у дня может не быть - тогда переносим последний известный; такой
+    # день помечен estimated, и в сводки месяца он не идёт.
+    snapshot_dates = {s.date for s in snapshots}
+    carried: Decimal | None = Decimal(str(prev_snap.balance_usdt)) if prev_snap else None
     days_out = []
     for d in range(1, last_day + 1):
         date_str = f"{prefix}-{d:02d}"
         balance = balance_by_date.get(date_str)
-        is_real = date_str in {s.date for s in snapshots}
+        is_real = date_str in snapshot_dates
+        base = balance if balance is not None else carried
+
+        cell = journal_by_date.get(date_str, {})
+        day_pnl = float(cell.get("pnl", 0.0))
+        day_trades = int(cell.get("trades", 0))
+
         pnl_pct: float | None = None
-        if balance is not None:
-            if not first_snapshot_seen:
-                pnl_pct = 0.0
-                first_snapshot_seen = True
-            elif prev_balance is not None and prev_balance > 0:
-                pnl_pct = float((balance - prev_balance) / prev_balance * 100)
+        if base is not None and base > 0:
+            pnl_pct = day_pnl / float(base) * 100
+
         vol = volume_by_date.get(date_str, 0.0)
         days_out.append({
             "date": date_str,
             "signals": signals_by_date.get(date_str, 0),
             "balance": float(balance) if balance is not None else None,
             "pnl_pct": pnl_pct,
-            "estimated": not is_real and balance is not None,
+            "estimated": not is_real and base is not None,
             "trades": 1 if vol > 0 else 0,        # был ли торговый объём за день
             "trade_volume": vol,
             "has_deposit": date_str in deposit_dates,
-            "journal_pnl": round(journal_by_date.get(date_str, {}).get("pnl", 0.0), 2),
-            "journal_trades": int(journal_by_date.get(date_str, {}).get("trades", 0)),
+            "journal_pnl": round(day_pnl, 2),
+            "journal_trades": day_trades,
         })
         if balance is not None:
-            prev_balance = balance
+            carried = balance
 
     return {"days": days_out}
