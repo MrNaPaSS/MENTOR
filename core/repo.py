@@ -66,6 +66,18 @@ def get_or_create_student(session, tg_id: int, username: Optional[str] = None) -
     return student
 
 
+def find_student(session, tg_id: int) -> Optional[Student]:
+    """Ученик по телеграму — без заведения нового.
+
+    Отдельно от ``get_or_create_student``: бот закрыт, и на первую команду от
+    незнакомого человека запись заводить нельзя. Раньше спросить «есть ли он у
+    нас» было нечем, и сам вопрос создавал ученика.
+    """
+    return session.execute(
+        select(Student).where(Student.tg_id == tg_id)
+    ).scalar_one_or_none()
+
+
 def get_student_by_username(session, username: str) -> Optional[Student]:
     username = username.lstrip("@")
     return session.execute(

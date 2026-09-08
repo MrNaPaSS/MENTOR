@@ -13,6 +13,8 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from core.db import SessionLocal
 from core.models import Student
 
+from backend.api.chat import MENTOR_NAME
+from backend.mentor import is_mentor
 from backend.security import decode_token, TokenError
 from backend.price_collector import active_symbols
 from backend.scalping.ladder import DEFAULT_ROWS, MAX_ROWS
@@ -94,11 +96,14 @@ async def ws_chat(websocket: WebSocket, token: str = Query(default="")):
         if student is None or not student.is_active:
             await websocket.close(code=4401)
             return
+        # Подпись собирается тем же правилом, что и в ленте: наставник идёт
+        # школой, а не личным ником, и с короной.
+        mentor = is_mentor(student)
         who = {
             "id": student.id,
-            "name": student.card_name or student.username or f"id{student.id}",
+            "name": student.card_name or (MENTOR_NAME if mentor else student.username or f"id{student.id}"),
             "avatar": student.avatar_url or "",
-            "mentor": bool(getattr(student, "is_admin", False)),
+            "mentor": mentor,
         }
     finally:
         session.close()

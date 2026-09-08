@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from backend.mentor import is_mentor
 from backend.chat.format import link_ranges, message_html
 from backend.deps import get_current_student, get_session
 from core.models import ChartShot, ChatMessage, ChatThread, Signal, Student, utcnow
@@ -202,13 +203,23 @@ class MessageEdit(BaseModel):
     text: str = Field(min_length=1, max_length=MAX_TEXT)
 
 
+# Как подписан наставник, пока он не задал себе имя карточки.
+#
+# Ник в телеграме - это личный аккаунт, а сигналы идут от школы: подписывать их
+# им значит светить личный контакт в каждом сообщении, в каждой цитате и в
+# копии, которая уходит в форум.
+MENTOR_NAME = "NMNH"
+
+
 def _who(student: Student) -> dict:
     """Подпись автора: как он выглядит в ленте прямо сейчас."""
+    mentor = is_mentor(student)
+    fallback = MENTOR_NAME if mentor else (student.username or f"id{student.id}")
     return {
         "id": student.id,
-        "name": student.card_name or student.username or f"id{student.id}",
+        "name": student.card_name or fallback,
         "avatar": student.avatar_url or "",
-        "mentor": bool(getattr(student, "is_admin", False)),
+        "mentor": mentor,
     }
 
 
@@ -415,7 +426,7 @@ async def send(
     # объявлять его неудачей нельзя. О причине говорим отдельным полем - панель
     # покажет её строкой.
     signal_error = None
-    if body.as_signal and bool(getattr(student, "is_admin", False)):
+    if body.as_signal and is_mentor(student):
         try:
             signal = _signal_from_attach(body.attach, body.audience, row.id)
             session.add(signal)
@@ -571,7 +582,7 @@ async def remove(
     if row is None:
         # Уже нет - значит уже убрано. Ошибкой это не назовёшь.
         return None
-    if not _mine(row, student) and not bool(getattr(student, "is_admin", False)):
+    if not _mine(row, student) and not is_mentor(student):
         raise HTTPException(403, "Чужое сообщение может убрать только наставник")
 
     # Удалённое сообщение означает «я передумал»: живого обещания после него

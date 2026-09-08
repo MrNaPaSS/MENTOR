@@ -122,15 +122,34 @@ async def test_mentor_approve_and_reject(env):
 
 # ── Ученик ──
 
-async def test_student_start_new_notifies_mentor(env):
+async def test_stranger_cannot_start_the_bot(env):
+    """Бот закрыт: чужой «старт» не заводит ученика и не будит ментора."""
     dp, bot, session = env
     await feed_message(dp, bot, 777, "/start")
     texts = session.texts()
-    # Ручного одобрения больше не ждём: сразу ведём в онбординг.
+    assert any("закрыт" in t.lower() for t in texts)
+    assert not any("Добро пожаловать" in t for t in texts)
+    assert not any("Новый пользователь" in t for t in texts)
+    with SessionLocal() as s:
+        assert repo.find_student(s, 777) is None
+
+
+async def test_mentor_start_opens_onboarding(env):
+    """Наставнику «старт» открывает ту же регистрацию, что и раньше."""
+    dp, bot, session = env
+    await feed_message(dp, bot, ADMIN, "/start")
+    texts = session.texts()
     assert any("Добро пожаловать" in t for t in texts)
     assert any("Выберите язык" in t for t in texts)
-    # Ментору при этом уходит уведомление о новом пользователе.
-    assert any("Новый пользователь" in t for t in texts)
+
+
+async def test_known_student_keeps_his_start(env):
+    """Заведённый ученик доходит до конца регистрации: он уже не с улицы."""
+    dp, bot, session = env
+    with SessionLocal() as s:
+        repo.get_or_create_student(s, tg_id=779, username="known")
+    await feed_message(dp, bot, 779, "/start")
+    assert any("Выберите язык" in t for t in session.texts())
 
 
 async def test_student_help(env):

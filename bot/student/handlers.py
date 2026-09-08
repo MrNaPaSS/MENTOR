@@ -31,6 +31,20 @@ def build_student_router(admin_id: int, referral_link: str = "https://www.weex.c
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext):
         user = message.from_user
+
+        # Бот закрыт: регистрацию начинает наставник, а не любой, кто нашёл бота
+        # поиском. Незнакомому человеку не заводим даже запись - иначе список
+        # учеников зарастает теми, кто нажал «старт» из любопытства, а ментору
+        # на каждого уходит уведомление.
+        #
+        # Кто уже заведён, проходит дальше: у него /start - это продолжение
+        # своей же регистрации, а не вход с улицы.
+        with SessionLocal() as session:
+            known = repo.find_student(session, user.id) is not None
+        if not known and user.id != admin_id:
+            await message.answer("Бот закрыт. Доступ выдаёт наставник.")
+            return
+
         with SessionLocal() as session:
             student = repo.get_or_create_student(session, user.id, user.username)
             has_uid = bool(student.weex_uid)
