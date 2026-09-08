@@ -288,12 +288,14 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.6);
     position: relative; z-index: 3;
   }}
+  /* Внутри щели - тусклый блик, а не бирюзовая подсветка: это прорезь в
+     корпусе, из которой идёт лист, и светиться ей незачем. */
   .slot::after {{
     content: ""; position: absolute; inset: 3px 10px auto; height: 2px;
-    border-radius: 2px; background: var(--accent); opacity: .5;
+    border-radius: 2px; background: rgba(255,255,255,.18);
     animation: warm 1.1s ease-out both;
   }}
-  @keyframes warm {{ 0% {{ opacity: 0; }} 25% {{ opacity: .9; }} 100% {{ opacity: .35; }} }}
+  @keyframes warm {{ 0% {{ opacity: 0; }} 25% {{ opacity: 1; }} 100% {{ opacity: .5; }} }}
 
   /* Окно, из которого лист выезжает: оно и обрезает его сверху. */
   .window {{ width: min(420px, 92vw); margin-top: -10px; overflow: hidden; padding-top: 10px; }}
@@ -466,17 +468,25 @@ def shot_page(shot_id: str, session=Depends(get_session)):
      графика выглядел вырезанным из другого приложения; здесь под ним та же
      бумага в клетку, что на странице входа. */
   :root[data-paper="light"] body {{
-    background:
-      linear-gradient(to right, rgba(42,42,62,.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(42,42,62,.05) 1px, transparent 1px),
-      radial-gradient(120% 80% at 50% -10%, rgba(126,87,194,.07), transparent 60%),
-      #f4f5f8;
-    background-size: 48px 48px, 48px 48px, auto, auto;
+    background: radial-gradient(120% 80% at 50% -10%, rgba(126,87,194,.06), transparent 60%), #f4f5f8;
     color: #111418;
   }}
+  /* Сетка отдельным слоем и с маской: она должна гаснуть к краям, а не
+     упираться в них обрезанной клеткой. Ровно так же она сделана на странице
+     входа. Слоем - потому что маска на самом теле съела бы и содержимое. */
+  :root[data-paper="light"] body::before {{
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      linear-gradient(to right, rgba(42,42,62,.055) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(42,42,62,.055) 1px, transparent 1px);
+    background-size: 48px 48px;
+    -webkit-mask-image: radial-gradient(75% 60% at 50% 38%, #000 35%, transparent 100%);
+    mask-image: radial-gradient(75% 60% at 50% 38%, #000 35%, transparent 100%);
+  }}
+  /* Содержимое - поверх сетки. */
+  .slot, .window, .note, .logo {{ position: relative; z-index: 1; }}
   :root[data-paper="light"] .slot {{
-    background: linear-gradient(180deg, #e6e8ee, #cfd3dc);
-    box-shadow: 0 0 0 1px rgba(17,20,24,.08), 0 10px 30px rgba(17,20,24,.12);
+    box-shadow: 0 0 0 1px rgba(17,20,24,.1), 0 10px 26px rgba(17,20,24,.16);
   }}
   :root[data-paper="light"] .paper {{ box-shadow: 0 24px 60px rgba(17,20,24,.18); }}
   :root[data-paper="light"] .note {{ color: #4a5058; }}
@@ -508,25 +518,22 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     position: relative; container-type: inline-size;
     border-radius: 10px; overflow: hidden;
     box-shadow: 0 24px 60px rgba(0,0,0,.65);
-    animation: feed 1.15s cubic-bezier(.22,.61,.36,1) .15s both, shock .18s ease-out 1.35s;
+    animation: feed .95s cubic-bezier(.16,.84,.3,1) .1s both;
     transform-origin: 50% 0;
+    will-change: transform;
   }}
   .paper img {{ display: block; width: 100%; height: auto; }}
 
-  /* Лист идёт рывками - валик принтера тянет его не ровно. Лист широкий,
-     поэтому наклон вдвое меньше, чем у карточки: на такой ширине тот же угол
-     уводит край на десятки пикселей. */
+  /* Одно движение вместо семи.
+     У карточки лист узкий, и рывки валика читаются как печать. Здесь лист во
+     всю ширину экрана: те же рывки с поворотом болтали его углы на десятки
+     пикселей - выходила не печать, а тряска. Осталось ровное скольжение и
+     короткая осадка в конце: лист доходит до упора и встаёт. */
   @keyframes feed {{
-    0%   {{ transform: translateY(-101%) rotate(.3deg); }}
-    18%  {{ transform: translateY(-78%)  rotate(-.24deg); }}
-    36%  {{ transform: translateY(-52%)  rotate(.2deg); }}
-    54%  {{ transform: translateY(-28%)  rotate(-.15deg); }}
-    72%  {{ transform: translateY(-11%)  rotate(.1deg); }}
-    88%  {{ transform: translateY(-2%)   rotate(-.05deg); }}
-    100% {{ transform: translateY(0) rotate(0); }}
+    0%   {{ transform: translateY(-100%); }}
+    82%  {{ transform: translateY(.9%); }}
+    100% {{ transform: translateY(0); }}
   }}
-  /* Удар печати отдаётся в лист - коротко и почти незаметно. */
-  @keyframes shock {{ 0%,100% {{ scale: 1; }} 40% {{ scale: 1.004; }} }}
 
   /* Печать в правом нижнем углу графика. Размеры в cqw - в долях ширины
      самого листа, поэтому оттиск одинаков и на мониторе, и на телефоне.
@@ -536,7 +543,7 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     position: absolute; right: 3.5%; bottom: 7%;
     width: 17.5%; aspect-ratio: 3.1 / 1;
     display: grid; place-items: center; pointer-events: none;
-    animation: slam .42s cubic-bezier(.2,1.5,.35,1) 1.3s both;
+    animation: slam .4s cubic-bezier(.2,1.5,.35,1) 1.05s both;
     /* Смешивание задано здесь, а не на самом оттиске: поворот печати заводит
        ей собственный слой, и разность внутри него сравнивалась бы с пустотой -
        печать пропадала целиком. */
