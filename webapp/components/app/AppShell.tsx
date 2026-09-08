@@ -117,10 +117,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Ambient />
 
       {/* ─── Верхний header ─── */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-bg-deep/80 backdrop-blur-2xl">
-        {/* Бегущая строка тикер */}
+      {/*
+        Лента вынесена из-под размытия намеренно.
+        Она была внутри шапки, а у той `backdrop-blur-2xl`: браузер пересобирал
+        размытие фона на каждом кадре её движения - по всей ширине экрана,
+        шестьдесят раз в секунду. Отсюда и рывки, и нагрев на пустом месте.
+        Теперь размыт только ряд навигации, а лента едет над своим непрозрачным
+        фоном и ничего за собой не тянет.
+      */}
+      <div className="fixed inset-x-0 top-0 z-50">
         <MarketTicker />
 
+        <header className="border-b border-border bg-bg-deep/80 backdrop-blur-2xl">
         <div className="flex h-14 items-center justify-between px-4 md:px-6">
           {/* Лого и радио: музыку включают на весь рабочий день, и место ей
               рядом со знаком, а не среди кнопок сделки. */}
@@ -200,7 +208,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </div>
-      </header>
+        </header>
+      </div>
 
       {/* Уведомления о сделках. В терминале их показывает он сам - над графиком,
           там, куда смотрят; здесь они висят под шапкой, поверх раздела.

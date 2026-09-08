@@ -9,9 +9,12 @@
 // одинаковых половин, поэтому в конце пути вторая половина стоит ровно там,
 // откуда начинала первая, и возврат в ноль не виден.
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { askSymbol } from "@/lib/openSymbol";
+
+/** Как часто спрашиваем цены. */
+const POLL_MS = 15_000;
 
 const SYMBOLS = [
   "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
@@ -64,8 +67,25 @@ export default function MarketTicker() {
     }
 
     load();
-    const id = setInterval(load, 15_000); // обновление каждые 15с
-    return () => clearInterval(id);
+    let id = window.setInterval(load, POLL_MS);
+
+    // Свёрнутую вкладку не опрашиваем.
+    //
+    // Цены за спиной никто не читает, а каждый круг - это запрос на биржу и
+    // перерисовка тридцати строк. Вернулись к вкладке - обновляем сразу, чтобы
+    // первое, что человек увидит, не было ценой получасовой давности.
+    function watch() {
+      window.clearInterval(id);
+      if (document.hidden) return;
+      load();
+      id = window.setInterval(load, POLL_MS);
+    }
+
+    document.addEventListener("visibilitychange", watch);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", watch);
+    };
   }, []);
 
   if (!tickers.length) return null;
@@ -76,8 +96,15 @@ export default function MarketTicker() {
     // взят у панелей терминала, а подобран отдельно: витрина рынка не обязана
     // совпадать с ними, но на белой странице обязана быть белой.
     <div
-      className="group overflow-hidden border-b backdrop-blur-sm"
-      style={{ background: "var(--tick-bg)", borderColor: "var(--tick-line)" }}
+      className="group overflow-hidden border-b"
+      style={{
+        background: "var(--tick-bg)",
+        borderColor: "var(--tick-line)",
+        // Полоса живёт сама по себе: то, что происходит внутри неё, не может
+        // изменить ничего снаружи. Браузер на этом основании перестаёт
+        // пересчитывать раскладку страницы на каждый кадр её движения.
+        contain: "content",
+      }}
     >
       <div
         ref={trackRef}
@@ -113,7 +140,14 @@ function Half({ items, clone }: { items: Ticker[]; clone?: boolean }) {
   );
 }
 
-function Pair({ t }: { t: Ticker }) {
+/**
+ * Пара в ленте.
+ *
+ * Через memo: цены приезжают раз в пятнадцать секунд, и без него React
+ * перебирал бы все тридцать строк, включая те, у которых ничего не менялось, -
+ * прямо посреди движения ленты.
+ */
+const Pair = memo(function Pair({ t }: { t: Ticker }) {
   const pos = t.change >= 0;
   const sym = t.symbol.replace("USDT", "");
   return (
@@ -151,4 +185,4 @@ function Pair({ t }: { t: Ticker }) {
       </span>
     </Link>
   );
-}
+});
