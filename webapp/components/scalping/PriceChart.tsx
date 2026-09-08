@@ -30,6 +30,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
+import { visibleOn } from "@/lib/indicator/ink";
 import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
 import { readout, tenth, type ScoreReadout } from "@/lib/indicator/score";
 
@@ -1186,8 +1187,12 @@ function PriceChart({
         ) {
           // Живая панель, а не снимок этой минуты: трейдер, нажавший по цене,
           // просит показать, что происходит сейчас, - и через минуту тоже.
+          //
+          // Только открываем. Закрыть разбор можно крестиком и больше ничем:
+          // нажатие по графику - это и прокрутка, и разметка, и расчёт сделки,
+          // и картинка, пропадающая от любого из них, живёт своей жизнью.
           setPickedBar(null);
-          setFollowBar((now) => !now);
+          setFollowBar(true);
           return;
         }
       }
@@ -1197,7 +1202,7 @@ function PriceChart({
       // цены, и отбирать его у трейдера нельзя.
       const bar = barUnder(scale, series, param.point, dataRef.current);
       if (bar && FOOTPRINT_INTERVALS.has(intervalRef.current)) {
-        setPickedBar((now) => (now === bar.time ? null : bar.time));
+        setPickedBar(bar.time);
         return;
       }
 
@@ -1933,19 +1938,6 @@ function PriceChart({
     setPickedBar(null);
   }, [symbol, interval]);
 
-  // Escape - тот же выход, что и нажатие по колонке. Раскрытая свеча закрывает
-  // соседей, и руке проще нажать клавишу, чем целиться в неё же мышью.
-  useEffect(() => {
-    if (openBar === null) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      setPickedBar(null);
-      setFollowBar(false);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [openBar]);
-
   // Масштаб строк читаем один раз при первой отрисовке: хранилище - вещь
   // браузера, а страница собирается и на сервере, где его нет.
   useEffect(() => {
@@ -1969,11 +1961,13 @@ function PriceChart({
       border: pick("--pane-border", "#2b3139"),
       text: pick("--pane-text", "#eaecef"),
       muted: pick("--pane-muted", "#7a8290"),
-      // Объём красится цветом выбранных свечей, а не всегда зелёно-красным:
-      // на белом листе свечи чёрно-белые, и зелёный столбик рядом с ними -
-      // фигура из другого графика.
-      up: skinRef.current.up,
-      down: skinRef.current.down,
+      // Объём - цветами панели. Это и есть цвета выбранной палитры: пресет
+      // подменяет их своими для того листа, на котором сидит трейдер, и
+      // доводит до видимости на его бумаге. Брать их прямо у свечей нельзя -
+      // у стандартной палитры и у мегатрона рост на белом белый, у вельвета
+      // белым выходит падение, и сторона объёма исчезает целиком.
+      up: visibleOn(pick("--pane-up", "#0ecb81"), pick("--pane-bg", "#181a20")),
+      down: visibleOn(pick("--pane-down", "#f6465d"), pick("--pane-bg", "#181a20")),
       // Светлые чернила для тёмной ячейки. Берём фон тёмного листа, а не
       // белый: чистый белый на цветной подложке слепит.
       bright: "#f5f7fa",

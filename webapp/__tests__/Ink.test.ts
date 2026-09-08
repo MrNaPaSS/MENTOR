@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { light, mix, readableInk, toRgb } from "@/lib/indicator/ink";
+import { apart, light, mix, readableInk, toRgb, visibleOn } from "@/lib/indicator/ink";
 
 // Цифра, пропавшая на своей же подложке, - ошибка, которую видно только на той
 // монете и том пресете, где так сошлось. Поэтому выбор чернил считается, а не
@@ -84,5 +84,52 @@ describe("чернила под подложку", () => {
 
   it("цвет, который не разобрать, чернил не меняет", () => {
     expect(readableInk("var(--pane-up)", "#181a20", 0.8, DARK, BRIGHT)).toBe(DARK);
+  });
+});
+
+describe("цвет доводится до видимости на своей бумаге", () => {
+  const WHITE = "#ffffff";
+  const DARK = "#181a20";
+
+  it("белый рост на белом листе темнеет", () => {
+    // Стандартная палитра и мегатрон: рост на белом задан белым, и заливка
+    // такого цвета на бумаге пропадает целиком.
+    const fixed = visibleOn("#ffffff", WHITE);
+    expect(fixed).not.toBe("#ffffff");
+    expect(apart(toRgb(fixed)!, toRgb(WHITE)!)).toBeGreaterThanOrEqual(0.12);
+  });
+
+  it("почти белое на белом - тоже", () => {
+    // Вельвет: падение на белом листе остаётся белым телом в тёплой рамке.
+    const fixed = visibleOn("#fdfdfc", WHITE);
+    expect(apart(toRgb(fixed)!, toRgb(WHITE)!)).toBeGreaterThanOrEqual(0.12);
+  });
+
+  it("тёмный цвет на тёмном листе светлеет", () => {
+    const fixed = visibleOn("#1a1c22", DARK);
+    expect(apart(toRgb(fixed)!, toRgb(DARK)!)).toBeGreaterThanOrEqual(0.12);
+  });
+
+  it("видимый цвет не трогаем вовсе", () => {
+    // Палитра обязана оставаться собой везде, где она и так читается.
+    expect(visibleOn("#0ecb81", DARK)).toBe("#0ecb81");
+    expect(visibleOn("#f23645", WHITE)).toBe("#f23645");
+    expect(visibleOn("#4a4a4a", WHITE)).toBe("#4a4a4a");
+  });
+
+  it("тон сохраняется: розовое остаётся розовым", () => {
+    // Уводим к чёрному или белому долями, а не заменяем цвет: иначе на белом
+    // листе все палитры стали бы одинаково чёрными.
+    const fixed = toRgb(visibleOn("#fff0f0", WHITE))!;
+    expect(fixed.r).toBeGreaterThan(fixed.b);
+  });
+
+  it("цвет, который не разобрать, отдаём как есть", () => {
+    expect(visibleOn("var(--pane-up)", WHITE)).toBe("var(--pane-up)");
+  });
+
+  it("возвращается шестнадцатеричная запись", () => {
+    // Дальше цвет уходит в rgba(), а она разбирает только её.
+    expect(visibleOn("#ffffff", WHITE)).toMatch(/^#[0-9a-f]{6}$/);
   });
 });

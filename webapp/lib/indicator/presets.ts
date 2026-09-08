@@ -12,6 +12,8 @@
 // перечислено только то, что на белом обязано поменяться, остальное берётся из
 // тёмного.
 
+import { visibleOn } from "@/lib/indicator/ink";
+
 export const CHART_PAPERS = ["dark", "light"] as const;
 export type ChartPaper = (typeof CHART_PAPERS)[number];
 
@@ -328,7 +330,14 @@ export function paneInk(
   paper: ChartPaper,
 ): Record<string, string> {
   if (palette === "default") return {};
-  const { bull, bear } = paletteSwatch(palette, paper);
+  const swatch = paletteSwatch(palette, paper);
+  // Цвет палитры сначала доводится до видимости на своей бумаге. Пары
+  // рисовались под свечи, а панели красятся ими же: у мегатрона рост на белом
+  // белый, у вельвета белым выходит падение - на бумаге такая сторона стакана
+  // исчезает целиком. Тон при этом остаётся прежним, палитра узнаётся.
+  const back = paper === "light" ? "#ffffff" : "#181a20";
+  const bull = visibleOn(swatch.bull, back);
+  const bear = visibleOn(swatch.bear, back);
   return {
     "--pane-up": bull,
     "--pane-down": bear,

@@ -271,8 +271,11 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
         const wickTop = Math.round(candle.wickTop * vy);
         const wickBottom = Math.round(candle.wickBottom * vy);
 
+        // Волосяная линия и у фитиля, и у рамки: тело в полторы точки
+        // спорило по весу с цифрами внутри себя, а рамка здесь - обвод, а не
+        // фигура сама по себе.
         ctx.strokeStyle = wick;
-        ctx.lineWidth = Math.max(line, Math.round(1.5 * hx));
+        ctx.lineWidth = line;
         if (wickTop < bodyTop) {
           ctx.beginPath();
           ctx.moveTo(axis + 0.5 * line, wickTop);

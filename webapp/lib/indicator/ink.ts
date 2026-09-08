@@ -86,3 +86,60 @@ export function readableInk(
   if (!fore || !under) return dark;
   return light(mix(fore, under, alpha)) > 0.5 ? dark : bright;
 }
+
+/**
+ * Насколько цвет вообще видно на этом фоне.
+ *
+ * Разница яркостей, от нуля до единицы. Не отношение контрастов из правил
+ * доступности: там речь про текст, а здесь про заливку, и нам нужно ровно одно
+ * - отличается она от бумаги или слилась с ней.
+ */
+export function apart(color: Rgb, back: Rgb): number {
+  return Math.abs(light(color) - light(back));
+}
+
+/** Ниже этого цвет на фоне уже не читается как отдельная фигура. */
+const APART_MIN = 0.12;
+
+/**
+ * Довести цвет до видимости на своём фоне, не меняя тона.
+ *
+ * На белом листе у стандартной палитры рост белый, у мегатрона тоже, у вельвета
+ * белым выходит падение: чистая заливка такого цвета на белой бумаге
+ * пропадает, и сторона объёма исчезает целиком. Заметить это можно только на
+ * том листе и той палитре, где так сошлось, поэтому проверку делает не глаз.
+ *
+ * Уводим цвет в сторону, противоположную бумаге: на белом темним, на тёмном
+ * светлим. Тон остаётся тем же - палитра узнаётся, - а фигура появляется.
+ */
+export function visibleOn(color: string, back: string): string {
+  const fore = toRgb(color);
+  const under = toRgb(back);
+  if (!fore || !under) return color;
+  if (apart(fore, under) >= APART_MIN) return color;
+
+  // Куда уводить: от светлой бумаги к чёрному, от тёмной к белому.
+  const target: Rgb = light(under) > 0.5 ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 };
+  // Шагами по десятой доле: доводим ровно настолько, насколько нужно, а не до
+  // упора - иначе бледная палитра почернела бы целиком.
+  for (let part = 0.1; part <= 1; part += 0.1) {
+    const moved = mix(target, fore, part);
+    if (apart(moved, under) >= APART_MIN) return rgbText(moved);
+  }
+  return rgbText(target);
+}
+
+/**
+ * Обратно в строку.
+ *
+ * Шестнадцатеричной записью, а не `rgb()`: этот цвет уходит дальше в `rgba`,
+ * которая разбирает только её, - и запись из трёх чисел развалила бы все
+ * полупрозрачные оттенки панели разом.
+ */
+function rgbText(color: Rgb): string {
+  const byte = (v: number) =>
+    Math.max(0, Math.min(255, Math.round(v)))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${byte(color.r)}${byte(color.g)}${byte(color.b)}`;
+}
