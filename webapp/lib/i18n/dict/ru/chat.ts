@@ -24,6 +24,7 @@ export const chat = {
   attach: "Приложить",
   attachPhoto: "Фотографию",
   attachOrder: (coin: string) => `Заявку ${coin}`,
+  groupRunning: "В рынке",
   groupPending: "Ждущие заявки",
   groupJournal: "Журнал сделок",
   noJournal: "Отработанных сделок нет",

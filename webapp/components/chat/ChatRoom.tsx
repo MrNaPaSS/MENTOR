@@ -23,6 +23,7 @@ import {
   X,
   ImageIcon,
   Clock,
+  Activity,
   BookText,
   Pencil,
   Trash2,
@@ -228,8 +229,9 @@ function TradeCard({
   >;
 }) {
   const long = trade.side === "long";
-  const closed = trade.state === "closed" && typeof trade.pnl === "number";
-  const win = closed && (trade.pnl ?? 0) >= 0;
+  const closed = trade.state === "closed";
+  const result = trade.state !== "planned" && typeof trade.pnl === "number";
+  const win = (trade.pnl ?? 0) >= 0;
   const state =
     trade.state === "planned" ? labels.planned : trade.state === "open" ? labels.open : labels.closed;
   const outcome =
@@ -238,7 +240,7 @@ function TradeCard({
   // Проценты считаем от маржи, а не от объёма: вложено было именно столько, и
   // «плюс двадцать процентов» здесь означает пятую часть внесённых денег.
   const percent =
-    closed && trade.margin && trade.margin > 0 ? ((trade.pnl ?? 0) / trade.margin) * 100 : null;
+    result && trade.margin && trade.margin > 0 ? ((trade.pnl ?? 0) / trade.margin) * 100 : null;
 
   return (
     <div className={`mt-1.5 overflow-hidden text-[11px] ${skin.card}`}>
@@ -256,7 +258,7 @@ function TradeCard({
 
       {/* Результат: крупно и с процентом от маржи. Только у закрытой - у ждущей
           заявки его ещё нет, и рисовать там ноль значит соврать. */}
-      {closed && (
+      {result && (
         <div className={`flex items-baseline gap-2 px-2.5 py-1.5 ${win ? skin.upBox : skin.downBox}`}>
           <span className="text-[15px] font-bold leading-none">{money(trade.pnl ?? 0)}</span>
           <span className="text-[10px] opacity-80">USD</span>
@@ -332,14 +334,14 @@ function useLinkPreview(link: LinkCard | null): LinkPreview | null {
 export default function ChatRoom({
   tone = "site",
   symbol,
-  pending = [],
+  own = [],
   onClose,
 }: {
   tone?: ChatTone;
   /** Открытая монета: ею подписывается страница отправленной фотографии. */
   symbol?: string;
-  /** Ждущие входа заявки по всем монетам: их прикладывают скрепкой. */
-  pending?: SharedTrade[];
+  /** Свои сделки по всем монетам - идущие и ждущие входа: их прикладывают скрепкой. */
+  own?: SharedTrade[];
   /** Кнопка сворачивания в шапке. Есть только у панели терминала. */
   onClose?: () => void;
 }) {
@@ -404,6 +406,11 @@ export default function ChatRoom({
       setBusy(false);
     }
   }
+
+  // Идущие отдельно от ждущих: это разные вопросы к собеседнику - «посмотри,
+  // что у меня в рынке» и «посмотри, что я поставил».
+  const running = own.filter((t) => t.state === "open");
+  const waiting = own.filter((t) => t.state === "planned");
 
   const pinned = state.messages.find((m) => m.author.mentor);
   const time = (at: number) =>
@@ -569,14 +576,46 @@ export default function ChatRoom({
               <ImageIcon className="h-3.5 w-3.5" />
               {t.chat.attachPhoto}
             </button>
+            {/* Идущие сделки - по всем монетам сразу. */}
+            {running.length > 0 && (
+              <>
+                <p className={`px-3 pt-1.5 text-[10px] uppercase tracking-wide ${skin.muted}`}>
+                  {t.chat.groupRunning}
+                </p>
+                {running.map((trade, i) => (
+                  <button
+                    key={`open-${trade.symbol}-${i}`}
+                    onClick={() => {
+                      setAttach({ kind: "trade", trade });
+                      setAttachMenu(false);
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] ${skin.nameOther} hover:opacity-80`}
+                  >
+                    <Activity className="h-3.5 w-3.5" />
+                    <span className={trade.side === "long" ? skin.up : skin.down}>
+                      {trade.side === "long" ? "L" : "S"}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {trade.symbol.replace(/USDT$/i, "")}
+                    </span>
+                    {typeof trade.pnl === "number" && (
+                      <span className={trade.pnl >= 0 ? skin.up : skin.down}>
+                        {money(trade.pnl)}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </>
+            )}
+
             {/* Ждущие заявки - по всем монетам сразу. */}
             <p className={`px-3 pt-1.5 text-[10px] uppercase tracking-wide ${skin.muted}`}>
               {t.chat.groupPending}
             </p>
-            {pending.length === 0 ? (
+            {waiting.length === 0 ? (
               <p className={`px-3 py-1 text-[11px] ${skin.muted}`}>{t.chat.noPending}</p>
             ) : (
-              pending.map((trade, i) => (
+              waiting.map((trade, i) => (
                 <button
                   key={`${trade.symbol}-${trade.entry}-${i}`}
                   onClick={() => {

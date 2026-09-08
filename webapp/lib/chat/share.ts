@@ -41,6 +41,11 @@ export function fromActive(trade: ActiveTrade): SharedTrade {
     leverage: trade.leverage,
     state: trade.status === "open" ? "open" : "planned",
     takesHit: trade.takesHit,
+    margin: trade.margin,
+    // Плавающий результат идущей сделки. Снимок на момент отправки, как и цены:
+    // пока сообщение читают, он уже другой - и это честнее, чем цифра, которая
+    // молча меняется в чужой ленте.
+    pnl: trade.status === "open" ? (trade.unrealized ?? null) : null,
   };
 }
 

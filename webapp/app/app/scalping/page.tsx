@@ -2044,17 +2044,17 @@ export default function ScalpingPage() {
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
 
   /**
-   * Ждущие входа заявки - их прикладывают к сообщению скрепкой.
+   * Свои сделки для скрепки: и ждущие входа, и уже идущие.
    *
    * По всем монетам, а не только по открытой: лимитки ставят с вечера на
    * десяток инструментов, а показать одну из них хотят, стоя на другом
    * графике - и переключаться ради этого туда и обратно незачем.
    *
-   * Снимком, а не ссылкой: заявку через минуту переставят или отменят, а в
-   * ленте должно остаться то, что человек показал.
+   * Снимком, а не ссылкой: заявку через минуту переставят или отменят, позиция
+   * закроется, а в ленте должно остаться то, что человек показал.
    */
-  const pendingShares = useMemo(
-    () => trades.filter((t) => t.status === "planned").map(fromActive),
+  const myShares = useMemo(
+    () => trades.filter((t) => t.status !== "closed").map(fromActive),
     [trades],
   );
 
@@ -2912,7 +2912,7 @@ export default function ScalpingPage() {
                   <ChatRoom
                     tone="pane"
                     symbol={symbol ?? undefined}
-                    pending={pendingShares}
+                    own={myShares}
                     onClose={() => setChatOpen(false)}
                   />
                 </section>

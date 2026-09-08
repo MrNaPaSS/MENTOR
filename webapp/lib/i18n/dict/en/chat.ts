@@ -20,6 +20,7 @@ export const chat = {
   attach: "Attach",
   attachPhoto: "A photo",
   attachOrder: (coin: string) => `${coin} order`,
+  groupRunning: "In the market",
   groupPending: "Resting orders",
   groupJournal: "Trade journal",
   noJournal: "No closed trades yet",
