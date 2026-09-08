@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
+import { cardFromTrade } from "@/lib/pnl/data";
 import {
   loadCalendar,
   loadTrades,
@@ -404,7 +405,9 @@ export default function JournalPanel({
         </div>
       )}
 
-      {card && <PnlCard trade={card} owner={owner} onClose={() => setCard(null)} />}
+      {card && (
+        <PnlCard data={cardFromTrade(card, owner)} onClose={() => setCard(null)} />
+      )}
     </div>
   );
 }

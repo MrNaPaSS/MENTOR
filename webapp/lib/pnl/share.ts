@@ -69,16 +69,17 @@ export async function share(
   const token = getAccessToken();
   if (!token) return null;
 
-  const note =
-    `${data.side === "long" ? "Лонг" : "Шорт"} ${data.symbol} ` +
-    `${data.roi >= 0 ? "+" : ""}${data.roi.toFixed(2)}%`;
+  // Заметка складывается из того, что и так стоит на карточке: одним бланком
+  // делятся и сделкой, и итогом срока, и «Шорт BTCUSDT» подошло бы только
+  // первому.
+  const note = `${data.subtitle} ${data.title} ${data.roi >= 0 ? "+" : ""}${data.roi.toFixed(2)}%`;
 
   const body = await authReq<{ id: string; url: string }>("/api/shots/pnl", token, {
     method: "POST",
     body: JSON.stringify({
       image: stamped.toDataURL("image/png"),
       raw: plain.toDataURL("image/png"),
-      symbol: data.symbol,
+      symbol: data.title,
       side: data.side,
       owner: data.owner ?? "",
       note,

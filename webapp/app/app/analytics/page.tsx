@@ -8,7 +8,9 @@ import PnlCard from "@/components/scalping/PnlCard";
 // Цены показываем тем же форматом, что и на самой карточке: цена выхода -
 // средняя по частям закрытия, и без округления она приезжает с десятком
 // знаков после точки.
-import { price as fmtPrice } from "@/lib/pnl/card";
+import { price as fmtPrice, type CardData } from "@/lib/pnl/card";
+import { cardFromPeriod, cardFromTrade } from "@/lib/pnl/data";
+import { periodOf, type Span } from "@/lib/pnl/period";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
@@ -84,6 +86,14 @@ function getXpLevel(totalXp: number) {
   while (xpToLevel(lvl + 1) <= totalXp) lvl++;
   return { level: lvl, xpInLevel: totalXp - xpToLevel(lvl), xpNeeded: xpToLevel(lvl + 1) - xpToLevel(lvl) };
 }
+
+// Сроки, за которые собирается карточка. Порядок - от короткого к длинному:
+// им же и пользуются, от «сегодня получилось» к «вот месяц».
+const SPANS: { id: Span; label: string }[] = [
+  { id: "day",   label: "день"   },
+  { id: "week",  label: "неделю" },
+  { id: "month", label: "месяц"  },
+];
 
 const ACH_CATEGORIES: { id: AchCategory; label: string; icon: React.ElementType }[] = [
   { id: "all",         label: "Все",        icon: Trophy        },
@@ -251,7 +261,9 @@ export default function AnalyticsPage() {
   // не было. Три разных случая, и путать их нельзя.
   const [dayTrades, setDayTrades] = useState<JournalTrade[] | null | undefined>(null);
   // Чья карточка открыта. Null - окна нет.
-  const [card, setCard] = useState<JournalTrade | null>(null);
+  // Карточкой делятся и одной сделкой, и итогом срока - окно одно, а
+  // колонку для него собирают в lib/pnl/data.
+  const [card, setCard] = useState<CardData | null>(null);
   const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
   const [owner, setOwner] = useState<string | null>(null);
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
@@ -546,6 +558,10 @@ export default function AnalyticsPage() {
 
   // Лучший/худший день месяца
   const realDays = calData.filter(d => d.pnl_pct !== null && !d.estimated);
+  // Опорная дата сроков: выбранный день, а если не выбран - последний день
+  // месяца, который вообще есть в календаре. Открытый месяц кончается сегодня,
+  // так что для текущего это и будет сегодня.
+  const anchor = selectedDay?.date ?? calData[calData.length - 1]?.date ?? "";
   const bestDay = realDays.reduce<CalendarDay | null>((a, b) => (b.pnl_pct! > (a?.pnl_pct ?? -Infinity) ? b : a), null);
   const worstDay = realDays.reduce<CalendarDay | null>((a, b) => (b.pnl_pct! < (a?.pnl_pct ?? Infinity) ? b : a), null);
   const totalPnl = realDays.reduce((s, d) => s + (d.pnl_pct ?? 0), 0);
@@ -894,7 +910,7 @@ export default function AnalyticsPage() {
                               делятся ровно оттуда, где его увидели. */}
                           <td className="py-1 pl-2 text-right">
                             <button
-                              onClick={() => setCard(one)}
+                              onClick={() => setCard(cardFromTrade(one, owner ?? undefined))}
                               title="Карточка сделки: скопировать, скачать, поделиться"
                               className="text-text-primary/30 transition-colors duration-150 ease-out hover:text-accent-cyan"
                             >
@@ -939,6 +955,36 @@ export default function AnalyticsPage() {
               </div>
             </div>
           )}
+
+          {/* Карточка за срок.
+              Сделкой делятся из строки журнала, а хорошим днём, неделей или
+              месяцем делиться было нечем - приходилось слать пять карточек
+              подряд. Опорная дата - выбранный день: неделя берётся та, что
+              обведена в сетке над кнопками, а не последние семь суток. */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
+            <span className="text-[10px] uppercase tracking-wider text-text-primary/30">
+              Карточка за
+            </span>
+            {SPANS.map(({ id, label }) => {
+              const ready = periodOf(calData, id, anchor);
+              return (
+                <button
+                  key={id}
+                  disabled={!ready}
+                  onClick={() => ready && setCard(cardFromPeriod(ready, owner ?? undefined))}
+                  title={
+                    ready
+                      ? `${ready.title}: ${ready.roi >= 0 ? "+" : ""}${ready.roi.toFixed(2)}%`
+                      : "За этот срок нечего показать"
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[11px] font-semibold text-text-secondary transition-colors duration-150 ease-out hover:border-accent-cyan/40 hover:text-accent-cyan disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-border disabled:hover:text-text-secondary"
+                >
+                  <Share2 className="h-3 w-3" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Цели */}
@@ -1142,7 +1188,7 @@ export default function AnalyticsPage() {
           переменными панелей терминала, а на этой странице их нет. */}
       {card && (
         <div className={pane}>
-          <PnlCard trade={card} owner={owner ?? undefined} onClose={() => setCard(null)} />
+          <PnlCard data={card} onClose={() => setCard(null)} />
         </div>
       )}
     </div>

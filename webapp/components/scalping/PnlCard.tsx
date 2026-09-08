@@ -14,22 +14,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Copy, Download, Link2, X } from "lucide-react";
 
-import type { JournalTrade } from "@/lib/journal";
-import { defaultVariant, loadBackdrop, render, resultInk, variantsFor } from "@/lib/pnl/card";
-import { cardFromTrade } from "@/lib/pnl/data";
+import {
+  defaultVariant,
+  loadBackdrop,
+  render,
+  resultInk,
+  variantsFor,
+  type CardData,
+} from "@/lib/pnl/card";
 import { copy, download, share } from "@/lib/pnl/share";
 
 export default function PnlCard({
-  trade,
-  owner,
+  data,
   onClose,
 }: {
-  trade: JournalTrade;
-  /** Имя владельца в подписи. Пусто - подписи не будет. */
-  owner?: string;
+  /**
+   * Что показать. Готовой колонкой, а не записью журнала: тем же бланком
+   * делятся итогом дня, недели и месяца, и собирать колонку умеет `lib/pnl/data`.
+   */
+  data: CardData;
   onClose: () => void;
 }) {
-  const data = useMemo(() => cardFromTrade(trade, owner), [trade, owner]);
   // Заготовки на выбор - те, что подходят стороне сделки.
   //
   // Открывается первая: порядок задан наставником, и первая в нём - лицо
@@ -104,7 +109,7 @@ export default function PnlCard({
   }
 
   async function onDownload() {
-    const name = `${data.symbol}-${data.side}-${data.at.slice(0, 10)}`;
+    const name = `${data.title}-${data.side}-${data.at.slice(0, 10)}`;
     await download(await stamped(), name);
     setNote("Файл сохранён");
   }
@@ -221,7 +226,7 @@ export default function PnlCard({
           {paper ? (
             <div className="pnl-paper">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={paper} alt={`${data.symbol} ${data.side}`} />
+              <img src={paper} alt={`${data.title} ${data.subtitle}`} />
               <div className="pnl-stamp">
                 <div className="pnl-ink">
                   <span className="pnl-mark">

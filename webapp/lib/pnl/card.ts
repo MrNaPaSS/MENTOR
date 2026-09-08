@@ -217,18 +217,31 @@ export function defaultVariant(side: CardSide): Variant {
   return VARIANTS.find((v) => v.side === side) ?? VARIANTS[0];
 }
 
+/**
+ * Что стоит в колонке карточки.
+ *
+ * Не «сделка»: тем же бланком делятся итогом дня, недели и месяца. Геометрия у
+ * них одна - крупный заголовок, строка под ним, доход, две строки над чертой и
+ * подпись под ней, - а чем эти места заполнить, решает тот, кто карточку
+ * заказал. Само рисование про повод не знает и знать не должно: иначе каждый
+ * новый повод пришлось бы вписывать сюда ветками.
+ */
 export type CardData = {
-  symbol: string;
+  /** Крупная строка: монета у сделки, название периода у сводки. */
+  title: string;
+  /** Строка под заголовком, цветом заготовки. */
+  subtitle: string;
+  /** Какой набор заготовок открывать. У сводки - по знаку итога. */
   side: CardSide;
-  leverage: number;
-  /** Доход в процентах от залога. */
+  /** Доход в процентах. У сделки - от залога, у периода - от депозита. */
   roi: number;
   /** Доход в USDT - тот, что пришёл на счёт, уже за вычетом комиссии. */
   pnl: number;
-  entry: number;
-  /** Цена выхода. `null` - выхода в отчёте биржи ещё нет. */
-  exit: number | null;
-  /** Когда сделка закрылась, ISO. */
+  /** Две строки «подпись - значение» над чертой. */
+  rows: [string, string][];
+  /** Подпись и значение под чертой. */
+  footer: [string, string];
+  /** Когда это было, ISO. Идёт в имя файла при скачивании. */
   at: string;
   /** Имя владельца. Пусто - подписи не будет. */
   owner?: string;
@@ -295,7 +308,7 @@ function zone(at: Date): string {
 }
 
 /** Время карточки - по часам того, кто её собирает, и с их поясом. */
-function stamped(iso: string): string {
+export function stamped(iso: string): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -405,13 +418,13 @@ export function paint(
 
   ctx.fillStyle = ink;
   ctx.font = face(w * 0.062, 800);
-  ctx.fillText(data.symbol, x, head + room * 0.19);
+  ctx.fillText(data.title, x, head + room * 0.19);
 
-  // Строка стороны - цветом заготовки: она про то, куда встали.
+  // Вторая строка - цветом заготовки: у сделки она про то, куда встали, у
+  // сводки - про то, за какой срок счёт.
   ctx.fillStyle = variant.accent;
   ctx.font = face(w * 0.036, 600);
-  const side = data.side === "long" ? "Лонг" : "Шорт";
-  ctx.fillText(`${side}   |   ${data.leverage}x`, x, head + room * 0.27);
+  ctx.fillText(data.subtitle, x, head + room * 0.27);
 
   // А числа - цветом результата: плюс зелёный, минус красный, независимо от
   // того, лонг это был или шорт.
@@ -422,13 +435,9 @@ export function paint(
   ctx.font = face(w * 0.04, 600);
   ctx.fillText(`${signed(data.pnl, 4)} USDT`, x, head + room * 0.53);
 
-  // Цены - подпись слева, число в колонке: так их сравнивают глазами, а не
+  // Подпись слева, число в колонке: так их сравнивают глазами, а не
   // выискивают в строке.
-  const rows: [string, string][] = [
-    ["Цена входа", price(data.entry)],
-    ["Цена выхода", data.exit === null ? "-" : price(data.exit)],
-  ];
-  rows.forEach(([label, value], i) => {
+  data.rows.slice(0, 2).forEach(([label, value], i) => {
     const y = head + room * (0.79 + i * 0.055);
     ctx.fillStyle = muted;
     ctx.font = face(w * 0.028, 500);
@@ -447,11 +456,11 @@ export function paint(
 
   ctx.fillStyle = muted;
   ctx.font = face(w * 0.026, 500);
-  ctx.fillText("Дата и время", x, head + room * 0.96);
+  ctx.fillText(data.footer[0], x, head + room * 0.96);
   // Чуть мельче остальных строк: к дате прибавился пояс, и прежним кеглем
   // строка заезжала на картинку.
   ctx.font = face(w * 0.024, 500);
-  ctx.fillText(stamped(data.at), x + w * 0.3, head + room * 0.96);
+  ctx.fillText(data.footer[1], x + w * 0.3, head + room * 0.96);
 
   // Имя владельца - справа вверху и на подложке, как это делают биржи.
   //

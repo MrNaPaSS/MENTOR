@@ -8,7 +8,7 @@
 
 import type { JournalTrade } from "@/lib/journal";
 
-import type { CardData } from "./card";
+import { price, stamped, type CardData, type CardSide } from "./card";
 
 /**
  * Доход в процентах - от залога, а не от оборота.
@@ -26,17 +26,87 @@ export function roiOf(trade: JournalTrade): number {
 
 /** Запись журнала - в карточку. */
 export function cardFromTrade(trade: JournalTrade, owner?: string): CardData {
+  const side = trade.side === "long" ? "Лонг" : "Шорт";
   return {
-    symbol: trade.symbol,
+    title: trade.symbol,
+    subtitle: `${side}   |   ${trade.leverage}x`,
     side: trade.side,
-    leverage: trade.leverage,
     roi: roiOf(trade),
     // Итог тот же, что в журнале: после комиссии. Карточка с доходом до неё
     // обещала бы больше, чем пришло на счёт.
     pnl: Number(trade.pnl),
-    entry: Number(trade.entry),
-    exit: trade.exit_price === null ? null : Number(trade.exit_price),
+    rows: [
+      ["Цена входа", price(Number(trade.entry))],
+      ["Цена выхода", trade.exit_price === null ? "-" : price(Number(trade.exit_price))],
+    ],
+    footer: ["Дата и время", stamped(trade.closed_at)],
     at: trade.closed_at,
+    owner: owner || undefined,
+  };
+}
+
+/** Итог за срок: день, неделя, месяц. */
+export type Period = {
+  /** Крупная строка: «8 сентября», «1 - 7 сентября», «Сентябрь 2026». */
+  title: string;
+  /** Строка под ней: «Итог дня» и так далее. */
+  label: string;
+  /** Доход за срок в процентах от депозита. */
+  roi: number;
+  /** Доход за срок в USDT. */
+  pnl: number;
+  /** Сколько сделок закрыто за срок. */
+  trades: number;
+  /** Сколько дней срока закончились в плюс и сколько всего торговали. */
+  winDays: number;
+  tradeDays: number;
+  /** Границы срока, чтобы подписать карточку. */
+  from: string;
+  to: string;
+};
+
+/** Множественное число по-русски: 1 сделка, 2 сделки, 5 сделок. */
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  const mod10 = n % 10;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}
+
+function dotted(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}.${m}.${y}`;
+}
+
+/**
+ * Итог за срок - в карточку.
+ *
+ * Заготовку выбирает знак итога, а не сторона сделки: у срока стороны нет, а
+ * бланки нарисованы под неё - на медвежьем листе прибыльный месяц читался бы
+ * наоборот. Прибыльный срок идёт на бычьи бланки, убыточный на медвежьи.
+ */
+export function cardFromPeriod(period: Period, owner?: string): CardData {
+  const side: CardSide = period.pnl >= 0 ? "long" : "short";
+  return {
+    title: period.title,
+    subtitle: period.label,
+    side,
+    roi: period.roi,
+    pnl: period.pnl,
+    rows: [
+      ["Сделок", `${period.trades} ${plural(period.trades, "сделка", "сделки", "сделок")}`],
+      [
+        "Дней в плюс",
+        period.tradeDays > 0 ? `${period.winDays} из ${period.tradeDays}` : "-",
+      ],
+    ],
+    footer: [
+      period.from === period.to ? "Дата" : "Период",
+      period.from === period.to ? dotted(period.to) : `${dotted(period.from)} - ${dotted(period.to)}`,
+    ],
+    at: `${period.to}T12:00:00`,
     owner: owner || undefined,
   };
 }
