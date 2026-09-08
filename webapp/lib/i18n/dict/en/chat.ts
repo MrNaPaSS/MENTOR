@@ -4,7 +4,6 @@ export const chat = {
   placeholder: "Write a message…",
   send: "Send",
   note: "No connection to the chat - new messages will not arrive on their own",
-  hint: "Enter sends · the clip attaches a photo or an order",
   empty: "Nobody has written anything yet",
   earlier: "Show earlier",
   offline: "offline",

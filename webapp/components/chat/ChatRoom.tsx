@@ -823,7 +823,7 @@ export default function ChatRoom({
         </div>
       )}
 
-      <div className={`relative flex gap-2 ${tone === "pane" ? "px-2 pt-1" : "mt-3"}`}>
+      <div className={`relative flex gap-2 ${tone === "pane" ? "px-2 pb-2 pt-1" : "mb-1 mt-3"}`}>
         <input
           ref={fileRef}
           type="file"
@@ -986,7 +986,10 @@ export default function ChatRoom({
           <Send className="h-4 w-4" />
         </button>
       </div>
-      <p className={skin.note}>{state.live ? t.chat.hint : t.chat.note}</p>
+      {/* Подсказка про Enter и скрепку убрана: её читают один раз, а место она
+          занимает под каждым сообщением. Обрыв связи остаётся - о нём молчать
+          нельзя, иначе тишина в чате выглядит как затишье на рынке. */}
+      {!state.live && <p className={skin.note}>{t.chat.note}</p>}
 
       {card && <PnlCard data={card} onClose={() => setCard(null)} />}
     </div>
