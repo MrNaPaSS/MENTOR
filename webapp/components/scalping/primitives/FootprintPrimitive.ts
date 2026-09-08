@@ -45,12 +45,8 @@ import {
   type FootprintData,
 } from "@/lib/indicator/footprint";
 import { withValueArea } from "@/lib/indicator/valueArea";
-import {
-  cellHeat,
-  rowBudget,
-  rowHeight,
-  traceTail,
-} from "@/lib/indicator/footprintLayout";
+import { ROWS, cellHeat, rowHeight, traceTail } from "@/lib/indicator/footprintLayout";
+import { readableInk } from "@/lib/indicator/ink";
 import { money, price as fmtPrice } from "@/lib/scalping";
 import type { Candle } from "@/lib/indicator/types";
 
@@ -60,8 +56,11 @@ export type FootprintSkin = {
   border: string;
   text: string;
   muted: string;
+  /** Цвет объёма: тот же, что у выбранных свечей, а не всегда зелёно-красный. */
   up: string;
   down: string;
+  /** Светлые чернила - для тёмной ячейки. Тёмные берутся из `text`. */
+  bright: string;
   gold: string;
   accent: string;
   /**
@@ -106,6 +105,8 @@ type ReadyRow = {
   buyTail: number;
   sellHeat: number;
   buyHeat: number;
+  sellInk: string;
+  buyInk: string;
   sellBold: boolean;
   buyBold: boolean;
   poc: boolean;
@@ -207,11 +208,12 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
         }
         ctx.globalAlpha = 1;
 
-        ctx.fillStyle = skin.text;
         ctx.textAlign = "right";
+        ctx.fillStyle = row.sellInk;
         ctx.font = font(9, row.sellBold);
         ink(row.sell, priceLeft - Math.round(3 * hx), middle);
         ctx.textAlign = "left";
+        ctx.fillStyle = row.buyInk;
         ctx.font = font(9, row.buyBold);
         ink(row.buy, priceRight + Math.round(3 * hx), middle);
 
@@ -336,14 +338,13 @@ class FootprintPaneView implements IPrimitivePaneView {
 
     const prices = data.levels.map((level) => level.price);
     const span = Math.max(...prices) - Math.min(...prices);
-    // Крупность: ступень делит число строк, а не шаг цены. Так на любой монете
-    // «вдвое грубее» означает одно и то же - вдвое меньше строк.
-    const budget = rowBudget(this.source.grow);
-    const step = stepForRows(data.tick, span, budget);
+    const step = stepForRows(data.tick, span, ROWS);
     if (!(step > 0)) return;
 
     const { rows } = withValueArea(markRows(foldRows(data.levels, step)));
     if (rows.length === 0) return;
+
+    const skin = this.source.skin;
 
     const pane = chart.paneSize();
     // Строка ужимается, только если картинка не влезает в холст целиком:
@@ -369,6 +370,10 @@ class FootprintPaneView implements IPrimitivePaneView {
       buyTail: traceTail(row.buy, peak, SIDE),
       sellHeat: cellHeat(row.sell, peak),
       buyHeat: cellHeat(row.buy, peak),
+      // Чернила под свою ячейку: цвет объёма идёт от выбранных свечей, и на
+      // белом листе одна сторона чёрная - тёмная цифра на ней пропадает.
+      sellInk: ink(skin, skin.down, cellHeat(row.sell, peak)),
+      buyInk: ink(skin, skin.up, cellHeat(row.buy, peak)),
       sellBold: row.imbalance < 0,
       buyBold: row.imbalance > 0,
       poc: row.poc,
@@ -453,6 +458,12 @@ class FootprintPaneView implements IPrimitivePaneView {
   }
 }
 
+/** Чернила для ячейки: её цвет смешан с фоном панели ровно так, как на экране. */
+function ink(skin: FootprintSkin, fill: string, heat: number): string {
+  if (!(heat > 0)) return skin.muted;
+  return readableInk(fill, skin.bg, heat, skin.text, skin.bright);
+}
+
 function shift(shape: ReadyCandle, by: number): ReadyCandle {
   return {
     ...shape,
@@ -466,7 +477,6 @@ function shift(shape: ReadyCandle, by: number): ReadyCandle {
 export class FootprintPrimitive implements ISeriesPrimitive<Time> {
   data: FootprintData | null = null;
   candle: Candle | null = null;
-  grow = 1;
   skin: FootprintSkin = {
     bg: "#181a20",
     border: "#2b3139",
@@ -474,6 +484,7 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
     muted: "#7a8290",
     up: "#0ecb81",
     down: "#f6465d",
+    bright: "#ffffff",
     gold: "#f0b90b",
     accent: "#0affe0",
     bodyUp: "#0ecb81",
@@ -507,10 +518,9 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
     this.requestUpdate = undefined;
   }
 
-  setData(data: FootprintData | null, candle: Candle | null, grow: number, skin: FootprintSkin) {
+  setData(data: FootprintData | null, candle: Candle | null, skin: FootprintSkin) {
     this.data = data;
     this.candle = candle;
-    this.grow = grow;
     this.skin = skin;
     this.requestUpdate?.();
   }
@@ -540,3 +550,6 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
 
 /** Ширина картинки в точках: по ней страница равняет подпись над ней. */
 export const FOOTPRINT_WIDTH = WIDTH;
+
+/** Ширина колонки цены: подпись оставляет над ней пропуск - там фитиль. */
+export const FOOTPRINT_PRICE = PRICE;

@@ -12,7 +12,7 @@
 
 import { useT } from "@/lib/i18n";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Crosshair, X } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import {
   CandlestickSeries,
   ColorType,
@@ -36,10 +36,6 @@ import { readout, tenth, type ScoreReadout } from "@/lib/indicator/score";
 // Свёрнута ли панель показаний. Ключ свой, отдельно от рабочего места: там
 // живёт раскладка кабинета, а это переключатель внутри самого графика.
 const SCORE_KEY = "nmnh.chart.score.wide";
-
-// Насколько загрубить строки объёма рукой. Ключ отдельный от рабочего
-// места: ширины панелей общие на терминал, а это привычка чтения свечи.
-const FOOT_GROW_KEY = "nmnh.chart.foot.grow";
 
 // Насколько трейдер увёл разбор свечи от неё самой.
 const FOOT_SHIFT_KEY = "nmnh.chart.foot.shift";
@@ -66,30 +62,6 @@ function keepShift(shift: { dx: number; dy: number }): void {
   } catch {
     // Не запомнилось - сдвиг всё равно держится до конца сессии.
   }
-}
-
-// Во сколько раз строка выше обычной. Единица - строка текста, дальше
-// вдвое и вчетверо: шаг мельче между ними неразличим глазом, а список из
-// восьми ступеней в углу графика читать некогда.
-const FOOT_GROWS = [1, 2, 4] as const;
-
-function readGrow(): number {
-  try {
-    const saved = Number(localStorage.getItem(FOOT_GROW_KEY));
-    return FOOT_GROWS.includes(saved as (typeof FOOT_GROWS)[number]) ? saved : 1;
-  } catch {
-    // В приватном окне обращение к хранилищу бросает исключение.
-    return 1;
-  }
-}
-
-function keepGrow(grow: number): number {
-  try {
-    localStorage.setItem(FOOT_GROW_KEY, String(grow));
-  } catch {
-    // Не запомнилось - масштаб всё равно сменится на эту сессию.
-  }
-  return grow;
 }
 
 function readScoreWide(): boolean {
@@ -127,6 +99,7 @@ import {
 } from "./primitives/ShapesPrimitive";
 import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
 import {
+  FOOTPRINT_PRICE,
   FOOTPRINT_WIDTH,
   FootprintPrimitive,
   type FootprintSkin,
@@ -996,14 +969,6 @@ function PriceChart({
   const [foot, setFoot] = useState<FootprintData | null>(null);
   const footRef = useRef<FootprintData | null>(null);
   footRef.current = foot;
-  // Во сколько раз загрубить строки объёма сверх того, что уже собрал
-  // масштаб графика. Читаем из хранилища при первой отрисовке: страница
-  // собирается и на сервере, где хранилища нет.
-  const [footGrow, setFootGrow] = useState(1);
-  // Через ref: цвета снимаются на смене листа, и той отрисовке нужны
-  // сегодняшние данные, а не те, что были на сборке замыкания.
-  const footGrowRef = useRef(1);
-  footGrowRef.current = footGrow;
   // Подпись над лестницей: время свечи, итоги и ступени укрупнения.
   // Положение задаётся покадрово - она стоит на свече, а свеча едет.
   const footBarRef = useRef<HTMLDivElement>(null);
@@ -1984,7 +1949,6 @@ function PriceChart({
   // Масштаб строк читаем один раз при первой отрисовке: хранилище - вещь
   // браузера, а страница собирается и на сервере, где его нет.
   useEffect(() => {
-    setFootGrow(readGrow());
     footPrimRef.current?.setShift(readShift());
   }, []);
 
@@ -2005,8 +1969,14 @@ function PriceChart({
       border: pick("--pane-border", "#2b3139"),
       text: pick("--pane-text", "#eaecef"),
       muted: pick("--pane-muted", "#7a8290"),
-      up: pick("--pane-up", "#0ecb81"),
-      down: pick("--pane-down", "#f6465d"),
+      // Объём красится цветом выбранных свечей, а не всегда зелёно-красным:
+      // на белом листе свечи чёрно-белые, и зелёный столбик рядом с ними -
+      // фигура из другого графика.
+      up: skinRef.current.up,
+      down: skinRef.current.down,
+      // Светлые чернила для тёмной ячейки. Берём фон тёмного листа, а не
+      // белый: чистый белый на цветной подложке слепит.
+      bright: "#f5f7fa",
       gold: pick("--pane-gold", "#f0b90b"),
       accent: pick("--pane-accent", "#0affe0"),
       // Свеча разбора - той же палитрой, что свечи графика: на белом листе они
@@ -2023,7 +1993,6 @@ function PriceChart({
     footPrimRef.current?.setData(
       footRef.current,
       barAt(dataRef.current, footRef.current?.time),
-      footGrowRef.current,
       footSkinRef.current,
     );
   }, [paper, preset]);
@@ -2034,12 +2003,12 @@ function PriceChart({
   useEffect(() => {
     const skin = footSkinRef.current;
     if (skin) {
-      footPrimRef.current?.setData(foot, barAt(dataRef.current, foot?.time), footGrow, skin);
+      footPrimRef.current?.setData(foot, barAt(dataRef.current, foot?.time), skin);
     }
     // Свежая свеча - в зависимостях: тело и фитили на картинке двигаются с
     // каждой сделкой, а профиль перезапрашивается раз в три секунды. Без этого
     // свеча на разборе отставала бы от той, что стоит на графике.
-  }, [foot, footGrow, liveCandle]);
+  }, [foot, liveCandle]);
 
   // Перенос разбора свечи за её тело.
   //
@@ -2692,70 +2661,43 @@ function PriceChart({
           className="pointer-events-auto absolute left-0 top-0 z-20 flex items-center gap-2 rounded px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
           style={{
             visibility: "hidden",
-            // Подпись прижата к левому краю картинки, но своей ширины:
-            // растянутая на всю её ширину, она читалась заголовком окна,
-            // которого здесь больше нет.
-            maxWidth: FOOTPRINT_WIDTH,
+            // Ширина - ровно по картинке: слова обязаны встать над своими
+            // колонками, а не рядом друг с другом.
+            width: FOOTPRINT_WIDTH,
             background: "var(--pane-bg)",
             color: "var(--pane-text-2)",
           }}
         >
-          {/* Только два числа: сколько за свечу набрали в лонг и сколько в
-              шорт. Время в подписи не шло - оно у свечи одно на всю её жизнь,
-              - а перевес с оборотом читаются по самой картинке: следы для того
-              и разведены в две стороны. */}
-          <span style={{ color: "var(--pane-up)" }}>
-            {t.terminal.chart.footLong} {money(foot.buy)}
-          </span>
-          <span
-            // «≈» у обеих сторон, когда свеча разобрана не целиком: цифры
-            // всё равно меньше настоящих, и выдавать их за полные нельзя.
-            title={foot.partial ? t.terminal.chart.footPartial : undefined}
-            style={{ color: "var(--pane-down)" }}
-          >
+          {/* Слово стоит над своей колонкой: шорт над колонкой продаж, лонг
+              над колонкой покупок. Подпись сбоку заставляла бы каждый раз
+              вспоминать, какая сторона где, - а сторону надо знать раньше,
+              чем прочитаешь цифру.
+
+              Между ними пропуск в ширину колонки цены: там из картинки
+              выходит верхний фитиль, и слово на нём читалось бы поверх свечи. */}
+          <span className="flex-1 text-right" style={{ color: "var(--pane-down)" }}>
             {t.terminal.chart.footShort} {foot.partial ? "≈" : ""}
             {money(foot.sell)}
           </span>
-
-          {/* Ступени укрупнения. Масштаб графика собирает строки сам, но
-              привычка чтения у каждого своя: кому-то нужна каждая цена, кому-то
-              картина крупными мазками. */}
-          <span className="flex items-center gap-0.5" title={t.terminal.chart.footGrow}>
-            {FOOT_GROWS.map((step) => (
-              <button
-                key={step}
-                onClick={() => setFootGrow(keepGrow(step))}
-                className="rounded px-1 transition-colors duration-150 ease-out"
-                style={{
-                  color: footGrow === step ? "var(--pane-chip)" : "var(--pane-muted)",
-                  background: footGrow === step ? "var(--pane-chip-faint)" : undefined,
-                }}
-              >
-                {step}×
-              </button>
-            ))}
+          <span
+            className="shrink-0"
+            style={{ width: FOOTPRINT_PRICE }}
+            // «≈» у обеих сторон, когда свеча разобрана не целиком: цифры
+            // всё равно меньше настоящих, и выдавать их за полные нельзя.
+            title={foot.partial ? t.terminal.chart.footPartial : undefined}
+          />
+          <span className="flex-1 text-left" style={{ color: "var(--pane-up)" }}>
+            {t.terminal.chart.footLong} {foot.partial ? "≈" : ""}
+            {money(foot.buy)}
           </span>
 
-          {pickedBar !== null && (
-            <button
-              onClick={() => {
-                setPickedBar(null);
-                setFollowBar(true);
-              }}
-              title={t.terminal.chart.footLive}
-              className="transition-opacity duration-150 ease-out hover:opacity-70"
-              style={{ color: "var(--pane-muted)" }}
-            >
-              <Crosshair className="h-3 w-3" />
-            </button>
-          )}
           <button
             onClick={() => {
               setPickedBar(null);
               setFollowBar(false);
             }}
             title={t.terminal.chart.footClose}
-            className="transition-opacity duration-150 ease-out hover:opacity-70"
+            className="shrink-0 transition-opacity duration-150 ease-out hover:opacity-70"
             style={{ color: "var(--pane-muted)" }}
           >
             <X className="h-3 w-3" />

@@ -4,7 +4,6 @@ import {
   ROW_MIN,
   ROWS,
   cellHeat,
-  rowBudget,
   rowHeight,
   traceTail,
 } from "@/lib/indicator/footprintLayout";
@@ -14,28 +13,6 @@ import { foldRows, stepForRows, type FootprintLevel } from "@/lib/indicator/foot
 // не выглядит ошибкой: картинка нарисуется стройной, просто соврёт. Поэтому
 // мерка проверяется числами.
 
-describe("сколько строк разрешено", () => {
-  it("на обычной крупности - все", () => {
-    expect(rowBudget(1)).toBe(ROWS);
-  });
-
-  it("ступень делит число строк", () => {
-    expect(rowBudget(2)).toBe(ROWS / 2);
-    expect(rowBudget(4)).toBe(ROWS / 4);
-  });
-
-  it("совсем без строк картинки не бывает", () => {
-    // Даже самая грубая ступень обязана оставить свече хоть какую-то высоту.
-    expect(rowBudget(100)).toBeGreaterThanOrEqual(4);
-  });
-
-  it("крупность мельче единицы ничего не добавляет", () => {
-    // Ноль и минус приходят из хранилища, куда мог залезть кто угодно.
-    expect(rowBudget(0)).toBe(ROWS);
-    expect(rowBudget(-3)).toBe(ROWS);
-  });
-});
-
 describe("свеча растёт вместе со сделками", () => {
   function level(price: number): FootprintLevel {
     return { price, buy: 1, sell: 1 };
@@ -43,14 +20,14 @@ describe("свеча растёт вместе со сделками", () => {
 
   it("только что открытая стоит одной строкой", () => {
     // Первая сделка прошла на одной цене - и показать надо ровно её.
-    const step = stepForRows(0.1, 0, rowBudget(1));
+    const step = stepForRows(0.1, 0, ROWS);
     expect(foldRows([level(100)], step)).toHaveLength(1);
   });
 
   it("пошли цены - пошли строки", () => {
     const levels = [level(100), level(100.1), level(100.2)];
     const span = 0.2;
-    const step = stepForRows(0.1, span, rowBudget(1));
+    const step = stepForRows(0.1, span, ROWS);
     expect(foldRows(levels, step)).toHaveLength(3);
   });
 
@@ -58,17 +35,11 @@ describe("свеча растёт вместе со сделками", () => {
     // Час торговли на биткойне - три сотни шагов биржи. В столбик они не
     // влезают ни на каком экране, и лестница обязана огрубеть сама.
     const levels = Array.from({ length: 300 }, (_, i) => level(100 + i * 0.1));
-    const step = stepForRows(0.1, 29.9, rowBudget(1));
+    const step = stepForRows(0.1, 29.9, ROWS);
     expect(foldRows(levels, step).length).toBeLessThanOrEqual(ROWS);
     expect(foldRows(levels, step).length).toBeGreaterThan(ROWS / 2);
   });
 
-  it("грубая ступень оставляет вдвое меньше строк", () => {
-    const levels = Array.from({ length: 300 }, (_, i) => level(100 + i * 0.1));
-    const fine = foldRows(levels, stepForRows(0.1, 29.9, rowBudget(1))).length;
-    const rough = foldRows(levels, stepForRows(0.1, 29.9, rowBudget(2))).length;
-    expect(rough).toBeLessThan(fine);
-  });
 });
 
 describe("высота строки", () => {
