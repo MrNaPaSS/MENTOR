@@ -405,7 +405,7 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
       </div>
     </div>
   </div>
-  <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH">NMNH</span></a>
+  <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH.TRADE">NMNH.TRADE</span></a>
 </body>
 </html>"""
     )
@@ -430,24 +430,13 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     interval = escape(shot.interval)
     note = escape(shot.note or "")
 
-    when = shot.created_at
-    if when and when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    # Время снимка в двух видах: машинное для браузера и UTC как запасное.
-    #
-    # Сервер живёт в UTC, а смотрит снимок человек - у себя. Час, посчитанный
-    # не в его поясе, ему нечем сверить с собственным графиком, поэтому
-    # окончательную подпись собирает браузер, а серверная остаётся на случай
-    # выключенных скриптов.
-    stamp = when.strftime("%d.%m.%Y %H:%M UTC") if when else ""
-    iso = when.isoformat() if when else ""
-
     # Карточка сделки живёт своей страницей: у неё и движение своё, и печать.
     if shot.kind == "pnl":
         return _card_page(shot)
 
     title = f"{symbol} · {interval}"
     image = f"{BASE_URL}/{shot_id}.png"
+    caption = f'<div class="note">{note}</div>' if note else ""
 
     return HTMLResponse(
         f"""<!doctype html>
@@ -462,35 +451,114 @@ def shot_page(shot_id: str, session=Depends(get_session)):
 <meta property="og:image" content="{image}">
 <meta name="twitter:card" content="summary_large_image">
 <style>
-  :root {{ color-scheme: dark; }}
+  :root {{ color-scheme: dark; --accent: #0affe0; }}
+  * {{ box-sizing: border-box; }}
   body {{
-    margin: 0; padding: 24px; background: #0b0e11; color: #eaecef;
-    font: 14px/1.5 "Inter", system-ui, sans-serif;
-    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    margin: 0; min-height: 100vh; padding: 28px 16px 40px;
+    background: radial-gradient(120% 80% at 50% -10%, rgba(255,255,255,.05), transparent 60%), #06080b;
+    color: #eaecef; font: 14px/1.5 "Inter", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
   }}
-  .card {{
-    width: min(1200px, 100%); background: #181a20; border: 1px solid #2b3139;
-    border-radius: 16px; overflow: hidden;
-  }}
-  /* Шторка узкая: она подписывает картинку, а не соперничает с ней. */
-  .head {{ display: flex; align-items: baseline; gap: 10px; padding: 7px 14px; border-bottom: 1px solid #2b3139; }}
-  .sym {{ font-size: 15px; font-weight: 700; }}
-  .tf {{ color: #7a8290; font-family: "JetBrains Mono", monospace; font-size: 12px; }}
-  .who {{ margin-left: auto; color: #7a8290; font-size: 12px; }}
-  img {{ display: block; width: 100%; height: auto; }}
-  .note {{ padding: 12px 18px; color: #b7bdc6; }}
 
-  /* Знак NMNH - тот же, что в шапке сайта: жирный шрифт, глитч по цветам
-     акцента и опасности, свечение под курсором. Пояснительной подписи под ним
-     нет: знак и так ведёт на сайт, а объяснять логотип словами незачем. */
-  /* Без рамки и подложки - одни буквы. Кнопка вокруг знака делала из него
-     элемент управления, которым он не является: это подпись, ведущая домой. */
+  /* Верхней шторки нет намеренно. Пара, таймфрейм, автор и время нарисованы в
+     самой картинке - подпись над ней повторяла их слово в слово. */
+
+  /* Щель принтера: тонкая полоса, из которой выходит лист. Без неё движение
+     читается как «картинка приехала», а не как «её напечатали». */
+  .slot {{
+    width: min(1200px, 96vw); height: 10px; border-radius: 6px;
+    background: linear-gradient(180deg, #12161b, #04060a);
+    box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.6);
+    position: relative; z-index: 3;
+  }}
+  .slot::after {{
+    content: ""; position: absolute; inset: 3px 10px auto; height: 2px;
+    border-radius: 2px; background: var(--accent); opacity: .5;
+    animation: warm 1.1s ease-out both;
+  }}
+  @keyframes warm {{ 0% {{ opacity: 0; }} 25% {{ opacity: .9; }} 100% {{ opacity: .35; }} }}
+
+  /* Окно, из которого лист выезжает: оно и обрезает его сверху. */
+  .window {{ width: min(1200px, 96vw); margin-top: -10px; overflow: hidden; padding-top: 10px; }}
+
+  .paper {{
+    position: relative; container-type: inline-size;
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.65);
+    animation: feed 1.15s cubic-bezier(.22,.61,.36,1) .15s both, shock .18s ease-out 1.35s;
+    transform-origin: 50% 0;
+  }}
+  .paper img {{ display: block; width: 100%; height: auto; }}
+
+  /* Лист идёт рывками - валик принтера тянет его не ровно. Лист широкий,
+     поэтому наклон вдвое меньше, чем у карточки: на такой ширине тот же угол
+     уводит край на десятки пикселей. */
+  @keyframes feed {{
+    0%   {{ transform: translateY(-101%) rotate(.3deg); }}
+    18%  {{ transform: translateY(-78%)  rotate(-.24deg); }}
+    36%  {{ transform: translateY(-52%)  rotate(.2deg); }}
+    54%  {{ transform: translateY(-28%)  rotate(-.15deg); }}
+    72%  {{ transform: translateY(-11%)  rotate(.1deg); }}
+    88%  {{ transform: translateY(-2%)   rotate(-.05deg); }}
+    100% {{ transform: translateY(0) rotate(0); }}
+  }}
+  /* Удар печати отдаётся в лист - коротко и почти незаметно. */
+  @keyframes shock {{ 0%,100% {{ scale: 1; }} 40% {{ scale: 1.004; }} }}
+
+  /* Печать в правом нижнем углу графика. Размеры в cqw - в долях ширины
+     самого листа, поэтому оттиск одинаков и на мониторе, и на телефоне.
+     Полупрозрачная: это оттиск на графике, а не наклейка поверх него, и
+     свечи под ней должны просвечивать. */
+  .stamp {{
+    position: absolute; right: 3.5%; bottom: 7%;
+    width: 22%; aspect-ratio: 3.1 / 1;
+    display: grid; place-items: center; pointer-events: none;
+    animation: slam .42s cubic-bezier(.2,1.5,.35,1) 1.3s both;
+    /* Смешивание задано здесь, а не на самом оттиске: поворот печати заводит
+       ей собственный слой, и разность внутри него сравнивалась бы с пустотой -
+       печать пропадала целиком. */
+    mix-blend-mode: difference; opacity: .75;
+  }}
+  /* Оттиск белым в разностном смешивании.
+     Снимок бывает и на белом листе светлой темы, и на чёрном - какой именно,
+     страница не знает: тема в записи не хранится. Любой один цвет пропадал бы
+     на половине снимков: бирюза на белом почти не видна. Разность инвертирует
+     оттиск под тем, что под ним, - на белом он выходит тёмным, на тёмном
+     светлым, и читается всегда. */
+  .ink {{
+    position: relative; width: 100%; height: 100%;
+    border: .34cqw solid #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: .35cqw; color: #fff;
+  }}
+  .ink::before {{
+    content: ""; position: absolute; inset: .9cqw;
+    border: .12cqw solid #fff; opacity: .8;
+  }}
+  .mark {{
+    font-size: 2.1cqw; font-weight: 800; letter-spacing: .02em; line-height: 1;
+  }}
+  .creed {{
+    font-size: 1.05cqw; font-weight: 600; letter-spacing: .08em;
+    opacity: .85; line-height: 1;
+  }}
+
+  @keyframes slam {{
+    0%   {{ transform: scale(2.4) rotate(-24deg); opacity: 0; }}
+    60%  {{ opacity: 1; }}
+    100% {{ transform: scale(1) rotate(-4.5deg); opacity: 1; }}
+  }}
+
+  .note {{ color: #b7bdc6; max-width: min(1200px, 96vw); text-align: center; }}
+
+  /* Знак NMNH - тот же, что в шапке сайта: одни буквы, глитч, свечение под
+     курсором. Пояснительной подписи под ним нет: он и так ведёт на сайт. */
   .logo {{
     display: inline-block; padding: 4px;
     color: #eaecef; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;
     text-decoration: none; transition: color .2s ease, text-shadow .2s ease;
   }}
-  .logo:hover {{ color: #fff; text-shadow: 0 0 18px rgba(10, 255, 224, .75); }}
+  .logo:hover {{ color: #fff; text-shadow: 0 0 18px var(--accent); }}
   .glitch {{ position: relative; display: inline-block; }}
   .glitch::before, .glitch::after {{
     content: attr(data-text); position: absolute; inset: 0;
@@ -516,37 +584,30 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     93% {{ transform: translate(-3px, -1px); opacity: .9; }}
     97% {{ transform: translate(2px, -1px); opacity: .6; }}
   }}
-  /* Тем, кому движение мешает, знак стоит смирно. */
+
+  /* Кому движение мешает - лист уже лежит, печать уже стоит. */
   @media (prefers-reduced-motion: reduce) {{
-    .glitch::before, .glitch::after {{ animation: none; opacity: 0; }}
+    .paper, .stamp, .slot::after, .glitch::before, .glitch::after {{ animation: none; }}
+    .stamp {{ transform: rotate(-4.5deg); }}
+    .glitch::before, .glitch::after {{ opacity: 0; }}
   }}
 </style>
 </head>
 <body>
-  <div class="card">
-    <div class="head">
-      <span class="sym">{symbol}</span>
-      <span class="tf">{interval}</span>
-      <time class="who" datetime="{iso}">{stamp}</time>
+  <div class="slot"></div>
+  <div class="window">
+    <div class="paper">
+      <img src="{image}" alt="{title}">
+      <div class="stamp">
+        <div class="ink">
+          <span class="mark">NMNH.ORIGINAL</span>
+          <span class="creed">Just by trade</span>
+        </div>
+      </div>
     </div>
-    <img src="{image}" alt="{title}">
-    {f'<div class="note">{note}</div>' if note else ''}
   </div>
-  <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH">NMNH</span></a>
-<script>
-  // Время - по часам того, кто смотрит.
-  (function () {{
-    var node = document.querySelector("time.who");
-    if (!node) return;
-    var at = new Date(node.getAttribute("datetime"));
-    if (isNaN(at)) return;
-    node.textContent = at.toLocaleString("ru", {{
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    }});
-    node.title = "по вашему времени";
-  }})();
-</script>
+  {caption}
+  <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH.TRADE">NMNH.TRADE</span></a>
 </body>
 </html>"""
     )
