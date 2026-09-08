@@ -2538,7 +2538,7 @@ export default function ScalpingPage() {
             вернуть. Прятать совсем нельзя - трейдер не должен вспоминать, где
             была панель.
 
-            Две пятых её уходят за край экрана и там и остаются. Неподвижно:
+            Половина её уходит за край экрана и там и остаётся. Неподвижно:
             полоса, которая выезжает под курсором, тянет взгляд на себя каждый
             раз, когда мимо проходит рука, - а смотреть в этот момент нужно на
             цену. Место, которое она перестала занимать, забирает отрицательное
@@ -2552,17 +2552,28 @@ export default function ScalpingPage() {
           <button
             onClick={() => setScreenerOpen(true)}
             title={t.terminal.expandScreener}
-            className={`hidden w-9 shrink-0 -translate-x-[14px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-1.5 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-mr-3 xl:flex`}
+            className={`hidden w-9 shrink-0 -translate-x-[18px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-0.5 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-mr-4 xl:flex`}
             style={paneStyle}
           >
-            <PanelLeftOpen className="h-4 w-4" />
+            {/* Всё содержимое - в колонках одной ширины. Точка вдесятеро уже
+                значка, и прижатая к тому же краю она вставала правее его
+                середины: полоса читалась косой. Общая ширина ставит их на одну
+                ось, а видно её или нет - решает край экрана. */}
+            <PanelLeftOpen className="h-4 w-4 shrink-0" />
             {/* Точка связи между значком и названием: там её ищут глазами - у
                 открытого скринера она стоит ровно так же, в его заголовке. */}
             <span
               title={connected ? t.terminal.streamOn : t.terminal.streamOff}
-              className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-[var(--pane-up)]" : "bg-[var(--pane-down)]"}`}
-            />
-            <span className="text-[11px]" style={{ writingMode: "vertical-rl" }}>
+              className="flex h-1.5 w-4 shrink-0 items-center justify-center"
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-[var(--pane-up)]" : "bg-[var(--pane-down)]"}`}
+              />
+            </span>
+            <span
+              className="w-4 text-center text-[11px]"
+              style={{ writingMode: "vertical-rl" }}
+            >
               {t.terminal.screenerTitle}
             </span>
           </button>
@@ -3164,22 +3175,29 @@ export default function ScalpingPage() {
               <button
                 onClick={() => setChatOpen(true)}
                 title={t.terminal.expandChat}
-                // Полоса у правого края - зеркало скринера: две пятых за краем,
+                // Полоса у правого края - зеркало скринера: половина за краем,
                 // неподвижно, значок и название на видной части.
-                className="hidden w-9 shrink-0 translate-x-[14px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-1.5 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-ml-3 xl:flex"
+                className="hidden w-9 shrink-0 translate-x-[18px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-0.5 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-ml-4 xl:flex"
                 style={paneStyle}
               >
-                <PanelRightOpen className="h-4 w-4" />
+                {/* Колонки одной ширины - как у скринера: иначе точка
+                    непрочитанного встаёт мимо оси значка. */}
+                <PanelRightOpen className="h-4 w-4 shrink-0" />
                 {/* Точка непрочитанного: мигает, пока панель свёрнута. Разговор
                     в торговый час идёт о том, что происходит прямо сейчас, и
                     узнать о нём через час - всё равно что не узнать. */}
                 {chat.unread > 0 && (
                   <span
                     title={t.chat.unread(chat.unread)}
-                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--pane-accent)]"
-                  />
+                    className="flex h-1.5 w-4 shrink-0 items-center justify-center"
+                  >
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--pane-accent)]" />
+                  </span>
                 )}
-                <span className="text-[11px]" style={{ writingMode: "vertical-rl" }}>
+                <span
+                  className="w-4 text-center text-[11px]"
+                  style={{ writingMode: "vertical-rl" }}
+                >
                   {t.chat.title}
                 </span>
               </button>
