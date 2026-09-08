@@ -52,6 +52,8 @@ export type FootprintSkin = {
 
 /** Ширина следа в каждую сторону, точки. */
 const SIDE = 104;
+/** Сколько места занимает само число: короче этого след не рисуем. */
+const NUMBER = 44;
 /** Ширина тела свечи. Уже - и она перестаёт быть свечой, шире - лезет в следы. */
 const CANDLE = 18;
 /** Колонка цены справа от следов. У монет с мелким шагом в цене восемь знаков. */
@@ -133,9 +135,7 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
       const skin = this.skin;
       const line = Math.max(1, Math.round(hx));
       const x = Math.round(ready.x * hx);
-      const y = Math.round(ready.y * vy);
       const width = Math.round(WIDTH * hx);
-      const height = Math.round(ready.height * vy);
 
       // Ось свечи: от неё расходятся оба следа, и она же середина тела.
       const axis = x + Math.round((PAD + SIDE + CANDLE / 2) * hx);
@@ -143,17 +143,26 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
       const bodyRight = bodyLeft + Math.round(CANDLE * hx);
       const priceLeft = bodyRight + Math.round((SIDE + GAP) * hx);
 
-      // Подложка: свечи графика под картинкой должны просвечивать, но не
-      // мешать читать. Прозрачнее - и цифры ложатся на чужие фитили, плотнее -
-      // и картинка становится тем же окном, только приклеенным к свече.
-      ctx.globalAlpha = 0.92;
-      ctx.fillStyle = skin.bg;
-      ctx.fillRect(x, y, width, height);
-      ctx.globalAlpha = 1;
-
+      // Подложки нет намеренно: картинка лежит прямо на графике, и сетка со
+      // свечами просвечивает сквозь неё. Прямоугольник цвета панели превращал
+      // разбор свечи в то же окно, только приклеенное к ней.
+      //
+      // Читаемость держится двумя вещами: следы под цифрами всегда шире
+      // самих цифр, а всё, что стоит вне следов, обведено цветом панели -
+      // тонкой каймой, которую не видно, но которая не даёт числу пропасть на
+      // фитиле соседней свечи.
       const font = (size: number, bold = false) =>
         `${bold ? "700 " : ""}${Math.round(size * vy)}px ui-monospace, monospace`;
       ctx.textBaseline = "middle";
+
+      /** Число с каймой цвета панели: на голом графике иначе не прочесть. */
+      const ink = (text: string, atX: number, atY: number) => {
+        ctx.strokeStyle = skin.bg;
+        ctx.lineWidth = Math.max(line, Math.round(2.5 * hx));
+        ctx.lineJoin = "round";
+        ctx.strokeText(text, atX, atY);
+        ctx.fillText(text, atX, atY);
+      };
 
       for (const row of ready.rows) {
         const top = Math.round(row.top * vy);
@@ -183,23 +192,23 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
         ctx.fillStyle = skin.text;
         ctx.textAlign = "right";
         ctx.font = font(10, row.sellBold);
-        ctx.fillText(row.sell, bodyLeft - Math.round(3 * hx), middle);
+        ink(row.sell, bodyLeft - Math.round(3 * hx), middle);
         ctx.textAlign = "left";
         ctx.font = font(10, row.buyBold);
-        ctx.fillText(row.buy, bodyRight + Math.round(3 * hx), middle);
+        ink(row.buy, bodyRight + Math.round(3 * hx), middle);
 
         // Цена справа. Крупная сделка - тем же жёлтым, что плита в стакане:
         // это одно и то же событие, только уже прошедшее.
         ctx.textAlign = "right";
         ctx.font = font(10);
         ctx.fillStyle = row.whale ? skin.gold : skin.muted;
-        ctx.fillText(row.price, priceLeft + Math.round((PRICE - 2) * hx), middle);
+        ink(row.price, priceLeft + Math.round((PRICE - 2) * hx), middle);
 
         if (row.tag) {
           ctx.textAlign = "left";
           ctx.font = font(8);
           ctx.fillStyle = row.poc ? skin.gold : skin.accent;
-          ctx.fillText(row.tag, priceLeft - Math.round(1 * hx), middle);
+          ink(row.tag, priceLeft - Math.round(1 * hx), middle);
         }
 
         // Граница области стоимости - чертой во всю картинку: по ней видно,
@@ -244,9 +253,6 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
       }
 
       ctx.textAlign = "left";
-      ctx.strokeStyle = skin.border;
-      ctx.lineWidth = line;
-      ctx.strokeRect(x + 0.5 * line, y + 0.5 * line, width - line, height - line);
     });
   }
 }
@@ -377,10 +383,15 @@ function shift(shape: ReadyCandle, by: number): ReadyCandle {
  * Корнем от доли, а не долей: на свече, где одна плита вдесятеро больше
  * соседей, доля оставляет от всех остальных следов по два пикселя, и картинка
  * превращается в одну полосу посреди пустоты.
+ *
+ * Короче своего числа след не бывает. Подложки под картинкой нет, и цифра,
+ * вылезшая за край следа, повисает на чужих свечах; к тому же сплошная лента
+ * ячеек у свечи - это и есть та лестница, по которой красное сравнивают с
+ * зелёным, не считая.
  */
 function length(value: number, peak: number): number {
   if (!(peak > 0) || !(value > 0)) return 0;
-  return SIDE * Math.sqrt(value / peak);
+  return Math.max(NUMBER, SIDE * Math.sqrt(value / peak));
 }
 
 /** Густота следа. Короткий обязан быть и бледнее: иначе длину не видно вовсе. */

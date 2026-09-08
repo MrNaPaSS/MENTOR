@@ -2585,11 +2585,13 @@ function PriceChart({
       {foot && (
         <div
           ref={footBarRef}
-          className="pointer-events-auto absolute left-0 top-0 z-20 flex items-center gap-2 rounded-t border border-b-0 px-1.5 py-0.5 font-mono text-[10px] tabular-nums shadow-sm"
+          className="pointer-events-auto absolute left-0 top-0 z-20 flex items-center gap-2 rounded px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
           style={{
             visibility: "hidden",
-            minWidth: FOOTPRINT_WIDTH,
-            borderColor: "var(--pane-border)",
+            // Подпись прижата к левому краю картинки, но своей ширины:
+            // растянутая на всю её ширину, она читалась заголовком окна,
+            // которого здесь больше нет.
+            maxWidth: FOOTPRINT_WIDTH,
             background: "var(--pane-bg)",
             color: "var(--pane-text-2)",
           }}
