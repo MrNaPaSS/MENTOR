@@ -151,6 +151,28 @@ def test_waiting_trade_is_not_closed_by_an_empty_book():
     assert decide(row, None, set(), None, 5).closed is False
 
 
+def test_waiting_trade_does_not_take_over_a_position_someone_else_leads():
+    """Позиция на бирже одна на монету и сторону - и ведёт её одна сделка.
+
+    Снятая лимитка из списка заявок уходит, `resting` становится ложью, и
+    ждущая сделка объявляла себя открытой на чужой позиции. Дальше по журналу
+    это видно так: две записи об одном закрытии, с одним итогом и разными
+    ценами входа.
+    """
+    row = trade(status="waiting")
+    assert decide(row, position(), ALL_PLANS, 101.5, 0, resting=False).opened is True
+    assert (
+        decide(row, position(), ALL_PLANS, 101.5, 0, resting=False, taken=True).opened
+        is False
+    )
+
+
+def test_owner_of_the_position_is_not_stopped_by_the_flag():
+    """Признак касается только ждущих: открытую сделку он трогать не должен."""
+    row = trade(status="open", takes_hit=0)
+    assert decide(row, position(), ALL_PLANS, 101.5, 0, taken=True).closed is False
+
+
 def test_exchange_breakeven_wins_over_our_formula():
     """Биржа знает реальную цену исполнения, комиссию и фандинг — мы нет.
 
@@ -470,7 +492,52 @@ def test_settle_takes_the_number_the_exchange_named():
     gross, fee, price = settle(fills, entry=80000.0, side="long")
     assert gross == 64.0
     assert fee == 5.0
-    assert price == 81200.0
+    # Цена выхода - средняя по объёму, а не цена последней части: позицию
+    # закрыли двумя равными кусками, и вышла она по 81100.
+    assert price == 81100.0
+
+
+def test_exit_price_ignores_the_entry_fill():
+    """Цена выхода собирается только из закрывающих исполнений.
+
+    Отчёт биржа отдаёт свежими вперёд, и раньше сюда попадала цена последнего
+    в обходе исполнения - то есть самого старого, входа. В журнале цена входа и
+    цена выхода оказывались одним числом, и на карточке сделки это видно сразу.
+    """
+    from backend.trading.watcher import settle
+
+    fills = [
+        {"price": "2487,20".replace(",", "."), "qty": "1", "side": "sell", "realizedPnl": "4.5"},
+        {"price": "2482.71", "qty": "1", "side": "buy", "realizedPnl": "0"},
+    ]
+    _gross, _fee, price = settle(fills, entry=2482.71, side="long")
+    assert price == pytest.approx(2487.20)
+
+
+def test_exit_price_is_empty_without_closing_fills():
+    """Выхода в отчёте нет - цены выхода тоже нет, а не цена входа."""
+    from backend.trading.watcher import settle
+
+    fills = [{"price": "2482.71", "qty": "1", "side": "buy"}]
+    _gross, _fee, price = settle(fills, entry=2482.71, side="long")
+    assert price is None
+
+
+def test_exit_price_falls_back_to_the_latest_fill_without_sides():
+    """Сторон в отчёте нет - берём самое позднее исполнение, а не первое.
+
+    Отличить вход от выхода без стороны нечем, и это лучшая догадка, какая тут
+    возможна. Важно, что «позднее» считается по времени: список приходит
+    свежими вперёд, и последнее в обходе - как раз вход.
+    """
+    from backend.trading.watcher import settle
+
+    fills = [
+        {"price": "79500", "qty": "0.5", "time": 2000, "realizedPnl": "83.6"},
+        {"price": "79000", "qty": "0.5", "time": 1000, "realizedPnl": "0"},
+    ]
+    _gross, _fee, price = settle(fills, entry=79000.0, side="long")
+    assert price == 79500.0
 
 
 def test_settle_counts_it_itself_when_the_field_is_missing():

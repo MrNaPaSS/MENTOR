@@ -296,8 +296,13 @@ def _card_page(shot: ChartShot, iso: str, stamp: str) -> HTMLResponse:
   .paper.hit {{ animation: feed 1.15s cubic-bezier(.22,.61,.36,1) .15s both, shock .18s ease-out 1.35s; }}
   @keyframes shock {{ 0%,100% {{ scale: 1; }} 40% {{ scale: 1.006; }} }}
 
-  .who {{ display: flex; align-items: baseline; gap: 10px; color: #7a8290; font-size: 13px; }}
-  .who b {{ color: #eaecef; font-size: 14px; }}
+  .who {{ display: flex; align-items: center; gap: 10px; color: #7a8290; font-size: 13px; }}
+  /* Имя на подложке - так же, как оно нарисовано на самой карточке. */
+  .who b {{
+    color: #eaecef; font-size: 13px; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px;
+    background: rgba(6, 10, 14, .66); border: 1px solid rgba(242, 244, 247, .16);
+  }}
   .logo {{
     color: #eaecef; font-size: 22px; font-weight: 800; letter-spacing: -.02em;
     text-decoration: none; transition: color .2s ease, text-shadow .2s ease;
@@ -330,16 +335,21 @@ def _card_page(shot: ChartShot, iso: str, stamp: str) -> HTMLResponse:
   </div>
   <a class="logo" href="https://www.nmnh.trade">NMNH</a>
 <script>
-  // Время - по часам того, кто смотрит.
+  // Время - по часам того, кто смотрит, и с их поясом: без пояса одна и та же
+  // сделка у отправителя и у получателя приходится на разные часы.
   (function () {{
     var node = document.querySelector("time");
     if (!node) return;
     var at = new Date(node.getAttribute("datetime"));
     if (isNaN(at)) return;
+    var minutes = -at.getTimezoneOffset();
+    var rest = Math.abs(minutes) % 60;
+    var zone = "UTC" + (minutes < 0 ? "-" : "+") + Math.floor(Math.abs(minutes) / 60) +
+      (rest ? ":" + String(rest).padStart(2, "0") : "");
     node.textContent = at.toLocaleString("ru", {{
       day: "2-digit", month: "2-digit", year: "numeric",
       hour: "2-digit", minute: "2-digit",
-    }});
+    }}) + " " + zone;
   }})();
 </script>
 </body>

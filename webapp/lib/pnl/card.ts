@@ -100,14 +100,32 @@ function signed(value: number, digits: number): string {
   return sign + ru(Math.abs(value), digits);
 }
 
-/** Время карточки - по часам того, кто её собирает. */
+/**
+ * Часовой пояс того, кто собирает карточку.
+ *
+ * Без него время на карточке ничего не значит: одна и та же сделка у трейдера
+ * в Москве и у того, кому он её отправил, приходится на разные часы, и спор
+ * «когда это было» решать нечем.
+ */
+function zone(at: Date): string {
+  // На восток от Гринвича смещение отрицательное - знак разворачиваем.
+  const minutes = -at.getTimezoneOffset();
+  const sign = minutes < 0 ? "-" : "+";
+  const hours = Math.floor(Math.abs(minutes) / 60);
+  const rest = Math.abs(minutes) % 60;
+  const tail = rest ? `:${String(rest).padStart(2, "0")}` : "";
+  return `UTC${sign}${hours}${tail}`;
+}
+
+/** Время карточки - по часам того, кто её собирает, и с их поясом. */
 function stamped(iso: string): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
   return (
     `${pad(at.getDate())}.${pad(at.getMonth() + 1)}.${at.getFullYear()} ` +
-    `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`
+    `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())} ` +
+    zone(at)
   );
 }
 
@@ -241,15 +259,37 @@ export function paint(
   ctx.fillStyle = MUTED;
   ctx.font = face(w * 0.026, 500);
   ctx.fillText("Дата и время", x, h * 0.736);
+  // Чуть мельче остальных строк: к дате прибавился пояс, и прежним кеглем
+  // строка заезжала на зверя.
+  ctx.font = face(w * 0.024, 500);
   ctx.fillText(stamped(data.at), x + w * 0.3, h * 0.736);
 
-  // Имя владельца - справа вверху, как это делают биржи: карточку показывают
-  // другим, и первый вопрос к ней «чьё это».
+  // Имя владельца - справа вверху и на подложке, как это делают биржи.
+  //
+  // Подложка не украшение: за именем идёт картинка города со свечами, и белые
+  // буквы поверх неё то читались, то нет - в зависимости от того, что оказалось
+  // под ними. Плашка отвечает за это сама, чего бы ни нарисовали на заготовке.
   if (data.owner) {
+    const size = w * 0.026;
+    ctx.font = face(size, 700);
+    const padX = size * 0.62;
+    const padY = size * 0.42;
+    const width = ctx.measureText(data.owner).width + padX * 2;
+    const height = size + padY * 2;
+    const right = w * 0.955;
+    const top = h * 0.052 - size * 0.78 - padY;
+
+    ctx.fillStyle = "rgba(6, 10, 14, 0.66)";
+    ctx.strokeStyle = "rgba(242, 244, 247, 0.16)";
+    ctx.lineWidth = Math.max(1, w * 0.0015);
+    ctx.beginPath();
+    ctx.roundRect(right - width, top, width, height, height / 2);
+    ctx.fill();
+    ctx.stroke();
+
     ctx.textAlign = "right";
     ctx.fillStyle = INK;
-    ctx.font = face(w * 0.026, 700);
-    ctx.fillText(data.owner, w * 0.955, h * 0.052);
+    ctx.fillText(data.owner, right - padX, h * 0.052);
   }
 
   // Нижняя панель: свободное место справа от QR на самой заготовке.

@@ -128,24 +128,34 @@ def decide(
     mark_price: float | None,
     missing_streak: int,
     resting: bool = False,
+    taken: bool = False,
 ) -> Decision:
     """Решение по одной сделке. Только числа, никаких обращений наружу.
 
     `open_plans` — идентификаторы условных заявок, которые ещё висят на бирже.
     `resting` — вход этой сделки всё ещё стоит на бирже и ждёт своей цены.
+    `taken` — эту позицию уже ведёт другая сделка того же инструмента и стороны.
     """
     size = position_size(position)
 
     if trade.status == "waiting":
         # Позиция появилась - но исполнилась ли именно эта заявка?
         #
-        # Биржа отдаёт одну сводную позицию на монету и сторону: две лимитки на
-        # покупку по ней неразличимы. Раньше сюда приходил один и тот же объём,
-        # и обе сделки объявлялись открытыми - на одну позицию вставали две
-        # лестницы целей и два стопа, а в журнал уходили две записи.
+        # Биржа отдаёт одну сводную позицию на монету и сторону: две лимитки по
+        # ней неразличимы, и объём приходит обеим сделкам один и тот же. Условий
+        # поэтому два, и одного мало.
         #
-        # Пока наш вход стоит в заявках, позиция набрана не им.
-        return Decision(trade.takes_hit, opened=size > 0 and not resting, size=size)
+        # Наша заявка ещё стоит в стакане - значит позиция набрана не ею.
+        #
+        # Позицию уже ведёт другая сделка - значит и подавно не ею. Снятая или
+        # переставленная лимитка из списка заявок уходит, `resting` становится
+        # ложью, и ждущая сделка объявляла себя открытой на чужой позиции: на
+        # неё вставали вторая лестница целей и второй стоп, а в журнал уходили
+        # две записи с одним итогом и разными ценами входа - 1368 у той, что
+        # действительно исполнилась, и 1341.62 у той, что только собиралась.
+        return Decision(
+            trade.takes_hit, opened=size > 0 and not resting and not taken, size=size
+        )
 
     takes: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
 
@@ -353,6 +363,12 @@ class PositionWatcher:
         # биржа такой отклоняет, и позиция остаётся со старым.
         prices: dict[str, float | None] = {}
 
+        # Кто уже ведёт позицию по инструменту и стороне. На бирже она одна, и
+        # вторая сделка на неё претендовать не вправе - иначе в журнал уйдут две
+        # записи об одном закрытии. Открывшуюся в этом же обходе дописываем ниже:
+        # две ждущие лимитки не должны разобрать одну позицию на двоих.
+        owned = {(t.symbol.upper(), t.side) for t in trades if t.status == "open"}
+
         for trade in trades:
             position = position_for(positions, trade.symbol, trade.side)
             streak = self._missing.get(trade.id, 0)
@@ -370,10 +386,21 @@ class PositionWatcher:
 
             plans = await self._open_plans(client, trade)
             resting = await self._resting(client, trade)
+            key = (trade.symbol.upper(), trade.side)
             decision = decide(
-                trade, position, plans, price, self._missing[trade.id], resting
+                trade,
+                position,
+                plans,
+                price,
+                self._missing[trade.id],
+                resting,
+                taken=trade.status == "waiting" and key in owned,
             )
             await self._apply(session, client, trade, decision, price)
+            if trade.status == "open":
+                owned.add(key)
+            elif trade.status == "closed":
+                owned.discard(key)
 
     async def _resting(self, client: WeexFutures, trade: LiveTrade) -> bool:
         """Стоит ли ещё вход этой сделки в заявках биржи.
@@ -700,16 +727,16 @@ class PositionWatcher:
                 gross,
                 fee,
             )
+            # Строку исполнения выкладываем целиком, а не разобранной по полям.
+            #
+            # Разобранная показывает только то, что мы уже умеем читать, - а
+            # расходится как раз то, чего в нашем списке полей нет. У SKHYNIX
+            # результат по цене сошёлся с биржей до копейки, а комиссия вышла
+            # 2.42 против удержанных 3.24: искать недостающую четверть по
+            # выборке из шести полей нечем. Строк на сделку единицы, и уходят
+            # они только на закрытии.
             for one in fills:
-                logger.debug(
-                    "  исполнение %s: цена %s объём %s сторона %s результат %s комиссия %s",
-                    one.get("orderId") or one.get("id") or "?",
-                    one.get("price"),
-                    one.get("qty") or one.get("size"),
-                    one.get("side"),
-                    one.get("realizedPnl"),
-                    one.get("commission"),
-                )
+                logger.info("  исполнение: %s", one)
 
         except WeexTradeError as exc:
             logger.warning("Исполнения %s не получены: %s", trade.symbol, exc)
@@ -1040,7 +1067,20 @@ def settle(
     # бывает неполным, и это надо уметь заметить.
     charged = 0.0
     silent = 0.0
-    price: float | None = None
+    # Цена выхода собирается только из закрывающих исполнений и по объёму.
+    #
+    # Раньше сюда писалась цена любого исполнения, какое встретилось последним.
+    # Отчёт биржа отдаёт свежими вперёд, последним в обходе оказывался самый
+    # старый - вход, - и в журнал уходила цена выхода, равная цене входа. На
+    # карточке сделки это видно сразу: обе строки с одним числом.
+    exit_value = 0.0
+    exit_size = 0.0
+    # Запасной вариант на отчёт без сторон: самое позднее исполнение по времени.
+    # Именно по времени, а не последнее в списке - список приходит свежими
+    # вперёд, и «последнее в обходе» это как раз вход.
+    latest_at = -1
+    latest_price: float | None = None
+    sided = False
     has_reported = False
     has_fee = False
     long = side == "long"
@@ -1054,8 +1094,6 @@ def settle(
         paid = _first(row, _FEE_FIELDS)
         at = _first(row, _PRICE_FIELDS) or 0.0
         size = abs(_first(row, _SIZE_FIELDS) or 0.0)
-        if at > 0:
-            price = at
         # Оборот всех ног: по нему считается комиссия, когда биржа её не назвала.
         turnover += at * size
 
@@ -1068,10 +1106,20 @@ def settle(
         else:
             silent += at * size
 
+        if any(name in row and str(row[name] or "").strip() for name in _SIDE_FIELDS):
+            sided = True
+        moment = fill_time(row)
+        if at > 0 and moment > latest_at:
+            latest_at = moment
+            latest_price = at
+
         # Закрывающее исполнение идёт против стороны сделки: лонг закрывают
         # продажей. Открывающие в результат не входят - они его создали.
-        if is_closing(row, side) and at > 0 and size > 0 and entry > 0:
-            derived += (at - entry) * size if long else (entry - at) * size
+        if is_closing(row, side) and at > 0 and size > 0:
+            exit_value += at * size
+            exit_size += size
+            if entry > 0:
+                derived += (at - entry) * size if long else (entry - at) * size
 
     # Комиссия, которую биржа не назвала.
     #
@@ -1100,6 +1148,21 @@ def settle(
                 missed,
                 fee,
             )
+
+    # Цена выхода - средняя по объёму закрывающих исполнений, а не цена
+    # последней части: позицию закрывают частями, и «цена выхода» у сделки
+    # одна - та, по которой вышел весь объём.
+    #
+    # Сторон в отчёте может не быть вовсе - тогда отличить вход от выхода
+    # нечем, и берём самое позднее исполнение: это лучшая догадка, какая тут
+    # возможна. А вот когда стороны названы и закрывающих среди них нет, выхода
+    # действительно ещё не было, и цена входа вместо него - неправда.
+    if exit_size > 0:
+        price = exit_value / exit_size
+    elif not sided:
+        price = latest_price
+    else:
+        price = None
 
     if not has_reported and fills:
         global _fills_warned
