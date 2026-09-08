@@ -11,7 +11,7 @@
 import { authReq, API_URL } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 
-import type { CardData } from "./card";
+import type { CardData, Variant } from "./card";
 
 function toBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
   return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
@@ -63,6 +63,7 @@ export async function share(
   stamped: HTMLCanvasElement,
   plain: HTMLCanvasElement,
   data: CardData,
+  variant: Variant,
 ): Promise<string | null> {
   const token = getAccessToken();
   if (!token) return null;
@@ -80,6 +81,14 @@ export async function share(
       side: data.side,
       owner: data.owner ?? "",
       note,
+      // Куда странице ставить печать и каким цветом. Отправляем числами, а не
+      // именем заготовки: иначе те же доли пришлось бы держать ещё и на
+      // сервере, и они бы разошлись при первой же новой картинке.
+      card: {
+        variant: variant.id,
+        ink: variant.ink,
+        stamp: variant.stamp,
+      },
     }),
   });
   return body ? `${API_URL}${body.url}` : null;

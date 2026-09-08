@@ -6,14 +6,19 @@
 // потом уйдёт в чат: он выезжает сверху, как из принтера, и получает печать.
 // Ровно эта же карточка и копируется, и скачивается, и открывается по ссылке -
 // собирает её один и тот же код, поэтому разойтись они не могут.
+//
+// Заготовку выбирает тема терминала, а не человек: светлая тема - карточки с
+// графиком, тёмная - со зверем. Отдельный выбор был бы ещё одной настройкой,
+// которую надо помнить, ради того, что уже решено темой.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Download, Link2, X } from "lucide-react";
 
 import type { JournalTrade } from "@/lib/journal";
-import { ACCENT, loadBackdrop, render } from "@/lib/pnl/card";
+import { loadBackdrop, render, variantFor } from "@/lib/pnl/card";
 import { cardFromTrade } from "@/lib/pnl/data";
 import { copy, download, share } from "@/lib/pnl/share";
+import { useTerminalTheme } from "@/lib/terminalTheme";
 
 export default function PnlCard({
   trade,
@@ -26,7 +31,8 @@ export default function PnlCard({
   onClose: () => void;
 }) {
   const data = useMemo(() => cardFromTrade(trade, owner), [trade, owner]);
-  const accent = ACCENT[data.side];
+  const theme = useTerminalTheme();
+  const variant = useMemo(() => variantFor(theme, data.side), [theme, data.side]);
 
   // Лист без печати: её ставит разметка поверх, и она же движется. Картинка с
   // готовым оттиском собирается отдельно - для буфера, файла и ссылки.
@@ -39,11 +45,14 @@ export default function PnlCard({
 
   useEffect(() => {
     let dropped = false;
-    loadBackdrop(data.side)
+    setPaper(null);
+    setFailed(false);
+    backdrop.current = null;
+    loadBackdrop(variant)
       .then(async (image) => {
         if (dropped) return;
         backdrop.current = image;
-        const canvas = await render(data, false, image);
+        const canvas = await render(data, variant, false, image);
         if (!dropped) setPaper(canvas.toDataURL("image/png"));
       })
       .catch(() => {
@@ -52,7 +61,7 @@ export default function PnlCard({
     return () => {
       dropped = true;
     };
-  }, [data]);
+  }, [data, variant]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -64,8 +73,8 @@ export default function PnlCard({
 
   /** Карточка с печатью. Заготовка уже в памяти - сеть не тревожим. */
   const stamped = useCallback(
-    () => render(data, true, backdrop.current ?? undefined),
-    [data],
+    () => render(data, variant, true, backdrop.current ?? undefined),
+    [data, variant],
   );
 
   function onCopy() {
@@ -88,9 +97,10 @@ export default function PnlCard({
     try {
       const image = backdrop.current ?? undefined;
       const url = await share(
-        await render(data, true, image),
-        await render(data, false, image),
+        await render(data, variant, true, image),
+        await render(data, variant, false, image),
         data,
+        variant,
       );
       if (!url) {
         setNote("Ссылку не удалось получить");
@@ -115,7 +125,17 @@ export default function PnlCard({
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
       onClick={onClose}
-      style={{ ["--pnl-accent" as string]: accent }}
+      style={
+        {
+          "--pnl-accent": variant.ink,
+          // Доли рамки печати - у каждой заготовки свои, и разметка ставит
+          // оттиск по тем же числам, что и холст.
+          "--pnl-x": `${variant.stamp.x * 100}%`,
+          "--pnl-y": `${variant.stamp.y * 100}%`,
+          "--pnl-w": `${variant.stamp.w * 100}%`,
+          "--pnl-h": `${variant.stamp.h * 100}%`,
+        } as React.CSSProperties
+      }
     >
       <div
         className="my-auto flex w-full max-w-[420px] flex-col items-stretch gap-3"
@@ -137,7 +157,7 @@ export default function PnlCard({
         <div className="pnl-slot" />
         <div className="pnl-window">
           {paper ? (
-            <div className="pnl-paper">
+            <div className="pnl-paper" key={variant.id}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={paper} alt={`${data.symbol} ${data.side}`} />
               <div className="pnl-stamp">

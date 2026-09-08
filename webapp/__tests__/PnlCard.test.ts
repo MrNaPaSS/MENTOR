@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { price, STAMP_BOX } from "@/lib/pnl/card";
+import { price, VARIANTS, variantFor } from "@/lib/pnl/card";
 import { cardFromTrade, roiOf } from "@/lib/pnl/data";
 import type { JournalTrade } from "@/lib/journal";
 
@@ -76,13 +76,37 @@ describe("цена на карточке", () => {
   });
 });
 
-describe("место под печать", () => {
-  it("совпадает с рамкой на заготовке", () => {
-    // Рамка нарисована на самой картинке: 20..391 по горизонтали и 23..112 по
-    // вертикали при размере 640x852. Разъедутся доли - печать съедет с рамки.
-    expect(STAMP_BOX.x * 640).toBeCloseTo(20, 6);
-    expect(STAMP_BOX.y * 852).toBeCloseTo(23, 6);
-    expect((STAMP_BOX.x + STAMP_BOX.w) * 640).toBeCloseTo(391, 6);
-    expect((STAMP_BOX.y + STAMP_BOX.h) * 852).toBeCloseTo(112, 6);
+describe("заготовка карточки", () => {
+  it("выбирается темой и стороной, без спроса", () => {
+    expect(variantFor("dark", "long").id).toBe("bull");
+    expect(variantFor("dark", "short").id).toBe("bear");
+    expect(variantFor("light", "long").id).toBe("chart-long");
+    expect(variantFor("light", "short").id).toBe("chart-short");
+  });
+
+  it("на каждое сочетание темы и стороны есть ровно одна", () => {
+    const seen = VARIANTS.map((v) => `${v.theme}:${v.side}`);
+    expect(new Set(seen).size).toBe(seen.length);
+    expect(seen.length).toBe(4);
+  });
+
+  it("место под печать совпадает с рамкой на своей заготовке", () => {
+    // Рамки нарисованы на самих картинках, и доли сняты с них. Разъедутся -
+    // печать сядет мимо рамки, а на странице по ссылке ещё и мимо картинки.
+    const box = (id: string) => VARIANTS.find((v) => v.id === id)!.stamp;
+
+    expect(box("bull").x * 640).toBeCloseTo(20, 6);
+    expect((box("bull").y + box("bull").h) * 852).toBeCloseTo(112, 6);
+    expect(box("chart-long").x * 587).toBeCloseTo(20, 6);
+    expect((box("chart-long").y + box("chart-long").h) * 781).toBeCloseTo(103, 6);
+    expect(box("chart-short").x * 586).toBeCloseTo(18, 6);
+    expect((box("chart-short").y + box("chart-short").h) * 780).toBeCloseTo(97, 6);
+  });
+
+  it("светлое полотно только у светлого лонга", () => {
+    // От яркости полотна зависят чернила: на белой карточке белый текст
+    // невидим, и перепутать здесь значит отдать пустой лист.
+    const light = VARIANTS.filter((v) => v.paper === "light").map((v) => v.id);
+    expect(light).toEqual(["chart-long"]);
   });
 });

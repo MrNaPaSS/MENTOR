@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import json
 import os
 import re
 import secrets
@@ -102,6 +103,25 @@ def save_shot(
     return {"id": shot_id, "url": f"{BASE_URL}/{shot_id}"}
 
 
+class CardFrame(BaseModel):
+    """Прямоугольник в долях ширины и высоты карточки."""
+
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    w: float = Field(gt=0, le=1)
+    h: float = Field(gt=0, le=1)
+
+
+class CardLook(BaseModel):
+    """Чем страница отличает одну заготовку от другой."""
+
+    variant: str = Field(default="", max_length=24)
+    # Цвет печати. Проверяем строго: это значение уходит прямо в стили
+    # страницы, и чужая строка там - открытая дверь.
+    ink: str = Field(default="#22E07A", pattern="^#[0-9A-Fa-f]{6}$")
+    stamp: CardFrame
+
+
 class CardIn(BaseModel):
     """Карточка сделки: две картинки одной и той же карточки.
 
@@ -117,6 +137,9 @@ class CardIn(BaseModel):
     side: str = Field(pattern="^(long|short)$")
     owner: str = Field(default="", max_length=32)
     note: str = Field(default="", max_length=140)
+    # Куда странице ставить печать и каким цветом. Числами, а не именем
+    # заготовки: держать те же доли ещё и здесь значит однажды их разойти.
+    card: CardLook | None = None
 
 
 def _png(payload: str) -> bytes:
@@ -157,6 +180,7 @@ def save_card(
             kind="pnl",
             side=body.side,
             owner=body.owner.strip(),
+            card_json=body.card.model_dump_json() if body.card else "",
         )
     )
     session.commit()
@@ -181,12 +205,41 @@ def shot_image(shot_id: str, session=Depends(get_session)):
     return FileResponse(path, media_type="image/png")
 
 
-# Цвета карточки по стороне. Те же, что светятся на самой заготовке и что
-# рисует холст: страница и картинка обязаны совпадать до оттенка.
-_CARD_ACCENT = {"long": "#22E07A", "short": "#FF3B4E"}
+# Как выглядит карточка, если запись об этом молчит. Так лежат карточки,
+# сделанные до того, как заготовок стало несколько.
+_CARD_FALLBACK = {
+    "long": {"ink": "#22E07A"},
+    "short": {"ink": "#FF3B4E"},
+}
+_STAMP_FALLBACK = {"x": 20 / 640, "y": 23 / 852, "w": 371 / 640, "h": 89 / 852}
 
 
-def _card_page(shot: ChartShot, iso: str, stamp: str) -> HTMLResponse:
+def _card_look(shot: ChartShot) -> tuple[str, dict[str, float]]:
+    """Цвет печати и её место в долях - из записи, а не из таблицы здесь.
+
+    Числа приходят оттуда же, откуда рисуется сама карточка. Держать их копию
+    на сервере значит однажды нарисовать новую заготовку и получить печать
+    мимо рамки.
+    """
+    ink = _CARD_FALLBACK.get(shot.side, _CARD_FALLBACK["long"])["ink"]
+    box = dict(_STAMP_FALLBACK)
+    try:
+        saved = json.loads(shot.card_json or "null")
+    except (TypeError, ValueError):
+        saved = None
+    if isinstance(saved, dict):
+        if re.fullmatch(r"#[0-9A-Fa-f]{6}", str(saved.get("ink", ""))):
+            ink = str(saved["ink"])
+        frame = saved.get("stamp")
+        if isinstance(frame, dict):
+            try:
+                box = {k: float(frame[k]) for k in ("x", "y", "w", "h")}
+            except (KeyError, TypeError, ValueError):
+                box = dict(_STAMP_FALLBACK)
+    return ink, box
+
+
+def _card_page(shot: ChartShot) -> HTMLResponse:
     """Страница карточки сделки: лист выезжает сверху, сверху падает печать.
 
     Движение здесь не украшение. Печать, которая просто появляется на плакате, -
@@ -198,9 +251,8 @@ def _card_page(shot: ChartShot, iso: str, stamp: str) -> HTMLResponse:
     скачиваемый PNG (`drawStamp` в webapp/lib/pnl/card.ts) - размеры здесь
     повторяют тамошние доли, и менять их нужно в обоих местах сразу.
     """
-    accent = _CARD_ACCENT.get(shot.side, _CARD_ACCENT["long"])
+    accent, box = _card_look(shot)
     symbol = escape(shot.symbol)
-    owner = escape(shot.owner or "")
     note = escape(shot.note or "")
     title = f"{symbol} · NMNH"
     image = f"{BASE_URL}/{shot.id}.png"
@@ -269,7 +321,9 @@ def _card_page(shot: ChartShot, iso: str, stamp: str) -> HTMLResponse:
   /* Печать. Доли те же, что у холста: рамка на заготовке 20..391 x 23..112
      при 640x852 - отсюда и проценты, и размеры в cqw. */
   .stamp {{
-    position: absolute; left: 3.13%; top: 2.70%; width: 57.97%; height: 10.45%;
+    position: absolute;
+    left: {box["x"] * 100:.4f}%; top: {box["y"] * 100:.4f}%;
+    width: {box["w"] * 100:.4f}%; height: {box["h"] * 100:.4f}%;
     display: grid; place-items: center; pointer-events: none;
     animation: slam .42s cubic-bezier(.2,1.5,.35,1) 1.35s both;
   }}
@@ -296,22 +350,44 @@ def _card_page(shot: ChartShot, iso: str, stamp: str) -> HTMLResponse:
   .paper.hit {{ animation: feed 1.15s cubic-bezier(.22,.61,.36,1) .15s both, shock .18s ease-out 1.35s; }}
   @keyframes shock {{ 0%,100% {{ scale: 1; }} 40% {{ scale: 1.006; }} }}
 
-  .who {{ display: flex; align-items: center; gap: 10px; color: #7a8290; font-size: 13px; }}
-  /* Имя на подложке - так же, как оно нарисовано на самой карточке. */
-  .who b {{
-    color: #eaecef; font-size: 13px; font-weight: 700;
-    padding: 3px 10px; border-radius: 999px;
-    background: rgba(6, 10, 14, .66); border: 1px solid rgba(242, 244, 247, .16);
-  }}
+  /* Под карточкой - только знак. Имя и время на ней уже нарисованы, и
+     повторять их подписью значит спорить с самой карточкой. */
   .logo {{
     color: #eaecef; font-size: 22px; font-weight: 800; letter-spacing: -.02em;
     text-decoration: none; transition: color .2s ease, text-shadow .2s ease;
   }}
   .logo:hover {{ color: #fff; text-shadow: 0 0 18px var(--accent); }}
+  /* Глитч - тот же, что у знака в шапке сайта. */
+  .glitch {{ position: relative; display: inline-block; }}
+  .glitch::before, .glitch::after {{
+    content: attr(data-text); position: absolute; inset: 0;
+    pointer-events: none; opacity: .85;
+  }}
+  .glitch::before {{
+    color: #0affe0; animation: glitch-x 3.4s infinite steps(2, end);
+    clip-path: inset(0 0 60% 0);
+  }}
+  .glitch::after {{
+    color: #f6465d; animation: glitch-y 2.8s infinite steps(2, end);
+    clip-path: inset(60% 0 0 0);
+  }}
+  @keyframes glitch-x {{
+    0%, 86%, 100% {{ transform: translate(0); opacity: 0; }}
+    88% {{ transform: translate(-3px, -1px); opacity: .9; }}
+    92% {{ transform: translate(3px, 1px); opacity: .9; }}
+    96% {{ transform: translate(-2px, 1px); opacity: .6; }}
+  }}
+  @keyframes glitch-y {{
+    0%, 86%, 100% {{ transform: translate(0); opacity: 0; }}
+    89% {{ transform: translate(3px, 1px); opacity: .9; }}
+    93% {{ transform: translate(-3px, -1px); opacity: .9; }}
+    97% {{ transform: translate(2px, -1px); opacity: .6; }}
+  }}
 
   /* Кому движение мешает - лист уже лежит, печать уже стоит. */
   @media (prefers-reduced-motion: reduce) {{
-    .paper, .paper.hit, .stamp, .slot::after {{ animation: none; }}
+    .paper, .paper.hit, .stamp, .slot::after,
+    .glitch::before, .glitch::after {{ animation: none; }}
     .stamp {{ transform: rotate(-4.5deg); }}
   }}
 </style>
@@ -329,29 +405,7 @@ def _card_page(shot: ChartShot, iso: str, stamp: str) -> HTMLResponse:
       </div>
     </div>
   </div>
-  <div class="who">
-    {f'<b>{owner}</b>' if owner else ''}
-    <time datetime="{iso}">{stamp}</time>
-  </div>
-  <a class="logo" href="https://www.nmnh.trade">NMNH</a>
-<script>
-  // Время - по часам того, кто смотрит, и с их поясом: без пояса одна и та же
-  // сделка у отправителя и у получателя приходится на разные часы.
-  (function () {{
-    var node = document.querySelector("time");
-    if (!node) return;
-    var at = new Date(node.getAttribute("datetime"));
-    if (isNaN(at)) return;
-    var minutes = -at.getTimezoneOffset();
-    var rest = Math.abs(minutes) % 60;
-    var zone = "UTC" + (minutes < 0 ? "-" : "+") + Math.floor(Math.abs(minutes) / 60) +
-      (rest ? ":" + String(rest).padStart(2, "0") : "");
-    node.textContent = at.toLocaleString("ru", {{
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    }}) + " " + zone;
-  }})();
-</script>
+  <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH">NMNH</span></a>
 </body>
 </html>"""
     )
@@ -390,7 +444,7 @@ def shot_page(shot_id: str, session=Depends(get_session)):
 
     # Карточка сделки живёт своей страницей: у неё и движение своё, и печать.
     if shot.kind == "pnl":
-        return _card_page(shot, iso, stamp)
+        return _card_page(shot)
 
     title = f"{symbol} · {interval}"
     image = f"{BASE_URL}/{shot_id}.png"
