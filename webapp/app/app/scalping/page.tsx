@@ -51,6 +51,7 @@ import {
   CHART_PALETTES,
   CHART_PRESETS,
   isChartPaletteName,
+  paneInk,
   isChartPaper,
   isChartPresetName,
   paletteSwatch,
@@ -2499,6 +2500,11 @@ export default function ScalpingPage() {
   const pane = paper === "light" ? "pane-light" : "pane-dark";
   const paneStyle = paneHeight(journalOpen, journalH, full);
 
+  // Выбранная палитра красит не только свечи: рост и падение нарисованы и в
+  // стакане, и в ленте, и в скринере. Подменяем переменные панелей на корне -
+  // ниже их возьмут все, кому они нужны, вместе с полупрозрачными заливками.
+  const ink = paneInk(palette, paper) as React.CSSProperties;
+
   return (
     <div
       className={
@@ -2514,6 +2520,7 @@ export default function ScalpingPage() {
             // кабинета своим отрицательным полем и задаём свой.
             `${pane} -mx-4 overflow-x-clip px-2 md:-mx-6 lg:-mb-8 lg:pb-2`
       }
+      style={ink}
     >
       {/* Уведомления поверх всего: лимитка срабатывает сама, и почти всегда
           тогда, когда трейдер смотрит на другую монету. */}
