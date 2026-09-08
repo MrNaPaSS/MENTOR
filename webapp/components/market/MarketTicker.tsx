@@ -2,8 +2,16 @@
 
 // Бегущая строка рынка.
 //
-// Витрина: пятнадцать пар с ценой и суточным изменением, бесконечной лентой.
-// Она же и вход в терминал - нажатие на пару открывает её график со стаканом.
+// Витрина и вход в терминал разом: нажатие на пару открывает её график со
+// стаканом.
+//
+// Пары берём у скринера - те же, что видит терминал.
+//
+// Раньше список был свой, из пятнадцати имён, набранных руками, и цены к нему
+// приходили напрямую с биржи. Разойтись со скринером он мог в любой день: MATIC
+// в ленте был, а открыть его терминал не мог - пары в скринере нет, и нажатие
+// вело в пустоту. Общий источник эту рассинхронизацию убирает сам: в ленте не
+// может оказаться того, чего терминал не покажет.
 //
 // Лента бесшовная. Едет она на половину своей ширины, а собрана из двух
 // одинаковых половин, поэтому в конце пути вторая половина стоит ровно там,
@@ -12,21 +20,25 @@
 import { memo, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { askSymbol } from "@/lib/openSymbol";
+import { authReq } from "@/lib/api";
+import { getAccessToken } from "@/lib/auth";
+import type { ScreenerRow } from "@/lib/scalping";
 
 /** Как часто спрашиваем цены. */
 const POLL_MS = 15_000;
 
-const SYMBOLS = [
-  "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
-  "DOGEUSDT", "AVAXUSDT", "ADAUSDT", "LTCUSDT", "DOTUSDT",
-  "MATICUSDT", "LINKUSDT", "UNIUSDT", "ATOMUSDT", "NEARUSDT",
-];
+/** Сколько пар показываем: первые по обороту. */
+const SHOWN = 18;
 
-interface Ticker {
-  symbol: string;
-  price: number;
-  change: number; // % за 24ч
-}
+/**
+ * С какой плиты пара считается той, «где есть большая ликвидность».
+ *
+ * Плита - самая крупная одиночная заявка в стакане. Миллион долларов в одной
+ * заявке держит цену как стена, и трейдер идёт смотреть именно туда. Цифра
+ * абсолютная, а не доля от списка: доля пометила бы лучшую из имеющихся даже в
+ * день, когда крупного нет вовсе.
+ */
+const BIG_WALL = 1_000_000;
 
 function formatPrice(price: number): string {
   if (price >= 10000) return price.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -35,34 +47,31 @@ function formatPrice(price: number): string {
   return price.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 6 });
 }
 
+/** Плита словами: миллионы и тысячи, без длинных хвостов. */
+function money(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
+  return String(Math.round(value));
+}
+
 export default function MarketTicker() {
-  const [tickers, setTickers] = useState<Ticker[]>([]);
+  const [rows, setRows] = useState<ScreenerRow[]>([]);
   const trackRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    async function load() {
-      try {
-        // Binance public API - без ключей, точные цены в реальном времени
-        const symbolsParam = encodeURIComponent(JSON.stringify(SYMBOLS));
-        const res = await fetch(
-          `https://api.binance.com/api/v3/ticker/24hr?symbols=${symbolsParam}`
-        );
-        if (!res.ok) return;
-        const data: Array<{
-          symbol: string;
-          lastPrice: string;
-          priceChangePercent: string;
-        }> = await res.json();
+    let stopped = false;
 
-        setTickers(
-          data.map((t) => ({
-            symbol: t.symbol,
-            price: parseFloat(t.lastPrice),
-            change: parseFloat(t.priceChangePercent),
-          }))
+    async function load() {
+      const token = getAccessToken();
+      if (!token) return;
+      try {
+        const body = await authReq<{ rows: ScreenerRow[] }>(
+          `/api/scalping/screener?sort=volume&limit=${SHOWN}`,
+          token,
         );
+        if (!stopped && Array.isArray(body?.rows)) setRows(body.rows);
       } catch {
-        // При ошибке ничего не показываем - тикер скрыт
+        // Не ответил - показываем прошлые цены, они секундной давности.
       }
     }
 
@@ -71,9 +80,9 @@ export default function MarketTicker() {
 
     // Свёрнутую вкладку не опрашиваем.
     //
-    // Цены за спиной никто не читает, а каждый круг - это запрос на биржу и
-    // перерисовка тридцати строк. Вернулись к вкладке - обновляем сразу, чтобы
-    // первое, что человек увидит, не было ценой получасовой давности.
+    // Цены за спиной никто не читает, а каждый круг - это запрос и перерисовка
+    // строк. Вернулись к вкладке - обновляем сразу, чтобы первое, что человек
+    // увидит, не было ценой получасовой давности.
     function watch() {
       window.clearInterval(id);
       if (document.hidden) return;
@@ -83,17 +92,18 @@ export default function MarketTicker() {
 
     document.addEventListener("visibilitychange", watch);
     return () => {
+      stopped = true;
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", watch);
     };
   }, []);
 
-  if (!tickers.length) return null;
+  if (!rows.length) return null;
 
   return (
     // У строки свой набор цветов на каждую тему - он задан переменными
-    // `--tick-*`. Тёмный остался тем, с которым её задумывали; светлый не
-    // взят у панелей терминала, а подобран отдельно: витрина рынка не обязана
+    // `--tick-*`. Тёмный остался тем, с которым её задумывали; светлый не взят
+    // у панелей терминала, а подобран отдельно: витрина рынка не обязана
     // совпадать с ними, но на белой странице обязана быть белой.
     <div
       className="group overflow-hidden border-b"
@@ -110,31 +120,31 @@ export default function MarketTicker() {
         ref={trackRef}
         // Курсор на строке останавливает её.
         //
-        // Прочитать цену бегущей пары нельзя, а нажать на неё - тем более:
-        // к моменту нажатия под курсором уже соседняя. Пауза на всю строку, а
-        // не на одну пару: остановить надо ленту, по которой ведут курсор.
-        // py-1.5 вместе с отступом самой пары держит прежнюю высоту строки:
-        // на неё рассчитан отступ содержимого под шапкой.
+        // Прочитать цену бегущей пары нельзя, а нажать на неё - тем более: к
+        // моменту нажатия под курсором уже соседняя. Пауза на всю строку, а не
+        // на одну пару: остановить надо ленту, по которой ведут курсор.
+        // py-1.5 вместе с отступом самой пары держит прежнюю высоту строки: на
+        // неё рассчитан отступ содержимого под шапкой.
         className="flex w-max animate-marquee py-1.5 will-change-transform group-hover:[animation-play-state:paused]"
       >
         {/* Две одинаковые половины. Вторая - для глаза, а не для чтения: она
             повторяет первую, и озвучивать её ещё раз незачем. */}
-        <Half items={tickers} />
-        <Half items={tickers} clone />
+        <Half rows={rows} />
+        <Half rows={rows} clone />
       </div>
     </div>
   );
 }
 
-function Half({ items, clone }: { items: Ticker[]; clone?: boolean }) {
+function Half({ rows, clone }: { rows: ScreenerRow[]; clone?: boolean }) {
   return (
     // Отступ справа вместо зазора после последней пары: зазор ставится только
     // между соседями, и на стыке половин его не хватало - лента дёргалась на
     // пол-отступа каждый круг. Здесь у половины свой хвост, и её ширина ровно
     // половина ленты.
     <div className="flex gap-8 pr-8" aria-hidden={clone}>
-      {items.map((t) => (
-        <Pair key={t.symbol} t={t} />
+      {rows.map((row) => (
+        <Pair key={row.symbol} row={row} />
       ))}
     </div>
   );
@@ -144,45 +154,63 @@ function Half({ items, clone }: { items: Ticker[]; clone?: boolean }) {
  * Пара в ленте.
  *
  * Через memo: цены приезжают раз в пятнадцать секунд, и без него React
- * перебирал бы все тридцать строк, включая те, у которых ничего не менялось, -
- * прямо посреди движения ленты.
+ * перебирал бы все строки, включая те, у которых ничего не менялось, - прямо
+ * посреди движения ленты.
  */
-const Pair = memo(function Pair({ t }: { t: Ticker }) {
-  const pos = t.change >= 0;
-  const sym = t.symbol.replace("USDT", "");
+const Pair = memo(function Pair({ row }: { row: ScreenerRow }) {
+  const pos = row.change_pct >= 0;
+  const sym = row.symbol.replace(/USDT$/, "");
+  // Крупная плита - золотом. Тем же цветом она отмечена в стакане и на
+  // графике: одно и то же явление не должно называться в терминале двумя
+  // разными цветами.
+  const heavy = row.wall_notional >= BIG_WALL;
   return (
     // Нажатие открывает пару в терминале - с её графиком и стаканом. Монета
-    // передаётся адресом: терминал читает её при открытии, а рабочее место
-    // трейдера при этом не переписывается.
+    // передаётся адресом, а событием - уже открытому терминалу: переход внутри
+    // приложения страницу не пересоздаёт, и адрес там прочитать некому.
     <Link
-      href={`/app/scalping?symbol=${t.symbol}`}
-      // Адрес открывает терминал с другой страницы, событие - когда терминал
-      // уже на экране: переход внутри приложения страницу не пересоздаёт, и
-      // адрес там прочитать некому.
-      onClick={() => askSymbol(t.symbol)}
-      title={`${sym} - открыть график и стакан`}
+      href={`/app/scalping?symbol=${row.symbol}`}
+      onClick={() => askSymbol(row.symbol)}
+      title={
+        heavy
+          ? `${sym} - плита ${money(row.wall_notional)}, открыть график и стакан`
+          : `${sym} - открыть график и стакан`
+      }
       className="flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs transition-[background-color,transform] duration-150 ease-out hover:scale-[1.06] hover:bg-[var(--tick-hover)] motion-reduce:hover:scale-100"
+      style={heavy ? { background: "rgb(var(--accent-gold) / 0.12)" } : undefined}
     >
       {/* Цветная точка = индикатор направления */}
       <span
         className="inline-block h-1.5 w-1.5 rounded-full"
         style={{ backgroundColor: pos ? "var(--tick-up)" : "var(--tick-down)" }}
       />
-      <span className="font-semibold" style={{ color: "var(--tick-symbol)" }}>
+      <span
+        className="font-semibold"
+        style={{ color: heavy ? "rgb(var(--accent-gold))" : "var(--tick-symbol)" }}
+      >
         {sym}
       </span>
       <span
         className="font-mono font-medium tabular-nums"
         style={{ color: "var(--tick-price)" }}
       >
-        ${formatPrice(t.price)}
+        ${formatPrice(row.price)}
       </span>
       <span
         className="font-mono text-[11px] font-semibold tabular-nums"
         style={{ color: pos ? "var(--tick-up)" : "var(--tick-down)" }}
       >
-        {pos ? "▲" : "▼"} {Math.abs(t.change).toFixed(2)}%
+        {pos ? "▲" : "▼"} {Math.abs(row.change_pct).toFixed(2)}%
       </span>
+      {/* Размер плиты - только когда она крупная: у остальных это шум. */}
+      {heavy && (
+        <span
+          className="font-mono text-[10px] font-bold tabular-nums"
+          style={{ color: "rgb(var(--accent-gold))" }}
+        >
+          {money(row.wall_notional)}
+        </span>
+      )}
     </Link>
   );
 });
