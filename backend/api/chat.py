@@ -20,6 +20,7 @@ import asyncio
 import json
 import logging
 import re
+from datetime import timezone
 from html import unescape
 
 import aiohttp
@@ -83,10 +84,18 @@ def _out(message: ChatMessage, author: Student | None) -> dict:
             # Строку писали мы сами; если она сломалась, сообщение важнее
             # вложения - отдаём без него.
             attach = None
+    # Время отдаём с меткой пояса. В базу оно пишется в UTC, но SQLite про
+    # пояса не знает и возвращает время голым - без метки браузер читает его
+    # как своё местное и показывает сообщение на пару часов раньше, чем оно
+    # было. С PostgreSQL метка приходит сама, и эта строка ничего не меняет.
+    at = message.created_at
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+
     return {
         "id": message.id,
         "text": message.text,
-        "at": message.created_at.isoformat(),
+        "at": at.isoformat(),
         "author": _who(author) if author is not None else {"id": 0, "name": "?", "avatar": "", "mentor": False},
         "attach": attach,
     }
