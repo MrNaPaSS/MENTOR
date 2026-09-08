@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import ChatRoom from "@/components/chat/ChatRoom";
 import { fromActive, shareShot as shotToChat } from "@/lib/chat/share";
+import type { SharedTrade } from "@/lib/chat/store";
 import {
   open as openChat,
   serverSnapshot as chatServer,
@@ -436,6 +437,7 @@ export default function ScalpingPage() {
       // Подпись на снимках и карточках: своя, если задана, иначе ник Telegram.
       setAuthor(body.card_name || body.username || null);
       setAvatar(body.avatar_url ? `${API_URL}${body.avatar_url}` : null);
+      setCopyAllowed(Boolean(body.copy_allowed));
     } catch {
       // Не ответил профиль - строка просто останется без баланса.
     }
@@ -574,6 +576,9 @@ export default function ScalpingPage() {
   // Фотография из Telegram: ею подписаны сообщения в чате. Путь приходит от
   // бэкенда, а сайт живёт на другом домене - отсюда и API_URL.
   const [avatar, setAvatar] = useState<string | null>(null);
+  // Допуск к копированию сделок из чата. Выдаётся наставником поимённо и
+  // приходит вместе с профилем: кнопки «войти» недопущенный не увидит вовсе.
+  const [copyAllowed, setCopyAllowed] = useState(false);
   // Чат подключён, пока открыт терминал, - даже со свёрнутой панелью: иначе
   // точка непрочитанного загоралась бы только у того, кто и так в него смотрит.
   const chat = useSyncExternalStore(chatSubscribe, chatSnapshot, chatServer);
@@ -801,6 +806,65 @@ export default function ScalpingPage() {
     favorites,
     onlyFavorites,
   ]);
+
+  /**
+   * Повторить чужую заявку у себя.
+   *
+   * Уровни берутся один в один - вход, стоп и цели, - а объём считается по
+   * своей сумме. Копировать чужой объём было бы не «той же сделкой», а другим
+   * риском: у автора за этими цифрами свой депозит, у копирующего свой.
+   *
+   * Плечо берём авторское: им задан характер сделки, и менять его значит
+   * повторять не её.
+   */
+  const copyTrade = useCallback(
+    async (shared: SharedTrade) => {
+      if (!copyAllowed) return;
+      if (!exchange?.connected) {
+        setOrderNote({ text: t.terminal.notes.notConnected, bad: true });
+        setExchangeOpen(true);
+        return;
+      }
+
+      const qty = (margin * shared.leverage) / shared.entry;
+      if (!(qty > 0)) return;
+
+      // График переезжает на монету сделки: разметка должна встать там, где на
+      // неё можно смотреть.
+      if (shared.symbol !== symbol) selectSymbol(shared.symbol);
+
+      const next = createTrade(
+        {
+          symbol: shared.symbol,
+          side: shared.side,
+          entry: shared.entry,
+          stop: shared.stop,
+          targets: shared.targets,
+          qty,
+          margin,
+          leverage: shared.leverage,
+        },
+        `${shared.symbol}-${Date.now()}`,
+      );
+      setTrades((list) => [...list, next]);
+      setOrderNote({ text: t.terminal.notes.sendingOrder, bad: false });
+
+      try {
+        const result = await openPosition(next, true);
+        if (!result) throw new Error(t.terminal.notes.orderRejected);
+        setOrderNote({ text: t.chat.copied(base(shared.symbol)), bad: false });
+      } catch (err) {
+        // Та же осторожность, что и у своей заявки: биржа отказала - убираем и
+        // с графика, иначе трейдер ждёт вход, которого нет.
+        setTrades((list) => list.filter((t) => t.id !== next.id));
+        setOrderNote({
+          text: err instanceof Error ? err.message : t.terminal.notes.orderRejected,
+          bad: true,
+        });
+      }
+    },
+    [copyAllowed, exchange?.connected, margin, symbol, selectSymbol, t],
+  );
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
   function resizeScreener(delta: number) {
@@ -2950,6 +3014,7 @@ export default function ScalpingPage() {
                     tone="pane"
                     symbol={symbol ?? undefined}
                     own={myShares}
+                    onCopy={copyAllowed ? copyTrade : undefined}
                     onClose={() => setChatOpen(false)}
                   />
                 </section>

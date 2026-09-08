@@ -62,6 +62,10 @@ class Student(Base):
     balance_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Допуск к копированию сделок из чата. Выдаётся наставником поимённо и по
+    # умолчанию закрыт: нажатие «войти» ставит настоящую заявку на настоящие
+    # деньги, и открывать такое всем разом нельзя.
+    copy_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
     coins: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     # Откуда появилась запись: bot | web | academy. Ученик может быть заведён

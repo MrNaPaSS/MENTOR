@@ -21,6 +21,8 @@ export const chat = {
   save: "Сохранить",
   removeMine: "Убрать своё сообщение",
   removeTheirs: "Убрать сообщение (наставник)",
+  copyIn: "Войти",
+  copied: (coin: string) => `Заявка ${coin} повторена у вас`,
   attach: "Приложить",
   attachPhoto: "Фотографию",
   attachOrder: (coin: string) => `Заявку ${coin}`,

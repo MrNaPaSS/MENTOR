@@ -29,6 +29,21 @@ export default function AdminStudents() {
       setBusy(null);
     }
   }
+  /**
+   * Допуск к копированию сделок из чата.
+   *
+   * Поимённо и по умолчанию закрыт: нажатие «войти» под чужой заявкой ставит
+   * настоящую заявку на настоящие деньги, и открывать такое всем разом нельзя.
+   */
+  async function toggleCopy(s: StudentOut) {
+    setBusy(s.id);
+    try {
+      replace(await api.studentPatch(token, s.id, { copy_allowed: !s.copy_allowed }));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function toggleActive(s: StudentOut) {
     setBusy(s.id);
     try {
@@ -92,7 +107,16 @@ export default function AdminStudents() {
           <div className="space-y-2">
             {pending.map((s) => (
               <div key={s.id} className="flex items-center justify-between rounded-xl border border-border bg-bg-panel px-4 py-2.5">
-                <span className="font-medium text-text-primary">@{s.username || s.id}</span>
+                {/* Когда заявка появилась и сколько уже висит. Заявка недельной
+                    давности и вчерашняя выглядели одинаково, а решают по ним
+                    по-разному: человек, который ждёт доступ седьмой день, уже
+                    ушёл к кому-то другому. */}
+                <span className="flex min-w-0 items-baseline gap-2">
+                  <span className="font-medium text-text-primary">@{s.username || s.id}</span>
+                  <span className="text-xs text-text-muted" title={fmtDateTime(s.created_at)}>
+                    {fmtDateTime(s.created_at)} · {fmtAgo(s.created_at)}
+                  </span>
+                </span>
                 <div className="flex gap-2">
                   <button onClick={() => approve(s.id)} disabled={busy === s.id} className="btn-primary px-3 py-1.5 text-xs">
                     <Check className="h-3.5 w-3.5" /> Принять
@@ -124,6 +148,7 @@ export default function AdminStudents() {
                 <th className="text-center">Входов</th>
                 <th>Источник</th>
                 <th className="text-center">Активен</th>
+                <th className="text-center">Копи</th>
                 <th className="text-right">Действия</th>
               </tr>
             </thead>
@@ -168,6 +193,20 @@ export default function AdminStudents() {
                       className={`badge-${s.is_active ? "success" : "muted"}`}
                     >
                       {s.is_active ? "вкл" : "выкл"}
+                    </button>
+                  </td>
+                  <td className="text-center">
+                    <button
+                      onClick={() => toggleCopy(s)}
+                      disabled={busy === s.id}
+                      title={
+                        s.copy_allowed
+                          ? "Может копировать чужие заявки из чата"
+                          : "Копирование заявок из чата закрыто"
+                      }
+                      className={`badge-${s.copy_allowed ? "success" : "muted"}`}
+                    >
+                      {s.copy_allowed ? "да" : "нет"}
                     </button>
                   </td>
                   <td className="text-right">

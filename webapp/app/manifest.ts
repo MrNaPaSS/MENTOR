@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "NMNH Platform",
     short_name: "NMNH",
-    description: "Персональные торговые сигналы под твой депозит. Реальный расчёт, риск под контролем.",
+    description: "Профессиональный торговый терминал: стакан, график, журнал сделок и расчёт риска.",
     lang: "ru",
     start_url: "/app/scalping",
     scope: "/",

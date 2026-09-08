@@ -236,6 +236,13 @@ export interface Profile {
   card_name?: string | null;
   /** Наставник: у него есть право править журнал. */
   is_admin?: boolean;
+  /**
+   * Допуск к копированию сделок из чата.
+   *
+   * Приходит вместе с профилем, а не спрашивается отдельно: кнопку «войти» под
+   * чужой заявкой недопущенный не должен увидеть даже на мгновение.
+   */
+  copy_allowed?: boolean;
   /** Открыт ли скальпинг-терминал: раздел работает с живыми деньгами. */
 }
 
@@ -329,6 +336,8 @@ export interface StudentOut {
   balance_usdt: string | null;
   is_active: boolean;
   is_approved: boolean;
+  /** Допущен к копированию сделок из чата. Выдаёт наставник поимённо. */
+  copy_allowed: boolean;
   coins: number;
   /** Откуда запись: bot | web | academy. */
   created_via: string;

@@ -26,6 +26,7 @@ def _to_out(s: Student) -> StudentOut:
         id=s.id, username=s.username, weex_uid=s.weex_uid, tg_id=s.tg_id, mode=s.mode,
         language=s.language, balance_usdt=s.balance_usdt,
         is_active=s.is_active, is_approved=s.is_approved,
+        copy_allowed=bool(s.copy_allowed),
         coins=s.coins or 0,
         created_via=s.created_via or "bot",
         created_at=_iso(s.created_at),
@@ -40,6 +41,7 @@ class StudentPatch(BaseModel):
     risk_percent: Optional[float] = None
     is_active: Optional[bool] = None
     is_approved: Optional[bool] = None
+    copy_allowed: Optional[bool] = None
 
 
 @router.get("", response_model=list[StudentOut])

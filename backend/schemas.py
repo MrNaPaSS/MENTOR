@@ -170,6 +170,8 @@ class StudentOut(BaseModel):
     balance_usdt: Optional[Decimal]
     is_active: bool
     is_approved: bool
+    # Допущен к копированию сделок из чата. Выдаётся наставником поимённо.
+    copy_allowed: bool = False
     coins: int = 0
     # Откуда запись: bot | web | academy
     created_via: str = "bot"
@@ -234,6 +236,9 @@ class ProfileOut(BaseModel):
     # Права наставника. Интерфейсу нужно знать их до отрисовки: кнопки, которой
     # у ученика быть не должно, он не нарисует и на мгновение.
     is_admin: bool = False
+    # Допуск к копированию сделок из чата. По той же причине приходит вместе с
+    # профилем: «войти» под чужой заявкой видит только допущенный.
+    copy_allowed: bool = False
 
 
 class ProfilePatch(BaseModel):

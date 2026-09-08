@@ -30,6 +30,7 @@ import {
   Check,
   ChevronRight,
   ChevronLeft,
+  LogIn,
 } from "lucide-react";
 import { SOCIAL_LINKS } from "@/lib/content";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
@@ -84,6 +85,10 @@ const SKIN: Record<
     down: string;
     divider: string;
     edge: string;
+    upDot: string;
+    downDot: string;
+    pendingDot: string;
+    doneDot: string;
     upBox: string;
     downBox: string;
     chip: string;
@@ -116,6 +121,10 @@ const SKIN: Record<
     down: "text-danger",
     divider: "bg-border",
     edge: "border-border",
+    upDot: "bg-success",
+    downDot: "bg-danger",
+    pendingDot: "border-warning",
+    doneDot: "bg-text-muted",
     upBox: "bg-success/12 text-success ring-1 ring-success/25",
     downBox: "bg-danger/12 text-danger ring-1 ring-danger/25",
     chip: "bg-bg-deep/60 text-text-muted",
@@ -152,6 +161,10 @@ const SKIN: Record<
     down: "text-[var(--pane-down)]",
     divider: "bg-[var(--pane-border)]",
     edge: "border-[var(--pane-border)]",
+    upDot: "bg-[var(--pane-up)]",
+    downDot: "bg-[var(--pane-down)]",
+    pendingDot: "border-[var(--pane-gold)]",
+    doneDot: "bg-[var(--pane-muted)]",
     upBox: "bg-[var(--pane-up)]/12 text-[var(--pane-up)] ring-1 ring-[var(--pane-up)]/25",
     downBox: "bg-[var(--pane-down)]/12 text-[var(--pane-down)] ring-1 ring-[var(--pane-down)]/25",
     chip: "bg-[var(--pane-hover)] text-[var(--pane-muted)]",
@@ -261,7 +274,21 @@ function TradeCard({
           {long ? "LONG" : "SHORT"}
         </span>
         <span className={`rounded px-1 py-px text-[10px] ${skin.chip}`}>×{trade.leverage}</span>
-        <span className={`ml-auto text-[10px] ${skin.muted}`}>{closed ? outcome : state}</span>
+        {/* Точка состояния у самой подписи: идущая сделка светится и мигает,
+            ждущая - пустой кружок, закрытая - глухой серый. По одному взгляду
+            видно, живая она или уже нет. */}
+        <span className={`ml-auto flex items-center gap-1 text-[10px] ${skin.muted}`}>
+          <span
+            className={
+              trade.state === "open"
+                ? `h-1.5 w-1.5 animate-pulse rounded-full ${long ? skin.upDot : skin.downDot}`
+                : trade.state === "planned"
+                  ? `h-1.5 w-1.5 rounded-full border ${skin.pendingDot}`
+                  : `h-1.5 w-1.5 rounded-full ${skin.doneDot}`
+            }
+          />
+          {closed ? outcome : state}
+        </span>
       </div>
 
       {/* Результат: крупно и с процентом от маржи. Только у закрытой - у ждущей
@@ -346,6 +373,7 @@ export default function ChatRoom({
   tone = "site",
   symbol,
   own = [],
+  onCopy,
   onClose,
 }: {
   tone?: ChatTone;
@@ -353,6 +381,13 @@ export default function ChatRoom({
   symbol?: string;
   /** Свои сделки по всем монетам - идущие и ждущие входа: их прикладывают скрепкой. */
   own?: SharedTrade[];
+  /**
+   * Повторить чужую заявку у себя.
+   *
+   * Не передан - кнопки нет. Так это и работает у недопущенных и на странице
+   * чата в кабинете: там нет ни графика, ни биржевого счёта.
+   */
+  onCopy?: (trade: SharedTrade) => void;
   /** Кнопка сворачивания в шапке. Есть только у панели терминала. */
   onClose?: () => void;
 }) {
@@ -544,6 +579,7 @@ export default function ChatRoom({
                 message={m}
                 self={state.me?.id === m.author.id}
                 mentor={Boolean(state.me?.mentor)}
+                onCopy={onCopy}
                 skin={skin}
                 tone={tone}
                 time={time(m.at)}
@@ -741,11 +777,17 @@ export default function ChatRoom({
   );
 }
 
+/** Сделка из сообщения. Отдельной строкой - разбирать вложение дважды незачем. */
+function trade(message: ChatMessage): SharedTrade {
+  return (message.attach as { kind: "trade"; trade: SharedTrade }).trade;
+}
+
 /** Одно сообщение: лицо, ник, время и то, что приложено. */
 function Bubble({
   message,
   self,
   mentor,
+  onCopy,
   skin,
   tone,
   time,
@@ -755,6 +797,7 @@ function Bubble({
   self: boolean;
   /** Смотрит наставник: ему разрешено убирать чужое. */
   mentor: boolean;
+  onCopy?: (trade: SharedTrade) => void;
   skin: Skin;
   tone: ChatTone;
   time: string;
@@ -862,7 +905,21 @@ function Bubble({
         )}
 
         {message.attach?.kind === "trade" && (
-          <TradeCard trade={message.attach.trade} skin={skin} labels={labels} />
+          <>
+            <TradeCard trade={message.attach.trade} skin={skin} labels={labels} />
+            {/* Повторить чужую заявку у себя. Только ждущую и только чужую: в
+                идущую сделку заходят по её цене, которой уже нет, а свою
+                собственную копировать незачем. */}
+            {onCopy && !self && message.attach.trade.state === "planned" && (
+              <button
+                onClick={() => onCopy(trade(message))}
+                className={`mt-1 flex w-full items-center justify-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold ${skin.upBox}`}
+              >
+                <LogIn className="h-3 w-3" />
+                {t.chat.copyIn}
+              </button>
+            )}
+          </>
         )}
 
         {link && (

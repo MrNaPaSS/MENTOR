@@ -17,6 +17,8 @@ export const chat = {
   save: "Save",
   removeMine: "Remove your message",
   removeTheirs: "Remove the message (mentor)",
+  copyIn: "Take it",
+  copied: (coin: string) => `The ${coin} order is now yours too`,
   attach: "Attach",
   attachPhoto: "A photo",
   attachOrder: (coin: string) => `${coin} order`,

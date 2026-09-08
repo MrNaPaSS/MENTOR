@@ -9,7 +9,7 @@ import TelegramInit from "@/components/telegram/TelegramInit";
 export const metadata: Metadata = {
   metadataBase: new URL("https://nmnh.io"),
   title: {
-    default: "NMNH - Персональные торговые сигналы",
+    default: "NMNH - Профессиональный торговый терминал",
     template: "%s - NMNH",
   },
   description:
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     title: "NMNH",
   },
   openGraph: {
-    title: "NMNH - Персональные торговые сигналы",
+    title: "NMNH - Профессиональный торговый терминал",
     description:
       "Торгуй как профи. Учись у лучших. Персональные сигналы под твой депозит.",
     type: "website",
