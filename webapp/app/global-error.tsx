@@ -20,7 +20,7 @@ export default function GlobalError() {
       <body className="min-h-screen bg-black">
         <MaintenanceScreen
           title="Терминал не запустился"
-          note="Перезагрузите страницу — обычно этого достаточно. Если не помогло, напишите нам, и мы починим."
+          note="Перезагрузите страницу, обычно этого достаточно. Если не помогло, напишите нам, и мы починим."
           action={
             <MaintenanceAction onClick={() => window.location.reload()}>
               Перезагрузить

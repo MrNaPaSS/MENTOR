@@ -17,7 +17,7 @@ export default function SectionError({ reset }: { error: Error; reset: () => voi
   return (
     <MaintenanceScreen
       title="Раздел не открылся"
-      note="Мы уже знаем об этом. Попробуйте открыть его снова — остальной терминал работает."
+      note="Мы уже знаем об этом. Попробуйте открыть его снова, остальной терминал работает."
       action={<MaintenanceAction onClick={reset}>Попробовать снова</MaintenanceAction>}
     />
   );

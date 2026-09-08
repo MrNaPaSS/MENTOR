@@ -34,11 +34,12 @@ export default function MaintenanceScreen({ title, note, action }: MaintenanceSc
       aria-live="polite"
       className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-black"
     >
-      {/* Ролик фоном, во всю заслонку. Звука у него нет и быть не должно:
-          экран появляется сам, без нажатия, и заговоривший ниоткуда сайт
-          пугает сильнее, чем молчащий. */}
+      {/* Ролик фоном, во всю заслонку и в полную силу: приглушать его нечем -
+          он и есть то, ради чего на этот экран смотрят дольше секунды. Звука у
+          него нет и быть не должно: экран появляется сам, без нажатия, и
+          заговоривший ниоткуда сайт пугает сильнее, чем молчащий. */}
       <video
-        className="absolute inset-0 h-full w-full object-cover opacity-70"
+        className="absolute inset-0 h-full w-full object-cover"
         src="/maintenance.mp4"
         poster="/maintenance.jpg"
         autoPlay
@@ -48,16 +49,17 @@ export default function MaintenanceScreen({ title, note, action }: MaintenanceSc
         aria-hidden="true"
       />
 
-      {/* Затемнение под надписью: ролик тёмный, но не везде, и белый текст на
-          светлом кадре пропадает ровно в тот момент, когда его читают. */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/50 to-black/85" />
-
-      <div className="relative mx-auto flex max-w-md flex-col items-center px-6 text-center">
-        <span className="mb-5 flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-white/70 backdrop-blur-sm">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          </span>
+      {/* Полотна поверх ролика нет. Надпись держится на собственной тени: она
+          обводит буквы, а не гасит кадр за ними, и потому читается и на тёмном
+          кадре, и на светлом. */}
+      <div className="relative mx-auto flex max-w-md flex-col items-center px-6 text-center [text-shadow:0_2px_18px_rgba(0,0,0,.85),0_1px_3px_rgba(0,0,0,.9)]">
+        {/* Знак - тот же, что в шапке сайта и под снимками: с тем же разрывом
+            цвета. Плашка с точкой на его месте выглядела служебной наклейкой,
+            а здесь стоит подпись хозяина страницы. */}
+        <span
+          className="glitch mb-5 text-[13px] font-extrabold uppercase tracking-[0.2em] text-white"
+          data-text="NMNH.TRADE"
+        >
           NMNH.TRADE
         </span>
 
@@ -65,7 +67,7 @@ export default function MaintenanceScreen({ title, note, action }: MaintenanceSc
           {title}
         </h1>
 
-        <p className="mt-3 text-sm leading-relaxed text-white/70">{note}</p>
+        <p className="mt-3 text-sm leading-relaxed text-white/85">{note}</p>
 
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
           {action}
@@ -73,7 +75,7 @@ export default function MaintenanceScreen({ title, note, action }: MaintenanceSc
             href={SOCIAL_LINKS.telegram}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-full border border-white/20 px-5 py-2.5 text-[13px] font-semibold text-white/80 transition-colors hover:border-white/40 hover:text-white"
+            className="rounded-full border border-white/25 bg-black/40 px-5 py-2.5 text-[13px] font-semibold text-white backdrop-blur-md transition-colors hover:border-white/50 hover:bg-black/55"
           >
             Мы в Telegram
           </a>
@@ -93,8 +95,10 @@ export function MaintenanceAction({
   href?: string;
   children: ReactNode;
 }) {
+  // Тень надписи кнопке не достаётся: буквы на ней чёрные, и чёрная тень под
+  // ними читается как грязь на печати.
   const look =
-    "rounded-full bg-white px-5 py-2.5 text-[13px] font-bold text-black transition-transform duration-150 hover:-translate-y-0.5";
+    "rounded-full bg-white px-5 py-2.5 text-[13px] font-bold text-black transition-transform duration-150 hover:-translate-y-0.5 [text-shadow:none]";
   if (href) {
     return (
       <a href={href} className={look}>

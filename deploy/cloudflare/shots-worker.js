@@ -35,7 +35,7 @@ const SITE = "https://www.nmnh.trade";
 const OFFLINE = {
   status: 503,
   title: "Сервер обновляется",
-  note: "Снимок откроется через пару минут. Страница сама покажет его, как только сервер ответит.",
+  note: "Снимок откроется через пару минут. Обновлять страницу не нужно, он появится сам, как только сервер ответит.",
   // Возвращаемся сами: человек оставил вкладку открытой, и ждать от него
   // нажатия F5 значит терять того, кому график и был отправлен.
   reload: true,
@@ -120,32 +120,53 @@ function page(what) {
     font: 14px/1.5 "Inter", system-ui, -apple-system, sans-serif;
     display: flex; align-items: center; justify-content: center;
   }
-  video, .veil { position: absolute; inset: 0; width: 100%; height: 100%; }
-  video { object-fit: cover; opacity: .7; }
-  .veil { background: linear-gradient(180deg, rgba(0,0,0,.8), rgba(0,0,0,.5) 45%, rgba(0,0,0,.85)); }
-  main { position: relative; max-width: 26rem; padding: 0 24px; text-align: center; }
-  .badge {
-    display: inline-flex; align-items: center; gap: 8px; margin-bottom: 20px;
-    border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06);
-    border-radius: 999px; padding: 5px 12px;
-    font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: rgba(255,255,255,.7);
+  video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  /* Полотна поверх ролика нет: надпись держится на собственной тени. */
+  main {
+    position: relative; max-width: 26rem; padding: 0 24px; text-align: center;
+    text-shadow: 0 2px 18px rgba(0,0,0,.85), 0 1px 3px rgba(0,0,0,.9);
   }
-  .dot { width: 6px; height: 6px; border-radius: 50%; background: #22e07a; animation: beat 1.6s ease-in-out infinite; }
-  @keyframes beat { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+  /* Знак - тот же, что в шапке сайта и на странице снимка: с тем же разрывом
+     цвета. Разные написания в разных местах читаются как разные хозяева. */
+  .mark {
+    position: relative; display: inline-block; margin-bottom: 20px;
+    font-size: 13px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase;
+    color: #fff;
+  }
+  .mark::before, .mark::after {
+    content: attr(data-text); position: absolute; inset: 0;
+    pointer-events: none; opacity: .85;
+  }
+  .mark::before { color: #0affe0; animation: glitch-x 3.4s infinite steps(2, end); clip-path: inset(0 0 60% 0); }
+  .mark::after { color: #f6465d; animation: glitch-y 2.8s infinite steps(2, end); clip-path: inset(60% 0 0 0); }
+  @keyframes glitch-x {
+    0%, 86%, 100% { transform: translate(0); opacity: 0; }
+    88% { transform: translate(-3px, -1px); opacity: .9; }
+    92% { transform: translate(3px, 1px); opacity: .9; }
+    96% { transform: translate(-2px, 1px); opacity: .6; }
+  }
+  @keyframes glitch-y {
+    0%, 86%, 100% { transform: translate(0); opacity: 0; }
+    89% { transform: translate(3px, 1px); opacity: .9; }
+    93% { transform: translate(-3px, -1px); opacity: .9; }
+    97% { transform: translate(2px, -1px); opacity: .6; }
+  }
   h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
-  p { margin: 12px 0 0; font-size: 14px; color: rgba(255,255,255,.72); }
+  p { margin: 12px 0 0; font-size: 14px; color: rgba(255,255,255,.9); }
   a {
     display: inline-block; margin-top: 26px; padding: 10px 20px; border-radius: 999px;
     background: #fff; color: #000; font-size: 13px; font-weight: 700; text-decoration: none;
   }
-  @media (prefers-reduced-motion: reduce) { video { display: none; } .dot { animation: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    video { display: none; }
+    .mark::before, .mark::after { animation: none; }
+  }
 </style>
 </head>
 <body>
   <video src="${SITE}/maintenance.mp4" poster="${SITE}/maintenance.jpg" autoplay loop muted playsinline></video>
-  <div class="veil"></div>
   <main>
-    <span class="badge"><span class="dot"></span>NMNH.TRADE</span>
+    <span class="mark" data-text="NMNH.TRADE">NMNH.TRADE</span>
     <h1>${what.title}</h1>
     <p>${what.note}</p>
     <a href="${SITE}">На сайт</a>
