@@ -186,6 +186,95 @@ describe("станция не отвечает", () => {
   });
 });
 
+describe("поток оборвался посреди песни", () => {
+  /** Плеер, у которого можно дёрнуть события на последнем открытом элементе. */
+  function trackAudio() {
+    const asked: string[] = [];
+    let last: HTMLAudioElement | null = null;
+    const Real = window.Audio;
+    window.Audio = function (...args: ConstructorParameters<typeof Audio>) {
+      const one = new Real(...args);
+      const src = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+      Object.defineProperty(one, "src", {
+        configurable: true,
+        get: () => src?.get?.call(one),
+        set(value: string) {
+          asked.push(value);
+          src?.set?.call(one, value);
+        },
+      });
+      last = one;
+      return one;
+    } as unknown as typeof Audio;
+    return {
+      asked,
+      current: () => last!,
+      restore: () => {
+        window.Audio = Real;
+      },
+    };
+  }
+
+  it("оборвавшаяся станция возвращается, а не уступает место следующей", async () => {
+    // Живой поток обрывается не только когда станция умерла: хватает секунды
+    // без связи. Перебор списка на таком обрыве проходил все станции за доли
+    // секунды - каждая падала по той же причине - и выключал радио. Со стороны
+    // это выглядело так: перешёл в другой раздел, музыка встала на паузу.
+    vi.useFakeTimers();
+    const tape = trackAudio();
+    try {
+      const radio = await import("@/lib/radio");
+      const { default: RadioChip } = await import("@/components/app/RadioChip");
+      render(<RadioChip />);
+      fireEvent.click(playButton());
+
+      const first = tape.asked[0];
+      tape.current().onplaying?.(new Event("playing"));
+      expect(radio.snapshot().mode).toBe("playing");
+
+      tape.current().onerror?.(new Event("error"));
+      // Не выключились и не ушли к соседней - ждём возврата.
+      expect(radio.snapshot().mode).toBe("loading");
+      expect(tape.asked).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(900);
+      expect(tape.asked.at(-1)).toBe(first);
+    } finally {
+      tape.restore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("не вернулась за все попытки - уходим к соседней, а не молчим", async () => {
+    // Возвраты не бесконечны: станция может замолчать на неделю, и держать
+    // человека на ней всё это время значит подменить радио тишиной.
+    vi.useFakeTimers();
+    const tape = trackAudio();
+    try {
+      const radio = await import("@/lib/radio");
+      const { default: RadioChip } = await import("@/components/app/RadioChip");
+      render(<RadioChip />);
+      fireEvent.click(playButton());
+
+      const first = tape.asked[0];
+      tape.current().onplaying?.(new Event("playing"));
+
+      // Обрыв, следом все возвраты подряд - ни один не зазвучал, - и уже
+      // после них прежний перебор: та же станция без CORS, потом соседняя.
+      for (let i = 0; i < 6; i++) {
+        tape.current().onerror?.(new Event("error"));
+        await vi.advanceTimersByTimeAsync(15000);
+      }
+
+      expect(tape.asked.at(-1)).not.toBe(first);
+      expect(radio.snapshot().mode).not.toBe("off");
+    } finally {
+      tape.restore();
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("уведомление и музыка", () => {
   it("сигнал терминала приглушает радио, а потом отпускает", async () => {
     // Движок держит свой <audio> при себе и наружу не отдаёт. Перехватываем

@@ -45,6 +45,20 @@ const DEFAULT_STATION = Math.max(
   STATIONS.findIndex((s) => s.url === "https://radio.promodj.com/mini-192"),
 );
 
+/**
+ * Паузы перед возвратом на ту же станцию, миллисекунды.
+ *
+ * Живой поток обрывается не только когда станция умерла: хватает секунды без
+ * связи или замершей на вкладке отрисовки, и браузер роняет на элемент ошибку
+ * посреди песни. Перебор списка на таком обрыве проходил все станции за доли
+ * секунды - каждая не отвечала по той же причине - и заканчивался выключенным
+ * радио. Со стороны это выглядело так: перешёл в раздел, музыка встала.
+ *
+ * Поэтому оборвавшуюся станцию сперва возвращают. Пауза растёт: если связи нет
+ * совсем, долбить поток четыре раза в секунду бессмысленно.
+ */
+const REVIVE_WAITS = [800, 2000, 5000, 12000];
+
 /** До какой доли громкости приглушаем музыку под уведомление. */
 const DUCK_TO = 0.25;
 /** За сколько секунд громкость доезжает до цели: рывок слышен щелчком. */
@@ -67,6 +81,11 @@ let buf: Uint8Array | null = null;
 let duckUntil = 0;
 let duckTimer: number | null = null;
 let loaded = false;
+/** Станция уже играла в этом включении - значит она живая, а связь пропала. */
+let wasPlaying = false;
+/** Сколько раз подряд её уже возвращали, не дождавшись звука. */
+let revives = 0;
+let reviveTimer: number | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -131,6 +150,10 @@ export function restore(): void {
 }
 
 function teardown(): void {
+  if (reviveTimer !== null) {
+    window.clearTimeout(reviveTimer);
+    reviveTimer = null;
+  }
   if (audio) {
     // Снимаем обработчики до остановки: сброс src сам по себе роняет на
     // элемент ошибку, а она у нас означает "поток не пошёл, пробуй иначе".
@@ -199,7 +222,12 @@ function start(index: number, cors: boolean, tried: Set<number> = new Set()): vo
   audio = element;
   emit({ station: index, mode: "loading", live: false });
 
-  element.onplaying = () => emit({ mode: "playing" });
+  element.onplaying = () => {
+    // Звук пошёл: станция живая, и запас возвратов ей полагается заново.
+    wasPlaying = true;
+    revives = 0;
+    emit({ mode: "playing" });
+  };
 
   /**
    * Станция не пошла.
@@ -213,6 +241,24 @@ function start(index: number, cors: boolean, tried: Set<number> = new Set()): vo
    * соседняя - вопрос снимается сам.
    */
   function failed() {
+    // Станция играла и оборвалась - это не мёртвый поток, а провал связи.
+    // Возвращаем её же, с паузой. Уходить по списку нельзя: человек выбрал эту
+    // станцию, а пройдя список до конца, радио выключилось бы совсем.
+    if (wasPlaying && revives < REVIVE_WAITS.length) {
+      const wait = REVIVE_WAITS[revives++];
+      teardown();
+      // Не "off": радио не выключено, оно возвращается. Кнопка показывает
+      // ожидание, а не пуск, и человек видит разницу между обрывом и тем, что
+      // он сам нажал паузу.
+      emit({ mode: "loading", live: false });
+      reviveTimer = window.setTimeout(() => {
+        reviveTimer = null;
+        start(index, true, new Set());
+      }, wait);
+      return;
+    }
+    // Возвраты кончились - станция и правда молчит, идём по списку.
+    wasPlaying = false;
     if (cors) {
       start(index, false, tried);
       return;
@@ -241,6 +287,9 @@ function start(index: number, cors: boolean, tried: Set<number> = new Set()): vo
 }
 
 export function toggle(): void {
+  // Нажали руками - прошлые обрывы забываются: и при пуске, и при остановке.
+  wasPlaying = false;
+  revives = 0;
   if (state.mode === "off") start(state.station, true);
   else {
     teardown();
@@ -250,6 +299,8 @@ export function toggle(): void {
 
 export function pick(index: number): void {
   if (!STATIONS[index]) return;
+  wasPlaying = false;
+  revives = 0;
   emit({ station: index });
   save();
   // Станцию меняют обычно на ходу - переключаем, не заставляя жать пуск.
