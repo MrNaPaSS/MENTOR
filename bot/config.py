@@ -25,6 +25,16 @@ class Config:
     # Мост форума с чатом сайта. Ноль означает «моста нет»: пока адрес группы
     # не выверен, разослать чужой разговор в чат необратимо.
     forum_chat_id: int
+    # Токен бота, который сидит в форумной группе.
+    #
+    # Отдельно от BOT_TOKEN, потому что это разные боты: ученикам сигналы
+    # рассылает наш, а в группе стоит тот, кого туда пустили админом. Слушать
+    # форум может только второй - первому Telegram обновлений группы не
+    # отдаёт вовсе, он в ней не состоит.
+    #
+    # Пусто - берётся BOT_TOKEN: если это однажды окажется один бот, настройку
+    # не придётся менять.
+    forum_bot_token: str
     # Куда бот отдаёт сообщения форума. Своим процессом до сокетов чата не
     # дотянуться - их держит бэкенд.
     api_url: str
@@ -42,6 +52,7 @@ class Config:
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             weex_referral_link=os.getenv("WEEX_REFERRAL_LINK", "https://www.weex.com/ru/register?vipCode=kaktotakxme"),
             forum_chat_id=int(os.getenv("FORUM_CHAT_ID", "0") or "0"),
+            forum_bot_token=os.getenv("FORUM_BOT_TOKEN", "") or os.getenv("BOT_TOKEN", ""),
             api_url=os.getenv("NMNH_API_URL", "http://127.0.0.1:8000"),
             service_api_key=os.getenv("SERVICE_API_KEY", ""),
         )

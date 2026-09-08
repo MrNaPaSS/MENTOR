@@ -51,9 +51,13 @@ async def run() -> None:
     # разбираться ни как команда ментора, ни как реплика ученика в личке. Свой
     # фильтр по адресу группы у него уже есть, чужие сообщения он пропускает
     # дальше нетронутыми.
-    dp.include_router(
-        build_forum_router(config.forum_chat_id, config.api_url, config.service_api_key)
-    )
+    #
+    # Здесь он подключается только тогда, когда в группе стоит тот же бот, что
+    # пишет ученикам. Если ботов два - у форума будет своё соединение, ниже.
+    if config.forum_bot_token == config.bot_token:
+        dp.include_router(
+            build_forum_router(config.forum_chat_id, config.api_url, config.service_api_key)
+        )
     dp.include_router(build_mentor_router(config.admin_tg_id))
     dp.include_router(build_student_router(config.admin_tg_id, config.weex_referral_link))
 
@@ -61,10 +65,36 @@ async def run() -> None:
         interval = repo.load_settings(session).balance_sync_interval
     scheduler = start_scheduler(weex, interval_minutes=interval)
 
+    # Форумный бот - отдельным соединением, если это не тот же бот.
+    #
+    # Одним его не сделать: обновления группы Telegram отдаёт только тому, кто
+    # в ней состоит, а в форуме админом стоит не тот бот, что рассылает
+    # сигналы. Опрашивать чужим токеном бесполезно - придёт пустота.
+    forum_bot: Bot | None = None
+    forum_task: asyncio.Task | None = None
+    if config.forum_bot_token and config.forum_bot_token != config.bot_token:
+        forum_bot = Bot(config.forum_bot_token)
+        forum_dp = Dispatcher(storage=MemoryStorage())
+        forum_dp.include_router(
+            build_forum_router(config.forum_chat_id, config.api_url, config.service_api_key)
+        )
+        forum_task = asyncio.create_task(
+            forum_dp.start_polling(forum_bot), name="forum-polling"
+        )
+        logger.info("Форумный бот слушает группу %s своим соединением", config.forum_chat_id)
+
     logger.info("NMNH Signal Bot запущен (mock WEEX=%s)", config.weex_use_mock)
     try:
         await dp.start_polling(bot)
     finally:
+        if forum_task is not None:
+            forum_task.cancel()
+            try:
+                await forum_task
+            except asyncio.CancelledError:
+                pass
+        if forum_bot is not None:
+            await forum_bot.session.close()
         scheduler.shutdown(wait=False)
         await weex.close()
         await bot.session.close()
