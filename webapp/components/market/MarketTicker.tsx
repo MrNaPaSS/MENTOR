@@ -17,7 +17,7 @@
 // одинаковых половин, поэтому в конце пути вторая половина стоит ровно там,
 // откуда начинала первая, и возврат в ноль не виден.
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { Crown } from "lucide-react";
 import { askSymbol } from "@/lib/openSymbol";
@@ -160,10 +160,23 @@ export default function MarketTicker() {
         // на одну пару: остановить надо ленту, по которой ведут курсор.
         // py-1.5 вместе с отступом самой пары держит прежнюю высоту строки: на
         // неё рассчитан отступ содержимого под шапкой.
-        className="flex w-max animate-marquee py-1.5 will-change-transform group-hover:[animation-play-state:paused]"
+        className="flex w-max animate-marquee py-1.5 [backface-visibility:hidden] will-change-transform group-hover:[animation-play-state:paused]"
         // Пока не измерились - идём с длительностью по умолчанию: лента поедет
         // сразу, а через кадр возьмёт свою.
-        style={span > 0 ? { animationDuration: `${span / SPEED}s` } : undefined}
+        //
+        // Сдвиг округляем до пикселя: половина ленты меряется по тексту и
+        // шириной выходит дробной. Кадр за кадром лента вставала между
+        // пикселями, и точка направления - круг в шесть пикселей - дрожала
+        // краями. Стык от округления уходит меньше чем на полпикселя, а
+        // половины одинаковые - его не видно.
+        style={
+          span > 0
+            ? ({
+                animationDuration: `${span / SPEED}s`,
+                "--marquee-span": `${Math.round(span)}px`,
+              } as CSSProperties)
+            : undefined
+        }
       >
         {/* Две одинаковые половины. Вторая - для глаза, а не для чтения: она
             повторяет первую, и озвучивать её ещё раз незачем. */}
