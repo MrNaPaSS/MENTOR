@@ -27,17 +27,12 @@
 
 export type CardSide = "long" | "short";
 
-/** Тема терминала: она и решает, на какой заготовке рисовать. */
-export type CardTheme = "dark" | "light";
-
 /** Прямоугольник в долях ширины и высоты заготовки. */
 export type Frame = { x: number; y: number; w: number; h: number };
 
 export type Variant = {
   id: string;
   side: CardSide;
-  /** Под какой темой терминала эта заготовка идёт в дело. */
-  theme: CardTheme;
   src: string;
   /** Рамка под печать - та, что нарисована в левом верхнем углу. */
   stamp: Frame;
@@ -50,9 +45,9 @@ export type Variant = {
   /**
    * Светлое ли само полотно.
    *
-   * Это не то же, что тема: у светлой темы шорт нарисован на тёмном холсте.
-   * От яркости полотна зависят чернила и то, гасим мы фон под числами или,
-   * наоборот, высветляем.
+   * Не по названию заготовки: мятный график шорта нарисован на тёмном
+   * холсте. От яркости полотна зависят чернила и то, гасим мы фон под
+   * числами или, наоборот, высветляем.
    */
   paper: "light" | "dark";
 };
@@ -69,7 +64,6 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: "chart-long",
     side: "long",
-    theme: "light",
     src: "/cards/card-long-light.jpg",
     // 587x781: рамка 20..359 x 19..103, панель 19..567 x 612..762.
     stamp: { x: 20 / 587, y: 19 / 781, w: 339 / 587, h: 84 / 781 },
@@ -83,7 +77,6 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: "mono",
     side: "long",
-    theme: "dark",
     src: "/cards/card-long-mono.jpg",
     // 574x765: рамка 19..339 x 14..92, панель 12..561 x 594..733.
     stamp: { x: 19 / 574, y: 14 / 765, w: 320 / 574, h: 78 / 765 },
@@ -98,7 +91,6 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: "bull",
     side: "long",
-    theme: "dark",
     src: "/cards/card-long.jpg",
     // 640x852: рамка 20..391 x 23..112, панель 18..617 x 668..831.
     stamp: { x: 20 / 640, y: 23 / 852, w: 371 / 640, h: 89 / 852 },
@@ -110,7 +102,6 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: "neon-long",
     side: "long",
-    theme: "dark",
     src: "/cards/card-long-neon.jpg",
     // 571x759: рамка 19..340 x 16..94, панель 16..555 x 595..731.
     stamp: { x: 19 / 571, y: 16 / 759, w: 321 / 571, h: 78 / 759 },
@@ -124,7 +115,6 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: "neon-short",
     side: "short",
-    theme: "dark",
     src: "/cards/card-short-neon.jpg",
     // 570x762: рамка 17..338 x 16..93, панель 14..553 x 596..730.
     stamp: { x: 17 / 570, y: 16 / 762, w: 321 / 570, h: 77 / 762 },
@@ -136,7 +126,6 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: "whale-short",
     side: "short",
-    theme: "dark",
     src: "/cards/card-short-whale.jpg",
     // 520x697: рамка 8..318 x 14..77, панель 8..507 x 563..669.
     stamp: { x: 8 / 520, y: 14 / 697, w: 310 / 520, h: 63 / 697 },
@@ -151,7 +140,6 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: "bear",
     side: "short",
-    theme: "dark",
     src: "/cards/card-short.jpg",
     stamp: { x: 20 / 638, y: 23 / 852, w: 371 / 638, h: 89 / 852 },
     panel: { x: 18 / 638, y: 668 / 852, w: 599 / 638, h: 163 / 852 },
@@ -162,7 +150,6 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: "chart-short",
     side: "short",
-    theme: "light",
     src: "/cards/card-short-dark.jpg",
     // 586x780: рамка 18..355 x 17..97, панель 16..565 x 592..741.
     stamp: { x: 18 / 586, y: 17 / 780, w: 337 / 586, h: 80 / 780 },
@@ -177,7 +164,6 @@ export const VARIANTS: readonly Variant[] = [
   {
     id: "graffiti-short",
     side: "short",
-    theme: "light",
     src: "/cards/card-short-graffiti.jpg",
     // 516x690: рамка 8..329 x 13..84, панель 14..499 x 552..672.
     stamp: { x: 8 / 516, y: 13 / 690, w: 321 / 516, h: 71 / 690 },
@@ -210,13 +196,6 @@ export function resultInk(paper: "light" | "dark", pnl: number): string {
 }
 
 /**
- * Заготовка под тему и сторону.
- *
- * Выбирать её человеку не даём: карточка - часть того же рабочего места, что и
- * график, и переключать её отдельно значит держать в голове ещё одну
- * настройку. Тема уже сказала всё, что нужно.
- */
-/**
  * Все заготовки для этой стороны сделки.
  *
  * Только для своей: на бланке нарисованы свечи, и лонг на медвежьем листе
@@ -226,12 +205,16 @@ export function variantsFor(side: CardSide): Variant[] {
   return VARIANTS.filter((v) => v.side === side);
 }
 
-export function variantFor(theme: CardTheme, side: CardSide): Variant {
-  return (
-    VARIANTS.find((v) => v.theme === theme && v.side === side) ??
-    VARIANTS.find((v) => v.side === side) ??
-    VARIANTS[0]
-  );
+/**
+ * Заготовка, с которой карточка открывается.
+ *
+ * Первая в списке для этой стороны, и только. Раньше её выбирала тема
+ * терминала, и на светлой шорт открывался четвёртой заготовкой - той, что
+ * когда-то отметили светлой. Порядок задан наставником и означает старшинство:
+ * первая - лицо стороны, с неё и начинают, а дальше листают стрелками.
+ */
+export function defaultVariant(side: CardSide): Variant {
+  return VARIANTS.find((v) => v.side === side) ?? VARIANTS[0];
 }
 
 export type CardData = {

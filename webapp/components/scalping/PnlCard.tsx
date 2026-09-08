@@ -15,10 +15,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Copy, Download, Link2, X } from "lucide-react";
 
 import type { JournalTrade } from "@/lib/journal";
-import { loadBackdrop, render, resultInk, variantFor, variantsFor } from "@/lib/pnl/card";
+import { defaultVariant, loadBackdrop, render, resultInk, variantsFor } from "@/lib/pnl/card";
 import { cardFromTrade } from "@/lib/pnl/data";
 import { copy, download, share } from "@/lib/pnl/share";
-import { useTerminalTheme } from "@/lib/terminalTheme";
 
 export default function PnlCard({
   trade,
@@ -31,21 +30,21 @@ export default function PnlCard({
   onClose: () => void;
 }) {
   const data = useMemo(() => cardFromTrade(trade, owner), [trade, owner]);
-  const theme = useTerminalTheme();
   // Заготовки на выбор - те, что подходят стороне сделки.
   //
-  // По умолчанию берётся та, что под темой терминала: она уже сказала всё, что
-  // нужно, и заставлять выбирать при каждом открытии незачем. Но выбор бывает
-  // и вкусовым - карточку показывают другим, - поэтому рядом с ней стрелки.
+  // Открывается первая: порядок задан наставником, и первая в нём - лицо
+  // стороны. Тема терминала на это больше не влияет - при ней шорт открывался
+  // с середины списка. Но выбор бывает и вкусовым - карточку показывают
+  // другим, - поэтому рядом с ней стрелки.
   const choices = useMemo(() => variantsFor(data.side), [data.side]);
-  const fallback = useMemo(() => variantFor(theme, data.side), [theme, data.side]);
+  const fallback = useMemo(() => defaultVariant(data.side), [data.side]);
   const [pick, setPick] = useState<number | null>(null);
   // Печать листа - событие, а не переход. Она играет один раз, при открытии
   // окна или переходе по ссылке; смена заготовки стрелками - это выбор, и
   // прогонять принтер заново на каждый выбор значит превращать движение в
   // помеху. Нажали стрелку - дальше лист просто меняется.
   const [still, setStill] = useState(false);
-  // Сменилась сторона или тема - выбор сбрасывается: он был про другой набор.
+  // Сменилась сторона - выбор сбрасывается: он был про другой набор.
   useEffect(() => {
     setPick(null);
     setStill(false);

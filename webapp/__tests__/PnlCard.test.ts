@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { price, resultInk, VARIANTS, variantFor } from "@/lib/pnl/card";
+import { defaultVariant, price, resultInk, VARIANTS } from "@/lib/pnl/card";
 import { cardFromTrade, roiOf } from "@/lib/pnl/data";
 import type { JournalTrade } from "@/lib/journal";
 
@@ -77,22 +77,20 @@ describe("цена на карточке", () => {
 });
 
 describe("заготовка карточки", () => {
-  it("по умолчанию берётся заготовка своей темы и своей стороны", () => {
-    // Заготовок на сторону теперь несколько - их перебирают стрелками, - и
-    // проверять здесь имя конкретной значит переписывать тест на каждую новую.
-    // Важно другое: без спроса подставляется подходящая.
-    for (const theme of ["dark", "light"] as const) {
-      for (const side of ["long", "short"] as const) {
-        const picked = variantFor(theme, side);
-        expect(picked.side).toBe(side);
-        expect(picked.theme).toBe(theme);
-      }
+  it("карточка открывается первой заготовкой своей стороны", () => {
+    // Не второй и не той, что подошла теме: порядок задан наставником и
+    // означает старшинство. Имя конкретной здесь не проверяем - его меняет
+    // каждая перестановка, - а проверяем то, ради чего порядок и задавали.
+    for (const side of ["long", "short"] as const) {
+      const picked = defaultVariant(side);
+      expect(picked.side).toBe(side);
+      expect(picked).toBe(VARIANTS.find((v) => v.side === side));
     }
   });
 
-  it("на каждое сочетание темы и стороны есть хотя бы одна", () => {
-    const seen = VARIANTS.map((v) => `${v.theme}:${v.side}`);
-    expect(new Set(seen).size).toBe(4);
+  it("на каждую сторону есть хотя бы одна заготовка", () => {
+    const seen = VARIANTS.map((v) => v.side);
+    expect(new Set(seen).size).toBe(2);
   });
 
   it("опознаватели не повторяются", () => {
