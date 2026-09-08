@@ -2536,7 +2536,10 @@ export default function ScalpingPage() {
             выезжает целиком.
 
             Уезжает движением, а не полем: поле сдвинуло бы весь ряд, и график
-            подрагивал бы каждый раз, когда мимо проходит курсор.
+            подрагивал бы каждый раз, когда мимо проходит курсор. А отрицательное
+            поле рядом с движением - это ширина, которую полоса перестала
+            занимать: без него между ней и стаканом оставался зазор в ту самую
+            половину, что ушла за край.
 
             Название и значок прижаты к внутреннему краю - к тому, что остаётся
             на виду: полоса без подписи это просто выступ у края, о который
@@ -2545,17 +2548,21 @@ export default function ScalpingPage() {
           <button
             onClick={() => setScreenerOpen(true)}
             title={t.terminal.expandScreener}
-            className={`hidden w-9 shrink-0 -translate-x-[18px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-1.5 text-[var(--pane-muted)] transition-transform duration-300 ease-out hover:translate-x-0 hover:text-[var(--pane-text)] xl:mr-2 xl:flex`}
+            className={`hidden w-9 shrink-0 -translate-x-[18px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-1.5 text-[var(--pane-muted)] transition-transform duration-300 ease-out hover:translate-x-0 hover:text-[var(--pane-text)] xl:-mr-4 xl:flex`}
             style={paneStyle}
           >
             <PanelLeftOpen className="h-4 w-4" />
-            <span
-              title={connected ? t.terminal.streamOn : t.terminal.streamOff}
-              className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-[var(--pane-up)]" : "bg-[var(--pane-down)]"}`}
-            />
             <span className="text-[11px]" style={{ writingMode: "vertical-rl" }}>
               {t.terminal.screenerTitle}
             </span>
+            {/* Точка связи - внизу полосы. Между значком и названием она
+                разрывала их надвое: сверху две метки подряд, а под ними имя,
+                к которому они обе относятся. Внизу она читается как то, чем и
+                является, - состоянием потока, а не частью подписи. */}
+            <span
+              title={connected ? t.terminal.streamOn : t.terminal.streamOff}
+              className={`mt-auto h-1.5 w-1.5 rounded-full ${connected ? "bg-[var(--pane-up)]" : "bg-[var(--pane-down)]"}`}
+            />
           </button>
         )}
 
@@ -3158,7 +3165,7 @@ export default function ScalpingPage() {
                 // Полоса у правого края - зеркало скринера: половина за краем,
                 // под курсором выезжает целиком, название и значок прижаты к
                 // внутреннему краю, к тому, что видно всегда.
-                className="hidden w-9 shrink-0 translate-x-[18px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-1.5 text-[var(--pane-muted)] transition-transform duration-300 ease-out hover:translate-x-0 hover:text-[var(--pane-text)] xl:ml-2 xl:flex"
+                className="hidden w-9 shrink-0 translate-x-[18px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-1.5 text-[var(--pane-muted)] transition-transform duration-300 ease-out hover:translate-x-0 hover:text-[var(--pane-text)] xl:-ml-4 xl:flex"
                 style={paneStyle}
               >
                 <PanelRightOpen className="h-4 w-4" />
