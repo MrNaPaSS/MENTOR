@@ -263,6 +263,9 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval }: Op
 /** Деньги коротко: 1.2M, 340K. Длинные числа в таблице не читаются. */
 export function money(value: number): string {
   const abs = Math.abs(value);
+  // Триллионы нужны разделу «Рынок»: капитализация всех монет вместе - это
+  // единицы триллионов, и в миллиардах она читалась как «3400.00B».
+  if (abs >= 1e12) return `${(value / 1e12).toFixed(2)}T`;
   if (abs >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
   if (abs >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
   if (abs >= 1e3) return `${Math.round(value / 1e3)}K`;

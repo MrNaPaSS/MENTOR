@@ -360,6 +360,12 @@ export const api = {
   marketForex: (base = "USD", symbols = "EUR,GBP,JPY,CHF,CAD,AUD") =>
     req<ForexRates>(`/api/market/forex?base=${base}&symbols=${symbols}`),
 
+  // ── Рыночные данные биржи (WEEX через наш сервер) ──
+  marketFearGreed: () => req<FearGreed>("/api/market/fear-greed"),
+  marketFunding: () => req<{ rates: FundingRate[] }>("/api/market/funding-rates"),
+  marketDerivatives: (symbol: string) =>
+    req<Derivatives>(`/api/market/derivatives/${symbol.toUpperCase()}`),
+
   // ── Auth ──
   loginByUid: (weex_uid: string) =>
     req<{ access_token: string; refresh_token: string }>("/api/auth/login-by-uid", {
@@ -564,6 +570,40 @@ export interface ForexRates {
   base: string;
   date: string;
   rates: Record<string, number>;
+}
+
+/** Точка индекса страха и жадности. Значения приходят строками. */
+export interface FearGreedPoint {
+  value: string;
+  value_classification: string;
+  timestamp: string;
+}
+
+export interface FearGreed {
+  current: FearGreedPoint | null;
+  history: FearGreedPoint[];
+}
+
+/**
+ * Ставка финансирования по инструменту.
+ *
+ * Положительная - платят лонги, отрицательная - шорты. Ноль означает и
+ * настоящий ноль, и то, что биржа ставку не назвала: различить их по этому
+ * ответу нельзя, поэтому в таблице ноль показывается прочерком.
+ */
+export interface FundingRate {
+  symbol: string;
+  fundingRate: string;
+  nextFundingTime: number | null;
+}
+
+export interface Derivatives {
+  symbol: string;
+  openInterestUsd: number | null;
+  fundingRate: string | null;
+  nextFundingTime: number | null;
+  lastPrice: number;
+  priceChangePct: number;
 }
 
 export interface BroadcastItem {

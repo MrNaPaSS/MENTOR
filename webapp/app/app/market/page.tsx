@@ -1,29 +1,63 @@
 "use client";
 
+// Раздел «Рынок»: то же рабочее место, только шире взгляд.
+//
+// Раньше он был стопкой чужих виджетов в четыре вкладки: каждый со своей
+// рамкой, своим шрифтом и своим представлением о том, что такое тёмная тема.
+// Между терминалом и этим разделом человек переходил как между двумя разными
+// программами.
+//
+// Теперь всё, что мы умеем считать сами, считаем сами: настроение рынка,
+// финансирование, сеть биткоина, скринер на живом потоке биржи. Чужое
+// осталось там, где своего нет - тепловые карты и календарь событий, - и
+// заведено в ту же рамку, что и остальное.
+//
+// Порядок вкладок отвечает на вопросы по мере их появления: что происходит
+// вообще, где сегодня работать, что делают крупные, как выглядит рынок целиком
+// и чего ждать по календарю.
+
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { Building2, Map, Search, TrendingUp } from "lucide-react";
+import {
+  Activity,
+  Building2,
+  CalendarDays,
+  Map as MapIcon,
+  Search,
+} from "lucide-react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
+import FearGreedPane from "@/components/market/FearGreedPane";
+import ForexPane from "@/components/market/ForexPane";
+import FundingPane from "@/components/market/FundingPane";
+import GlobalStrip from "@/components/market/GlobalStrip";
+import MarketScreener from "@/components/market/MarketScreener";
+import OnChainPane from "@/components/market/OnChainPane";
+import TrendingPane from "@/components/market/TrendingPane";
 
-const SmartMoney   = dynamic(() => import("@/app/app/smartmoney/page"), {
+const SmartMoney = dynamic(() => import("@/app/app/smartmoney/page"), {
   ssr: false,
   loading: () => (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {[...Array(3)].map((_, i) => (
-        <div key={i} className="animate-pulse rounded-xl border border-border/50 bg-bg-panel p-4">
-          <div className="mb-3 h-4 w-40 rounded bg-bg-panel/60" />
-          <div className="space-y-2">
-            <div className="h-3 rounded bg-bg-panel/60" style={{ width: "80%" }} />
-            <div className="h-3 rounded bg-bg-panel/60" style={{ width: "60%" }} />
-          </div>
-        </div>
+        <div
+          key={i}
+          className="h-24 animate-pulse rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)]"
+          style={{ animationDelay: `${i * 120}ms` }}
+        />
       ))}
     </div>
   ),
 });
 
-// ── Универсальный TradingView виджет ─────────────────────────────────────────
+// ── Чужой виджет в нашей рамке ───────────────────────────────────────────────
 
+/**
+ * Обёртка над встраиваемым скриптом TradingView.
+ *
+ * Тему он берёт один раз - из настроек, с которыми его завели, - поэтому при
+ * смене темы виджет пересобирается целиком. Фон задаём цветом панели: своей
+ * рамки чужой скрипт не рисует, и любое расхождение читается швом.
+ */
 function TvWidget({
   scriptName,
   config,
@@ -35,10 +69,6 @@ function TvWidget({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const configKey = JSON.stringify(config);
-  // Виджет рисует чужой скрипт, и тему он берёт один раз - из настроек, с
-  // которыми его завели. Раньше там стояло «тёмная» намертво: на белой странице
-  // посреди светлых панелей висел чёрный прямоугольник. Тему берём у терминала,
-  // как берут её все остальные разделы.
   const theme = useTerminalTheme();
 
   useEffect(() => {
@@ -60,16 +90,17 @@ function TvWidget({
       colorTheme: theme,
       locale: "ru",
       isTransparent: false,
-      // Фон под цвет карточки, в которой виджет лежит: чужой скрипт своей
-      // рамки не рисует, и любое расхождение читается швом.
-      backgroundColor: theme === "light" ? "#ffffff" : "#0b0e11",
+      // Тот же цвет, что у панели вокруг: #181a20 тёмная, белая светлая.
+      backgroundColor: theme === "light" ? "#ffffff" : "#181a20",
     });
     el.appendChild(script);
 
-    return () => { if (el) el.innerHTML = ""; };
-  // Тема в зависимостях: сменили её - виджет пересобирается. Своего способа
-  // перекраситься на лету у него нет.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      if (el) el.innerHTML = "";
+    };
+    // Тема в зависимостях: сменили её - виджет пересобирается. Своего способа
+    // перекраситься на лету у него нет.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scriptName, configKey, height, theme]);
 
   return (
@@ -81,19 +112,72 @@ function TvWidget({
   );
 }
 
-// ── Тепловая карта крипты ─────────────────────────────────────────────────────
-
-function HeatmapSection() {
+/** Панель под чужой виджет: та же рамка и шапка, что у своих показателей. */
+function WidgetPane({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="space-y-4">
-      <div className="card p-0 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div>
-            <h3 className="text-sm font-semibold text-text-primary">Тепловая карта криптовалют</h3>
-            <p className="text-[11px] text-text-muted">Размер - капитализация · Цвет - изменение цены</p>
-          </div>
-          <span className="rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-success">LIVE</span>
+    <section className="overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+      <header className="flex items-baseline justify-between gap-3 border-b border-[var(--pane-border)] px-3 py-2">
+        <div className="min-w-0">
+          <h2 className="truncate text-[12px] font-semibold text-[var(--pane-text)]">{title}</h2>
+          <p className="mt-0.5 truncate text-[10px] text-[var(--pane-muted)]">{hint}</p>
         </div>
+        <span
+          className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-[var(--pane-muted)]"
+          title="Данные и рисование - TradingView"
+        >
+          TradingView
+        </span>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+// ── Вкладки ───────────────────────────────────────────────────────────────────
+
+type Section = "pulse" | "screener" | "smart" | "maps" | "calendar";
+
+const TABS: { key: Section; label: string; icon: React.ReactNode; hint: string }[] = [
+  { key: "pulse", label: "Пульс", icon: <Activity className="h-3.5 w-3.5" />, hint: "Настроение рынка и деньги за позиции" },
+  { key: "screener", label: "Скринер", icon: <Search className="h-3.5 w-3.5" />, hint: "Где сегодня работать" },
+  { key: "smart", label: "Smart Money", icon: <Building2 className="h-3.5 w-3.5" />, hint: "Что делают крупные" },
+  { key: "maps", label: "Карты", icon: <MapIcon className="h-3.5 w-3.5" />, hint: "Рынок целиком одной картинкой" },
+  { key: "calendar", label: "Календарь", icon: <CalendarDays className="h-3.5 w-3.5" />, hint: "События, двигающие рынок" },
+];
+
+// ── Пульс ─────────────────────────────────────────────────────────────────────
+
+function PulseSection() {
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      <FearGreedPane />
+      <FundingPane />
+      <OnChainPane />
+      <div className="grid gap-3">
+        <TrendingPane />
+        <ForexPane />
+      </div>
+    </div>
+  );
+}
+
+// ── Карты ─────────────────────────────────────────────────────────────────────
+
+function MapsSection() {
+  return (
+    <div className="space-y-3">
+      <WidgetPane
+        title="Тепловая карта криптовалют"
+        hint="Размер - капитализация, цвет - изменение цены"
+      >
         <TvWidget
           scriptName="embed-widget-crypto-coins-heatmap.js"
           config={{
@@ -107,144 +191,88 @@ function HeatmapSection() {
           }}
           height={520}
         />
-      </div>
+      </WidgetPane>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="card p-0 overflow-hidden">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-text-primary">Форекс тепловая карта</h3>
-            <p className="text-[11px] text-text-muted">Кросс-курсы валютных пар</p>
-          </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <WidgetPane title="Валютные пары" hint="Кросс-курсы восьми основных валют">
           <TvWidget
             scriptName="embed-widget-forex-cross-rates.js"
-            config={{
-              currencies: ["EUR", "USD", "JPY", "GBP", "CHF", "AUD", "CAD", "NZD"],
-            }}
+            config={{ currencies: ["EUR", "USD", "JPY", "GBP", "CHF", "AUD", "CAD", "NZD"] }}
             height={400}
           />
-        </div>
+        </WidgetPane>
 
-        <div className="card p-0 overflow-hidden">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-text-primary">ETF тепловая карта</h3>
-            <p className="text-[11px] text-text-muted">Изменение ETF-фондов за день</p>
-          </div>
+        <WidgetPane title="Фонды ETF" hint="Размер - активы под управлением, цвет - день">
           <TvWidget
             scriptName="embed-widget-etf-heatmap.js"
-            config={{
-              dataSource: "AllUSEtf",
-              blockSize: "aum",
-              blockColor: "change",
-              hasTopBar: false,
-            }}
+            config={{ dataSource: "AllUSEtf", blockSize: "aum", blockColor: "change", hasTopBar: false }}
             height={400}
           />
-        </div>
+        </WidgetPane>
       </div>
     </div>
   );
 }
 
-// ── Скринер ───────────────────────────────────────────────────────────────────
+// ── Календарь ─────────────────────────────────────────────────────────────────
 
-function ScreenerSection() {
+function CalendarSection() {
   return (
-    <div className="space-y-4">
-      <div className="card p-0 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div>
-            <h3 className="text-sm font-semibold text-text-primary">Скринер криптовалют</h3>
-            <p className="text-[11px] text-text-muted">Фильтрация и поиск по всем монетам</p>
-          </div>
-        </div>
-        <TvWidget
-          scriptName="embed-widget-screener.js"
-          config={{
-            defaultColumn: "overview",
-            defaultScreen: "general",
-            market: "crypto",
-            showToolbar: true,
-          }}
-          height={600}
-        />
-      </div>
-    </div>
+    <WidgetPane
+      title="Экономический календарь"
+      hint="Макроэкономические события: ставки, инфляция, занятость"
+    >
+      <TvWidget scriptName="embed-widget-events.js" config={{}} height={760} />
+    </WidgetPane>
   );
 }
 
-// ── Обзор рынка ───────────────────────────────────────────────────────────────
-
-function OverviewSection() {
-  return (
-    <div className="space-y-4">
-      {/* Экономический календарь - полная ширина */}
-      <div className="card p-0 overflow-hidden">
-        <div className="border-b border-border px-4 py-3">
-          <h3 className="text-sm font-semibold text-text-primary">Экономический календарь</h3>
-          <p className="text-[11px] text-text-muted">Макроэкономические события, влияющие на рынок</p>
-        </div>
-        <TvWidget
-          scriptName="embed-widget-events.js"
-          config={{}}
-          height={760}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── Страница Рынок ────────────────────────────────────────────────────────────
-
-type Section = "smart" | "heatmap" | "screener" | "overview";
-
-const TABS: { key: Section; label: string; icon?: React.ReactNode }[] = [
-  { key: "smart",    label: "Smart Money", icon: <Building2 className="h-3.5 w-3.5" /> },
-  { key: "heatmap",  label: "Тепловая карта", icon: <Map className="h-3.5 w-3.5" /> },
-  { key: "screener", label: "Скринер",     icon: <Search className="h-3.5 w-3.5" /> },
-  { key: "overview", label: "Обзор рынка", icon: <TrendingUp className="h-3.5 w-3.5" /> },
-];
+// ── Страница ──────────────────────────────────────────────────────────────────
 
 export default function MarketPage() {
-  const [section, setSection] = useState<Section>("smart");
+  const [section, setSection] = useState<Section>("pulse");
+  const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
+  const active = TABS.find((t) => t.key === section);
 
   return (
-    <div className="space-y-5">
-      {/* Заголовок */}
-      <div>
-        <h1 className="text-2xl font-extrabold text-text-primary">Рынок</h1>
-        <p className="text-sm text-text-muted">Smart Money · Тепловая карта · Скринер · Обзор рынка</p>
+    <div className={`${pane} space-y-3`}>
+      {/* Шапка раздела: имя и то, что сейчас открыто. */}
+      <div className="flex items-baseline justify-between gap-3">
+        <h1 className="text-[15px] font-semibold uppercase tracking-[0.16em] text-[var(--pane-text)]">
+          Рынок
+        </h1>
+        <p className="truncate text-[11px] text-[var(--pane-muted)]">{active?.hint}</p>
       </div>
 
-      {/* Вкладки */}
-      <div className="no-scrollbar flex gap-1 overflow-x-auto rounded-xl border border-border bg-bg-panel p-1">
+      <GlobalStrip />
+
+      {/* Вкладки сегментами, как переключатели в терминале. */}
+      <nav className="no-scrollbar flex overflow-x-auto rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] p-0.5">
         {TABS.map((t) => {
-          const active = section === t.key;
-          const isGold = t.key === "smart";
+          const on = section === t.key;
           return (
             <button
               key={t.key}
               onClick={() => setSection(t.key)}
-              className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition whitespace-nowrap ${
-                active
-                  ? isGold
-                    ? "bg-accent-gold/15 text-accent-gold"
-                    : "bg-accent-cyan/15 text-accent-cyan"
-                  : "text-text-muted hover:text-text-primary"
-              }`}
+              title={t.hint}
+              className="flex shrink-0 items-center gap-1.5 rounded px-3 py-1.5 text-[11px] font-semibold transition-colors duration-150"
+              style={{
+                background: on ? "var(--pane-chip-faint)" : "transparent",
+                color: on ? "var(--pane-chip)" : "var(--pane-muted)",
+              }}
             >
               {t.icon}
               {t.label}
             </button>
           );
         })}
-      </div>
+      </nav>
 
-      {/* Контент */}
-      {section === "smart"    && <SmartMoney />}
-      {section === "heatmap"  && <HeatmapSection />}
-      {section === "screener" && <ScreenerSection />}
-      {section === "overview" && <OverviewSection />}
-
+      {section === "pulse" && <PulseSection />}
+      {section === "screener" && <MarketScreener />}
+      {section === "smart" && <SmartMoney />}
+      {section === "maps" && <MapsSection />}
+      {section === "calendar" && <CalendarSection />}
     </div>
   );
 }

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { API_URL, GlobalMarket, TrendingCoin, OnChainStats } from "@/lib/api";
+import { API_URL } from "@/lib/api";
+import { useTerminalTheme } from "@/lib/terminalTheme";
 import {
-  Building2, TrendingUp, TrendingDown, Minus,
-  AlertTriangle, BarChart3, DollarSign, Activity, Zap,
-  ChevronUp, ChevronDown, Globe, Flame, Boxes,
+  Activity, AlertTriangle, BarChart3, Building2,
+  ChevronDown, ChevronUp, DollarSign,
 } from "lucide-react";
 
 // ── Embedded CSS ──────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ const ANIM_CSS = `
   .sm-fade      { animation: fadeIn   0.4s ease both; }
   .sm-bar       { transform-origin:left; animation:scaleInX 0.9s cubic-bezier(0.4,0,0.2,1) both; }
   .sm-glow      { animation: glowPulse 2.5s ease-in-out infinite; }
-  .sm-shimmer   { background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.06) 50%,transparent 100%);
+  .sm-shimmer   { background:linear-gradient(90deg,transparent 0%,var(--pane-hover) 50%,transparent 100%);
                   background-size:200% 100%; animation:shimmer 1.8s ease-in-out infinite; }
   .sm-hover     { transition:border-color 0.2s,background 0.2s,transform 0.15s; }
   .sm-hover:hover { transform:translateY(-1px); border-color:rgba(255,255,255,0.15) !important; }
@@ -125,7 +125,7 @@ const COINGECKO_API = "https://api.coingecko.com/api/v3";
 function fmt(n:number, dec=0)  { return n.toLocaleString("en-US",{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
 function fmtK(n:number)         { return Math.abs(n)>=1000?(n/1000).toFixed(1)+"K":String(n); }
 function fmtB(n:number)         { if(n>=1e9)return`$${(n/1e9).toFixed(1)}B`; if(n>=1e6)return`$${(n/1e6).toFixed(0)}M`; return`$${n.toFixed(0)}`; }
-function signColor(n:number)    { return n>0?"text-success":n<0?"text-danger":"text-text-primary/30"; }
+function signColor(n:number)    { return n>0?"text-[var(--pane-up)]":n<0?"text-[var(--pane-down)]":"text-[var(--pane-muted)]"; }
 
 async function fetchJson<T>(url:string, opts?:RequestInit): Promise<T|null> {
   try {
@@ -135,106 +135,173 @@ async function fetchJson<T>(url:string, opts?:RequestInit): Promise<T|null> {
   } catch { return null; }
 }
 
-// ── Shared UI ─────────────────────────────────────────────────────────────────
+// ── Общие части ──────────────────────────────────────────────────────────────
+//
+// Раздел живёт вкладкой «Рынка», а значит обязан выглядеть его частью: та же
+// рамка, та же шапка, те же подписи прописными. Своя рамка со свечением по
+// краю у него была - и рядом с панелями терминала читалась вставкой из другой
+// программы.
 
+/** Данные приходят с сервера и обновляются сами. */
 function LiveBadge() {
   return (
-    <span className="flex items-center gap-1 rounded-md border border-success/30 bg-success/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-success">
-      <span className="relative flex h-1.5 w-1.5">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
-      </span>
-      LIVE
+    <span
+      className="inline-flex items-center gap-1.5 rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+      style={{ color: "var(--pane-up)" }}
+      title="Данные с источника"
+    >
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--pane-up)" }} />
+      Live
     </span>
   );
 }
 
+/**
+ * Источник не ответил, и на экране - образец.
+ *
+ * Метка кричащая намеренно. Цифры под ней выдуманы, и спутать их с настоящими
+ * значит принять решение по числу, которого не было: на этих показателях
+ * строят взгляд на неделю вперёд.
+ */
 function DemoBadge() {
   return (
-    <span className="rounded-md border border-accent-gold/40 bg-accent-gold/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-accent-gold">
-      ДЕМО
+    <span
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+      style={{
+        color: "var(--pane-gold)",
+        background: "var(--pane-gold-soft)",
+        border: "1px solid var(--pane-gold)",
+      }}
+      title="Источник не ответил: показан образец, а не настоящие данные"
+    >
+      Образец
     </span>
   );
 }
 
-function Skeleton({ rows=4 }:{ rows?:number }) {
+function Skeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="space-y-3">
-      {Array.from({length:rows}).map((_,i)=>(
-        <div key={i} className="sm-shimmer h-8 rounded-xl" style={{width:`${72+(i%3)*9}%`}} />
+    <div className="space-y-2">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="h-6 animate-pulse rounded bg-[var(--pane-border)]"
+          style={{ width: `${72 + (i % 3) * 9}%`, animationDelay: `${i * 120}ms` }}
+        />
       ))}
     </div>
   );
 }
 
-function Section({icon,title,sub,badge,accent="cyan",delay=0,children}:{
-  icon:React.ReactNode; title:string; sub?:string;
-  badge?:React.ReactNode; accent?:"cyan"|"gold"|"green";
-  delay?:number; children:React.ReactNode;
+/** Панель раздела: та же рамка, что у всех показателей «Рынка». */
+function Section({
+  icon,
+  title,
+  sub,
+  badge,
+  accent = "cyan",
+  delay = 0,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  sub?: string;
+  badge?: React.ReactNode;
+  accent?: "cyan" | "gold" | "green";
+  delay?: number;
+  children: React.ReactNode;
 }) {
-  const ac = accent==="gold"?"var(--c-gold)":accent==="green"?"var(--c-up)":"var(--c-accent)";
+  const ac =
+    accent === "gold"
+      ? "var(--pane-gold)"
+      : accent === "green"
+        ? "var(--pane-up)"
+        : "var(--pane-accent)";
   return (
-    <div className="sm-fade-up relative overflow-hidden rounded-2xl"
-      style={{
-        animationDelay:`${delay}s`,
-        background:"linear-gradient(160deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.015) 100%)",
-        border:"1px solid rgba(255,255,255,0.07)",
-        boxShadow:`0 0 0 1px rgba(255,255,255,0.03) inset, 0 32px 64px -16px rgba(0,0,0,0.6), 0 0 60px -20px ${ac}22`,
-      }}>
-      {/* top accent glow */}
-      <div className="absolute inset-x-0 top-0 h-[1px]"
-        style={{background:`linear-gradient(90deg,transparent,${ac}70,transparent)`}} />
-      {/* subtle corner glow */}
-      <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full"
-        style={{background:`radial-gradient(circle,${ac}12 0%,transparent 70%)`}} />
-
-      <div className="flex items-center gap-3 border-b border-border px-5 py-3.5">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl"
-          style={{background:`${ac}18`,border:`1px solid ${ac}35`,boxShadow:`0 0 12px ${ac}20`}}>
+    <section
+      className="sm-fade-up flex flex-col overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)]"
+      style={{ animationDelay: `${delay}s` }}
+    >
+      <header className="flex items-center gap-2.5 border-b border-[var(--pane-border)] px-3 py-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded" style={{ color: ac }}>
           {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <span className="text-[12px] font-semibold text-[var(--pane-text)]">{title}</span>
+          {sub && (
+            <span className="ml-2 text-[10px] text-[var(--pane-muted)]">{sub}</span>
+          )}
         </div>
-        <div className="flex-1 min-w-0">
-          <span className="text-[13px] font-semibold text-text-primary">{title}</span>
-          {sub && <span className="ml-3 text-[10px] text-text-primary/25">{sub}</span>}
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">{badge}</div>
-      </div>
-      <div className="p-5">{children}</div>
-    </div>
+        <div className="flex shrink-0 items-center gap-2">{badge}</div>
+      </header>
+      <div className="flex-1 p-3">{children}</div>
+    </section>
   );
 }
 
-// KPI card primitive
-function KpiCard({label,value,sub,color,bg,border,delay=0}:{
-  label:string; value:string; sub?:string;
-  color:string; bg:string; border:string; delay?:number;
+/** Крупное число с подписью: показатель, который читают первым. */
+function KpiCard({
+  label,
+  value,
+  sub,
+  color,
+  bg,
+  border,
+  delay = 0,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  color: string;
+  bg: string;
+  border: string;
+  delay?: number;
 }) {
   return (
-    <div className="sm-fade-up sm-hover rounded-2xl px-4 py-3.5"
-      style={{animationDelay:`${delay}s`,background:bg,border:`1px solid ${border}`}}>
-      <div className="mb-1 text-[9px] uppercase tracking-widest text-text-primary/30">{label}</div>
-      <div className="font-mono text-[22px] font-extrabold leading-none tabular-nums"
-        style={{color,textShadow:`0 0 20px ${color}50`}}>
+    <div
+      className="sm-fade-up rounded border border-[var(--pane-border)] bg-[var(--pane-deep)] px-3 py-2"
+      style={{ animationDelay: `${delay}s`, background: bg, borderColor: border }}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--pane-muted)]">
+        {label}
+      </div>
+      <div className="mt-0.5 font-mono text-[19px] font-bold leading-none tabular-nums" style={{ color }}>
         {value}
       </div>
-      {sub && <div className="mt-1.5 text-[10px] text-text-primary/35">{sub}</div>}
+      {sub && <div className="mt-1 text-[10px] text-[var(--pane-muted)]">{sub}</div>}
     </div>
   );
 }
 
-// Animated bar
-function AnimBar({pct,color,height=6,delay=0}:{pct:number;color:string;height?:number;delay?:number}) {
+/** Полоса-доля. Растёт после появления: так видно, что число живое. */
+function AnimBar({
+  pct,
+  color,
+  height = 4,
+  delay = 0,
+}: {
+  pct: number;
+  color: string;
+  height?: number;
+  delay?: number;
+}) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(()=>{
-    const el = ref.current; if(!el) return;
-    el.style.width="0%";
-    const id = setTimeout(()=>{ el.style.width=`${pct}%`; el.style.transition="width 0.9s cubic-bezier(0.4,0,0.2,1)"; },
-      delay*1000+60);
-    return ()=>clearTimeout(id);
-  },[pct,delay]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.width = "0%";
+    const id = setTimeout(
+      () => {
+        el.style.width = `${pct}%`;
+        el.style.transition = "width 0.9s cubic-bezier(0.4,0,0.2,1)";
+      },
+      delay * 1000 + 60,
+    );
+    return () => clearTimeout(id);
+  }, [pct, delay]);
   return (
-    <div className="overflow-hidden rounded-full bg-bg-panel/60" style={{height}}>
-      <div ref={ref} className="h-full rounded-full" style={{backgroundColor:color,opacity:0.7}} />
+    <div className="overflow-hidden rounded-full bg-[var(--pane-border)]" style={{ height }}>
+      <div ref={ref} className="h-full rounded-full" style={{ backgroundColor: color }} />
     </div>
   );
 }
@@ -264,32 +331,32 @@ function CotSection() {
   const maxNet = cot ? Math.max(...cot.map(r=>Math.abs(r.nc_net)),1) : 1;
 
   return (
-    <Section icon={<Building2 className="h-4 w-4 text-accent-gold"/>}
-      title="COT - Позиции институционалов" accent="gold" delay={0}
+    <Section icon={<Building2 className="h-4 w-4 text-[var(--pane-gold)]"/>}
+      title="Позиции крупных" accent="gold" delay={0}
       badge={isDemo ? <DemoBadge/> : undefined}
-      sub={isDemo ? "CFTC · ориентировочные" : "CFTC CME · актуально"}>
+      sub={isDemo ? "Отчёт CFTC не пришёл" : "Отчёт CFTC по бирже CME"}>
 
       {/* Asset toggle */}
       <div className="mb-5 flex items-center gap-1.5">
         {(["BTC","ETH"] as const).map(a=>(
           <button key={a} onClick={()=>setAsset(a)}
-            className="relative rounded-xl px-5 py-1.5 text-[12px] font-bold transition-all"
+            className="relative rounded px-5 py-1.5 text-[12px] font-bold transition-all"
             style={{
-              background: asset===a ? "rgba(240,185,11,0.14)" : "rgba(255,255,255,0.03)",
-              color: asset===a ? "var(--c-gold)" : "rgba(255,255,255,0.35)",
-              border: asset===a ? "1px solid rgba(240,185,11,0.3)" : "1px solid rgba(255,255,255,0.06)",
-              boxShadow: asset===a ? "0 0 16px rgba(240,185,11,0.15)" : "none",
+              background: asset===a ? "var(--pane-gold-soft)" : "var(--pane-hover)",
+              color: asset===a ? "var(--pane-gold)" : "rgba(255,255,255,0.35)",
+              border: asset===a ? "1px solid var(--pane-gold)" : "1px solid var(--pane-hover)",
+              boxShadow: "none",
             }}>
             {a}
           </button>
         ))}
-        {loading && <div className="ml-1 h-4 w-4 animate-spin rounded-full border border-accent-gold/20 border-t-accent-gold/80" />}
+        {loading && <div className="ml-1 h-4 w-4 animate-spin rounded-full border border-[var(--pane-border)] border-t-[var(--pane-gold)]" />}
       </div>
 
       {!cot || loading ? <Skeleton rows={5}/> : <>
 
         {isDemo && (
-          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-accent-gold/20 bg-accent-gold/[0.05] px-4 py-2.5 text-[11px] text-accent-gold">
+          <div className="mb-4 flex items-center gap-2.5 rounded border border-[var(--pane-gold-soft)] bg-[var(--pane-deep)] px-4 py-2.5 text-[11px] text-[var(--pane-gold)]">
             <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 opacity-70"/>
             CFTC API недоступен - ориентировочные данные на основе реальной структуры отчётов
           </div>
@@ -299,40 +366,40 @@ function CotSection() {
 
           {/* KPI row */}
           <div className="grid grid-cols-3 gap-3">
-            <KpiCard label="Хедж-фонды нетто" value={`${cur.nc_net>0?"+":""}${fmtK(cur.nc_net)}`}
+            <KpiCard label="Хедж-фонды, нетто" value={`${cur.nc_net>0?"+":""}${fmtK(cur.nc_net)}`}
               sub={`${cur.nc_net_chg>0?"+":""}${fmtK(cur.nc_net_chg)} нед.`}
-              color={cur.nc_net>0?"var(--c-up)":"var(--c-down)"}
-              bg={cur.nc_net>0?"rgba(14,203,129,0.07)":"rgba(246,70,93,0.07)"}
-              border={cur.nc_net>0?"rgba(14,203,129,0.2)":"rgba(246,70,93,0.2)"} delay={0.05}/>
-            <KpiCard label="Коммерческие нетто" value={`${cur.c_net>0?"+":""}${fmtK(cur.c_net)}`}
+              color={cur.nc_net>0?"var(--pane-up)":"var(--pane-down)"}
+              bg={cur.nc_net>0?"var(--pane-up-faint)":"var(--pane-down-faint)"}
+              border={cur.nc_net>0?"var(--pane-up-soft)":"var(--pane-down-soft)"} delay={0.05}/>
+            <KpiCard label="Хеджеры, нетто" value={`${cur.c_net>0?"+":""}${fmtK(cur.c_net)}`}
               sub={`${cur.c_net_chg>0?"+":""}${fmtK(cur.c_net_chg)} нед.`}
-              color={cur.c_net>0?"var(--c-up)":"var(--c-down)"}
-              bg={cur.c_net>0?"rgba(14,203,129,0.07)":"rgba(246,70,93,0.07)"}
-              border={cur.c_net>0?"rgba(14,203,129,0.2)":"rgba(246,70,93,0.2)"} delay={0.1}/>
+              color={cur.c_net>0?"var(--pane-up)":"var(--pane-down)"}
+              bg={cur.c_net>0?"var(--pane-up-faint)":"var(--pane-down-faint)"}
+              border={cur.c_net>0?"var(--pane-up-soft)":"var(--pane-down-soft)"} delay={0.1}/>
             <KpiCard label="Открытый интерес" value={fmtK(cur.oi)}
-              color="var(--c-text)" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0.15}/>
+              color="var(--pane-text)" bg="var(--pane-hover)" border="var(--pane-hover)" delay={0.15}/>
           </div>
 
           {/* Position structure */}
-          <div className="rounded-2xl border border-border bg-bg-panel/60 p-4 space-y-3">
-            <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Структура позиций (% от ОИ)</div>
+          <div className="rounded-lg border border-[var(--pane-border)] bg-[var(--pane-deep)] p-4 space-y-3">
+            <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">Из чего собран интерес, % от всего</div>
 
             {[
-              {label:"Lev. Money (хедж-фонды)", long:cur.nc_long_pct, short:cur.nc_short_pct, lc:"var(--c-up)", sc:"var(--c-down)"},
-              {label:"Asset Manager (институт.)", long:cur.c_long_pct,  short:cur.c_short_pct,  lc:"var(--c-up)", sc:"var(--c-down)"},
+              {label:"Lev. Money (хедж-фонды)", long:cur.nc_long_pct, short:cur.nc_short_pct, lc:"var(--pane-up)", sc:"var(--pane-down)"},
+              {label:"Asset Manager (институт.)", long:cur.c_long_pct,  short:cur.c_short_pct,  lc:"var(--pane-up)", sc:"var(--pane-down)"},
             ].map((row,ri)=>(
               <div key={ri}>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] text-text-primary/40">{row.label}</span>
+                  <span className="text-[10px] text-[var(--pane-muted)]">{row.label}</span>
                   <div className="flex gap-3 text-[10px] font-mono">
                     <span style={{color:row.lc}}>L {row.long.toFixed(1)}%</span>
                     <span style={{color:row.sc}}>S {row.short.toFixed(1)}%</span>
                   </div>
                 </div>
-                <div className="flex h-2 overflow-hidden rounded-full bg-bg-panel/60">
+                <div className="flex h-2 overflow-hidden rounded-full bg-[var(--pane-deep)]">
                   <div className="h-full rounded-l-full transition-all duration-700"
                     style={{width:`${row.long}%`,background:`linear-gradient(90deg,${row.lc}50,${row.lc}90)`}} />
-                  <div className="mx-[1px] h-full w-[2px] flex-shrink-0 bg-bg-panel/20 rounded-full" />
+                  <div className="mx-[1px] h-full w-[2px] flex-shrink-0 bg-[var(--pane-deep)] rounded-full" />
                   <div className="h-full rounded-r-full transition-all duration-700"
                     style={{width:`${row.short}%`,background:`linear-gradient(90deg,${row.sc}90,${row.sc}50)`}} />
                 </div>
@@ -343,22 +410,22 @@ function CotSection() {
           {/* History mini-chart */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <div className="text-[9px] uppercase tracking-widest text-text-primary/25">
+              <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)]">
                 Нетто позиция хедж-фондов - {cot.length} недель
               </div>
-              <div className="flex items-center gap-3 text-[8px] text-text-primary/20">
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-success/50"/>бычий</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-danger/50"/>медвежий</span>
+              <div className="flex items-center gap-3 text-[8px] text-[var(--pane-muted)]">
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{background:"var(--pane-up)"}}/>бычий</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{background:"var(--pane-down)"}}/>медвежий</span>
               </div>
             </div>
-            <div className="flex items-end gap-1.5 rounded-xl bg-bg-panel/60 px-3 pb-2 pt-3" style={{height:80}}>
+            <div className="flex items-end gap-1.5 rounded bg-[var(--pane-deep)] px-3 pb-2 pt-3" style={{height:80}}>
               {[...cot].reverse().map((row,i)=>{
                 const h = Math.max((Math.abs(row.nc_net)/maxNet)*62,4);
-                const color = row.nc_net>=0 ? "var(--c-up)" : "var(--c-down)";
+                const color = row.nc_net>=0 ? "var(--pane-up)" : "var(--pane-down)";
                 return (
                   <div key={i} title={`${row.date}: ${row.nc_net>0?"+":""}${fmt(row.nc_net)}`}
                     className="group relative flex flex-1 flex-col items-center justify-end cursor-default" style={{height:68}}>
-                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-bg-deep/80 px-1.5 py-0.5 text-[8px] text-text-primary opacity-0 transition-opacity group-hover:opacity-100 z-10">
+                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-bg-deep/80 px-1.5 py-0.5 text-[8px] text-[var(--pane-text)] opacity-0 transition-opacity group-hover:opacity-100 z-10">
                       {fmtK(row.nc_net)}
                     </div>
                     <div className="w-full rounded-t-sm transition-all duration-200 group-hover:opacity-100"
@@ -368,17 +435,17 @@ function CotSection() {
                 );
               })}
             </div>
-            <div className="mt-1.5 flex justify-between text-[8px] text-text-primary/15">
+            <div className="mt-1.5 flex justify-between text-[8px] text-[var(--pane-text)]/15">
               <span>← старше</span><span>новее →</span>
             </div>
           </div>
 
           {/* Insight box */}
-          <div className="rounded-xl border border-accent-gold/15 bg-accent-gold/[0.04] p-3.5 text-[10px] leading-relaxed text-text-primary/35">
-            <span className="font-semibold text-accent-gold">Leveraged Money нетто &gt; 0</span> - хедж-фонды в лонге, бычий сигнал.{" "}
-            <span className="font-semibold text-accent-gold">Asset Manager</span> - институциональные, часто контртрендовые.
-            {prev && (<>{" "}Нед. изм.: <span className={signColor(cur.nc_net-prev.nc_net)}>{cur.nc_net>=prev.nc_net?"▲":"▼"} {Math.abs(cur.nc_net-prev.nc_net).toLocaleString()}</span>.</>)}
-            {" "}<span className="text-text-primary/20">CFTC публикует каждую пятницу - данные за предыдущий вторник.</span>
+          <div className="rounded border border-[var(--pane-gold-soft)] bg-[var(--pane-deep)] p-3.5 text-[10px] leading-relaxed text-[var(--pane-muted)]">
+            <span className="font-semibold text-[var(--pane-gold)]">Хедж-фонды в плюсе</span> - спекулянты стоят в лонг, и это бычий знак.{" "}
+            <span className="font-semibold text-[var(--pane-gold)]">Хеджеры</span> обычно стоят против них: они страхуют товар, а не ставят на цену.
+            {prev && (<>{" "}За неделю: <span className={signColor(cur.nc_net-prev.nc_net)}>{cur.nc_net>=prev.nc_net?"▲":"▼"} {Math.abs(cur.nc_net-prev.nc_net).toLocaleString()}</span>.</>)}
+            {" "}<span className="text-[var(--pane-muted)]">Отчёт выходит в пятницу и описывает позиции на прошлый вторник - он всегда с опозданием.</span>
           </div>
 
         </div>
@@ -414,15 +481,15 @@ function MacroSection() {
   },[]);
 
   return (
-    <Section icon={<BarChart3 className="h-4 w-4 text-accent-cyan"/>}
-      title="Макро индикаторы" accent="cyan" delay={0.05}
+    <Section icon={<BarChart3 className="h-4 w-4 text-[var(--pane-accent)]"/>}
+      title="Макро" accent="cyan" delay={0.05}
       badge={isDemo ? <DemoBadge/> : undefined}
-      sub={isDemo ? "Yahoo Finance · ориентировочные" : "Yahoo Finance · live"}>
+      sub={isDemo ? "Источник не ответил" : "Индексы, ставки, сырьё"}>
 
       {!items ? <Skeleton rows={3}/> : <>
 
         {isDemo && (
-          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-accent-gold/20 bg-accent-gold/[0.05] px-4 py-2.5 text-[11px] text-accent-gold">
+          <div className="mb-4 flex items-center gap-2.5 rounded border border-[var(--pane-gold-soft)] bg-[var(--pane-deep)] px-4 py-2.5 text-[11px] text-[var(--pane-gold)]">
             <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 opacity-70"/>
             Yahoo Finance недоступен - ориентировочные данные
           </div>
@@ -432,25 +499,25 @@ function MacroSection() {
           {items.map((item,i)=>{
             const pos = item.changePct>=0;
             const dec = item.key==="US10Y"||item.key==="VIX" ? 2 : item.price>1000 ? 1 : 2;
-            const color = pos ? "var(--c-up)" : "var(--c-down)";
+            const color = pos ? "var(--pane-up)" : "var(--pane-down)";
             const meta  = MACRO_META[item.key]??{context:"",icon:"•"};
             return (
               <div key={item.key}
-                className="sm-fade-up sm-hover group relative overflow-hidden rounded-2xl p-4 cursor-default"
+                className="sm-fade-up sm-hover group relative overflow-hidden rounded-lg p-4 cursor-default"
                 style={{
                   animationDelay:`${i*0.04}s`,
-                  background: pos ? "rgba(14,203,129,0.04)" : "rgba(246,70,93,0.04)",
-                  border: `1px solid ${pos?"rgba(14,203,129,0.12)":"rgba(246,70,93,0.12)"}`,
+                  background: pos ? "var(--pane-up-faint)" : "var(--pane-down-faint)",
+                  border: `1px solid ${pos?"var(--pane-up-soft)":"var(--pane-down-soft)"}`,
                 }}>
                 {/* dim corner bg */}
                 <div className="pointer-events-none absolute right-2 bottom-2 text-[28px] opacity-[0.06] select-none">{meta.icon}</div>
 
                 <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-[8px] font-bold uppercase tracking-widest text-text-primary/25">{item.label}</span>
+                  <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--pane-muted)]">{item.label}</span>
                   <span className="font-mono text-[9px] font-bold" style={{color:"rgba(255,255,255,0.2)"}}>{item.key}</span>
                 </div>
 
-                <div className="font-mono text-[20px] font-extrabold leading-none text-text-primary">
+                <div className="font-mono text-[20px] font-extrabold leading-none text-[var(--pane-text)]">
                   {fmt(item.price,dec)}
                 </div>
 
@@ -466,7 +533,7 @@ function MacroSection() {
                   </span>
                 </div>
 
-                <div className="mt-2 text-[9px] text-text-primary/20">{meta.context}</div>
+                <div className="mt-2 text-[9px] text-[var(--pane-muted)]">{meta.context}</div>
               </div>
             );
           })}
@@ -494,46 +561,46 @@ function EtfSection() {
   const topEtf = data?.etfs[0];
 
   return (
-    <Section icon={<DollarSign className="h-4 w-4 text-success"/>}
-      title="Bitcoin Spot ETF - Институциональные холдинги" accent="green" delay={0.3}
+    <Section icon={<DollarSign className="h-4 w-4 text-[var(--pane-up)]"/>}
+      title="Биткоин в фондах" accent="green" delay={0.3}
       badge={isDemo ? <DemoBadge/> : <LiveBadge/>}
-      sub={isDemo ? "оценочные данные" : "Nasdaq · CoinGecko · live"}>
+      sub={isDemo ? "Источник не ответил" : "Спотовые ETF, отчётность фондов"}>
 
       {!data ? <Skeleton rows={5}/> : <div className="space-y-4">
 
         {/* Banner */}
-        <div className="relative overflow-hidden rounded-2xl border border-accent-gold/20 p-5"
-          style={{background:"linear-gradient(135deg,rgba(240,185,11,0.08),rgba(240,185,11,0.03))"}}>
+        <div className="relative overflow-hidden rounded-lg border border-[var(--pane-gold-soft)] p-5"
+          style={{background:"linear-gradient(135deg,var(--pane-accent-faint),var(--pane-accent-faint))"}}>
           <div className="pointer-events-none absolute inset-0"
-            style={{background:"radial-gradient(ellipse at 80% 50%,rgba(240,185,11,0.06),transparent 70%)"}} />
+            style={{background:"radial-gradient(ellipse at 80% 50%,var(--pane-accent-faint),transparent 70%)"}} />
           <div className="relative flex flex-wrap items-center gap-6">
             <div>
-              <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Всего BTC в ETF</div>
-              <div className="font-mono text-[32px] font-black leading-none text-accent-gold">
+              <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">Всего BTC в ETF</div>
+              <div className="font-mono text-[32px] font-black leading-none text-[var(--pane-gold)]">
                 ~{(data.total_btc/1000).toFixed(0)}<span className="text-[16px] font-semibold ml-1">K BTC</span>
               </div>
-              <div className="mt-1 text-[10px] text-text-primary/25">
+              <div className="mt-1 text-[10px] text-[var(--pane-muted)]">
                 {((data.total_btc/21_000_000)*100).toFixed(2)}% от максимальной эмиссии
               </div>
             </div>
-            <div className="h-12 w-px bg-bg-panel/60"/>
+            <div className="h-12 w-px bg-[var(--pane-deep)]"/>
             <div>
-              <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Фондов</div>
-              <div className="font-mono text-[28px] font-black leading-none text-text-primary">{data.etfs.length}</div>
+              <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">Фондов</div>
+              <div className="font-mono text-[28px] font-black leading-none text-[var(--pane-text)]">{data.etfs.length}</div>
             </div>
             {btcPrice>0 && <>
-              <div className="h-12 w-px bg-bg-panel/60"/>
+              <div className="h-12 w-px bg-[var(--pane-deep)]"/>
               <div>
-                <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">BTC/USD</div>
-                <div className="font-mono text-[24px] font-black leading-none text-accent-cyan">${btcPrice.toLocaleString("en-US")}</div>
+                <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">BTC/USD</div>
+                <div className="font-mono text-[24px] font-black leading-none text-[var(--pane-accent)]">${btcPrice.toLocaleString("en-US")}</div>
               </div>
             </>}
             {topEtf && <>
-              <div className="h-12 w-px bg-bg-panel/60"/>
+              <div className="h-12 w-px bg-[var(--pane-deep)]"/>
               <div>
-                <div className="text-[9px] uppercase tracking-widest text-text-primary/25 mb-1">Лидер</div>
-                <div className="font-mono text-[18px] font-black leading-none text-text-primary">{topEtf.ticker}</div>
-                <div className="text-[9px] text-text-primary/25">{topEtf.sharePct}% доли</div>
+                <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">Лидер</div>
+                <div className="font-mono text-[18px] font-black leading-none text-[var(--pane-text)]">{topEtf.ticker}</div>
+                <div className="text-[9px] text-[var(--pane-muted)]">{topEtf.sharePct}% доли</div>
               </div>
             </>}
           </div>
@@ -542,50 +609,50 @@ function EtfSection() {
         {/* ETF list */}
         <div className="space-y-2">
           {/* header */}
-          <div className="grid px-3 text-[8px] uppercase tracking-widest text-text-primary/20"
+          <div className="grid px-3 text-[8px] uppercase tracking-widest text-[var(--pane-muted)]"
             style={{gridTemplateColumns:"28px 1fr 70px 60px 55px 80px"}}>
             <span>#</span><span>Фонд</span>
             <span className="text-right">BTC</span>
-            <span className="text-right">AUM</span>
+            <span className="text-right">Активы</span>
             <span className="text-right">Доля</span>
-            <span className="text-right">Цена ETF</span>
+            <span className="text-right">Пай</span>
           </div>
 
           {data.etfs.map((etf,i)=>{
             const pos = etf.changePct>=0;
             return (
-              <div key={i} className="sm-fade-up sm-hover group relative overflow-hidden rounded-xl p-3"
+              <div key={i} className="sm-fade-up sm-hover group relative overflow-hidden rounded p-3"
                 style={{
                   animationDelay:`${i*0.04+0.1}s`,
                   background:"rgba(255,255,255,0.025)",
-                  border:"1px solid rgba(255,255,255,0.06)",
+                  border:"1px solid var(--pane-hover)",
                 }}>
                 {/* share bar background */}
                 <div className="absolute inset-y-0 left-0 rounded-l-xl transition-all duration-700"
-                  style={{width:`${etf.sharePct}%`,background:"rgba(14,203,129,0.04)",maxWidth:"100%"}} />
+                  style={{width:`${etf.sharePct}%`,background:"var(--pane-up-faint)",maxWidth:"100%"}} />
 
                 <div className="relative grid items-center gap-2"
                   style={{gridTemplateColumns:"28px 1fr 70px 60px 55px 80px"}}>
-                  <div className="text-[11px] font-bold text-text-primary/20">{i+1}</div>
+                  <div className="text-[11px] font-bold text-[var(--pane-muted)]">{i+1}</div>
 
                   <div>
-                    <div className="text-[12px] font-bold text-text-primary">{etf.ticker}</div>
-                    <div className="text-[9px] text-text-primary/30 truncate">{etf.name}</div>
+                    <div className="text-[12px] font-bold text-[var(--pane-text)]">{etf.ticker}</div>
+                    <div className="text-[9px] text-[var(--pane-muted)] truncate">{etf.name}</div>
                   </div>
 
-                  <div className="text-right font-mono text-[11px] text-text-primary/70">
+                  <div className="text-right font-mono text-[11px] text-[var(--pane-text-2)]">
                     {etf.btc>0 ? `${(etf.btc/1000).toFixed(0)}K` : "-"}
                   </div>
-                  <div className="text-right font-mono text-[10px] text-text-primary/35">
+                  <div className="text-right font-mono text-[10px] text-[var(--pane-muted)]">
                     {etf.aum_usd&&etf.aum_usd>0 ? `$${(etf.aum_usd/1e9).toFixed(1)}B` : "-"}
                   </div>
-                  <div className="text-right font-mono text-[12px] font-bold text-success">
+                  <div className="text-right font-mono text-[12px] font-bold text-[var(--pane-up)]">
                     {etf.sharePct}%
                   </div>
                   <div className="text-right">
-                    <div className="font-mono text-[11px] text-text-primary">{etf.price>0?`$${etf.price}`:"-"}</div>
+                    <div className="font-mono text-[11px] text-[var(--pane-text)]">{etf.price>0?`$${etf.price}`:"-"}</div>
                     {etf.price>0 && (
-                      <div className="font-mono text-[9px]" style={{color:pos?"var(--c-up)":"var(--c-down)"}}>
+                      <div className="font-mono text-[9px]" style={{color:pos?"var(--pane-up)":"var(--pane-down)"}}>
                         {pos?"+":""}{etf.changePct.toFixed(2)}%
                       </div>
                     )}
@@ -594,14 +661,14 @@ function EtfSection() {
 
                 {/* animated share bar */}
                 <div className="mt-2.5">
-                  <AnimBar pct={etf.sharePct} color="var(--c-up)" height={3} delay={i*0.05+0.1}/>
+                  <AnimBar pct={etf.sharePct} color="var(--pane-up)" height={3} delay={i*0.05+0.1}/>
                 </div>
               </div>
             );
           })}
         </div>
 
-        <p className="text-[9px] text-text-primary/15">AUM и BTC холдинги - Nasdaq API. Цены ETF - Yahoo Finance. BTC/USD - CoinGecko.</p>
+        <p className="text-[9px] text-[var(--pane-text)]/15">AUM и BTC холдинги - Nasdaq API. Цены ETF - Yahoo Finance. BTC/USD - CoinGecko.</p>
       </div>}
     </Section>
   );
@@ -644,59 +711,59 @@ function DerivativesSection() {
   const maxOI   = Math.max(...rows.map(r=>r.oi),1);
 
   return (
-    <Section icon={<Activity className="h-4 w-4 text-accent-cyan"/>}
-      title="Деривативы - открытый интерес" accent="cyan" delay={0.2}
+    <Section icon={<Activity className="h-4 w-4 text-[var(--pane-accent)]"/>}
+      title="Открытый интерес" accent="cyan" delay={0.2}
       badge={<LiveBadge/>}
-      sub={updatedAt ? `WEEX · ${updatedAt}` : "загрузка…"}>
+      sub={updatedAt ? `Биржа WEEX, ${updatedAt}` : "спрашиваем биржу…"}>
 
       {loading ? <Skeleton rows={5}/> : <>
 
         {/* KPI row */}
         <div className="mb-5 grid grid-cols-3 gap-3">
-          <KpiCard label="Суммарный OI" value={fmtB(totalOI)} color="var(--c-text)"
-            bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0}/>
-          <KpiCard label="Монет отслеживается" value={String(rows.length)}
-            color="var(--c-accent)" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.05}/>
+          <KpiCard label="Интерес всего" value={fmtB(totalOI)} color="var(--pane-text)"
+            bg="var(--pane-hover)" border="var(--pane-hover)" delay={0}/>
+          <KpiCard label="Монет в списке" value={String(rows.length)}
+            color="var(--pane-accent)" bg="var(--pane-accent-faint)" border="var(--pane-accent-soft)" delay={0.05}/>
           <KpiCard
-            label="Топ по OI"
+            label="Больше всего"
             value={rows[0]?.sym??"-"}
             sub={rows[0]?.oi>0 ? fmtB(rows[0].oi) : undefined}
-            color="var(--c-gold)" bg="rgba(240,185,11,0.07)" border="rgba(240,185,11,0.18)" delay={0.1}/>
+            color="var(--pane-gold)" bg="var(--pane-accent-faint)" border="var(--pane-gold-soft)" delay={0.1}/>
         </div>
 
         {/* Rows */}
         <div className="space-y-2">
-          <div className="grid px-3 text-[8px] uppercase tracking-widest text-text-primary/20"
+          <div className="grid px-3 text-[8px] uppercase tracking-widest text-[var(--pane-muted)]"
             style={{gridTemplateColumns:"48px 1fr 90px 80px 80px"}}>
-            <span>Пара</span><span>OI (доля)</span>
+            <span>Пара</span><span>Доля интереса</span>
             <span className="text-right">OI</span>
-            <span className="text-right">Funding 8ч</span>
+            <span className="text-right">Ставка 8ч</span>
             <span className="text-right">24ч</span>
           </div>
 
           {rows.map((r,i)=>{
             const fr = r.fr; const frPct = fr*100;
-            const frColor = fr>0.01?"var(--c-down)":fr>0?"var(--c-warn)":fr<-0.001?"var(--c-up)":"var(--c-muted)";
+            const frColor = fr>0.01?"var(--pane-down)":fr>0?"var(--pane-gold)":fr<-0.001?"var(--pane-up)":"var(--pane-muted)";
             const pct = (r as DerivRow & {pct24h?:number}).pct24h??0;
             const oiPct = r.oi/maxOI*100;
 
             return (
-              <div key={r.sym} className="sm-fade-up sm-hover group rounded-2xl p-3.5"
+              <div key={r.sym} className="sm-fade-up sm-hover group rounded-lg p-3.5"
                 style={{
                   animationDelay:`${i*0.05}s`,
                   background:"rgba(255,255,255,0.025)",
-                  border:"1px solid rgba(255,255,255,0.06)",
+                  border:"1px solid var(--pane-hover)",
                 }}>
                 <div className="grid items-center gap-3" style={{gridTemplateColumns:"48px 1fr 90px 80px 80px"}}>
 
-                  <div className="font-bold text-[14px] text-text-primary">{r.sym}</div>
+                  <div className="font-bold text-[14px] text-[var(--pane-text)]">{r.sym}</div>
 
                   <div>
-                    <AnimBar pct={oiPct} color="var(--c-accent)" height={5} delay={i*0.04}/>
-                    <div className="mt-1 text-[8px] text-text-primary/20">{oiPct.toFixed(0)}% от макс.</div>
+                    <AnimBar pct={oiPct} color="var(--pane-accent)" height={5} delay={i*0.04}/>
+                    <div className="mt-1 text-[8px] text-[var(--pane-muted)]">{oiPct.toFixed(0)}% от макс.</div>
                   </div>
 
-                  <div className="text-right font-mono text-[12px] text-text-primary/70">
+                  <div className="text-right font-mono text-[12px] text-[var(--pane-text-2)]">
                     {r.oi>0 ? fmtB(r.oi) : "-"}
                   </div>
 
@@ -704,12 +771,12 @@ function DerivativesSection() {
                     <div className="font-mono text-[12px] font-bold" style={{color:frColor}}>
                       {fr>=0?"+":""}{frPct.toFixed(4)}%
                     </div>
-                    <div className="mt-0.5 text-[8px] font-semibold text-text-primary/25">
+                    <div className="mt-0.5 text-[8px] font-semibold text-[var(--pane-muted)]">
                       {fr>0.01?"ПЕРЕГРЕВ":fr>0.001?"ЛОНГИ":fr<-0.001?"ШОРТЫ":"НЕЙТР."}
                     </div>
                   </div>
 
-                  <div className={`text-right font-mono text-[12px] font-bold ${pct>=0?"text-success":"text-danger"}`}>
+                  <div className={`text-right font-mono text-[12px] font-bold ${pct>=0?"text-[var(--pane-up)]":"text-[var(--pane-down)]"}`}>
                     {pct>=0?"+":""}{pct.toFixed(2)}%
                   </div>
 
@@ -719,7 +786,7 @@ function DerivativesSection() {
           })}
         </div>
 
-        <p className="mt-3 text-[8.5px] text-text-primary/15">
+        <p className="mt-3 text-[8.5px] text-[var(--pane-text)]/15">
           Funding {">"} 0% - лонги переплачивают (перегрев) · Funding {"<"} 0% - шорты платят лонгам (бычий сигнал)
         </p>
       </>}
@@ -727,531 +794,34 @@ function DerivativesSection() {
   );
 }
 
-// ── Onchain / Global Market Section ──────────────────────────────────────────
-
-const FG_LABEL_RU: Record<string,string> = {
-  "Extreme Fear":"Крайний страх","Fear":"Страх","Neutral":"Нейтрально",
-  "Greed":"Жадность","Extreme Greed":"Крайняя жадность",
-};
-
-function FearGaugeSmall({val,color}:{val:number;color:string}) {
-  const r=44, cx=62, cy=56;
-  const arc = val/100;
-  const circ = Math.PI*r;
-  return (
-    <svg viewBox="0 0 124 62" className="w-full overflow-visible">
-      <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
-        fill="none" stroke="rgba(128,128,128,0.25)" strokeWidth="10" strokeLinecap="butt"/>
-      {[{from:0,to:.25,c:"var(--c-up)"},{from:.25,to:.45,c:"var(--c-up)"},{from:.45,to:.55,c:"var(--c-muted)"},{from:.55,to:.75,c:"var(--c-gold)"},{from:.75,to:1,c:"var(--c-down)"}]
-        .map((z,i)=>{
-          const a1=Math.PI-z.from*Math.PI, a2=Math.PI-z.to*Math.PI;
-          const x1=cx+r*Math.cos(a1),y1=cy-r*Math.sin(a1),x2=cx+r*Math.cos(a2),y2=cy-r*Math.sin(a2);
-          return <path key={i} fill="none" stroke={z.c} strokeWidth="10" opacity="0.3"
-            d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`}/>;
-        })}
-      <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
-        fill="none" stroke={color} strokeWidth="10" strokeLinecap="round" opacity="0.7"
-        strokeDasharray={`${arc*circ} ${circ}`}
-        style={{transition:"stroke-dasharray 0.9s ease"}}/>
-      {(()=>{
-        const a=Math.PI-arc*Math.PI;
-        const nx=cx+(r-14)*Math.cos(a), ny=cy-(r-14)*Math.sin(a);
-        const pa=a+Math.PI/2;
-        return <polygon points={`${nx},${ny} ${cx+4*Math.cos(pa)},${cy-4*Math.sin(pa)} ${cx-4*Math.cos(pa)},${cy+4*Math.sin(pa)}`}
-          fill={color} style={{transition:"all 0.9s ease"}}/>;
-      })()}
-      <circle cx={cx} cy={cy} r="4" fill={color}/>
-      <text x={cx} y={cy-16} textAnchor="middle" fill="white" fontSize="18" fontWeight="900" fontFamily="monospace">{val}</text>
-    </svg>
-  );
-}
-
-function OnchainSection() {
-  const [data,setData]       = useState<GlobalData|null>(null);
-  const [loading,setLoading] = useState(true);
-  const [updatedAt,setUpdatedAt] = useState("");
-
-  useEffect(()=>{
-    const load = async()=>{
-      const [fgRes,cgRes] = await Promise.allSettled([
-        fetch(ALT_ME_API).then(r=>r.json()),
-        fetch(`${COINGECKO_API}/global`).then(r=>r.json()),
-      ]);
-      const fg = fgRes.status==="fulfilled"?fgRes.value?.data?.[0]:null;
-      const cg = cgRes.status==="fulfilled"?cgRes.value?.data:null;
-      if(!fg&&!cg) return;
-      const pct = cg?.market_cap_percentage??{};
-      setData({
-        fearGreed:{value:fg?parseInt(fg.value):50, label:FG_LABEL_RU[fg?.value_classification??""]??fg?.value_classification??"-"},
-        btcDom:pct.btc??0, ethDom:pct.eth??0, stableDom:(pct.usdt??0)+(pct.usdc??0),
-        totalMcap:cg?.total_market_cap?.usd??0,
-        mcapChg24h:cg?.market_cap_change_percentage_24h_usd??0,
-        vol24h:cg?.total_volume?.usd??0,
-      });
-      setUpdatedAt(new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}));
-      setLoading(false);
-    };
-    load(); const t=setInterval(load,60_000); return ()=>clearInterval(t);
-  },[]);
-
-  const d = data;
-  const fgVal   = d?.fearGreed.value??0;
-  const fgColor = fgVal>=75?"var(--c-down)":fgVal>=55?"var(--c-gold)":fgVal>=45?"var(--c-muted)":fgVal>=25?"var(--c-accent)":"var(--c-up)";
-  const altSeason = d ? Math.max(0,100-d.btcDom-d.ethDom) : 0;
-
-  return (
-    <Section icon={<Zap className="h-4 w-4 text-accent-cyan"/>}
-      title="Настроение и структура рынка" accent="cyan" delay={0.1}
-      badge={<LiveBadge/>}
-      sub={updatedAt ? `Alternative.me · CoinGecko · ${updatedAt}` : "загрузка…"}>
-
-      {loading||!d ? <Skeleton rows={4}/> : <>
-
-        <div className="mb-4 grid grid-cols-2 gap-3">
-
-          {/* Fear & Greed card */}
-          <div className="sm-hover rounded-2xl border border-border bg-bg-panel/60 p-4">
-            <div className="mb-1 text-[9px] uppercase tracking-widest text-text-primary/25">Fear & Greed Index</div>
-            <FearGaugeSmall val={fgVal} color={fgColor}/>
-            <div className="mt-1 text-center">
-              <span className="text-[13px] font-bold" style={{color:fgColor}}>
-                {d.fearGreed.label}
-              </span>
-            </div>
-          </div>
-
-          {/* Dominance card */}
-          <div className="sm-hover rounded-2xl border border-border bg-bg-panel/60 p-4">
-            <div className="mb-3 text-[9px] uppercase tracking-widest text-text-primary/25">Доминация крипторынка</div>
-            <div className="space-y-3">
-              {[
-                {label:"BTC",    val:d.btcDom,    col:"var(--c-gold)"},
-                {label:"ETH",    val:d.ethDom,    col:"#627eea"},
-                {label:"Stable", val:d.stableDom, col:"var(--c-up)"},
-                {label:"Альты",  val:altSeason,   col:"var(--c-accent)"},
-              ].map((x,i)=>(
-                <div key={x.label}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold" style={{color:x.col}}>{x.label}</span>
-                    <span className="font-mono text-[11px] font-bold text-text-primary">{x.val.toFixed(1)}%</span>
-                  </div>
-                  <AnimBar pct={x.val} color={x.col} height={5} delay={i*0.08}/>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            {label:"Капитализация",
-              value: d.totalMcap>=1e12?`$${(d.totalMcap/1e12).toFixed(2)}T`:`$${(d.totalMcap/1e9).toFixed(0)}B`,
-              sub:`${d.mcapChg24h>=0?"+":""}${d.mcapChg24h.toFixed(2)}% 24ч`,
-              color:d.mcapChg24h>=0?"var(--c-up)":"var(--c-down)"},
-            {label:"Объём 24ч",
-              value: d.vol24h>=1e12?`$${(d.vol24h/1e12).toFixed(2)}T`:`$${(d.vol24h/1e9).toFixed(0)}B`,
-              sub:"суммарный",color:"var(--c-muted)"},
-            {label:"Альт-сезон",
-              value:`${altSeason.toFixed(1)}%`,
-              sub:altSeason>40?"Сезон альтов":altSeason>25?"Смешанный":"Доминация BTC",
-              color:altSeason>30?"var(--c-accent)":"var(--c-gold)"},
-          ].map((m,i)=>(
-            <div key={m.label} className="sm-fade-up sm-hover rounded-2xl p-3.5"
-              style={{
-                animationDelay:`${i*0.05+0.1}s`,
-                background:`${m.color}09`,
-                border:`1px solid ${m.color}20`,
-              }}>
-              <div className="mb-1 text-[8.5px] uppercase tracking-widest text-text-primary/25">{m.label}</div>
-              <div className="font-mono text-[15px] font-extrabold leading-none" style={{color:m.color}}>{m.value}</div>
-              <div className="mt-1 text-[9px] text-text-primary/30">{m.sub}</div>
-            </div>
-          ))}
-        </div>
-
-      </>}
-    </Section>
-  );
-}
-
-// ── Funding Rates Heatmap ─────────────────────────────────────────────────────
-
-function FundingHeatmapSection() {
-  const [rows,setRows]         = useState<FrRow[]>([]);
-  const [loading,setLoading]   = useState(true);
-  const [updatedAt,setUpdatedAt] = useState("");
-
-  useEffect(()=>{
-    const load = async()=>{
-      const res = await fetch(`${API_URL}/api/market/funding-rates`,SKIP).then(r=>r.json()).catch(()=>null);
-      const rateMap = new Map<string,Record<string,unknown>>(
-        (res?.rates??[]).map((r:Record<string,unknown>)=>[r.symbol as string,r])
-      );
-      const tickers = await Promise.all(
-        FR_SYMS.map(sym=>
-          fetch(`${API_URL}/api/market/ticker/${sym}`,SKIP).then(r=>r.ok?r.json():null).catch(()=>null)
-        )
-      );
-      setRows(FR_SYMS.map((sym,i)=>{
-        const rate = rateMap.get(sym)??{};
-        const tk   = tickers[i]??{};
-        return {
-          sym:sym.replace("USDT",""),
-          fr:parseFloat((rate.fundingRate as string)??"0"),
-          pct24h:parseFloat((tk.priceChangePercent as string)??"0"),
-          nextFunding:parseInt((rate.nextFundingTime as string)??"0")||0,
-          price:parseFloat((tk.lastPrice as string)??"0"),
-        };
-      }));
-      setUpdatedAt(new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}));
-      setLoading(false);
-    };
-    load(); const t=setInterval(load,15_000); return ()=>clearInterval(t);
-  },[]);
-
-  const avgFr   = rows.length ? rows.reduce((s,r)=>s+r.fr,0)/rows.length : 0;
-  // шорты платят = fr < 0 (лонги получают — бычий сигнал)
-  // лонги платят = fr > 0 (шорты получают — медвежий сигнал)
-  const bullish  = rows.filter(r=>r.fr<-0.000001).length;
-  const bearish  = rows.filter(r=>r.fr>0.000001).length;
-  const maxAbsFr = Math.max(...rows.map(r=>Math.abs(r.fr)),0.000001);
-
-  function frTheme(fr:number) {
-    // Пороги в decimal: 0.0003 = 0.03% per 8h (~33% APR) — перегрев
-    if(fr>0.0003)  return {color:"var(--c-down)",glow:"rgba(246,70,93,0.4)",  bg:"rgba(246,70,93,0.10)", border:"rgba(246,70,93,0.30)", label:"ПЕРЕГРЕВ",pulse:true};
-    if(fr>0.0001)  return {color:"var(--c-warn)",glow:"rgba(245,158,11,0.35)",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.22)",label:"ЛОНГИ",   pulse:false};
-    if(fr>0.000001)return {color:"var(--c-muted)",glow:"transparent",          bg:"rgba(255,255,255,0.03)",border:"rgba(255,255,255,0.07)",label:"НЕЙТР.", pulse:false};
-    if(fr>-0.000001)return{color:"var(--c-muted)",glow:"transparent",          bg:"rgba(255,255,255,0.03)",border:"rgba(255,255,255,0.07)",label:"НЕЙТР.", pulse:false};
-    if(fr>-0.0001) return {color:"var(--c-up)",glow:"rgba(14,203,129,0.35)",bg:"rgba(14,203,129,0.08)",border:"rgba(14,203,129,0.22)",label:"ШОРТЫ",   pulse:false};
-    return               {color:"var(--c-accent)",glow:"rgba(10,255,224,0.40)", bg:"rgba(10,255,224,0.10)",border:"rgba(10,255,224,0.30)",label:"ДИСКОНТ",pulse:true};
-  }
-
-  function fmtNext(ts:number) {
-    if(!ts) return ""; const diff=ts-Date.now(); if(diff<=0) return "сейчас";
-    const h=Math.floor(diff/3_600_000), m=Math.floor((diff%3_600_000)/60_000);
-    return h>0?`${h}ч ${m}м`:`${m}м`;
-  }
-
-  return (
-    <Section icon={<DollarSign className="h-4 w-4 text-accent-gold"/>}
-      title="Ставки финансирования (8ч)" accent="gold" delay={0.15}
-      badge={<LiveBadge/>}
-      sub={updatedAt ? `WEEX · ${updatedAt}` : "загрузка…"}>
-
-      {loading ? <Skeleton rows={4}/> : <>
-
-        {/* Summary KPIs */}
-        <div className="mb-5 grid grid-cols-3 gap-3">
-          {[
-            {label:"Средний FR",
-              value:`${avgFr>=0?"+":""}${(avgFr*100).toFixed(4)}%`,
-              color:avgFr>0.000001?"var(--c-warn)":avgFr<-0.000001?"var(--c-up)":"var(--c-muted)",
-              bg:avgFr>0.000001?"rgba(245,158,11,0.07)":avgFr<-0.000001?"rgba(14,203,129,0.07)":"rgba(255,255,255,0.03)",
-              border:avgFr>0.000001?"rgba(245,158,11,0.2)":avgFr<-0.000001?"rgba(14,203,129,0.2)":"rgba(255,255,255,0.07)"},
-            {label:"Шорты платят", value:`${bullish} из ${rows.length}`,
-              color:"var(--c-up)", bg:"rgba(14,203,129,0.07)", border:"rgba(14,203,129,0.2)"},
-            {label:"Лонги платят", value:`${bearish} из ${rows.length}`,
-              color:"var(--c-down)", bg:"rgba(246,70,93,0.07)", border:"rgba(246,70,93,0.2)"},
-          ].map((s,i)=>(
-            <div key={s.label} className="sm-fade-up rounded-2xl px-4 py-3.5 text-center"
-              style={{animationDelay:`${i*0.05}s`,background:s.bg,border:`1px solid ${s.border}`}}>
-              <div className="mb-1 text-[9px] uppercase tracking-widest text-text-primary/25">{s.label}</div>
-              <div className="font-mono text-[16px] font-extrabold" style={{color:s.color}}>{s.value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Heatmap grid */}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {rows.map((r,i)=>{
-            const th = frTheme(r.fr);
-            const barW = Math.min(100, Math.abs(r.fr)/maxAbsFr*100);
-            const next = fmtNext(r.nextFunding);
-
-            return (
-              <div key={r.sym}
-                className={`sm-fade-up sm-hover relative overflow-hidden rounded-2xl p-3.5 ${th.pulse?"sm-glow":""}`}
-                style={{
-                  animationDelay:`${i*0.04+0.05}s`,
-                  background:th.bg,
-                  border:`1px solid ${th.border}`,
-                  ["--glow" as string]: th.glow,
-                }}>
-
-                {/* Top accent */}
-                <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-2xl"
-                  style={{background:`linear-gradient(90deg,transparent,${th.color},transparent)`,opacity:0.8}}/>
-
-                {/* Symbol */}
-                <div className="mb-2.5 flex items-center justify-between">
-                  <span className="text-[12px] font-black text-text-primary/80">{r.sym}</span>
-                  <span className="text-[7px] font-bold uppercase tracking-wider"
-                    style={{color:th.color,opacity:0.8}}>{th.label}</span>
-                </div>
-
-                {/* FR value */}
-                <div className="font-mono text-[19px] font-extrabold leading-none tabular-nums"
-                  style={{color:th.color, textShadow:`0 0 20px ${th.glow}`}}>
-                  {r.fr>=0?"+":""}{(r.fr*100).toFixed(4)}%
-                </div>
-
-                {/* Magnitude bar */}
-                <div className="mt-2.5">
-                  <AnimBar pct={barW} color={th.color} height={3} delay={i*0.04+0.05}/>
-                </div>
-
-                {/* 24h + next */}
-                <div className="mt-2.5 flex items-center justify-between">
-                  <span className="font-mono text-[10px] font-semibold"
-                    style={{color:r.pct24h>=0?"var(--c-up)":"var(--c-down)"}}>
-                    {r.pct24h>=0?"+":""}{r.pct24h.toFixed(2)}%
-                  </span>
-                  {next && <span className="text-[8px] text-text-primary/20">через {next}</span>}
-                </div>
-
-              </div>
-            );
-          })}
-        </div>
-
-        <p className="mt-3 text-[8.5px] text-text-primary/15">
-          FR {"<"} 0% - шорты платят лонгам (бычий) · FR {">"} 0.01% - лонги перегреты
-        </p>
-
-      </>}
-    </Section>
-  );
-}
-
-// ── Global Market Section (CoinGecko via бэкенд) ──────────────────────────────
-
-function fmtMoney(n: number): string {
-  if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
-  if (n >= 1e9)  return `$${(n / 1e9).toFixed(1)}B`;
-  if (n >= 1e6)  return `$${(n / 1e6).toFixed(0)}M`;
-  return `$${n.toFixed(0)}`;
-}
-
-function GlobalMarketSection() {
-  const [g, setG] = useState<GlobalMarket | null>(null);
-
-  useEffect(() => {
-    const load = () => fetchJson<GlobalMarket>(`${API_URL}/api/market/global`).then(d => { if (d) setG(d); });
-    load();
-    const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
-  }, []);
-
-  const pos = (g?.market_cap_change_24h ?? 0) >= 0;
-
-  return (
-    <Section icon={<Globe className="h-4 w-4 text-accent-cyan" />}
-      title="Глобальный рынок" accent="cyan" delay={0.05}
-      badge={<LiveBadge />} sub="CoinGecko · вся крипта">
-      {!g ? <Skeleton rows={2} /> : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <KpiCard label="Капитализация" value={fmtMoney(g.total_market_cap_usd)}
-            sub={g.active_cryptos ? `${fmt(g.active_cryptos)} монет` : undefined}
-            color="var(--c-text)" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0} />
-          <KpiCard label="BTC доминация" value={`${g.btc_dominance.toFixed(1)}%`}
-            color="var(--c-gold)" bg="rgba(240,185,11,0.07)" border="rgba(240,185,11,0.18)" delay={0.05} />
-          <KpiCard label="Объём 24ч" value={fmtMoney(g.total_volume_usd)}
-            color="var(--c-accent)" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.1} />
-          <KpiCard label="Капа 24ч" value={`${pos ? "+" : ""}${g.market_cap_change_24h.toFixed(2)}%`}
-            color={pos ? "var(--c-up)" : "var(--c-down)"}
-            bg={pos ? "rgba(14,203,129,0.07)" : "rgba(246,70,93,0.07)"}
-            border={pos ? "rgba(14,203,129,0.2)" : "rgba(246,70,93,0.2)"} delay={0.15} />
-        </div>
-      )}
-    </Section>
-  );
-}
-
-// ── Trending Coins Section (CoinGecko) ────────────────────────────────────────
-
-function TrendingSection() {
-  const [coins, setCoins] = useState<TrendingCoin[] | null>(null);
-
-  useEffect(() => {
-    const load = () => fetchJson<{ coins: TrendingCoin[] }>(`${API_URL}/api/market/trending`)
-      .then(d => { if (d?.coins) setCoins(d.coins); });
-    load();
-    const t = setInterval(load, 120_000);
-    return () => clearInterval(t);
-  }, []);
-
-  const rankStyle = (i: number) =>
-    i === 0 ? { color: "var(--c-gold)", bg: "rgba(240,185,11,0.15)", bd: "rgba(240,185,11,0.4)" }
-    : i === 1 ? { color: "var(--c-muted)", bg: "rgba(203,213,225,0.12)", bd: "rgba(203,213,225,0.3)" }
-    : i === 2 ? { color: "#d8895a", bg: "rgba(216,137,90,0.12)", bd: "rgba(216,137,90,0.3)" }
-    : { color: "rgba(255,255,255,0.35)", bg: "rgba(255,255,255,0.04)", bd: "rgba(255,255,255,0.08)" };
-
-  return (
-    <Section icon={<Flame className="h-4 w-4 text-accent-gold" />}
-      title="Трендовые монеты" accent="gold" delay={0.1}
-      badge={<LiveBadge />} sub="CoinGecko · поиск за 24ч">
-      {!coins ? <Skeleton rows={6} /> : (
-        <div className="space-y-1.5">
-          {coins.slice(0, 8).map((c, i) => {
-            const rs = rankStyle(i);
-            return (
-              <div key={c.id} className="sm-fade-up sm-hover flex items-center gap-3 rounded-xl px-3 py-2.5"
-                style={{ animationDelay: `${i * 0.04}s`, background: "rgba(255,255,255,0.025)", border: "1px solid rgb(var(--border) / 0.7)" }}>
-                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg font-mono text-[11px] font-black"
-                  style={{ color: rs.color, background: rs.bg, border: `1px solid ${rs.bd}` }}>
-                  {i + 1}
-                </span>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={c.thumb} alt={c.symbol} className="h-6 w-6 flex-shrink-0 rounded-full ring-1 ring-white/10" />
-                <span className="font-bold text-[13px] text-text-primary">{c.symbol}</span>
-                <span className="truncate text-[11px] text-text-primary/30">{c.name}</span>
-                {c.rank != null && (
-                  <span className="ml-auto flex-shrink-0 rounded-md bg-bg-panel/60 px-2 py-0.5 font-mono text-[9px] font-semibold text-text-primary/40">
-                    #{c.rank}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Section>
-  );
-}
-
-// ── Bitcoin Network / On-chain Section (mempool.space + blockchain.info) ───────
-
-function BtcNetworkSection() {
-  const [d, setD] = useState<OnChainStats | null>(null);
-
-  useEffect(() => {
-    const load = () => fetchJson<OnChainStats>(`${API_URL}/api/market/onchain`).then(x => { if (x) setD(x); });
-    load();
-    const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
-  }, []);
-
-  const diffPos = (d?.difficulty_change_pct ?? 0) >= 0;
-
-  const feeTiers = d ? [
-    { label: "Срочно", value: d.fees.fastest, color: "var(--c-down)" },
-    { label: "30 мин", value: d.fees.half_hour, color: "var(--c-gold)" },
-    { label: "1 час", value: d.fees.hour, color: "var(--c-accent)" },
-    { label: "Эконом", value: d.fees.economy, color: "var(--c-up)" },
-  ] : [];
-
-  return (
-    <Section icon={<Boxes className="h-4 w-4 text-accent-gold" />}
-      title="Сеть Bitcoin" accent="gold" delay={0.15}
-      badge={<LiveBadge />} sub="mempool.space · blockchain.info">
-      {!d ? <Skeleton rows={4} /> : (
-        <div className="space-y-4">
-          {/* Комиссии по приоритету */}
-          <div>
-            <div className="mb-2 text-[9px] uppercase tracking-widest text-text-primary/25">Комиссия сети (sat/vB)</div>
-            <div className="grid grid-cols-4 gap-2">
-              {feeTiers.map((f, i) => (
-                <div key={f.label} className="sm-fade-up rounded-xl px-2 py-2.5 text-center"
-                  style={{ animationDelay: `${i * 0.04}s`, background: `${f.color}0d`, border: `1px solid ${f.color}25` }}>
-                  <div className="font-mono text-[18px] font-extrabold leading-none" style={{ color: f.color, textShadow: `0 0 16px ${f.color}40` }}>
-                    {f.value}
-                  </div>
-                  <div className="mt-1.5 text-[8px] uppercase tracking-wider text-text-primary/30">{f.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* KPI */}
-          <div className="grid grid-cols-3 gap-3">
-            <KpiCard label="Хешрейт" value={`${d.hash_rate_ehs.toFixed(0)}`} sub="EH/s"
-              color="var(--c-accent)" bg="rgba(10,255,224,0.06)" border="rgba(10,255,224,0.15)" delay={0.05} />
-            <KpiCard label="Транзакций 24ч" value={fmtB(d.tx_count_24h).replace("$", "")}
-              color="var(--c-text)" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" delay={0.1} />
-            <KpiCard label="Сложность" value={`${diffPos ? "+" : ""}${d.difficulty_change_pct.toFixed(2)}%`}
-              sub={`ретаргет ${d.retarget_progress_pct.toFixed(0)}%`}
-              color={diffPos ? "var(--c-up)" : "var(--c-down)"}
-              bg={diffPos ? "rgba(14,203,129,0.07)" : "rgba(246,70,93,0.07)"}
-              border={diffPos ? "rgba(14,203,129,0.2)" : "rgba(246,70,93,0.2)"} delay={0.15} />
-          </div>
-
-          <p className="text-[9px] text-text-primary/15">
-            Низкая комиссия = свободная сеть · рост сложности = приток майнеров (бычий сигнал для безопасности сети).
-          </p>
-        </div>
-      )}
-    </Section>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SmartMoneyPage() {
+  const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
+
   return (
     <>
       <style>{ANIM_CSS}</style>
-      <div className="space-y-5">
-
-        {/* Page header */}
-        <div className="sm-fade relative overflow-hidden rounded-2xl border border-border px-6 py-5"
-          style={{background:"linear-gradient(135deg,rgba(240,185,11,0.08),rgba(10,255,224,0.04),rgba(14,203,129,0.05))"}}>
-          <div className="pointer-events-none absolute inset-0"
-            style={{background:"radial-gradient(ellipse at 10% 50%,rgba(240,185,11,0.06),transparent 60%)"}}/>
-          <div className="relative flex items-center gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl flex-shrink-0"
-              style={{background:"rgba(240,185,11,0.12)",border:"1px solid rgba(240,185,11,0.3)",boxShadow:"0 0 24px rgba(240,185,11,0.15)"}}>
-              <Building2 className="h-5 w-5 text-accent-gold"/>
-            </div>
-            <div>
-              <h1 className="text-[20px] font-black text-text-primary tracking-tight">Smart Money</h1>
-              <p className="mt-0.5 text-[11px] text-text-primary/30 tracking-wide">
-                CFTC COT · Деривативы · Ончейн · Макро · Bitcoin ETF · Потоки капитала
-              </p>
-            </div>
-            <div className="ml-auto hidden sm:flex items-center gap-2">
-              {[
-                {label:"COT", color:"var(--c-gold)"},
-                {label:"Макро", color:"var(--c-accent)"},
-                {label:"ETF", color:"var(--c-up)"},
-                {label:"Funding", color:"var(--c-gold)"},
-              ].map(t=>(
-                <span key={t.label} className="rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider"
-                  style={{color:t.color,background:`${t.color}12`,border:`1px solid ${t.color}25`}}>
-                  {t.label}
-                </span>
-              ))}
-            </div>
-          </div>
+      {/* Класс темы и здесь: раздел открывается и сам по себе, не только
+          вкладкой «Рынка», и без него панели остались бы без палитры. */}
+      <div className={`${pane} space-y-3`}>
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className="text-[15px] font-semibold uppercase tracking-[0.16em] text-[var(--pane-text)]">
+            Smart Money
+          </h1>
+          <p className="truncate text-[11px] text-[var(--pane-muted)]">
+            Позиции крупных, деривативы, макро и потоки в фонды
+          </p>
         </div>
 
-        {/* Grid: COT + Ставки и финансирование */}
-        <div className="grid gap-5 xl:grid-cols-2">
-          <CotSection/>
-          <FundingHeatmapSection/>
+        <div className="grid gap-3 xl:grid-cols-2">
+          <CotSection />
+          <MacroSection />
         </div>
 
-        {/* Derivatives — full width */}
-        <DerivativesSection/>
+        <DerivativesSection />
 
-        {/* Grid: Onchain + Макро индикаторы */}
-        <div className="grid gap-5 xl:grid-cols-2">
-          <OnchainSection/>
-          <MacroSection/>
-        </div>
-
-        {/* ETF — full width */}
-        <EtfSection/>
-
-        {/* Глобальный рынок */}
-        <GlobalMarketSection/>
-
-        {/* Grid: Трендовые монеты + Сеть Bitcoin */}
-        <div className="grid gap-5 xl:grid-cols-2">
-          <TrendingSection/>
-          <BtcNetworkSection/>
-        </div>
-
+        <EtfSection />
       </div>
     </>
   );
