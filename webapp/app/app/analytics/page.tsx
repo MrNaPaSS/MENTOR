@@ -310,8 +310,7 @@ export default function AnalyticsPage() {
     const vProfitDays  = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 0).length;
     const vHotDays     = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 3).length;
     const vTradingDays = calData.filter(d => dayVolume(d) > 0).length;
-    const vActiveDays  = calData.filter(d => d.signals > 0).length;
-    const vEffTrade    = vTradingDays > 0 ? vTradingDays : vActiveDays;
+    const vEffTrade    = vTradingDays;
     const vGoalDays    = calData.filter(d => d.signals > 0 && d.pnl_pct !== null && d.pnl_pct > 0).length;
     const vMonthVol    = calData.reduce((s, d) => s + dayVolume(d), 0);
     const vStreak      = (() => {
@@ -462,10 +461,19 @@ export default function AnalyticsPage() {
   const hotDays     = calData.filter(d => d.pnl_pct !== null && d.pnl_pct > 3).length;
   const superHotDay = calData.some(d => d.pnl_pct !== null && d.pnl_pct >= 5);
   const epicDay     = calData.some(d => d.pnl_pct !== null && d.pnl_pct >= 10);
-  const depositTotal = recentDeposits.reduce((s, d) => s + d.amount, 0);
+  // Сумма пополнений - из сводки биржи за весь срок. Список рядом обрезан до
+  // пяти последних: он для показа, и достижение «Пополнения от 10 000» по нему
+  // считало только пять верхних записей. Сводки нет - складываем что есть.
+  const depositTotal =
+    (tradeSummary?.deposit_total ?? 0) || recentDeposits.reduce((s, d) => s + d.amount, 0);
 
   // Цели месяца — работают даже без PnL снимков
-  const effectiveTradeDays = tradingDays > 0 ? tradingDays : activeDays;
+  // Торговый день - тот, в который торговали. Прежде, когда оборот стоял нулём
+  // всегда, вместо него подставлялись дни с полученным сигналом: «Настоящий
+  // трейдер, 20 торговых дней» выдавался за двадцать дней, в которые ученик
+  // ничего не открыл. Оборот теперь считается по журналу, и подмена больше не
+  // нужна - она только приписывала работу, которой не было.
+  const effectiveTradeDays = tradingDays;
   const goals: Goal[] = [
     {
       id: "volume", label: "Объём за месяц", icon: BarChart2, target: 250_000,
@@ -629,9 +637,9 @@ export default function AnalyticsPage() {
         </div>
         {/* Дней торговали */}
         <div className="card flex flex-col items-center gap-2 py-5">
-          <CircleProgress pct={Math.min(((tradingDays > 0 ? tradingDays : activeDays) / 15) * 100, 100)} color="var(--c-gold)" size={72}>
+          <CircleProgress pct={Math.min((tradingDays / 15) * 100, 100)} color="var(--c-gold)" size={72}>
             <Calendar className="h-4 w-4 text-accent-gold" />
-            <span className="font-mono text-sm font-bold text-text-primary">{tradingDays > 0 ? tradingDays : activeDays}</span>
+            <span className="font-mono text-sm font-bold text-text-primary">{tradingDays}</span>
           </CircleProgress>
           <span className="text-xs text-text-muted">Дней торговали</span>
           <span className="text-[10px] text-accent-gold">цель: 15 дней</span>
