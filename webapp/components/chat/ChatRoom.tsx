@@ -14,11 +14,26 @@
 // отправка. Склад с живым каналом - в lib/chat/store.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Send, Crown, Pin, PanelRightClose, Paperclip, X, ImageIcon, Clock } from "lucide-react";
+import {
+  Send,
+  Crown,
+  Pin,
+  PanelRightClose,
+  Paperclip,
+  X,
+  ImageIcon,
+  Clock,
+  BookText,
+  Pencil,
+  Trash2,
+  Check,
+} from "lucide-react";
 import { SOCIAL_LINKS } from "@/lib/content";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
 import { price as fmtPrice } from "@/lib/scalping";
 import {
+  change,
+  drop,
   open,
   post,
   older,
@@ -31,6 +46,8 @@ import {
   type SharedTrade,
 } from "@/lib/chat/store";
 import { preview, uploadPhoto, type LinkPreview } from "@/lib/chat/api";
+import { fromJournal } from "@/lib/chat/share";
+import { journalAvailable, loadTrades, type JournalTrade } from "@/lib/journal";
 import { firstLink, type LinkCard } from "@/lib/chat/link";
 
 /** Где показан чат: страницей кабинета или панелью терминала. */
@@ -61,6 +78,10 @@ const SKIN: Record<
     note: string;
     up: string;
     down: string;
+    divider: string;
+    upBox: string;
+    downBox: string;
+    chip: string;
   }
 > = {
   site: {
@@ -87,6 +108,10 @@ const SKIN: Record<
     note: "mt-2 text-center text-[11px] text-text-muted",
     up: "text-success",
     down: "text-danger",
+    divider: "bg-border",
+    upBox: "bg-success/12 text-success ring-1 ring-success/25",
+    downBox: "bg-danger/12 text-danger ring-1 ring-danger/25",
+    chip: "bg-bg-deep/60 text-text-muted",
   },
   pane: {
     head: "border-b border-[var(--pane-border)] px-2 py-1.5",
@@ -117,10 +142,29 @@ const SKIN: Record<
     note: "px-2 pb-2 text-center text-[10px] text-[var(--pane-muted)]",
     up: "text-[var(--pane-up)]",
     down: "text-[var(--pane-down)]",
+    divider: "bg-[var(--pane-border)]",
+    upBox: "bg-[var(--pane-up)]/12 text-[var(--pane-up)] ring-1 ring-[var(--pane-up)]/25",
+    downBox: "bg-[var(--pane-down)]/12 text-[var(--pane-down)] ring-1 ring-[var(--pane-down)]/25",
+    chip: "bg-[var(--pane-hover)] text-[var(--pane-muted)]",
   },
 };
 
 type Skin = (typeof SKIN)[ChatTone];
+
+// Сколько истории журнала предлагать в скрепке. Три месяца - то же окно, в
+// котором журнал открывается сам; в список берём последние сделки, потому что
+// показывают почти всегда свежую.
+const JOURNAL_DAYS = 90;
+const JOURNAL_SHOWN = 12;
+
+/**
+ * Какого дня сообщение. Ключом служит сама дата, а не её подпись: подпись
+ * зависит от языка, а группировка - нет.
+ */
+function dayKey(at: number): string {
+  const day = new Date(at);
+  return `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+}
 
 /**
  * Аватарка собеседника.
@@ -164,7 +208,13 @@ function money(value: number): string {
   return `${sign}${Math.abs(value).toFixed(2)}`;
 }
 
-/** Карточка сделки или заявки внутри сообщения. */
+/**
+ * Карточка сделки или заявки внутри сообщения.
+ *
+ * У закрытой сделки главное - результат, и он стоит первым по величине: её
+ * показывают, чтобы сказать «вот чем кончилось», а не чтобы свериться по
+ * ценам. У ждущей заявки наоборот - результата ещё нет, и главное в ней уровни.
+ */
 function TradeCard({
   trade,
   skin,
@@ -172,22 +222,54 @@ function TradeCard({
 }: {
   trade: SharedTrade;
   skin: Skin;
-  labels: Record<"entry" | "stop" | "take" | "planned" | "open" | "closed", string>;
+  labels: Record<
+    "entry" | "stop" | "take" | "planned" | "open" | "closed" | "byStop" | "byTake" | "byHand" | "ofMargin",
+    string
+  >;
 }) {
   const long = trade.side === "long";
+  const closed = trade.state === "closed" && typeof trade.pnl === "number";
+  const win = closed && (trade.pnl ?? 0) >= 0;
   const state =
     trade.state === "planned" ? labels.planned : trade.state === "open" ? labels.open : labels.closed;
+  const outcome =
+    trade.outcome === "stop" ? labels.byStop : trade.outcome === "take" ? labels.byTake : labels.byHand;
+
+  // Проценты считаем от маржи, а не от объёма: вложено было именно столько, и
+  // «плюс двадцать процентов» здесь означает пятую часть внесённых денег.
+  const percent =
+    closed && trade.margin && trade.margin > 0 ? ((trade.pnl ?? 0) / trade.margin) * 100 : null;
 
   return (
-    <div className={`mt-1.5 px-2.5 py-2 text-[11px] ${skin.card}`}>
-      <div className="mb-1 flex items-center gap-1.5">
+    <div className={`mt-1.5 overflow-hidden text-[11px] ${skin.card}`}>
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5">
         {trade.state === "planned" && <Clock className={`h-3 w-3 ${skin.muted}`} />}
-        <span className="font-semibold">{trade.symbol.replace(/USDT$/i, "")}</span>
-        <span className={long ? skin.up : skin.down}>{long ? "LONG" : "SHORT"}</span>
-        <span className={skin.muted}>×{trade.leverage}</span>
-        <span className={`ml-auto ${skin.muted}`}>{state}</span>
+        <span className="text-[12px] font-semibold">{trade.symbol.replace(/USDT$/i, "")}</span>
+        <span
+          className={`rounded px-1 py-px text-[10px] font-semibold ${long ? skin.upBox : skin.downBox}`}
+        >
+          {long ? "LONG" : "SHORT"}
+        </span>
+        <span className={`rounded px-1 py-px text-[10px] ${skin.chip}`}>×{trade.leverage}</span>
+        <span className={`ml-auto text-[10px] ${skin.muted}`}>{closed ? outcome : state}</span>
       </div>
-      <div className="grid grid-cols-3 gap-1">
+
+      {/* Результат: крупно и с процентом от маржи. Только у закрытой - у ждущей
+          заявки его ещё нет, и рисовать там ноль значит соврать. */}
+      {closed && (
+        <div className={`flex items-baseline gap-2 px-2.5 py-1.5 ${win ? skin.upBox : skin.downBox}`}>
+          <span className="text-[15px] font-bold leading-none">{money(trade.pnl ?? 0)}</span>
+          <span className="text-[10px] opacity-80">USD</span>
+          {percent !== null && (
+            <span className="ml-auto text-[10px] opacity-80">
+              {percent >= 0 ? "+" : "-"}
+              {Math.abs(percent).toFixed(1)}% {labels.ofMargin}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-1 px-2.5 py-1.5">
         {(
           [
             [labels.entry, trade.entry, ""],
@@ -196,7 +278,7 @@ function TradeCard({
           ] as const
         ).map(([label, value, colour]) => (
           <div key={label}>
-            <div className={skin.muted}>{label}</div>
+            <div className={`text-[10px] ${skin.muted}`}>{label}</div>
             {/* Цена округляется как на графике: у дорогих монет два знака,
                 у дешёвых больше - на них два знака показали бы один и тот же
                 ноль вместо цены. */}
@@ -204,9 +286,18 @@ function TradeCard({
           </div>
         ))}
       </div>
-      {trade.state === "closed" && typeof trade.pnl === "number" && (
-        <div className={`mt-1 font-semibold ${trade.pnl >= 0 ? skin.up : skin.down}`}>
-          {money(trade.pnl)}
+
+      {/* Взятые цели точками: «1/3» одной строкой не показывает, докуда дошло. */}
+      {trade.targets.length > 1 && (
+        <div className="flex items-center gap-1 px-2.5 pb-1.5">
+          {trade.targets.map((_, i) => (
+            <span
+              key={i}
+              className={i < (trade.takesHit ?? 0) ? skin.up : `${skin.muted} opacity-50`}
+            >
+              {i < (trade.takesHit ?? 0) ? "●" : "○"}
+            </span>
+          ))}
         </div>
       )}
     </div>
@@ -259,6 +350,10 @@ export default function ChatRoom({
   const [text, setText] = useState("");
   const [attach, setAttach] = useState<ChatAttach | null>(null);
   const [attachMenu, setAttachMenu] = useState(false);
+  // Отработанные сделки для скрепки. Тянем при первом открытии меню, а не
+  // при показе панели: журнал за три месяца ради кнопки, которую могут и не
+  // нажать, - лишний запрос на каждое открытие чата.
+  const [journal, setJournal] = useState<JournalTrade[] | null>(null);
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -277,6 +372,13 @@ export default function ChatRoom({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state.messages]);
+
+  useEffect(() => {
+    if (!attachMenu || journal !== null || !journalAvailable()) return;
+    void loadTrades(JOURNAL_DAYS)
+      .then((body) => setJournal(body?.trades ?? []))
+      .catch(() => setJournal([]));
+  }, [attachMenu, journal]);
 
   async function attachPhoto(file: File | undefined | null) {
     if (!file || !file.type.startsWith("image/")) return;
@@ -307,6 +409,18 @@ export default function ChatRoom({
   const time = (at: number) =>
     new Date(at).toLocaleTimeString(intlLocale(locale), { hour: "2-digit", minute: "2-digit" });
 
+  // Сегодня и вчера называем словами: дата у них читается хуже, чем «сегодня».
+  const dayLabel = (at: number) => {
+    const now = Date.now();
+    if (dayKey(at) === dayKey(now)) return t.chat.today;
+    if (dayKey(at) === dayKey(now - 86400000)) return t.chat.yesterday;
+    return new Date(at).toLocaleDateString(intlLocale(locale), {
+      day: "numeric",
+      month: "long",
+      year: dayKey(at).slice(0, 4) === dayKey(now).slice(0, 4) ? undefined : "numeric",
+    });
+  };
+
   const cardLabels = {
     entry: t.chat.card.entry,
     stop: t.chat.card.stop,
@@ -314,6 +428,10 @@ export default function ChatRoom({
     planned: t.chat.card.planned,
     open: t.chat.card.open,
     closed: t.chat.card.closed,
+    byStop: t.chat.card.byStop,
+    byTake: t.chat.card.byTake,
+    byHand: t.chat.card.byHand,
+    ofMargin: t.chat.card.ofMargin,
   };
 
   return (
@@ -371,17 +489,35 @@ export default function ChatRoom({
         {state.messages.length === 0 && (
           <p className={`py-6 text-center text-[11px] ${skin.muted}`}>{t.chat.empty}</p>
         )}
-        {state.messages.map((m) => (
-          <Bubble
-            key={m.id}
-            message={m}
-            self={state.me?.id === m.author.id}
-            skin={skin}
-            tone={tone}
-            time={time(m.at)}
-            labels={cardLabels}
-          />
-        ))}
+        {state.messages.map((m, i) => {
+          const previous = state.messages[i - 1];
+          const fresh = !previous || dayKey(previous.at) !== dayKey(m.at);
+          return (
+            <div key={m.id} className="space-y-2">
+              {/* Разделитель дня, как в мессенджерах: без него вчерашний
+                  разговор читается как сегодняшний, а в торговом чате это
+                  разница между «уже поздно» и «ещё можно». */}
+              {fresh && (
+                <div className="flex items-center gap-2 py-1">
+                  <span className={`h-px flex-1 ${skin.divider}`} />
+                  <span className={`text-[10px] uppercase tracking-wide ${skin.muted}`}>
+                    {dayLabel(m.at)}
+                  </span>
+                  <span className={`h-px flex-1 ${skin.divider}`} />
+                </div>
+              )}
+              <Bubble
+                message={m}
+                self={state.me?.id === m.author.id}
+                mentor={Boolean(state.me?.mentor)}
+                skin={skin}
+                tone={tone}
+                time={time(m.at)}
+                labels={cardLabels}
+              />
+            </div>
+          );
+        })}
         <div ref={endRef} />
       </div>
 
@@ -433,8 +569,12 @@ export default function ChatRoom({
               <ImageIcon className="h-3.5 w-3.5" />
               {t.chat.attachPhoto}
             </button>
+            {/* Ждущие заявки - по всем монетам сразу. */}
+            <p className={`px-3 pt-1.5 text-[10px] uppercase tracking-wide ${skin.muted}`}>
+              {t.chat.groupPending}
+            </p>
             {pending.length === 0 ? (
-              <p className={`px-3 py-1.5 text-[11px] ${skin.muted}`}>{t.chat.noPending}</p>
+              <p className={`px-3 py-1 text-[11px] ${skin.muted}`}>{t.chat.noPending}</p>
             ) : (
               pending.map((trade, i) => (
                 <button
@@ -450,6 +590,35 @@ export default function ChatRoom({
                     {trade.side === "long" ? "L" : "S"}
                   </span>
                   {t.chat.attachOrder(trade.symbol.replace(/USDT$/i, ""))}
+                </button>
+              ))
+            )}
+
+            {/* Отработанные сделки: журнал прямо здесь, а не отдельной кнопкой
+                в самом журнале. Показать сделку хотят в разговоре - значит
+                искать её надо там, где пишут, а не там, где считают. */}
+            <p className={`px-3 pt-1.5 text-[10px] uppercase tracking-wide ${skin.muted}`}>
+              {t.chat.groupJournal}
+            </p>
+            {journal === null ? (
+              <p className={`px-3 py-1 text-[11px] ${skin.muted}`}>{t.chat.loading}</p>
+            ) : journal.length === 0 ? (
+              <p className={`px-3 py-1 text-[11px] ${skin.muted}`}>{t.chat.noJournal}</p>
+            ) : (
+              journal.slice(0, JOURNAL_SHOWN).map((row) => (
+                <button
+                  key={row.id}
+                  onClick={() => {
+                    setAttach({ kind: "trade", trade: fromJournal(row) });
+                    setAttachMenu(false);
+                  }}
+                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] ${skin.nameOther} hover:opacity-80`}
+                >
+                  <BookText className="h-3.5 w-3.5" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {row.symbol.replace(/USDT$/i, "")}
+                  </span>
+                  <span className={row.pnl >= 0 ? skin.up : skin.down}>{money(row.pnl)}</span>
                 </button>
               ))
             )}
@@ -482,6 +651,7 @@ export default function ChatRoom({
 function Bubble({
   message,
   self,
+  mentor,
   skin,
   tone,
   time,
@@ -489,14 +659,30 @@ function Bubble({
 }: {
   message: ChatMessage;
   self: boolean;
+  /** Смотрит наставник: ему разрешено убирать чужое. */
+  mentor: boolean;
   skin: Skin;
   tone: ChatTone;
   time: string;
   labels: Parameters<typeof TradeCard>[0]["labels"];
 }) {
+  const t = useT();
   const link = firstLink(message.text);
   const rich = useLinkPreview(link);
   const size = tone === "pane" ? 20 : 28;
+  const [draft, setDraft] = useState<string | null>(null);
+
+  // Править можно только своё - и наставнику тоже только своё: убрать чужое это
+  // про порядок в комнате, а переписать чужое значит вложить человеку в рот
+  // слова, которых он не говорил.
+  const canEdit = self && Boolean(message.text);
+  const canDrop = self || mentor;
+
+  async function keep() {
+    const next = (draft ?? "").trim();
+    setDraft(null);
+    if (next && next !== message.text) await change(message.id, next);
+  }
 
   return (
     <div className={`flex items-end gap-1.5 ${self ? "justify-end" : "justify-start"}`}>
@@ -512,12 +698,60 @@ function Bubble({
             {message.author.name}
           </span>
           <span className={skin.muted}>· {time}</span>
+          {message.edited > 0 && <span className={skin.muted}>· {t.chat.edited}</span>}
+
+          {/* Правка и уборка - в самой строке подписи, а не отдельным меню:
+              нажатий и так хватает, а прятать их за долгим нажатием значит
+              спрятать совсем. */}
+          {canEdit && draft === null && (
+            <button
+              onClick={() => setDraft(message.text)}
+              title={t.chat.edit}
+              className={`ml-1 ${skin.muted} hover:opacity-80`}
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
+          {canDrop && (
+            <button
+              onClick={() => void drop(message.id)}
+              title={self ? t.chat.removeMine : t.chat.removeTheirs}
+              className={`${skin.muted} hover:opacity-80`}
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
         </div>
 
-        {message.text && (
-          <p className={tone === "pane" ? "break-words text-[12px] leading-snug" : "break-words text-sm"}>
-            {message.text}
-          </p>
+        {draft !== null ? (
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void keep();
+                if (e.key === "Escape") setDraft(null);
+              }}
+              className={skin.input}
+            />
+            <button onClick={() => void keep()} title={t.chat.save} className={skin.muted}>
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={() => setDraft(null)} title={t.chat.drop} className={skin.muted}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          message.text && (
+            <p
+              className={
+                tone === "pane" ? "break-words text-[12px] leading-snug" : "break-words text-sm"
+              }
+            >
+              {message.text}
+            </p>
+          )
         )}
 
         {/* Снимок открывается страницей на сайте: там подпись, монета и время,

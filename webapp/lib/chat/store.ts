@@ -17,8 +17,10 @@
 import { API_URL } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import {
+  edit as editMessage,
   history,
   normalize,
+  remove as removeMessage,
   send as sendMessage,
   type ChatAttach,
   type ChatAuthor,
@@ -119,6 +121,16 @@ function connect() {
       set({ people: ((frame.payload.people ?? []) as ChatAuthor[]).map(host) });
       return;
     }
+    if (frame.event === "edited") {
+      const edited = normalize(frame.payload as never);
+      set({ messages: state.messages.map((m) => (m.id === edited.id ? edited : m)) });
+      return;
+    }
+    if (frame.event === "removed") {
+      const id = Number(frame.payload.id);
+      set({ messages: state.messages.filter((m) => m.id !== id) });
+      return;
+    }
     if (frame.event === "message") {
       const message = normalize(frame.payload as never);
       // Своё сообщение уже лежит в ленте: его положил ответ на отправку.
@@ -203,4 +215,28 @@ export async function post(text: string, attach?: ChatAttach | null): Promise<vo
   if (!message) return;
   if (state.messages.some((m) => m.id === message.id)) return;
   set({ messages: [...state.messages, message] });
+}
+
+/** Поправить своё сообщение. */
+export async function change(id: number, text: string): Promise<void> {
+  const message = await editMessage(id, text);
+  if (!message) return;
+  set({ messages: state.messages.map((m) => (m.id === message.id ? message : m)) });
+}
+
+/**
+ * Убрать сообщение.
+ *
+ * Из ленты убираем сразу, не дожидаясь рассылки: тот, кто нажал, обязан увидеть
+ * результат в тот же кадр. Отказавший сервер вернёт сообщение назад при
+ * следующем чтении истории.
+ */
+export async function drop(id: number): Promise<void> {
+  const kept = state.messages;
+  set({ messages: state.messages.filter((m) => m.id !== id) });
+  try {
+    await removeMessage(id);
+  } catch {
+    set({ messages: kept });
+  }
 }

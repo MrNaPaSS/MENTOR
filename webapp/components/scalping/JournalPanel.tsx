@@ -13,7 +13,7 @@
 
 import { useIntlLocale, useT, type Dict } from "@/lib/i18n";
 import { useCallback, useEffect, useState } from "react";
-import { MessageSquare, RefreshCw, Share2, Trash2, X } from "lucide-react";
+import { RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
 import { cardFromTrade } from "@/lib/pnl/data";
 import {
@@ -93,7 +93,6 @@ export default function JournalPanel({
   onHover,
   onPick,
   owner,
-  onShare,
   onClose,
 }: {
   /** Показать только этот инструмент. Пусто — все. */
@@ -119,13 +118,6 @@ export default function JournalPanel({
   onPick?: (trade: JournalTrade) => void;
   /** Имя владельца: печать на карточке заверяет чью-то сделку, а не ничью. */
   owner?: string;
-  /**
-   * Показать сделку в чате.
-   *
-   * Не передан - кнопки нет: чат живёт в терминале, а журнал открывают и
-   * оттуда, где его некуда отправить.
-   */
-  onShare?: (trade: JournalTrade) => void;
   onClose: () => void;
 }) {
   const t = useT();
@@ -385,23 +377,6 @@ export default function JournalPanel({
                         <Share2 className="h-3 w-3" />
                       </button>
                     </td>
-                    {/* Та же сделка, но не картинкой наружу, а строкой в общий
-                        чат: спросить «почему так вышло» проще, чем объяснять
-                        цифры словами. */}
-                    {onShare && (
-                      <td className="pl-2 text-right">
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onShare(row);
-                          }}
-                          title={t.chat.shareToChat}
-                          className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
-                        >
-                          <MessageSquare className="h-3 w-3" />
-                        </button>
-                      </td>
-                    )}
                     {/* Убрать запись может только наставник: журнал - это
                         статистика, и право стереть из неё неудачную сделку
                         обесценивает её целиком. */}

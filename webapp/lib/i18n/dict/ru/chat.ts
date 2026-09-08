@@ -14,12 +14,22 @@ export const chat = {
   /** Сколько человек в комнате: список приходит от сервера. */
   inRoom: (n: number) => `${n} в чате`,
   unread: (n: number) => `Новых сообщений: ${n}`,
+  today: "Сегодня",
+  yesterday: "Вчера",
+  edited: "изменено",
+  edit: "Изменить сообщение",
+  save: "Сохранить",
+  removeMine: "Убрать своё сообщение",
+  removeTheirs: "Убрать сообщение (наставник)",
   attach: "Приложить",
   attachPhoto: "Фотографию",
   attachOrder: (coin: string) => `Заявку ${coin}`,
+  groupPending: "Ждущие заявки",
+  groupJournal: "Журнал сделок",
+  noJournal: "Отработанных сделок нет",
+  loading: "Читаем журнал…",
   noPending: "Ждущих заявок нет",
   drop: "Убрать",
-  shareToChat: "Показать сделку в чате",
   shotToChat: "Отправить снимок в чат",
   /** Подписи на карточке сделки внутри сообщения. */
   card: {
@@ -29,5 +39,9 @@ export const chat = {
     planned: "ждёт входа",
     open: "в рынке",
     closed: "закрыта",
+    byStop: "по стопу",
+    byTake: "по цели",
+    byHand: "закрыта руками",
+    ofMargin: "от маржи",
   },
 };

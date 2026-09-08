@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.deps import get_current_student, get_session
-from core.models import ChatMessage, Student
+from core.models import ChatMessage, Student, utcnow
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -65,6 +65,12 @@ class MessageIn(BaseModel):
     attach: Attach | None = None
 
 
+class MessageEdit(BaseModel):
+    """Правка своего сообщения. Вложение не трогаем: правят слова."""
+
+    text: str = Field(min_length=1, max_length=MAX_TEXT)
+
+
 def _who(student: Student) -> dict:
     """Подпись автора: как он выглядит в ленте прямо сейчас."""
     return {
@@ -92,10 +98,15 @@ def _out(message: ChatMessage, author: Student | None) -> dict:
     if at.tzinfo is None:
         at = at.replace(tzinfo=timezone.utc)
 
+    edited = message.edited_at
+    if edited is not None and edited.tzinfo is None:
+        edited = edited.replace(tzinfo=timezone.utc)
+
     return {
         "id": message.id,
         "text": message.text,
         "at": at.isoformat(),
+        "edited": edited.isoformat() if edited else None,
         "author": _who(author) if author is not None else {"id": 0, "name": "?", "avatar": "", "mentor": False},
         "attach": attach,
     }
@@ -162,6 +173,77 @@ async def send(
     if hub is not None:
         await hub.broadcast("message", payload)
     return payload
+
+
+def _mine(message: ChatMessage, student: Student) -> bool:
+    return message.student_id == student.id
+
+
+@router.patch("/messages/{message_id}")
+async def edit(
+    message_id: int,
+    body: MessageEdit,
+    request: Request,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Поправить своё сообщение.
+
+    Только своё, и наставнику тоже только своё: удалить чужое - это про порядок
+    в комнате, а переписать чужое - это вложить человеку в рот слова, которых он
+    не говорил.
+    """
+    row = session.get(ChatMessage, message_id)
+    if row is None:
+        raise HTTPException(404, "Сообщения нет")
+    if not _mine(row, student):
+        raise HTTPException(403, "Править можно только своё")
+
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(400, "Пустое сообщение")
+    if text == row.text:
+        return _out(row, student)
+
+    row.text = text
+    row.edited_at = utcnow()
+    session.commit()
+    session.refresh(row)
+
+    payload = _out(row, student)
+    hub = getattr(request.app.state, "chat_hub", None)
+    if hub is not None:
+        await hub.broadcast("edited", payload)
+    return payload
+
+
+@router.delete("/messages/{message_id}", status_code=204)
+async def remove(
+    message_id: int,
+    request: Request,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Убрать сообщение: своё - всегда, чужое - только наставнику.
+
+    Удаляем совсем, а не прячем флагом. Прятать имеет смысл там, где переписку
+    потом читает суд; здесь её читают люди, и «сообщение удалено» посреди ленты
+    занимает место, не сообщая ничего.
+    """
+    row = session.get(ChatMessage, message_id)
+    if row is None:
+        # Уже нет - значит уже убрано. Ошибкой это не назовёшь.
+        return None
+    if not _mine(row, student) and not bool(getattr(student, "is_admin", False)):
+        raise HTTPException(403, "Чужое сообщение может убрать только наставник")
+
+    session.delete(row)
+    session.commit()
+
+    hub = getattr(request.app.state, "chat_hub", None)
+    if hub is not None:
+        await hub.broadcast("removed", {"id": message_id})
+    return None
 
 
 # ── Предпросмотр ссылки ──

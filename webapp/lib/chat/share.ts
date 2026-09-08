@@ -23,6 +23,9 @@ export function fromJournal(trade: JournalTrade): SharedTrade {
     state: "closed",
     pnl: trade.pnl,
     takesHit: trade.takes_hit,
+    margin: trade.margin,
+    outcome: trade.outcome,
+    fee: trade.fee,
   };
 }
 

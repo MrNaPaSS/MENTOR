@@ -28,6 +28,12 @@ export type SharedTrade = {
   state: "planned" | "open" | "closed";
   pnl?: number | null;
   takesHit?: number;
+  /** Маржа: по ней считается результат в процентах, а не в одних долларах. */
+  margin?: number;
+  /** Чем кончилась: стопом, целью или закрыли руками. */
+  outcome?: "stop" | "take" | "manual";
+  /** Комиссия обеих ног - по ней видно, почему на счёт пришло меньше. */
+  fee?: number;
 };
 
 export type ChatAttach =
@@ -39,11 +45,17 @@ export type ChatMessage = {
   text: string;
   /** Время отправки в миллисекундах: формат зависит от языка, строкой не держим. */
   at: number;
+  /** Когда поправили. Ноль - не правили. */
+  edited: number;
   author: ChatAuthor;
   attach?: ChatAttach | null;
 };
 
-type RawMessage = Omit<ChatMessage, "at" | "author"> & { at: string; author: ChatAuthor };
+type RawMessage = Omit<ChatMessage, "at" | "edited" | "author"> & {
+  at: string;
+  edited: string | null;
+  author: ChatAuthor;
+};
 
 /** Аватарка приходит путём на бэкенде, а сайт живёт на другом домене. */
 export function withHost(author: ChatAuthor): ChatAuthor {
@@ -54,6 +66,7 @@ export function normalize(raw: RawMessage): ChatMessage {
   return {
     ...raw,
     at: new Date(raw.at).getTime(),
+    edited: raw.edited ? new Date(raw.edited).getTime() : 0,
     author: withHost(raw.author),
   };
 }
@@ -79,6 +92,20 @@ export async function send(text: string, attach?: ChatAttach | null): Promise<Ch
     body: JSON.stringify({ text, attach: attach ?? null }),
   });
   return body ? normalize(body) : null;
+}
+
+/** Поправить своё сообщение. */
+export async function edit(id: number, text: string): Promise<ChatMessage | null> {
+  const body = await request<RawMessage>(`/api/chat/messages/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ text }),
+  });
+  return body ? normalize(body) : null;
+}
+
+/** Убрать сообщение: своё - всегда, чужое - только наставнику. */
+export async function remove(id: number): Promise<void> {
+  await request<void>(`/api/chat/messages/${id}`, { method: "DELETE" });
 }
 
 export type LinkPreview = { title: string; description: string; image: string };

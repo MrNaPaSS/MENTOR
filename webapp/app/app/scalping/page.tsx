@@ -33,7 +33,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import ChatRoom from "@/components/chat/ChatRoom";
-import { fromActive, fromJournal, share as shareToChat, shareShot as shotToChat } from "@/lib/chat/share";
+import { fromActive, shareShot as shotToChat } from "@/lib/chat/share";
 import {
   open as openChat,
   serverSnapshot as chatServer,
@@ -2058,12 +2058,6 @@ export default function ScalpingPage() {
     [trades],
   );
 
-  /** Сделка из журнала - в чат. Панель при этом открывается сама. */
-  const shareJournal = useCallback((row: JournalTrade) => {
-    void shareToChat(fromJournal(row));
-    setChatOpen(true);
-  }, []);
-
 
   /**
    * Сколько заявок ждёт и сколько позиций в работе - по всем монетам.
@@ -3040,7 +3034,6 @@ export default function ScalpingPage() {
                 if (t.symbol !== symbol) setSymbol(t.symbol);
               }}
               owner={author ?? undefined}
-              onShare={shareJournal}
               onClose={() => setJournalOpen(false)}
             />
           </section>

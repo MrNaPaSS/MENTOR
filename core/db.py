@@ -114,6 +114,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
 
     from core.models import (
         ChartShot,
+        ChatMessage,
         LiveTrade,
         ScalpTrade,
         ScalpWorkspace,
@@ -122,7 +123,15 @@ def _add_missing_columns(conn, inspector, engine) -> None:
     )
 
     tables = set(inspector.get_table_names())
-    for model in (ScalpTrade, ScalpWorkspace, WeexCredential, LiveTrade, ChartShot, Student):
+    for model in (
+        ScalpTrade,
+        ScalpWorkspace,
+        WeexCredential,
+        LiveTrade,
+        ChartShot,
+        ChatMessage,
+        Student,
+    ):
         table = model.__table__
         if table.name not in tables:
             continue

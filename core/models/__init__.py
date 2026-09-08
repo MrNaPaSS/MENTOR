@@ -369,6 +369,12 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True
     )
+    # Когда сообщение поправили. Пусто - не правили ни разу. Нужно не для учёта,
+    # а для честности: исправленное задним числом слово меняет разговор, и
+    # собеседник вправе знать, что читает не то, что было написано.
+    edited_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class ScalpWorkspace(Base):
