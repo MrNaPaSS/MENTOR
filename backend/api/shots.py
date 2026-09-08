@@ -517,14 +517,14 @@ def shot_page(shot_id: str, session=Depends(get_session)):
   /* Окно, из которого лист выезжает: оно и обрезает его сверху. */
   .window {{ width: min(1200px, 96vw); margin-top: -10px; overflow: hidden; padding-top: 10px; }}
 
-  /* Рамка обязательна.
-     Лист без неё сливается с листом страницы, а скруглённые углы на этом фоне
-     читаются не как скругление, а как обрезанные - будто картинку подрезали.
-     Обводка возвращает краю форму. */
+  /* Лист прямоугольный, с рамкой.
+     Скругление срезало углы самого графика: под ним свечи и подписи, и
+     закруглять их нечем - выходит подрезанная картинка. Рамка при этом нужна:
+     без неё белый лист сливается с листом страницы. */
   .paper {{
     position: relative; container-type: inline-size;
     border: 1px solid rgba(255,255,255,.1);
-    border-radius: 10px; overflow: hidden;
+    overflow: hidden;
     box-shadow: 0 24px 60px rgba(0,0,0,.65);
     animation: feed .95s cubic-bezier(.16,.84,.3,1) .1s both;
     transform-origin: 50% 0;
