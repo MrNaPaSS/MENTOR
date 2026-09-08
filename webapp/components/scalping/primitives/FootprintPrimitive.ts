@@ -64,21 +64,36 @@ export type FootprintSkin = {
   down: string;
   gold: string;
   accent: string;
+  /**
+   * Цвета самой свечи - те же, что у свечей на графике.
+   *
+   * Не зелёный с красным: на белом листе свечи чёрно-белые, и разбор, который
+   * рисует их по-своему, читается как чужая фигура поверх графика. А вот следы
+   * покупателя и продавца остаются цветными на любом листе - там цвет несёт
+   * смысл, а не оформление.
+   */
+  bodyUp: string;
+  bodyDown: string;
+  /** Заливка тела. На белом листе рост пустой, падение залитое - как на графике. */
+  washUp: string;
+  washDown: string;
+  wickUp: string;
+  wickDown: string;
 };
 
 /** Колонка цены. Посередине: цена - это то, к чему относятся оба числа рядом. */
-const PRICE = 54;
+const PRICE = 46;
 /** Колонка числа по каждую сторону от цены. */
-const NUM = 44;
+const NUM = 38;
 /** Ядро - то, что обводит тело свечи: цена и оба числа. */
 const CORE = PRICE + NUM * 2;
 /** Насколько далеко за ядро уходит самый длинный след. */
-const SIDE = 84;
-const PAD = 6;
+const SIDE = 62;
+const PAD = 4;
 const WIDTH = PAD * 2 + SIDE * 2 + CORE;
 
 /** Место под фитиль и подпись края там, где свеча выходит за лестницу. */
-const TAIL = 16;
+const TAIL = 14;
 
 type ReadyRow = {
   top: number;
@@ -114,6 +129,9 @@ type Ready = {
   rows: ReadyRow[];
   candle: ReadyCandle | null;
 } | null;
+
+/** Прямоугольник в точках экрана: место картинки и место её тела. */
+export type FootprintBox = { x: number; y: number; width: number; height: number };
 
 class FootprintRenderer implements IPrimitivePaneRenderer {
   constructor(
@@ -191,16 +209,16 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
 
         ctx.fillStyle = skin.text;
         ctx.textAlign = "right";
-        ctx.font = font(10, row.sellBold);
-        ink(row.sell, priceLeft - Math.round(4 * hx), middle);
+        ctx.font = font(9, row.sellBold);
+        ink(row.sell, priceLeft - Math.round(3 * hx), middle);
         ctx.textAlign = "left";
-        ctx.font = font(10, row.buyBold);
-        ink(row.buy, priceRight + Math.round(4 * hx), middle);
+        ctx.font = font(9, row.buyBold);
+        ink(row.buy, priceRight + Math.round(3 * hx), middle);
 
         // Цена посередине. Крупная сделка - тем же жёлтым, что плита в
         // стакане: это одно и то же событие, только уже прошедшее.
         ctx.textAlign = "center";
-        ctx.font = font(10);
+        ctx.font = font(9);
         ctx.fillStyle = row.whale ? skin.gold : skin.muted;
         ink(row.price, axis, middle);
 
@@ -219,7 +237,7 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
           ctx.setLineDash([]);
 
           ctx.fillStyle = skin.accent;
-          ctx.font = font(8);
+          ctx.font = font(7);
           ctx.textAlign = "right";
           ctx.textBaseline = row.edge === "vah" ? "bottom" : "top";
           ink(row.edge === "vah" ? "VAH" : "VAL", x + width - Math.round(2 * hx), edge);
@@ -243,13 +261,15 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
       // торчат из тела, - внутри него фитиля не бывает.
       const candle = ready.candle;
       if (candle) {
-        const color = candle.rising ? skin.up : skin.down;
+        const body = candle.rising ? skin.bodyUp : skin.bodyDown;
+        const wash = candle.rising ? skin.washUp : skin.washDown;
+        const wick = candle.rising ? skin.wickUp : skin.wickDown;
         const bodyTop = Math.round(candle.bodyTop * vy);
         const bodyBottom = Math.round(candle.bodyBottom * vy);
         const wickTop = Math.round(candle.wickTop * vy);
         const wickBottom = Math.round(candle.wickBottom * vy);
 
-        ctx.strokeStyle = color;
+        ctx.strokeStyle = wick;
         ctx.lineWidth = Math.max(line, Math.round(1.5 * hx));
         if (wickTop < bodyTop) {
           ctx.beginPath();
@@ -264,17 +284,29 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
           ctx.stroke();
         }
 
+        // Тело чуть подкрашено изнутри. Обводки мало: на белом листе она у
+        // роста и у падения одна и та же, чёрная, и направление по ней не
+        // читается. Заливка же там разная - пустая и залитая, как у свечей
+        // графика, - и восьми процентов хватает, чтобы это было видно, не
+        // закрасив лестницу.
+        const bodyH = Math.max(line, bodyBottom - bodyTop);
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = wash;
+        ctx.fillRect(coreLeft, bodyTop, coreRight - coreLeft, bodyH);
+        ctx.globalAlpha = 1;
+
+        ctx.strokeStyle = body;
         ctx.strokeRect(
           coreLeft + 0.5 * line,
           bodyTop + 0.5 * line,
           coreRight - coreLeft - line,
-          Math.max(line, bodyBottom - bodyTop) - line,
+          bodyH - line,
         );
 
         // Края хода подписаны: максимум над верхним фитилём, минимум под
         // нижним. Без них картинка молчит о том, докуда цена дотянулась.
         ctx.fillStyle = skin.muted;
-        ctx.font = font(9);
+        ctx.font = font(8);
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
         ink(candle.high, axis, wickTop - Math.round(3 * vy));
@@ -377,14 +409,20 @@ class FootprintPaneView implements IPrimitivePaneView {
     const spacing = scale.options().barSpacing;
     let x = anchor + spacing;
     if (x + WIDTH > pane.width - 4) x = anchor - spacing - WIDTH;
-    x = Math.max(4, Math.min(x, pane.width - WIDTH - 4));
+    // Сдвиг рукой поверх этого выбора: трейдер потянул картинку за тело свечи,
+    // и держать её на месте после этого - значит отменить его решение. Своей
+    // свечи она при этом не теряет: сдвиг откладывается от её же места.
+    x = Math.max(4, Math.min(x + this.source.shift.dx, pane.width - WIDTH - 4));
 
     // По вертикали - вокруг середины своей свечи: разбор обязан стоять там же,
     // где цена, о которой он рассказывает.
     const middle = series.priceToCoordinate((top + bottom) / 2);
     const y = Math.max(
       over,
-      Math.min((middle ?? pane.height / 2) - height / 2, pane.height - height - under),
+      Math.min(
+        (middle ?? pane.height / 2) - height / 2 + this.source.shift.dy,
+        pane.height - height - under,
+      ),
     );
 
     this.ready = {
@@ -393,6 +431,16 @@ class FootprintPaneView implements IPrimitivePaneView {
       candle: shape ? shift(shape, y) : null,
     };
     this.source.box = { x, y: y - over, width: WIDTH, height: height + over + under };
+    // Тело свечи - ручка переноса: за него картинку и таскают. Отдаём его
+    // страницею в тех же точках экрана, в которых она ловит мышь.
+    this.source.body = shape
+      ? {
+          x: x + PAD + SIDE,
+          y: Math.min(shape.bodyTop, shape.bodyBottom) + y,
+          width: CORE,
+          height: Math.max(4, Math.abs(shape.bodyBottom - shape.bodyTop)),
+        }
+      : null;
   }
 
   renderer() {
@@ -428,9 +476,19 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
     down: "#f6465d",
     gold: "#f0b90b",
     accent: "#0affe0",
+    bodyUp: "#0ecb81",
+    bodyDown: "#f6465d",
+    washUp: "#0ecb81",
+    washDown: "#f6465d",
+    wickUp: "#0ecb81",
+    wickDown: "#f6465d",
   };
   /** Место картинки на холсте: по нему страница ставит подпись над ней. */
-  box: { x: number; y: number; width: number; height: number } | null = null;
+  box: FootprintBox | null = null;
+  /** Место тела свечи: за него картинку переносят рукой. */
+  body: FootprintBox | null = null;
+  /** Насколько картинку увели от её свечи. */
+  shift: { dx: number; dy: number } = { dx: 0, dy: 0 };
   chart: IChartApi | null = null;
   series: ISeriesApi<SeriesType> | null = null;
 
@@ -461,6 +519,13 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
     this.data = null;
     this.candle = null;
     this.box = null;
+    this.body = null;
+    this.requestUpdate?.();
+  }
+
+  /** Увести картинку от свечи. Сдвиг живёт отдельно от данных: он про руку. */
+  setShift(shift: { dx: number; dy: number }) {
+    this.shift = shift;
     this.requestUpdate?.();
   }
 

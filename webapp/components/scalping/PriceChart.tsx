@@ -41,6 +41,33 @@ const SCORE_KEY = "nmnh.chart.score.wide";
 // места: ширины панелей общие на терминал, а это привычка чтения свечи.
 const FOOT_GROW_KEY = "nmnh.chart.foot.grow";
 
+// Насколько трейдер увёл разбор свечи от неё самой.
+const FOOT_SHIFT_KEY = "nmnh.chart.foot.shift";
+
+function readShift(): { dx: number; dy: number } {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FOOT_SHIFT_KEY) || "null") as unknown;
+    const spot = raw as { dx?: unknown; dy?: unknown } | null;
+    // Нечисло из хранилища увело бы картинку с экрана насовсем.
+    if (!spot || typeof spot.dx !== "number" || typeof spot.dy !== "number") {
+      return { dx: 0, dy: 0 };
+    }
+    if (!Number.isFinite(spot.dx) || !Number.isFinite(spot.dy)) return { dx: 0, dy: 0 };
+    return { dx: spot.dx, dy: spot.dy };
+  } catch {
+    // В приватном окне обращение к хранилищу бросает исключение.
+    return { dx: 0, dy: 0 };
+  }
+}
+
+function keepShift(shift: { dx: number; dy: number }): void {
+  try {
+    localStorage.setItem(FOOT_SHIFT_KEY, JSON.stringify(shift));
+  } catch {
+    // Не запомнилось - сдвиг всё равно держится до конца сессии.
+  }
+}
+
 // Во сколько раз строка выше обычной. Единица - строка текста, дальше
 // вдвое и вчетверо: шаг мельче между ними неразличим глазом, а список из
 // восьми ступеней в углу графика читать некогда.
@@ -105,7 +132,7 @@ import {
   type FootprintSkin,
 } from "./primitives/FootprintPrimitive";
 import { parseFootprint, type FootprintData } from "@/lib/indicator/footprint";
-import { clockLabel, money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
+import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
 import DragLevels, { type DragLevel } from "./DragLevels";
 import OrderChipView, { type OrderChip } from "./OrderChip";
@@ -1958,6 +1985,7 @@ function PriceChart({
   // браузера, а страница собирается и на сервере, где его нет.
   useEffect(() => {
     setFootGrow(readGrow());
+    footPrimRef.current?.setShift(readShift());
   }, []);
 
   // Цвета лестницы снимаем с живого узла страницы.
@@ -1981,6 +2009,16 @@ function PriceChart({
       down: pick("--pane-down", "#f6465d"),
       gold: pick("--pane-gold", "#f0b90b"),
       accent: pick("--pane-accent", "#0affe0"),
+      // Свеча разбора - той же палитрой, что свечи графика: на белом листе они
+      // чёрно-белые, и зелёно-красная свеча поверх них читалась бы чужой
+      // фигурой. Обводка тела берётся от неё же - на белом листе тело роста
+      // пустое, и без обводки его просто нет.
+      bodyUp: skinRef.current.upBorder || skinRef.current.up,
+      bodyDown: skinRef.current.downBorder || skinRef.current.down,
+      washUp: skinRef.current.up,
+      washDown: skinRef.current.down,
+      wickUp: skinRef.current.upWick,
+      wickDown: skinRef.current.downWick,
     };
     footPrimRef.current?.setData(
       footRef.current,
@@ -2002,6 +2040,69 @@ function PriceChart({
     // каждой сделкой, а профиль перезапрашивается раз в три секунды. Без этого
     // свеча на разборе отставала бы от той, что стоит на графике.
   }, [foot, footGrow, liveCandle]);
+
+  // Перенос разбора свечи за её тело.
+  //
+  // Ручка - само тело: за него картинку и хватают, как хватают любую вещь на
+  // экране за её середину. Ловим нажатие на перехвате и глушим его: ниже по
+  // дереву лежит холст библиотеки, и без этого график поехал бы вместе с
+  // картинкой.
+  //
+  // Сдвиг откладывается от места самой свечи, а не задаётся в точках холста:
+  // картинка обязана остаться при своей свече, когда график прокрутят.
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+
+    const hit = (event: PointerEvent) => {
+      const body = footPrimRef.current?.body;
+      if (!body) return false;
+      const rect = box.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      return (
+        x >= body.x && x <= body.x + body.width && y >= body.y && y <= body.y + body.height
+      );
+    };
+
+    function onDown(event: PointerEvent) {
+      if (event.button !== 0 || !hit(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const from = footPrimRef.current?.shift ?? { dx: 0, dy: 0 };
+      const startX = event.clientX;
+      const startY = event.clientY;
+      let last = from;
+
+      const move = (moved: PointerEvent) => {
+        last = { dx: from.dx + (moved.clientX - startX), dy: from.dy + (moved.clientY - startY) };
+        footPrimRef.current?.setShift(last);
+      };
+      const drop = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", drop);
+        keepShift(last);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", drop);
+    }
+
+    // Курсор-ладонь над телом: иначе о том, что картинку можно увести, узнают
+    // только случайно.
+    function onHover(event: PointerEvent) {
+      if (event.buttons !== 0) return;
+      box!.style.cursor = hit(event) ? "grab" : "";
+    }
+
+    box.addEventListener("pointerdown", onDown, true);
+    box.addEventListener("pointermove", onHover);
+    return () => {
+      box.removeEventListener("pointerdown", onDown, true);
+      box.removeEventListener("pointermove", onHover);
+      box.style.cursor = "";
+    };
+  }, []);
 
   // Точность ценовой шкалы - по шагу инструмента, а не по умолчанию в цент.
   useEffect(() => {
@@ -2599,34 +2700,21 @@ function PriceChart({
             color: "var(--pane-text-2)",
           }}
         >
-          <span className="flex items-center gap-1">
-            {clockLabel(foot.time)}
-            {/* Живая свеча ещё набирается: цифры в ней меняются на глазах, и
-                принимать их за итог нельзя. */}
-            {pickedBar === null && followBar && (
-              <span
-                title={t.terminal.chart.footLiveTitle}
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ background: "var(--pane-accent)" }}
-              />
-            )}
-          </span>
-
-          <span
-            style={{
-              color: foot.buy >= foot.sell ? "var(--pane-up)" : "var(--pane-down)",
-            }}
-          >
-            Δ {foot.buy >= foot.sell ? "+" : "−"}
-            {money(Math.abs(foot.buy - foot.sell))}
+          {/* Только два числа: сколько за свечу набрали в лонг и сколько в
+              шорт. Время в подписи не шло - оно у свечи одно на всю её жизнь,
+              - а перевес с оборотом читаются по самой картинке: следы для того
+              и разведены в две стороны. */}
+          <span style={{ color: "var(--pane-up)" }}>
+            {t.terminal.chart.footLong} {money(foot.buy)}
           </span>
           <span
-            // «≈» вместо «Σ», когда свеча разобрана не целиком: цифра рядом
-            // всё равно меньше настоящей, и выдавать её за полную нельзя.
+            // «≈» у обеих сторон, когда свеча разобрана не целиком: цифры
+            // всё равно меньше настоящих, и выдавать их за полные нельзя.
             title={foot.partial ? t.terminal.chart.footPartial : undefined}
-            style={{ color: "var(--pane-muted)" }}
+            style={{ color: "var(--pane-down)" }}
           >
-            {foot.partial ? "≈" : "Σ"} {money(foot.buy + foot.sell)}
+            {t.terminal.chart.footShort} {foot.partial ? "≈" : ""}
+            {money(foot.sell)}
           </span>
 
           {/* Ступени укрупнения. Масштаб графика собирает строки сам, но

@@ -14,8 +14,8 @@
 export const ROWS = 28;
 
 /** Высота строки в точках: обычная и та, ниже которой цифры сливаются. */
-export const ROW = 15;
-export const ROW_MIN = 11;
+export const ROW = 13;
+export const ROW_MIN = 10;
 
 /** Насколько густа самая крупная ячейка и самая мелкая. */
 const HEAT_MIN = 0.22;

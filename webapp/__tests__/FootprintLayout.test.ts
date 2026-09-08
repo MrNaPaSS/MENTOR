@@ -77,7 +77,9 @@ describe("высота строки", () => {
   });
 
   it("места мало - строка ужимается", () => {
-    const tall = rowHeight(20, 260);
+    // Места ровно на четыре пятых от обычной высоты - считаем от неё самой,
+    // чтобы проверка пережила смену размера картинки.
+    const tall = rowHeight(20, 20 * ROW * 0.8);
     expect(tall).toBeLessThan(ROW);
     expect(tall).toBeGreaterThanOrEqual(ROW_MIN);
   });
