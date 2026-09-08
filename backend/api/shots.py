@@ -318,12 +318,26 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     image = f"{BASE_URL}/{shot.id}.png"
     paper = f"{BASE_URL}/{shot.id}-raw.png"
 
-    # Кнопка в терминал. Появляется последней, когда лист уже напечатан:
-    # предлагать действие раньше, чем человек прочёл карточку, - это торопить
-    # его решение, а решение здесь про деньги.
-    go = _terminal_url(shot.symbol)
-    button = (
-        f'<a class="go" href="{go}">Перейти к терминалу</a>' if go else ""
+    # Что стоит под листом.
+    #
+    # У сигнала - кнопка в терминал: сигнал это приглашение к действию, и монета
+    # ещё та самая, пока человек читает. Появляется она последней, когда лист
+    # уже напечатан: предлагать действие раньше, чем карточка прочитана, значит
+    # торопить решение, а решение здесь про деньги.
+    #
+    # У итога сделки и у снимка графика кнопки нет. Там нечего предлагать:
+    # сделка закончилась, а график показывают, а не зовут в него входить. Под
+    # ними остаётся только знак - он же и ведёт на сайт.
+    #
+    # Написано в обоих случаях одно и то же - NMNH.TRADE. Знак человек узнаёт с
+    # одного взгляда, а «перейти к терминалу» приходится читать; и стоять под
+    # карточкой двум разным надписям в двух разных местах незачем.
+    go = _terminal_url(shot.symbol) if shot.kind == "signal" else ""
+    mark = '<span class="glitch" data-text="NMNH.TRADE">NMNH.TRADE</span>'
+    sign = (
+        f'<a class="go" href="{go}">{mark}</a>'
+        if go
+        else f'<a class="logo" href="https://www.nmnh.trade">{mark}</a>'
     )
 
     # Оттиск. У сигнала это тот же логотип, который холст ставит на скачиваемую
@@ -519,19 +533,23 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     opacity: .95;
   }}
 
-  /* Кнопка в терминал: появляется после того, как лист напечатан. */
+  /* Кнопка в терминал: тот же знак, что и подпись под остальными карточками,
+     только обведённый рамкой - по ней видно, что на него нажимают. Цветной
+     пилюлей она спорила со знаком под собой за внимание, а сказать им нужно
+     одно и то же. Появляется после того, как лист напечатан. */
   .go {{
     position: relative; z-index: 2;
-    display: inline-block; padding: 11px 22px; border-radius: 999px;
-    background: var(--accent); color: #05070a;
-    font-weight: 700; font-size: 13px; letter-spacing: .02em;
+    display: inline-block; padding: 10px 22px; border-radius: 999px;
+    border: 1px solid currentColor; color: #eaecef;
+    font-weight: 800; font-size: 20px; letter-spacing: -.02em; line-height: 1;
     text-decoration: none; white-space: nowrap;
-    box-shadow: 0 10px 30px rgba(0,0,0,.45);
-    transition: transform .15s ease-out, filter .15s ease-out;
+    transition: color .2s ease, text-shadow .2s ease, transform .15s ease-out;
     animation: offer .5s ease-out 1.5s both;
   }}
-  .go:hover {{ transform: translateY(-1px); filter: brightness(1.08); }}
+  .go:hover {{ color: #fff; text-shadow: 0 0 18px var(--accent); transform: translateY(-1px); }}
   .go:active {{ transform: translateY(0) scale(.985); }}
+  :root[data-paper="light"] .go {{ color: #111418; }}
+  :root[data-paper="light"] .go:hover {{ color: #000; }}
   @keyframes offer {{
     from {{ opacity: 0; transform: translateY(8px); }}
     to   {{ opacity: 1; transform: translateY(0); }}
@@ -553,8 +571,7 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
       </div>
     </div>
   </div>
-  {button}
-  <a class="logo" href="https://www.nmnh.trade"><span class="glitch" data-text="NMNH.TRADE">NMNH.TRADE</span></a>
+  {sign}
 </body>
 </html>"""
     )
