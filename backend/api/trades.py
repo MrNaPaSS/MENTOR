@@ -9,9 +9,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 
-from core.models import Student
-from backend.deps import get_current_student, get_weex
+from core.models import ScalpTrade, Student
+from backend.deps import get_current_student, get_session, get_weex
+from backend.trading.funds import trade_volume
 
 router = APIRouter(prefix="/api/trades", tags=["trades"])
 logger = logging.getLogger("nmnh.trades")
@@ -33,18 +35,65 @@ def _ts_to_iso(ts_ms: int | None) -> str | None:
         return None
 
 
+def _journal_summary(session, student: Student, since_ms: int) -> dict[str, float] | None:
+    """Оборот и комиссия по журналу терминала. `None` - сделок за срок нет.
+
+    Запасной счёт на случай, когда биржа о торговле молчит: партнёрская ручка
+    знает только тех, у кого заведён UID, а без её ответа обнулялось всё, что
+    на обороте стоит - вехи, дни торговли и путь трейдера. Журнал считает
+    меньше настоящего - в него попадает только то, что вёл терминал, - но это
+    честное «сколько наторговал через нас», а не ноль.
+    """
+    since = datetime.fromtimestamp(since_ms / 1000, tz=timezone.utc)
+    rows = session.execute(
+        select(ScalpTrade)
+        .where(ScalpTrade.student_id == student.id)
+        .where(ScalpTrade.closed_at >= since)
+    ).scalars().all()
+    if not rows:
+        return None
+
+    volume = sum(
+        trade_volume(
+            float(t.qty or 0), float(t.entry or 0), float(t.exit_price or 0) or None
+        )
+        for t in rows
+    )
+    return {
+        "futures_volume": round(volume, 2),
+        "spot_volume": 0.0,
+        "total_volume": round(volume, 2),
+        "deposit_total": 0.0,
+        "withdrawal_total": 0.0,
+        "commission": round(sum(float(t.fee or 0) for t in rows), 2),
+    }
+
+
 @router.get("/me")
 async def trades_me(
     days: int = Query(30, ge=1, le=365),
     student: Student = Depends(get_current_student),
+    session=Depends(get_session),
     weex=Depends(get_weex),
 ):
-    if not student.weex_uid:
-        return {"trades": [], "summary": None, "deposits": [], "needs_uid": True}
-
-    uid = str(student.weex_uid).strip()
     end_ms = int(time.time() * 1000)
     start_ms = end_ms - days * 86_400_000
+
+    # Без UID партнёрскую ручку спрашивать не о чем, но торговля у ученика
+    # могла быть: терминал работает по ключам, а UID заводит наставник. Раньше
+    # здесь стоял ранний выход, и такой ученик видел нулевой оборот, пустые
+    # вехи и путь трейдера, застывший на первом уровне.
+    if not student.weex_uid:
+        return {
+            "trades": [],
+            "summary": _journal_summary(session, student, start_ms),
+            "deposits": [],
+            "withdrawals": [],
+            "transactions": [],
+            "needs_uid": True,
+        }
+
+    uid = str(student.weex_uid).strip()
 
     # Торговий підсумок за період
     all_rows = await weex.get_channel_trade_asset(start_ms, end_ms, page=1)
@@ -69,7 +118,10 @@ async def trades_me(
             "commission": _to_float(user_row.get("commission")),
         }
     else:
+        # Строки нет - оборот считаем по журналу, чтобы аналитика не обнулилась
+        # целиком из-за молчания партнёрской ручки.
         logger.info("Trades uid=%s not found in channel_trade_asset", uid)
+        summary = _journal_summary(session, student, start_ms)
 
     assets = await weex.get_agency_assert(uid)
 
