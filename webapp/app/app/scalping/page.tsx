@@ -336,23 +336,40 @@ export default function ScalpingPage() {
   const { coins } = useCoins(full ? "full" : "windowed");
   const [balance, setBalance] = useState<string | null>(null);
 
-  // Баланс счёта и имя для подписи на снимке. Имя рисуется в самой картинке и
-  // на сервер не уходит: подпись нужна тому, кто смотрит, а базе о владельце
-  // знать незачем.
-  useEffect(() => {
-    if (balance !== null) return;
+  /**
+   * Баланс счёта и имя для подписи на снимке.
+   *
+   * Двумя запросами, и это не лишнее. Профиль отдаёт сохранённое - оно уже в
+   * базе и приезжает мгновенно, поэтому строка не пустует. Следом идёт запрос
+   * за свежим: там, где ученик подключил ключи, баланс берётся по ним, то есть
+   * ровно тот, что он видит в приложении биржи. Ждать эту цифру, ничего не
+   * показывая, нельзя - по ней считается объём сделки, а биржа отвечает не
+   * мгновенно.
+   *
+   * Имя рисуется в самой картинке снимка и на сервер не уходит: подпись нужна
+   * тому, кто смотрит, а базе о владельце знать незачем.
+   */
+  const loadBalance = useCallback(async () => {
     const token = getAccessToken();
     if (!token) return;
-    api
-      .profile(token)
-      .then((body) => {
-        setBalance(body.balance_usdt ?? "0");
-        setAuthor(body.username ?? null);
-      })
-      .catch(() => {
-        // Не ответил профиль - строка просто останется без баланса.
-      });
-  }, [balance]);
+    try {
+      const body = await api.profile(token);
+      setBalance(body.balance_usdt ?? "0");
+      setAuthor(body.username ?? null);
+    } catch {
+      // Не ответил профиль - строка просто останется без баланса.
+    }
+    try {
+      const fresh = await api.refreshBalance(token);
+      if (fresh) setBalance(fresh.balance_usdt ?? "0");
+    } catch {
+      // Биржа промолчала - остаёмся при сохранённом.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBalance();
+  }, [loadBalance]);
 
   /**
    * Полный экран.
@@ -2611,6 +2628,8 @@ export default function ScalpingPage() {
           onClose={() => setExchangeOpen(false)}
           onSaved={() => {
             loadExchange();
+            // Ключи подключили - баланс теперь берётся по ним, а не по UID.
+            void loadBalance();
             setExchangeOpen(false);
           }}
         />
