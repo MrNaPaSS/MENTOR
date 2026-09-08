@@ -272,16 +272,33 @@ function TradeCard({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-1 px-2.5 py-1.5">
+      <div className="grid grid-cols-3 gap-1 px-2.5 pb-2 pt-1.5">
         {(
           [
-            [labels.entry, trade.entry, ""],
-            [labels.stop, trade.stop, skin.down],
-            [labels.take, trade.targets[0] ?? 0, skin.up],
+            [labels.entry, trade.entry, "", false],
+            [labels.stop, trade.stop, skin.down, false],
+            // Точки взятых целей стоят у самой подписи «цель», а не отдельной
+            // строкой внизу: это про неё, и глазу не нужно связывать их через
+            // всю карточку.
+            [labels.take, trade.targets[0] ?? 0, skin.up, trade.targets.length > 1],
           ] as const
-        ).map(([label, value, colour]) => (
+        ).map(([label, value, colour, dots]) => (
           <div key={label}>
-            <div className={`text-[10px] ${skin.muted}`}>{label}</div>
+            <div className={`flex items-center gap-1 text-[10px] ${skin.muted}`}>
+              {label}
+              {dots && (
+                <span className="flex items-center gap-px leading-none">
+                  {trade.targets.map((_, i) => (
+                    <span
+                      key={i}
+                      className={i < (trade.takesHit ?? 0) ? skin.up : "opacity-40"}
+                    >
+                      {i < (trade.takesHit ?? 0) ? "●" : "○"}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </div>
             {/* Цена округляется как на графике: у дорогих монет два знака,
                 у дешёвых больше - на них два знака показали бы один и тот же
                 ноль вместо цены. */}
@@ -289,20 +306,6 @@ function TradeCard({
           </div>
         ))}
       </div>
-
-      {/* Взятые цели точками: «1/3» одной строкой не показывает, докуда дошло. */}
-      {trade.targets.length > 1 && (
-        <div className="flex items-center gap-1 px-2.5 pb-1.5">
-          {trade.targets.map((_, i) => (
-            <span
-              key={i}
-              className={i < (trade.takesHit ?? 0) ? skin.up : `${skin.muted} opacity-50`}
-            >
-              {i < (trade.takesHit ?? 0) ? "●" : "○"}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
