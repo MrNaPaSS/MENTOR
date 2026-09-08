@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -25,6 +25,15 @@ import { getAccessToken, logout } from "@/lib/auth";
 import { useCoins } from "@/lib/useCoins";
 import { fmtUsd, modeLabel } from "@/lib/format";
 import MarketTicker from "@/components/market/MarketTicker";
+import Toasts from "@/components/scalping/Toasts";
+import {
+  dismissSymbol,
+  dismissToast,
+  serverSnapshot as serverToasts,
+  snapshot as snapshotToasts,
+  subscribe as subscribeToasts,
+  watchTrades,
+} from "@/lib/tradeAlerts";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 
 const NAV = [
@@ -57,6 +66,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Тема терминала красит весь сайт: подписка нужна, чтобы оболочка сменила
   // цвета в тот же момент, что и панели, а не после перезагрузки.
   useTerminalTheme();
+
+  // Сделка идёт на бирже, а не на экране: лимитка исполняется и позиция
+  // закрывается, пока трейдер смотрит анализы или выбирает награду в маркете.
+  // Наблюдение живёт в оболочке, поэтому событие догонит его в любом разделе.
+  //
+  // Пока открыт терминал, наблюдение молчит: там оно своё и знает больше.
+  const toasts = useSyncExternalStore(subscribeToasts, snapshotToasts, serverToasts);
+  useEffect(() => watchTrades(), []);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -184,6 +201,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+
+      {/* Уведомления о сделках. В терминале их показывает он сам - над графиком,
+          там, куда смотрят; здесь они висят под шапкой, поверх раздела.
+          Список общий, поэтому показать его дважды нельзя: он бы задвоился. */}
+      {!isActive("/app/scalping") && (
+        <Toasts items={toasts} onClose={dismissToast} onPick={dismissSymbol} place="shell" />
+      )}
 
       {/* ─── Контент (отступ под header + ticker = 14px + 38px ≈ 96px) ─── */}
       <main className="px-4 pb-24 pt-[96px] md:px-6 lg:pb-8">

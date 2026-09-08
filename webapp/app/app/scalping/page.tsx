@@ -11,7 +11,7 @@
 // таймфрейм и индикаторы у графика. Прошлая версия начиналась с семи
 // переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   BookText,
   CandlestickChart,
@@ -47,6 +47,16 @@ import {
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import { setTerminalTheme } from "@/lib/terminalTheme";
 import { onSymbolAsked, symbolFromUrl } from "@/lib/openSymbol";
+import { readTrades, writeTrades } from "@/lib/tradeStore";
+import {
+  dismissSymbol,
+  dismissToast,
+  holdTerminal,
+  pushToast,
+  serverSnapshot as serverToasts,
+  snapshot as snapshotToasts,
+  subscribe as subscribeToasts,
+} from "@/lib/tradeAlerts";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import ConnectDialog, { type ConnectNeed } from "@/components/scalping/ConnectDialog";
 import CloseDialog from "@/components/scalping/CloseDialog";
@@ -205,26 +215,6 @@ const STORAGE_KEY = "nmnh.scalping.panes";
 // пишется на каждом изменении и не должна тащить за собой ширины панелей.
 // Уйти со страницы и вернуться — обычное дело, а позиция на рынке от этого не
 // закрывается, значит и разметка её пропадать не должна.
-const TRADE_KEY = "nmnh.scalping.trade";
-const TRADES_KEY = "nmnh.scalping.trades";
-
-function readTrades(): ActiveTrade[] {
-  try {
-    const raw = localStorage.getItem(TRADES_KEY);
-    if (raw) {
-      const list = JSON.parse(raw) as ActiveTrade[];
-      return Array.isArray(list) ? list.filter((t) => t && t.status !== "closed") : [];
-    }
-    // Переезд со старого ключа: у трейдера могла остаться идущая сделка,
-    // записанная прежней версией, и терять её из-за обновления нельзя.
-    const single = localStorage.getItem(TRADE_KEY);
-    const trade = single ? (JSON.parse(single) as ActiveTrade) : null;
-    return trade && trade.status !== "closed" ? [trade] : [];
-  } catch {
-    // В приватном окне доступ к хранилищу бросает исключение.
-    return [];
-  }
-}
 
 // По умолчанию включено всё, кроме зон: они заливают половину окна сплошным
 // цветом и нужны, только когда смотришь картину крупнее минуты.
@@ -502,17 +492,13 @@ export default function ScalpingPage() {
   const [manual, setManual] = useState<ManualDraft | null>(null);
   // Уведомления поверх терминала: сюда попадает то, что случилось само и не
   // на глазах у трейдера.
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  /**
-   * Поднять уведомление, если такого ещё нет.
-   *
-   * Одно и то же событие видят двое: опрос объёмов на бирже и наблюдение за
-   * состоянием сделки. Кто заметит первым - неизвестно, поэтому опознаватель у
-   * события общий, и второй заметивший ничего не добавляет.
-   */
-  const pushToast = useCallback((toast: Toast) => {
-    setToasts((list) => (list.some((one) => one.id === toast.id) ? list : [...list, toast]));
-  }, []);
+  // Уведомления - на общем складе снаружи от React: событие может поднять и
+  // оболочка кабинета, когда терминал закрыт, и список не должен пропадать от
+  // перехода между разделами.
+  const toasts = useSyncExternalStore(subscribeToasts, snapshotToasts, serverToasts);
+  // Пока терминал открыт, оболочка не наблюдает: одно событие не должно
+  // прийти дважды.
+  useEffect(() => holdTerminal(), []);
 
   // Объёмы всех открытых позиций счёта: по ним считается счётчик у итога дня.
   const [liveSizes, setLiveSizes] = useState<Record<string, number>>({});
@@ -1505,16 +1491,7 @@ export default function ScalpingPage() {
   // Разметка сделки переживает уход со страницы.
   useEffect(() => {
     if (!hydrated.current) return;
-    try {
-      const alive = trades.filter((t) => t.status !== "closed");
-      if (alive.length > 0) localStorage.setItem(TRADES_KEY, JSON.stringify(alive));
-      else localStorage.removeItem(TRADES_KEY);
-      // Старый ключ больше не читается никем, кроме переезда, — чистим, чтобы
-      // он не воскресил закрытую сделку.
-      localStorage.removeItem(TRADE_KEY);
-    } catch {
-      // Не сохранилось — сделки всё равно на экране.
-    }
+    writeTrades(trades);
   }, [trades]);
 
   // Звук на переходах сделки: вход, взятая цель, стоп, закрытие. Следим за
@@ -2566,10 +2543,10 @@ export default function ScalpingPage() {
                     видит. Нажатие открывает монету, о которой речь. */}
                 <Toasts
                   items={toasts}
-                  onClose={(id) => setToasts((list) => list.filter((t) => t.id !== id))}
+                  onClose={dismissToast}
                   onPick={(next) => {
                     selectSymbol(next);
-                    setToasts((list) => list.filter((t) => t.symbol !== next));
+                    dismissSymbol(next);
                   }}
                 />
 

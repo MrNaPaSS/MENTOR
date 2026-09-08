@@ -33,11 +33,20 @@ export default function Toasts({
   items,
   onClose,
   onPick,
+  place = "chart",
 }: {
   items: Toast[];
   onClose: (id: string) => void;
   /** Нажали по уведомлению: открываем ту монету, о которой оно. */
   onPick?: (symbol: string) => void;
+  /**
+   * Где висят.
+   *
+   * `chart` - вверху графика, там, куда смотрят, пока терминал открыт.
+   * `shell` - под шапкой кабинета: в других разделах графика нет, а событие
+   * приходит всё равно.
+   */
+  place?: "chart" | "shell";
 }) {
   // Гасим по одному и по своему сроку: общий таймер снимал бы свежее
   // уведомление вместе со старым.
@@ -51,7 +60,14 @@ export default function Toasts({
   if (items.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-10 z-40 flex flex-col items-center gap-2 px-2">
+    <div
+      className={
+        "pointer-events-none z-40 flex flex-col items-center gap-2 px-2 " +
+        (place === "shell"
+          ? "fixed inset-x-0 top-[104px] z-[60]"
+          : "absolute inset-x-0 top-10")
+      }
+    >
       {items.map((item) => {
         const tone =
           item.tone === "up"
