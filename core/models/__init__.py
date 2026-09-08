@@ -346,6 +346,31 @@ class ChartShot(Base):
     card_json: Mapped[str] = mapped_column(Text, default="")
 
 
+class ChatMessage(Base):
+    """Сообщение общего чата.
+
+    Автор - ссылка на ученика, а не переписанные в строку ник с аватаркой. Ник
+    в Telegram меняют, и старые сообщения обязаны подписываться так же, как
+    новые: иначе один и тот же собеседник выглядит в ленте двумя разными.
+
+    Приложенное лежит строкой JSON. Фотография, сделка, ждущая заявка - у
+    каждого своя форма, и заводить миграцию на каждый новый вид вложения значит
+    не заводить их вовсе. Читает эту строку только тот же чат, разойтись ей не с
+    чем.
+    """
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    attach_json: Mapped[str] = mapped_column(Text, default="")
+    # По времени лента и читается: индекс нужен, страниц истории будет много.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+
+
 class ScalpWorkspace(Base):
     """Сохранённый шаблон рабочего места скальпера.
 

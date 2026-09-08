@@ -1,10 +1,10 @@
 "use client";
 
-// Чем делятся в чате: сделка из журнала и ждущая заявка с графика.
+// Чем делятся в чате: сделка из журнала, ждущая заявка с графика и снимок.
 //
-// Снимок, а не ссылка на живую запись. Сделка после этого закроется, заявку
-// отменят или переставят - сообщение обязано остаться тем, что человек показал:
-// разговор о цифрах, которые молча поменялись, бессмысленен.
+// Снимок цифр, а не ссылка на живую запись. Сделка после этого закроется,
+// заявку отменят или переставят - сообщение обязано остаться тем, что человек
+// показал: разговор о цифрах, которые молча поменялись, бессмысленен.
 
 import type { JournalTrade } from "@/lib/journal";
 import type { ActiveTrade } from "@/lib/trade/position";
@@ -41,7 +41,12 @@ export function fromActive(trade: ActiveTrade): SharedTrade {
   };
 }
 
-/** Отправить сделку в чат от своего имени. */
-export function share(trade: SharedTrade, author: string, text = ""): void {
-  post({ author, text, self: true, attach: { kind: "trade", trade } });
+/** Отправить сделку или заявку в чат. */
+export function share(trade: SharedTrade, text = ""): Promise<void> {
+  return post(text, { kind: "trade", trade });
+}
+
+/** Отправить снимок графика: в ленте он откроется страницей на сайте. */
+export function shareShot(url: string, id: string, text = ""): Promise<void> {
+  return post(text, { kind: "shot", url, image: id });
 }

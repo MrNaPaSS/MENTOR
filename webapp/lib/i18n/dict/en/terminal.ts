@@ -101,7 +101,8 @@ export const terminal = {
     shotCopyFailed: "Your browser won't copy images - save it as a file",
     shotSaved: (guard: string) => `Snapshot saved${guard}`,
     shotUploading: "Uploading the snapshot…",
-    linkFailed: "Couldn't get the link",
+    shotToChat: "Snapshot sent to the chat",
+  linkFailed: "Couldn't get the link",
     linkCopied: (link: string) => `Link copied: ${link}`,
   },
 

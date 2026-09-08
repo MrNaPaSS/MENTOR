@@ -1,13 +1,17 @@
 """WebSocket-эндпоинты (ТЗ §9.1).
 
 ``/ws/prices`` — публичный канал цен; ``/ws`` — авторизованный канал (JWT в query) для
-персональных событий (новые сигналы, баланс, чат); ``/ws/scalping`` — скринер и
-стакан с подпиской на конкретный инструмент.
+персональных событий (новые сигналы, баланс); ``/ws/scalping`` — скринер и
+стакан с подпиской на конкретный инструмент; ``/ws/chat`` — общая комната:
+присутствие и новые сообщения.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+
+from core.db import SessionLocal
+from core.models import Student
 
 from backend.security import decode_token, TokenError
 from backend.price_collector import active_symbols
@@ -56,6 +60,61 @@ async def ws_authed(websocket: WebSocket, token: str = Query(default="")):
         pass
     finally:
         await manager.disconnect(websocket)
+
+
+@router.websocket("/ws/chat")
+async def ws_chat(websocket: WebSocket, token: str = Query(default="")):
+    """Общая комната: кто в ней и что пишут.
+
+    История сюда не идёт - её листают страницами через ``/api/chat/messages``.
+    Сокет отвечает только за живое: список присутствующих при входе и выходе
+    каждого, новое сообщение всем сразу.
+
+    Кто пришёл, спрашиваем у базы отдельной короткой сессией: в токене лежит
+    только номер, а ленте нужны ник и аватарка - и такие же, как у остальных
+    сообщений, иначе один человек выглядит в комнате двумя.
+    """
+    config = websocket.app.state.config
+    try:
+        payload = decode_token(token, config.jwt_secret)
+        if payload.get("type") != "access":
+            raise TokenError("Нужен access-токен")
+    except TokenError:
+        await websocket.close(code=4401)
+        return
+
+    hub = getattr(websocket.app.state, "chat_hub", None)
+    if hub is None:
+        await websocket.close(code=4503)
+        return
+
+    session = SessionLocal()
+    try:
+        student = session.get(Student, int(payload["sub"]))
+        if student is None or not student.is_active:
+            await websocket.close(code=4401)
+            return
+        who = {
+            "id": student.id,
+            "name": student.card_name or student.username or f"id{student.id}",
+            "avatar": student.avatar_url or "",
+            "mentor": bool(getattr(student, "is_admin", False)),
+        }
+    finally:
+        session.close()
+
+    await websocket.accept()
+    await hub.join(websocket, who)
+    try:
+        await websocket.send_json({"event": "hello", "payload": {"you": who, "people": hub.people()}})
+        while True:
+            # Сообщения отправляются по HTTP: там же они и сохраняются. Здесь
+            # читаем только для того, чтобы заметить разрыв.
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await hub.leave(websocket)
 
 
 @router.websocket("/ws/scalping")

@@ -33,7 +33,13 @@ import {
   WifiOff,
 } from "lucide-react";
 import ChatRoom from "@/components/chat/ChatRoom";
-import { fromActive, fromJournal, share as shareToChat } from "@/lib/chat/share";
+import { fromActive, fromJournal, share as shareToChat, shareShot as shotToChat } from "@/lib/chat/share";
+import {
+  open as openChat,
+  serverSnapshot as chatServer,
+  snapshot as chatSnapshot,
+  subscribe as chatSubscribe,
+} from "@/lib/chat/store";
 import PaneDivider from "@/components/scalping/PaneDivider";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
@@ -56,7 +62,7 @@ import {
   composeShot,
   copy as copyShot,
   download as downloadShot,
-  share as shareShot,
+  upload as uploadShot,
   type ShotResult,
 } from "@/lib/shot";
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
@@ -556,6 +562,10 @@ export default function ScalpingPage() {
   // Фотография из Telegram: ею подписаны сообщения в чате. Путь приходит от
   // бэкенда, а сайт живёт на другом домене - отсюда и API_URL.
   const [avatar, setAvatar] = useState<string | null>(null);
+  // Чат подключён, пока открыт терминал, - даже со свёрнутой панелью: иначе
+  // точка непрочитанного загоралась бы только у того, кто и так в него смотрит.
+  const chat = useSyncExternalStore(chatSubscribe, chatSnapshot, chatServer);
+  useEffect(() => openChat(), []);
 
   const { screener, dom, connected } = useScalpingFeed({ symbol, rows, agg, sort, shelf, interval: timeframe });
 
@@ -2036,22 +2046,23 @@ export default function ScalpingPage() {
   /**
    * Ждущие входа заявки - их прикладывают к сообщению скрепкой.
    *
+   * По всем монетам, а не только по открытой: лимитки ставят с вечера на
+   * десяток инструментов, а показать одну из них хотят, стоя на другом
+   * графике - и переключаться ради этого туда и обратно незачем.
+   *
    * Снимком, а не ссылкой: заявку через минуту переставят или отменят, а в
    * ленте должно остаться то, что человек показал.
    */
   const pendingShares = useMemo(
-    () => mine.filter((t) => t.status === "planned").map(fromActive),
-    [mine],
+    () => trades.filter((t) => t.status === "planned").map(fromActive),
+    [trades],
   );
 
   /** Сделка из журнала - в чат. Панель при этом открывается сама. */
-  const shareJournal = useCallback(
-    (row: JournalTrade) => {
-      shareToChat(fromJournal(row), author || t.chat.you);
-      setChatOpen(true);
-    },
-    [author, t.chat.you],
-  );
+  const shareJournal = useCallback((row: JournalTrade) => {
+    void shareToChat(fromJournal(row));
+    setChatOpen(true);
+  }, []);
 
 
   /**
@@ -2202,7 +2213,7 @@ export default function ScalpingPage() {
    * Картинка собирается из холста графика и шапки с монетой, таймфреймом,
    * именем и временем: чужой скриншот без этих подписей бесполезен.
    */
-  async function takeShot(action: "download" | "copy" | "link") {
+  async function takeShot(action: "download" | "copy" | "link" | "chat") {
     setShotMenu(false);
     const taken = shotRef.current?.();
     if (!taken || !symbol) {
@@ -2262,11 +2273,22 @@ export default function ScalpingPage() {
 
     setOrderNote({ text: t.terminal.notes.shotUploading, bad: false });
     try {
-      const link = await shareShot(picture, { symbol, interval: timeframe, theme: paper });
-      if (!link) {
+      const saved = await uploadShot(picture, { symbol, interval: timeframe, theme: paper });
+      if (!saved) {
         setOrderNote({ text: t.terminal.notes.linkFailed, bad: true });
         return;
       }
+
+      // В чат - тем же снимком: в ленте он показывается картинкой, а нажатие
+      // открывает ту же страницу на сайте, что и ссылка.
+      if (action === "chat") {
+        await shotToChat(saved.url, saved.image);
+        setChatOpen(true);
+        setOrderNote({ text: t.terminal.notes.shotToChat, bad: false });
+        return;
+      }
+
+      const link = saved.url;
       // Ссылку сразу в буфер: её для того и просят, чтобы отправить дальше.
       try {
         await navigator.clipboard.writeText(link);
@@ -2676,6 +2698,7 @@ export default function ScalpingPage() {
                             ["download", t.terminal.shotDownload],
                             ["copy", t.terminal.shotCopy],
                             ["link", t.terminal.shotLink],
+                            ["chat", t.chat.shotToChat],
                           ] as const
                         ).map(([action, label]) => (
                           <button
@@ -2894,7 +2917,7 @@ export default function ScalpingPage() {
                 >
                   <ChatRoom
                     tone="pane"
-                    me={{ name: author || t.chat.you, avatar }}
+                    symbol={symbol ?? undefined}
                     pending={pendingShares}
                     onClose={() => setChatOpen(false)}
                   />
@@ -2908,6 +2931,15 @@ export default function ScalpingPage() {
                 style={paneStyle}
               >
                 <PanelRightOpen className="h-4 w-4" />
+                {/* Точка непрочитанного: мигает, пока панель свёрнута. Разговор
+                    в торговый час идёт о том, что происходит прямо сейчас, и
+                    узнать о нём через час - всё равно что не узнать. */}
+                {chat.unread > 0 && (
+                  <span
+                    title={t.chat.unread(chat.unread)}
+                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--pane-accent)]"
+                  />
+                )}
                 <span className="text-[11px]" style={{ writingMode: "vertical-rl" }}>
                   {t.chat.title}
                 </span>

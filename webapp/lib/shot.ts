@@ -74,6 +74,20 @@ export async function share(
   canvas: HTMLCanvasElement,
   meta: ShotMeta,
 ): Promise<string | null> {
+  const saved = await upload(canvas, meta);
+  return saved ? saved.url : null;
+}
+
+/**
+ * Тот же снимок, но с его именем.
+ *
+ * Ссылку хватает тому, кто отправляет её людям. Чату мало: в ленте снимок
+ * показывается картинкой, а открывается страницей, и адреса нужны оба.
+ */
+export async function upload(
+  canvas: HTMLCanvasElement,
+  meta: ShotMeta,
+): Promise<{ id: string; url: string; image: string } | null> {
   const token = getAccessToken();
   if (!token) return null;
 
@@ -85,5 +99,6 @@ export async function share(
       interval: meta.interval,
     }),
   });
-  return body ? `${API_URL}${body.url}` : null;
+  if (!body) return null;
+  return { id: body.id, url: `${API_URL}${body.url}`, image: `${API_URL}/${body.id}.png` };
 }

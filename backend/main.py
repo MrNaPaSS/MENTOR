@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from backend.chat import ChatHub
 from core.db import init_engine, create_all, SessionLocal
 from core import repo
 from core.weex import get_weex_client
@@ -22,6 +23,7 @@ from backend.trading.watcher import PositionWatcher
 from backend.api import shots
 from backend.api import trading as trading_api
 from backend.api import auth, market, market_data, market_extra, signals, stats, students, profile, admin_affiliate, institutional, broadcast, pnl, trades, journal, trading, coins, shop
+from backend.api import chat as chat_api
 from backend.api import scalping as scalping_api
 from backend.api import trading_move
 from backend.ws import ConnectionManager
@@ -113,6 +115,10 @@ def create_app(
     app.state.weex = weex
     app.state.notifier = notifier
     app.state.ws_manager = manager
+    # Комната общего чата: присутствие и рассылка живут в памяти процесса,
+    # сами сообщения - в базе. Перезапуск сервера теряет только список
+    # присутствующих, и он соберётся заново с первым же подключением.
+    app.state.chat_hub = ChatHub()
     app.state.price_collector = collector
     app.state.scalping = scalping
     app.state.scalping_hub = scalping_hub
@@ -167,6 +173,7 @@ def create_app(
     app.include_router(coins.router)
     app.include_router(shop.router)
     app.include_router(shop.admin_router)
+    app.include_router(chat_api.router)
     app.include_router(scalping_api.router)
     app.include_router(ws_routes.router)
     # Короткий путь снимка - последним: он живёт в корне и ловит одиночный

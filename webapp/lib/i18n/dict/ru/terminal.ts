@@ -108,7 +108,8 @@ export const terminal = {
     shotCopyFailed: "Браузер не даёт копировать картинки - сохраните файлом",
     shotSaved: (guard: string) => `Снимок сохранён${guard}`,
     shotUploading: "Выкладываем снимок…",
-    linkFailed: "Ссылку получить не удалось",
+    shotToChat: "Снимок ушёл в чат",
+  linkFailed: "Ссылку получить не удалось",
     linkCopied: (link: string) => `Ссылка скопирована: ${link}`,
   },
 

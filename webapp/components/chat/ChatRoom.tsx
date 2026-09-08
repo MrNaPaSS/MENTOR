@@ -10,16 +10,19 @@
 // Цвета поэтому не в разметке, а в таблице ниже: строка «site» - оформление
 // кабинета, строка «pane» - переменные панелей терминала.
 //
-// Сама лента лежит снаружи, на складе: писать в неё умеет не только чат.
-// Сделкой делятся из журнала, ожидающей заявкой - отсюда же, скрепкой.
+// Сообщения, присутствие и история живут на сервере; здесь только показ и
+// отправка. Склад с живым каналом - в lib/chat/store.
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Send, Crown, Pin, PanelRightClose, Paperclip, X, ImageIcon, Clock } from "lucide-react";
 import { SOCIAL_LINKS } from "@/lib/content";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
+import { price as fmtPrice } from "@/lib/scalping";
 import {
+  open,
   post,
-  seedOnce,
+  older,
+  setReading,
   serverSnapshot,
   snapshot,
   subscribe,
@@ -27,19 +30,16 @@ import {
   type ChatMessage,
   type SharedTrade,
 } from "@/lib/chat/store";
-import { firstLink } from "@/lib/chat/link";
+import { preview, uploadPhoto, type LinkPreview } from "@/lib/chat/api";
+import { firstLink, type LinkCard } from "@/lib/chat/link";
 
 /** Где показан чат: страницей кабинета или панелью терминала. */
 export type ChatTone = "site" | "pane";
-
-/** Кто пишет: ник и аватарка из Telegram. */
-export type ChatMe = { name: string; avatar?: string | null };
 
 const SKIN: Record<
   ChatTone,
   {
     head: string;
-    headText: string;
     banner: string;
     bannerText: string;
     bannerArrow: string;
@@ -65,7 +65,6 @@ const SKIN: Record<
 > = {
   site: {
     head: "mb-3 border-b border-border pb-2",
-    headText: "text-text-primary",
     banner: "glass mb-3 rounded-xl px-4 py-2.5 text-sm",
     bannerText: "text-text-secondary",
     bannerArrow: "text-accent-cyan",
@@ -91,7 +90,6 @@ const SKIN: Record<
   },
   pane: {
     head: "border-b border-[var(--pane-border)] px-2 py-1.5",
-    headText: "text-[var(--pane-text)]",
     banner:
       "mx-2 mt-2 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px]",
     bannerText: "text-[var(--pane-text-2)]",
@@ -122,12 +120,14 @@ const SKIN: Record<
   },
 };
 
+type Skin = (typeof SKIN)[ChatTone];
+
 /**
  * Аватарка собеседника.
  *
  * Фотография из Telegram есть не у всех: у половины комнаты стоит замок на
- * профиле, а у наставника она и вовсе своя. Без фотографии - кружок с первой
- * буквой ника, а не общий силуэт: по силуэтам собеседники неразличимы.
+ * профиле. Без фотографии - кружок с первой буквой ника, а не общий силуэт: по
+ * силуэтам собеседники неразличимы.
  */
 function Avatar({ src, name, size = 24 }: { src?: string | null; name: string; size?: number }) {
   const [broken, setBroken] = useState(false);
@@ -171,8 +171,8 @@ function TradeCard({
   labels,
 }: {
   trade: SharedTrade;
-  skin: (typeof SKIN)[ChatTone];
-  labels: { entry: string; stop: string; take: string; planned: string; open: string; closed: string };
+  skin: Skin;
+  labels: Record<"entry" | "stop" | "take" | "planned" | "open" | "closed", string>;
 }) {
   const long = trade.side === "long";
   const state =
@@ -188,14 +188,19 @@ function TradeCard({
         <span className={`ml-auto ${skin.muted}`}>{state}</span>
       </div>
       <div className="grid grid-cols-3 gap-1">
-        {[
-          [labels.entry, trade.entry, ""],
-          [labels.stop, trade.stop, skin.down],
-          [labels.take, trade.targets[0] ?? 0, skin.up],
-        ].map(([label, value, tone]) => (
-          <div key={String(label)}>
+        {(
+          [
+            [labels.entry, trade.entry, ""],
+            [labels.stop, trade.stop, skin.down],
+            [labels.take, trade.targets[0] ?? 0, skin.up],
+          ] as const
+        ).map(([label, value, colour]) => (
+          <div key={label}>
             <div className={skin.muted}>{label}</div>
-            <div className={String(tone)}>{Number(value) || "-"}</div>
+            {/* Цена округляется как на графике: у дорогих монет два знака,
+                у дешёвых больше - на них два знака показали бы один и тот же
+                ноль вместо цены. */}
+            <div className={colour}>{value ? fmtPrice(value) : "-"}</div>
           </div>
         ))}
       </div>
@@ -208,16 +213,41 @@ function TradeCard({
   );
 }
 
+// Предпросмотр ссылки спрашиваем у сервера один раз на адрес: одно и то же
+// сообщение перерисовывается десятки раз, и ходить за обложкой на каждый кадр
+// значит выбрать чужую страницу за десять минут.
+const previews = new Map<string, LinkPreview | null>();
+
+function useLinkPreview(link: LinkCard | null): LinkPreview | null {
+  const [, redraw] = useState(0);
+  const href = link?.href ?? "";
+
+  useEffect(() => {
+    if (!href || previews.has(href)) return;
+    // Метка «уже спрашиваем»: два сообщения с одной ссылкой не должны
+    // отправлять два запроса.
+    previews.set(href, null);
+    void preview(href).then((body) => {
+      if (body && (body.title || body.image)) {
+        previews.set(href, body);
+        redraw((n) => n + 1);
+      }
+    });
+  }, [href]);
+
+  return href ? (previews.get(href) ?? null) : null;
+}
+
 export default function ChatRoom({
   tone = "site",
-  me,
+  symbol,
   pending = [],
   onClose,
 }: {
   tone?: ChatTone;
-  /** Кто пишет. Без профиля - просто «вы». */
-  me?: ChatMe;
-  /** Ожидающие входа заявки: их можно приложить к сообщению скрепкой. */
+  /** Открытая монета: ею подписывается страница отправленной фотографии. */
+  symbol?: string;
+  /** Ждущие входа заявки по всем монетам: их прикладывают скрепкой. */
   pending?: SharedTrade[];
   /** Кнопка сворачивания в шапке. Есть только у панели терминала. */
   onClose?: () => void;
@@ -225,62 +255,55 @@ export default function ChatRoom({
   const t = useT();
   const locale = useLocale();
   const skin = SKIN[tone];
-  const messages = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  const state = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const [text, setText] = useState("");
   const [attach, setAttach] = useState<ChatAttach | null>(null);
   const [attachMenu, setAttachMenu] = useState(false);
+  const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Пока чат на экране, пришедшее считается прочитанным: точка у свёрнутой
+  // панели загорается только тогда, когда её и правда не видели.
   useEffect(() => {
-    seedOnce(t);
-  }, [t]);
+    const close = open();
+    setReading(true);
+    return () => {
+      setReading(false);
+      close();
+    };
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [state.messages]);
 
-  const myName = me?.name || t.chat.you;
-
-  /**
-   * Кто сейчас в комнате.
-   *
-   * Настоящее присутствие знает только сервер, а его у чата пока нет. Поэтому
-   * здесь честный минимум: те, чьи сообщения в ленте, и сам трейдер. Выдумывать
-   * число «сейчас онлайн» нельзя - по нему решают, ждать ли ответа.
-   */
-  const people = useMemo(() => {
-    const seen = new Map<string, { name: string; avatar?: string | null; mentor?: boolean }>();
-    seen.set(myName, { name: myName, avatar: me?.avatar });
-    for (const m of messages) {
-      if (m.self) continue;
-      if (!seen.has(m.author)) seen.set(m.author, { name: m.author, mentor: m.mentor });
-    }
-    return [...seen.values()];
-  }, [messages, myName, me?.avatar]);
-
-  function attachPhoto(file: File | undefined | null) {
+  async function attachPhoto(file: File | undefined | null) {
     if (!file || !file.type.startsWith("image/")) return;
-    // Ссылка на файл в памяти вкладки: снимок графика весит мегабайты, и
-    // превращать его в строку ради ленты, которая живёт до перезагрузки, незачем.
-    setAttach({ kind: "photo", src: URL.createObjectURL(file), name: file.name });
     setAttachMenu(false);
+    setBusy(true);
+    // Фотография уезжает на сервер сразу: в ленте она должна открываться
+    // страницей у нас, а страница появляется только после загрузки.
+    const uploaded = await uploadPhoto(file, symbol ?? "");
+    setBusy(false);
+    if (uploaded) setAttach(uploaded);
   }
 
-  function send() {
+  async function submit() {
     const body = text.trim();
-    if (!body && !attach) return;
-    post({
-      author: myName,
-      text: body,
-      self: true,
-      attach: attach ?? undefined,
-    });
+    if ((!body && !attach) || busy) return;
+    setBusy(true);
     setText("");
+    const sending = attach;
     setAttach(null);
+    try {
+      await post(body, sending);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  const pinned = messages.find((m) => m.mentor);
+  const pinned = state.messages.find((m) => m.author.mentor);
   const time = (at: number) =>
     new Date(at).toLocaleTimeString(intlLocale(locale), { hour: "2-digit", minute: "2-digit" });
 
@@ -295,20 +318,22 @@ export default function ChatRoom({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Шапка: кто в комнате. На странице кабинета заголовок свой, здесь
-          только лица и счёт. */}
+      {/* Шапка: кто в комнате прямо сейчас. Список приходит от сервера - это
+          настоящее присутствие, а не догадка по ленте. */}
       <div className={`flex items-center gap-2 ${skin.head}`}>
         <div className="flex -space-x-1.5">
-          {people.slice(0, 5).map((p) => (
-            <Avatar key={p.name} src={p.avatar} name={p.name} size={tone === "pane" ? 20 : 26} />
+          {state.people.slice(0, 5).map((p) => (
+            <Avatar key={p.id} src={p.avatar} name={p.name} size={tone === "pane" ? 20 : 26} />
           ))}
         </div>
-        <span className={`text-[11px] ${skin.muted}`}>{t.chat.inRoom(people.length)}</span>
+        <span className={`text-[11px] ${skin.muted}`}>
+          {state.live ? t.chat.inRoom(state.people.length) : t.chat.offline}
+        </span>
         {onClose && (
           <button
             onClick={onClose}
             title={t.terminal.collapseChat}
-            className={`ml-auto rounded px-1.5 py-0.5 ${skin.muted} transition-colors hover:text-[var(--pane-text)]`}
+            className={`ml-auto rounded px-1.5 py-0.5 ${skin.muted} transition-colors hover:opacity-80`}
           >
             <PanelRightClose className="h-3.5 w-3.5" />
           </button>
@@ -329,14 +354,33 @@ export default function ChatRoom({
         <div className={`flex items-start gap-2 ${skin.pinned}`}>
           <Pin className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${skin.pinnedIcon}`} />
           <p className={skin.pinnedText}>
-            <span className={skin.pinnedName}>👑 {t.chat.mentor}:</span> {pinned.text}
+            <span className={skin.pinnedName}>👑 {pinned.author.name}:</span> {pinned.text}
           </p>
         </div>
       )}
 
       <div className={skin.feed}>
-        {messages.map((m) => (
-          <Bubble key={m.id} message={m} skin={skin} tone={tone} me={me} time={time(m.at)} labels={cardLabels} />
+        {state.more && (
+          <button
+            onClick={() => void older()}
+            className={`mx-auto block rounded px-2 py-1 text-[11px] ${skin.muted} hover:opacity-80`}
+          >
+            {t.chat.earlier}
+          </button>
+        )}
+        {state.messages.length === 0 && (
+          <p className={`py-6 text-center text-[11px] ${skin.muted}`}>{t.chat.empty}</p>
+        )}
+        {state.messages.map((m) => (
+          <Bubble
+            key={m.id}
+            message={m}
+            self={state.me?.id === m.author.id}
+            skin={skin}
+            tone={tone}
+            time={time(m.at)}
+            labels={cardLabels}
+          />
         ))}
         <div ref={endRef} />
       </div>
@@ -344,15 +388,15 @@ export default function ChatRoom({
       {/* Приложенное - над строкой ввода, чтобы было видно, что уйдёт. */}
       {attach && (
         <div className={`mx-2 mt-1 flex items-center gap-2 px-2 py-1.5 text-[11px] ${skin.card}`}>
-          {attach.kind === "photo" ? (
+          {attach.kind === "shot" ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={attach.src} alt="" className="h-8 w-8 rounded object-cover" />
-              <span className="min-w-0 flex-1 truncate">{attach.name}</span>
+              <img src={attach.image} alt="" className="h-8 w-8 rounded object-cover" />
+              <span className="min-w-0 flex-1 truncate">{t.chat.attachPhoto}</span>
             </>
           ) : (
             <span className="min-w-0 flex-1 truncate">
-              {attach.trade.symbol} · {t.chat.card.planned}
+              {attach.trade.symbol.replace(/USDT$/i, "")} · {t.chat.card.planned}
             </span>
           )}
           <button onClick={() => setAttach(null)} className={skin.muted} title={t.chat.drop}>
@@ -367,7 +411,7 @@ export default function ChatRoom({
           type="file"
           accept="image/*"
           hidden
-          onChange={(e) => attachPhoto(e.target.files?.[0])}
+          onChange={(e) => void attachPhoto(e.target.files?.[0])}
         />
         <button
           onClick={() => setAttachMenu((v) => !v)}
@@ -380,7 +424,7 @@ export default function ChatRoom({
 
         {attachMenu && (
           <div
-            className={`absolute bottom-full left-0 z-30 mb-1 w-52 overflow-hidden py-1 shadow-xl ${skin.card}`}
+            className={`absolute bottom-full left-0 z-30 mb-1 max-h-60 w-56 overflow-y-auto py-1 shadow-xl ${skin.card}`}
           >
             <button
               onClick={() => fileRef.current?.click()}
@@ -394,7 +438,7 @@ export default function ChatRoom({
             ) : (
               pending.map((trade, i) => (
                 <button
-                  key={`${trade.symbol}-${i}`}
+                  key={`${trade.symbol}-${trade.entry}-${i}`}
                   onClick={() => {
                     setAttach({ kind: "trade", trade });
                     setAttachMenu(false);
@@ -402,6 +446,9 @@ export default function ChatRoom({
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] ${skin.nameOther} hover:opacity-80`}
                 >
                   <Clock className="h-3.5 w-3.5" />
+                  <span className={trade.side === "long" ? skin.up : skin.down}>
+                    {trade.side === "long" ? "L" : "S"}
+                  </span>
                   {t.chat.attachOrder(trade.symbol.replace(/USDT$/i, ""))}
                 </button>
               ))
@@ -414,14 +461,19 @@ export default function ChatRoom({
           placeholder={t.chat.placeholder}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onPaste={(e) => attachPhoto(e.clipboardData.files?.[0])}
-          onKeyDown={(e) => e.key === "Enter" && send()}
+          onPaste={(e) => void attachPhoto(e.clipboardData.files?.[0])}
+          onKeyDown={(e) => e.key === "Enter" && void submit()}
         />
-        <button className={skin.button} onClick={send} aria-label={t.chat.send}>
+        <button
+          className={skin.button}
+          onClick={() => void submit()}
+          disabled={busy}
+          aria-label={t.chat.send}
+        >
           <Send className="h-4 w-4" />
         </button>
       </div>
-      <p className={skin.note}>{t.chat.note}</p>
+      <p className={skin.note}>{state.live ? t.chat.hint : t.chat.note}</p>
     </div>
   );
 }
@@ -429,38 +481,35 @@ export default function ChatRoom({
 /** Одно сообщение: лицо, ник, время и то, что приложено. */
 function Bubble({
   message,
+  self,
   skin,
   tone,
-  me,
   time,
   labels,
 }: {
   message: ChatMessage;
-  skin: (typeof SKIN)[ChatTone];
+  self: boolean;
+  skin: Skin;
   tone: ChatTone;
-  me?: ChatMe;
   time: string;
   labels: Parameters<typeof TradeCard>[0]["labels"];
 }) {
   const link = firstLink(message.text);
-  const avatar = message.self ? me?.avatar : null;
+  const rich = useLinkPreview(link);
+  const size = tone === "pane" ? 20 : 28;
 
   return (
-    <div className={`flex items-end gap-1.5 ${message.self ? "justify-end" : "justify-start"}`}>
-      {!message.self && <Avatar src={avatar} name={message.author} size={tone === "pane" ? 20 : 28} />}
-      <div
-        className={`max-w-[85%] rounded-2xl px-3 py-1.5 ${
-          message.self ? skin.bubbleSelf : skin.bubbleOther
-        }`}
-      >
+    <div className={`flex items-end gap-1.5 ${self ? "justify-end" : "justify-start"}`}>
+      {!self && <Avatar src={message.author.avatar} name={message.author.name} size={size} />}
+      <div className={`max-w-[85%] rounded-2xl px-3 py-1.5 ${self ? skin.bubbleSelf : skin.bubbleOther}`}>
         <div className="mb-0.5 flex items-center gap-1 text-[11px]">
           <span
             className={`font-semibold ${
-              message.mentor ? skin.nameMentor : message.self ? skin.nameSelf : skin.nameOther
+              message.author.mentor ? skin.nameMentor : self ? skin.nameSelf : skin.nameOther
             }`}
           >
-            {message.mentor && <Crown className="mr-0.5 inline h-3 w-3" />}
-            {message.author}
+            {message.author.mentor && <Crown className="mr-0.5 inline h-3 w-3" />}
+            {message.author.name}
           </span>
           <span className={skin.muted}>· {time}</span>
         </div>
@@ -471,13 +520,17 @@ function Bubble({
           </p>
         )}
 
-        {message.attach?.kind === "photo" && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={message.attach.src}
-            alt={message.attach.name}
-            className="mt-1.5 max-h-56 w-full rounded-lg object-cover"
-          />
+        {/* Снимок открывается страницей на сайте: там подпись, монета и время,
+            и там же его развернёт превью мессенджера. */}
+        {message.attach?.kind === "shot" && (
+          <a href={message.attach.url} target="_blank" rel="noopener noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={message.attach.image}
+              alt=""
+              className="mt-1.5 max-h-56 w-full rounded-lg object-cover"
+            />
+          </a>
         )}
 
         {message.attach?.kind === "trade" && (
@@ -491,18 +544,26 @@ function Bubble({
             rel="noopener noreferrer"
             className={`mt-1.5 block overflow-hidden text-[11px] ${skin.card}`}
           >
-            {link.image && (
+            {(rich?.image || link.image) && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={link.href} alt="" className="max-h-40 w-full object-cover" />
+              <img
+                src={rich?.image || link.href}
+                alt=""
+                className="max-h-40 w-full object-cover"
+              />
             )}
             <span className="block px-2.5 py-1.5">
-              <span className="block font-semibold">{link.host}</span>
-              {link.rest && <span className={`block truncate ${skin.muted}`}>{link.rest}</span>}
+              <span className="block font-semibold">{rich?.title || link.host}</span>
+              {rich?.description ? (
+                <span className={`block line-clamp-2 ${skin.muted}`}>{rich.description}</span>
+              ) : (
+                link.rest && <span className={`block truncate ${skin.muted}`}>{link.rest}</span>
+              )}
             </span>
           </a>
         )}
       </div>
-      {message.self && <Avatar src={avatar} name={message.author} size={tone === "pane" ? 20 : 28} />}
+      {self && <Avatar src={message.author.avatar} name={message.author.name} size={size} />}
     </div>
   );
 }
