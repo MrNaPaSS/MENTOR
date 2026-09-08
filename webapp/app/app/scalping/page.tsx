@@ -2538,7 +2538,10 @@ export default function ScalpingPage() {
             вернуть. Прятать совсем нельзя - трейдер не должен вспоминать, где
             была панель.
 
-            Половина её уходит за край экрана и там и остаётся. Неподвижно:
+            За край экрана уходит почти вся полоса: снаружи остаётся ровно
+            столько, сколько занимают значок и подпись, и они встают под самым
+            краем. Полоса шире нужного отъедала бы поле у графика впустую. И
+            неподвижно:
             полоса, которая выезжает под курсором, тянет взгляд на себя каждый
             раз, когда мимо проходит рука, - а смотреть в этот момент нужно на
             цену. Место, которое она перестала занимать, забирает отрицательное
@@ -2552,7 +2555,7 @@ export default function ScalpingPage() {
           <button
             onClick={() => setScreenerOpen(true)}
             title={t.terminal.expandScreener}
-            className={`hidden w-9 shrink-0 -translate-x-[18px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-0 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-mr-4 xl:flex`}
+            className={`hidden w-9 shrink-0 -translate-x-[26px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-0 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-mr-4 xl:flex`}
             style={paneStyle}
           >
             {/* Всё содержимое - в колонках одной ширины. Точка вдесятеро уже
@@ -3175,9 +3178,9 @@ export default function ScalpingPage() {
               <button
                 onClick={() => setChatOpen(true)}
                 title={t.terminal.expandChat}
-                // Полоса у правого края - зеркало скринера: половина за краем,
-                // неподвижно, значок и название на видной части.
-                className="hidden w-9 shrink-0 translate-x-[18px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-0 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-ml-4 xl:flex"
+                // Полоса у правого края - зеркало скринера: почти вся за
+                // краем, неподвижно, значок и название под самым краем.
+                className="hidden w-9 shrink-0 translate-x-[26px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-0 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-ml-4 xl:flex"
                 style={paneStyle}
               >
                 {/* Колонки одной ширины - как у скринера: иначе точка

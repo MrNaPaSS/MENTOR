@@ -73,7 +73,6 @@ import {
 import { VolumeCandlesPrimitive } from "./primitives/VolumeCandlesPrimitive";
 import {
   FootprintPrimitive,
-  FOOTPRINT_HALF_W,
   type FootprintPalette,
 } from "./primitives/FootprintPrimitive";
 import { parseFootprint, type FootprintData } from "@/lib/indicator/footprint";
@@ -910,7 +909,10 @@ function PriceChart({
       return;
     }
     const candle = dataRef.current.find((c) => c.time === data.time) ?? null;
-    primitive.setData(data, candle, footSkinRef.current);
+    // Время последней свечи: от неё панель отсчитывает пустое поле справа, в
+    // котором стоит.
+    const last = dataRef.current.at(-1)?.time ?? null;
+    primitive.setData(data, candle, last, footSkinRef.current);
   }, []);
 
   const pushShapes = useCallback(() => {
@@ -1168,22 +1170,36 @@ function PriceChart({
         return;
       }
 
-      // Раскрытая свеча закрывает соседей своей колонкой: нажатие в её пределах
-      // сворачивает её обратно, а не проваливается на то, что под ней.
+      // Кластерная панель стоит справа, в пустом поле: нажатие по ней сворачивает
+      // её обратно, а не проваливается на цену под ней.
       const scale = chart.timeScale();
-      const open = openBarRef.current;
-      if (open !== null) {
-        const ox = scale.timeToCoordinate(open as UTCTimestamp);
-        if (ox !== null && Math.abs(ox - param.point.x) <= FOOTPRINT_HALF_W) {
-          setOpenBar(null);
+      if (openBarRef.current !== null && footRef.current?.hit(param.point.x, param.point.y)) {
+        setOpenBar(null);
+        return;
+      }
+
+      // Нажатие по текущей цене раскрывает идущую свечу. Это главный жест
+      // режима: цена стоит у правого края, панель встаёт рядом с ней — рука
+      // тянется туда же, куда и взгляд.
+      const live = dataRef.current.at(-1);
+      if (live && FOOTPRINT_INTERVALS.has(intervalRef.current)) {
+        const liveX = scale.timeToCoordinate(live.time as UTCTimestamp);
+        const liveY = series.priceToCoordinate(live.close);
+        if (
+          liveX !== null &&
+          liveY !== null &&
+          param.point.x > liveX &&
+          Math.abs(liveY - param.point.y) <= FOOTPRINT_HIT_PX
+        ) {
+          setOpenBar((now) => (now === live.time ? null : live.time));
           return;
         }
       }
 
-      // Нажатие по самой свече раскрывает её: на месте палочки встаёт колонка
-      // объёмов по ценам. Проверяем и по горизонтали, и по вертикали: клик по
-      // пустому месту над свечой - это расчёт сделки от той цены, и отбирать
-      // его у трейдера нельзя.
+      // Нажатие по самой свече раскрывает её: справа встаёт колонка объёмов по
+      // ценам, а к свече от неё идёт пунктир. Проверяем и по горизонтали, и по
+      // вертикали: клик по пустому месту над свечой - это расчёт сделки от той
+      // цены, и отбирать его у трейдера нельзя.
       const bar = barUnder(scale, series, param.point, dataRef.current);
       if (bar && FOOTPRINT_INTERVALS.has(intervalRef.current)) {
         setOpenBar((now) => (now === bar.time ? null : bar.time));

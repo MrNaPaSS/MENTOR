@@ -1,16 +1,20 @@
-// Раскрытая свеча: её объём разложен по ценам прямо на графике.
+// Кластерная свеча: объём выбранной свечи, разложенный по ценам.
 //
-// Нажатие по свече раскрывает её: на месте одной палочки встаёт колонка строк —
-// сколько денег прошло на каждой цене, слева продажи, справа покупки. Порядок
-// тот же, что в стакане рядом: продажи слева, покупки справа, старшая цена
-// сверху. Одно и то же движение глаз читает и книгу заявок, и уже прошедший
-// объём.
+// Стоит она не на месте свечи, а справа от графика — в пустом поле впереди
+// последней свечи. Раньше колонка вставала прямо на палочку и закрывала собой
+// соседей: чтобы посмотреть, из чего собрана минута, приходилось терять из
+// виду то, что было до неё. Теперь график остаётся целым, а свеча раскрывается
+// рядом — так же, как стакан стоит сбоку, а не поверх цены.
 //
-// Рисуем сами, а не средствами библиотеки: ей на графике доступны линии и
-// маркеры, а здесь нужна таблица, встающая ровно на ценовую сетку и знающая
-// текущий масштаб. Сама свеча тоже перерисовывается здесь — тонкой чертой
-// поверх строк: под таблицей её тело было бы не видно, а без него непонятно,
-// какую свечу раскрыли.
+// Строки встают на ту же ценовую сетку, что и график: строка панели и уровень
+// на графике находятся на одной высоте, и до цены из панели можно дотянуться
+// взглядом по горизонтали. Порядок сторон тот же, что в стакане: продажи
+// слева, покупки справа, старшая цена сверху.
+//
+// Рисуем сами, а не средствами библиотеки: ей доступны линии и маркеры, а
+// здесь нужна таблица, знающая текущий масштаб цены. Тело свечи повторяется
+// внутри панели тонкой чертой по её оси — иначе непонятно, где внутри размаха
+// свеча открылась и где стоит сейчас.
 
 import type {
   IChartApi,
@@ -26,6 +30,7 @@ import type { Candle } from "@/lib/indicator/types";
 import {
   foldRows,
   markRows,
+  panelLeft,
   pickStep,
   type FootprintData,
   type FootprintRow,
@@ -33,24 +38,32 @@ import {
 import { money } from "@/lib/scalping";
 
 /** Минимальная высота строки: меньше в неё не влезает число. */
-const MIN_ROW_PX = 12;
+const MIN_ROW_PX = 13;
+
+/** Ширина одной колонки чисел: продажи слева от оси, покупки справа. */
+const COL_W = 52;
+
+/** Полная ширина панели. */
+export const FOOTPRINT_W = COL_W * 2;
+
+/** Зазор от числа до оси панели: в этом коридоре стоит тело свечи. */
+const GAP = 6;
+
+/** Отступ панели от ценовой шкалы. */
+const PAD = 8;
 
 /**
- * Ширина колонки чисел и зазор от оси свечи до края числа.
+ * Шапка: две строки итогов свечи.
  *
- * Наружу отдаётся половина ширины панели: по ней график понимает, попало ли
- * нажатие в раскрытую свечу.
+ * Сверху стороны порознь — сколько продали и сколько купили: это два разных
+ * лагеря, и складывать их в одно число значит терять главное. Ниже их итог:
+ * перевес и весь оборот свечи.
  */
-const COL_W = 54;
-const GAP = 5;
+const HEAD_LINE = 14;
+const HEAD_H = HEAD_LINE * 2;
 
-export const FOOTPRINT_HALF_W = COL_W;
-
-/** Размер шрифта строк, точки экрана. */
+/** Размер шрифта, точки экрана. */
 const FONT_PX = 10;
-
-/** Отступ шапки над верхней строкой. */
-const HEAD_GAP = 6;
 
 export type FootprintPalette = {
   /** Фон панели: под ним свечи соседей должны угадываться, но не мешать. */
@@ -67,7 +80,7 @@ export type FootprintPalette = {
   poc: string;
   /** Крупная сделка — тот же жёлтый, что у плиты в стакане. */
   gold: string;
-  /** Тело и фитиль раскрытой свечи поверх строк. */
+  /** Тело и фитиль раскрытой свечи внутри панели. */
   candleUp: string;
   candleDown: string;
 };
@@ -89,15 +102,24 @@ type ReadyRow = {
 };
 
 type Ready = {
+  /** Ось панели: от неё расходятся колонки. */
   x: number;
   left: number;
   right: number;
+  /** Верх панели вместе с шапкой — по нему же считается попадание мышью. */
+  top: number;
+  bottom: number;
   rows: ReadyRow[];
   peakSide: number;
-  head: string;
-  headY: number;
-  headDelta: number;
+  /** Итоги свечи: стороны порознь сверху, перевес и оборот под ними. */
+  sellText: string;
+  buyText: string;
+  deltaText: string;
+  totalText: string;
+  buyersWin: boolean;
   candle: ReadyCandle | null;
+  /** Где на графике стоит раскрытая свеча. Уехала под панель — ничего. */
+  markerX: number | null;
 } | null;
 
 class FootprintRenderer implements IPrimitivePaneRenderer {
@@ -124,11 +146,29 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
       const x = Math.round(ready.x * hx);
       const left = Math.round(ready.left * hx);
       const right = Math.round(ready.right * hx);
-      const top = Math.round(ready.rows[0].top * vy);
-      const bottom = Math.round(ready.rows[ready.rows.length - 1].bottom * vy);
+      const top = Math.round(ready.top * vy);
+      const rowsTop = Math.round(ready.rows[0].top * vy);
+      const bottom = Math.round(ready.bottom * vy);
 
-      // Подложка. Без неё строки читались бы поверх соседних свечей, и цифры
-      // мешались бы с фитилями.
+      // Черта от свечи к панели: панель стоит в стороне, и без неё непонятно,
+      // какую именно свечу разобрали. Пунктиром — это подсказка, а не данные.
+      if (ready.markerX !== null) {
+        const mx = Math.round(ready.markerX * hx) + 0.5 * line;
+        context.save();
+        context.strokeStyle = palette.border;
+        context.lineWidth = line;
+        context.setLineDash([3 * hx, 3 * hx]);
+        context.beginPath();
+        context.moveTo(mx, top);
+        context.lineTo(mx, bottom);
+        context.moveTo(mx, rowsTop);
+        context.lineTo(left, rowsTop);
+        context.stroke();
+        context.restore();
+      }
+
+      // Подложка. Панель стоит в пустом поле, но при сильном отдалении свечи
+      // подходят к ней вплотную: без глухого фона цифры смешались бы с ними.
       context.fillStyle = palette.panel;
       context.fillRect(left, top, right - left, bottom - top);
       context.strokeStyle = palette.border;
@@ -138,9 +178,34 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
       context.font = `${Math.round(FONT_PX * vy)}px ui-monospace, monospace`;
       context.textBaseline = "middle";
 
-      // Половина панели в точках холста: полосы объёма растут от оси свечи к
-      // краям, и длиннее половины быть не могут.
-      const half = COL_W * hx;
+      // Шапка. Верхняя строка - стороны порознь: слева продали, справа купили,
+      // в том же порядке, что и колонки под ней. Нижняя - их итог: перевес и
+      // весь оборот свечи. Итоги считает сервер по всем сделкам, а не по
+      // видимым строкам, — укрупнение на них не влияет.
+      const lineA = (ready.top + HEAD_LINE / 2) * vy;
+      const lineB = (ready.top + HEAD_LINE * 1.5) * vy;
+      const inner = GAP * hx;
+      context.textAlign = "left";
+      context.fillStyle = palette.down;
+      context.fillText(ready.sellText, left + inner, lineA);
+      context.textAlign = "right";
+      context.fillStyle = palette.up;
+      context.fillText(ready.buyText, right - inner, lineA);
+      context.textAlign = "left";
+      context.fillStyle = ready.buyersWin ? palette.up : palette.down;
+      context.fillText(ready.deltaText, left + inner, lineB);
+      context.textAlign = "right";
+      context.fillStyle = palette.muted;
+      context.fillText(ready.totalText, right - inner, lineB);
+      context.beginPath();
+      context.strokeStyle = palette.border;
+      context.lineWidth = line;
+      context.moveTo(left, rowsTop - 0.5 * line);
+      context.lineTo(right, rowsTop - 0.5 * line);
+      context.stroke();
+
+      // Длина полосы: от оси до края колонки, за вычетом рамки.
+      const span = (COL_W - 2) * hx;
       for (const { row, top: rowTop, bottom: rowBottom, center } of ready.rows) {
         const y1 = Math.round(rowTop * vy);
         const y2 = Math.round(rowBottom * vy);
@@ -150,13 +215,13 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
           // Цена, на которой свеча простояла дольше всего: к ней она и
           // возвращается, и по ней ставят стоп.
           context.fillStyle = palette.poc;
-          context.fillRect(left, y1, right - left, Math.max(1, y2 - y1));
+          context.fillRect(left + line, y1, right - left - 2 * line, Math.max(1, y2 - y1));
         }
 
         // Полосы за числами: по ним видно перевес, не читая цифр.
         if (ready.peakSide > 0) {
-          const sellW = Math.round((row.sell / ready.peakSide) * half);
-          const buyW = Math.round((row.buy / ready.peakSide) * half);
+          const sellW = Math.round((row.sell / ready.peakSide) * span);
+          const buyW = Math.round((row.buy / ready.peakSide) * span);
           const h = Math.max(1, y2 - y1 - Math.round(vy));
           if (sellW > 0) {
             context.fillStyle = palette.barSell;
@@ -170,12 +235,16 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
 
         // Числа. Ноль не печатаем: пустая строка читается быстрее, чем строка
         // нулей, а профиль как раз про то, где объём есть.
-        context.textAlign = "right";
-        context.fillStyle = row.sell > 0 ? palette.down : palette.muted;
-        if (row.sell > 0) context.fillText(money(row.sell), x - GAP * hx, y);
-        context.textAlign = "left";
-        context.fillStyle = row.buy > 0 ? palette.up : palette.muted;
-        if (row.buy > 0) context.fillText(money(row.buy), x + GAP * hx, y);
+        if (row.sell > 0) {
+          context.textAlign = "right";
+          context.fillStyle = palette.down;
+          context.fillText(money(row.sell), x - GAP * hx, y);
+        }
+        if (row.buy > 0) {
+          context.textAlign = "left";
+          context.fillStyle = palette.up;
+          context.fillText(money(row.buy), x + GAP * hx, y);
+        }
 
         if (row.whale) {
           // Крупная сделка обводится, как плита в стакане: тем же жёлтым и
@@ -190,13 +259,14 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
           // передавил.
           const width = Math.max(2, Math.round(2 * hx));
           context.fillStyle = row.imbalance > 0 ? palette.up : palette.down;
-          const edge = row.imbalance > 0 ? right - width : left;
+          const edge = row.imbalance > 0 ? right - line - width : left + line;
           context.fillRect(edge, y1, width, Math.max(1, y2 - y1));
         }
       }
 
-      // Сама свеча поверх строк: тонкой чертой по оси колонки. Без неё
-      // непонятно, какую свечу раскрыли и куда она сходила.
+      // Сама свеча — тонкой чертой по оси панели, в коридоре между колонками.
+      // Без неё панель была бы просто столбиком чисел: тело показывает, где
+      // внутри размаха свеча открылась и где стоит сейчас.
       if (ready.candle) {
         const body = ready.candle.rising ? palette.candleUp : palette.candleDown;
         context.strokeStyle = body;
@@ -208,16 +278,11 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
 
         const bodyTop = Math.round(Math.min(ready.candle.open, ready.candle.close) * vy);
         const bodyBottom = Math.round(Math.max(ready.candle.open, ready.candle.close) * vy);
-        const width = Math.max(line, Math.round(3 * hx));
+        const width = Math.max(line, Math.round((GAP - 2) * hx));
         context.fillStyle = body;
         context.fillRect(x - width / 2, bodyTop, width, Math.max(line, bodyBottom - bodyTop));
       }
 
-      // Шапка: оборот свечи и её дельта. Итоги считает сервер по всем сделкам,
-      // а не по видимым строкам, — укрупнение на них не влияет.
-      context.textAlign = "center";
-      context.fillStyle = ready.headDelta >= 0 ? palette.up : palette.down;
-      context.fillText(ready.head, x, ready.headY * vy);
       context.textAlign = "left";
       context.textBaseline = "alphabetic";
     });
@@ -229,6 +294,13 @@ class FootprintPaneView implements IPrimitivePaneView {
 
   constructor(private readonly source: FootprintPrimitive) {}
 
+  /** Панель на экране — по ней график считает попадание мышью. */
+  box() {
+    const ready = this.ready;
+    if (!ready) return null;
+    return { left: ready.left, right: ready.right, top: ready.top, bottom: ready.bottom };
+  }
+
   update() {
     const chart = this.source.chart;
     const series = this.source.series;
@@ -239,9 +311,8 @@ class FootprintPaneView implements IPrimitivePaneView {
     }
 
     const scale = chart.timeScale();
-    const x = scale.timeToCoordinate(data.time as Time);
-    if (x === null) {
-      // Свечу увели за край экрана прокруткой — рисовать нечего.
+    const width = scale.width();
+    if (!(width > 0)) {
       this.ready = null;
       return;
     }
@@ -278,13 +349,20 @@ class FootprintPaneView implements IPrimitivePaneView {
       return;
     }
 
+    // Панель прижата к ценовой шкале и стоит впереди последней свечи. Место
+    // под неё есть почти всегда: справа график держит пустое поле в полтора
+    // десятка свечей — то самое, в которое уходит цена.
+    const lastX = this.source.lastTime === null
+      ? null
+      : scale.timeToCoordinate(this.source.lastTime as Time);
+    const left = panelLeft(width, FOOTPRINT_W, PAD, lastX, scale.options().barSpacing);
+
     const peakSide = rows.reduce((acc, row) => Math.max(acc, row.buy, row.sell), 0);
     const delta = data.buy - data.sell;
     const total = data.buy + data.sell;
     // «≈» вместо «Σ», когда свеча разобрана не целиком: цифра рядом всё равно
     // меньше настоящей, и выдавать её за полную нельзя.
     const sign = delta >= 0 ? "+" : "−";
-    const head = `${data.partial ? "≈" : "Σ"}${money(total)}  Δ${sign}${money(Math.abs(delta))}`;
 
     const candleData = this.source.candle;
     let candle: ReadyCandle | null = null;
@@ -298,16 +376,25 @@ class FootprintPaneView implements IPrimitivePaneView {
       }
     }
 
+    const markerX = scale.timeToCoordinate(data.time as Time);
+
     this.ready = {
-      x,
-      left: x - COL_W,
-      right: x + COL_W,
+      x: left + COL_W,
+      left,
+      right: left + FOOTPRINT_W,
+      top: ready[0].top - HEAD_H,
+      bottom: ready[ready.length - 1].bottom,
       rows: ready,
       peakSide,
-      head,
-      headY: ready[0].top - HEAD_GAP,
-      headDelta: delta,
+      sellText: money(data.sell),
+      buyText: money(data.buy),
+      deltaText: `Δ${sign}${money(Math.abs(delta))}`,
+      totalText: `${data.partial ? "≈" : "Σ"}${money(total)}`,
+      buyersWin: delta >= 0,
       candle,
+      // Черту к свече ведём, только если панель её не накрыла: под панелью
+      // рисовать пунктир незачем.
+      markerX: markerX !== null && markerX < left ? markerX : null,
     };
   }
 
@@ -338,6 +425,8 @@ const DEFAULT_PALETTE: FootprintPalette = {
 export class FootprintPrimitive implements ISeriesPrimitive<Time> {
   data: FootprintData | null = null;
   candle: Candle | null = null;
+  /** Время последней свечи ряда: от неё считается пустое поле справа. */
+  lastTime: number | null = null;
   palette: FootprintPalette = DEFAULT_PALETTE;
   chart: IChartApi | null = null;
   series: ISeriesApi<SeriesType> | null = null;
@@ -357,9 +446,15 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
     this.requestUpdate = undefined;
   }
 
-  setData(data: FootprintData | null, candle: Candle | null, palette: FootprintPalette) {
+  setData(
+    data: FootprintData | null,
+    candle: Candle | null,
+    lastTime: number | null,
+    palette: FootprintPalette,
+  ) {
     this.data = data;
     this.candle = candle;
+    this.lastTime = lastTime;
     this.palette = palette;
     this.requestUpdate?.();
   }
@@ -368,6 +463,13 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
     this.data = null;
     this.candle = null;
     this.requestUpdate?.();
+  }
+
+  /** Попало ли нажатие в панель. Нажатие внутри неё сворачивает её обратно. */
+  hit(x: number, y: number): boolean {
+    const box = this.view.box();
+    if (!box) return false;
+    return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
   }
 
   updateAllViews() {
