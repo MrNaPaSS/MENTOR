@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Download, Link2, X } from "lucide-react";
 
 import type { JournalTrade } from "@/lib/journal";
-import { loadBackdrop, render, variantFor } from "@/lib/pnl/card";
+import { loadBackdrop, render, resultInk, variantFor } from "@/lib/pnl/card";
 import { cardFromTrade } from "@/lib/pnl/data";
 import { copy, download, share } from "@/lib/pnl/share";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -127,7 +127,13 @@ export default function PnlCard({
       onClick={onClose}
       style={
         {
-          "--pnl-accent": variant.ink,
+          // Цвет печати - по знаку результата, а не по бланку.
+          //
+          // Здесь оттиск рисует разметка, а на скачиваемой картинке - холст, и
+          // это две разные реализации одной печати. Холст перевели на результат
+          // раньше, а разметка осталась на цвете заготовки: в окне терминала
+          // печать была зелёной у убыточной сделки, а по ссылке - красной.
+          "--pnl-accent": resultInk(variant.paper, data.pnl),
           // Доли рамки печати - у каждой заготовки свои, и разметка ставит
           // оттиск по тем же числам, что и холст.
           "--pnl-x": `${variant.stamp.x * 100}%`,
