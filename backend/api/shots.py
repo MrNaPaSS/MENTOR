@@ -24,7 +24,7 @@ from datetime import timezone
 from html import escape
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -45,6 +45,28 @@ BASE_URL = (os.getenv("SHOTS_BASE_URL", "") or "").rstrip("/")
 # Куда ведёт кнопка со страницы карточки. Отдельно от BASE_URL: картинки отдаёт
 # бэкенд, а терминал живёт на сайте, и это разные адреса.
 SITE_URL = (os.getenv("SITE_URL", "https://www.nmnh.trade") or "").rstrip("/")
+
+
+def shot_origin(request: Request) -> str:
+    """Адрес, по которому эту страницу и её картинки видно снаружи.
+
+    Из настройки, если она задана; иначе - из самого запроса. Второе нужно не
+    для удобства: og-теги обязаны быть полными адресами. Относительный
+    `/abc.png` браузер разворачивает сам, а Telegram - нет: он молча оставляет
+    превью без картинки, и ссылка на карточку уходит в форум серым
+    прямоугольником с одним заголовком.
+
+    Заголовки от прокси - первыми: снаружи это `https://api.nmnh.trade`, а до
+    uvicorn запрос доходит как `http://127.0.0.1:8000`, и собранный по нему
+    адрес никуда не ведёт.
+    """
+    if BASE_URL:
+        return BASE_URL
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    if not host:
+        return ""
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    return f"{proto}://{host}".rstrip("/")
 
 
 def _terminal_url(symbol: str) -> str:
@@ -80,6 +102,7 @@ class ShotIn(BaseModel):
 @api_router.post("", status_code=201)
 def save_shot(
     body: ShotIn,
+    request: Request,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
@@ -110,7 +133,7 @@ def save_shot(
         )
     )
     session.commit()
-    return {"id": shot_id, "url": f"{BASE_URL}/{shot_id}"}
+    return {"id": shot_id, "url": f"{shot_origin(request)}/{shot_id}"}
 
 
 class CardFrame(BaseModel):
@@ -173,6 +196,7 @@ def _png(payload: str) -> bytes:
 @api_router.post("/pnl", status_code=201)
 def save_card(
     body: CardIn,
+    request: Request,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
@@ -198,7 +222,7 @@ def save_card(
         )
     )
     session.commit()
-    return {"id": card_id, "url": f"{BASE_URL}/{card_id}"}
+    return {"id": card_id, "url": f"{shot_origin(request)}/{card_id}"}
 
 
 # Первые байты JPEG. Так фотография из Telegram отличается от чего угодно
@@ -299,7 +323,7 @@ def _card_look(shot: ChartShot) -> tuple[str, dict[str, float]]:
     return ink, box
 
 
-def _card_page(shot: ChartShot) -> HTMLResponse:
+def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
     """Страница карточки сделки: лист выезжает сверху, сверху падает печать.
 
     Движение здесь не украшение. Печать, которая просто появляется на плакате, -
@@ -315,8 +339,8 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     symbol = escape(shot.symbol)
     note = escape(shot.note or "")
     title = f"{symbol} · NMNH"
-    image = f"{BASE_URL}/{shot.id}.png"
-    paper = f"{BASE_URL}/{shot.id}-raw.png"
+    image = f"{base}/{shot.id}.png"
+    paper = f"{base}/{shot.id}-raw.png"
 
     # Что стоит под листом.
     #
@@ -578,7 +602,7 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
 
 
 @router.get("/{shot_id}", response_class=HTMLResponse, include_in_schema=False)
-def shot_page(shot_id: str, session=Depends(get_session)):
+def shot_page(shot_id: str, request: Request, session=Depends(get_session)):
     """Страница снимка: картинка, монета, таймфрейм, автор и время.
 
     Отдаём готовый HTML с сервера, а не страницу приложения: ссылку открывают
@@ -596,12 +620,14 @@ def shot_page(shot_id: str, session=Depends(get_session)):
     interval = escape(shot.interval)
     note = escape(shot.note or "")
 
+    base = shot_origin(request)
+
     # Карточка сделки живёт своей страницей: у неё и движение своё, и печать.
     if shot.kind in ("pnl", "signal"):
-        return _card_page(shot)
+        return _card_page(shot, base)
 
     title = f"{symbol} · {interval}"
-    image = f"{BASE_URL}/{shot_id}.png"
+    image = f"{base}/{shot_id}.png"
     caption = f'<div class="note">{note}</div>' if note else ""
 
     return HTMLResponse(

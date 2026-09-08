@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.api.coins import find_or_create_student, require_service_key
-from backend.api.shots import BASE_URL as SHOTS_BASE_URL, save_photo
+from backend.api.shots import save_photo, shot_origin
 from backend.deps import get_session
 from core.models import ChatBridge, ChatMessage, ChatThread, Student, utcnow
 
@@ -97,7 +97,7 @@ def _author(session, body: ForumMessage) -> Student:
     return student
 
 
-def _attach(body: ForumMessage) -> dict | None:
+def _attach(body: ForumMessage, base: str) -> dict | None:
     """Что приложено к сообщению.
 
     Фотография - снимком: в ленте она открывается так же, как снимок с
@@ -115,7 +115,9 @@ def _attach(body: ForumMessage) -> dict | None:
         logger.warning("Фотография из форума не сохранилась: %s", exc)
         return None
 
-    url = f"{SHOTS_BASE_URL}/{name}"
+    # Полным адресом: картинку показывает браузер ученика, а сайт и снимки
+    # живут на разных доменах - относительный путь он искал бы у себя.
+    url = f"{base}/{name}"
     return {"kind": "shot", "url": url, "image": url, "trade": None}
 
 
@@ -182,7 +184,7 @@ async def incoming(body: ForumMessage, request: Request, session=Depends(get_ses
             )
         ).scalar_one_or_none()
 
-    attach = _attach(body)
+    attach = _attach(body, shot_origin(request))
     row = ChatMessage(
         student_id=student.id,
         text=text,

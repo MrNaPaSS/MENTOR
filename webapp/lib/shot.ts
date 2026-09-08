@@ -10,7 +10,7 @@
 // нужна тому, кто смотрит, а базе о владельце знать незачем.
 
 import { dict } from "@/lib/i18n";
-import { authReq, API_URL } from "./api";
+import { absolute, authReq, API_URL } from "./api";
 import { getAccessToken } from "./auth";
 import type { ShotMeta } from "./shotFrame";
 
@@ -100,5 +100,5 @@ export async function upload(
     }),
   });
   if (!body) return null;
-  return { id: body.id, url: `${API_URL}${body.url}`, image: `${API_URL}/${body.id}.png` };
+  return { id: body.id, url: absolute(body.url), image: `${API_URL}/${body.id}.png` };
 }

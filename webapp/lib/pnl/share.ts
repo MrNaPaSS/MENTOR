@@ -9,7 +9,7 @@
 // внутрь уже начатой записи.
 
 import { dict } from "@/lib/i18n";
-import { authReq, API_URL } from "@/lib/api";
+import { absolute, authReq } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 
 import { resultInk } from "./card";
@@ -94,5 +94,5 @@ export async function share(
       },
     }),
   });
-  return body ? `${API_URL}${body.url}` : null;
+  return body ? absolute(body.url) : null;
 }

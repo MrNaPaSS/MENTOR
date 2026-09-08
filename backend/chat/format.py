@@ -112,7 +112,7 @@ def trade_html(trade: dict, url: str = "") -> str:
     else:
         note = "закрыта"
 
-    head = f"<b>{symbol}</b> · {side} · ×{leverage} — {note}"
+    head = f"<b>{symbol}</b> · {side} · ×{leverage} · {note}"
     if url.lower().startswith(("http://", "https://")):
         head = f'<a href="{html.escape(url, quote=True)}">{head}</a>'
     lines = [f"{mark} {head}"]

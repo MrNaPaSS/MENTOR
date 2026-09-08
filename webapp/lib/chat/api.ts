@@ -4,7 +4,7 @@
 //
 // Живое приходит сокетом, здесь всё, что спрашивают один раз или по нажатию.
 
-import { API_URL, authReq } from "@/lib/api";
+import { absolute, API_URL, authReq } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 
 /** Кто написал: так, как он выглядит в ленте сейчас. */
@@ -231,7 +231,7 @@ export async function uploadPhoto(file: File, symbol: string): Promise<ChatAttac
 
   return {
     kind: "shot",
-    url: `${API_URL}${body.url}`,
+    url: absolute(body.url),
     image: `${API_URL}/${body.id}.png`,
   };
 }

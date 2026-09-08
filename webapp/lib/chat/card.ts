@@ -22,7 +22,7 @@
 // Ошибка здесь никогда не отменяет сообщение. Не собралась картинка - сделка
 // уйдёт в чат без ссылки: разговор важнее иллюстрации к нему.
 
-import { authReq, API_URL } from "@/lib/api";
+import { absolute, authReq, API_URL } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { defaultVariant, render } from "@/lib/pnl/card";
 import { cardFromShared } from "@/lib/pnl/data";
@@ -79,7 +79,7 @@ async function publishSignal(trade: SharedTrade, at: string): Promise<string | n
       card: { variant: template.id, ink: template.accent, stamp: template.stamp },
     }),
   });
-  return body ? `${API_URL}${body.url}` : null;
+  return body ? absolute(body.url) : null;
 }
 
 /** Выложить карточку результата - ту же, что делают в терминале. */
