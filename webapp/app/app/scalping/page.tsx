@@ -2616,10 +2616,6 @@ export default function ScalpingPage() {
                     const one = picked ?? hovered;
                     return one && one.symbol === symbol ? one : null;
                   })()}
-                  // Увозить график к сделке нужно только когда её открыли
-                  // нажатием: под курсором разметка показывается там, где
-                  // трейдер уже смотрит, и дёргать под ним экран незачем.
-                  ghostFocus={picked?.id ?? null}
                   hoverLevel={levelHint}
                   shot={shotRef}
                   // Шаг сетки лестницы делим на укрупнение: биржевой шаг от
