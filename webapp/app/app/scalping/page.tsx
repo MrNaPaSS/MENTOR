@@ -2979,7 +2979,6 @@ export default function ScalpingPage() {
                     )}
                   </button>
                 </div>
-
               </div>
 
               {/* Инструмент, цена и плита — отдельной строкой под таймфреймами.
