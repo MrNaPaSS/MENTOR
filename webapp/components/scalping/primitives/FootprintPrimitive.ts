@@ -12,9 +12,11 @@
 // Разметки свечи здесь нет намеренно: ни рамки тела, ни фитилей, ни подписей
 // краёв. Всё это картинка и так рассказывает строками - где прошли деньги,
 // там свеча и стояла, - а рамка поверх них только спорила с цифрами внутри
-// себя. От свечи осталась обведённая цена: та строка, на которой цена стоит
-// сейчас. Это единственный вопрос, которого у строк нет, и отвечает на него
-// не отдельная фигура, а сама цена в своей колонке.
+// себя. От свечи осталась одна помеченная цена: та строка, на которой рынок
+// стоит сейчас. Это единственный вопрос, которого у строк нет, и отвечает на
+// него не отдельная фигура, а сама цена в своей колонке - залитая плашкой
+// цвета свечи. Рамка на лестнице одна, золотая, и она про другое: где свеча
+// простояла дольше всего.
 //
 // Растёт картинка сама. Только что открытая свеча стоит на одной цене - у неё
 // одна строка; за минуту их набирается десяток, за час - сотня. Строк ровно
@@ -94,6 +96,9 @@ const WIDTH = PAD * 2 + SIDE * 2 + CORE;
 /** Место под фитиль и подпись края там, где свеча выходит за лестницу. */
 const TAIL = 14;
 
+/** Насколько контур следа гуще своей заливки. */
+const EDGE = 0.3;
+
 type ReadyRow = {
   top: number;
   height: number;
@@ -119,10 +124,12 @@ type ReadyRow = {
 };
 
 type ReadyCandle = {
-  /** Строка, на которой цена стоит сейчас: её цену и обводим. */
+  /** Строка, на которой цена стоит сейчас: её цену и метим плашкой. */
   top: number;
   height: number;
   rising: boolean;
+  /** Чернила по плашке: цвет свечей бывает и светлым, и почти чёрным. */
+  ink: string;
 };
 
 type Ready = {
@@ -184,6 +191,27 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
         ctx.fillText(text, atX, atY);
       };
 
+      // Плашка текущей цены - под строками, а не поверх них.
+      //
+      // Раньше здесь стояла рамка, и на самой наторгованной цене их сходилось
+      // сразу две: золотая вокруг ядра и эта внутри неё. Две вложенные рамки
+      // читаются как одна фигура неясного смысла, а вопросы у них разные -
+      // «здесь свеча стояла дольше всего» и «здесь рынок сейчас». Поэтому
+      // рамка осталась одна, золотая, а текущая цена стала залитой плашкой:
+      // спорить им больше нечем.
+      const candle = ready.candle;
+      if (candle) {
+        const top = Math.round(candle.top * vy);
+        const h = Math.max(line, Math.round(candle.height * vy));
+        ctx.fillStyle = candle.rising ? skin.dotUp : skin.dotDown;
+        ctx.fillRect(
+          priceLeft,
+          top + Math.round(1 * vy),
+          priceRight - priceLeft,
+          Math.max(line, h - Math.round(2 * vy)),
+        );
+      }
+
       for (const row of ready.rows) {
         const top = Math.round(row.top * vy);
         const h = Math.max(line, Math.round(row.height * vy));
@@ -196,19 +224,29 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
         // Ячейка у цены есть всегда - на ней стоит число; за край ядра уходит
         // след, и вот он уже про деньги. Одним прямоугольником: стык двух
         // заливок с одинаковой прозрачностью виден полосой.
+        //
+        // По краю - контур своим же цветом в полную силу. Заливка задана
+        // густотой, и на бледных строках её край размывается в бумагу: две
+        // соседние полосы отличаются на пиксель длины, а на глаз выходят
+        // одинаковыми. Контур возвращает след к тому, чем он и является, -
+        // к полосе известной длины, которую можно сравнить с соседней.
+        const trace = (fill: string, from: number, to: number, heat: number) => {
+          ctx.globalAlpha = heat;
+          ctx.fillStyle = fill;
+          ctx.fillRect(from, cellTop, to - from, cellH);
+          ctx.globalAlpha = Math.min(1, heat + EDGE);
+          ctx.strokeStyle = fill;
+          ctx.lineWidth = line;
+          ctx.strokeRect(from + 0.5 * line, cellTop + 0.5 * line, to - from - line, cellH - line);
+          ctx.globalAlpha = 1;
+        };
+
         if (row.sellHeat > 0) {
-          ctx.globalAlpha = row.sellHeat;
-          ctx.fillStyle = skin.down;
-          const tail = Math.round(row.sellTail * hx);
-          ctx.fillRect(coreLeft - tail, cellTop, priceLeft - coreLeft + tail, cellH);
+          trace(skin.down, coreLeft - Math.round(row.sellTail * hx), priceLeft, row.sellHeat);
         }
         if (row.buyHeat > 0) {
-          ctx.globalAlpha = row.buyHeat;
-          ctx.fillStyle = skin.up;
-          const tail = Math.round(row.buyTail * hx);
-          ctx.fillRect(priceRight, cellTop, coreRight - priceRight + tail, cellH);
+          trace(skin.up, priceRight, coreRight + Math.round(row.buyTail * hx), row.buyHeat);
         }
-        ctx.globalAlpha = 1;
 
         ctx.textAlign = "right";
         ctx.fillStyle = row.sellInk;
@@ -220,11 +258,18 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
         ink(row.buy, priceRight + Math.round(3 * hx), middle);
 
         // Цена посередине. Крупная сделка - тем же жёлтым, что плита в
-        // стакане: это одно и то же событие, только уже прошедшее.
+        // стакане: это одно и то же событие, только уже прошедшее. На плашке
+        // текущей цены - её чернилами и без каймы: кайма цвета панели обвела
+        // бы цифру белым кольцом посреди залитой плашки.
         ctx.textAlign = "center";
         ctx.font = font(9);
-        ctx.fillStyle = row.whale ? skin.gold : skin.muted;
-        ink(row.price, axis, middle);
+        if (candle && row.top === candle.top) {
+          ctx.fillStyle = candle.ink;
+          ctx.fillText(row.price, axis, middle);
+        } else {
+          ctx.fillStyle = row.whale ? skin.gold : skin.muted;
+          ink(row.price, axis, middle);
+        }
 
         // Граница области стоимости - чертой во всю ширину: по ней видно, где
         // рынок согласился торговать, а где пробежал на пустоте. Верхняя идёт
@@ -265,24 +310,6 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
           ctx.lineWidth = line;
           ctx.strokeRect(coreLeft + 0.5 * line, top + 0.5 * line, coreRight - coreLeft - line, h - line);
         }
-      }
-
-      // Текущая цена - обведённая. Не отдельная фигура поверх строк, а та же
-      // цена в своей колонке: рамка говорит «вот здесь рынок сейчас», ничего
-      // не закрывая и ни с чем не споря.
-      const candle = ready.candle;
-      if (candle) {
-        const top = Math.round(candle.top * vy);
-        const h = Math.max(line, Math.round(candle.height * vy));
-        ctx.strokeStyle = candle.rising ? skin.dotUp : skin.dotDown;
-        ctx.lineWidth = Math.max(line, Math.round(1.5 * hx));
-        const inset = ctx.lineWidth / 2;
-        ctx.strokeRect(
-          priceLeft + inset,
-          top + Math.round(1 * vy) + inset,
-          priceRight - priceLeft - ctx.lineWidth,
-          Math.max(ctx.lineWidth, h - Math.round(2 * vy)) - ctx.lineWidth,
-        );
       }
 
       ctx.textAlign = "left";
@@ -380,7 +407,21 @@ class FootprintPaneView implements IPrimitivePaneView {
           best = i;
         }
       });
-      shape = { top: laid[best].top, height: laid[best].height, rising: candle.close >= candle.open };
+      const rising = candle.close >= candle.open;
+      shape = {
+        top: laid[best].top,
+        height: laid[best].height,
+        rising,
+        // Плашка залита в полную силу, значит и чернила считаем по ней самой:
+        // цвет свечей бывает и почти белым, и почти чёрным.
+        ink: readableInk(
+          rising ? skin.dotUp : skin.dotDown,
+          skin.bg,
+          1,
+          skin.text,
+          skin.bright,
+        ),
+      };
     }
 
     // Поле сверху и снизу: сверху под подпись, снизу чтобы нижняя строка не
