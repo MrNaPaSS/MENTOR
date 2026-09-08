@@ -2,10 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { Globe, Building2, Map, Search, TrendingUp } from "lucide-react";
+import { Building2, Map, Search, TrendingUp } from "lucide-react";
+import { useTerminalTheme } from "@/lib/terminalTheme";
 
-const TradingChart = dynamic(() => import("@/components/market/TradingChart"), { ssr: false });
-const OrderBook    = dynamic(() => import("@/components/market/OrderBook"), { ssr: false });
 const SmartMoney   = dynamic(() => import("@/app/app/smartmoney/page"), {
   ssr: false,
   loading: () => (
@@ -23,16 +22,6 @@ const SmartMoney   = dynamic(() => import("@/app/app/smartmoney/page"), {
   ),
 });
 
-const PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"];
-const TF = [
-  { key: "1",   label: "1м"  },
-  { key: "5",   label: "5м"  },
-  { key: "15",  label: "15м" },
-  { key: "60",  label: "1ч"  },
-  { key: "240", label: "4ч"  },
-  { key: "D",   label: "1Д"  },
-];
-
 // ── Универсальный TradingView виджет ─────────────────────────────────────────
 
 function TvWidget({
@@ -46,6 +35,11 @@ function TvWidget({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const configKey = JSON.stringify(config);
+  // Виджет рисует чужой скрипт, и тему он берёт один раз - из настроек, с
+  // которыми его завели. Раньше там стояло «тёмная» намертво: на белой странице
+  // посреди светлых панелей висел чёрный прямоугольник. Тему берём у терминала,
+  // как берут её все остальные разделы.
+  const theme = useTerminalTheme();
 
   useEffect(() => {
     const el = ref.current;
@@ -63,16 +57,20 @@ function TvWidget({
       ...config,
       width: "100%",
       height,
-      colorTheme: "dark",
+      colorTheme: theme,
       locale: "ru",
       isTransparent: false,
-      backgroundColor: "#0b0e11",
+      // Фон под цвет карточки, в которой виджет лежит: чужой скрипт своей
+      // рамки не рисует, и любое расхождение читается швом.
+      backgroundColor: theme === "light" ? "#ffffff" : "#0b0e11",
     });
     el.appendChild(script);
 
     return () => { if (el) el.innerHTML = ""; };
+  // Тема в зависимостях: сменили её - виджет пересобирается. Своего способа
+  // перекраситься на лету у него нет.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scriptName, configKey, height]);
+  }, [scriptName, configKey, height, theme]);
 
   return (
     <div
@@ -197,20 +195,16 @@ function OverviewSection() {
 
 // ── Страница Рынок ────────────────────────────────────────────────────────────
 
-type Section = "single" | "multi" | "smart" | "heatmap" | "screener" | "overview";
+type Section = "smart" | "heatmap" | "screener" | "overview";
 
 const TABS: { key: Section; label: string; icon?: React.ReactNode }[] = [
   { key: "smart",    label: "Smart Money", icon: <Building2 className="h-3.5 w-3.5" /> },
-  { key: "single",   label: "График",      icon: <Globe className="h-3.5 w-3.5" /> },
-  { key: "multi",    label: "2×2",         icon: null },
   { key: "heatmap",  label: "Тепловая карта", icon: <Map className="h-3.5 w-3.5" /> },
   { key: "screener", label: "Скринер",     icon: <Search className="h-3.5 w-3.5" /> },
   { key: "overview", label: "Обзор рынка", icon: <TrendingUp className="h-3.5 w-3.5" /> },
 ];
 
 export default function MarketPage() {
-  const [sym, setSym]         = useState("BTCUSDT");
-  const [tf, setTf]           = useState("15");
   const [section, setSection] = useState<Section>("smart");
 
   return (
@@ -218,7 +212,7 @@ export default function MarketPage() {
       {/* Заголовок */}
       <div>
         <h1 className="text-2xl font-extrabold text-text-primary">Рынок</h1>
-        <p className="text-sm text-text-muted">Графики · Тепловые карты · Скринер · Индексы · Smart Money</p>
+        <p className="text-sm text-text-muted">Smart Money · Тепловая карта · Скринер · Обзор рынка</p>
       </div>
 
       {/* Вкладки */}
@@ -251,59 +245,6 @@ export default function MarketPage() {
       {section === "screener" && <ScreenerSection />}
       {section === "overview" && <OverviewSection />}
 
-      {section === "single" && (
-        <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
-          <div className="space-y-3">
-            <div className="card flex flex-wrap items-center gap-3 p-3">
-              <div className="flex flex-wrap gap-1">
-                {PAIRS.map((p) => (
-                  <button key={p} onClick={() => setSym(p)}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                      sym === p ? "bg-accent-cyan text-bg-deep" : "bg-bg-panel text-text-secondary hover:text-text-primary"
-                    }`}>{p.replace("USDT", "")}</button>
-                ))}
-              </div>
-              <div className="mx-1 h-5 w-px bg-border" />
-              <div className="flex gap-1">
-                {TF.map((t) => (
-                  <button key={t.key} onClick={() => setTf(t.key)}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                      tf === t.key ? "bg-bg-panel/10 text-text-primary" : "text-text-muted hover:text-text-primary"
-                    }`}>{t.label}</button>
-                ))}
-              </div>
-            </div>
-            <div className="card overflow-hidden p-0">
-              <TradingChart symbol={sym} interval={tf} height={678} showToolbar />
-            </div>
-          </div>
-          <div className="space-y-4">
-            <div className="card overflow-hidden p-0">
-              <div className="border-b border-border p-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-text-primary">Стакан цен</h3>
-                  <span className="text-[10px] text-text-muted">{sym}</span>
-                </div>
-              </div>
-              <OrderBook symbol={sym} rows={14} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {section === "multi" && (
-        <div className="grid gap-3 md:grid-cols-2">
-          {PAIRS.slice(0, 4).map((p) => (
-            <div key={p} className="card overflow-hidden p-0">
-              <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <span className="text-sm font-semibold text-text-primary">{p}</span>
-                <span className="text-[10px] text-text-muted">15м</span>
-              </div>
-              <TradingChart symbol={p} interval="15" height={420} showToolbar={false} />
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
