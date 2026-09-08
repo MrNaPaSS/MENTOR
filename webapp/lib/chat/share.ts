@@ -50,11 +50,11 @@ export function fromActive(trade: ActiveTrade): SharedTrade {
 }
 
 /** Отправить сделку или заявку в чат. */
-export function share(trade: SharedTrade, text = ""): Promise<void> {
+export function share(trade: SharedTrade, text = ""): Promise<string | null> {
   return post(text, { kind: "trade", trade });
 }
 
 /** Отправить снимок графика: в ленте он откроется страницей на сайте. */
-export function shareShot(url: string, id: string, text = ""): Promise<void> {
+export function shareShot(url: string, id: string, text = ""): Promise<string | null> {
   return post(text, { kind: "shot", url, image: id });
 }

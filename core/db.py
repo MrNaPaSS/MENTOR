@@ -116,6 +116,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
         ChartShot,
         ChatMessage,
         LiveTrade,
+        Signal,
         ScalpTrade,
         ScalpWorkspace,
         Student,
@@ -130,6 +131,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
         LiveTrade,
         ChartShot,
         ChatMessage,
+        Signal,
         Student,
     ):
         table = model.__table__

@@ -212,11 +212,18 @@ export default function TradeDialog({
       className="fixed inset-0 z-50 grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
       onClick={onCancel}
     >
+      {/* Два слоя, и это не лишний div.
+          Смещение живёт снаружи, появление - внутри. Анимация появления задана
+          с fill-mode both и в последнем кадре ставит transform: none, а
+          анимация в CSS сильнее строчного стиля - и держит его насовсем. Пока
+          оба свойства висели на одном элементе, окно не двигалось вовсе:
+          смещение считалось, но до экрана не доезжало. */}
       <div
         onClick={(event) => event.stopPropagation()}
         style={{ transform: `translate(${shift.x}px, ${shift.y}px)` }}
-        className="w-[520px] max-w-full animate-dialog-in overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+        className="w-[520px] max-w-full"
       >
+      <div className="animate-dialog-in overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none">
         {/* Шапка: что за уровень и в какую сторону от него работаем.
             Она же ручка окна - за неё его отодвигают от графика. */}
         <div
@@ -374,6 +381,7 @@ export default function TradeDialog({
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

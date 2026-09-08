@@ -25,9 +25,11 @@ import {
   type ChatAttach,
   type ChatAuthor,
   type ChatMessage,
+  type SendExtras,
 } from "./api";
 
-export type { ChatAttach, ChatAuthor, ChatMessage, SharedTrade } from "./api";
+export type { ChatAttach, ChatAuthor, ChatMessage, ChatQuote, SharedTrade } from "./api";
+export type { SendExtras } from "./api";
 
 export type ChatState = {
   messages: ChatMessage[];
@@ -209,12 +211,24 @@ export async function older(): Promise<void> {
   set({ messages: [...messages, ...state.messages], more });
 }
 
-/** Написать в чат. Сообщение появляется в ленте ответом сервера. */
-export async function post(text: string, attach?: ChatAttach | null): Promise<void> {
-  const message = await sendMessage(text, attach);
-  if (!message) return;
-  if (state.messages.some((m) => m.id === message.id)) return;
-  set({ messages: [...state.messages, message] });
+/**
+ * Написать в чат. Сообщение появляется в ленте ответом сервера.
+ *
+ * Возвращает жалобу сервера на сигнал, если он не собрался: сообщение при этом
+ * ушло, и объявлять отправку неудачей нельзя - но и промолчать о том, что
+ * сигнала не будет, тоже.
+ */
+export async function post(
+  text: string,
+  attach?: ChatAttach | null,
+  extras: SendExtras = {},
+): Promise<string | null> {
+  const message = await sendMessage(text, attach, extras);
+  if (!message) return null;
+  if (!state.messages.some((m) => m.id === message.id)) {
+    set({ messages: [...state.messages, message] });
+  }
+  return message.signalError ?? null;
 }
 
 /** Поправить своё сообщение. */

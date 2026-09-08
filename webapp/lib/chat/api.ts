@@ -40,6 +40,16 @@ export type ChatAttach =
   | { kind: "shot"; url: string; image: string }
   | { kind: "trade"; trade: SharedTrade };
 
+/** Снимок того, на что отвечают: ник, начало текста и вид вложения. */
+export type ChatQuote = {
+  id: number;
+  author?: string;
+  text?: string;
+  attach?: "shot" | "trade" | null;
+  /** Оригинал удалён: цитата остаётся, но перестаёт быть нажимаемой. */
+  deleted?: boolean;
+};
+
 export type ChatMessage = {
   id: number;
   text: string;
@@ -49,12 +59,17 @@ export type ChatMessage = {
   edited: number;
   author: ChatAuthor;
   attach?: ChatAttach | null;
+  /** На что отвечает. Пусто - самостоятельная реплика. */
+  reply?: ChatQuote | null;
+  /** Заявка ушла во вкладку «Сигналы». */
+  signalId?: number | null;
 };
 
-type RawMessage = Omit<ChatMessage, "at" | "edited" | "author"> & {
+type RawMessage = Omit<ChatMessage, "at" | "edited" | "author" | "signalId"> & {
   at: string;
   edited: string | null;
   author: ChatAuthor;
+  signal_id: number | null;
 };
 
 /** Аватарка приходит путём на бэкенде, а сайт живёт на другом домене. */
@@ -68,6 +83,7 @@ export function normalize(raw: RawMessage): ChatMessage {
     at: new Date(raw.at).getTime(),
     edited: raw.edited ? new Date(raw.edited).getTime() : 0,
     author: withHost(raw.author),
+    signalId: raw.signal_id ?? null,
   };
 }
 
@@ -86,12 +102,32 @@ export async function history(before?: number): Promise<{ messages: ChatMessage[
   return { messages: body.messages.map(normalize), more: body.more };
 }
 
-export async function send(text: string, attach?: ChatAttach | null): Promise<ChatMessage | null> {
-  const body = await request<RawMessage>("/api/chat/messages", {
+/** Чем сообщение может быть, кроме текста и вложения. */
+export type SendExtras = {
+  /** На какое сообщение отвечаем. */
+  replyTo?: number | null;
+  /** Показать заявку во вкладке «Сигналы». Право проверяет сервер. */
+  asSignal?: boolean;
+  audience?: "all" | "moderate" | "turbo";
+};
+
+export async function send(
+  text: string,
+  attach?: ChatAttach | null,
+  extras: SendExtras = {},
+): Promise<(ChatMessage & { signalError?: string }) | null> {
+  const body = await request<RawMessage & { signal_error?: string }>("/api/chat/messages", {
     method: "POST",
-    body: JSON.stringify({ text, attach: attach ?? null }),
+    body: JSON.stringify({
+      text,
+      attach: attach ?? null,
+      reply_to: extras.replyTo ?? null,
+      as_signal: Boolean(extras.asSignal),
+      audience: extras.audience ?? "all",
+    }),
   });
-  return body ? normalize(body) : null;
+  if (!body) return null;
+  return { ...normalize(body), signalError: body.signal_error };
 }
 
 /** Поправить своё сообщение. */

@@ -2804,24 +2804,6 @@ export default function ScalpingPage() {
                     <BookText className="h-3.5 w-3.5" />
                   </button>
 
-                  {/* Журнал действий: всё, что нажимал трейдер, и все решения
-                      терминала - в буфер обмена одним нажатием. Долгое нажатие
-                      очищает: журнал накапливается неделями, и разбирать
-                      вчерашнее вместе с сегодняшним незачем. */}
-                  <button
-                    onClick={copyLog}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      clearLog();
-                      record("log.cleared");
-                      setOrderNote({ text: t.terminal.notes.logCleared, bad: false });
-                    }}
-                    title={t.terminal.logTitle}
-                    className={`${CHIP} ${CHIP_OFF}`}
-                  >
-                    <ScrollText className="h-3.5 w-3.5" />
-                  </button>
-
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
 
                   {/* Лист графика: белая бумага или тёмная. Он же красит
@@ -3094,6 +3076,29 @@ export default function ScalpingPage() {
                   onAddOrder={startManual}
                   onAxisHeight={setAxisHeight}
                 />
+
+                {/* Журнал действий: всё, что нажимал трейдер, и все решения
+                    терминала - в буфер обмена одним нажатием, правой кнопкой
+                    очистка.
+
+                    В углу самого графика, а не среди инструментов наверху: его
+                    жмут не в работе, а когда что-то разошлось с биржей, - и
+                    искать его среди двух десятков рабочих кнопок в этот момент
+                    не надо. Приглушён, пока на него не навели: угол графика
+                    занят ценой, и лишнее пятно там мешает. */}
+                <button
+                  onClick={copyLog}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    clearLog();
+                    record("log.cleared");
+                    setOrderNote({ text: t.terminal.notes.logCleared, bad: false });
+                  }}
+                  title={t.terminal.logTitle}
+                  className="absolute bottom-2 right-2 z-20 rounded-md border border-[var(--pane-border)] bg-[var(--pane-bg)]/80 p-1.5 text-[var(--pane-muted)] opacity-40 backdrop-blur-sm transition-opacity duration-150 ease-out hover:opacity-100 hover:text-[var(--pane-text)]"
+                >
+                  <ScrollText className="h-3.5 w-3.5" />
+                </button>
               </div>
             </section>
 

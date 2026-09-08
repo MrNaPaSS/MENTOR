@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.deps import get_current_student, get_session
-from core.models import ChatMessage, Student, utcnow
+from core.models import ChatMessage, Signal, Student, utcnow
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -63,6 +63,12 @@ class Attach(BaseModel):
 class MessageIn(BaseModel):
     text: str = Field(default="", max_length=MAX_TEXT)
     attach: Attach | None = None
+    # На какое сообщение это ответ. Проверка одна - что оно существует.
+    reply_to: int | None = None
+    # Показать заявку во вкладке «Сигналы». Только наставнику - у остальных
+    # поле молча игнорируется: право проверяется на сервере, а кнопки у них нет.
+    as_signal: bool = False
+    audience: str = Field(default="all", pattern="^(all|moderate|turbo)$")
 
 
 class MessageEdit(BaseModel):
@@ -81,7 +87,44 @@ def _who(student: Student) -> dict:
     }
 
 
-def _out(message: ChatMessage, author: Student | None) -> dict:
+# Сколько текста оригинала уносит цитата. Две строки в узкой панели - это
+# примерно столько; дальше цитата начинает спорить с самим ответом.
+QUOTE_TEXT = 120
+
+
+def _quote(session, reply_to_id: int | None) -> dict | None:
+    """Снимок цитируемого сообщения: ник, начало текста и вид вложения.
+
+    Снимком, а не ссылкой на сообщение целиком: тянуть за собой ещё одно
+    вложение и ещё одного автора ради двух строк незачем. Собирается при выдаче,
+    а не хранится - автор мог сменить ник, и цитата обязана показывать нынешний.
+    """
+    if not reply_to_id:
+        return None
+
+    row = session.get(ChatMessage, reply_to_id)
+    if row is None:
+        # Оригинал удалили. Ответ остаётся, цитата говорит об этом прямо.
+        return {"id": reply_to_id, "deleted": True}
+
+    author = session.get(Student, row.student_id)
+    kind = ""
+    if row.attach_json:
+        try:
+            kind = str(json.loads(row.attach_json).get("kind", ""))
+        except ValueError:
+            kind = ""
+
+    return {
+        "id": row.id,
+        "author": _who(author)["name"] if author is not None else "?",
+        "text": row.text[:QUOTE_TEXT],
+        "attach": kind or None,
+        "deleted": False,
+    }
+
+
+def _out(message: ChatMessage, author: Student | None, session=None) -> dict:
     attach = None
     if message.attach_json:
         try:
@@ -109,6 +152,9 @@ def _out(message: ChatMessage, author: Student | None) -> dict:
         "edited": edited.isoformat() if edited else None,
         "author": _who(author) if author is not None else {"id": 0, "name": "?", "avatar": "", "mentor": False},
         "attach": attach,
+        "reply": _quote(session, message.reply_to_id) if session is not None else None,
+        # Заявка ушла дальше чата: карточка отметит это значком вещания.
+        "signal_id": message.signal_id,
     }
 
 
@@ -141,7 +187,7 @@ def history(
     }
     rows.reverse()
     return {
-        "messages": [_out(r, authors.get(r.student_id)) for r in rows],
+        "messages": [_out(r, authors.get(r.student_id), session) for r in rows],
         # Столько же, сколько просили - значит впереди, скорее всего, ещё есть.
         "more": len(rows) == limit,
     }
@@ -159,20 +205,100 @@ async def send(
     if not text and body.attach is None:
         raise HTTPException(400, "Пустое сообщение")
 
+    # Отвечают на существующее. Номер несуществующего - не повод отказывать в
+    # сообщении: оно ценно само по себе, а цитаты просто не будет.
+    reply_to = body.reply_to
+    if reply_to is not None and session.get(ChatMessage, reply_to) is None:
+        reply_to = None
+
     row = ChatMessage(
         student_id=student.id,
         text=text,
         attach_json=body.attach.model_dump_json() if body.attach else "",
+        reply_to_id=reply_to,
     )
     session.add(row)
     session.commit()
     session.refresh(row)
 
-    payload = _out(row, student)
+    # Сигнал из заявки. Только наставнику и только по его просьбе.
+    #
+    # Сорвавшийся сигнал не роняет отправку: сообщение уже ушло людям, и
+    # объявлять его неудачей нельзя. О причине говорим отдельным полем - панель
+    # покажет её строкой.
+    signal_error = None
+    if body.as_signal and bool(getattr(student, "is_admin", False)):
+        try:
+            signal = _signal_from_attach(body.attach, body.audience, row.id)
+            session.add(signal)
+            session.commit()
+            session.refresh(signal)
+            row.signal_id = signal.id
+            session.commit()
+            session.refresh(row)
+        except ValueError as exc:
+            signal_error = str(exc)
+
+    payload = _out(row, student, session)
     hub = getattr(request.app.state, "chat_hub", None)
     if hub is not None:
         await hub.broadcast("message", payload)
+    if signal_error:
+        payload = {**payload, "signal_error": signal_error}
     return payload
+
+
+def _signal_from_attach(attach: Attach | None, audience: str, message_id: int) -> Signal:
+    """Сигнал из ждущей заявки, показанной в чате.
+
+    Объём в сигнал не переносится - он посчитан под депозит наставника, а лента
+    считает свой под депозит смотрящего; в этом и смысл вкладки.
+
+    Тип входа всегда лимитный: заявка по определению ждёт свою цену. Маржа
+    изолированная - терминал торгует только такой.
+    """
+    if attach is None or attach.kind != "trade" or not attach.trade:
+        raise ValueError("Сигнал делается только из заявки")
+
+    trade = attach.trade
+    state = str(trade.get("state", ""))
+    if state != "planned":
+        raise ValueError("Сигналом становится только ждущая входа заявка")
+
+    def number(name: str) -> float | None:
+        try:
+            value = float(trade.get(name))
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
+    entry = number("entry")
+    if entry is None:
+        raise ValueError("У заявки нет цены входа")
+
+    targets = [t for t in (trade.get("targets") or []) if isinstance(t, (int, float)) and t > 0]
+    side = str(trade.get("side", "")).lower()
+
+    try:
+        leverage = max(1, int(trade.get("leverage") or 1))
+    except (TypeError, ValueError):
+        leverage = 1
+
+    return Signal(
+        symbol=str(trade.get("symbol", "")).upper(),
+        direction="LONG" if side == "long" else "SHORT",
+        leverage=leverage,
+        entry_price=entry,
+        entry_type="limit",
+        stop_loss=number("stop"),
+        tp1=targets[0] if len(targets) > 0 else None,
+        tp2=targets[1] if len(targets) > 1 else None,
+        tp3=targets[2] if len(targets) > 2 else None,
+        margin_type="isolated",
+        target_audience=audience,
+        status="active",
+        chat_message_id=message_id,
+    )
 
 
 def _mine(message: ChatMessage, student: Student) -> bool:
@@ -203,14 +329,14 @@ async def edit(
     if not text:
         raise HTTPException(400, "Пустое сообщение")
     if text == row.text:
-        return _out(row, student)
+        return _out(row, student, session)
 
     row.text = text
     row.edited_at = utcnow()
     session.commit()
     session.refresh(row)
 
-    payload = _out(row, student)
+    payload = _out(row, student, session)
     hub = getattr(request.app.state, "chat_hub", None)
     if hub is not None:
         await hub.broadcast("edited", payload)
@@ -236,6 +362,14 @@ async def remove(
         return None
     if not _mine(row, student) and not bool(getattr(student, "is_admin", False)):
         raise HTTPException(403, "Чужое сообщение может убрать только наставник")
+
+    # Удалённое сообщение означает «я передумал»: живого обещания после него
+    # оставаться не должно.
+    if row.signal_id:
+        signal = session.get(Signal, row.signal_id)
+        if signal is not None and signal.status == "active":
+            signal.status = "closed"
+            signal.closed_at = utcnow()
 
     session.delete(row)
     session.commit()

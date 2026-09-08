@@ -31,6 +31,8 @@ import {
   ChevronRight,
   ChevronLeft,
   LogIn,
+  Reply,
+  Radio,
 } from "lucide-react";
 import { SOCIAL_LINKS } from "@/lib/content";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
@@ -408,6 +410,13 @@ export default function ChatRoom({
   // нажать, - лишний запрос на каждое открытие чата.
   const [journal, setJournal] = useState<JournalTrade[] | null>(null);
   const [busy, setBusy] = useState(false);
+  // На что отвечаем. Полоса цитаты стоит над вводом, пока не отправили или не
+  // сняли крестиком.
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  // Показать заявку во вкладке «Сигналы». Только наставнику: заявками делятся и
+  // просто так, а сигнал - это обещание.
+  const [asSignal, setAsSignal] = useState(false);
+  const [audience, setAudience] = useState<"all" | "moderate" | "turbo">("all");
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const attachRef = useRef<HTMLDivElement>(null);
@@ -426,6 +435,24 @@ export default function ChatRoom({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state.messages]);
+
+  /**
+   * Показать оригинал цитаты.
+   *
+   * Если его нет в загруженном куске, дочитываем историю вверх - иначе ответ на
+   * утреннее сообщение никуда не ведёт.
+   */
+  async function goToMessage(id: number) {
+    let node = document.getElementById(`chat-msg-${id}`);
+    for (let step = 0; !node && step < 5 && snapshot().more; step++) {
+      await older();
+      node = document.getElementById(`chat-msg-${id}`);
+    }
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    node.classList.add("chat-found");
+    setTimeout(() => node?.classList.remove("chat-found"), 1200);
+  }
 
   // Нажатие мимо закрывает меню скрепки. Меню, которое не уходит само, остаётся
   // висеть над лентой и закрывает собой разговор - а человек уже передумал
@@ -481,9 +508,20 @@ export default function ChatRoom({
     setBusy(true);
     setText("");
     const sending = attach;
+    const quoting = replyTo;
+    const signalling = asSignal && sending?.kind === "trade";
     setAttach(null);
+    setReplyTo(null);
+    setAsSignal(false);
     try {
-      await post(body, sending);
+      const failed = await post(body, sending, {
+        replyTo: quoting?.id ?? null,
+        asSignal: signalling,
+        audience,
+      });
+      // Сообщение ушло, а сигнал не собрался - об этом надо сказать: молчание
+      // здесь означало бы, что наставник ждёт сигнал, которого нет.
+      setSignalNote(failed ?? null);
     } finally {
       setBusy(false);
     }
@@ -493,6 +531,10 @@ export default function ChatRoom({
   // что у меня в рынке» и «посмотри, что я поставил».
   const running = own.filter((t) => t.state === "open");
   const waiting = own.filter((t) => t.state === "planned");
+
+  // Жалоба сервера на несобравшийся сигнал. Живёт до следующей отправки.
+  const [signalNote, setSignalNote] = useState<string | null>(null);
+  const mentor = Boolean(state.me?.mentor);
 
   const pinned = state.messages.find((m) => m.author.mentor);
   const time = (at: number) =>
@@ -602,8 +644,10 @@ export default function ChatRoom({
               <Bubble
                 message={m}
                 self={state.me?.id === m.author.id}
-                mentor={Boolean(state.me?.mentor)}
+                mentor={mentor}
                 onCopy={onCopy}
+                onReply={() => setReplyTo(m)}
+                onGoTo={goToMessage}
                 skin={skin}
                 tone={tone}
                 time={time(m.at)}
@@ -615,6 +659,52 @@ export default function ChatRoom({
         <div ref={endRef} />
         </div>
       </div>
+
+      {/* На что отвечаем. Стоит над вводом, пока не отправили или не сняли. */}
+      {replyTo && (
+        <div className={`mx-2 mt-1 flex items-center gap-2 px-2 py-1.5 text-[11px] ${skin.card}`}>
+          <Reply className={`h-3.5 w-3.5 shrink-0 ${skin.muted}`} />
+          <span className="min-w-0 flex-1 truncate">
+            <span className={`font-semibold ${skin.nameOther}`}>{replyTo.author.name}</span>{" "}
+            <span className={skin.muted}>
+              {replyTo.text || (replyTo.attach?.kind === "shot" ? t.chat.attachPhoto : t.chat.card.planned)}
+            </span>
+          </span>
+          <button onClick={() => setReplyTo(null)} className={skin.muted} title={t.chat.drop}>
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Заявка уйдёт ещё и в сигналы. Только наставнику и только у заявки. */}
+      {mentor && attach?.kind === "trade" && (
+        <div className={`mx-2 mt-1 flex items-center gap-2 px-2 py-1.5 text-[11px] ${skin.card}`}>
+          <button
+            onClick={() => setAsSignal((v) => !v)}
+            className={`flex items-center gap-1.5 ${asSignal ? skin.nameSelf : skin.muted}`}
+          >
+            <Radio className="h-3.5 w-3.5" />
+            {t.chat.asSignal}
+          </button>
+          {asSignal && (
+            <span className="ml-auto flex gap-1">
+              {(["all", "moderate", "turbo"] as const).map((key) => (
+                <button
+                  key={key}
+                  onClick={() => setAudience(key)}
+                  className={`rounded px-1.5 py-px ${audience === key ? skin.upBox : skin.chip}`}
+                >
+                  {t.chat.audience[key]}
+                </button>
+              ))}
+            </span>
+          )}
+        </div>
+      )}
+
+      {signalNote && (
+        <p className={`mx-2 mt-1 text-[10px] ${skin.down}`}>{signalNote}</p>
+      )}
 
       {/* Приложенное - над строкой ввода, чтобы было видно, что уйдёт. */}
       {attach && (
@@ -815,6 +905,8 @@ function Bubble({
   self,
   mentor,
   onCopy,
+  onReply,
+  onGoTo,
   skin,
   tone,
   time,
@@ -825,6 +917,8 @@ function Bubble({
   /** Смотрит наставник: ему разрешено убирать чужое. */
   mentor: boolean;
   onCopy?: (trade: SharedTrade) => void;
+  onReply: () => void;
+  onGoTo: (id: number) => void;
   skin: Skin;
   tone: ChatTone;
   time: string;
@@ -849,7 +943,12 @@ function Bubble({
   }
 
   return (
-    <div className={`flex items-end gap-1.5 ${self ? "justify-end" : "justify-start"}`}>
+    <div
+      id={`chat-msg-${message.id}`}
+      className={`flex items-end gap-1.5 rounded-2xl transition-colors duration-500 ${
+        self ? "justify-end" : "justify-start"
+      }`}
+    >
       {!self && <Avatar src={message.author.avatar} name={message.author.name} size={size} />}
       <div className={`max-w-[85%] rounded-2xl px-3 py-1.5 ${self ? skin.bubbleSelf : skin.bubbleOther}`}>
         <div className="mb-0.5 flex items-center gap-1 text-[11px]">
@@ -867,6 +966,20 @@ function Bubble({
           {/* Правка и уборка - в самой строке подписи, а не отдельным меню:
               нажатий и так хватает, а прятать их за долгим нажатием значит
               спрятать совсем. */}
+          <button
+            onClick={onReply}
+            title={t.chat.reply}
+            className={`ml-1 ${skin.muted} hover:opacity-80`}
+          >
+            <Reply className="h-3 w-3" />
+          </button>
+          {/* Заявка ушла во вкладку «Сигналы»: видно, что разговором дело не
+              ограничилось. */}
+          {message.signalId ? (
+            <span title={t.chat.isSignal} className={skin.nameSelf}>
+              <Radio className="h-3 w-3" />
+            </span>
+          ) : null}
           {canEdit && draft === null && (
             <button
               onClick={() => setDraft(message.text)}
@@ -886,6 +999,30 @@ function Bubble({
             </button>
           )}
         </div>
+
+        {/* Цитата: две строки оригинала с чертой слева. Нажатие уводит к нему;
+            у удалённого нажимать не на что, и это сказано словом. */}
+        {message.reply && (
+          <button
+            onClick={() => !message.reply?.deleted && onGoTo(message.reply!.id)}
+            disabled={Boolean(message.reply.deleted)}
+            className={`mb-1 flex w-full flex-col items-start gap-0.5 border-l-2 pl-2 text-left text-[11px] ${skin.edge} ${
+              message.reply.deleted ? "opacity-60" : "hover:opacity-80"
+            }`}
+          >
+            {message.reply.deleted ? (
+              <span className={skin.muted}>{t.chat.quoteGone}</span>
+            ) : (
+              <>
+                <span className={`font-semibold ${skin.nameOther}`}>{message.reply.author}</span>
+                <span className={`line-clamp-2 ${skin.muted}`}>
+                  {message.reply.text ||
+                    (message.reply.attach === "shot" ? t.chat.attachPhoto : t.chat.card.planned)}
+                </span>
+              </>
+            )}
+          </button>
+        )}
 
         {draft !== null ? (
           <div className="flex items-center gap-1">

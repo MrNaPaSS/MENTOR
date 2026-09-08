@@ -23,6 +23,7 @@ def _to_out(s: Signal) -> SignalOut:
         entry_price=s.entry_price, entry_type=s.entry_type, stop_loss=s.stop_loss,
         tp1=s.tp1, tp2=s.tp2, tp3=s.tp3, margin_type=s.margin_type,
         target_audience=s.target_audience, status=s.status,
+        chat_message_id=s.chat_message_id,
         chart_url=getattr(s, "chart_url", None),
     )
 

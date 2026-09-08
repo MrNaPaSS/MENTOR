@@ -100,6 +100,10 @@ class Signal(Base):
     status: Mapped[str] = mapped_column(String(8), default="active", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Из какого сообщения чата вырос сигнал. Пусто - заведён формой в админке.
+    # Ссылку держим без внешнего ключа: сообщение могут удалить, а сигнал после
+    # этого закрывается, но остаётся в истории - по нему считают статистику.
+    chat_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     deliveries: Mapped[list["SignalDelivery"]] = relationship(back_populates="signal")
 
@@ -379,6 +383,16 @@ class ChatMessage(Base):
     edited_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Во что превратилось сообщение. По этой ссылке карточка в чате знает, что
+    # заявка ушла дальше разговора, а удаление сообщения закрывает сигнал.
+    signal_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # На какое сообщение это ответ.
+    #
+    # Без внешнего ключа и намеренно: оригинал удаляют, а ответ обязан остаться.
+    # Реплика «этот вход я бы не брал» имеет смысл и без цитаты, а исчезновение
+    # чужого ответа вслед за своим сообщением - способ переписать разговор
+    # задним числом.
+    reply_to_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
 
 class ScalpWorkspace(Base):

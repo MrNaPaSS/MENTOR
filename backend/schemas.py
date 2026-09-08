@@ -70,6 +70,9 @@ class SignalOut(BaseModel):
     target_audience: str
     status: str
     chart_url: Optional[str] = None
+    # Из какого сообщения чата вырос сигнал. По нему карточка рисует ссылку на
+    # обсуждение: там уже лежит разговор о сделке.
+    chat_message_id: Optional[int] = None
 
 
 # ── Статистика ──
