@@ -71,11 +71,16 @@ export default function MaintenanceScreen({ title, note, action }: MaintenanceSc
 
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
           {action}
+          {/* Тем же письмом, что и знак: тот же разрыв цвета, тот же кегль и
+              разрядка. Пилюля с обводкой рядом со знаком спорила с ним за
+              внимание, а это не действие ради которого сюда пришли, - это
+              подпись «мы здесь» под ней. */}
           <a
             href={SOCIAL_LINKS.telegram}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-full border border-white/25 bg-black/40 px-5 py-2.5 text-[13px] font-semibold text-white backdrop-blur-md transition-colors hover:border-white/50 hover:bg-black/55"
+            className="glitch px-2 py-2.5 text-[13px] font-extrabold uppercase tracking-[0.2em] text-white transition-opacity hover:opacity-80"
+            data-text="Мы в Telegram"
           >
             Мы в Telegram
           </a>
