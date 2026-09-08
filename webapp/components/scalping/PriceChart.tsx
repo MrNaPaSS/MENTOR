@@ -619,6 +619,8 @@ function PriceChart({
   const tradeLinesRef = useRef(new Map<string, IPriceLine>());
   const tradeShapesRef = useRef<Shapes | null>(null);
   const ghostShapesRef = useRef<Shapes | null>(null);
+  /** Ценовые линии сделки из журнала: живут, пока она выбрана. */
+  const ghostLinesRef = useRef<Map<string, IPriceLine>>(new Map());
   const hoverLineRef = useRef<IPriceLine | null>(null);
   const alertLinesRef = useRef<IPriceLine[]>([]);
   // Ключом по значениям: массив приходит новый на каждом кадре стакана.
@@ -958,6 +960,9 @@ function PriceChart({
       heavyRef.current = null;
       lineRef.current = null;
       tradeLinesRef.current = new Map();
+      // Линии сделки из журнала живут на том же ряду: с его уходом ссылки на
+      // них становятся чужими, и снимать их с нового ряда нельзя.
+      ghostLinesRef.current = new Map();
       shelfLinesRef.current = [];
     };
   }, []);
@@ -1651,21 +1656,18 @@ function PriceChart({
           price: ghost.entry,
           color: palette.text,
           dashed: false,
-          label: "вход",
         },
         ...ghost.targets.map((price, i) => ({
           ...span,
           price,
           color: palette.bidLine,
           dashed: i >= ghost.takes_hit,     // невзятая цель - пунктиром
-          label: `тейк ${i + 1}`,
         })),
         {
           ...span,
           price: ghost.stop,
           color: palette.askLine,
           dashed: true,
-          label: "стоп",
         },
         // Цена выхода: чем сделка кончилась на самом деле.
         ...(ghost.exit_price
@@ -1675,7 +1677,6 @@ function PriceChart({
                 price: ghost.exit_price,
                 color: ghost.pnl >= 0 ? palette.bidLine : palette.askLine,
                 dashed: false,
-                label: "выход",
               },
             ]
           : []),
@@ -1684,6 +1685,65 @@ function PriceChart({
     };
     pushShapes();
   }, [ghost, theme, pushShapes]);
+
+  // Уровни сделки из журнала - у ценовой шкалы, как у живой сделки.
+  //
+  // Раньше «вход», «стоп» и «тейк 1..3» были надписями поверх бокса: чтобы
+  // прочитать цену уровня, приходилось вести взгляд от подписи к шкале и
+  // обратно. У идущей сделки это давно сделано иначе - линия во всю ширину и
+  // ярлык с ценой справа, - и разбирать закрытую сделку глаз должен так же,
+  // не переучиваясь.
+  //
+  // Линии переставляем, а не пересоздаём: смена сделки в журнале иначе давала
+  // бы моргание.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+    const palette = THEMES[themeRef.current];
+
+    const kept = new Map<string, IPriceLine>();
+    const put = (key: string, price: number, color: string, title: string, dashed: boolean) => {
+      if (!(price > 0)) return;
+      const options = {
+        price,
+        color,
+        lineWidth: 1 as const,
+        lineStyle: (dashed ? 2 : 0) as 0 | 2,
+        axisLabelVisible: true,
+        title,
+      };
+      const alive = ghostLinesRef.current.get(key);
+      if (alive) {
+        alive.applyOptions(options);
+        kept.set(key, alive);
+        return;
+      }
+      kept.set(key, series.createPriceLine(options));
+    };
+
+    if (ghost) {
+      put("entry", ghost.entry, palette.text, "вход", false);
+      put("stop", ghost.stop, palette.askLine, "стоп", true);
+      ghost.targets.forEach((price, i) => {
+        // Невзятая цель пунктиром - тем же различием, что и у идущей сделки.
+        put(`take${i}`, price, palette.bidLine, `тейк ${i + 1}`, i >= ghost.takes_hit);
+      });
+      if (ghost.exit_price) {
+        put(
+          "exit",
+          ghost.exit_price,
+          ghost.pnl >= 0 ? palette.bidLine : palette.askLine,
+          "выход",
+          false,
+        );
+      }
+    }
+
+    for (const [key, line] of ghostLinesRef.current) {
+      if (!kept.has(key)) series.removePriceLine(line);
+    }
+    ghostLinesRef.current = kept;
+  }, [ghost, theme]);
 
   // Отработанные сетапы из журнала прямо на графике.
   //
