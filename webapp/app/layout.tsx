@@ -6,6 +6,7 @@ import UiWatch from "@/components/log/UiWatch";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import DevBar from "@/components/dev/DevBar";
 import TelegramInit from "@/components/telegram/TelegramInit";
+import ServerUpdating from "@/components/app/ServerUpdating";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://nmnh.io"),
@@ -65,6 +66,7 @@ export default function RootLayout({
         />
         <TelegramInit />
         {children}
+        <ServerUpdating />
         <ServiceWorkerRegister />
         <UiWatch />
         <InstallPrompt />

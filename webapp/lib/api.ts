@@ -10,6 +10,7 @@ import {
   setStudentTokens,
   setMentorToken,
 } from "./auth";
+import { apiAlive, apiDown, isServerGone, setHealthProbe } from "./health";
 
 let baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -75,11 +76,36 @@ function endSession(kind: TokenKind) {
   }
 }
 
-function send(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1", ...(init?.headers || {}) },
+// Проверка живости для общего наблюдателя: адрес бэкенда знает этот модуль, и
+// собирать его во второй раз незачем.
+setHealthProbe(async () => {
+  const res = await fetch(`${API_URL}/api/health`, {
+    cache: "no-store",
+    headers: { "ngrok-skip-browser-warning": "1" },
   });
+  return res.ok;
+});
+
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1", ...(init?.headers || {}) },
+    });
+  } catch (error) {
+    // До сервера не достучались вовсе. Отсюда виден только этот факт - что
+    // именно оборвалось, сеть или туннель, браузер не рассказывает.
+    apiDown();
+    throw error;
+  }
+
+  // Ответ есть, но отвечал не сервер, а прокси перед ним. Для приложения это
+  // то же самое, что молчание: данных в таком ответе нет.
+  if (isServerGone(res.status)) apiDown();
+  else apiAlive();
+
+  return res;
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {

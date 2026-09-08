@@ -24,5 +24,20 @@ ingress:
       connectTimeout: 30s
       noTLSVerify: false
 
+  # Снимки и карточки сделок - тот же бэкенд, но отдельным именем.
+  #
+  # Отдельным потому, что перед этим именем стоит воркер-заслонка
+  # (deploy/cloudflare/shots-worker.js): пока сервер выключен, он отвечает
+  # вместо Cloudflare с её «Error 1033», которую иначе видит каждый, кому
+  # прислали ссылку на график. Держать посредника перед api.nmnh.trade нельзя -
+  # туда идёт поток самого терминала.
+  #
+  # Адрес ссылок задаётся в .env бэкенда: SHOTS_BASE_URL=https://s.nmnh.trade
+  - hostname: s.nmnh.trade
+    service: http://127.0.0.1:8000
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: false
+
   # Обязательное правило-заглушка: всё остальное отбрасываем.
   - service: http_status:404

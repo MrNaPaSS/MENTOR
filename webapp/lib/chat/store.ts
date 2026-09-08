@@ -39,6 +39,14 @@ export type ChatState = {
   messages: ChatMessage[];
   /** Кто сейчас в комнате. Приходит от сервера, а не считается по ленте. */
   people: ChatAuthor[];
+  /**
+   * Сколько человек в форумной группе Telegram.
+   *
+   * Не «онлайн»: кто из них сейчас смотрит в экран, Telegram не показывает
+   * никому. Это участники форума - тот же разговор, только на другой его
+   * стороне, где людей всегда больше, чем во вкладке на сайте.
+   */
+  forum: number;
   /** Кто мы: по нему сообщение узнаёт себя и прижимается вправо. */
   me: ChatAuthor | null;
   /** Есть ли ещё история выше загруженного. */
@@ -56,6 +64,7 @@ export type ChatState = {
 const EMPTY: ChatState = {
   messages: [],
   people: [],
+  forum: 0,
   me: null,
   more: false,
   unread: 0,
@@ -126,11 +135,18 @@ function connect() {
     if (frame.event === "hello") {
       const you = frame.payload.you as ChatAuthor | undefined;
       const people = (frame.payload.people ?? []) as ChatAuthor[];
-      set({ me: you ? host(you) : null, people: people.map(host) });
+      set({
+        me: you ? host(you) : null,
+        people: people.map(host),
+        forum: Number(frame.payload.forum ?? 0) || 0,
+      });
       return;
     }
     if (frame.event === "people") {
-      set({ people: ((frame.payload.people ?? []) as ChatAuthor[]).map(host) });
+      set({
+        people: ((frame.payload.people ?? []) as ChatAuthor[]).map(host),
+        forum: Number(frame.payload.forum ?? 0) || 0,
+      });
       return;
     }
     if (frame.event === "edited") {

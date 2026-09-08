@@ -8,12 +8,13 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.api.chat import _has_picture, _shot_symbol
 from backend.chat.format import link_ranges, message_html, text_html, trade_html
 from backend.chat.forum import ForumBridge
 from backend.config import BackendConfig
 from backend.main import create_app
 from core.db import SessionLocal
-from core.models import ChatBridge, ChatMessage, ChatThread, Student
+from core.models import ChartShot, ChatBridge, ChatMessage, ChatThread, Student
 from core.weex import get_weex_client
 
 SERVICE_KEY = "forum-secret-key"
@@ -245,3 +246,62 @@ def test_branches_are_seeded():
     with SessionLocal() as session:
         topics = {t.tg_topic_id for t in session.query(ChatThread).all()}
     assert {10, 14, 8, 32281} <= topics
+
+
+# ── Картинка под сообщением ──────────────────────────────────────────────────
+
+
+def test_picture_unfolds_only_where_it_is_the_message():
+    """Превью разворачивается у снимка и карточки - и только у них.
+
+    Ссылка на график это и есть сообщение: свёрнутая в строку, она требует
+    нажатия, чтобы понять, о чём речь. А у слов ссылка остаётся ссылкой.
+    """
+    shot = {"kind": "shot", "url": "https://s.nmnh.trade/abc12345"}
+    trade = {"kind": "trade", "url": "https://s.nmnh.trade/xyz98765", "trade": {"symbol": "BTC"}}
+    assert _has_picture(shot) is True
+    assert _has_picture(trade) is True
+    assert _has_picture(None) is False
+    # Карточка не собралась - разворачивать нечего.
+    assert _has_picture({"kind": "trade", "url": "", "trade": {}}) is False
+    # Чужая схема в адресе картинкой не станет.
+    assert _has_picture({"kind": "shot", "url": "javascript:alert(1)"}) is False
+
+
+def test_shot_button_takes_the_coin_from_the_record(client):
+    """Монету под снимком берём из записи о нём: в приложении её нет."""
+    with SessionLocal() as session:
+        session.add(ChartShot(id="abc12345", symbol="ETHUSDT", interval="5m", note=""))
+        session.commit()
+
+        assert _shot_symbol(session, "https://s.nmnh.trade/abc12345") == "ETHUSDT"
+        # Картинка карточки лежит под тем же именем с хвостом.
+        assert _shot_symbol(session, "https://s.nmnh.trade/abc12345-raw.png") == "ETHUSDT"
+        # Фотография из форума своей записи не имеет - и кнопки не получит.
+        assert _shot_symbol(session, "https://s.nmnh.trade/zzz99999.jpg") == ""
+        assert _shot_symbol(session, "") == ""
+
+
+# ── Сколько нас в форуме ─────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_forum_size_is_asked_once(monkeypatch):
+    """Размер группы спрашиваем раз и держим: его читают на каждый вход."""
+    bridge = ForumBridge("token", FORUM, "https://www.nmnh.trade")
+    calls = []
+
+    async def fake(method, payload):
+        calls.append(method)
+        return 137
+
+    monkeypatch.setattr(bridge, "_call", fake)
+    assert await bridge.members() == 137
+    assert await bridge.members() == 137
+    assert calls == ["getChatMemberCount"]
+
+
+@pytest.mark.asyncio
+async def test_forum_size_without_bridge_is_zero():
+    """Моста нет - числа нет. Выдумывать его нельзя: рядом стоит настоящее."""
+    assert await ForumBridge("", 0, "").members() == 0

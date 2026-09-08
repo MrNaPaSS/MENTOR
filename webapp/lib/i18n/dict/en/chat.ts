@@ -12,6 +12,8 @@ export const chat = {
   away: "not in the chat",
   threadInForum: "What is written here also goes to the forum",
   inRoom: (n: number) => `${n} in the room`,
+  /** Members of the Telegram forum - membership, not presence. */
+  inForum: (n: number) => `${n} in the forum`,
   unread: (n: number) => `New messages: ${n}`,
   today: "Today",
   yesterday: "Yesterday",

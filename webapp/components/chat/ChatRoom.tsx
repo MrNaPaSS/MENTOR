@@ -623,8 +623,12 @@ export default function ChatRoom({
             <Avatar key={p.id} src={p.avatar} name={p.name} size={tone === "pane" ? 20 : 26} />
           ))}
         </div>
+        {/* Сколько нас: в комнате сейчас и в форуме всего. Второе число - от
+            бота: разговор идёт в двух местах сразу, и «1 в чате» без него
+            выглядит пустой комнатой, хотя рядом целая группа. */}
         <span className={`text-[11px] ${skin.muted}`}>
           {state.live ? t.chat.inRoom(state.people.length) : t.chat.offline}
+          {state.forum > 0 && ` · ${t.chat.inForum(state.forum)}`}
         </span>
         {onClose && (
           <button
@@ -642,9 +646,15 @@ export default function ChatRoom({
           прятать её за нажатием значит прятать сам разговор.
 
           При одной ветке строки нет вовсе: выбирать не из чего, а полоса
-          отнимает у ленты высоту. */}
+          отнимает у ленты высоту.
+
+          Полосу прокрутки под ветками прячем. Windows рисует её всегда, а не
+          на время движения, и под строкой из четырёх кнопок она читается как
+          отдельный элемент интерфейса, который зачем-то нужно тянуть. Ветки
+          листаются колесом, пальцем и самой строкой - ползунок для этого не
+          нужен. */}
       {state.threads.length > 1 && (
-        <div className="flex gap-1 overflow-x-auto px-2 py-1.5">
+        <div className="no-scrollbar flex gap-1 overflow-x-auto px-2 py-1.5">
           {state.threads.map((branch) => (
             <button
               key={branch.id}

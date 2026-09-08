@@ -30,7 +30,7 @@ from sqlalchemy import select
 
 from backend.chat.format import link_ranges, message_html
 from backend.deps import get_current_student, get_session
-from core.models import ChatMessage, ChatThread, Signal, Student, utcnow
+from core.models import ChartShot, ChatMessage, ChatThread, Signal, Student, utcnow
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -58,6 +58,35 @@ def _thread_topic(session, thread_id: int | None) -> int | None:
     ).scalar_one_or_none()
 
 
+def _shot_symbol(session, url: str) -> str:
+    """Монета снимка - по его же записи.
+
+    В приложении к сообщению её нет: снимок это ссылка и картинка, а что на
+    картинке нарисовано, знает только запись о ней. Без монеты под сообщением
+    в форуме не появлялась бы кнопка - и выложенный график оставался бы
+    картинкой, из которой некуда идти.
+
+    Идентификатор берём хвостом адреса: его собирает сам сервер снимков, и
+    ничего, кроме имени файла, там не бывает.
+    """
+    tail = (url or "").rstrip("/").rsplit("/", 1)[-1]
+    shot_id = tail.split(".", 1)[0].removesuffix("-raw")
+    if not shot_id:
+        return ""
+    row = session.get(ChartShot, shot_id)
+    return str(row.symbol) if row is not None else ""
+
+
+def _has_picture(attach: dict | None) -> bool:
+    """Есть ли за сообщением картинка, которую стоит развернуть превью."""
+    if not isinstance(attach, dict):
+        return False
+    url = str(attach.get("url", ""))
+    if not url.lower().startswith(("http://", "https://")):
+        return False
+    return attach.get("kind") in ("shot", "trade")
+
+
 def _to_forum(request: Request, message: ChatMessage, author: Student, session) -> None:
     """Отправить сообщение в форум. Молча, если моста нет.
 
@@ -80,6 +109,8 @@ def _to_forum(request: Request, message: ChatMessage, author: Student, session) 
     symbol = ""
     if isinstance(attach, dict) and isinstance(attach.get("trade"), dict):
         symbol = str(attach["trade"].get("symbol", ""))
+    elif isinstance(attach, dict) and attach.get("kind") == "shot":
+        symbol = _shot_symbol(session, str(attach.get("url", "")))
 
     forum.submit(
         {
@@ -93,6 +124,12 @@ def _to_forum(request: Request, message: ChatMessage, author: Student, session) 
             # монете. Под «привет» она была бы украшением.
             "symbol": symbol,
             "button": TERMINAL_BUTTON if symbol else "",
+            # Картинка разворачивается сразу под сообщением. Ссылка на снимок
+            # или карточку - это и есть само сообщение: свёрнутая в строку, она
+            # требует нажатия, чтобы понять, о чём речь, и в ленте форума
+            # проходит мимо глаз. У обычного разговора превью по-прежнему нет -
+            # там ссылка это ссылка, а не картинка.
+            "preview": _has_picture(attach),
         }
     )
 
@@ -494,6 +531,7 @@ async def edit(
                 "html": message_html(
                     _who(student)["name"], row.text, link_ranges(row.links_json), attach
                 ),
+                "preview": _has_picture(attach),
             }
         )
     return payload

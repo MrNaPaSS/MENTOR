@@ -42,6 +42,11 @@ QUEUE_MAX = 500
 
 TIMEOUT = 15
 
+# Как часто спрашивать у Telegram размер группы. Пять минут: число это меняется
+# за день на единицы, а спрашивать его на каждый вход в комнату значит слать в
+# Bot API запрос за запросом ради одной и той же цифры.
+MEMBERS_TTL = 300.0
+
 
 class ForumBridge:
     """Односторонний мост «сайт -> форум»: очередь, частота и память отправок."""
@@ -56,11 +61,37 @@ class ForumBridge:
         self._task: asyncio.Task | None = None
         # Времена последних отправок - по ним считается, можно ли слать сейчас.
         self._sent: list[float] = []
+        # Сколько людей в группе и когда мы это узнали.
+        self._members = 0
+        self._members_at = 0.0
 
     @property
     def enabled(self) -> bool:
         """Мост настроен. Без токена или адреса группы он молчит целиком."""
         return bool(self.token and self.chat_id)
+
+    # ── Сколько нас ──
+
+    async def members(self) -> int:
+        """Сколько человек в форумной группе. Ноль - моста нет или Telegram молчит.
+
+        Это участники, а не «сейчас онлайн»: кто из них прямо сейчас смотрит в
+        экран, Bot API не показывает никому - ни нам, ни другим ботам. Поэтому
+        в комнате на сайте это число стоит отдельной величиной и подписано
+        «в форуме», а не подмешивается к тем, кто действительно здесь.
+
+        Ответ держим пять минут: спрашивают его на каждый вход в комнату.
+        """
+        if not self.enabled:
+            return 0
+        now = time.monotonic()
+        if self._members and now - self._members_at < MEMBERS_TTL:
+            return self._members
+        result = await self._call("getChatMemberCount", {"chat_id": self.chat_id})
+        if isinstance(result, int):
+            self._members = result
+            self._members_at = now
+        return self._members
 
     # ── Приём заданий ──
 
@@ -190,10 +221,18 @@ class ForumBridge:
             "chat_id": self.chat_id,
             "text": job["html"],
             "parse_mode": "HTML",
-            # Превью разворачивается только там, где картинка и есть сообщение.
-            # У спрятанной ссылки смысл в том, что её не видно, и простыня под
-            # «BTC 1m» этот смысл отменяет.
-            "link_preview_options": {"is_disabled": not job.get("preview")},
+            # Превью разворачивается только там, где картинка и есть сообщение:
+            # у снимка графика и у карточки сделки. Крупно и над текстом -
+            # смотрят их, а подпись под ними читают вторым движением.
+            #
+            # У обычного разговора превью нет: спрятанная ссылка на то и
+            # спрятана, чтобы «BTC 1m» осталось двумя словами, а не выросло в
+            # простыню с чужого сайта.
+            "link_preview_options": (
+                {"prefer_large_media": True, "show_above_text": True}
+                if job.get("preview")
+                else {"is_disabled": True}
+            ),
         }
         if job.get("topic_id"):
             payload["message_thread_id"] = int(job["topic_id"])
@@ -223,7 +262,14 @@ class ForumBridge:
                 "message_id": tg_id,
                 "text": job["html"],
                 "parse_mode": "HTML",
-                "link_preview_options": {"is_disabled": True},
+                # Та же картинка, что была под сообщением до правки: убрать её
+                # вместе с опечаткой значит превратить выложенный график в
+                # строку текста.
+                "link_preview_options": (
+                    {"prefer_large_media": True, "show_above_text": True}
+                    if job.get("preview")
+                    else {"is_disabled": True}
+                ),
             },
         )
 

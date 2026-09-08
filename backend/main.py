@@ -126,7 +126,7 @@ def create_app(
     # Комната общего чата: присутствие и рассылка живут в памяти процесса,
     # сами сообщения - в базе. Перезапуск сервера теряет только список
     # присутствующих, и он соберётся заново с первым же подключением.
-    app.state.chat_hub = ChatHub()
+    app.state.chat_hub = ChatHub(members=forum.members)
     app.state.forum = forum
     app.state.price_collector = collector
     app.state.scalping = scalping

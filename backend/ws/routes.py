@@ -106,7 +106,9 @@ async def ws_chat(websocket: WebSocket, token: str = Query(default="")):
     await websocket.accept()
     await hub.join(websocket, who)
     try:
-        await websocket.send_json({"event": "hello", "payload": {"you": who, "people": hub.people()}})
+        await websocket.send_json(
+            {"event": "hello", "payload": {"you": who, **await hub.presence()}}
+        )
         while True:
             # Сообщения отправляются по HTTP: там же они и сохраняются. Здесь
             # читаем только для того, чтобы заметить разрыв.
