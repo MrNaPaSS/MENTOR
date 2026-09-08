@@ -154,7 +154,7 @@ export const terminal = {
     footShort: "short",
     footClose: "Close the candle volume",
     footWhale: "A big trade: well above its neighbours and its share of the candle",
-    footMove: "Drag by the candle body - the picture will stand where you want it",
+    footMove: "Drag by the price column - the picture will stand where you want it",
     footValueTitle:
       "Value area: the prices that took seventy percent of the candle's turnover",
     footPartial: "The candle is not fully broken down: it holds more trades than could be pulled",

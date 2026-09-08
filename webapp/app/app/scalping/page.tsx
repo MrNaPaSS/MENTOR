@@ -2521,6 +2521,12 @@ export default function ScalpingPage() {
   }
 
   // Класс темы для рабочих панелей: стакан и график светлеют вместе.
+  // Класс листа стоит только на корне рабочего места.
+  //
+  // На самих панелях его быть не должно: он объявляет весь набор переменных
+  // заново, и цвета выбранной палитры, положенные корню стилем, до стакана уже
+  // не доходили - он оставался стандартным зелёно-красным, какую свечу ни
+  // выбери. Переменные наследуются, одного объявления сверху хватает всем.
   const pane = paper === "light" ? "pane-light" : "pane-dark";
   const paneStyle = paneHeight(journalOpen, journalH, full);
 
@@ -2691,7 +2697,7 @@ export default function ScalpingPage() {
           <>
             {/* Стакан: ширина по своим колонкам, история прокручивается влево. */}
             <section
-              className={`${pane} flex shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] xl:w-[var(--dom-w)]`}
+              className={`flex shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] xl:w-[var(--dom-w)]`}
               style={paneStyle}
             >
               {/* Шапка переносится по строкам, а не выдавливает кнопки наружу.
@@ -2759,7 +2765,7 @@ export default function ScalpingPage() {
 
             {/* График занимает всё оставшееся место. */}
             <section
-              className={`${pane} flex min-w-0 flex-1 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]`}
+              className={`flex min-w-0 flex-1 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]`}
               style={paneStyle}
             >
               <div className="relative flex flex-wrap items-center justify-between gap-2 border-b border-[var(--pane-border)] px-3 py-2">
@@ -3218,7 +3224,7 @@ export default function ScalpingPage() {
               <>
                 <PaneDivider onResize={resizeChat} title={t.terminal.chatWidth} />
                 <section
-                  className={`${pane} hidden shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] xl:flex xl:w-[var(--chat-w)]`}
+                  className={`hidden shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] xl:flex xl:w-[var(--chat-w)]`}
                   style={paneStyle}
                 >
                   <ChatRoom
@@ -3345,7 +3351,7 @@ export default function ScalpingPage() {
             horizontal
           />
           <section
-            className={`${pane} overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]`}
+            className={`overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]`}
             style={{ height: journalH }}
           >
             <JournalPanel

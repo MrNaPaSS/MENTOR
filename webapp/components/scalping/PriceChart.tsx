@@ -1973,16 +1973,18 @@ function PriceChart({
       bright: "#f5f7fa",
       gold: pick("--pane-gold", "#f0b90b"),
       accent: pick("--pane-accent", "#0affe0"),
-      // Свеча разбора - той же палитрой, что свечи графика: на белом листе они
-      // чёрно-белые, и зелёно-красная свеча поверх них читалась бы чужой
-      // фигурой. Обводка тела берётся от неё же - на белом листе тело роста
-      // пустое, и без обводки его просто нет.
-      bodyUp: skinRef.current.upBorder || skinRef.current.up,
-      bodyDown: skinRef.current.downBorder || skinRef.current.down,
-      washUp: skinRef.current.up,
-      washDown: skinRef.current.down,
-      wickUp: skinRef.current.upWick,
-      wickDown: skinRef.current.downWick,
+      // Точка текущей цены - той же палитрой, что свечи графика, и доведённая
+      // до видимости: на белом листе тело роста белое, и точка такого цвета
+      // на бумаге пропала бы совсем. Обводка берётся первой - она у свечи
+      // есть всегда, а тело бывает пустым.
+      dotUp: visibleOn(
+        skinRef.current.upBorder || skinRef.current.up,
+        pick("--pane-bg", "#181a20"),
+      ),
+      dotDown: visibleOn(
+        skinRef.current.downBorder || skinRef.current.down,
+        pick("--pane-bg", "#181a20"),
+      ),
     };
     footPrimRef.current?.setData(
       footRef.current,

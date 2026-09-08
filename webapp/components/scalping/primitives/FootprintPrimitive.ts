@@ -7,10 +7,11 @@
 // длина которого и есть объём. Свеча с одной плитой у низа и свеча, набранная
 // ровным потоком, различаются с одного взгляда, не читая ни одной цифры.
 //
-// Тело свечи - рамка вокруг лестницы: от цены открытия до цены закрытия.
-// Фитили торчат из неё вверх и вниз, к максимуму и минимуму. Так это и есть
-// свеча, а не таблица рядом со свечой: видно, какая часть хода пришлась на
-// тело, а какую цена только пощупала и вернулась.
+// Разметки свечи здесь нет намеренно: ни рамки тела, ни фитилей, ни подписей
+// краёв. Всё это картинка и так рассказывает строками - где прошли деньги,
+// там свеча и стояла, - а рамка поверх них только спорила с цифрами внутри
+// себя. От свечи осталась одна точка на текущей цене: она отвечает на
+// единственный вопрос, которого у строк нет, - где цена сейчас.
 //
 // Растёт картинка сама. Только что открытая свеча стоит на одной цене - у неё
 // одна строка; за минуту их набирается десяток, за час - сотня, и они
@@ -64,20 +65,14 @@ export type FootprintSkin = {
   gold: string;
   accent: string;
   /**
-   * Цвета самой свечи - те же, что у свечей на графике.
+   * Точка текущей цены - цветом свечей графика.
    *
-   * Не зелёный с красным: на белом листе свечи чёрно-белые, и разбор, который
-   * рисует их по-своему, читается как чужая фигура поверх графика. А вот следы
-   * покупателя и продавца остаются цветными на любом листе - там цвет несёт
-   * смысл, а не оформление.
+   * Не зелёная с красной: на белом листе свечи чёрно-белые, и цветная точка
+   * поверх них читалась бы чужой фигурой. Следы покупателя и продавца при этом
+   * остаются цветными везде - там цвет несёт смысл, а не оформление.
    */
-  bodyUp: string;
-  bodyDown: string;
-  /** Заливка тела. На белом листе рост пустой, падение залитое - как на графике. */
-  washUp: string;
-  washDown: string;
-  wickUp: string;
-  wickDown: string;
+  dotUp: string;
+  dotDown: string;
 };
 
 /** Колонка цены. Посередине: цена - это то, к чему относятся оба числа рядом. */
@@ -116,13 +111,9 @@ type ReadyRow = {
 };
 
 type ReadyCandle = {
-  wickTop: number;
-  wickBottom: number;
-  bodyTop: number;
-  bodyBottom: number;
+  /** Где на картинке стоит текущая цена. */
+  dot: number;
   rising: boolean;
-  high: string;
-  low: string;
 };
 
 type Ready = {
@@ -256,68 +247,21 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
         }
       }
 
-      // Свеча поверх следов: она здесь предмет разговора, а следы - объяснение.
-      //
-      // Тело - рамкой вокруг ядра: залитое, оно закрыло бы собой всю лестницу,
-      // ради которой картинку и открыли. Фитили рисуются только там, где они
-      // торчат из тела, - внутри него фитиля не бывает.
+      // Текущая цена - точкой. Кружок поверх ячеек, с ободком цвета панели:
+      // без него точка сливается с густой ячейкой, на которой чаще всего и
+      // стоит - цена ходит там, где идут деньги.
       const candle = ready.candle;
       if (candle) {
-        const body = candle.rising ? skin.bodyUp : skin.bodyDown;
-        const wash = candle.rising ? skin.washUp : skin.washDown;
-        const wick = candle.rising ? skin.wickUp : skin.wickDown;
-        const bodyTop = Math.round(candle.bodyTop * vy);
-        const bodyBottom = Math.round(candle.bodyBottom * vy);
-        const wickTop = Math.round(candle.wickTop * vy);
-        const wickBottom = Math.round(candle.wickBottom * vy);
-
-        // Волосяная линия и у фитиля, и у рамки: тело в полторы точки
-        // спорило по весу с цифрами внутри себя, а рамка здесь - обвод, а не
-        // фигура сама по себе.
-        ctx.strokeStyle = wick;
-        ctx.lineWidth = line;
-        if (wickTop < bodyTop) {
-          ctx.beginPath();
-          ctx.moveTo(axis + 0.5 * line, wickTop);
-          ctx.lineTo(axis + 0.5 * line, bodyTop);
-          ctx.stroke();
-        }
-        if (wickBottom > bodyBottom) {
-          ctx.beginPath();
-          ctx.moveTo(axis + 0.5 * line, bodyBottom);
-          ctx.lineTo(axis + 0.5 * line, wickBottom);
-          ctx.stroke();
-        }
-
-        // Тело чуть подкрашено изнутри. Обводки мало: на белом листе она у
-        // роста и у падения одна и та же, чёрная, и направление по ней не
-        // читается. Заливка же там разная - пустая и залитая, как у свечей
-        // графика, - и восьми процентов хватает, чтобы это было видно, не
-        // закрасив лестницу.
-        const bodyH = Math.max(line, bodyBottom - bodyTop);
-        ctx.globalAlpha = 0.08;
-        ctx.fillStyle = wash;
-        ctx.fillRect(coreLeft, bodyTop, coreRight - coreLeft, bodyH);
-        ctx.globalAlpha = 1;
-
-        ctx.strokeStyle = body;
-        ctx.strokeRect(
-          coreLeft + 0.5 * line,
-          bodyTop + 0.5 * line,
-          coreRight - coreLeft - line,
-          bodyH - line,
-        );
-
-        // Края хода подписаны: максимум над верхним фитилём, минимум под
-        // нижним. Без них картинка молчит о том, докуда цена дотянулась.
-        ctx.fillStyle = skin.muted;
-        ctx.font = font(8);
-        ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        ink(candle.high, axis, wickTop - Math.round(3 * vy));
-        ctx.textBaseline = "top";
-        ink(candle.low, axis, wickBottom + Math.round(3 * vy));
-        ctx.textBaseline = "middle";
+        const at = Math.round(candle.dot * vy);
+        const radius = Math.max(line * 2, Math.round(3 * hx));
+        ctx.beginPath();
+        ctx.arc(axis, at, radius + line, 0, Math.PI * 2);
+        ctx.fillStyle = skin.bg;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(axis, at, radius, 0, Math.PI * 2);
+        ctx.fillStyle = candle.rising ? skin.dotUp : skin.dotDown;
+        ctx.fill();
       }
 
       ctx.textAlign = "left";
@@ -385,28 +329,21 @@ class FootprintPaneView implements IPrimitivePaneView {
     }));
 
     const candle = this.source.candle;
-    const at = (price: number) => (top - price) * perPixel;
     const shape: ReadyCandle | null =
       candle && perPixel > 0
         ? {
-            wickTop: at(candle.high),
-            wickBottom: at(candle.low),
-            bodyTop: at(Math.max(candle.open, candle.close)),
-            bodyBottom: at(Math.min(candle.open, candle.close)),
+            // Точка держится в пределах картинки: цена уходит за край строк на
+            // доли шага, и точка, вылезшая наружу, читалась бы отдельной
+            // фигурой, ничьей.
+            dot: Math.min(height, Math.max(0, (top - candle.close) * perPixel)),
             rising: candle.close >= candle.open,
-            high: fmtPrice(candle.high, data.tick),
-            low: fmtPrice(candle.low, data.tick),
           }
         : null;
 
-    // Свеча выходит за лестницу настолько, насколько её край не совпал с краем
-    // строки. Место под этот вылет и под подписи краёв держим всегда: иначе
-    // картинка у верха холста обрезается ровно по максимуму хода.
-    const over = Math.max(TAIL, shape ? TAIL - Math.min(0, shape.wickTop) : TAIL);
-    const under = Math.max(
-      TAIL,
-      shape ? TAIL + Math.max(0, shape.wickBottom - height) : TAIL,
-    );
+    // Поле сверху и снизу: сверху под подпись, снизу чтобы нижняя строка не
+    // упиралась в шкалу времени.
+    const over = TAIL;
+    const under = TAIL;
 
     // Где встанет картинка. Справа от своей свечи, если справа есть место:
     // слева от неё история цены, ради которой на график и смотрят. Не влезла -
@@ -436,19 +373,18 @@ class FootprintPaneView implements IPrimitivePaneView {
     this.ready = {
       x,
       rows: laid.map((row) => ({ ...row, top: row.top + y })),
-      candle: shape ? shift(shape, y) : null,
+      candle: shape ? { ...shape, dot: shape.dot + y } : null,
     };
     this.source.box = { x, y: y - over, width: WIDTH, height: height + over + under };
-    // Тело свечи - ручка переноса: за него картинку и таскают. Отдаём его
-    // страницею в тех же точках экрана, в которых она ловит мышь.
-    this.source.body = shape
-      ? {
-          x: x + PAD + SIDE,
-          y: Math.min(shape.bodyTop, shape.bodyBottom) + y,
-          width: CORE,
-          height: Math.max(4, Math.abs(shape.bodyBottom - shape.bodyTop)),
-        }
-      : null;
+    // Ручка переноса - колонка цены: это ось картинки, единственная её полоса
+    // без цифр по краям, и попасть в неё мышью можно не целясь. Отдаём её
+    // странице в тех же точках экрана, в которых она ловит мышь.
+    this.source.body = {
+      x: x + PAD + SIDE + NUM,
+      y,
+      width: PRICE,
+      height,
+    };
   }
 
   renderer() {
@@ -467,16 +403,6 @@ function ink(skin: FootprintSkin, fill: string, heat: number): string {
   return readableInk(fill, skin.bg, heat, skin.text, skin.bright);
 }
 
-function shift(shape: ReadyCandle, by: number): ReadyCandle {
-  return {
-    ...shape,
-    wickTop: shape.wickTop + by,
-    wickBottom: shape.wickBottom + by,
-    bodyTop: shape.bodyTop + by,
-    bodyBottom: shape.bodyBottom + by,
-  };
-}
-
 export class FootprintPrimitive implements ISeriesPrimitive<Time> {
   data: FootprintData | null = null;
   candle: Candle | null = null;
@@ -490,12 +416,8 @@ export class FootprintPrimitive implements ISeriesPrimitive<Time> {
     bright: "#ffffff",
     gold: "#f0b90b",
     accent: "#0affe0",
-    bodyUp: "#0ecb81",
-    bodyDown: "#f6465d",
-    washUp: "#0ecb81",
-    washDown: "#f6465d",
-    wickUp: "#0ecb81",
-    wickDown: "#f6465d",
+    dotUp: "#0ecb81",
+    dotDown: "#f6465d",
   };
   /** Место картинки на холсте: по нему страница ставит подпись над ней. */
   box: FootprintBox | null = null;
