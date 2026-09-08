@@ -61,9 +61,10 @@ export default function Calculator() {
     <div
       className="overflow-hidden rounded-3xl"
       style={{
-        background: "linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%)",
+        background:
+          "linear-gradient(145deg, rgb(var(--bg-card) / 0.92) 0%, rgb(var(--bg-panel) / 0.65) 100%)",
         border: "1px solid rgb(var(--border) / 0.7)",
-        boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
+        boxShadow: "0 24px 80px rgb(0 0 0 / 0.22)",
       }}
     >
       <div className="grid md:grid-cols-2">
@@ -83,9 +84,9 @@ export default function Calculator() {
                   onClick={() => setDirection(d)}
                   className="flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold transition-all duration-200"
                   style={{
-                    background: active ? `${color}18` : "rgba(255,255,255,0.03)",
-                    border: `1px solid ${active ? color + "50" : "rgba(255,255,255,0.07)"}`,
-                    color: active ? color : "rgba(255,255,255,0.4)",
+                    background: active ? `${color}18` : "rgb(var(--bg-panel) / 0.7)",
+                    border: `1px solid ${active ? color + "50" : "rgb(var(--border) / 0.8)"}`,
+                    color: active ? color : "rgb(var(--text-muted))",
                     boxShadow: active ? `0 0 20px ${color}15` : "none",
                   }}
                 >
@@ -134,7 +135,11 @@ export default function Calculator() {
                 onClick={fetchPrice}
                 disabled={priceLoading}
                 className="flex h-[42px] w-11 shrink-0 items-center justify-center rounded-lg transition-all"
-                style={{ background: "rgba(10,255,224,0.08)", border: "1px solid rgba(10,255,224,0.2)", color: "var(--c-accent)" }}
+                style={{
+                  background: "rgb(var(--accent-cyan) / 0.1)",
+                  border: "1px solid rgb(var(--accent-cyan) / 0.28)",
+                  color: "var(--c-accent)",
+                }}
                 aria-label="Получить текущую цену"
               >
                 <RefreshCw className={`h-4 w-4 ${priceLoading ? "animate-spin" : ""}`} />
@@ -148,13 +153,17 @@ export default function Calculator() {
               <span className="text-sm font-medium text-text-secondary">Плечо</span>
               <span
                 className="rounded-lg px-2.5 py-1 font-mono text-sm font-bold"
-                style={{ background: "rgba(10,255,224,0.1)", color: "var(--c-accent)", border: "1px solid rgba(10,255,224,0.2)" }}
+                style={{
+                  background: "rgb(var(--accent-cyan) / 0.12)",
+                  color: "var(--c-accent)",
+                  border: "1px solid rgb(var(--accent-cyan) / 0.28)",
+                }}
               >
                 ×{leverage}
               </span>
             </div>
 
-            <div className="relative h-1.5 w-full rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+            <div className="relative h-1.5 w-full rounded-full" style={{ background: "rgb(var(--border))" }}>
               <div
                 className="absolute left-0 top-0 h-full rounded-full transition-all"
                 style={{ width: `${leveragePct}%`, background: "linear-gradient(90deg, var(--c-accent), var(--c-accent))" }}
@@ -191,11 +200,15 @@ export default function Calculator() {
         {/* ─── RIGHT: RESULT PANEL ─── */}
         <div
           className="p-7"
-          style={{ borderLeft: "1px solid rgba(255,255,255,0.06)" }}
+          style={{ borderLeft: "1px solid rgb(var(--border) / 0.7)" }}
         >
           {error && (
             <div className="mb-5 flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
-              style={{ background: "rgba(255,71,87,0.1)", border: "1px solid rgba(255,71,87,0.3)", color: "var(--c-down)" }}>
+              style={{
+                background: "rgb(var(--danger) / 0.1)",
+                border: "1px solid rgb(var(--danger) / 0.32)",
+                color: "var(--c-down)",
+              }}>
               <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
             </div>
           )}
@@ -204,7 +217,10 @@ export default function Calculator() {
             <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
               <div
                 className="mb-4 grid h-16 w-16 place-items-center rounded-2xl"
-                style={{ background: "rgba(10,255,224,0.06)", border: "1px solid rgba(10,255,224,0.12)" }}
+                style={{
+                  background: "rgb(var(--accent-cyan) / 0.07)",
+                  border: "1px solid rgb(var(--accent-cyan) / 0.2)",
+                }}
               >
                 <TrendingUp className="h-7 w-7" style={{ color: "var(--c-accent)", opacity: 0.5 }} />
               </div>
@@ -239,7 +255,7 @@ export default function Calculator() {
                   <div
                     key={tp.index}
                     className="flex items-center justify-between rounded-xl px-4 py-3"
-                    style={{ background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}
+                    style={{ background: i % 2 === 0 ? "rgb(var(--bg-deep) / 0.45)" : "transparent" }}
                   >
                     <div>
                       <span className="text-xs font-semibold text-text-muted">
@@ -257,7 +273,10 @@ export default function Calculator() {
               {result.take_profits[0] && (
                 <div
                   className="flex items-center justify-between rounded-2xl px-4 py-3"
-                  style={{ background: "rgba(255,196,0,0.06)", border: "1px solid rgba(255,196,0,0.2)" }}
+                  style={{
+                    background: "rgb(var(--accent-gold) / 0.09)",
+                    border: "1px solid rgb(var(--accent-gold) / 0.28)",
+                  }}
                 >
                   <span className="text-sm text-text-secondary">Risk / Reward (TP1)</span>
                   <span className="font-mono font-bold" style={{ color: "var(--c-gold)" }}>
@@ -297,9 +316,30 @@ function Field({ label, accent, children }: { label: string; accent?: boolean; c
 }
 
 function ResultCard({ label, value, accent }: { label: string; value: string; accent: "cyan" | "danger" | "neutral" }) {
-  const color = accent === "cyan" ? "var(--c-accent)" : accent === "danger" ? "var(--c-down)" : "white";
-  const bg = accent === "cyan" ? "rgba(10,255,224,0.05)" : accent === "danger" ? "rgba(255,71,87,0.08)" : "rgba(255,255,255,0.03)";
-  const border = accent === "cyan" ? "rgba(10,255,224,0.12)" : accent === "danger" ? "rgba(255,71,87,0.2)" : "rgba(255,255,255,0.06)";
+  // Цвета ролями, а не оттенками.
+  //
+  // «Нейтральная» карточка была написана словом white, а её подложка и рамка -
+  // полупрозрачным белым. На тёмной теме это работало, на белом листе исчезало
+  // целиком: риск и цена стопа не читались вовсе, хотя ради них калькулятор и
+  // открывают. Бирюза и красный тоже взяты у ролей - на светлой теме они свои.
+  const color =
+    accent === "cyan"
+      ? "var(--c-accent)"
+      : accent === "danger"
+        ? "var(--c-down)"
+        : "var(--c-text)";
+  const bg =
+    accent === "cyan"
+      ? "rgb(var(--accent-cyan) / 0.06)"
+      : accent === "danger"
+        ? "rgb(var(--danger) / 0.08)"
+        : "rgb(var(--bg-panel) / 0.7)";
+  const border =
+    accent === "cyan"
+      ? "rgb(var(--accent-cyan) / 0.25)"
+      : accent === "danger"
+        ? "rgb(var(--danger) / 0.28)"
+        : "rgb(var(--border) / 0.8)";
   return (
     <div className="rounded-2xl p-4" style={{ background: bg, border: `1px solid ${border}` }}>
       <div className="font-mono text-xl font-black tabular-nums" style={{ color }}>{value}</div>

@@ -30,6 +30,12 @@
   --text-muted: 122 130 144;
   --accent-cyan: 10 255 224;
   --accent-gold: 240 185 11;
+  /* Монеты NMNH: свой цвет, не золото.
+     Золотом на сайте отмечено то, что связано с деньгами биржи - баланс,
+     плита в стакане, - и монеты в том же цвете читались как ещё одни деньги.
+     Они не деньги, а награда, и цвет у них теперь свой.
+     На тёмном - светлый фиолетовый: густой на чёрном становится грязным. */
+  --coin: 167 139 250;
   --success: 14 203 129;
   --danger: 246 70 93;
   --border: 43 49 57;
@@ -81,6 +87,8 @@
      #7E57C2 - линия тренда, #9575CD - заливка блоков, #2962FF - метки. */
   --accent-cyan: 126 87 194;
   --accent-gold: 141 110 0;
+  /* На белом наоборот: светлый фиолетовый теряется, нужен густой. */
+  --coin: 109 40 217;
   --success: 0 168 107;
   --danger: 255 26 46;
   --border: 214 220 222;
@@ -151,6 +159,18 @@
   --pane-accent-soft: rgba(41, 98, 255, 0.35);
   --pane-accent-faint: rgba(41, 98, 255, 0.06);
   --pane-hover: rgba(0, 0, 0, 0.05);
+}
+
+/* Плашка монет NMNH в шапке. Цвет один на обе темы - меняются только каналы. */
+.coin-chip {
+  border-color: rgb(var(--coin) / 0.35);
+  background: rgb(var(--coin) / 0.1);
+  color: rgb(var(--coin));
+  transition: border-color 0.15s ease-out, background-color 0.15s ease-out;
+}
+.coin-chip:hover {
+  border-color: rgb(var(--coin) / 0.6);
+  background: rgb(var(--coin) / 0.16);
 }
 
 @layer base {
