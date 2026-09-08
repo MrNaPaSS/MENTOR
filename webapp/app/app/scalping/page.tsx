@@ -612,6 +612,19 @@ export default function ScalpingPage() {
     // «уже сохранено» здесь не ставится.
     setTrades(readTrades());
     applyWorkspace(readWorkspace());
+    // Монета из адреса важнее запомненной: по такой ссылке приходят намеренно -
+    // из бегущей строки, из чужого сообщения, из закладки на конкретную пару.
+    // Рабочее место при этом не переписывается: вернувшись сюда без адреса,
+    // трейдер найдёт ту монету, с которой работал.
+    try {
+      const asked = new URLSearchParams(window.location.search).get("symbol");
+      if (asked && /^[A-Z0-9]{2,20}$/.test(asked.toUpperCase())) {
+        setSymbol(asked.toUpperCase());
+        setScreenerOpen(false);
+      }
+    } catch {
+      // Адрес без параметров - открываемся как обычно.
+    }
     hydrated.current = true;
     if (!journalAvailable()) return;
     let cancelled = false;
