@@ -11,7 +11,12 @@ import type { Time, UTCTimestamp } from "lightweight-charts";
 import type { Shapes, ShapeBand, ShapeBox, ShapePoint, ShapeSegment } from
   "@/components/scalping/primitives/ShapesPrimitive";
 import { BULLISH, type SmcResult } from "./smc";
-import { CHART_PRESETS, rgba, type ChartPresetName, type ChartTheme } from "./presets";
+import {
+  presetSkin,
+  rgba,
+  type ChartPaletteName,
+  type ChartPaper,
+} from "./presets";
 import { activeLevel, type ChandelierResult } from "./chandelier";
 
 export type ShapeToggles = {
@@ -33,9 +38,14 @@ export const SHAPE_DEFAULTS: ShapeToggles = {
   zones: false,
 };
 
-// Тема графика объявлена рядом с пресетами, а сюда вынесена наружу: половина
-// терминала берёт её отсюда, и разводить два источника незачем.
-export type { ChartTheme };
+/**
+ * Как выглядит график: лист и палитра свечей.
+ *
+ * Две настройки, а не одна: любой пресет включается и на тёмном листе, и на
+ * белом. Фигуры структуры зависят от обеих - подписи и блоки берут цвет от
+ * листа, а разрывы и отметки разворота от палитры.
+ */
+export type ChartLook = { paper: ChartPaper; palette: ChartPaletteName };
 
 const DARK = {
   structure: "#8A93A0",
@@ -102,32 +112,30 @@ const LIGHT: typeof DARK = {
   discount: "rgba(149, 117, 205, 0.16)",
 };
 
-// Пресет наследует тёмную разметку и перекрашивает в ней только то, что несёт
-// направление: разрывы справедливой цены, отметки разворота ленты и зоны премии
-// со скидкой. Структура, ордер-блоки и подписи остаются нейтральными - они про
-// расположение, а не про сторону сделки, и от цвета свечей не зависят.
-const dressed = (name: ChartPresetName): typeof DARK => {
-  const preset = CHART_PRESETS[name];
-  return {
-    ...DARK,
-    bullishGap: rgba(preset.bull, 0.16),
-    bearishGap: rgba(preset.bear, 0.16),
-    trendUpMark: preset.bull,
-    trendDownMark: preset.bear,
-    premium: rgba(preset.bear, 0.07),
-    discount: rgba(preset.bull, 0.07),
-  };
-};
+// Разметка на выбранном листе, перекрашенная под палитру.
+//
+// Пресет трогает в ней только то, что несёт направление: разрывы справедливой
+// цены, отметки разворота ленты и зоны премии со скидкой. Структура,
+// ордер-блоки и подписи остаются от листа - они про расположение, а не про
+// сторону сделки, и от цвета свечей не зависят.
+function shapeColors({ paper, palette }: ChartLook): typeof DARK {
+  const base = paper === "light" ? LIGHT : DARK;
+  if (palette === "default") return base;
 
-const PALETTES: Record<ChartTheme, typeof DARK> = {
-  dark: DARK,
-  light: LIGHT,
-  fusion: dressed("fusion"),
-  megatron: dressed("megatron"),
-  imperium: dressed("imperium"),
-  keystone: dressed("keystone"),
-  velvet: dressed("velvet"),
-};
+  const skin = presetSkin(palette, paper);
+  // На белом слабая заливка исчезает вовсе - там плотнее, как и у самой светлой
+  // темы.
+  const gap = paper === "light" ? 0.13 : 0.16;
+  return {
+    ...base,
+    bullishGap: rgba(skin.bull, gap),
+    bearishGap: rgba(skin.bear, gap),
+    trendUpMark: skin.bull,
+    trendDownMark: skin.bear,
+    premium: rgba(skin.bear, 0.07),
+    discount: rgba(skin.bull, 0.07),
+  };
+}
 
 /**
  * Собрать фигуры для графика.
@@ -139,10 +147,10 @@ export function buildShapes(
   smc: SmcResult,
   lastTime: number,
   toggles: ShapeToggles = SHAPE_DEFAULTS,
-  theme: ChartTheme = "dark",
+  look: ChartLook = { paper: "dark", palette: "default" },
   ce: ChandelierResult | null = null,
 ): Shapes {
-  const COLORS = PALETTES[theme];
+  const COLORS = shapeColors(look);
   const bands: ShapeBand[] = [];
   const boxes: ShapeBox[] = [];
   const segments: ShapeSegment[] = [];

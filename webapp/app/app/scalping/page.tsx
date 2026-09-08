@@ -18,6 +18,7 @@ import {
   CandlestickChart,
   Maximize2,
   Minimize2,
+  Moon,
   Palette,
   Radio,
   Volume2,
@@ -26,6 +27,7 @@ import {
   PanelLeftOpen,
   Star,
   Camera,
+  Sun,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -33,12 +35,15 @@ import PaneDivider from "@/components/scalping/PaneDivider";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
 import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
-import type { ChartTheme } from "@/lib/indicator/shapes";
 import {
+  CHART_PALETTES,
   CHART_PRESETS,
-  CHART_THEMES,
-  isChartTheme,
-  themeSwatch,
+  isChartPaletteName,
+  isChartPaper,
+  isChartPresetName,
+  paletteSwatch,
+  type ChartPaletteName,
+  type ChartPaper,
 } from "@/lib/indicator/presets";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
@@ -265,7 +270,10 @@ function clamp(value: number, { min, max }: { min: number; max: number }) {
 
 /** Настройки рабочего места, которые переживают перезагрузку страницы. */
 type Workspace = {
-  theme: ChartTheme;
+  /** Лист графика: тёмная бумага или белая. Он же красит кабинет вокруг. */
+  paper: ChartPaper;
+  /** Палитра свечей: стандартная или один из пресетов. */
+  palette: ChartPaletteName;
   screener: number;
   dom: number;
   indicators: Indicators;
@@ -286,6 +294,14 @@ type Workspace = {
    * `notifySound` один раз считывает прежний выбор человека.
    */
   sound?: boolean;
+  /**
+   * Лист и палитра одной настройкой - остаток от прежней формы.
+   *
+   * До разделения тема была единственным полем и принимала как «dark», так и
+   * «velvet». Поле оставлено в типе, потому что такие свёртки уже сохранены:
+   * по нему один раз разбирается прежний выбор человека.
+   */
+  theme?: string;
   /** Последняя открытая монета: возврат в раздел не должен начинаться с нуля. */
   symbol: string | null;
   /** Отметки на ценах: пережидают перезагрузку вместе с остальными настройками. */
@@ -512,9 +528,11 @@ export default function ScalpingPage() {
   const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
   const [timeframe, setTimeframe] = useState("1m");
   const [indicators, setIndicators] = useState<Indicators>(DEFAULT_INDICATORS);
-  // Светлая - тема сайта по умолчанию; сохранённый выбор подставит рабочее
-  // место, когда доедет.
-  const [theme, setTheme] = useState<ChartTheme>("light");
+  // Светлый лист - оформление сайта по умолчанию; сохранённый выбор подставит
+  // рабочее место, когда доедет.
+  const [paper, setPaper] = useState<ChartPaper>("light");
+  // Палитра свечей независима от листа: любой пресет включается на обоих.
+  const [palette, setPalette] = useState<ChartPaletteName>("default");
 
   // Открыт при каждой загрузке: работа начинается с выбора монеты, и свёрнутый
   // список на старте — это лишний клик перед каждой сессией. Свернётся сам,
@@ -567,7 +585,14 @@ export default function ScalpingPage() {
   // трейдером, важнее того, что осталось в этом браузере.
   const applyWorkspace = useCallback((saved: Partial<Workspace> | null) => {
     if (!saved) return;
-    if (isChartTheme(saved.theme)) setTheme(saved.theme);
+    // Прежде лист и палитра были одним полем: «dark» и «light» означали лист,
+    // имя пресета - тёмный лист с этими свечами. Новые поля важнее старого.
+    if (isChartPaper(saved.paper)) setPaper(saved.paper);
+    else if (isChartPaper(saved.theme)) setPaper(saved.theme);
+    else if (isChartPresetName(saved.theme)) setPaper("dark");
+
+    if (isChartPaletteName(saved.palette)) setPalette(saved.palette);
+    else if (isChartPresetName(saved.theme)) setPalette(saved.theme);
     if (typeof saved.screener === "number") {
       setScreenerW(clamp(saved.screener, PANE_LIMITS.screener));
     }
@@ -682,7 +707,8 @@ export default function ScalpingPage() {
   useEffect(() => {
     if (!hydrated.current) return;
     const snapshot = {
-      theme,
+      paper,
+      palette,
       screener: screenerW,
       dom: domW,
       indicators,
@@ -716,7 +742,8 @@ export default function ScalpingPage() {
     }, 1500);
     return () => clearTimeout(id);
   }, [
-    theme,
+    paper,
+    palette,
     screenerW,
     domW,
     indicators,
@@ -2066,11 +2093,10 @@ export default function ScalpingPage() {
   // Белые панели на чёрной странице выглядят вырезанными из другого
   // приложения.
   //
-  // Пресеты цвета свечей наружу не уезжают: они меняют график, а не кабинет, и
-  // для оболочки все пятеро - тёмная тема.
+  // Уезжает именно лист: палитра свечей меняет график, а не кабинет.
   useEffect(() => {
-    setTerminalTheme(theme === "light" ? "light" : "dark");
-  }, [theme]);
+    setTerminalTheme(paper);
+  }, [paper]);
 
   // Нажатие мимо меню снимка закрывает его. Меню, которое не уходит само,
   // остаётся висеть поверх графика и мешает работать.
@@ -2143,10 +2169,6 @@ export default function ScalpingPage() {
     // Обещанием, а не готовой картинкой: право писать в буфер браузер даёт
     // только на свежее нажатие, и любое ожидание между кликом и записью его
     // снимает - запись молча отклоняется, а в буфере остаётся прежнее.
-    // Подпись под снимком рисуется в цветах листа, а лист бывает только белым
-    // и чёрным: пресеты меняют свечи, а не бумагу.
-    const paper = theme === "light" ? "light" : "dark";
-
     const building = Promise.resolve(
       composeShot(taken.canvas, {
         symbol,
@@ -2195,7 +2217,7 @@ export default function ScalpingPage() {
   }
 
   // Класс темы для рабочих панелей: стакан и график светлеют вместе.
-  const pane = theme === "light" ? "pane-light" : "pane-dark";
+  const pane = paper === "light" ? "pane-light" : "pane-dark";
   const paneStyle = paneHeight(journalOpen, journalH, full);
 
   return (
@@ -2518,38 +2540,43 @@ export default function ScalpingPage() {
 
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
 
-                  {/* Палитра графика: два режима листа и пять пресетов свечей.
-                      Раньше здесь стоял переключатель светлого с тёмным, но
-                      выбор из семи в один клик не помещается - список. Два
-                      кружка у строки показывают цвет роста и падения: имена
-                      пресетов ни о чём не говорят, пока их не увидишь. */}
+                  {/* Лист графика: белая бумага или тёмная. Он же красит
+                      кабинет вокруг терминала, поэтому и остался отдельной
+                      кнопкой - это одно нажатие, а не выбор из списка. */}
+                  <button
+                    onClick={() => setPaper((p) => (p === "dark" ? "light" : "dark"))}
+                    title={t.terminal.chartPaper}
+                    className={`${CHIP} ${CHIP_OFF}`}
+                  >
+                    {paper === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                  </button>
+
+                  {/* Палитра свечей: стандартная и пять пресетов. Независима от
+                      листа - любую можно включить и на белом, и на тёмном. Два
+                      кружка у строки показывают рост и падение на текущем
+                      листе: имена пресетов ни о чём не говорят, пока их не
+                      увидишь, а на разной бумаге они выглядят по-разному. */}
                   <div className="relative" ref={themeMenuRef}>
                     <button
                       onClick={() => setThemeMenu((v) => !v)}
-                      title={t.terminal.chartTheme}
+                      title={t.terminal.chartPalette}
                       className={`${CHIP} ${themeMenu ? CHIP_ON : CHIP_OFF}`}
                     >
                       <Palette className="h-3.5 w-3.5" />
                     </button>
                     {themeMenu && (
                       <div className="absolute right-0 top-7 z-30 w-40 overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] py-1 shadow-xl">
-                        {CHART_THEMES.map((key) => {
-                          const swatch = themeSwatch(key);
-                          const label =
-                            key === "dark"
-                              ? t.profile.themeDark
-                              : key === "light"
-                                ? t.profile.themeLight
-                                : CHART_PRESETS[key].name;
+                        {CHART_PALETTES.map((key) => {
+                          const swatch = paletteSwatch(key, paper);
                           return (
                             <button
                               key={key}
                               onClick={() => {
-                                setTheme(key);
+                                setPalette(key);
                                 setThemeMenu(false);
                               }}
                               className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)] ${
-                                theme === key ? "text-[var(--pane-text)]" : "text-[var(--pane-text-2)]"
+                                palette === key ? "text-[var(--pane-text)]" : "text-[var(--pane-text-2)]"
                               }`}
                             >
                               <span className="flex shrink-0 gap-0.5">
@@ -2561,7 +2588,7 @@ export default function ScalpingPage() {
                                   />
                                 ))}
                               </span>
-                              {label}
+                              {key === "default" ? t.terminal.paletteDefault : CHART_PRESETS[key].name}
                             </button>
                           );
                         })}
@@ -2622,7 +2649,7 @@ export default function ScalpingPage() {
                   <div className="pointer-events-auto absolute left-1/2 flex -translate-x-1/2 items-center gap-2">
                     <Logo
                       href="/app/analysis"
-                      tone={theme === "light" ? "text-[var(--pane-text)]" : "text-text-primary"}
+                      tone={paper === "light" ? "text-[var(--pane-text)]" : "text-text-primary"}
                       className="text-base"
                     />
                     <RadioChip tone="pane" />
@@ -2749,7 +2776,8 @@ export default function ScalpingPage() {
                   interval={timeframe}
                   wall={dom?.wall ?? null}
                   shelves={dom?.shelves ?? []}
-                  theme={theme}
+                  paper={paper}
+                  preset={palette}
                   indicators={indicators}
                   trades={mine}
                   preview={preview}

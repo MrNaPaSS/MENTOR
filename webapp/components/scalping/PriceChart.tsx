@@ -33,11 +33,12 @@ import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
 import { computeChandelier, type ChandelierResult } from "@/lib/indicator/chandelier";
 import { atr, ema } from "@/lib/indicator/ta";
 import type { Candle } from "@/lib/indicator/types";
-import { buildShapes, type ChartTheme } from "@/lib/indicator/shapes";
+import { buildShapes, type ChartLook } from "@/lib/indicator/shapes";
 import {
-  CHART_PRESETS,
+  presetSkin,
   rgba,
-  type ChartPresetName,
+  type ChartPaletteName,
+  type ChartPaper,
 } from "@/lib/indicator/presets";
 import {
   EMPTY_SHAPES,
@@ -58,17 +59,17 @@ import {
   type ActiveTrade,
 } from "@/lib/trade/position";
 
-// Два режима графика и пять пресетов поверх тёмного.
+// Лист графика и палитра свечей.
 //
-// Тёмный — биржевой: зелёные и красные свечи на тёмном фоне. Светлый собран по
+// Тёмный лист — биржевой: зелёные и красные свечи на тёмном фоне. Светлый собран по
 // оформлению самого индикатора: белый фон без сетки, свечи чёрно-белые с чёрной
 // обводкой (рост — пустая, падение — залитая), структура чёрным пунктиром.
 // Зелёный с красным на нём остаются только там, где цвет несёт смысл, — на
 // линиях полок покупателя и продавца.
 //
-// Пресеты — те же тёмные потроха с другими свечами: фон, сетку и рамку они не
-// трогают, потому что поле графика живёт внутри панели кабинета и своим фоном
-// вырезало бы из неё дыру.
+// Палитра меняет свечи, лист — бумагу под ними. Настройки независимы: любой из
+// пяти пресетов включается на обоих листах, и фон, сетку с рамкой пресет не
+// трогает — они приходят от листа.
 
 type ChartPalette = {
   background: string;
@@ -173,53 +174,48 @@ const BASE: Record<"dark" | "light", ChartPalette> = {
 };
 
 /**
- * Пресет поверх тёмной темы.
+ * Полная палитра графика: лист плюс выбранные свечи.
  *
  * Своё у пресета только то, что человек видит как цвет графика: свечи, средние,
- * крестовина, линии полок, объёмы и боксы сделки. Фон, сетка, рамка и серый
- * бокс израсходованного риска приходят из тёмной темы — они про панель, а не
- * про палитру, и меняться от пресета к пресету не должны.
+ * крестовина, линии полок, объёмы и боксы сделки. Фон, сетка, рамка и серый бокс
+ * израсходованного риска приходят от листа — они про панель, а не про палитру.
  *
  * Обводка включена у всех пяти: она задана в каждом пресете отдельным цветом, а
- * у Megatron ещё и одна несёт направление — тела там одинаково графитовые.
+ * у Megatron ещё и одна несёт направление — тела там одинаковые.
  */
-const dressed = (name: ChartPresetName): ChartPalette => {
-  const preset = CHART_PRESETS[name];
-  return {
-    ...BASE.dark,
-    text: preset.ink,
-    up: preset.up,
-    down: preset.down,
-    upBorder: preset.upBorder,
-    downBorder: preset.downBorder,
-    upWick: preset.upWick,
-    downWick: preset.downWick,
-    candleBorders: true,
-    upVolume: rgba(preset.bull, 0.36),
-    downVolume: rgba(preset.bear, 0.36),
-    bidLine: preset.bull,
-    askLine: preset.bear,
-    emaFast: preset.emaFast,
-    emaSlow: preset.emaSlow,
-    emaTrend: preset.emaTrend,
-    crosshair: preset.crosshair,
-    mtf: preset.mtf,
-    gold: preset.gold,
-    riskBox: rgba(preset.bear, 0.16),
-    riskBorder: rgba(preset.bear, 0.45),
-    rewardBox: rgba(preset.bull, 0.14),
-    rewardBorder: rgba(preset.bull, 0.45),
-  };
-};
+function chartPalette(paper: ChartPaper, choice: ChartPaletteName): ChartPalette {
+  const base = BASE[paper];
+  if (choice === "default") return base;
 
-const THEMES: Record<ChartTheme, ChartPalette> = {
-  ...BASE,
-  fusion: dressed("fusion"),
-  megatron: dressed("megatron"),
-  imperium: dressed("imperium"),
-  keystone: dressed("keystone"),
-  velvet: dressed("velvet"),
-};
+  const skin = presetSkin(choice, paper);
+  // На белом листе прозрачные заливки слабее видно: там плотнее.
+  const dense = paper === "light";
+  return {
+    ...base,
+    text: skin.ink,
+    up: skin.up,
+    down: skin.down,
+    upBorder: skin.upBorder,
+    downBorder: skin.downBorder,
+    upWick: skin.upWick,
+    downWick: skin.downWick,
+    candleBorders: true,
+    upVolume: rgba(skin.bull, dense ? 0.42 : 0.36),
+    downVolume: rgba(skin.bear, dense ? 0.42 : 0.36),
+    bidLine: skin.bull,
+    askLine: skin.bear,
+    emaFast: skin.emaFast,
+    emaSlow: skin.emaSlow,
+    emaTrend: skin.emaTrend,
+    crosshair: skin.crosshair,
+    mtf: skin.mtf,
+    gold: skin.gold,
+    riskBox: rgba(skin.bear, dense ? 0.18 : 0.16),
+    riskBorder: rgba(skin.bear, dense ? 0.5 : 0.45),
+    rewardBox: rgba(skin.bull, dense ? 0.18 : 0.14),
+    rewardBorder: rgba(skin.bull, dense ? 0.5 : 0.45),
+  };
+}
 
 // Периоды скользящих средних индикатора.
 const EMA_FAST = 8;
@@ -359,7 +355,7 @@ function snapToBar(
  */
 function tradeBoxes(
   trade: ActiveTrade | null,
-  palette: (typeof THEMES)[ChartTheme],
+  palette: ChartPalette,
   candles: Candle[],
 ): Shapes | null {
   const last = candles.at(-1);
@@ -432,7 +428,7 @@ function tradeBoxes(
  */
 function tradeShapes(
   items: (ActiveTrade | null | undefined)[],
-  palette: (typeof THEMES)[ChartTheme],
+  palette: ChartPalette,
   candles: Candle[],
 ): Shapes | null {
   const parts: Shapes[] = [];
@@ -518,7 +514,8 @@ function PriceChart({
   wall,
   shelves,
   indicators,
-  theme,
+  paper,
+  preset,
   trades,
   preview,
   livePrice,
@@ -547,7 +544,8 @@ function PriceChart({
   wall: Wall | null;
   shelves: Wall[];
   indicators: Indicators;
-  theme: ChartTheme;
+  paper: ChartPaper;
+  preset: ChartPaletteName;
   /**
    * Идущие сделки: вход, стоп и цели. Жизненный цикл считается снаружи.
    *
@@ -686,8 +684,15 @@ function PriceChart({
   // переключателей, иначе включение индикатора перезапрашивало бы свечи.
   const indicatorsRef = useRef(indicators);
   indicatorsRef.current = indicators;
-  const themeRef = useRef(theme);
-  themeRef.current = theme;
+  // Готовая палитра: лист и выбор свечей сходятся здесь один раз. Через useMemo,
+  // потому что по ней сравниваются зависимости эффектов перекраски.
+  const skin = useMemo(() => chartPalette(paper, preset), [paper, preset]);
+  const skinRef = useRef(skin);
+  skinRef.current = skin;
+  // Фигурам структуры нужен не готовый цвет, а сам выбор: лист красит подписи,
+  // палитра — разрывы.
+  const lookRef = useRef<ChartLook>({ paper, palette: preset });
+  lookRef.current = { paper, palette: preset };
   const lineRef = useRef<IPriceLine | null>(null);
   const shelfLinesRef = useRef<IPriceLine[]>([]);
   const tradeLinesRef = useRef(new Map<string, IPriceLine>());
@@ -739,17 +744,17 @@ function PriceChart({
     const heavy = heavyRef.current;
     if (!series || !heavy) return;
 
-    const palette = THEMES[themeRef.current];
+    const paint = skinRef.current;
     if (!indicatorsRef.current.heavy) {
       heavy.clear();
       series.applyOptions({
-        upColor: palette.up,
-        downColor: palette.down,
-        borderVisible: palette.candleBorders,
-        borderUpColor: palette.upBorder,
-        borderDownColor: palette.downBorder,
-        wickUpColor: palette.upWick,
-        wickDownColor: palette.downWick,
+        upColor: paint.up,
+        downColor: paint.down,
+        borderVisible: paint.candleBorders,
+        borderUpColor: paint.upBorder,
+        borderDownColor: paint.downBorder,
+        wickUpColor: paint.upWick,
+        wickDownColor: paint.downWick,
       });
       return;
     }
@@ -764,14 +769,14 @@ function PriceChart({
       wickDownColor: "transparent",
     });
     heavy.setData(dataRef.current, {
-      up: palette.up,
-      down: palette.down,
-      upWick: palette.upWick,
-      downWick: palette.downWick,
+      up: paint.up,
+      down: paint.down,
+      upWick: paint.upWick,
+      downWick: paint.downWick,
       // Обводка там, где она есть у обычных свечей темы: на светлой свеча
       // роста белая, и без неё на белом листе её не видно вовсе.
-      upBorder: palette.candleBorders ? palette.upBorder : undefined,
-      downBorder: palette.candleBorders ? palette.downBorder : undefined,
+      upBorder: paint.candleBorders ? paint.upBorder : undefined,
+      downBorder: paint.candleBorders ? paint.downBorder : undefined,
     });
   }, []);
 
@@ -931,16 +936,16 @@ function PriceChart({
     });
 
     candleRef.current = chart.addSeries(CandlestickSeries, {
-      upColor: THEMES[theme].up,
-      downColor: THEMES[theme].down,
-      borderVisible: THEMES[theme].candleBorders,
-      borderUpColor: THEMES[theme].upBorder,
-      borderDownColor: THEMES[theme].downBorder,
-      wickUpColor: THEMES[theme].upWick,
-      wickDownColor: THEMES[theme].downWick,
+      upColor: skin.up,
+      downColor: skin.down,
+      borderVisible: skin.candleBorders,
+      borderUpColor: skin.upBorder,
+      borderDownColor: skin.downBorder,
+      wickUpColor: skin.upWick,
+      wickDownColor: skin.downWick,
       // Линия текущей цены цветом текста темы: на светлой она чёрная, иначе
       // белая свеча роста рисовала бы белую линию на белом фоне.
-      priceLineColor: THEMES[theme].text,
+      priceLineColor: skin.text,
     });
 
     // Объём живёт на своей шкале в нижней пятой части окна, иначе он
@@ -1022,7 +1027,7 @@ function PriceChart({
     if (shotRef.current) {
       // Снимок различает лишь цвет листа: пресеты живут на тёмном.
       shotRef.current.current = () =>
-        snapshot(chart, box, themeRef.current === "light" ? "light" : "dark");
+        snapshot(chart, box, lookRef.current.paper);
     }
     return () => {
       chart.remove();
@@ -1058,8 +1063,8 @@ function PriceChart({
           value: c.volume,
           color:
             c.close >= c.open
-              ? THEMES[themeRef.current].upVolume
-              : THEMES[themeRef.current].downVolume,
+              ? skinRef.current.upVolume
+              : skinRef.current.downVolume,
         })),
       );
 
@@ -1089,7 +1094,7 @@ function PriceChart({
           equal: cfgNow.gaps,
           zones: cfgNow.zones,
         },
-        themeRef.current,
+        lookRef.current,
         ceRef.current,
       );
       paintCandles();
@@ -1102,7 +1107,7 @@ function PriceChart({
           ),
           previewRef.current,
         ],
-        THEMES[themeRef.current],
+        skinRef.current,
         candles,
       );
       pushShapes();
@@ -1189,7 +1194,7 @@ function PriceChart({
           equal: cfg.gaps,
           zones: cfg.zones,
         },
-        themeRef.current,
+        lookRef.current,
         ceRef.current,
       );
       pushShapes();
@@ -1201,13 +1206,13 @@ function PriceChart({
   // должно отзываться в тот же кадр.
   useEffect(() => {
     paintCandles();
-  }, [cfg.heavy, theme, paintCandles]);
+  }, [cfg.heavy, skin, paintCandles]);
 
   // Смена темы: перекрашиваем график на месте. Пересоздавать его нельзя —
   // потеряется масштаб и положение, которые трейдер выставил руками.
   useEffect(() => {
     const chart = chartRef.current;
-    const palette = THEMES[theme];
+    const palette = skin;
     if (!chart) return;
 
     chart.applyOptions({
@@ -1260,12 +1265,12 @@ function PriceChart({
           equal: cfg.gaps,
           zones: cfg.zones,
         },
-        theme,
+        { paper, palette: preset },
         ceRef.current,
       );
       pushShapes();
     }
-  }, [theme, cfg]);
+  }, [paper, preset, cfg]);
 
   // Уровни прошлого дня, недели и месяца. Грузятся отдельно от свечей графика:
   // это другие интервалы, и меняются они раз в сутки, а не каждые пять секунд.
@@ -1293,14 +1298,14 @@ function PriceChart({
     shelfLinesRef.current = drawn.map((shelf) =>
       series.createPriceLine({
         price: shelf.price,
-        color: shelf.side === "bid" ? THEMES[theme].bidLine : THEMES[theme].askLine,
+        color: shelf.side === "bid" ? skin.bidLine : skin.askLine,
         lineWidth: 1,
         lineStyle: 1,
         axisLabelVisible: true,
         title: money(shelf.notional),
       }),
     );
-  }, [shelfKey, cfg.shelves, theme, wall?.price, tick]);
+  }, [shelfKey, cfg.shelves, skin, wall?.price, tick]);
 
   // Разметка сделки: вход, стоп и цели линиями, риск и потенциал — боксами.
   //
@@ -1313,7 +1318,7 @@ function PriceChart({
     if (!series) return;
 
     tradeShapesRef.current = null;
-    const palette = THEMES[themeRef.current];
+    const palette = skinRef.current;
 
     // Линии не пересоздаём, а переставляем.
     //
@@ -1394,7 +1399,7 @@ function PriceChart({
       dataRef.current,
     );
     pushShapes();
-  }, [trades, preview, shown, theme, pushShapes]);
+  }, [trades, preview, shown, skin, pushShapes]);
 
   // Вертикальное перетаскивание прямо по свечам.
   //
@@ -1582,8 +1587,8 @@ function PriceChart({
           value: bar.volume,
           color:
             bar.close >= bar.open
-              ? THEMES[themeRef.current].upVolume
-              : THEMES[themeRef.current].downVolume,
+              ? skinRef.current.upVolume
+              : skinRef.current.downVolume,
         });
       }
       // Держим ряд в согласии с экраном: индикаторы считаются по нему, и без
@@ -1644,14 +1649,14 @@ function PriceChart({
     alertLinesRef.current = (alerts ?? []).map((alert) =>
       series.createPriceLine({
         price: alert.price,
-        color: THEMES[theme].gold,
+        color: skin.gold,
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,
         title: "",
       }),
     );
-  }, [alertKey, theme]);
+  }, [alertKey, skin]);
 
   // Уровень из стакана под курсором — линией через весь график.
   //
@@ -1671,14 +1676,14 @@ function PriceChart({
       price: hoverLevel.price,
       color:
         hoverLevel.side === "bid"
-          ? THEMES[themeRef.current].bidLine
-          : THEMES[themeRef.current].askLine,
+          ? skinRef.current.bidLine
+          : skinRef.current.askLine,
       lineWidth: 2,
       lineStyle: 0,
       axisLabelVisible: true,
       title: hoverLevel.label,
     });
-  }, [hoverLevel, theme]);
+  }, [hoverLevel, skin]);
 
   // Сделка из журнала под курсором: как она шла и чем кончилась.
   //
@@ -1702,7 +1707,7 @@ function PriceChart({
       return;
     }
 
-    const palette = THEMES[themeRef.current];
+    const palette = skinRef.current;
     const span = { fromTime: from as UTCTimestamp, toTime: (to === from ? to + 1 : to) as UTCTimestamp };
 
     // Дальняя граница прибыли: последняя цель, а если целей не записано —
@@ -1769,7 +1774,7 @@ function PriceChart({
       points: [],
     };
     pushShapes();
-  }, [ghost, theme, pushShapes]);
+  }, [ghost, skin, pushShapes]);
 
   // Уровни сделки из журнала - у ценовой шкалы, как у живой сделки.
   //
@@ -1784,7 +1789,7 @@ function PriceChart({
   useEffect(() => {
     const series = candleRef.current;
     if (!series) return;
-    const palette = THEMES[themeRef.current];
+    const palette = skinRef.current;
 
     const kept = new Map<string, IPriceLine>();
     const put = (key: string, price: number, color: string, title: string, dashed: boolean) => {
@@ -1828,7 +1833,7 @@ function PriceChart({
       if (!kept.has(key)) series.removePriceLine(line);
     }
     ghostLinesRef.current = kept;
-  }, [ghost, theme]);
+  }, [ghost, skin]);
 
   // Отработанные сетапы из журнала прямо на графике.
   //
@@ -1863,7 +1868,7 @@ function PriceChart({
               time: opened as UTCTimestamp,
               position: row.side === "long" ? "belowBar" : "aboveBar",
               shape: row.side === "long" ? "arrowUp" : "arrowDown",
-              color: THEMES[themeRef.current].mtf,
+              color: skinRef.current.mtf,
               text: row.side === "long" ? t.terminal.levels.entryUp : t.terminal.levels.entryDown,
             });
           }
@@ -1872,7 +1877,7 @@ function PriceChart({
               time: closed as UTCTimestamp,
               position: row.side === "long" ? "aboveBar" : "belowBar",
               shape: "circle",
-              color: win ? THEMES[themeRef.current].bidLine : THEMES[themeRef.current].askLine,
+              color: win ? skinRef.current.bidLine : skinRef.current.askLine,
               text: `${win ? "+" : "-"}${Math.abs(row.pnl).toFixed(2)}`,
             });
           }
@@ -2110,9 +2115,9 @@ function PriceChart({
           className="pointer-events-auto absolute right-28 top-0 z-10 flex items-center gap-1.5 rounded border px-1.5 py-0.5 font-mono text-[10px] tabular-nums shadow"
           style={{
             visibility: "hidden",
-            borderColor: THEMES[theme].gold,
+            borderColor: skin.gold,
             background: "var(--pane-bg)",
-            color: THEMES[theme].gold,
+            color: skin.gold,
           }}
         >
           <Bell className="h-3 w-3" />
@@ -2213,8 +2218,8 @@ function PriceChart({
           >
             {(
               [
-                // Цвета берём у интерфейса, а не у свечей: THEMES.up - это
-                // тело свечи, и на белой теме оно белое. Пункт «открыть лонг»
+                // Цвета берём у интерфейса, а не у свечей: цвет роста в палитре -
+                // это тело свечи, и на белом листе оно белое. Пункт «открыть лонг»
                 // оказывался белым по белому и не читался вовсе.
                 ["alert", t.terminal.chart.plusAlert, "var(--pane-text-2)"],
                 ["long", t.terminal.chart.plusLong, "var(--pane-up)"],
