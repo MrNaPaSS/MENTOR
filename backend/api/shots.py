@@ -325,6 +325,9 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
     left: {box["x"] * 100:.4f}%; top: {box["y"] * 100:.4f}%;
     width: {box["w"] * 100:.4f}%; height: {box["h"] * 100:.4f}%;
     display: grid; place-items: center; pointer-events: none;
+    /* Наклон - свойство самой печати, а не хвост анимации: не сыграет она -
+       оттиск всё равно должен сидеть косо, иначе это не печать, а бланк. */
+    transform: rotate(-4.5deg);
     animation: slam .42s cubic-bezier(.2,1.5,.35,1) 1.35s both;
   }}
   .ink {{
@@ -414,7 +417,6 @@ def _card_page(shot: ChartShot) -> HTMLResponse:
   @media (prefers-reduced-motion: reduce) {{
     .paper, .paper.hit, .stamp, .slot::after,
     .glitch::before, .glitch::after {{ animation: none; }}
-    .stamp {{ transform: rotate(-4.5deg); }}
   }}
 </style>
 </head>

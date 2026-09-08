@@ -464,6 +464,11 @@
   display: grid;
   place-items: center;
   pointer-events: none;
+  /* Наклон - свойство самой печати, а не хвост анимации.
+     Он стоял только в последнем кадре, и стоило анимации не сыграть - при
+     перелистывании заготовок стрелками, при выключенном движении в системе, -
+     оттиск садился ровно по рамке и переставал быть печатью. */
+  transform: rotate(-4.5deg);
   animation: pnl-slam 0.42s cubic-bezier(0.2, 1.5, 0.35, 1) 1.35s both;
 }
 .pnl-ink {
@@ -540,8 +545,5 @@
   .pnl-paper,
   .pnl-stamp {
     animation: none;
-  }
-  .pnl-stamp {
-    transform: rotate(-4.5deg);
   }
 }
