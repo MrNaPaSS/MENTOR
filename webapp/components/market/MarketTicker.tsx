@@ -31,6 +31,19 @@ const POLL_MS = 15_000;
 const SHOWN = 18;
 
 /**
+ * Скорость ленты - пикселей в секунду.
+ *
+ * Именно скорость, а не длительность круга. Длительность была задана намертво
+ * (сорок секунд на круг), и лента разгонялась от каждой новой пары: чем длиннее
+ * список, тем больше пикселей приходилось на те же сорок секунд. Здесь наоборот
+ * - скорость постоянна, а круг занимает столько, сколько нужно.
+ *
+ * Сорок пикселей в секунду - примерно две с половиной пары в минуту: успеваешь
+ * прочитать, не гоняясь глазами.
+ */
+const SPEED = 40;
+
+/**
  * С какой плиты пара считается той, «где есть большая ликвидность».
  *
  * Плита - самая крупная одиночная заявка в стакане. Миллион долларов в одной
@@ -57,6 +70,10 @@ function money(value: number): string {
 export default function MarketTicker() {
   const [rows, setRows] = useState<ScreenerRow[]>([]);
   const trackRef = useRef<HTMLDivElement>(null);
+  const halfRef = useRef<HTMLDivElement>(null);
+  // Ширина одной половины: по ней считается длительность круга. Лента едет
+  // ровно на половину своей ширины, поэтому это и есть длина пути.
+  const [span, setSpan] = useState(0);
 
   useEffect(() => {
     let stopped = false;
@@ -98,6 +115,22 @@ export default function MarketTicker() {
     };
   }, []);
 
+  // Меряем половину и пересчитываем длительность. Не на каждый рендер, а когда
+  // ширина действительно изменилась: смена длительности на ходу переставляет
+  // ленту, и делать это из-за дрожания в пиксель - хуже, чем не делать вовсе.
+  useEffect(() => {
+    const node = halfRef.current;
+    if (!node) return;
+    function measure() {
+      const width = node!.getBoundingClientRect().width;
+      setSpan((old) => (Math.abs(old - width) > 2 ? width : old));
+    }
+    measure();
+    const watcher = new ResizeObserver(measure);
+    watcher.observe(node);
+    return () => watcher.disconnect();
+  }, [rows]);
+
   if (!rows.length) return null;
 
   return (
@@ -126,23 +159,34 @@ export default function MarketTicker() {
         // py-1.5 вместе с отступом самой пары держит прежнюю высоту строки: на
         // неё рассчитан отступ содержимого под шапкой.
         className="flex w-max animate-marquee py-1.5 will-change-transform group-hover:[animation-play-state:paused]"
+        // Пока не измерились - идём с длительностью по умолчанию: лента поедет
+        // сразу, а через кадр возьмёт свою.
+        style={span > 0 ? { animationDuration: `${span / SPEED}s` } : undefined}
       >
         {/* Две одинаковые половины. Вторая - для глаза, а не для чтения: она
             повторяет первую, и озвучивать её ещё раз незачем. */}
-        <Half rows={rows} />
+        <Half rows={rows} innerRef={halfRef} />
         <Half rows={rows} clone />
       </div>
     </div>
   );
 }
 
-function Half({ rows, clone }: { rows: ScreenerRow[]; clone?: boolean }) {
+function Half({
+  rows,
+  clone,
+  innerRef,
+}: {
+  rows: ScreenerRow[];
+  clone?: boolean;
+  innerRef?: React.Ref<HTMLDivElement>;
+}) {
   return (
     // Отступ справа вместо зазора после последней пары: зазор ставится только
     // между соседями, и на стыке половин его не хватало - лента дёргалась на
     // пол-отступа каждый круг. Здесь у половины свой хвост, и её ширина ровно
     // половина ленты.
-    <div className="flex gap-8 pr-8" aria-hidden={clone}>
+    <div ref={innerRef} className="flex gap-8 pr-8" aria-hidden={clone}>
       {rows.map((row) => (
         <Pair key={row.symbol} row={row} />
       ))}
