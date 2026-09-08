@@ -11,6 +11,7 @@ import type { Time, UTCTimestamp } from "lightweight-charts";
 import type { Shapes, ShapeBand, ShapeBox, ShapePoint, ShapeSegment } from
   "@/components/scalping/primitives/ShapesPrimitive";
 import { BULLISH, type SmcResult } from "./smc";
+import { CHART_PRESETS, rgba, type ChartPresetName, type ChartTheme } from "./presets";
 import { activeLevel, type ChandelierResult } from "./chandelier";
 
 export type ShapeToggles = {
@@ -32,7 +33,9 @@ export const SHAPE_DEFAULTS: ShapeToggles = {
   zones: false,
 };
 
-export type ChartTheme = "dark" | "light";
+// Тема графика объявлена рядом с пресетами, а сюда вынесена наружу: половина
+// терминала берёт её отсюда, и разводить два источника незачем.
+export type { ChartTheme };
 
 const DARK = {
   structure: "#8A93A0",
@@ -99,7 +102,32 @@ const LIGHT: typeof DARK = {
   discount: "rgba(149, 117, 205, 0.16)",
 };
 
-const PALETTES = { dark: DARK, light: LIGHT };
+// Пресет наследует тёмную разметку и перекрашивает в ней только то, что несёт
+// направление: разрывы справедливой цены, отметки разворота ленты и зоны премии
+// со скидкой. Структура, ордер-блоки и подписи остаются нейтральными - они про
+// расположение, а не про сторону сделки, и от цвета свечей не зависят.
+const dressed = (name: ChartPresetName): typeof DARK => {
+  const preset = CHART_PRESETS[name];
+  return {
+    ...DARK,
+    bullishGap: rgba(preset.bull, 0.16),
+    bearishGap: rgba(preset.bear, 0.16),
+    trendUpMark: preset.bull,
+    trendDownMark: preset.bear,
+    premium: rgba(preset.bear, 0.07),
+    discount: rgba(preset.bull, 0.07),
+  };
+};
+
+const PALETTES: Record<ChartTheme, typeof DARK> = {
+  dark: DARK,
+  light: LIGHT,
+  fusion: dressed("fusion"),
+  megatron: dressed("megatron"),
+  imperium: dressed("imperium"),
+  keystone: dressed("keystone"),
+  velvet: dressed("velvet"),
+};
 
 /**
  * Собрать фигуры для графика.

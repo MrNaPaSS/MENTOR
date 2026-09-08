@@ -18,7 +18,7 @@ import {
   CandlestickChart,
   Maximize2,
   Minimize2,
-  Moon,
+  Palette,
   Radio,
   Volume2,
   VolumeX,
@@ -26,7 +26,6 @@ import {
   PanelLeftOpen,
   Star,
   Camera,
-  Sun,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -35,6 +34,12 @@ import ScreenerTable from "@/components/scalping/ScreenerTable";
 import DomTrader from "@/components/scalping/DomTrader";
 import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
 import type { ChartTheme } from "@/lib/indicator/shapes";
+import {
+  CHART_PRESETS,
+  CHART_THEMES,
+  isChartTheme,
+  themeSwatch,
+} from "@/lib/indicator/presets";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
 import { play } from "@/lib/sound";
@@ -349,6 +354,8 @@ export default function ScalpingPage() {
   const shotRef = useRef<(() => ShotResult | null) | null>(null);
   const [shotMenu, setShotMenu] = useState(false);
   const shotMenuRef = useRef<HTMLDivElement>(null);
+  const [themeMenu, setThemeMenu] = useState(false);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
   // Имя для подписи на снимке. Оно рисуется в картинке и на сервер не уходит.
   const [author, setAuthor] = useState<string | null>(null);
 
@@ -560,7 +567,7 @@ export default function ScalpingPage() {
   // трейдером, важнее того, что осталось в этом браузере.
   const applyWorkspace = useCallback((saved: Partial<Workspace> | null) => {
     if (!saved) return;
-    if (saved.theme === "light" || saved.theme === "dark") setTheme(saved.theme);
+    if (isChartTheme(saved.theme)) setTheme(saved.theme);
     if (typeof saved.screener === "number") {
       setScreenerW(clamp(saved.screener, PANE_LIMITS.screener));
     }
@@ -2058,8 +2065,11 @@ export default function ScalpingPage() {
   // Тема уезжает наружу: по ней светлеет оболочка сайта вокруг терминала.
   // Белые панели на чёрной странице выглядят вырезанными из другого
   // приложения.
+  //
+  // Пресеты цвета свечей наружу не уезжают: они меняют график, а не кабинет, и
+  // для оболочки все пятеро - тёмная тема.
   useEffect(() => {
-    setTerminalTheme(theme);
+    setTerminalTheme(theme === "light" ? "light" : "dark");
   }, [theme]);
 
   // Нажатие мимо меню снимка закрывает его. Меню, которое не уходит само,
@@ -2079,6 +2089,23 @@ export default function ScalpingPage() {
       document.removeEventListener("keydown", esc);
     };
   }, [shotMenu]);
+
+  // То же для списка палитр.
+  useEffect(() => {
+    if (!themeMenu) return;
+    function away(event: PointerEvent) {
+      if (!themeMenuRef.current?.contains(event.target as Node)) setThemeMenu(false);
+    }
+    function esc(event: KeyboardEvent) {
+      if (event.key === "Escape") setThemeMenu(false);
+    }
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [themeMenu]);
 
   /**
    * Снимок графика: скачать, скопировать или получить ссылку.
@@ -2116,12 +2143,16 @@ export default function ScalpingPage() {
     // Обещанием, а не готовой картинкой: право писать в буфер браузер даёт
     // только на свежее нажатие, и любое ожидание между кликом и записью его
     // снимает - запись молча отклоняется, а в буфере остаётся прежнее.
+    // Подпись под снимком рисуется в цветах листа, а лист бывает только белым
+    // и чёрным: пресеты меняют свечи, а не бумагу.
+    const paper = theme === "light" ? "light" : "dark";
+
     const building = Promise.resolve(
       composeShot(taken.canvas, {
         symbol,
         interval: timeframe,
         author: author ?? undefined,
-        theme,
+        theme: paper,
       }),
     );
 
@@ -2146,7 +2177,7 @@ export default function ScalpingPage() {
 
     setOrderNote({ text: t.terminal.notes.shotUploading, bad: false });
     try {
-      const link = await shareShot(picture, { symbol, interval: timeframe, theme });
+      const link = await shareShot(picture, { symbol, interval: timeframe, theme: paper });
       if (!link) {
         setOrderNote({ text: t.terminal.notes.linkFailed, bad: true });
         return;
@@ -2486,13 +2517,57 @@ export default function ScalpingPage() {
                   </button>
 
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
-                  <button
-                    onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-                    title={t.terminal.chartTheme}
-                    className={`${CHIP} ${CHIP_OFF}`}
-                  >
-                    {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                  </button>
+
+                  {/* Палитра графика: два режима листа и пять пресетов свечей.
+                      Раньше здесь стоял переключатель светлого с тёмным, но
+                      выбор из семи в один клик не помещается - список. Два
+                      кружка у строки показывают цвет роста и падения: имена
+                      пресетов ни о чём не говорят, пока их не увидишь. */}
+                  <div className="relative" ref={themeMenuRef}>
+                    <button
+                      onClick={() => setThemeMenu((v) => !v)}
+                      title={t.terminal.chartTheme}
+                      className={`${CHIP} ${themeMenu ? CHIP_ON : CHIP_OFF}`}
+                    >
+                      <Palette className="h-3.5 w-3.5" />
+                    </button>
+                    {themeMenu && (
+                      <div className="absolute right-0 top-7 z-30 w-40 overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] py-1 shadow-xl">
+                        {CHART_THEMES.map((key) => {
+                          const swatch = themeSwatch(key);
+                          const label =
+                            key === "dark"
+                              ? t.profile.themeDark
+                              : key === "light"
+                                ? t.profile.themeLight
+                                : CHART_PRESETS[key].name;
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                setTheme(key);
+                                setThemeMenu(false);
+                              }}
+                              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)] ${
+                                theme === key ? "text-[var(--pane-text)]" : "text-[var(--pane-text-2)]"
+                              }`}
+                            >
+                              <span className="flex shrink-0 gap-0.5">
+                                {[swatch.bull, swatch.bear].map((color, side) => (
+                                  <span
+                                    key={side}
+                                    className="h-2.5 w-2.5 rounded-sm border border-[var(--pane-border)]"
+                                    style={{ background: color }}
+                                  />
+                                ))}
+                              </span>
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Снимок графика: три способа поделиться одним нажатием. */}
                   <div className="relative" ref={shotMenuRef}>

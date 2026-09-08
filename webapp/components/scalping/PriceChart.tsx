@@ -35,6 +35,11 @@ import { atr, ema } from "@/lib/indicator/ta";
 import type { Candle } from "@/lib/indicator/types";
 import { buildShapes, type ChartTheme } from "@/lib/indicator/shapes";
 import {
+  CHART_PRESETS,
+  rgba,
+  type ChartPresetName,
+} from "@/lib/indicator/presets";
+import {
   EMPTY_SHAPES,
   ShapesPrimitive,
   type Shapes,
@@ -53,49 +58,53 @@ import {
   type ActiveTrade,
 } from "@/lib/trade/position";
 
-// Две темы графика.
+// Два режима графика и пять пресетов поверх тёмного.
 //
-// Тёмная — биржевая: зелёные и красные свечи на тёмном фоне. Светлая собрана по
+// Тёмный — биржевой: зелёные и красные свечи на тёмном фоне. Светлый собран по
 // оформлению самого индикатора: белый фон без сетки, свечи чёрно-белые с чёрной
 // обводкой (рост — пустая, падение — залитая), структура чёрным пунктиром.
-// Зелёный с красным на ней остаются только там, где цвет несёт смысл, — на
+// Зелёный с красным на нём остаются только там, где цвет несёт смысл, — на
 // линиях полок покупателя и продавца.
-const THEMES: Record<
-  ChartTheme,
-  {
-    background: string;
-    text: string;
-    grid: string;
-    border: string;
-    up: string;
-    down: string;
-    upBorder: string;
-    downBorder: string;
-    upWick: string;
-    downWick: string;
-    candleBorders: boolean;
-    upVolume: string;
-    downVolume: string;
-    bidLine: string;
-    askLine: string;
-    emaFast: string;
-    emaSlow: string;
-    emaTrend: string;
-    crosshair: string;
-    /** Уровни прошлого дня, недели и месяца. */
-    mtf: string;
-    /** Отметки трейдера на ценах — тот же жёлтый, что у плиты в стакане. */
-    gold: string;
-    /** Боксы риска и потенциала у разметки сделки. */
-    riskBox: string;
-    riskBorder: string;
-    /** Тот же бокс, когда риска уже нет: стоп переехал в безубыток. */
-    spentBox: string;
-    spentBorder: string;
-    rewardBox: string;
-    rewardBorder: string;
-  }
-> = {
+//
+// Пресеты — те же тёмные потроха с другими свечами: фон, сетку и рамку они не
+// трогают, потому что поле графика живёт внутри панели кабинета и своим фоном
+// вырезало бы из неё дыру.
+
+type ChartPalette = {
+  background: string;
+  text: string;
+  grid: string;
+  border: string;
+  up: string;
+  down: string;
+  upBorder: string;
+  downBorder: string;
+  upWick: string;
+  downWick: string;
+  candleBorders: boolean;
+  upVolume: string;
+  downVolume: string;
+  bidLine: string;
+  askLine: string;
+  emaFast: string;
+  emaSlow: string;
+  emaTrend: string;
+  crosshair: string;
+  /** Уровни прошлого дня, недели и месяца. */
+  mtf: string;
+  /** Отметки трейдера на ценах — тот же жёлтый, что у плиты в стакане. */
+  gold: string;
+  /** Боксы риска и потенциала у разметки сделки. */
+  riskBox: string;
+  riskBorder: string;
+  /** Тот же бокс, когда риска уже нет: стоп переехал в безубыток. */
+  spentBox: string;
+  spentBorder: string;
+  rewardBox: string;
+  rewardBorder: string;
+};
+
+const BASE: Record<"dark" | "light", ChartPalette> = {
   dark: {
     background: "transparent",
     text: "#7A8290",
@@ -161,6 +170,55 @@ const THEMES: Record<
     rewardBox: "rgba(149,117,205,0.16)",
     rewardBorder: "rgba(149,117,205,0.45)",
   },
+};
+
+/**
+ * Пресет поверх тёмной темы.
+ *
+ * Своё у пресета только то, что человек видит как цвет графика: свечи, средние,
+ * крестовина, линии полок, объёмы и боксы сделки. Фон, сетка, рамка и серый
+ * бокс израсходованного риска приходят из тёмной темы — они про панель, а не
+ * про палитру, и меняться от пресета к пресету не должны.
+ *
+ * Обводка включена у всех пяти: она задана в каждом пресете отдельным цветом, а
+ * у Megatron ещё и одна несёт направление — тела там одинаково графитовые.
+ */
+const dressed = (name: ChartPresetName): ChartPalette => {
+  const preset = CHART_PRESETS[name];
+  return {
+    ...BASE.dark,
+    text: preset.ink,
+    up: preset.up,
+    down: preset.down,
+    upBorder: preset.upBorder,
+    downBorder: preset.downBorder,
+    upWick: preset.upWick,
+    downWick: preset.downWick,
+    candleBorders: true,
+    upVolume: rgba(preset.bull, 0.36),
+    downVolume: rgba(preset.bear, 0.36),
+    bidLine: preset.bull,
+    askLine: preset.bear,
+    emaFast: preset.emaFast,
+    emaSlow: preset.emaSlow,
+    emaTrend: preset.emaTrend,
+    crosshair: preset.crosshair,
+    mtf: preset.mtf,
+    gold: preset.gold,
+    riskBox: rgba(preset.bear, 0.16),
+    riskBorder: rgba(preset.bear, 0.45),
+    rewardBox: rgba(preset.bull, 0.14),
+    rewardBorder: rgba(preset.bull, 0.45),
+  };
+};
+
+const THEMES: Record<ChartTheme, ChartPalette> = {
+  ...BASE,
+  fusion: dressed("fusion"),
+  megatron: dressed("megatron"),
+  imperium: dressed("imperium"),
+  keystone: dressed("keystone"),
+  velvet: dressed("velvet"),
 };
 
 // Периоды скользящих средних индикатора.
@@ -962,7 +1020,9 @@ function PriceChart({
 
     chartRef.current = chart;
     if (shotRef.current) {
-      shotRef.current.current = () => snapshot(chart, box, themeRef.current);
+      // Снимок различает лишь цвет листа: пресеты живут на тёмном.
+      shotRef.current.current = () =>
+        snapshot(chart, box, themeRef.current === "light" ? "light" : "dark");
     }
     return () => {
       chart.remove();
