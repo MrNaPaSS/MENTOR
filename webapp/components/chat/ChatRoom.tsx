@@ -115,7 +115,7 @@ const SKIN: Record<
     input: "input flex-1",
     button: "btn-primary px-4",
     ghost:
-      "shrink-0 rounded-xl border border-border px-3 text-text-secondary transition-colors hover:text-text-primary",
+      "h-full shrink-0 rounded-xl border border-border px-3 text-text-secondary transition-colors hover:text-text-primary",
     note: "mt-2 text-center text-[11px] text-text-muted",
     up: "text-success",
     down: "text-danger",
@@ -155,7 +155,7 @@ const SKIN: Record<
     button:
       "shrink-0 rounded-lg border border-[var(--pane-accent)]/50 px-2.5 text-[var(--pane-accent)] transition-colors hover:bg-[var(--pane-accent)]/10",
     ghost:
-      "shrink-0 rounded-lg border border-[var(--pane-border)] px-2 text-[var(--pane-text-2)] transition-colors hover:border-[var(--pane-accent)] hover:text-[var(--pane-text)]",
+      "h-full shrink-0 rounded-lg border border-[var(--pane-border)] px-2 text-[var(--pane-text-2)] transition-colors hover:border-[var(--pane-accent)] hover:text-[var(--pane-text)]",
     note: "px-2 pb-2 text-center text-[10px] text-[var(--pane-muted)]",
     up: "text-[var(--pane-up)]",
     down: "text-[var(--pane-down)]",
@@ -410,6 +410,7 @@ export default function ChatRoom({
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const attachRef = useRef<HTMLDivElement>(null);
 
   // Пока чат на экране, пришедшее считается прочитанным: точка у свёрнутой
   // панели загорается только тогда, когда её и правда не видели.
@@ -425,6 +426,29 @@ export default function ChatRoom({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state.messages]);
+
+  // Нажатие мимо закрывает меню скрепки. Меню, которое не уходит само, остаётся
+  // висеть над лентой и закрывает собой разговор - а человек уже передумал
+  // прикладывать.
+  useEffect(() => {
+    if (!attachMenu) return;
+    function away(event: PointerEvent) {
+      if (attachRef.current?.contains(event.target as Node)) return;
+      setAttachMenu(false);
+      setMenu("main");
+    }
+    function esc(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setAttachMenu(false);
+      setMenu("main");
+    }
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [attachMenu]);
 
   useEffect(() => {
     if (menu !== "journal" || journal !== null || !journalAvailable()) return;
@@ -620,6 +644,7 @@ export default function ChatRoom({
           hidden
           onChange={(e) => void attachPhoto(e.target.files?.[0])}
         />
+        <div className="relative" ref={attachRef}>
         <button
           onClick={() => {
             setAttachMenu((v) => !v);
@@ -754,6 +779,8 @@ export default function ChatRoom({
             </div>
           </div>
         )}
+
+        </div>
 
         <input
           className={skin.input}
