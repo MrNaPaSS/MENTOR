@@ -15,7 +15,7 @@ import { periodOf, type Span } from "@/lib/pnl/period";
 import { CHIP, CHIP_OFF, CHIP_ON, PaneHead, PaneScope } from "@/components/app/Pane";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
-import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles, Share2 } from "lucide-react";
+import { X, Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles, Share2 } from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
 function fmtDot(n: number, dec = 0): string {
@@ -850,139 +850,6 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            {/* Детальная карточка выбранного дня */}
-            {selectedDay && (
-              <div className="border-t border-[var(--pane-border)] px-3 py-3" style={{ background: "rgba(255,255,255,0.015)" }}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[var(--pane-text)]">
-                      {new Date(selectedDay.date + "T12:00:00").toLocaleDateString(numbers, { weekday: "long", day: "numeric", month: "long" })}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {selectedDay.balance !== null && (
-                        <span className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-text)]">
-                          💰 ${fmtDot(selectedDay.balance, 2)}
-                        </span>
-                      )}
-                      {selectedDay.signals > 0 && (
-                        <span className="rounded-lg bg-[var(--pane-accent-faint)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-accent)]">
-                          {t.analytics.calendar.daySignals(selectedDay.signals)}
-                        </span>
-                      )}
-                      {dayVolume(selectedDay) > 0 && (
-                        <span className="rounded-lg bg-[var(--pane-gold)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
-                          {t.analytics.calendar.dayVolume(fmtDot(dayVolume(selectedDay)))}
-                        </span>
-                      )}
-                      {selectedDay.has_deposit && (
-                        <span className="rounded-lg bg-[var(--pane-up)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
-                          {t.analytics.calendar.dayDeposit}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    {selectedDay.pnl_pct !== null ? (
-                      <>
-                        <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-[var(--pane-up)]" : selectedDay.pnl_pct < 0 ? "text-[var(--pane-down)]" : "text-[var(--pane-text)]/40"}`}>
-                          {selectedDay.pnl_pct > 0 ? "+" : ""}{selectedDay.pnl_pct.toFixed(2)}%
-                        </p>
-                        {selectedDay.signals > 0 && selectedDay.pnl_pct > 0 && (
-                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[var(--pane-up)]/15 px-2 py-0.5 text-[10px] font-bold text-[var(--pane-up)]">{t.analytics.calendar.dayGoal}</span>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-xs text-[var(--pane-text)]/20">{t.analytics.calendar.noSnapshot}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Сделки этого дня.
-                    Календарь отвечает на вопрос «сколько», а список под ним - на
-                    вопрос «из чего»: одна клетка в плюс бывает и одной сделкой, и
-                    десятью, и это разные дни работы. */}
-                {dayTrades === undefined ? (
-                  <div className="mt-3 space-y-1.5">
-                    {[...Array(2)].map((_, i) => (
-                      <div key={i} className="h-7 animate-pulse rounded-lg bg-[var(--pane-hover)]" />
-                    ))}
-                  </div>
-                ) : dayTrades && dayTrades.length > 0 ? (
-                  <div className="mt-3 overflow-x-auto">
-                    <table className="w-full whitespace-nowrap text-[11px]">
-                      <thead>
-                        <tr className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
-                          <th className="py-1 text-left font-medium">{t.analytics.trades.time}</th>
-                          <th className="py-1 text-left font-medium">{t.analytics.trades.coin}</th>
-                          <th className="py-1 text-right font-medium">{t.analytics.trades.entry}</th>
-                          <th className="py-1 text-right font-medium">{t.analytics.trades.exit}</th>
-                          <th className="py-1 text-right font-medium">{t.analytics.trades.result}</th>
-                          <th className="py-1" />
-                        </tr>
-                      </thead>
-                      <tbody className="font-mono tabular-nums">
-                        {dayTrades.map((one) => (
-                          <tr key={one.id} className="border-t border-[var(--pane-border)]/40">
-                            <td className="py-1 text-[var(--pane-text)]/40">
-                              {new Date(one.closed_at).toLocaleTimeString(numbers, {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </td>
-                            <td className="py-1 font-sans font-semibold text-[var(--pane-text)]">
-                              {one.symbol.replace(/USDT$/, "")}
-                              <span
-                                className={`ml-1.5 text-[10px] font-medium ${
-                                  one.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
-                                }`}
-                              >
-                                {one.side === "long" ? t.analytics.trades.long : t.analytics.trades.short}
-                              </span>
-                            </td>
-                            <td className="py-1 text-right text-[var(--pane-text-2)]">
-                              {fmtPrice(one.entry)}
-                            </td>
-                            <td className="py-1 text-right text-[var(--pane-text-2)]">
-                              {one.exit_price === null ? "-" : fmtPrice(one.exit_price)}
-                            </td>
-                            <td
-                              className={`py-1 text-right font-semibold ${
-                                one.pnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
-                              }`}
-                            >
-                              {one.pnl >= 0 ? "+" : "-"}
-                              {Math.abs(one.pnl).toFixed(2)} $
-                              {one.fee > 0 && (
-                                <span className="ml-1 text-[10px] font-normal text-[var(--pane-text)]/30">
-                                  -{one.fee.toFixed(2)}
-                                </span>
-                              )}
-                            </td>
-                            {/* Карточка сделки - та же, что в журнале терминала.
-                                Здесь она нужна не меньше: аналитику открывают,
-                                чтобы посмотреть на свой день, и хорошим днём
-                                делятся ровно оттуда, где его увидели. */}
-                            <td className="py-1 pl-2 text-right">
-                              <button
-                                onClick={() => setCard(cardFromTrade(one, owner ?? undefined))}
-                                title={t.analytics.trades.cardTitle}
-                                className="text-[var(--pane-text)]/30 transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
-                              >
-                                <Share2 className="h-3.5 w-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : dayTrades && dayTrades.length === 0 ? (
-                  <p className="mt-3 text-[11px] text-[var(--pane-text)]/30">
-                    {t.analytics.trades.none}
-                  </p>
-                ) : null}
-              </div>
-            )}
 
             {/* Итоги месяца */}
             {realDays.length >= 2 && (
@@ -1129,45 +996,6 @@ export default function AnalyticsPage() {
             )}
           </div>
 
-          {/* Третья панель: что приходило в сигналах и как часто в них
-              заходили. Первые две - про деньги, эта - про участие: сколько
-              сигналов пришло, сколько взято, сколько прошло мимо. */}
-          <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
-            <div className="flex items-baseline gap-2 border-b border-[var(--pane-border)] px-3 py-2">
-              <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">
-                {t.analytics.flow.title}
-              </h2>
-              <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.flow.hint}</span>
-            </div>
-            {analytics && analytics.signals_received > 0 ? (
-              <dl className="divide-y divide-[var(--pane-border)]">
-                <Metric
-                  label={t.analytics.flow.received}
-                  value={fmtDot(analytics.signals_received)}
-                />
-                <Metric
-                  label={t.analytics.flow.taken}
-                  value={fmtDot(analytics.sent)}
-                  tone={analytics.sent > 0 ? "up" : undefined}
-                />
-                <Metric label={t.analytics.flow.skipped} value={fmtDot(analytics.skipped)} />
-                <Metric
-                  label={t.analytics.flow.failed}
-                  value={fmtDot(analytics.failed)}
-                  tone={analytics.failed > 0 ? "down" : undefined}
-                />
-                <Metric
-                  label={t.analytics.flow.activeDays}
-                  value={String(activeDays)}
-                  note={t.analytics.flow.goalDays + ": " + goalDays}
-                />
-              </dl>
-            ) : (
-              <p className="px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
-                {t.analytics.flow.empty}
-              </p>
-            )}
-          </div>
           </div>
         </div>
 
@@ -1408,6 +1236,166 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
+        </div>
+      )}
+
+      {/* День календаря - окном поверх интерфейса.
+          Разбор дня жил полосой под календарём: открыв день, человек читал его
+          где-то внизу страницы, а сам календарь при этом прыгал - панель
+          вырастала на высоту таблицы сделок. Окно ничего не двигает и
+          закрывается тем же нажатием мимо, что и остальные окна терминала. */}
+      {selectedDay && (
+        <div
+          className="fixed inset-0 z-50 grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
+          onClick={() => setSelectedDay(null)}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[85vh] w-[760px] max-w-full animate-dialog-in overflow-y-auto rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--pane-border)] px-4 py-2.5">
+              <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">
+                {t.analytics.calendar.dayTitle}
+              </h2>
+              <button
+                onClick={() => setSelectedDay(null)}
+                className="text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)]"
+                aria-label={t.common.close}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-4 py-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-[var(--pane-text)]">
+                    {new Date(selectedDay.date + "T12:00:00").toLocaleDateString(numbers, { weekday: "long", day: "numeric", month: "long" })}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedDay.balance !== null && (
+                      <span className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-text)]">
+                        💰 ${fmtDot(selectedDay.balance, 2)}
+                      </span>
+                    )}
+                    {selectedDay.signals > 0 && (
+                      <span className="rounded-lg bg-[var(--pane-accent-faint)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-accent)]">
+                        {t.analytics.calendar.daySignals(selectedDay.signals)}
+                      </span>
+                    )}
+                    {dayVolume(selectedDay) > 0 && (
+                      <span className="rounded-lg bg-[var(--pane-gold)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
+                        {t.analytics.calendar.dayVolume(fmtDot(dayVolume(selectedDay)))}
+                      </span>
+                    )}
+                    {selectedDay.has_deposit && (
+                      <span className="rounded-lg bg-[var(--pane-up)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
+                        {t.analytics.calendar.dayDeposit}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  {selectedDay.pnl_pct !== null ? (
+                    <>
+                      <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-[var(--pane-up)]" : selectedDay.pnl_pct < 0 ? "text-[var(--pane-down)]" : "text-[var(--pane-text)]/40"}`}>
+                        {selectedDay.pnl_pct > 0 ? "+" : ""}{selectedDay.pnl_pct.toFixed(2)}%
+                      </p>
+                      {selectedDay.signals > 0 && selectedDay.pnl_pct > 0 && (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[var(--pane-up)]/15 px-2 py-0.5 text-[10px] font-bold text-[var(--pane-up)]">{t.analytics.calendar.dayGoal}</span>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-[var(--pane-text)]/20">{t.analytics.calendar.noSnapshot}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Сделки этого дня.
+                  Календарь отвечает на вопрос «сколько», а список под ним - на
+                  вопрос «из чего»: одна клетка в плюс бывает и одной сделкой, и
+                  десятью, и это разные дни работы. */}
+              {dayTrades === undefined ? (
+                <div className="mt-3 space-y-1.5">
+                  {[...Array(2)].map((_, i) => (
+                    <div key={i} className="h-7 animate-pulse rounded-lg bg-[var(--pane-hover)]" />
+                  ))}
+                </div>
+              ) : dayTrades && dayTrades.length > 0 ? (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full whitespace-nowrap text-[11px]">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
+                        <th className="py-1 text-left font-medium">{t.analytics.trades.time}</th>
+                        <th className="py-1 text-left font-medium">{t.analytics.trades.coin}</th>
+                        <th className="py-1 text-right font-medium">{t.analytics.trades.entry}</th>
+                        <th className="py-1 text-right font-medium">{t.analytics.trades.exit}</th>
+                        <th className="py-1 text-right font-medium">{t.analytics.trades.result}</th>
+                        <th className="py-1" />
+                      </tr>
+                    </thead>
+                    <tbody className="font-mono tabular-nums">
+                      {dayTrades.map((one) => (
+                        <tr key={one.id} className="border-t border-[var(--pane-border)]/40">
+                          <td className="py-1 text-[var(--pane-text)]/40">
+                            {new Date(one.closed_at).toLocaleTimeString(numbers, {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td className="py-1 font-sans font-semibold text-[var(--pane-text)]">
+                            {one.symbol.replace(/USDT$/, "")}
+                            <span
+                              className={`ml-1.5 text-[10px] font-medium ${
+                                one.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
+                              }`}
+                            >
+                              {one.side === "long" ? t.analytics.trades.long : t.analytics.trades.short}
+                            </span>
+                          </td>
+                          <td className="py-1 text-right text-[var(--pane-text-2)]">
+                            {fmtPrice(one.entry)}
+                          </td>
+                          <td className="py-1 text-right text-[var(--pane-text-2)]">
+                            {one.exit_price === null ? "-" : fmtPrice(one.exit_price)}
+                          </td>
+                          <td
+                            className={`py-1 text-right font-semibold ${
+                              one.pnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
+                            }`}
+                          >
+                            {one.pnl >= 0 ? "+" : "-"}
+                            {Math.abs(one.pnl).toFixed(2)} $
+                            {one.fee > 0 && (
+                              <span className="ml-1 text-[10px] font-normal text-[var(--pane-text)]/30">
+                                -{one.fee.toFixed(2)}
+                              </span>
+                            )}
+                          </td>
+                          {/* Карточка сделки - та же, что в журнале терминала.
+                              Здесь она нужна не меньше: аналитику открывают,
+                              чтобы посмотреть на свой день, и хорошим днём
+                              делятся ровно оттуда, где его увидели. */}
+                          <td className="py-1 pl-2 text-right">
+                            <button
+                              onClick={() => setCard(cardFromTrade(one, owner ?? undefined))}
+                              title={t.analytics.trades.cardTitle}
+                              className="text-[var(--pane-text)]/30 transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
+                            >
+                              <Share2 className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : dayTrades && dayTrades.length === 0 ? (
+                <p className="mt-3 text-[11px] text-[var(--pane-text)]/30">
+                  {t.analytics.trades.none}
+                </p>
+              ) : null}
+            </div>
+          </div>
         </div>
       )}
 

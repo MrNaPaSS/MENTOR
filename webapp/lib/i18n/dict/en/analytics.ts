@@ -45,18 +45,6 @@ export const analytics = {
     empty: "The exchange has not returned account numbers yet",
   },
 
-  flow: {
-    title: "Signals and taking part",
-    hint: "all time",
-    received: "signals received",
-    taken: "taken",
-    skipped: "skipped",
-    failed: "failed to place",
-    activeDays: "days with signals",
-    goalDays: "of them green",
-    empty: "No signals yet",
-  },
-
   path: {
     title: "Trader's path",
     subtitle: "Total volume on WEEX",
@@ -83,6 +71,8 @@ export const analytics = {
   },
 
   calendar: {
+    /** Заголовок окна, которое открывается нажатием по дню. */
+    dayTitle: "The day in detail",
     deposit: "Deposit",
     volume: (amount: string) => `Volume $${amount}`,
     profitDays: (n: number) => `↑ ${n} up`,
