@@ -1,13 +1,14 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: dark;
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  /* Имена от next/font: файлы шрифта лежат у нас и приезжают с той же
+     раздачей, что и страница. Системные - на случай, если шрифт ещё не
+     доехал: текст в это время читается, а не ждёт. */
+  --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), "JetBrains Mono", monospace;
 
   /* Цвета заданы каналами, а не готовым цветом: так Tailwind умеет добавлять
      к ним прозрачность (bg-bg-deep/80), а тема - подменять сами каналы. */

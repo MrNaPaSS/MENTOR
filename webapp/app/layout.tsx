@@ -1,6 +1,36 @@
 ﻿import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+
+/**
+ * Шрифты берём сборкой, а не у Google из браузера.
+ *
+ * Раньше в начале globals.css стоял `@import` с fonts.googleapis.com, и до
+ * первой буквы правильным шрифтом браузер шёл тремя кругами: скачать наш CSS,
+ * прочитать в нём импорт, сходить к Google за вторым CSS и только потом - к
+ * gstatic за самим шрифтом. Всё это на критическом пути каждой страницы, а у
+ * части людей Google ещё и отвечает через раз.
+ *
+ * Теперь файлы шрифта лежат у нас и приезжают с той же раздачей, что и
+ * страница: ни одного чужого запроса, ни одного лишнего круга.
+ *
+ * Кириллица в наборе обязательна: сайт русский, и без неё браузер подставил бы
+ * под русский текст первый попавшийся системный шрифт.
+ */
+const inter = Inter({
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500", "600", "700", "800", "900"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+const mono = JetBrains_Mono({
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-jetbrains",
+});
 import ServiceWorkerRegister from "@/components/pwa/ServiceWorkerRegister";
 import UiWatch from "@/components/log/UiWatch";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
@@ -23,10 +53,10 @@ export const metadata: Metadata = {
   // прежнюю картинку неделями; со сменой метки он идёт за новой.
   icons: {
     icon: [
-      { url: "/favicon-32.png?v=5", sizes: "32x32", type: "image/png" },
-      { url: "/icons/icon-192.png?v=5", sizes: "192x192", type: "image/png" },
+      { url: "/favicon-32.png?v=6", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png?v=6", sizes: "192x192", type: "image/png" },
     ],
-    apple: "/icons/apple-touch-icon.png?v=5",
+    apple: "/icons/apple-touch-icon.png?v=6",
   },
   appleWebApp: {
     capable: true,
@@ -61,11 +91,16 @@ export default function RootLayout({
     // Тема по умолчанию отмечена сразу на сервере: без этого первый кадр
     // рисуется тёмным, а через мгновение перекрашивается в светлый. Свой выбор
     // трейдера перебивает скрипт темы при первом же рендере в браузере.
-    <html lang="ru" data-terminal="light">
+    <html lang="ru" data-terminal="light" className={`${inter.variable} ${mono.variable}`}>
       <body className="min-h-screen bg-bg-deep font-sans text-text-primary antialiased">
+        {/* Телеграмовский скрипт больше не стоит перед страницей.
+            Он нужен одному входу из нескольких - тем, кто открыл кабинет
+            внутри Telegram, - а грузился у всех и до отрисовки: пока чужой
+            сервер молчал, у человека молчал и сайт. Теперь он приезжает после
+            того, как страница ожила, а то, что его ждёт, умеет подождать. */}
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
-          strategy="beforeInteractive"
+          strategy="afterInteractive"
         />
         <TelegramInit />
         {children}

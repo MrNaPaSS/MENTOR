@@ -27,6 +27,7 @@ import {
   Search,
 } from "lucide-react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
+import { useInView } from "@/lib/useInView";
 import FearGreedPane from "@/components/market/FearGreedPane";
 import FundingPane from "@/components/market/FundingPane";
 import GlobalStrip from "@/components/market/GlobalStrip";
@@ -70,10 +71,14 @@ function TvWidget({
   const ref = useRef<HTMLDivElement>(null);
   const configKey = JSON.stringify(config);
   const theme = useTerminalTheme();
+  // Виджет собирается, когда до него долистали. Четыре чужих виджета на одной
+  // странице тянули свои скрипты и кадры разом - и все вместе отнимали канал у
+  // того единственного, на который человек смотрел.
+  const seen = useInView(ref);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !seen) return;
     el.innerHTML = "";
 
     const widgetDiv = document.createElement("div");
@@ -101,7 +106,7 @@ function TvWidget({
     // Тема в зависимостях: сменили её - виджет пересобирается. Своего способа
     // перекраситься на лету у него нет.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scriptName, configKey, height, theme]);
+  }, [scriptName, configKey, height, theme, seen]);
 
   return (
     <div

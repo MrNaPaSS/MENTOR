@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+import { useInView } from "@/lib/useInView";
+
 interface Props {
   symbol: string;
   interval?: string;
@@ -22,10 +24,14 @@ export default function TradingChart({
   studies = [],
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // График чужой и тяжёлый: свой скрипт, свой кадр, свои запросы. Пока до него
+  // не долистали, он не нужен - и не должен отнимать канал у того, что человек
+  // читает сейчас.
+  const seen = useInView(containerRef);
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || !seen) return;
     container.innerHTML = "";
 
     const sym =
@@ -97,7 +103,7 @@ export default function TradingChart({
     return () => {
       if (container) container.innerHTML = "";
     };
-  }, [symbol, interval, height, showToolbar, fullHeight, chartStyle, studies]);
+  }, [symbol, interval, height, showToolbar, fullHeight, chartStyle, studies, seen]);
 
   if (fullHeight) {
     return (
