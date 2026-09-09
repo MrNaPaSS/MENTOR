@@ -208,6 +208,37 @@ export default function DomTrader({
     holdUntil.current = Date.now() + RECENTER_IDLE_MS;
   }
 
+  /**
+   * Тянуть стакан за подвал.
+   *
+   * Низ панели - единственная её полоса без цифр и заявок: провести по ней
+   * мышью можно, ничего не задев. Раньше историю кластеров листали только
+   * колесом с зажатым Shift или полосой прокрутки, о которых в терминале никто
+   * не догадывается, - и левее видимого края история существовала как бы
+   * впустую.
+   */
+  function dragTime(event: React.PointerEvent<HTMLDivElement>) {
+    const el = scrollRef.current;
+    if (!el || event.button !== 0) return;
+    event.preventDefault();
+    holdScroll();
+
+    const fromX = event.clientX;
+    const fromLeft = el.scrollLeft;
+    const move = (moved: PointerEvent) => {
+      // Тянем содержимое за рукой: ушли влево - история едет вправо.
+      el.scrollLeft = fromLeft - (moved.clientX - fromX);
+      holdScroll();
+    };
+    const drop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", drop);
+      holdScroll();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", drop);
+  }
+
   function handleScroll() {
     const el = scrollRef.current;
     if (!el) return;
@@ -261,7 +292,7 @@ export default function DomTrader({
             return items;
           })}
 
-          <TimeFooter columns={columns} height={footerHeight} />
+          <TimeFooter columns={columns} height={footerHeight} onDrag={dragTime} />
         </div>
       </div>
     </div>
@@ -462,13 +493,17 @@ function VolumeHeader({ columns }: { columns: ClusterColumn[] }) {
 function TimeFooter({
   columns,
   height,
+  onDrag,
 }: {
   columns: ClusterColumn[];
   height?: number;
+  /** Тянут за подвал - листаем историю: это единственная полоса без цифр. */
+  onDrag?: (event: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   return (
     <div
-      className="sticky bottom-0 z-20 flex items-center bg-[var(--pane-bg)] font-mono text-[10px] text-[var(--pane-muted)] shadow-[0_-1px_0_var(--pane-border)]"
+      onPointerDown={onDrag}
+      className="sticky bottom-0 z-20 flex cursor-ew-resize touch-none select-none items-center bg-[var(--pane-bg)] font-mono text-[10px] text-[var(--pane-muted)] shadow-[0_-1px_0_var(--pane-border)]"
       style={height ? { height } : undefined}
     >
       <div className="flex-1" />
