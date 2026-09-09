@@ -762,7 +762,7 @@ export default function AnalyticsPage() {
             <TradersTable /> */}
 
         {/* Календарь и цифры месяца - рядом: слева когда, справа сколько. */}
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+        <div className="grid gap-3 xl:grid-cols-2 xl:items-start">
           {/* ── Календарь ── */}
           <div className="w-full overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
 
@@ -1125,6 +1125,46 @@ export default function AnalyticsPage() {
             ) : (
               <p className="px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
                 {t.analytics.account.empty}
+              </p>
+            )}
+          </div>
+
+          {/* Третья панель: что приходило в сигналах и как часто в них
+              заходили. Первые две - про деньги, эта - про участие: сколько
+              сигналов пришло, сколько взято, сколько прошло мимо. */}
+          <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+            <div className="flex items-baseline gap-2 border-b border-[var(--pane-border)] px-3 py-2">
+              <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">
+                {t.analytics.flow.title}
+              </h2>
+              <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.flow.hint}</span>
+            </div>
+            {analytics && analytics.signals_received > 0 ? (
+              <dl className="divide-y divide-[var(--pane-border)]">
+                <Metric
+                  label={t.analytics.flow.received}
+                  value={fmtDot(analytics.signals_received)}
+                />
+                <Metric
+                  label={t.analytics.flow.taken}
+                  value={fmtDot(analytics.sent)}
+                  tone={analytics.sent > 0 ? "up" : undefined}
+                />
+                <Metric label={t.analytics.flow.skipped} value={fmtDot(analytics.skipped)} />
+                <Metric
+                  label={t.analytics.flow.failed}
+                  value={fmtDot(analytics.failed)}
+                  tone={analytics.failed > 0 ? "down" : undefined}
+                />
+                <Metric
+                  label={t.analytics.flow.activeDays}
+                  value={String(activeDays)}
+                  note={t.analytics.flow.goalDays + ": " + goalDays}
+                />
+              </dl>
+            ) : (
+              <p className="px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
+                {t.analytics.flow.empty}
               </p>
             )}
           </div>
