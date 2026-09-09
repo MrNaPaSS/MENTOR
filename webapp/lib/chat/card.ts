@@ -110,10 +110,43 @@ async function publishResult(trade: SharedTrade, at: string, owner: string): Pro
 }
 
 /**
+ * Чьим именем подписана карточка.
+ *
+ * Берём его у профиля, а не у ленты чата. В ленте наставник подписан школой -
+ * так и задумано: сигналы идут от NMNH, а не от личного телеграма. Но карточка
+ * - это результат конкретного человека, и школой она подписываться не должна:
+ * у отправителя есть своё имя, то же самое, которым подписаны его снимки
+ * графика.
+ *
+ * Спрашиваем один раз за сессию: имя меняют раз в жизни, а карточками делятся
+ * десятками.
+ */
+let mine: string | null = null;
+
+async function cardOwner(fallback: string): Promise<string> {
+  if (mine !== null) return mine;
+  const token = getAccessToken();
+  if (!token) return fallback;
+  try {
+    const me = await authReq<{ card_name?: string | null; username?: string | null }>(
+      "/api/profile",
+      token,
+    );
+    mine = me?.card_name || me?.username || fallback;
+  } catch {
+    // Профиль не ответил - подписываем тем, что дал вызывающий. Карточка без
+    // имени лучше, чем несобравшаяся карточка.
+    mine = fallback;
+  }
+  return mine;
+}
+
+/**
  * Собрать карточку сделки и выложить её.
  *
- * `owner` - имя на бланке итога. Пусто у того, кто ещё не назвался:
- * подписывать карточку чужим именем нельзя, а безымянная - обычное дело.
+ * `owner` - запасное имя на бланке итога: своё имя карточка спрашивает у
+ * профиля сама. Безымянная карточка - обычное дело: тот, кто ещё не назвался,
+ * подписывать её чужим именем не должен.
  */
 export async function cardLink(trade: SharedTrade, owner: string): Promise<CardLink | null> {
   try {
@@ -128,7 +161,7 @@ export async function cardLink(trade: SharedTrade, owner: string): Promise<CardL
     const url =
       trade.state === "planned"
         ? await publishSignal(trade, at)
-        : await publishResult(trade, at, owner);
+        : await publishResult(trade, at, await cardOwner(owner));
 
     if (!url) return null;
     return { url, image: `${url}.png` };

@@ -307,12 +307,27 @@ def test_photo_goes_without_a_signature():
     assert caption_html("вот тут отбой", [], shot) == "вот тут отбой"
 
 
-def test_trade_keeps_its_line_under_the_picture():
-    """У сделки подпись по существу: её читают в уведомлении, не открывая фото."""
+def test_waiting_order_keeps_its_line_under_the_picture():
+    """У ждущей заявки подпись по существу: её читают в уведомлении."""
     trade = {"kind": "trade", "url": "https://s.nmnh.trade/xyz", "trade": {
         "symbol": "BTCUSDT", "side": "short", "leverage": 200, "state": "planned",
     }}
     assert caption_html("", [], trade) == "<b>BTC · SHORT · ×200 · ждёт входа</b>"
+
+
+def test_position_in_the_market_goes_without_a_caption():
+    """Позиция в рынке - только картинка и кнопка под ней.
+
+    На карточке итога уже стоит всё: монета, сторона, плечо, вход, стоп и
+    результат. Строка под фотографией повторяла её слово в слово.
+    """
+    trade = {"kind": "trade", "url": "https://s.nmnh.trade/xyz", "trade": {
+        "symbol": "BTCUSDT", "side": "long", "leverage": 50, "state": "open",
+        "pnl": 12.5, "margin": 100,
+    }}
+    assert caption_html("", [], trade) == ""
+    # Слова человека остаются: это его подпись, а не наша выдумка.
+    assert caption_html("держу до вечера", [], trade) == "держу до вечера"
 
 
 class _Forum:
