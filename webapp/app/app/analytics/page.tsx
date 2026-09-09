@@ -164,7 +164,7 @@ function DayCell({ day, onClick, active, isToday }: {
     <button
       onClick={onClick}
       style={{ aspectRatio: "1", background: bg }}
-      className={`group relative flex flex-col rounded-xl border transition-all duration-150 hover:scale-[1.06] hover:z-10 hover:border-[var(--pane-border)] ${borderCls} p-1.5`}
+      className={`group relative flex flex-col rounded-lg border transition-transform duration-150 hover:scale-[1.06] hover:z-10 ${borderCls} p-1`}
       title={[
         day.date,
         hasDeposit ? t.analytics.calendar.deposit : "",
@@ -631,48 +631,6 @@ export default function AnalyticsPage() {
       {/* Итоги: чем закончились дни и куда идёт оборот. */}
       {tab === "results" && (
         <>
-        {/* KPI */}
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-          {/* Объём месяца */}
-          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-            <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)} color="var(--c-accent)" size={72}>
-              <span className="font-mono text-[11px] font-bold text-[var(--pane-text)] leading-tight text-center">
-                {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
-              </span>
-            </CircleProgress>
-            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.monthVolume}</span>
-            <span className="text-[10px] text-[var(--pane-accent)]">{t.analytics.kpi.monthVolumeGoal}</span>
-          </div>
-          {/* Стрик активности */}
-          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-            <CircleProgress pct={(activityStreak / 7) * 100} color="var(--c-warn)" size={72}>
-              <Flame className="h-5 w-5 text-orange-400" />
-              <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{activityStreak}</span>
-            </CircleProgress>
-            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.streak}</span>
-            <span className="text-[10px] text-orange-400">{t.analytics.kpi.streakGoal}</span>
-          </div>
-          {/* Ср. доходность */}
-          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-            <CircleProgress pct={Math.min(Math.abs(avgProfit) / 5 * 100, 100)} color={avgProfit >= 0 ? "var(--c-up)" : "var(--c-down)"} size={72}>
-              <span className={`font-mono text-sm font-bold ${avgProfit >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
-                {avgProfit >= 0 ? "+" : ""}{avgProfit.toFixed(2)}%
-              </span>
-            </CircleProgress>
-            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.avgDaily}</span>
-            <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.kpi.overDays(validPnl.length)}</span>
-          </div>
-          {/* Дней торговали */}
-          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-            <CircleProgress pct={Math.min((tradingDays / 15) * 100, 100)} color="var(--c-gold)" size={72}>
-              <Calendar className="h-4 w-4 text-[var(--pane-gold)]" />
-              <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{tradingDays}</span>
-            </CircleProgress>
-            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.tradingDays}</span>
-            <span className="text-[10px] text-[var(--pane-gold)]">{t.analytics.kpi.tradingDaysGoal}</span>
-          </div>
-        </div>
-
         {/* Вехи объёма — горизонтальный трек.
 
             Показываем и на нуле. Раньше блок висел на tradeSummary, а он
@@ -691,7 +649,7 @@ export default function AnalyticsPage() {
           return (
             <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
               {/* Шапка */}
-              <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-[var(--pane-border)]">
+              <div className="flex items-center gap-2 border-b border-[var(--pane-border)] px-3 pt-2.5 pb-2">
                 <BarChart2 className="h-4 w-4 text-[var(--pane-gold)]" />
                 <div>
                   <h2 className="text-[12px] font-semibold text-[var(--pane-text)] leading-none">{t.analytics.path.title}</h2>
@@ -703,7 +661,7 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              <div className="px-5 py-4 space-y-4">
+              <div className="px-3 py-3 space-y-3">
                 {/* Линия прогресса между вехами */}
                 {nextM && (
                   <div className="space-y-1.5">
@@ -750,6 +708,7 @@ export default function AnalyticsPage() {
           );
         })()}
 
+
         {/* Таблица трейдеров пока скрыта.
             Сама она готова - и ручка, и вёрстка, - но объём в ней считается по
             дневным снимкам, а те у ученика с ключами набираются по ленте
@@ -759,17 +718,19 @@ export default function AnalyticsPage() {
             <TradersTable /> */}
 
           {/* ── Календарь ── */}
-          <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+          {/* Ширина ограничена: на всю ширину экрана клетка месяца вырастала в
+              ладонь ради одной цифры внутри. */}
+          <div className="w-full max-w-3xl overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
 
             {/* Шапка */}
             <div
-              className="border-b border-[var(--pane-border)] px-5 pt-5 pb-4"
+              className="border-b border-[var(--pane-border)] px-3 pt-3 pb-2"
               style={{ background: "linear-gradient(135deg, var(--pane-accent-faint) 0%, transparent 55%)" }}
             >
               <div className="flex items-center justify-between">
                 <button
                   onClick={prevMonth}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--pane-border)] text-lg text-[var(--pane-muted)] transition hover:border-[var(--pane-border)] hover:text-[var(--pane-text)]"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--pane-border)] text-[13px] text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)]"
                 >‹</button>
                 <div className="text-center">
                   <h2 className="text-[13px] font-semibold text-[var(--pane-text)]">
@@ -779,7 +740,7 @@ export default function AnalyticsPage() {
                 <button
                   onClick={nextMonth}
                   disabled={year === today.getFullYear() && month === today.getMonth()}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--pane-border)] text-lg text-[var(--pane-muted)] transition hover:border-[var(--pane-border)] hover:text-[var(--pane-text)] disabled:opacity-25"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--pane-border)] text-[13px] text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)] disabled:opacity-25"
                 >›</button>
               </div>
 
@@ -817,14 +778,14 @@ export default function AnalyticsPage() {
             {/* Тело календаря */}
             <div className="p-4">
               {/* Дни недели */}
-              <div className="mb-2 grid grid-cols-7 gap-1.5">
+              <div className="mb-1.5 grid grid-cols-7 gap-1">
                 {t.analytics.calendar.weekdays.map(d => (
                   <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest text-[var(--pane-text)]/20">{d}</div>
                 ))}
               </div>
 
               {/* Ячейки */}
-              <div className="grid grid-cols-7 gap-1.5">
+              <div className="grid grid-cols-7 gap-1">
                 {cells.map((day, i) => (
                   <DayCell
                     key={i}
@@ -847,7 +808,7 @@ export default function AnalyticsPage() {
 
             {/* Детальная карточка выбранного дня */}
             {selectedDay && (
-              <div className="border-t border-[var(--pane-border)] px-5 py-4" style={{ background: "rgba(255,255,255,0.015)" }}>
+              <div className="border-t border-[var(--pane-border)] px-3 py-3" style={{ background: "rgba(255,255,255,0.015)" }}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-[var(--pane-text)]">
@@ -981,7 +942,7 @@ export default function AnalyticsPage() {
 
             {/* Итоги месяца */}
             {realDays.length >= 2 && (
-              <div className="border-t border-[var(--pane-border)] px-5 py-3">
+              <div className="border-t border-[var(--pane-border)] px-3 py-2.5">
                 <div className="grid grid-cols-3 gap-3 text-center">
                   <div>
                     <p className={`font-mono text-base font-extrabold ${totalPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
@@ -1010,7 +971,7 @@ export default function AnalyticsPage() {
                 месяцем делиться было нечем - приходилось слать пять карточек
                 подряд. Опорная дата - выбранный день: неделя берётся та, что
                 обведена в сетке над кнопками, а не последние семь суток. */}
-            <div className="flex flex-wrap items-center gap-2 border-t border-[var(--pane-border)] px-5 py-3">
+            <div className="flex flex-wrap items-center gap-2 border-t border-[var(--pane-border)] px-3 py-2.5">
               <span className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
                 {t.analytics.summary.cardFor}
               </span>
@@ -1035,6 +996,48 @@ export default function AnalyticsPage() {
               })}
             </div>
           </div>
+
+        {/* KPI */}
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+          {/* Объём месяца */}
+          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
+            <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)} color="var(--c-accent)" size={72}>
+              <span className="font-mono text-[11px] font-bold text-[var(--pane-text)] leading-tight text-center">
+                {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
+              </span>
+            </CircleProgress>
+            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.monthVolume}</span>
+            <span className="text-[10px] text-[var(--pane-accent)]">{t.analytics.kpi.monthVolumeGoal}</span>
+          </div>
+          {/* Стрик активности */}
+          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
+            <CircleProgress pct={(activityStreak / 7) * 100} color="var(--c-warn)" size={72}>
+              <Flame className="h-5 w-5 text-orange-400" />
+              <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{activityStreak}</span>
+            </CircleProgress>
+            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.streak}</span>
+            <span className="text-[10px] text-orange-400">{t.analytics.kpi.streakGoal}</span>
+          </div>
+          {/* Ср. доходность */}
+          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
+            <CircleProgress pct={Math.min(Math.abs(avgProfit) / 5 * 100, 100)} color={avgProfit >= 0 ? "var(--c-up)" : "var(--c-down)"} size={72}>
+              <span className={`font-mono text-sm font-bold ${avgProfit >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
+                {avgProfit >= 0 ? "+" : ""}{avgProfit.toFixed(2)}%
+              </span>
+            </CircleProgress>
+            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.avgDaily}</span>
+            <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.kpi.overDays(validPnl.length)}</span>
+          </div>
+          {/* Дней торговали */}
+          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
+            <CircleProgress pct={Math.min((tradingDays / 15) * 100, 100)} color="var(--c-gold)" size={72}>
+              <Calendar className="h-4 w-4 text-[var(--pane-gold)]" />
+              <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{tradingDays}</span>
+            </CircleProgress>
+            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.tradingDays}</span>
+            <span className="text-[10px] text-[var(--pane-gold)]">{t.analytics.kpi.tradingDaysGoal}</span>
+          </div>
+        </div>
         </>
       )}
 
