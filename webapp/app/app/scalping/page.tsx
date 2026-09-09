@@ -17,6 +17,8 @@ import { useSearchParams } from "next/navigation";
 import {
   BookText,
   CandlestickChart,
+  ChevronLeft,
+  ChevronRight,
   Maximize2,
   Minimize2,
   Moon,
@@ -334,6 +336,14 @@ type Workspace = {
    * по нему один раз разбирается прежний выбор человека.
    */
   theme?: string;
+  /**
+   * Раскрыт ли ряд разметки.
+   *
+   * По умолчанию свёрнут: восемь кнопок слоёв занимают половину верхней
+   * строки, а трогают их редко - разметку выбирают один раз и работают.
+   * Свёрнутый ряд освобождает середину строки, где стоит знак с плеером.
+   */
+  layers?: boolean;
   /** Последняя открытая монета: возврат в раздел не должен начинаться с нуля. */
   symbol: string | null;
   /** Отметки на ценах: пережидают перезагрузку вместе с остальными настройками. */
@@ -575,6 +585,9 @@ export default function ScalpingPage() {
   // список на старте — это лишний клик перед каждой сессией. Свернётся сам,
   // как только монета выбрана, и сохранять это состояние незачем.
   const [screenerOpen, setScreenerOpen] = useState(true);
+  // Ряд разметки свёрнут по умолчанию: кнопки слоёв трогают редко, а места они
+  // занимают половину строки.
+  const [layersOpen, setLayersOpen] = useState(false);
   const [screenerW, setScreenerW] = useState(PANE_LIMITS.screener.def);
   const [domW, setDomW] = useState(PANE_LIMITS.dom.def);
   // Чат закрыт на старте: день начинается с рынка, а не с разговора. Открытый
@@ -679,6 +692,7 @@ export default function ScalpingPage() {
     if (saved.indicators) {
       setIndicators({ ...DEFAULT_INDICATORS, ...saved.indicators });
     }
+    if (typeof saved.layers === "boolean") setLayersOpen(saved.layers);
     if (saved.sort && (SORT_KEYS as SortKey[]).includes(saved.sort)) setSort(saved.sort);
     if (saved.timeframe && TIMEFRAMES.includes(saved.timeframe)) {
       setTimeframe(saved.timeframe);
@@ -790,6 +804,7 @@ export default function ScalpingPage() {
       dom: domW,
       chat: chatW,
       indicators,
+      layers: layersOpen,
       sort,
       timeframe,
       agg,
@@ -826,6 +841,7 @@ export default function ScalpingPage() {
     domW,
     chatW,
     indicators,
+    layersOpen,
     sort,
     timeframe,
     agg,
@@ -2808,7 +2824,27 @@ export default function ScalpingPage() {
                 </div>
 
                 <div className="flex items-center gap-0.5">
-                  {LAYER_ORDER.map((key) => (
+                  {/* Ряд разметки прячется за стрелку и по умолчанию свёрнут.
+                      Восемь кнопок слоёв занимали половину верхней строки, а
+                      трогают их редко: разметку выбирают один раз и работают.
+                      Свёрнутый ряд возвращает середину строки знаку с плеером.
+
+                      Стрелка смотрит туда, куда поедет ряд: влево - раскроется
+                      влево, вправо - уедет обратно. */}
+                  <button
+                    onClick={() => setLayersOpen((open) => !open)}
+                    title={layersOpen ? t.terminal.layersHide : t.terminal.layersShow}
+                    className={`${CHIP} ${layersOpen ? CHIP_ON : CHIP_OFF}`}
+                  >
+                    {layersOpen ? (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+
+                  {layersOpen &&
+                    LAYER_ORDER.map((key) => (
                     <button
                       key={key}
                       onClick={() => toggle(key)}
@@ -2819,7 +2855,7 @@ export default function ScalpingPage() {
                   ))}
                   {/* Порог полок стоит рядом с их переключателем: цифра без
                       контекста непонятна, а так видно, к чему она. */}
-                  {indicators.shelves && (
+                  {layersOpen && indicators.shelves && (
                     <>
                       <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
                       {SHELF_STEPS.map((step) => (
@@ -2997,34 +3033,34 @@ export default function ScalpingPage() {
                     )}
                   </button>
                 </div>
-              </div>
 
-              {/* Инструмент, цена и плита — отдельной строкой под таймфреймами.
-                  Наложением поверх холста эта строка терялась: библиотека
-                  графика рисует своим слоем, и спорить с ним ради трёх слов
-                  незачем. */}
-              <div className="relative flex h-7 items-center gap-3 border-b border-[var(--pane-border)] px-3 font-mono text-[11px] tabular-nums">
                 {/* В полном экране шапки сайта нет, а знак нужен: он же и
                     дорога назад - нажатие уводит на главную. Вместе с ним
                     радио: в шапке кабинета они стоят рядом, а музыку выключают
                     чаще всего именно отсюда - когда рынок пошёл и нужна тишина.
                     Плеер общий, кнопка здесь управляет тем же потоком.
 
-                    Стоят они в этой строке, а не над ней: там, посреди ряда
-                    разметки, на широком экране знак ложился прямо поверх
-                    кнопок слоёв и закрывал половину из них. Здесь середина
-                    свободна - слева монета с ценой, справа итог дня. */}
+                    Посреди верхней строки: ряд разметки теперь свёрнут, и
+                    середина её свободна. Из-за него знак когда-то и уезжал
+                    вниз - на широком экране кнопки слоёв доходили до самого
+                    центра и знак ложился поверх них. */}
                 {full && (
-                  <div className="absolute left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
+                  <div className="pointer-events-auto absolute left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
                     <Logo
                       href="/app/analysis"
                       tone={paper === "light" ? "text-[var(--pane-text)]" : "text-text-primary"}
-                      className="text-sm"
+                      className="text-base"
                     />
                     <RadioChip tone="pane" />
                   </div>
                 )}
+              </div>
 
+              {/* Инструмент, цена и плита — отдельной строкой под таймфреймами.
+                  Наложением поверх холста эта строка терялась: библиотека
+                  графика рисует своим слоем, и спорить с ним ради трёх слов
+                  незачем. */}
+              <div className="flex h-6 items-center gap-3 border-b border-[var(--pane-border)] px-3 font-mono text-[11px] tabular-nums">
                 <span className="text-[12px] font-semibold text-[var(--pane-text)]">
                   {base(symbol)}
                 </span>

@@ -47,6 +47,8 @@ export const terminal = {
   collapseFull: "Collapse - Esc",
   expandFull: "Full screen",
 
+  layersShow: "Show the markup layers",
+  layersHide: "Collapse the markup layers",
   layers: {
     trend: "Trend",
     structure: "Structure",

@@ -52,6 +52,8 @@ export const terminal = {
   expandFull: "Во весь экран",
 
   // ── Слои разметки ──
+  layersShow: "Показать слои разметки",
+  layersHide: "Свернуть слои разметки",
   layers: {
     trend: "Тренд",
     structure: "Структура",
