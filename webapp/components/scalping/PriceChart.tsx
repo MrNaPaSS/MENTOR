@@ -395,6 +395,15 @@ const PLUS_MENU_H = 96;
 const PLUS_ABOVE_PRICE = -10;
 
 /**
+ * Зазор между плюсиком и ценовой шкалой, точки экрана.
+ *
+ * Кнопка стоит рядом с ценой, а не где-то у края холста: нажимают её ради
+ * действия с этой ценой, и рука ищет её там же, где глаз читает число. Зазор
+ * маленький - ровно чтобы кнопка не касалась подписей.
+ */
+const PLUS_NEAR_SCALE = 6;
+
+/**
  * Сколько пустых баров дорисовываем за ленту, пока не приехала история.
  *
  * Два часа минуток. Больше - значит ряд отстал не на пропуск сделок, а на
@@ -1836,6 +1845,17 @@ function PriceChart({
         onAxisHeightRef.current?.(axis);
       }
 
+      // Плюсик стоит вплотную к ценовой шкале, слева от неё.
+      //
+      // Ширину шкалы считает библиотека, от самих цифр: у биткойна подпись
+      // вдвое длиннее, чем у эфира, и число точек, подобранное на глаз, на
+      // одной монете оставляло дыру, а на другой лезло на подписи. Спрашиваем
+      // ширину каждый кадр - она меняется вместе с ценой.
+      const scaleW = chartRef.current?.priceScale("right").width() ?? 0;
+      if (plusRef.current && scaleW > 0) {
+        plusRef.current.style.right = `${Math.round(scaleW) + PLUS_NEAR_SCALE}px`;
+      }
+
       for (const active of tradeRef.current) {
         place(
           labelsRef.current.get(active.id) ?? null,
@@ -2814,7 +2834,7 @@ function PriceChart({
           было знать, что нажатие по графику что-то делает. */}
       <div
         ref={plusRef}
-        className="absolute right-[76px] top-0 z-30"
+        className="absolute right-16 top-0 z-30"
         style={{ visibility: "hidden" }}
         onPointerEnter={() => {
           plusHeldRef.current = true;

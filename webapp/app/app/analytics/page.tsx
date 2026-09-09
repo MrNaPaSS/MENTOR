@@ -2,6 +2,7 @@
 // v8
 import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 import { useEffect, useState } from "react";
+import { useTerminalTheme } from "@/lib/terminalTheme";
 import Link from "next/link";
 import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
 import { loadDay, type JournalTrade } from "@/lib/journal";
@@ -112,14 +113,19 @@ const ACH_CATEGORIES: { id: AchCategory; icon: React.ElementType }[] = [
 ];
 
 // ─── Ячейка дня ─────────────────────────────────────────────────────────────
-function DayCell({ day, onClick, active, isToday }: {
+function DayCell({ day, onClick, active, isToday, best }: {
   day: CalendarDay | null;
   onClick?: () => void;
   active: boolean;
   isToday?: boolean;
+  /** Лучший день месяца: на нём стоит звезда. */
+  best?: boolean;
 }) {
   const t = useT();
   const numbers = useIntlLocale();
+  // Звезда двух цветов: чёрная на белом листе, зелёная на тёмном. Один рисунок
+  // на оба не годится - чёрная звезда на тёмной клетке пропадает.
+  const paper = useTerminalTheme();
   if (!day) return <div style={{ aspectRatio: "1" }} />;
 
   const pnl = day.pnl_pct;
@@ -218,8 +224,21 @@ function DayCell({ day, onClick, active, isToday }: {
         </div>
       )}
 
+      {/* Звезда лучшего дня месяца. Рисунком, а не значком из набора: это
+          награда, и выглядеть она должна нарисованной от руки, как оттиск на
+          карточке. Стоит на месте галочки цели - две отметки в одном углу
+          спорили бы, а лучший день цель выполнил и так. */}
+      {best && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={paper === "light" ? "/marks/star.png" : "/marks/star-green.png"}
+          alt=""
+          className="pointer-events-none absolute -right-1.5 -top-1.5 h-4 w-4"
+        />
+      )}
+
       {/* Значок выполненной цели */}
-      {goalMet && (
+      {!best && goalMet && (
         <span className="absolute -right-[3px] -top-[3px] flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--pane-up)] shadow-[0_0_6px_rgba(0,212,160,0.5)] text-[7px] font-bold text-black">✓</span>
       )}
 
@@ -762,7 +781,11 @@ export default function AnalyticsPage() {
             <TradersTable /> */}
 
         {/* Календарь и цифры месяца - рядом: слева когда, справа сколько. */}
-        <div className="grid gap-3 xl:grid-cols-2 xl:items-start">
+        {/* Колонки кончаются на одной линии: календарь слева, цифры справа.
+            Пока они висели каждая своей высоты, низ страницы выглядел
+            обрезанным - одна панель кончалась, а вторая продолжалась в
+            пустоту. */}
+        <div className="grid gap-3 xl:grid-cols-2">
           {/* ── Календарь ── */}
           <div className="w-full overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
 
@@ -836,6 +859,7 @@ export default function AnalyticsPage() {
                     day={day}
                     active={selectedDay?.date === day?.date}
                     isToday={day?.date === todayStr}
+                    best={Boolean(day && bestDay && day.date === bestDay.date && (bestDay.pnl_pct ?? 0) > 0)}
                     onClick={() => day && setSelectedDay(day)}
                   />
                 ))}
