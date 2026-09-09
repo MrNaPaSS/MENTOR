@@ -12,7 +12,7 @@ import PnlCard from "@/components/scalping/PnlCard";
 import { price as fmtPrice, type CardData } from "@/lib/pnl/card";
 import { cardFromPeriod, cardFromTrade } from "@/lib/pnl/data";
 import { periodOf, type Span } from "@/lib/pnl/period";
-import { PaneHead, PaneScope } from "@/components/app/Pane";
+import { CHIP, CHIP_OFF, CHIP_ON, PaneHead, PaneScope } from "@/components/app/Pane";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
 import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles, Share2 } from "lucide-react";
@@ -279,6 +279,15 @@ export default function AnalyticsPage() {
   // Карточкой делятся и одной сделкой, и итогом срока - окно одно, а
   // колонку для него собирают в lib/pnl/data.
   const [card, setCard] = useState<CardData | null>(null);
+  /**
+   * Что показываем: итоги или награды.
+   *
+   * Раздел был одной лентой в три экрана: показатели, вехи, календарь, разбор
+   * дня, уровень, цели, достижения. Всё это разное - одно про торговлю, другое
+   * про игру вокруг неё, - и листалось вперемешку. Две вкладки разводят их и
+   * убирают из-под глаз то, чего сейчас не спрашивают.
+   */
+  const [tab, setTab] = useState<"results" | "rewards">("results");
   const [owner, setOwner] = useState<string | null>(null);
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
@@ -592,6 +601,21 @@ export default function AnalyticsPage() {
         title={`${t.analytics.title} ${t.analytics.titleAnd} ${t.analytics.titleTail}`}
         hint={t.analytics.subtitle}
       >
+        {(
+          [
+            ["results", t.analytics.tabs.results, BarChart2],
+            ["rewards", t.analytics.tabs.rewards, Trophy],
+          ] as const
+        ).map(([key, label, Icon]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex items-center gap-1.5 ${CHIP} ${tab === key ? CHIP_ON : CHIP_OFF}`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
         {tradeSummary && (
           <span className="flex items-baseline gap-1.5 rounded-lg border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10 px-2 py-1">
             <span className="text-[10px] uppercase tracking-wider text-[var(--pane-muted)]">
@@ -604,607 +628,613 @@ export default function AnalyticsPage() {
         )}
       </PaneHead>
 
-      {/* KPI */}
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        {/* Объём месяца */}
-        <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-          <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)} color="var(--c-accent)" size={72}>
-            <span className="font-mono text-[11px] font-bold text-[var(--pane-text)] leading-tight text-center">
-              {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
-            </span>
-          </CircleProgress>
-          <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.monthVolume}</span>
-          <span className="text-[10px] text-[var(--pane-accent)]">{t.analytics.kpi.monthVolumeGoal}</span>
+      {/* Итоги: чем закончились дни и куда идёт оборот. */}
+      {tab === "results" && (
+        <>
+        {/* KPI */}
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+          {/* Объём месяца */}
+          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
+            <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)} color="var(--c-accent)" size={72}>
+              <span className="font-mono text-[11px] font-bold text-[var(--pane-text)] leading-tight text-center">
+                {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
+              </span>
+            </CircleProgress>
+            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.monthVolume}</span>
+            <span className="text-[10px] text-[var(--pane-accent)]">{t.analytics.kpi.monthVolumeGoal}</span>
+          </div>
+          {/* Стрик активности */}
+          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
+            <CircleProgress pct={(activityStreak / 7) * 100} color="var(--c-warn)" size={72}>
+              <Flame className="h-5 w-5 text-orange-400" />
+              <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{activityStreak}</span>
+            </CircleProgress>
+            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.streak}</span>
+            <span className="text-[10px] text-orange-400">{t.analytics.kpi.streakGoal}</span>
+          </div>
+          {/* Ср. доходность */}
+          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
+            <CircleProgress pct={Math.min(Math.abs(avgProfit) / 5 * 100, 100)} color={avgProfit >= 0 ? "var(--c-up)" : "var(--c-down)"} size={72}>
+              <span className={`font-mono text-sm font-bold ${avgProfit >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
+                {avgProfit >= 0 ? "+" : ""}{avgProfit.toFixed(2)}%
+              </span>
+            </CircleProgress>
+            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.avgDaily}</span>
+            <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.kpi.overDays(validPnl.length)}</span>
+          </div>
+          {/* Дней торговали */}
+          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
+            <CircleProgress pct={Math.min((tradingDays / 15) * 100, 100)} color="var(--c-gold)" size={72}>
+              <Calendar className="h-4 w-4 text-[var(--pane-gold)]" />
+              <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{tradingDays}</span>
+            </CircleProgress>
+            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.tradingDays}</span>
+            <span className="text-[10px] text-[var(--pane-gold)]">{t.analytics.kpi.tradingDaysGoal}</span>
+          </div>
         </div>
-        {/* Стрик активности */}
-        <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-          <CircleProgress pct={(activityStreak / 7) * 100} color="var(--c-warn)" size={72}>
-            <Flame className="h-5 w-5 text-orange-400" />
-            <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{activityStreak}</span>
-          </CircleProgress>
-          <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.streak}</span>
-          <span className="text-[10px] text-orange-400">{t.analytics.kpi.streakGoal}</span>
-        </div>
-        {/* Ср. доходность */}
-        <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-          <CircleProgress pct={Math.min(Math.abs(avgProfit) / 5 * 100, 100)} color={avgProfit >= 0 ? "var(--c-up)" : "var(--c-down)"} size={72}>
-            <span className={`font-mono text-sm font-bold ${avgProfit >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
-              {avgProfit >= 0 ? "+" : ""}{avgProfit.toFixed(2)}%
-            </span>
-          </CircleProgress>
-          <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.avgDaily}</span>
-          <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.kpi.overDays(validPnl.length)}</span>
-        </div>
-        {/* Дней торговали */}
-        <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-          <CircleProgress pct={Math.min((tradingDays / 15) * 100, 100)} color="var(--c-gold)" size={72}>
-            <Calendar className="h-4 w-4 text-[var(--pane-gold)]" />
-            <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{tradingDays}</span>
-          </CircleProgress>
-          <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.tradingDays}</span>
-          <span className="text-[10px] text-[var(--pane-gold)]">{t.analytics.kpi.tradingDaysGoal}</span>
-        </div>
-      </div>
 
-      {/* Вехи объёма — горизонтальный трек.
+        {/* Вехи объёма — горизонтальный трек.
 
-          Показываем и на нуле. Раньше блок висел на tradeSummary, а он
-          приходил пустым, когда партнёрская ручка о торговле молчала - и в
-          разделе на месте пути трейдера не было вообще ничего. Путь с нулём и
-          первой вехой впереди говорит, куда идти; пустое место не говорит
-          ничего и читается как поломка. */}
-      {loaded && (() => {
-        const nextIdx = VOLUME_MILESTONES.findIndex(m => totalVolume < m.vol);
-        const nextM   = nextIdx >= 0 ? VOLUME_MILESTONES[nextIdx] : null;
-        const prevM   = nextIdx > 0  ? VOLUME_MILESTONES[nextIdx - 1] : nextIdx === -1 ? VOLUME_MILESTONES[VOLUME_MILESTONES.length - 1] : null;
-        const trackPct = nextM && prevM
-          ? Math.min(((totalVolume - prevM.vol) / (nextM.vol - prevM.vol)) * 100, 100)
-          : nextIdx === -1 ? 100 : Math.min((totalVolume / VOLUME_MILESTONES[0].vol) * 100, 100);
+            Показываем и на нуле. Раньше блок висел на tradeSummary, а он
+            приходил пустым, когда партнёрская ручка о торговле молчала - и в
+            разделе на месте пути трейдера не было вообще ничего. Путь с нулём и
+            первой вехой впереди говорит, куда идти; пустое место не говорит
+            ничего и читается как поломка. */}
+        {loaded && (() => {
+          const nextIdx = VOLUME_MILESTONES.findIndex(m => totalVolume < m.vol);
+          const nextM   = nextIdx >= 0 ? VOLUME_MILESTONES[nextIdx] : null;
+          const prevM   = nextIdx > 0  ? VOLUME_MILESTONES[nextIdx - 1] : nextIdx === -1 ? VOLUME_MILESTONES[VOLUME_MILESTONES.length - 1] : null;
+          const trackPct = nextM && prevM
+            ? Math.min(((totalVolume - prevM.vol) / (nextM.vol - prevM.vol)) * 100, 100)
+            : nextIdx === -1 ? 100 : Math.min((totalVolume / VOLUME_MILESTONES[0].vol) * 100, 100);
 
-        return (
-          <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
-            {/* Шапка */}
-            <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-[var(--pane-border)]">
-              <BarChart2 className="h-4 w-4 text-[var(--pane-gold)]" />
-              <div>
-                <h2 className="text-[12px] font-semibold text-[var(--pane-text)] leading-none">{t.analytics.path.title}</h2>
-                <p className="text-[10px] text-[var(--pane-text)]/30 mt-0.5">{t.analytics.path.subtitle}</p>
+          return (
+            <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+              {/* Шапка */}
+              <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-[var(--pane-border)]">
+                <BarChart2 className="h-4 w-4 text-[var(--pane-gold)]" />
+                <div>
+                  <h2 className="text-[12px] font-semibold text-[var(--pane-text)] leading-none">{t.analytics.path.title}</h2>
+                  <p className="text-[10px] text-[var(--pane-text)]/30 mt-0.5">{t.analytics.path.subtitle}</p>
+                </div>
+                <div className="ml-auto text-right">
+                  <span className="font-mono text-base font-extrabold text-[var(--pane-gold)]">${fmtDot(Math.round(totalVolume))}</span>
+                  <span className="text-[10px] text-[var(--pane-text)]/30 ml-1">USDT</span>
+                </div>
               </div>
-              <div className="ml-auto text-right">
-                <span className="font-mono text-base font-extrabold text-[var(--pane-gold)]">${fmtDot(Math.round(totalVolume))}</span>
-                <span className="text-[10px] text-[var(--pane-text)]/30 ml-1">USDT</span>
+
+              <div className="px-5 py-4 space-y-4">
+                {/* Линия прогресса между вехами */}
+                {nextM && (
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-[var(--pane-text)]/30">{prevM ? prevM.label : "0"}</span>
+                      <span className="text-[var(--pane-text)]/50">{t.analytics.path.toNext} <span className="text-[var(--pane-gold)] font-bold">{nextM.label}</span> {t.analytics.path.left} <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
+                      <span className="text-[var(--pane-gold)] font-bold">{nextM.label}</span>
+                    </div>
+                    <div className="relative h-2 overflow-hidden rounded-full bg-[var(--pane-hover)]">
+                      <div className="h-full rounded-full transition-all duration-1000"
+                        style={{ width: `${trackPct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }} />
+                    </div>
+                    <p className="text-[10px] text-[var(--pane-text)]/25 text-right">{t.analytics.path.pctToNext(trackPct.toFixed(1))}</p>
+                  </div>
+                )}
+
+                {/* Точки вех */}
+                <div className="flex items-end gap-2 overflow-x-auto pb-1">
+                  {VOLUME_MILESTONES.map((m, i) => {
+                    const reached = totalVolume >= m.vol;
+                    const isCurrent = nextIdx === i;
+                    return (
+                      <div key={m.label} className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5">
+                        {/* Индикатор */}
+                        <div className={`relative flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${
+                          reached
+                            ? "border-accent-gold bg-[var(--pane-gold)]/15 shadow-[0_0_16px_rgba(251,191,36,0.4)]"
+                            : isCurrent
+                            ? "border-[var(--pane-border)] bg-[var(--pane-hover)]"
+                            : "border-[var(--pane-border)] bg-[var(--pane-hover)]"
+                        }`}>
+                          <span className={`text-lg leading-none ${reached ? "" : "opacity-25"}`}>{m.emoji}</span>
+                          {reached && (
+                            <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--pane-gold)] text-[7px] font-black text-black">✓</span>
+                          )}
+                        </div>
+                        <span className={`font-mono text-[10px] font-bold ${reached ? "text-[var(--pane-gold)]" : isCurrent ? "text-[var(--pane-text)]/50" : "text-[var(--pane-text)]/20"}`}>{m.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
+          );
+        })()}
 
-            <div className="px-5 py-4 space-y-4">
-              {/* Линия прогресса между вехами */}
-              {nextM && (
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-[var(--pane-text)]/30">{prevM ? prevM.label : "0"}</span>
-                    <span className="text-[var(--pane-text)]/50">{t.analytics.path.toNext} <span className="text-[var(--pane-gold)] font-bold">{nextM.label}</span> {t.analytics.path.left} <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
-                    <span className="text-[var(--pane-gold)] font-bold">{nextM.label}</span>
+        {/* Таблица трейдеров пока скрыта.
+            Сама она готова - и ручка, и вёрстка, - но объём в ней считается по
+            дневным снимкам, а те у ученика с ключами набираются по ленте
+            исполнений: у неё нет диапазона дат, и за месяц цифра выходит меньше
+            настоящей. Показывать таблицу, по которой будут раздавать награды, с
+            заведомо неполным оборотом нельзя. Вернуть её - убрать эту заглушку.
+            <TradersTable /> */}
+
+          {/* ── Календарь ── */}
+          <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+
+            {/* Шапка */}
+            <div
+              className="border-b border-[var(--pane-border)] px-5 pt-5 pb-4"
+              style={{ background: "linear-gradient(135deg, var(--pane-accent-faint) 0%, transparent 55%)" }}
+            >
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={prevMonth}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--pane-border)] text-lg text-[var(--pane-muted)] transition hover:border-[var(--pane-border)] hover:text-[var(--pane-text)]"
+                >‹</button>
+                <div className="text-center">
+                  <h2 className="text-[13px] font-semibold text-[var(--pane-text)]">
+                    {t.analytics.calendar.months[month]} <span className="text-[var(--pane-muted)] font-medium">{year}</span>
+                  </h2>
+                </div>
+                <button
+                  onClick={nextMonth}
+                  disabled={year === today.getFullYear() && month === today.getMonth()}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--pane-border)] text-lg text-[var(--pane-muted)] transition hover:border-[var(--pane-border)] hover:text-[var(--pane-text)] disabled:opacity-25"
+                >›</button>
+              </div>
+
+              {/* Статспиллы */}
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <span className="flex items-center gap-1 rounded-full bg-[var(--pane-up)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
+                  {t.analytics.calendar.profitDays(profitDays)}
+                </span>
+                <span className="flex items-center gap-1 rounded-full bg-[var(--pane-down)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-down)]">
+                  {t.analytics.calendar.lossDays(lossDays)}
+                </span>
+                {tradingDays > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-[var(--pane-gold)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
+                    {t.analytics.calendar.tradeDays(tradingDays)}
+                  </span>
+                )}
+                {activeDays > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-[var(--pane-accent-faint)] px-3 py-1 text-[11px] font-semibold text-[var(--pane-accent)]">
+                    {t.analytics.calendar.signalDays(activeDays)}
+                  </span>
+                )}
+              </div>
+
+              {/* Мини-полоса прогресса профит/лосс */}
+              {(profitDays + lossDays) > 0 && (
+                <div className="mt-3 overflow-hidden rounded-full bg-[var(--pane-hover)]" style={{ height: 4 }}>
+                  <div className="flex h-full">
+                    <div className="bg-[var(--pane-up)]/60 transition-all duration-700" style={{ width: `${(profitDays / (profitDays + lossDays)) * 100}%` }} />
+                    <div className="bg-[var(--pane-down)]/50 transition-all duration-700" style={{ width: `${(lossDays / (profitDays + lossDays)) * 100}%` }} />
                   </div>
-                  <div className="relative h-2 overflow-hidden rounded-full bg-[var(--pane-hover)]">
-                    <div className="h-full rounded-full transition-all duration-1000"
-                      style={{ width: `${trackPct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }} />
-                  </div>
-                  <p className="text-[10px] text-[var(--pane-text)]/25 text-right">{t.analytics.path.pctToNext(trackPct.toFixed(1))}</p>
                 </div>
               )}
+            </div>
 
-              {/* Точки вех */}
-              <div className="flex items-end gap-2 overflow-x-auto pb-1">
-                {VOLUME_MILESTONES.map((m, i) => {
-                  const reached = totalVolume >= m.vol;
-                  const isCurrent = nextIdx === i;
-                  return (
-                    <div key={m.label} className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5">
-                      {/* Индикатор */}
-                      <div className={`relative flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${
-                        reached
-                          ? "border-accent-gold bg-[var(--pane-gold)]/15 shadow-[0_0_16px_rgba(251,191,36,0.4)]"
-                          : isCurrent
-                          ? "border-[var(--pane-border)] bg-[var(--pane-hover)]"
-                          : "border-[var(--pane-border)] bg-[var(--pane-hover)]"
-                      }`}>
-                        <span className={`text-lg leading-none ${reached ? "" : "opacity-25"}`}>{m.emoji}</span>
-                        {reached && (
-                          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--pane-gold)] text-[7px] font-black text-black">✓</span>
-                        )}
-                      </div>
-                      <span className={`font-mono text-[10px] font-bold ${reached ? "text-[var(--pane-gold)]" : isCurrent ? "text-[var(--pane-text)]/50" : "text-[var(--pane-text)]/20"}`}>{m.label}</span>
+            {/* Тело календаря */}
+            <div className="p-4">
+              {/* Дни недели */}
+              <div className="mb-2 grid grid-cols-7 gap-1.5">
+                {t.analytics.calendar.weekdays.map(d => (
+                  <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest text-[var(--pane-text)]/20">{d}</div>
+                ))}
+              </div>
+
+              {/* Ячейки */}
+              <div className="grid grid-cols-7 gap-1.5">
+                {cells.map((day, i) => (
+                  <DayCell
+                    key={i}
+                    day={day}
+                    active={selectedDay?.date === day?.date}
+                    isToday={day?.date === todayStr}
+                    onClick={() => day && setSelectedDay(day)}
+                  />
+                ))}
+              </div>
+
+              {/* Легенда */}
+              <div className="mt-4 flex flex-wrap justify-center gap-4 text-[10px] text-[var(--pane-text)]/30">
+                <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-accent)]" />{t.analytics.calendar.legendSignal}</span>
+                <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-gold)]" />{t.analytics.calendar.legendTrade}</span>
+                <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-up)]" />{t.analytics.calendar.legendDeposit}</span>
+                <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full bg-[var(--pane-up)] text-[7px] font-bold text-black flex items-center justify-center">✓</span>{t.analytics.calendar.legendGoal}</span>
+              </div>
+            </div>
+
+            {/* Детальная карточка выбранного дня */}
+            {selectedDay && (
+              <div className="border-t border-[var(--pane-border)] px-5 py-4" style={{ background: "rgba(255,255,255,0.015)" }}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-[var(--pane-text)]">
+                      {new Date(selectedDay.date + "T12:00:00").toLocaleDateString(numbers, { weekday: "long", day: "numeric", month: "long" })}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedDay.balance !== null && (
+                        <span className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-text)]">
+                          💰 ${fmtDot(selectedDay.balance, 2)}
+                        </span>
+                      )}
+                      {selectedDay.signals > 0 && (
+                        <span className="rounded-lg bg-[var(--pane-accent-faint)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-accent)]">
+                          {t.analytics.calendar.daySignals(selectedDay.signals)}
+                        </span>
+                      )}
+                      {dayVolume(selectedDay) > 0 && (
+                        <span className="rounded-lg bg-[var(--pane-gold)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
+                          {t.analytics.calendar.dayVolume(fmtDot(dayVolume(selectedDay)))}
+                        </span>
+                      )}
+                      {selectedDay.has_deposit && (
+                        <span className="rounded-lg bg-[var(--pane-up)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
+                          {t.analytics.calendar.dayDeposit}
+                        </span>
+                      )}
                     </div>
-                  );
-                })}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    {selectedDay.pnl_pct !== null ? (
+                      <>
+                        <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-[var(--pane-up)]" : selectedDay.pnl_pct < 0 ? "text-[var(--pane-down)]" : "text-[var(--pane-text)]/40"}`}>
+                          {selectedDay.pnl_pct > 0 ? "+" : ""}{selectedDay.pnl_pct.toFixed(2)}%
+                        </p>
+                        {selectedDay.signals > 0 && selectedDay.pnl_pct > 0 && (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[var(--pane-up)]/15 px-2 py-0.5 text-[10px] font-bold text-[var(--pane-up)]">{t.analytics.calendar.dayGoal}</span>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-[var(--pane-text)]/20">{t.analytics.calendar.noSnapshot}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Сделки этого дня.
+                    Календарь отвечает на вопрос «сколько», а список под ним - на
+                    вопрос «из чего»: одна клетка в плюс бывает и одной сделкой, и
+                    десятью, и это разные дни работы. */}
+                {dayTrades === undefined ? (
+                  <div className="mt-3 space-y-1.5">
+                    {[...Array(2)].map((_, i) => (
+                      <div key={i} className="h-7 animate-pulse rounded-lg bg-[var(--pane-hover)]" />
+                    ))}
+                  </div>
+                ) : dayTrades && dayTrades.length > 0 ? (
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full whitespace-nowrap text-[11px]">
+                      <thead>
+                        <tr className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
+                          <th className="py-1 text-left font-medium">{t.analytics.trades.time}</th>
+                          <th className="py-1 text-left font-medium">{t.analytics.trades.coin}</th>
+                          <th className="py-1 text-right font-medium">{t.analytics.trades.entry}</th>
+                          <th className="py-1 text-right font-medium">{t.analytics.trades.exit}</th>
+                          <th className="py-1 text-right font-medium">{t.analytics.trades.result}</th>
+                          <th className="py-1" />
+                        </tr>
+                      </thead>
+                      <tbody className="font-mono tabular-nums">
+                        {dayTrades.map((one) => (
+                          <tr key={one.id} className="border-t border-[var(--pane-border)]/40">
+                            <td className="py-1 text-[var(--pane-text)]/40">
+                              {new Date(one.closed_at).toLocaleTimeString(numbers, {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </td>
+                            <td className="py-1 font-sans font-semibold text-[var(--pane-text)]">
+                              {one.symbol.replace(/USDT$/, "")}
+                              <span
+                                className={`ml-1.5 text-[10px] font-medium ${
+                                  one.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
+                                }`}
+                              >
+                                {one.side === "long" ? t.analytics.trades.long : t.analytics.trades.short}
+                              </span>
+                            </td>
+                            <td className="py-1 text-right text-[var(--pane-text-2)]">
+                              {fmtPrice(one.entry)}
+                            </td>
+                            <td className="py-1 text-right text-[var(--pane-text-2)]">
+                              {one.exit_price === null ? "-" : fmtPrice(one.exit_price)}
+                            </td>
+                            <td
+                              className={`py-1 text-right font-semibold ${
+                                one.pnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
+                              }`}
+                            >
+                              {one.pnl >= 0 ? "+" : "-"}
+                              {Math.abs(one.pnl).toFixed(2)} $
+                              {one.fee > 0 && (
+                                <span className="ml-1 text-[10px] font-normal text-[var(--pane-text)]/30">
+                                  -{one.fee.toFixed(2)}
+                                </span>
+                              )}
+                            </td>
+                            {/* Карточка сделки - та же, что в журнале терминала.
+                                Здесь она нужна не меньше: аналитику открывают,
+                                чтобы посмотреть на свой день, и хорошим днём
+                                делятся ровно оттуда, где его увидели. */}
+                            <td className="py-1 pl-2 text-right">
+                              <button
+                                onClick={() => setCard(cardFromTrade(one, owner ?? undefined))}
+                                title={t.analytics.trades.cardTitle}
+                                className="text-[var(--pane-text)]/30 transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
+                              >
+                                <Share2 className="h-3.5 w-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : dayTrades && dayTrades.length === 0 ? (
+                  <p className="mt-3 text-[11px] text-[var(--pane-text)]/30">
+                    {t.analytics.trades.none}
+                  </p>
+                ) : null}
               </div>
-            </div>
-          </div>
-        );
-      })()}
+            )}
 
-      {/* Таблица трейдеров пока скрыта.
-          Сама она готова - и ручка, и вёрстка, - но объём в ней считается по
-          дневным снимкам, а те у ученика с ключами набираются по ленте
-          исполнений: у неё нет диапазона дат, и за месяц цифра выходит меньше
-          настоящей. Показывать таблицу, по которой будут раздавать награды, с
-          заведомо неполным оборотом нельзя. Вернуть её - убрать эту заглушку.
-          <TradersTable /> */}
-
-      {/* Основной блок */}
-      <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
-        {/* ── Календарь ── */}
-        <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
-
-          {/* Шапка */}
-          <div
-            className="border-b border-[var(--pane-border)] px-5 pt-5 pb-4"
-            style={{ background: "linear-gradient(135deg, var(--pane-accent-faint) 0%, transparent 55%)" }}
-          >
-            <div className="flex items-center justify-between">
-              <button
-                onClick={prevMonth}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--pane-border)] text-lg text-[var(--pane-muted)] transition hover:border-[var(--pane-border)] hover:text-[var(--pane-text)]"
-              >‹</button>
-              <div className="text-center">
-                <h2 className="text-[13px] font-semibold text-[var(--pane-text)]">
-                  {t.analytics.calendar.months[month]} <span className="text-[var(--pane-muted)] font-medium">{year}</span>
-                </h2>
-              </div>
-              <button
-                onClick={nextMonth}
-                disabled={year === today.getFullYear() && month === today.getMonth()}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--pane-border)] text-lg text-[var(--pane-muted)] transition hover:border-[var(--pane-border)] hover:text-[var(--pane-text)] disabled:opacity-25"
-              >›</button>
-            </div>
-
-            {/* Статспиллы */}
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
-              <span className="flex items-center gap-1 rounded-full bg-[var(--pane-up)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
-                {t.analytics.calendar.profitDays(profitDays)}
-              </span>
-              <span className="flex items-center gap-1 rounded-full bg-[var(--pane-down)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-down)]">
-                {t.analytics.calendar.lossDays(lossDays)}
-              </span>
-              {tradingDays > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-[var(--pane-gold)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
-                  {t.analytics.calendar.tradeDays(tradingDays)}
-                </span>
-              )}
-              {activeDays > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-[var(--pane-accent-faint)] px-3 py-1 text-[11px] font-semibold text-[var(--pane-accent)]">
-                  {t.analytics.calendar.signalDays(activeDays)}
-                </span>
-              )}
-            </div>
-
-            {/* Мини-полоса прогресса профит/лосс */}
-            {(profitDays + lossDays) > 0 && (
-              <div className="mt-3 overflow-hidden rounded-full bg-[var(--pane-hover)]" style={{ height: 4 }}>
-                <div className="flex h-full">
-                  <div className="bg-[var(--pane-up)]/60 transition-all duration-700" style={{ width: `${(profitDays / (profitDays + lossDays)) * 100}%` }} />
-                  <div className="bg-[var(--pane-down)]/50 transition-all duration-700" style={{ width: `${(lossDays / (profitDays + lossDays)) * 100}%` }} />
+            {/* Итоги месяца */}
+            {realDays.length >= 2 && (
+              <div className="border-t border-[var(--pane-border)] px-5 py-3">
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <p className={`font-mono text-base font-extrabold ${totalPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
+                      {totalPnl >= 0 ? "+" : ""}{totalPnl.toFixed(1)}%
+                    </p>
+                    <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.monthResult}</p>
+                  </div>
+                  <div>
+                    <p className="font-mono text-base font-extrabold text-[var(--pane-up)]">
+                      {bestDay ? `+${bestDay.pnl_pct!.toFixed(1)}%` : "-"}
+                    </p>
+                    <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.bestDay}</p>
+                  </div>
+                  <div>
+                    <p className="font-mono text-base font-extrabold text-[var(--pane-down)]">
+                      {worstDay && worstDay.pnl_pct! < 0 ? `${worstDay.pnl_pct!.toFixed(1)}%` : "-"}
+                    </p>
+                    <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.worstDay}</p>
+                  </div>
                 </div>
               </div>
             )}
+
+            {/* Карточка за срок.
+                Сделкой делятся из строки журнала, а хорошим днём, неделей или
+                месяцем делиться было нечем - приходилось слать пять карточек
+                подряд. Опорная дата - выбранный день: неделя берётся та, что
+                обведена в сетке над кнопками, а не последние семь суток. */}
+            <div className="flex flex-wrap items-center gap-2 border-t border-[var(--pane-border)] px-5 py-3">
+              <span className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
+                {t.analytics.summary.cardFor}
+              </span>
+              {SPANS.map((id) => {
+                const ready = periodOf(calData, id, anchor);
+                return (
+                  <button
+                    key={id}
+                    disabled={!ready}
+                    onClick={() => ready && setCard(cardFromPeriod(ready, owner ?? undefined))}
+                    title={
+                      ready
+                        ? `${ready.title}: ${ready.roi >= 0 ? "+" : ""}${ready.roi.toFixed(2)}%`
+                        : t.analytics.summary.nothingToShow
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-accent)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[var(--pane-border)] disabled:hover:text-[var(--pane-text-2)]"
+                  >
+                    <Share2 className="h-3 w-3" />
+                    {spanLabel[id]}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+        </>
+      )}
 
-          {/* Тело календаря */}
-          <div className="p-4">
-            {/* Дни недели */}
-            <div className="mb-2 grid grid-cols-7 gap-1.5">
-              {t.analytics.calendar.weekdays.map(d => (
-                <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest text-[var(--pane-text)]/20">{d}</div>
-              ))}
-            </div>
-
-            {/* Ячейки */}
-            <div className="grid grid-cols-7 gap-1.5">
-              {cells.map((day, i) => (
-                <DayCell
-                  key={i}
-                  day={day}
-                  active={selectedDay?.date === day?.date}
-                  isToday={day?.date === todayStr}
-                  onClick={() => day && setSelectedDay(day)}
-                />
-              ))}
-            </div>
-
-            {/* Легенда */}
-            <div className="mt-4 flex flex-wrap justify-center gap-4 text-[10px] text-[var(--pane-text)]/30">
-              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-accent)]" />{t.analytics.calendar.legendSignal}</span>
-              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-gold)]" />{t.analytics.calendar.legendTrade}</span>
-              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-up)]" />{t.analytics.calendar.legendDeposit}</span>
-              <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full bg-[var(--pane-up)] text-[7px] font-bold text-black flex items-center justify-center">✓</span>{t.analytics.calendar.legendGoal}</span>
-            </div>
-          </div>
-
-          {/* Детальная карточка выбранного дня */}
-          {selectedDay && (
-            <div className="border-t border-[var(--pane-border)] px-5 py-4" style={{ background: "rgba(255,255,255,0.015)" }}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-[var(--pane-text)]">
-                    {new Date(selectedDay.date + "T12:00:00").toLocaleDateString(numbers, { weekday: "long", day: "numeric", month: "long" })}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedDay.balance !== null && (
-                      <span className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-text)]">
-                        💰 ${fmtDot(selectedDay.balance, 2)}
-                      </span>
-                    )}
-                    {selectedDay.signals > 0 && (
-                      <span className="rounded-lg bg-[var(--pane-accent-faint)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-accent)]">
-                        {t.analytics.calendar.daySignals(selectedDay.signals)}
-                      </span>
-                    )}
-                    {dayVolume(selectedDay) > 0 && (
-                      <span className="rounded-lg bg-[var(--pane-gold)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
-                        {t.analytics.calendar.dayVolume(fmtDot(dayVolume(selectedDay)))}
-                      </span>
-                    )}
-                    {selectedDay.has_deposit && (
-                      <span className="rounded-lg bg-[var(--pane-up)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
-                        {t.analytics.calendar.dayDeposit}
-                      </span>
+      {/* Награды: уровень, цели и достижения - одной группой. */}
+      {tab === "rewards" && (
+        <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+          {/* Уровень и цели месяца - одним столбцом. */}
+          <div className="space-y-3">
+            {(() => {
+              const volXp      = Math.floor(totalVolume / 50_000) * 25;
+              const streakXp   = activityStreak * 30;
+              const goalXp     = goalDays * 20;
+              const hotXp      = hotDays * 50;
+              const profitXp   = profitDays * 15;
+              const tradeDayXp = effectiveTradeDays * 10;
+              const xp = volXp + streakXp + goalXp + hotXp + profitXp + tradeDayXp;
+              const { level, xpInLevel, xpNeeded } = getXpLevel(xp);
+              const pct = Math.min(100, (xpInLevel / xpNeeded) * 100);
+              const levelTitles = t.analytics.level.titles;
+              const levelTitle = Object.entries(levelTitles).reverse().find(([l]) => level >= +l)?.[1] ?? levelTitles[1];
+              const xpSources = t.analytics.level.sources;
+              const breakdown = [
+                { icon: BarChart2,    label: xpSources.volume,  val: volXp,      color: "text-[var(--pane-accent)]", bg: "bg-[var(--pane-accent-faint)]" },
+                { icon: Flame,        label: xpSources.streak,  val: streakXp,   color: "text-orange-400",  bg: "bg-orange-400/10" },
+                { icon: Zap,          label: xpSources.hotDays, val: hotXp,      color: "text-[var(--pane-gold)]", bg: "bg-[var(--pane-gold)]/10" },
+                { icon: TrendingUp,   label: xpSources.profit,  val: profitXp,   color: "text-[var(--pane-up)]",     bg: "bg-[var(--pane-up)]/10" },
+                { icon: CalendarDays, label: xpSources.days,    val: tradeDayXp, color: "text-blue-400",    bg: "bg-blue-400/10" },
+                { icon: Target,       label: xpSources.goals,   val: goalXp,     color: "text-purple-400",  bg: "bg-purple-400/10" },
+              ];
+              return (
+                <div className="relative overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
+                  {/* Заголовок */}
+                  <div className="relative flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--pane-gold)]/15 text-[var(--pane-gold)]">
+                        <Star className="h-4 w-4" />
+                      </div>
+                      <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.level.title}</h2>
+                    </div>
+                    {coinsBalance !== null && (
+                      <div className="flex items-center gap-1.5 rounded-full border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10 px-2.5 py-1">
+                        <Coins className="h-3.5 w-3.5 text-[var(--pane-gold)]" />
+                        <span className="font-mono text-sm font-extrabold text-[var(--pane-gold)]">{coinsBalance.toLocaleString(numbers)}</span>
+                        <span className="text-[9px] font-bold text-[var(--pane-gold)]/50">NMNH</span>
+                      </div>
                     )}
                   </div>
+
+                  {/* Уровень */}
+                  <div className="relative mt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-14 w-14 flex-col items-center justify-center rounded-xl border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/12">
+                        <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--pane-gold)]/60 leading-none">{t.analytics.level.short}</span>
+                        <span className="font-mono text-2xl font-black text-[var(--pane-gold)] leading-none">{level}</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-[var(--pane-text)]">{levelTitle}</p>
+                        <p className="mt-0.5 text-[11px] text-[var(--pane-text)]/40">{t.analytics.level.toNext(Math.max(0, xpNeeded - xpInLevel).toLocaleString(numbers), level + 1)}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono text-2xl font-extrabold leading-none text-[var(--pane-text)]">{xp.toLocaleString(numbers)}</span>
+                      <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[var(--pane-text)]/30">{t.analytics.level.totalXp}</p>
+                    </div>
+                  </div>
+
+                  {/* Прогресс */}
+                  <div className="relative mt-4 h-2.5 overflow-hidden rounded-full bg-[var(--pane-hover)]">
+                    <div
+                      className="h-full rounded-full shadow-[0_0_10px_rgba(255,200,0,0.5)] transition-all duration-700"
+                      style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }}
+                    />
+                  </div>
+                  <p className="relative mt-1.5 text-right text-[10px] text-[var(--pane-text)]/30">{xpInLevel.toLocaleString(numbers)} / {xpNeeded.toLocaleString(numbers)} XP</p>
+
+                  {/* Разбивка XP */}
+                  <div className="relative mt-4 grid grid-cols-2 gap-2">
+                    {breakdown.map(({ icon: Icon, label, val, color, bg }) => (
+                      <div key={label} className="flex items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-2">
+                        <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${bg} ${color}`}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <span className="flex-1 truncate text-[11px] text-[var(--pane-muted)]">{label}</span>
+                        <span className={`font-mono text-[11px] font-bold ${val > 0 ? "text-[var(--pane-text)]" : "text-[var(--pane-text)]/25"}`}>+{val}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="shrink-0 text-right">
-                  {selectedDay.pnl_pct !== null ? (
-                    <>
-                      <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-[var(--pane-up)]" : selectedDay.pnl_pct < 0 ? "text-[var(--pane-down)]" : "text-[var(--pane-text)]/40"}`}>
-                        {selectedDay.pnl_pct > 0 ? "+" : ""}{selectedDay.pnl_pct.toFixed(2)}%
-                      </p>
-                      {selectedDay.signals > 0 && selectedDay.pnl_pct > 0 && (
-                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[var(--pane-up)]/15 px-2 py-0.5 text-[10px] font-bold text-[var(--pane-up)]">{t.analytics.calendar.dayGoal}</span>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-xs text-[var(--pane-text)]/20">{t.analytics.calendar.noSnapshot}</p>
-                  )}
-                </div>
+              );
+            })()}
+
+            <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-[var(--pane-accent)]" />
+                <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.goalsTitle}</h2>
               </div>
 
-              {/* Сделки этого дня.
-                  Календарь отвечает на вопрос «сколько», а список под ним - на
-                  вопрос «из чего»: одна клетка в плюс бывает и одной сделкой, и
-                  десятью, и это разные дни работы. */}
-              {dayTrades === undefined ? (
-                <div className="mt-3 space-y-1.5">
-                  {[...Array(2)].map((_, i) => (
-                    <div key={i} className="h-7 animate-pulse rounded-lg bg-[var(--pane-hover)]" />
-                  ))}
-                </div>
-              ) : dayTrades && dayTrades.length > 0 ? (
-                <div className="mt-3 overflow-x-auto">
-                  <table className="w-full whitespace-nowrap text-[11px]">
-                    <thead>
-                      <tr className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
-                        <th className="py-1 text-left font-medium">{t.analytics.trades.time}</th>
-                        <th className="py-1 text-left font-medium">{t.analytics.trades.coin}</th>
-                        <th className="py-1 text-right font-medium">{t.analytics.trades.entry}</th>
-                        <th className="py-1 text-right font-medium">{t.analytics.trades.exit}</th>
-                        <th className="py-1 text-right font-medium">{t.analytics.trades.result}</th>
-                        <th className="py-1" />
-                      </tr>
-                    </thead>
-                    <tbody className="font-mono tabular-nums">
-                      {dayTrades.map((one) => (
-                        <tr key={one.id} className="border-t border-[var(--pane-border)]/40">
-                          <td className="py-1 text-[var(--pane-text)]/40">
-                            {new Date(one.closed_at).toLocaleTimeString(numbers, {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </td>
-                          <td className="py-1 font-sans font-semibold text-[var(--pane-text)]">
-                            {one.symbol.replace(/USDT$/, "")}
-                            <span
-                              className={`ml-1.5 text-[10px] font-medium ${
-                                one.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
-                              }`}
-                            >
-                              {one.side === "long" ? t.analytics.trades.long : t.analytics.trades.short}
-                            </span>
-                          </td>
-                          <td className="py-1 text-right text-[var(--pane-text-2)]">
-                            {fmtPrice(one.entry)}
-                          </td>
-                          <td className="py-1 text-right text-[var(--pane-text-2)]">
-                            {one.exit_price === null ? "-" : fmtPrice(one.exit_price)}
-                          </td>
-                          <td
-                            className={`py-1 text-right font-semibold ${
-                              one.pnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
-                            }`}
-                          >
-                            {one.pnl >= 0 ? "+" : "-"}
-                            {Math.abs(one.pnl).toFixed(2)} $
-                            {one.fee > 0 && (
-                              <span className="ml-1 text-[10px] font-normal text-[var(--pane-text)]/30">
-                                -{one.fee.toFixed(2)}
-                              </span>
-                            )}
-                          </td>
-                          {/* Карточка сделки - та же, что в журнале терминала.
-                              Здесь она нужна не меньше: аналитику открывают,
-                              чтобы посмотреть на свой день, и хорошим днём
-                              делятся ровно оттуда, где его увидели. */}
-                          <td className="py-1 pl-2 text-right">
-                            <button
-                              onClick={() => setCard(cardFromTrade(one, owner ?? undefined))}
-                              title={t.analytics.trades.cardTitle}
-                              className="text-[var(--pane-text)]/30 transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
-                            >
-                              <Share2 className="h-3.5 w-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : dayTrades && dayTrades.length === 0 ? (
-                <p className="mt-3 text-[11px] text-[var(--pane-text)]/30">
-                  {t.analytics.trades.none}
-                </p>
-              ) : null}
+              {goals.map((goal) => {
+                const Icon = goal.icon;
+                const pct = Math.min((goal.current / goal.target) * 100, 100);
+                return (
+                  <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-[var(--pane-up)]/[0.04]" : "border-[var(--pane-border)] bg-[var(--pane-hover)]"}`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: goal.color }} />
+                      <span className="text-[11px] font-semibold text-[var(--pane-text)] flex-1 min-w-0 truncate">{t.analytics.goals[goal.id].label}</span>
+                      {goal.unlocked
+                        ? <CheckCircle2 className="h-3.5 w-3.5 text-[var(--pane-up)] shrink-0" />
+                        : <span className="font-mono text-[10px] text-[var(--pane-text)]/30 shrink-0">{goal.current}/{goal.target}</span>
+                      }
+                    </div>
+                    <div className="h-1 overflow-hidden rounded-full bg-[var(--pane-bg)]">
+                      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
+                    </div>
+                    {goal.unlocked && (
+                      <p className="mt-1 text-[9px] text-[var(--pane-up)]/70 truncate">{t.analytics.goals[goal.id].reward}</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          )}
-
-          {/* Итоги месяца */}
-          {realDays.length >= 2 && (
-            <div className="border-t border-[var(--pane-border)] px-5 py-3">
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div>
-                  <p className={`font-mono text-base font-extrabold ${totalPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
-                    {totalPnl >= 0 ? "+" : ""}{totalPnl.toFixed(1)}%
-                  </p>
-                  <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.monthResult}</p>
-                </div>
-                <div>
-                  <p className="font-mono text-base font-extrabold text-[var(--pane-up)]">
-                    {bestDay ? `+${bestDay.pnl_pct!.toFixed(1)}%` : "-"}
-                  </p>
-                  <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.bestDay}</p>
-                </div>
-                <div>
-                  <p className="font-mono text-base font-extrabold text-[var(--pane-down)]">
-                    {worstDay && worstDay.pnl_pct! < 0 ? `${worstDay.pnl_pct!.toFixed(1)}%` : "-"}
-                  </p>
-                  <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.worstDay}</p>
-                </div>
+          </div>
+        {/* Достижения */}
+        <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-[var(--pane-gold)]" />
+              <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.achievements.title}</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs text-[var(--pane-gold)] font-bold">{achievements.filter(a => a.earned).length}/{achievements.length}</span>
+              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--pane-bg)]">
+                <div className="h-full rounded-full bg-[var(--pane-gold)] transition-all duration-700"
+                  style={{ width: `${(achievements.filter(a => a.earned).length / achievements.length) * 100}%` }} />
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Карточка за срок.
-              Сделкой делятся из строки журнала, а хорошим днём, неделей или
-              месяцем делиться было нечем - приходилось слать пять карточек
-              подряд. Опорная дата - выбранный день: неделя берётся та, что
-              обведена в сетке над кнопками, а не последние семь суток. */}
-          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--pane-border)] px-5 py-3">
-            <span className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
-              {t.analytics.summary.cardFor}
-            </span>
-            {SPANS.map((id) => {
-              const ready = periodOf(calData, id, anchor);
+          {/* Категории */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+            {ACH_CATEGORIES.map(cat => {
+              const count = cat.id === "all" ? achievements.filter(a => a.earned).length : achievements.filter(a => a.category === cat.id && a.earned).length;
+              const total = cat.id === "all" ? achievements.length : achievements.filter(a => a.category === cat.id).length;
               return (
-                <button
-                  key={id}
-                  disabled={!ready}
-                  onClick={() => ready && setCard(cardFromPeriod(ready, owner ?? undefined))}
-                  title={
-                    ready
-                      ? `${ready.title}: ${ready.roi >= 0 ? "+" : ""}${ready.roi.toFixed(2)}%`
-                      : t.analytics.summary.nothingToShow
-                  }
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-accent)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[var(--pane-border)] disabled:hover:text-[var(--pane-text-2)]"
-                >
-                  <Share2 className="h-3 w-3" />
-                  {spanLabel[id]}
+                <button key={cat.id} onClick={() => setAchCategory(cat.id)}
+                  className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-[var(--pane-gold)]/10 text-[var(--pane-gold)]" : "border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-text)]/40 hover:text-[var(--pane-text)]/70"}`}>
+                  <cat.icon className="h-3 w-3 shrink-0" />
+                  <span>{t.analytics.achievements.categories[cat.id]}</span>
+                  <span className={`font-mono text-[9px] ${achCategory === cat.id ? "text-[var(--pane-gold)]/60" : "text-[var(--pane-text)]/20"}`}>{count}/{total}</span>
                 </button>
               );
             })}
           </div>
-        </div>
 
-        {/* Цели */}
-        <div className="space-y-4">
-          {(() => {
-            const volXp      = Math.floor(totalVolume / 50_000) * 25;
-            const streakXp   = activityStreak * 30;
-            const goalXp     = goalDays * 20;
-            const hotXp      = hotDays * 50;
-            const profitXp   = profitDays * 15;
-            const tradeDayXp = effectiveTradeDays * 10;
-            const xp = volXp + streakXp + goalXp + hotXp + profitXp + tradeDayXp;
-            const { level, xpInLevel, xpNeeded } = getXpLevel(xp);
-            const pct = Math.min(100, (xpInLevel / xpNeeded) * 100);
-            const levelTitles = t.analytics.level.titles;
-            const levelTitle = Object.entries(levelTitles).reverse().find(([l]) => level >= +l)?.[1] ?? levelTitles[1];
-            const xpSources = t.analytics.level.sources;
-            const breakdown = [
-              { icon: BarChart2,    label: xpSources.volume,  val: volXp,      color: "text-[var(--pane-accent)]", bg: "bg-[var(--pane-accent-faint)]" },
-              { icon: Flame,        label: xpSources.streak,  val: streakXp,   color: "text-orange-400",  bg: "bg-orange-400/10" },
-              { icon: Zap,          label: xpSources.hotDays, val: hotXp,      color: "text-[var(--pane-gold)]", bg: "bg-[var(--pane-gold)]/10" },
-              { icon: TrendingUp,   label: xpSources.profit,  val: profitXp,   color: "text-[var(--pane-up)]",     bg: "bg-[var(--pane-up)]/10" },
-              { icon: CalendarDays, label: xpSources.days,    val: tradeDayXp, color: "text-blue-400",    bg: "bg-blue-400/10" },
-              { icon: Target,       label: xpSources.goals,   val: goalXp,     color: "text-purple-400",  bg: "bg-purple-400/10" },
-            ];
-            return (
-              <div className="relative overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
-                {/* Заголовок */}
-                <div className="relative flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--pane-gold)]/15 text-[var(--pane-gold)]">
-                      <Star className="h-4 w-4" />
-                    </div>
-                    <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.level.title}</h2>
-                  </div>
-                  {coinsBalance !== null && (
-                    <div className="flex items-center gap-1.5 rounded-full border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10 px-2.5 py-1">
-                      <Coins className="h-3.5 w-3.5 text-[var(--pane-gold)]" />
-                      <span className="font-mono text-sm font-extrabold text-[var(--pane-gold)]">{coinsBalance.toLocaleString(numbers)}</span>
-                      <span className="text-[9px] font-bold text-[var(--pane-gold)]/50">NMNH</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Уровень */}
-                <div className="relative mt-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-14 w-14 flex-col items-center justify-center rounded-xl border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/12">
-                      <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--pane-gold)]/60 leading-none">{t.analytics.level.short}</span>
-                      <span className="font-mono text-2xl font-black text-[var(--pane-gold)] leading-none">{level}</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-[var(--pane-text)]">{levelTitle}</p>
-                      <p className="mt-0.5 text-[11px] text-[var(--pane-text)]/40">{t.analytics.level.toNext(Math.max(0, xpNeeded - xpInLevel).toLocaleString(numbers), level + 1)}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-mono text-2xl font-extrabold leading-none text-[var(--pane-text)]">{xp.toLocaleString(numbers)}</span>
-                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[var(--pane-text)]/30">{t.analytics.level.totalXp}</p>
-                  </div>
-                </div>
-
-                {/* Прогресс */}
-                <div className="relative mt-4 h-2.5 overflow-hidden rounded-full bg-[var(--pane-hover)]">
-                  <div
-                    className="h-full rounded-full shadow-[0_0_10px_rgba(255,200,0,0.5)] transition-all duration-700"
-                    style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }}
-                  />
-                </div>
-                <p className="relative mt-1.5 text-right text-[10px] text-[var(--pane-text)]/30">{xpInLevel.toLocaleString(numbers)} / {xpNeeded.toLocaleString(numbers)} XP</p>
-
-                {/* Разбивка XP */}
-                <div className="relative mt-4 grid grid-cols-2 gap-2">
-                  {breakdown.map(({ icon: Icon, label, val, color, bg }) => (
-                    <div key={label} className="flex items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-2">
-                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${bg} ${color}`}>
-                        <Icon className="h-3.5 w-3.5" />
-                      </div>
-                      <span className="flex-1 truncate text-[11px] text-[var(--pane-muted)]">{label}</span>
-                      <span className={`font-mono text-[11px] font-bold ${val > 0 ? "text-[var(--pane-text)]" : "text-[var(--pane-text)]/25"}`}>+{val}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 space-y-3">
-            <div className="flex items-center gap-2">
-              <Target className="h-4 w-4 text-[var(--pane-accent)]" />
-              <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.goalsTitle}</h2>
-            </div>
-
-            {goals.map((goal) => {
-              const Icon = goal.icon;
-              const pct = Math.min((goal.current / goal.target) * 100, 100);
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {achievements.filter(a => achCategory === "all" || a.category === achCategory).map((ach) => {
+              const Icon = ach.icon;
+              const r = RARITY_STYLES[ach.rarity];
               return (
-                <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-[var(--pane-up)]/[0.04]" : "border-[var(--pane-border)] bg-[var(--pane-hover)]"}`}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: goal.color }} />
-                    <span className="text-[11px] font-semibold text-[var(--pane-text)] flex-1 min-w-0 truncate">{t.analytics.goals[goal.id].label}</span>
-                    {goal.unlocked
-                      ? <CheckCircle2 className="h-3.5 w-3.5 text-[var(--pane-up)] shrink-0" />
-                      : <span className="font-mono text-[10px] text-[var(--pane-text)]/30 shrink-0">{goal.current}/{goal.target}</span>
-                    }
+                <div
+                  key={ach.id}
+                  className={`relative overflow-hidden rounded-xl border p-4 transition ${r.border} ${r.glow} ${!ach.earned ? "opacity-50 grayscale" : ""}`}
+                  style={{ background: ach.earned ? "rgba(255,255,255,0.03)" : "transparent" }}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${r.border}`}>
+                      {ach.earned ? (
+                        <Icon className="h-5 w-5 text-[var(--pane-text)]" />
+                      ) : (
+                        <Lock className="h-4 w-4 text-[var(--pane-muted)]" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-[var(--pane-text)]">{t.analytics.achievements.items[ach.id].title}</h3>
+                        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${r.badge}`}>
+                          {t.analytics.rarity[ach.rarity]}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">{t.analytics.achievements.items[ach.id].desc}</p>
+                      <div className="mt-1.5 flex items-center gap-1">
+                        <Coins className="h-3 w-3 text-[var(--pane-gold)]/70" />
+                        <span className="font-mono text-[10px] font-bold text-[var(--pane-gold)]/80">
+                          {ach.earned ? "" : "+"}{RARITY_COINS[ach.rarity]} NMNH
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-[var(--pane-bg)]">
-                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
-                  </div>
-                  {goal.unlocked && (
-                    <p className="mt-1 text-[9px] text-[var(--pane-up)]/70 truncate">{t.analytics.goals[goal.id].reward}</p>
+                  {ach.earned && (
+                    <div className="absolute right-0 top-0 h-12 w-12 overflow-hidden">
+                      <div className="absolute right-0 top-0 h-12 w-12 -translate-y-6 translate-x-6 rotate-45 bg-[var(--pane-up)]/20" />
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
         </div>
-      </div>
 
-
-      {/* Достижения */}
-      <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-[var(--pane-gold)]" />
-            <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.achievements.title}</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-[var(--pane-gold)] font-bold">{achievements.filter(a => a.earned).length}/{achievements.length}</span>
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--pane-bg)]">
-              <div className="h-full rounded-full bg-[var(--pane-gold)] transition-all duration-700"
-                style={{ width: `${(achievements.filter(a => a.earned).length / achievements.length) * 100}%` }} />
-            </div>
-          </div>
         </div>
-
-        {/* Категории */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-          {ACH_CATEGORIES.map(cat => {
-            const count = cat.id === "all" ? achievements.filter(a => a.earned).length : achievements.filter(a => a.category === cat.id && a.earned).length;
-            const total = cat.id === "all" ? achievements.length : achievements.filter(a => a.category === cat.id).length;
-            return (
-              <button key={cat.id} onClick={() => setAchCategory(cat.id)}
-                className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-[var(--pane-gold)]/10 text-[var(--pane-gold)]" : "border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-text)]/40 hover:text-[var(--pane-text)]/70"}`}>
-                <cat.icon className="h-3 w-3 shrink-0" />
-                <span>{t.analytics.achievements.categories[cat.id]}</span>
-                <span className={`font-mono text-[9px] ${achCategory === cat.id ? "text-[var(--pane-gold)]/60" : "text-[var(--pane-text)]/20"}`}>{count}/{total}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {achievements.filter(a => achCategory === "all" || a.category === achCategory).map((ach) => {
-            const Icon = ach.icon;
-            const r = RARITY_STYLES[ach.rarity];
-            return (
-              <div
-                key={ach.id}
-                className={`relative overflow-hidden rounded-xl border p-4 transition ${r.border} ${r.glow} ${!ach.earned ? "opacity-50 grayscale" : ""}`}
-                style={{ background: ach.earned ? "rgba(255,255,255,0.03)" : "transparent" }}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${r.border}`}>
-                    {ach.earned ? (
-                      <Icon className="h-5 w-5 text-[var(--pane-text)]" />
-                    ) : (
-                      <Lock className="h-4 w-4 text-[var(--pane-muted)]" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-[var(--pane-text)]">{t.analytics.achievements.items[ach.id].title}</h3>
-                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${r.badge}`}>
-                        {t.analytics.rarity[ach.rarity]}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">{t.analytics.achievements.items[ach.id].desc}</p>
-                    <div className="mt-1.5 flex items-center gap-1">
-                      <Coins className="h-3 w-3 text-[var(--pane-gold)]/70" />
-                      <span className="font-mono text-[10px] font-bold text-[var(--pane-gold)]/80">
-                        {ach.earned ? "" : "+"}{RARITY_COINS[ach.rarity]} NMNH
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                {ach.earned && (
-                  <div className="absolute right-0 top-0 h-12 w-12 overflow-hidden">
-                    <div className="absolute right-0 top-0 h-12 w-12 -translate-y-6 translate-x-6 rotate-45 bg-[var(--pane-up)]/20" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      )}
 
       {/* Карточка сделки. Палитру панелей ей приносит общая обёртка страницы -
           своей больше не нужно. */}

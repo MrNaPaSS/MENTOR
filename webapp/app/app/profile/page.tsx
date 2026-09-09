@@ -14,7 +14,7 @@ import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import { setTerminalTheme, useTerminalTheme } from "@/lib/terminalTheme";
 import { setSoundOn, useSoundOn } from "@/lib/notifySound";
 import { intlLocale, setLocale, useLocale, useT, type Locale } from "@/lib/i18n";
-import { PaneScope } from "@/components/app/Pane";
+import { PaneHead, PaneScope } from "@/components/app/Pane";
 
 const ADMIN_WEEX_UID = "6613031308";
 
@@ -113,264 +113,275 @@ export default function ProfilePage() {
 
   return (
     <PaneScope className="space-y-3">
+      <PaneHead title={t.shell.nav.profile} hint={`@${p.username || "-"}`} />
 
-      {/* Кто я и сколько у меня. Без градиента и свечения: терминал рядом
-          собран из ровных панелей, и цветное пятно здесь читалось бы куском
-          другого приложения. */}
-      <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
-        <div className="flex items-center gap-3">
-          {/* Аватарка из Telegram, если она есть. Файл отдаёт бэкенд, поэтому
-              к пути добавляем API_URL: сайт живёт на другом домене. Нет
-              аватарки - остаётся буква, как было. */}
-          <div className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-accent-faint)] text-base font-bold text-[var(--pane-accent)]">
-            {p.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={`${API_URL}${p.avatar_url}`}
-                alt={p.username || t.profile.avatarAlt}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              initial
-            )}
-            {isAdmin && (
-              <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--pane-gold)]">
-                <ShieldCheck className="h-3 w-3 text-[var(--pane-bg)]" />
-              </span>
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-[13px] font-semibold text-[var(--pane-text)]">@{p.username || "-"}</div>
-            <div className="font-mono text-[11px] text-[var(--pane-muted)]">WEEX UID: {maskUid(p.weex_uid)}</div>
-          </div>
-        </div>
-
-        {/* Balance */}
-        <div className="mt-3 flex items-end justify-between border-t border-[var(--pane-border)] pt-3">
-          <div>
-            <div className="text-[10px] font-medium uppercase tracking-wider text-[var(--pane-muted)]">{t.profile.balance}</div>
-            <div className="font-mono text-xl font-bold tabular-nums text-[var(--pane-text)]">
-              {fmtUsd(p.balance_usdt)}
-              <span className="ml-1 text-[11px] font-semibold text-[var(--pane-muted)]">USDT</span>
-            </div>
-            {/* Откуда цифра. Ключи ученика и партнёрская ручка по UID - разные
-                источники, и разница между ними видна: одна показывает то же,
-                что приложение биржи, другая приходит с задержкой. */}
-            <div className="text-[10px] text-[var(--pane-muted)]">
-              {p.balance_source === "api_keys"
-                ? t.profile.balanceFromKeys
-                : p.balance_source === "affiliate_api"
-                  ? t.profile.balanceFromAffiliate
-                  : t.profile.balanceManual}
-            </div>
-          </div>
-          <button
-            onClick={refreshBalance}
-            disabled={refreshing}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-accent)] transition-colors hover:border-[var(--pane-accent-soft)] disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            {t.common.refresh}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Биржевой счёт ──
-          Ключи вводятся в терминале, но вопрос «подключено ли» человек задаёт
-          себе здесь - и ответа тут не было вовсе. */}
-      <div className={CARD}>
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-[12px] font-semibold text-[var(--pane-text)]">
-            {t.profile.exchangeTitle}
-          </span>
-          <span
-            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-              exchange?.connected ? "bg-[var(--pane-up)]/10 text-[var(--pane-up)]" : "bg-[var(--pane-hover)] text-[var(--pane-muted)]"
-            }`}
-          >
-            {exchange?.connected ? t.profile.connected : t.profile.disconnected}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-text-2)]">
-            <Key className="h-4 w-4" />
-          </div>
-          <div className="min-w-0 text-[12px]">
-            <div className="font-semibold text-[var(--pane-text)]">WEEX Futures</div>
-            <div className="mt-0.5 text-[12px] text-[var(--pane-muted)]">
-              {exchange?.connected ? (
-                <>
-                  {t.profile.keyTail(exchange.key_tail)}
-                  {exchange.updated_at && (
-                    <>
-                      {t.profile.keySince(
-                        new Date(exchange.updated_at).toLocaleDateString(intlLocale(locale))
-                      )}
-                    </>
-                  )}
-                </>
-              ) : exchange && !exchange.enabled ? (
-                t.profile.vaultOff
+      {/* Два столбца на широком экране: слева про счёт, справа про
+          обустройство кабинета. Одной колонкой всё это выстраивалось в
+          лестницу, где до настроек надо было доскроллить. */}
+      <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+        <div className="space-y-3">
+        {/* Кто я и сколько у меня. Без градиента и свечения: терминал рядом
+            собран из ровных панелей, и цветное пятно здесь читалось бы куском
+            другого приложения. */}
+        <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
+          <div className="flex items-center gap-3">
+            {/* Аватарка из Telegram, если она есть. Файл отдаёт бэкенд, поэтому
+                к пути добавляем API_URL: сайт живёт на другом домене. Нет
+                аватарки - остаётся буква, как было. */}
+            <div className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-accent-faint)] text-base font-bold text-[var(--pane-accent)]">
+              {p.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`${API_URL}${p.avatar_url}`}
+                  alt={p.username || t.profile.avatarAlt}
+                  className="h-full w-full object-cover"
+                />
               ) : (
-                t.profile.noKeys
+                initial
+              )}
+              {isAdmin && (
+                <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--pane-gold)]">
+                  <ShieldCheck className="h-3 w-3 text-[var(--pane-bg)]" />
+                </span>
               )}
             </div>
+            <div className="min-w-0">
+              <div className="truncate text-[13px] font-semibold text-[var(--pane-text)]">@{p.username || "-"}</div>
+              <div className="font-mono text-[11px] text-[var(--pane-muted)]">WEEX UID: {maskUid(p.weex_uid)}</div>
+            </div>
           </div>
-          <button
-            onClick={() => setKeysOpen(true)}
-            className="ml-auto shrink-0 rounded-xl border border-[var(--pane-border)] px-3 py-2 text-xs font-semibold text-[var(--pane-text-2)] transition-colors hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
-          >
-            {exchange?.connected ? t.common.change : t.common.connect}
-          </button>
+
+          {/* Balance */}
+          <div className="mt-3 flex items-end justify-between border-t border-[var(--pane-border)] pt-3">
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-wider text-[var(--pane-muted)]">{t.profile.balance}</div>
+              <div className="font-mono text-xl font-bold tabular-nums text-[var(--pane-text)]">
+                {fmtUsd(p.balance_usdt)}
+                <span className="ml-1 text-[11px] font-semibold text-[var(--pane-muted)]">USDT</span>
+              </div>
+              {/* Откуда цифра. Ключи ученика и партнёрская ручка по UID - разные
+                  источники, и разница между ними видна: одна показывает то же,
+                  что приложение биржи, другая приходит с задержкой. */}
+              <div className="text-[10px] text-[var(--pane-muted)]">
+                {p.balance_source === "api_keys"
+                  ? t.profile.balanceFromKeys
+                  : p.balance_source === "affiliate_api"
+                    ? t.profile.balanceFromAffiliate
+                    : t.profile.balanceManual}
+              </div>
+            </div>
+            <button
+              onClick={refreshBalance}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-accent)] transition-colors hover:border-[var(--pane-accent-soft)] disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              {t.common.refresh}
+            </button>
+          </div>
+        </div>
+        {/* ── Биржевой счёт ──
+            Ключи вводятся в терминале, но вопрос «подключено ли» человек задаёт
+            себе здесь - и ответа тут не было вовсе. */}
+        <div className={CARD}>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-[12px] font-semibold text-[var(--pane-text)]">
+              {t.profile.exchangeTitle}
+            </span>
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                exchange?.connected ? "bg-[var(--pane-up)]/10 text-[var(--pane-up)]" : "bg-[var(--pane-hover)] text-[var(--pane-muted)]"
+              }`}
+            >
+              {exchange?.connected ? t.profile.connected : t.profile.disconnected}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-text-2)]">
+              <Key className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 text-[12px]">
+              <div className="font-semibold text-[var(--pane-text)]">WEEX Futures</div>
+              <div className="mt-0.5 text-[12px] text-[var(--pane-muted)]">
+                {exchange?.connected ? (
+                  <>
+                    {t.profile.keyTail(exchange.key_tail)}
+                    {exchange.updated_at && (
+                      <>
+                        {t.profile.keySince(
+                          new Date(exchange.updated_at).toLocaleDateString(intlLocale(locale))
+                        )}
+                      </>
+                    )}
+                  </>
+                ) : exchange && !exchange.enabled ? (
+                  t.profile.vaultOff
+                ) : (
+                  t.profile.noKeys
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => setKeysOpen(true)}
+              className="ml-auto shrink-0 rounded-xl border border-[var(--pane-border)] px-3 py-2 text-xs font-semibold text-[var(--pane-text-2)] transition-colors hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
+            >
+              {exchange?.connected ? t.common.change : t.common.connect}
+            </button>
+          </div>
+
+          <p className="mt-4 text-[11px] leading-relaxed text-[var(--pane-muted)]">
+            {t.profile.keysNote}
+          </p>
         </div>
 
-        <p className="mt-4 text-[11px] leading-relaxed text-[var(--pane-muted)]">
-          {t.profile.keysNote}
-        </p>
-      </div>
-
-      {/* ── НАСТРОЙКИ ──
-          Здесь только то, что человек меняет про себя: как выглядит кабинет,
-          на каком языке, что звучит и как он подписан на карточках.
-
-          Режим торговли и риск на сделку отсюда убраны. Это не настройки
-          интерфейса, а параметры расчёта сигнала: их место рядом с самим
-          расчётом, а в списке личных предпочтений они читались как «сделай
-          мне турбо» и ставились наугад. Данные никуда не делись - ими
-          по-прежнему пользуются рассылка сигналов и калькулятор. */}
-      <div className={CARD}>
-        <div className="mb-3 text-[12px] font-semibold text-[var(--pane-text)]">{t.profile.settings}</div>
+        </div>
 
         <div className="space-y-3">
+        {/* ── НАСТРОЙКИ ──
+            Здесь только то, что человек меняет про себя: как выглядит кабинет,
+            на каком языке, что звучит и как он подписан на карточках.
 
-          {/* Тема. Общая на весь кабинет: терминал светлеет вместе с шапкой и
-              страницами, иначе панели выглядят вырезанными из другого
-              приложения. */}
-          <SettingRow label={t.profile.theme}>
-            <div
-              className="flex rounded-xl p-1"
-              style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
-            >
-              {([
-                ["light", t.profile.themeLight, Sun],
-                ["dark", t.profile.themeDark, Moon],
-              ] as const).map(([value, label, Icon]) => {
-                const active = theme === value;
-                return (
-                  <button
-                    key={value}
-                    onClick={() => setTerminalTheme(value)}
-                    className={`relative flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
-                      active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                    {active && (
-                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </SettingRow>
+            Режим торговли и риск на сделку отсюда убраны. Это не настройки
+            интерфейса, а параметры расчёта сигнала: их место рядом с самим
+            расчётом, а в списке личных предпочтений они читались как «сделай
+            мне турбо» и ставились наугад. Данные никуда не делись - ими
+            по-прежнему пользуются рассылка сигналов и калькулятор. */}
+        <div className={CARD}>
+          <div className="mb-3 text-[12px] font-semibold text-[var(--pane-text)]">{t.profile.settings}</div>
 
-          {/* Язык */}
-          <SettingRow label={t.profile.language}>
-            <div
-              className="flex rounded-xl p-1"
-              style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
-            >
-              {(["ru", "en"] as const).map((l) => {
-                const active = locale === l;
-                return (
-                  <button
-                    key={l}
-                    onClick={() => changeLocale(l)}
-                    disabled={saving}
-                    className={`relative flex-1 rounded py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors duration-150 disabled:opacity-60 ${
-                      active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
-                    }`}
-                  >
-                    {l}
-                    {active && (
-                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </SettingRow>
+          <div className="space-y-3">
 
-          {/* Звук событий. Настройка человека, а не страницы: раньше она жила
-              внутри рабочего места терминала, и выключить её можно было только
-              оттуда. */}
-          <SettingRow label={t.profile.sound}>
-            <div
-              className="flex rounded-xl p-1"
-              style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
-            >
-              {([
-                [true, t.common.on, Volume2],
-                [false, t.common.off, VolumeX],
-              ] as const).map(([value, label, Icon]) => {
-                const active = sound === value;
-                return (
-                  <button
-                    key={label}
-                    onClick={() => setSoundOn(value)}
-                    className={`relative flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
-                      active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                    {active && (
-                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </SettingRow>
-
-          {/* Установка на рабочий стол. Показываем только там, где браузер и
-              правда готов её выполнить: кнопка, которая ничего не делает,
-              хуже её отсутствия. Уже установленный кабинет её не показывает
-              вовсе. */}
-          {canInstall && (
-            <SettingRow label={t.profile.install}>
-              <button
-                onClick={() => void installApp()}
-                title={t.profile.installHint}
-                className="flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-text-2)] transition-colors duration-150 hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-accent)]"
+            {/* Тема. Общая на весь кабинет: терминал светлеет вместе с шапкой и
+                страницами, иначе панели выглядят вырезанными из другого
+                приложения. */}
+            <SettingRow label={t.profile.theme}>
+              <div
+                className="flex rounded-xl p-1"
+                style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
               >
-                <MonitorDown className="h-4 w-4" />
-                {t.profile.installAction}
-              </button>
+                {([
+                  ["light", t.profile.themeLight, Sun],
+                  ["dark", t.profile.themeDark, Moon],
+                ] as const).map(([value, label, Icon]) => {
+                  const active = theme === value;
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => setTerminalTheme(value)}
+                      className={`relative flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
+                        active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {label}
+                      {active && (
+                        <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </SettingRow>
-          )}
 
-          {/* Подпись на карточке. Отдельно от ника Telegram: тот переписывается
-              при каждом входе, а карточку показывают другим. */}
-          <SettingRow label={t.profile.cardName}>
-            <div className="flex items-center gap-2">
-              <input
-                defaultValue={p.card_name ?? ""}
-                placeholder={p.username || t.profile.cardNamePlaceholder}
-                maxLength={32}
-                onBlur={(e) => {
-                  const next = e.target.value.trim();
-                  if (next !== (p.card_name ?? "")) patch({ card_name: next });
-                }}
-                className="input w-44 text-center font-mono"
-              />
-            </div>
-          </SettingRow>
-          <p className="-mt-2 text-right text-[11px] text-[var(--pane-muted)]">
-            {t.profile.cardNameHint}
-          </p>
+            {/* Язык */}
+            <SettingRow label={t.profile.language}>
+              <div
+                className="flex rounded-xl p-1"
+                style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
+              >
+                {(["ru", "en"] as const).map((l) => {
+                  const active = locale === l;
+                  return (
+                    <button
+                      key={l}
+                      onClick={() => changeLocale(l)}
+                      disabled={saving}
+                      className={`relative flex-1 rounded py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors duration-150 disabled:opacity-60 ${
+                        active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
+                      }`}
+                    >
+                      {l}
+                      {active && (
+                        <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </SettingRow>
+
+            {/* Звук событий. Настройка человека, а не страницы: раньше она жила
+                внутри рабочего места терминала, и выключить её можно было только
+                оттуда. */}
+            <SettingRow label={t.profile.sound}>
+              <div
+                className="flex rounded-xl p-1"
+                style={{ background: "rgb(var(--bg-deep) / 0.3)", border: "1px solid rgb(var(--border) / 0.7)" }}
+              >
+                {([
+                  [true, t.common.on, Volume2],
+                  [false, t.common.off, VolumeX],
+                ] as const).map(([value, label, Icon]) => {
+                  const active = sound === value;
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => setSoundOn(value)}
+                      className={`relative flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
+                        active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {label}
+                      {active && (
+                        <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </SettingRow>
+
+            {/* Установка на рабочий стол. Показываем только там, где браузер и
+                правда готов её выполнить: кнопка, которая ничего не делает,
+                хуже её отсутствия. Уже установленный кабинет её не показывает
+                вовсе. */}
+            {canInstall && (
+              <SettingRow label={t.profile.install}>
+                <button
+                  onClick={() => void installApp()}
+                  title={t.profile.installHint}
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-text-2)] transition-colors duration-150 hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-accent)]"
+                >
+                  <MonitorDown className="h-4 w-4" />
+                  {t.profile.installAction}
+                </button>
+              </SettingRow>
+            )}
+
+            {/* Подпись на карточке. Отдельно от ника Telegram: тот переписывается
+                при каждом входе, а карточку показывают другим. */}
+            <SettingRow label={t.profile.cardName}>
+              <div className="flex items-center gap-2">
+                <input
+                  defaultValue={p.card_name ?? ""}
+                  placeholder={p.username || t.profile.cardNamePlaceholder}
+                  maxLength={32}
+                  onBlur={(e) => {
+                    const next = e.target.value.trim();
+                    if (next !== (p.card_name ?? "")) patch({ card_name: next });
+                  }}
+                  className="input w-44 text-center font-mono"
+                />
+              </div>
+            </SettingRow>
+            <p className="-mt-2 text-right text-[11px] text-[var(--pane-muted)]">
+              {t.profile.cardNameHint}
+            </p>
+          </div>
+        </div>
+
         </div>
       </div>
 
@@ -419,9 +430,12 @@ export default function ProfilePage() {
 
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    // Строка целиком - одна настройка: подпись слева, переключатель справа.
+    // Подсветка при наведении показывает границы строки: без неё соседние
+    // настройки сливались в столбик слов и столбик кнопок.
+    <div className="-mx-1.5 flex items-center justify-between gap-3 rounded-lg px-1.5 py-1 transition-colors duration-150 hover:bg-[var(--pane-hover)]">
       <span className="shrink-0 text-[12px] text-[var(--pane-text-2)]">{label}</span>
-      <div className="w-48 shrink-0">{children}</div>
+      <div className="w-44 shrink-0">{children}</div>
     </div>
   );
 }

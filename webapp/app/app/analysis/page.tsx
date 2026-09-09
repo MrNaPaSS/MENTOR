@@ -45,7 +45,9 @@ function BroadcastCard({ item }: { item: BroadcastItem }) {
   const [chartOpen, setChartOpen] = useState(false);
 
   return (
-    <article className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+    // Карточка подсвечивается под курсором: анализов на экране полдюжины, и
+    // без этого не видно, где кончается один и начинается соседний.
+    <article className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] transition-colors duration-150 hover:border-[var(--pane-accent-soft)]">
 
       {/* ── График (hero) ─────────────────────────────────────── */}
       {img ? (
@@ -174,7 +176,7 @@ function AnalysisFeed() {
           <p className="mt-1 text-sm opacity-60">{t.signals.emptyAnalysisHint}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {items.map((item) => (
             <BroadcastCard key={item.id} item={item} />
           ))}

@@ -1,4 +1,7 @@
 export const analytics = {
+
+  /** Вкладки раздела: торговля отдельно, игра вокруг неё отдельно. */
+  tabs: { results: "Results", rewards: "Rewards" },
   title: "Analytics",
   titleAnd: "&",
   titleTail: "Progress",
