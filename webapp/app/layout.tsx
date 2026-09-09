@@ -18,12 +18,15 @@ export const metadata: Metadata = {
     "Получай торговые сигналы под свой депозит. Реальный расчёт позиции, риск под контролем, закрытое сообщество учеников.",
   applicationName: "NMNH Platform",
   manifest: "/manifest.webmanifest",
+  // Метка версии в адресах значков - не украшение. Браузер держит значок
+  // вкладки едва ли не дольше всего остального и по одному адресу отдаёт
+  // прежнюю картинку неделями; со сменой метки он идёт за новой.
   icons: {
     icon: [
-      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/favicon-32.png?v=3", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png?v=3", sizes: "192x192", type: "image/png" },
     ],
-    apple: "/icons/apple-touch-icon.png",
+    apple: "/icons/apple-touch-icon.png?v=3",
   },
   appleWebApp: {
     capable: true,

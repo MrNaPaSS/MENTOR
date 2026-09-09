@@ -4,7 +4,7 @@
 // Версия в имени кэша не косметика: при её смене activate сносит всё прежнее.
 // Сборка меняет имена файлов, старые копии уже никто не спросит, а место они
 // занимают.
-const CACHE = "nmnh-static-v2";
+const CACHE = "nmnh-static-v3";
 const STATIC = ["/icons/icon-192.png", "/icons/icon-512.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
