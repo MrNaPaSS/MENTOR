@@ -432,7 +432,7 @@ class FootprintPaneView implements IPrimitivePaneView {
           rising ? skin.dotUp : skin.dotDown,
           skin.bg,
           1,
-          skin.text,
+          INK_DARK,
           skin.bright,
         ),
       };
@@ -530,10 +530,20 @@ class FootprintPaneView implements IPrimitivePaneView {
   }
 }
 
+/**
+ * Тёмные чернила для светлой ячейки.
+ *
+ * Своим цветом, а не текстом панели. На тёмной панели её текст сам светлый, и
+ * густая ячейка светлой палитры - белый рост мегатрона, белое падение
+ * вельвета - получала светлую цифру на светлом: сумма пропадала ровно там,
+ * где она самая крупная и нужнее всего.
+ */
+const INK_DARK = "#0b0e11";
+
 /** Чернила для ячейки: её цвет смешан с фоном панели ровно так, как на экране. */
 function ink(skin: FootprintSkin, fill: string, heat: number): string {
   if (!(heat > 0)) return skin.muted;
-  return readableInk(fill, skin.bg, heat, skin.text, skin.bright);
+  return readableInk(fill, skin.bg, heat, INK_DARK, skin.bright);
 }
 
 export class FootprintPrimitive implements ISeriesPrimitive<Time> {

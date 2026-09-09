@@ -23,7 +23,33 @@ import { ArrowLeft, ShieldCheck, TriangleAlert } from "lucide-react";
  * Шаг без картинки описан словами: рисунок здесь помогает, но не заменяет
  * текст, и пустая рамка хуже её отсутствия.
  */
-const SHOTS: Record<number, { src: string; alt: string }> = {};
+const SHOTS: Record<number, { src: string; alt: string; width: number }> = {
+  0: {
+    src: "/faq/api/step-1.png",
+    alt: "Верхняя панель WEEX: значок человечка справа, рядом с колокольчиком",
+    width: 427,
+  },
+  1: {
+    src: "/faq/api/step-2.png",
+    alt: "Меню профиля WEEX, внизу списка - «Управление API»",
+    width: 313,
+  },
+  2: {
+    src: "/faq/api/step-3.png",
+    alt: "Строка «Мой API · Статус: На рассмотрении» и кнопка «Добавить разрешение»",
+    width: 900,
+  },
+  3: {
+    src: "/faq/api/step-4.png",
+    alt: "Страница «Управление API» с кнопкой «Создать новый API»",
+    width: 900,
+  },
+  4: {
+    src: "/faq/api/step-5.png",
+    alt: "Окно «Создан»: ключ API, секретный ключ и QR-код",
+    width: 411,
+  },
+};
 
 type Step = {
   title: string;
@@ -135,13 +161,18 @@ export default function ApiFaq() {
 
               {shot ? (
                 <figure className="pl-10">
-                  {/* Обычный img, а не next/image: картинки лежат у нас, их
-                      размеры заранее не известны, и оптимизировать нечего. */}
+                  {/* Обычный img, а не next/image: сборка статическая, и
+                      оптимизатор в ней всё равно выключен.
+
+                      Шире своего размера картинку не растягиваем: снимок меню
+                      узкий, и на всю ширину страницы он превращается в кашу
+                      из увеличенных точек. */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={shot.src}
                     alt={shot.alt}
                     loading="lazy"
+                    style={{ maxWidth: shot.width }}
                     className="w-full rounded-xl border border-border"
                   />
                 </figure>

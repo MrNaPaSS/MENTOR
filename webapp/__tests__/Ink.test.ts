@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { apart, light, mix, readableInk, toRgb, visibleOn } from "@/lib/indicator/ink";
+import { apart, contrast, light, mix, readableInk, toRgb, visibleOn } from "@/lib/indicator/ink";
+import { CHART_PALETTES, CHART_PAPERS, paletteSwatch } from "@/lib/indicator/presets";
+import { cellHeat } from "@/lib/indicator/footprintLayout";
 
 // Цифра, пропавшая на своей же подложке, - ошибка, которую видно только на той
 // монете и том пресете, где так сошлось. Поэтому выбор чернил считается, а не
@@ -85,6 +87,44 @@ describe("чернила под подложку", () => {
   it("цвет, который не разобрать, чернил не меняет", () => {
     expect(readableInk("var(--pane-up)", "#181a20", 0.8, DARK, BRIGHT)).toBe(DARK);
   });
+});
+
+describe("суммы в ячейках читаются во всех палитрах", () => {
+  // Проверка не на глаз, а перебором: палитр шесть, листа два, густота ячейки
+  // зависит от объёма, и пропасть цифра может ровно в одном сочетании из
+  // двух десятков - на той монете, того трейдера, в тот день.
+  //
+  // Так и было: на тёмном листе тёмными чернилами служил текст панели, а он
+  // светлый, и густая ячейка светлой палитры - белый рост мегатрона, белое
+  // падение вельвета - выходила светлой цифрой на светлом.
+  const INK_DARK = "#0b0e11";
+  const BRIGHT = "#f5f7fa";
+  // Ниже четырёх цифра на подложке уже спорит с ней. Правила доступности для
+  // мелкого текста просят 4.5; наши суммы набраны жирным и крупнее строчного,
+  // и четырёх им хватает с запасом.
+  const ENOUGH = 4;
+
+  for (const palette of CHART_PALETTES) {
+    for (const paper of CHART_PAPERS) {
+      it(`${palette} на ${paper === "light" ? "белом" : "тёмном"} листе`, () => {
+        const back = paper === "light" ? "#ffffff" : "#181a20";
+        const swatch = paletteSwatch(palette, paper);
+
+        for (const raw of [swatch.bull, swatch.bear]) {
+          // Панели красятся цветом, доведённым до видимости на своей бумаге -
+          // ровно так же, как это делает paneInk().
+          const fill = visibleOn(raw, back);
+          // Густота: от самой пустой ячейки до самой крупной в свече.
+          for (const share of [0.01, 0.2, 0.5, 0.8, 1]) {
+            const heat = cellHeat(share, 1);
+            const chosen = readableInk(fill, back, heat, INK_DARK, BRIGHT);
+            const cell = mix(toRgb(fill)!, toRgb(back)!, heat);
+            expect(contrast(toRgb(chosen)!, cell)).toBeGreaterThanOrEqual(ENOUGH);
+          }
+        }
+      });
+    }
+  }
 });
 
 describe("цвет доводится до видимости на своей бумаге", () => {
