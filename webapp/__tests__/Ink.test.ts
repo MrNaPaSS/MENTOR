@@ -1,7 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { apart, contrast, light, mix, readableInk, toRgb, visibleOn } from "@/lib/indicator/ink";
+import {
+  apart,
+  contrast,
+  fadeLimit,
+  light,
+  mix,
+  readableInk,
+  toRgb,
+  visibleOn,
+} from "@/lib/indicator/ink";
 import { CHART_PALETTES, CHART_PAPERS, paletteSwatch } from "@/lib/indicator/presets";
-import { cellHeat } from "@/lib/indicator/footprintLayout";
+import { HEAT_FLOOR, HEAT_TOP, cellHeat } from "@/lib/indicator/footprintLayout";
 
 // Цифра, пропавшая на своей же подложке, - ошибка, которую видно только на той
 // монете и том пресете, где так сошлось. Поэтому выбор чернил считается, а не
@@ -94,37 +103,68 @@ describe("суммы в ячейках читаются во всех палит
   // зависит от объёма, и пропасть цифра может ровно в одном сочетании из
   // двух десятков - на той монете, того трейдера, в тот день.
   //
-  // Так и было: на тёмном листе тёмными чернилами служил текст панели, а он
-  // светлый, и густая ячейка светлой палитры - белый рост мегатрона, белое
-  // падение вельвета - выходила светлой цифрой на светлом.
+  // Цвет цифр один на всю картинку и берётся от листа: выбор под каждую
+  // ячейку честен по контрасту, но читается как поломка - в столбце половина
+  // сумм белая, половина чёрная. Подстраивается заливка: ярче своего предела
+  // ячейка не красится.
   const INK_DARK = "#0b0e11";
   const BRIGHT = "#f5f7fa";
-  // Ниже четырёх цифра на подложке уже спорит с ней. Правила доступности для
-  // мелкого текста просят 4.5; наши суммы набраны жирным и крупнее строчного,
-  // и четырёх им хватает с запасом.
-  const ENOUGH = 4;
+  const NEED = 4;
 
   for (const palette of CHART_PALETTES) {
     for (const paper of CHART_PAPERS) {
       it(`${palette} на ${paper === "light" ? "белом" : "тёмном"} листе`, () => {
         const back = paper === "light" ? "#ffffff" : "#181a20";
+        const letters = paper === "light" ? INK_DARK : BRIGHT;
         const swatch = paletteSwatch(palette, paper);
 
         for (const raw of [swatch.bull, swatch.bear]) {
           // Панели красятся цветом, доведённым до видимости на своей бумаге -
           // ровно так же, как это делает paneInk().
           const fill = visibleOn(raw, back);
-          // Густота: от самой пустой ячейки до самой крупной в свече.
+          const cap = fadeLimit(fill, back, letters, NEED, HEAT_TOP, HEAT_FLOOR);
+          // Предел не съедает заливку целиком: ячейка обязана остаться ячейкой.
+          expect(cap).toBeGreaterThanOrEqual(HEAT_FLOOR);
+
           for (const share of [0.01, 0.2, 0.5, 0.8, 1]) {
-            const heat = cellHeat(share, 1);
-            const chosen = readableInk(fill, back, heat, INK_DARK, BRIGHT);
-            const cell = mix(toRgb(fill)!, toRgb(back)!, heat);
-            expect(contrast(toRgb(chosen)!, cell)).toBeGreaterThanOrEqual(ENOUGH);
+            const cell = mix(toRgb(fill)!, toRgb(back)!, cellHeat(share, 1, cap));
+            expect(contrast(toRgb(letters)!, cell)).toBeGreaterThanOrEqual(NEED);
           }
         }
       });
     }
   }
+});
+
+describe("предел густоты", () => {
+  it("светлая заливка на тёмном листе гасится сильнее", () => {
+    // Белое падение вельвета на тёмной панели: густая ячейка становится
+    // светлой, и белая цифра на ней пропадает. Предел здесь ниже, чем у
+    // зелёного, - и это ровно то, ради чего он считается по цвету.
+    const white = fadeLimit("#ffffff", "#181a20", "#f5f7fa", 4, HEAT_TOP, HEAT_FLOOR);
+    const green = fadeLimit("#0ecb81", "#181a20", "#f5f7fa", 4, HEAT_TOP, HEAT_FLOOR);
+    expect(white).toBeLessThan(green);
+  });
+
+  it("бледная заливка на белом листе предела не требует", () => {
+    // Серое падение бумажной палитры: даже в полную силу оно остаётся светлее
+    // чёрной цифры на нём.
+    expect(fadeLimit("#8a90a6", "#ffffff", "#0b0e11", 4, HEAT_TOP, HEAT_FLOOR)).toBe(HEAT_TOP);
+  });
+
+  it("заливка цвета самих цифр гасится до предела", () => {
+    // Крайний случай: ячейка того же цвета, что и цифра на ней. Читать там
+    // нечего ни при какой густоте, кроме самой бледной.
+    expect(fadeLimit("#0b0e11", "#ffffff", "#0b0e11", 4, HEAT_TOP, HEAT_FLOOR)).toBeLessThan(
+      HEAT_TOP,
+    );
+  });
+
+  it("цвет, который не разобрать, предела не меняет", () => {
+    expect(fadeLimit("var(--pane-up)", "#181a20", "#f5f7fa", 4, HEAT_TOP, HEAT_FLOOR)).toBe(
+      HEAT_TOP,
+    );
+  });
 });
 
 describe("цвет доводится до видимости на своей бумаге", () => {

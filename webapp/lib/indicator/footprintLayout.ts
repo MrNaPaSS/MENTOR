@@ -66,7 +66,17 @@ export function traceTail(value: number, peak: number, side: number): number {
  * число, а числу нужна подложка - картинка лежит на голом графике. Поэтому
  * мелочь не уходит в ноль, но остаётся заметно бледнее крупного.
  */
-export function cellHeat(value: number, peak: number): number {
+export function cellHeat(value: number, peak: number, ceiling = HEAT_MIN + HEAT_MAX): number {
   if (!(peak > 0) || !(value > 0)) return 0;
-  return HEAT_MIN + HEAT_MAX * Math.sqrt(Math.min(1, value / peak));
+  // Потолок приходит снаружи: он считается по цвету палитры так, чтобы цифра
+  // на самой густой ячейке осталась читаемой. Ниже нижней границы не опускаем -
+  // без заливки ячейка перестаёт быть ячейкой.
+  const top = Math.max(HEAT_MIN, Math.min(HEAT_MIN + HEAT_MAX, ceiling));
+  return HEAT_MIN + (top - HEAT_MIN) * Math.sqrt(Math.min(1, value / peak));
 }
+
+/** Самая густая заливка, какая вообще бывает. По ней считается её предел. */
+export const HEAT_TOP = HEAT_MIN + HEAT_MAX;
+
+/** Самая бледная. Ниже неё ячейка сливается с панелью. */
+export const HEAT_FLOOR = HEAT_MIN;

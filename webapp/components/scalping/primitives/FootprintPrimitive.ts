@@ -53,8 +53,16 @@ import {
   type FootprintData,
 } from "@/lib/indicator/footprint";
 import { withValueArea } from "@/lib/indicator/valueArea";
-import { ROW, ROWS_MIN, cellHeat, rowHeight, traceTail } from "@/lib/indicator/footprintLayout";
-import { readableInk } from "@/lib/indicator/ink";
+import {
+  HEAT_FLOOR,
+  HEAT_TOP,
+  ROW,
+  ROWS_MIN,
+  cellHeat,
+  rowHeight,
+  traceTail,
+} from "@/lib/indicator/footprintLayout";
+import { fadeLimit, light, readableInk, toRgb } from "@/lib/indicator/ink";
 import { money, price as fmtPrice } from "@/lib/scalping";
 import type { Candle } from "@/lib/indicator/types";
 
@@ -375,6 +383,13 @@ class FootprintPaneView implements IPrimitivePaneView {
 
     const peak = rows.reduce((acc, row) => Math.max(acc, row.buy, row.sell), 0);
 
+    // Цифры одного цвета на всю картинку, а густота каждой стороны своя: у
+    // палитр разная светлота, и то, что на зелёном ещё читается, на белом
+    // вельвете уже нет.
+    const letters = inkOn(skin);
+    const sellCap = heatCap(skin, skin.down);
+    const buyCap = heatCap(skin, skin.up);
+
     const laid: ReadyRow[] = rows.map((row, i) => ({
       top: i * tall,
       height: tall,
@@ -385,12 +400,11 @@ class FootprintPaneView implements IPrimitivePaneView {
       buy: row.buy > 0 ? money(row.buy) : "·",
       sellTail: traceTail(row.sell, peak, SIDE),
       buyTail: traceTail(row.buy, peak, SIDE),
-      sellHeat: cellHeat(row.sell, peak),
-      buyHeat: cellHeat(row.buy, peak),
-      // Чернила под свою ячейку: цвет объёма идёт от выбранных свечей, и на
-      // белом листе одна сторона чёрная - тёмная цифра на ней пропадает.
-      sellInk: ink(skin, skin.down, cellHeat(row.sell, peak)),
-      buyInk: ink(skin, skin.up, cellHeat(row.buy, peak)),
+      sellHeat: cellHeat(row.sell, peak, sellCap),
+      buyHeat: cellHeat(row.buy, peak, buyCap),
+      // Пустая строка пишется приглушённым: там не сумма, а точка.
+      sellInk: row.sell > 0 ? letters : skin.muted,
+      buyInk: row.buy > 0 ? letters : skin.muted,
       sellBold: row.imbalance < 0,
       buyBold: row.imbalance > 0,
       poc: row.poc,
@@ -531,19 +545,38 @@ class FootprintPaneView implements IPrimitivePaneView {
 }
 
 /**
- * Тёмные чернила для светлой ячейки.
+ * Тёмные чернила для светлой подложки.
  *
- * Своим цветом, а не текстом панели. На тёмной панели её текст сам светлый, и
- * густая ячейка светлой палитры - белый рост мегатрона, белое падение
- * вельвета - получала светлую цифру на светлом: сумма пропадала ровно там,
- * где она самая крупная и нужнее всего.
+ * Своим цветом, а не текстом панели: на тёмной панели её текст сам светлый, и
+ * тёмным он быть не может по определению.
  */
 const INK_DARK = "#0b0e11";
 
-/** Чернила для ячейки: её цвет смешан с фоном панели ровно так, как на экране. */
-function ink(skin: FootprintSkin, fill: string, heat: number): string {
-  if (!(heat > 0)) return skin.muted;
-  return readableInk(fill, skin.bg, heat, INK_DARK, skin.bright);
+/** Каким контрастом цифра считается читаемой. Ниже четырёх она спорит с ячейкой. */
+const INK_RATIO = 4;
+
+/**
+ * Цвет цифр в ячейках - один на всю картинку, от листа панели.
+ *
+ * Не по каждой ячейке отдельно. Выбор под каждую честен по контрасту, но
+ * читается как поломка: в одном столбце половина сумм белая, половина чёрная,
+ * и правила в этом не видно - густота считается от объёма самой строки. Ровно
+ * это и было на тёмном листе во всех палитрах.
+ */
+function inkOn(skin: FootprintSkin): string {
+  const back = toRgb(skin.bg);
+  return back && light(back) > 0.5 ? INK_DARK : skin.bright;
+}
+
+/**
+ * До какой густоты можно красить сторону, чтобы цифры на ней остались видны.
+ *
+ * Подстраивается заливка, а не цвет цифр: заливка - оформление, цифра - смысл,
+ * и уступать должна первая. Длину следа это не трогает - объём по-прежнему
+ * виден целиком.
+ */
+function heatCap(skin: FootprintSkin, fill: string): number {
+  return fadeLimit(fill, skin.bg, inkOn(skin), INK_RATIO, HEAT_TOP, HEAT_FLOOR);
 }
 
 export class FootprintPrimitive implements ISeriesPrimitive<Time> {

@@ -182,3 +182,38 @@ function rgbText(color: Rgb): string {
       .padStart(2, "0");
   return `#${byte(color.r)}${byte(color.g)}${byte(color.b)}`;
 }
+
+/**
+ * До какой густоты можно красить ячейку, чтобы цифра на ней осталась читаемой.
+ *
+ * Нужно там, где цвет цифр один на всю колонку, а густота ячеек разная. Выбор
+ * чернил под каждую ячейку по отдельности честен по контрасту, но выглядит
+ * поломкой: в одном столбце половина сумм белая, половина чёрная, и никакого
+ * правила в этом не видно - густота считается от объёма самой строки. Так и
+ * было на тёмном листе: мелкие объёмы белым, крупные чёрным, вперемешку.
+ *
+ * Поэтому цвет цифр берётся от панели и не меняется, а подстраивается заливка:
+ * ярче этого предела ячейка не красится. Заливка - оформление, цифра - смысл,
+ * и уступать должна первая.
+ *
+ * Ищем шагами сверху вниз: предел нужен не точный, а такой, при котором цифру
+ * видно, и лишняя сотая доля здесь ничего не решает.
+ */
+export function fadeLimit(
+  fill: string,
+  back: string,
+  ink: string,
+  need: number,
+  ceiling: number,
+  floor: number,
+): number {
+  const fore = toRgb(fill);
+  const under = toRgb(back);
+  const letters = toRgb(ink);
+  if (!fore || !under || !letters) return ceiling;
+
+  for (let alpha = ceiling; alpha > floor; alpha -= 0.02) {
+    if (contrast(letters, mix(fore, under, alpha)) >= need) return alpha;
+  }
+  return floor;
+}
