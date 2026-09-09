@@ -604,5 +604,83 @@ export async function render(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error(dict().pnlCard.canvasUnavailable);
   paint(ctx, image, canvas.width, canvas.height, data, variant, stamp);
+  // Оттиск ставится после всего: он лежит поверх картинки, как настоящая
+  // печать поверх напечатанного листа.
+  await putMark(ctx, canvas.width, canvas.height, variant);
   return canvas;
+}
+
+/** Наш оттиск - тот же, что заверяет бланк сигнала. */
+const MARK_SRC = "/cards/signal-stamp.png";
+
+/**
+ * Знак в нижнем правом углу карточки.
+ *
+ * Тот же оттиск, что стоит на бланке сигнала и на странице снимка графика:
+ * карточка уходит в чужие чаты, и по ней должно быть видно, чем она сделана.
+ * Наборная печать в рамке слева вверху остаётся - она про другое: там сказано,
+ * что сделку подтвердил терминал.
+ *
+ * Не сыграла загрузка - карточка остаётся без оттиска: результат сделки важнее
+ * знака на нём.
+ */
+async function putMark(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  variant: Variant,
+): Promise<void> {
+  const mark = await loadImage(MARK_SRC).catch(() => null);
+  if (mark === null) return;
+
+  // Место - над нижней панелью, по её правому краю: панель с QR занимает низ
+  // листа целиком, и оттиск на ней читался бы её частью.
+  const room = { w: w * 0.2, h: h * 0.05 };
+  const scale = Math.min(room.w / mark.naturalWidth, room.h / mark.naturalHeight);
+  const iw = mark.naturalWidth * scale;
+  const ih = mark.naturalHeight * scale;
+  const right = (variant.panel.x + variant.panel.w) * w;
+  const bottom = variant.panel.y * h - h * 0.018;
+
+  // Оттиск нарисован чёрным. На тёмном полотне его не видно вовсе -
+  // перекрашиваем по маске, как на бланке сигнала: цвет меняется, а рваные
+  // края штрихов остаются.
+  const tinted = document.createElement("canvas");
+  tinted.width = Math.max(1, Math.round(iw));
+  tinted.height = Math.max(1, Math.round(ih));
+  const paintMark = tinted.getContext("2d");
+  if (paintMark === null) return;
+  paintMark.drawImage(mark, 0, 0, tinted.width, tinted.height);
+  paintMark.globalCompositeOperation = "source-in";
+  paintMark.fillStyle = variant.paper === "light" ? "#111418" : "#F4F7FA";
+  paintMark.fillRect(0, 0, tinted.width, tinted.height);
+
+  ctx.save();
+  ctx.translate(right - iw / 2, bottom - ih / 2);
+  // Косо, как и всякая печать: ровно поставленная читается наклейкой.
+  ctx.rotate((-4.5 * Math.PI) / 180);
+  ctx.globalAlpha = 0.42;
+  ctx.drawImage(tinted, -iw / 2, -ih / 2, iw, ih);
+  ctx.restore();
+}
+
+/** Картинка по адресу. Со сроком: молчащая сеть не должна вешать карточку. */
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    const timer = setTimeout(() => {
+      image.src = "";
+      reject(new Error(dict().pnlCard.templateFailed));
+    }, LOAD_TIMEOUT_MS);
+    image.onload = () => {
+      clearTimeout(timer);
+      resolve(image);
+    };
+    image.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error(dict().pnlCard.templateFailed));
+    };
+    image.src = src;
+  });
 }

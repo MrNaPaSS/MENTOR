@@ -19,6 +19,32 @@ export const analytics = {
     tradingDaysGoal: "goal: 15 days",
   },
 
+  month: {
+    title: "The month in numbers",
+    hint: "from the trade journal",
+    trades: "trades",
+    profitDays: "green days",
+    ofTrading: (n: number) => `of ${n} traded`,
+    result: "month result",
+    best: "best day",
+    worst: "worst day",
+    perDay: "volume per day",
+    empty: "No trades this month yet",
+  },
+
+  account: {
+    title: "Account and costs",
+    hint: "from the exchange",
+    futures: "futures",
+    spot: "spot",
+    commission: "fees",
+    ofVolume: (pct: string) => `${pct}% of volume`,
+    deposits: "deposited",
+    withdrawals: "withdrawn",
+    net: "net in",
+    empty: "The exchange has not returned account numbers yet",
+  },
+
   path: {
     title: "Trader's path",
     subtitle: "Total volume on WEEX",

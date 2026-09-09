@@ -481,6 +481,23 @@ export default function AnalyticsPage() {
   const depositTotal =
     (tradeSummary?.deposit_total ?? 0) || recentDeposits.reduce((s, d) => s + d.amount, 0);
 
+  // ── Месяц в цифрах ──
+  //
+  // Всё по журналу сделок, а не по снимкам баланса: журнал знает и объём, и
+  // результат каждой закрытой сделки, а снимок - только то, чем день кончился.
+  const monthTrades = calData.reduce((sum, d) => sum + (d.journal_trades ?? 0), 0);
+  const monthPnl = calData.reduce((sum, d) => sum + (d.journal_pnl ?? 0), 0);
+  const volumePerDay = tradingDays > 0 ? monthVolume / tradingDays : 0;
+
+  // ── Счёт и издержки ──
+  //
+  // Цифры биржи за всё время: обороты по рынкам, комиссия и движение денег.
+  // Комиссия в долях от оборота - то единственное, что делает её сравнимой:
+  // сотня долларов на миллионе оборота и на десяти тысячах - разные истории.
+  const withdrawTotal = tradeSummary?.withdrawal_total ?? 0;
+  const commission = tradeSummary?.commission ?? 0;
+  const commissionPct = totalVolume > 0 ? (commission / totalVolume) * 100 : 0;
+
   // Цели месяца — работают даже без PnL снимков
   // Торговый день - тот, в который торговали. Прежде, когда оборот стоял нулём
   // всегда, вместо него подставлялись дни с полученным сигналом: «Настоящий
@@ -631,78 +648,105 @@ export default function AnalyticsPage() {
       {/* Итоги: чем закончились дни и куда идёт оборот. */}
       {tab === "results" && (
         <>
-        {/* Вехи объёма — горизонтальный трек.
+        {/* Путь трейдера: одна дорожка с вехами оборота.
+            Показываем и на нуле: путь с первой вехой впереди говорит, куда
+            идти, а пустое место читается как поломка.
 
-            Показываем и на нуле. Раньше блок висел на tradeSummary, а он
-            приходил пустым, когда партнёрская ручка о торговле молчала - и в
-            разделе на месте пути трейдера не было вообще ничего. Путь с нулём и
-            первой вехой впереди говорит, куда идти; пустое место не говорит
-            ничего и читается как поломка. */}
+            Дорожкой, а не полосой с рядом кружков под ней. Полоса показывала
+            путь до ближайшей вехи, кружки - все вехи разом, и связи между ними
+            не было: заполненная наполовину полоса стояла над кружком, который
+            ещё не взят. Теперь это одна линия, на которой видно и пройденное, и
+            где стоишь, и что впереди. */}
         {loaded && (() => {
-          const nextIdx = VOLUME_MILESTONES.findIndex(m => totalVolume < m.vol);
-          const nextM   = nextIdx >= 0 ? VOLUME_MILESTONES[nextIdx] : null;
-          const prevM   = nextIdx > 0  ? VOLUME_MILESTONES[nextIdx - 1] : nextIdx === -1 ? VOLUME_MILESTONES[VOLUME_MILESTONES.length - 1] : null;
-          const trackPct = nextM && prevM
-            ? Math.min(((totalVolume - prevM.vol) / (nextM.vol - prevM.vol)) * 100, 100)
-            : nextIdx === -1 ? 100 : Math.min((totalVolume / VOLUME_MILESTONES[0].vol) * 100, 100);
+          const last = VOLUME_MILESTONES.length - 1;
+          const nextIdx = VOLUME_MILESTONES.findIndex((m) => totalVolume < m.vol);
+          const nextM = nextIdx >= 0 ? VOLUME_MILESTONES[nextIdx] : null;
+          const prevM = nextIdx > 0 ? VOLUME_MILESTONES[nextIdx - 1] : null;
+
+          // Между вехами линия заполняется по-своему: вехи стоят на равном
+          // расстоянии, а расстояние между ними в деньгах разное - от полусотни
+          // тысяч до пятнадцати миллионов. Считаем долю внутри своего отрезка.
+          const from = prevM ? prevM.vol : 0;
+          const to = nextM ? nextM.vol : VOLUME_MILESTONES[last].vol;
+          const inLeg = to > from ? Math.min(1, Math.max(0, (totalVolume - from) / (to - from))) : 1;
+          const done = nextIdx === -1 ? last : Math.max(0, nextIdx - 1);
+          const at = nextIdx === -1 ? 1 : (done + inLeg) / last;
 
           return (
             <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
-              {/* Шапка */}
               <div className="flex items-center gap-2 border-b border-[var(--pane-border)] px-3 pt-2.5 pb-2">
                 <BarChart2 className="h-4 w-4 text-[var(--pane-gold)]" />
-                <div>
-                  <h2 className="text-[12px] font-semibold text-[var(--pane-text)] leading-none">{t.analytics.path.title}</h2>
-                  <p className="text-[10px] text-[var(--pane-text)]/30 mt-0.5">{t.analytics.path.subtitle}</p>
-                </div>
-                <div className="ml-auto text-right">
-                  <span className="font-mono text-base font-extrabold text-[var(--pane-gold)]">${fmtDot(Math.round(totalVolume))}</span>
-                  <span className="text-[10px] text-[var(--pane-text)]/30 ml-1">USDT</span>
-                </div>
+                <h2 className="text-[12px] font-semibold leading-none text-[var(--pane-text)]">
+                  {t.analytics.path.title}
+                </h2>
+                <span className="text-[10px] text-[var(--pane-muted)]">
+                  {t.analytics.path.subtitle}
+                </span>
+                <span className="ml-auto font-mono text-[13px] font-bold tabular-nums text-[var(--pane-gold)]">
+                  ${fmtDot(Math.round(totalVolume))}
+                </span>
               </div>
 
-              <div className="px-3 py-3 space-y-3">
-                {/* Линия прогресса между вехами */}
-                {nextM && (
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-[var(--pane-text)]/30">{prevM ? prevM.label : "0"}</span>
-                      <span className="text-[var(--pane-text)]/50">{t.analytics.path.toNext} <span className="text-[var(--pane-gold)] font-bold">{nextM.label}</span> {t.analytics.path.left} <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
-                      <span className="text-[var(--pane-gold)] font-bold">{nextM.label}</span>
-                    </div>
-                    <div className="relative h-2 overflow-hidden rounded-full bg-[var(--pane-hover)]">
-                      <div className="h-full rounded-full transition-all duration-1000"
-                        style={{ width: `${trackPct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }} />
-                    </div>
-                    <p className="text-[10px] text-[var(--pane-text)]/25 text-right">{t.analytics.path.pctToNext(trackPct.toFixed(1))}</p>
-                  </div>
-                )}
-
-                {/* Точки вех */}
-                <div className="flex items-end gap-2 overflow-x-auto pb-1">
+              <div className="px-3 py-3">
+                {/* Сама дорожка. Точки стоят по краям своих долей, поэтому
+                    первая прижата к левому краю, последняя к правому - линия
+                    начинается и кончается вехой, а не воздухом. */}
+                <div className="relative h-8">
+                  <div className="absolute inset-x-0 top-1.5 h-[3px] rounded-full bg-[var(--pane-hover)]" />
+                  <div
+                    className="absolute left-0 top-1.5 h-[3px] rounded-full bg-[var(--pane-gold)] transition-[width] duration-700"
+                    style={{ width: `${at * 100}%` }}
+                  />
                   {VOLUME_MILESTONES.map((m, i) => {
                     const reached = totalVolume >= m.vol;
-                    const isCurrent = nextIdx === i;
+                    const target = nextIdx === i;
                     return (
-                      <div key={m.label} className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5">
-                        {/* Индикатор */}
-                        <div className={`relative flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${
-                          reached
-                            ? "border-accent-gold bg-[var(--pane-gold)]/15 shadow-[0_0_16px_rgba(251,191,36,0.4)]"
-                            : isCurrent
-                            ? "border-[var(--pane-border)] bg-[var(--pane-hover)]"
-                            : "border-[var(--pane-border)] bg-[var(--pane-hover)]"
-                        }`}>
-                          <span className={`text-lg leading-none ${reached ? "" : "opacity-25"}`}>{m.emoji}</span>
-                          {reached && (
-                            <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--pane-gold)] text-[7px] font-black text-black">✓</span>
-                          )}
-                        </div>
-                        <span className={`font-mono text-[10px] font-bold ${reached ? "text-[var(--pane-gold)]" : isCurrent ? "text-[var(--pane-text)]/50" : "text-[var(--pane-text)]/20"}`}>{m.label}</span>
+                      <div
+                        key={m.label}
+                        className="absolute top-0 flex -translate-x-1/2 flex-col items-center gap-1"
+                        style={{ left: `${(i / last) * 100}%` }}
+                        title={t.analytics.milestones[m.key]}
+                      >
+                        <span
+                          className={`h-3 w-3 rounded-full border-2 transition-colors duration-300 ${
+                            reached
+                              ? "border-[var(--pane-gold)] bg-[var(--pane-gold)]"
+                              : target
+                                ? "border-[var(--pane-gold)] bg-[var(--pane-bg)]"
+                                : "border-[var(--pane-border)] bg-[var(--pane-bg)]"
+                          }`}
+                        />
+                        <span
+                          className={`font-mono text-[10px] font-bold ${
+                            reached
+                              ? "text-[var(--pane-gold)]"
+                              : target
+                                ? "text-[var(--pane-text-2)]"
+                                : "text-[var(--pane-muted)]/50"
+                          }`}
+                        >
+                          {m.label}
+                        </span>
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Что впереди - одной строкой под дорожкой. */}
+                {nextM && (
+                  <p className="mt-2 text-[11px] text-[var(--pane-text-2)]">
+                    {t.analytics.path.toNext}{" "}
+                    <span className="font-bold text-[var(--pane-gold)]">{nextM.label}</span>{" "}
+                    {t.analytics.path.left}{" "}
+                    <span className="font-mono tabular-nums text-[var(--pane-text)]">
+                      ${fmtDot(Math.round(nextM.vol - totalVolume))}
+                    </span>
+                    <span className="text-[var(--pane-muted)]">
+                      {" · "}
+                      {t.analytics.path.pctToNext((inLeg * 100).toFixed(1))}
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
           );
@@ -1038,6 +1082,94 @@ export default function AnalyticsPage() {
             <span className="text-[10px] text-[var(--pane-gold)]">{t.analytics.kpi.tradingDaysGoal}</span>
           </div>
         </div>
+
+        {/* Ещё две панели цифр: как прошёл месяц и что со счётом.
+            Показатели над ними отвечают «сколько», эти - «как и почём». */}
+        <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+          <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+            <div className="flex items-baseline gap-2 border-b border-[var(--pane-border)] px-3 py-2">
+              <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">
+                {t.analytics.month.title}
+              </h2>
+              <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.month.hint}</span>
+            </div>
+            {monthTrades > 0 || tradingDays > 0 ? (
+              <dl className="divide-y divide-[var(--pane-border)]">
+                <Metric label={t.analytics.month.trades} value={fmtDot(monthTrades)} />
+                <Metric
+                  label={t.analytics.month.profitDays}
+                  value={`${profitDays}`}
+                  note={t.analytics.month.ofTrading(tradingDays)}
+                />
+                <Metric
+                  label={t.analytics.month.result}
+                  value={`${monthPnl >= 0 ? "+" : ""}${monthPnl.toFixed(2)} $`}
+                  tone={monthPnl >= 0 ? "up" : "down"}
+                />
+                <Metric
+                  label={t.analytics.month.best}
+                  value={bestDay ? `+${bestDay.pnl_pct!.toFixed(1)}%` : "-"}
+                  tone={bestDay ? "up" : undefined}
+                />
+                <Metric
+                  label={t.analytics.month.worst}
+                  value={worstDay ? `${worstDay.pnl_pct!.toFixed(1)}%` : "-"}
+                  tone={worstDay && (worstDay.pnl_pct ?? 0) < 0 ? "down" : undefined}
+                />
+                <Metric label={t.analytics.month.perDay} value={`$${fmtVolShort(volumePerDay)}`} />
+              </dl>
+            ) : (
+              <p className="px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
+                {t.analytics.month.empty}
+              </p>
+            )}
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+            <div className="flex items-baseline gap-2 border-b border-[var(--pane-border)] px-3 py-2">
+              <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">
+                {t.analytics.account.title}
+              </h2>
+              <span className="text-[10px] text-[var(--pane-muted)]">
+                {t.analytics.account.hint}
+              </span>
+            </div>
+            {tradeSummary ? (
+              <dl className="divide-y divide-[var(--pane-border)]">
+                <Metric
+                  label={t.analytics.account.futures}
+                  value={`$${fmtVolShort(tradeSummary.futures_volume)}`}
+                />
+                <Metric
+                  label={t.analytics.account.spot}
+                  value={`$${fmtVolShort(tradeSummary.spot_volume)}`}
+                />
+                <Metric
+                  label={t.analytics.account.commission}
+                  value={`$${fmtDot(Math.round(commission))}`}
+                  note={commission > 0 ? t.analytics.account.ofVolume(commissionPct.toFixed(3)) : undefined}
+                />
+                <Metric
+                  label={t.analytics.account.deposits}
+                  value={`$${fmtDot(Math.round(depositTotal))}`}
+                />
+                <Metric
+                  label={t.analytics.account.withdrawals}
+                  value={`$${fmtDot(Math.round(withdrawTotal))}`}
+                />
+                <Metric
+                  label={t.analytics.account.net}
+                  value={`$${fmtDot(Math.round(depositTotal - withdrawTotal))}`}
+                  tone={depositTotal - withdrawTotal >= 0 ? "up" : "down"}
+                />
+              </dl>
+            ) : (
+              <p className="px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
+                {t.analytics.account.empty}
+              </p>
+            )}
+          </div>
+        </div>
         </>
       )}
 
@@ -1243,5 +1375,41 @@ export default function AnalyticsPage() {
           своей больше не нужно. */}
       {card && <PnlCard data={card} onClose={() => setCard(null)} />}
     </PaneScope>
+  );
+}
+
+/**
+ * Строка цифры: подпись слева, значение справа.
+ *
+ * Одной строкой на всю ширину панели, а не карточкой: цифры читают колонкой
+ * сверху вниз и сравнивают между собой, а карточки заставляют искать каждую
+ * заново.
+ */
+function Metric({
+  label,
+  value,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  /** Пояснение под значением: от чего оно считается. */
+  note?: string;
+  tone?: "up" | "down";
+}) {
+  const color =
+    tone === "up"
+      ? "text-[var(--pane-up)]"
+      : tone === "down"
+        ? "text-[var(--pane-down)]"
+        : "text-[var(--pane-text)]";
+  return (
+    <div className="flex items-baseline justify-between gap-3 px-3 py-2">
+      <dt className="text-[11px] text-[var(--pane-text-2)]">{label}</dt>
+      <dd className="text-right">
+        <span className={`font-mono text-[12px] font-bold tabular-nums ${color}`}>{value}</span>
+        {note && <span className="ml-1.5 text-[10px] text-[var(--pane-muted)]">{note}</span>}
+      </dd>
+    </div>
   );
 }

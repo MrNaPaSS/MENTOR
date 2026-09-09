@@ -372,6 +372,15 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
 
     # Оттиск. У сигнала это тот же логотип, который холст ставит на скачиваемую
     # картинку, - иначе страница и картинка заверялись бы разными печатями.
+    # Наш знак в правом нижнем углу карточки итога - тот же оттиск, что холст
+    # ставит на скачиваемую картинку. У сигнала он и так стоит в рамке печати,
+    # второй раз ему там делать нечего.
+    watermark = (
+        ""
+        if shot.kind == "signal"
+        else '<img class="watermark" src="' + SITE_URL + '/cards/signal-stamp.png" alt="NMNH">'
+    )
+
     if shot.kind == "signal":
         ink = (
             '<img class="graffiti" src="' + SITE_URL + '/cards/signal-stamp.png" alt="NMNH">'
@@ -554,6 +563,23 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
     97% {{ transform: translate(2px, -1px); opacity: .6; }}
   }}
 
+  /* Наш знак в правом нижнем углу - над нижней панелью с QR: панель занимает
+     низ листа целиком, и оттиск на ней читался бы её частью. Полупрозрачный и
+     косой: это заверение, а не подпись автора. Тот же файл и то же место, что
+     холст ставит на скачиваемую картинку. */
+  .watermark {{
+    position: absolute; right: 4%; bottom: 21%;
+    width: 20%; height: auto; object-fit: contain; pointer-events: none;
+    transform: rotate(-4.5deg);
+    /* Разностью, а не цветом: заготовки бывают и белые, и почти чёрные, и
+       один цвет оттиска на одной из них пропадал бы. Разность выворачивает
+       то, что под ним, - оттиск виден на любой. Так же сделан знак на
+       странице снимка графика. */
+    filter: brightness(0) invert(1);
+    mix-blend-mode: difference; opacity: .5;
+    animation: slam .4s cubic-bezier(.2,1.5,.35,1) 1.5s both;
+  }}
+
   /* Кому движение мешает - лист уже лежит, печать уже стоит. */
   /* Оттиск-логотип у карточки сигнала: он светлый, потому что рамка под ним
      на бланке тёмная. Тот же файл холст ставит на скачиваемую картинку. */
@@ -596,6 +622,7 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
   <div class="window">
     <div class="paper hit">
       <img src="{paper}" alt="{title}">
+      {watermark}
       <div class="stamp">
         <div class="ink">{ink}</div>
       </div>

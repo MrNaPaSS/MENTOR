@@ -348,6 +348,8 @@ class FootprintRenderer implements IPrimitivePaneRenderer {
 
 class FootprintPaneView implements IPrimitivePaneView {
   private ready: Ready = null;
+  /** Чей кадр сейчас нарисован: монета и таймфрейм. */
+  private shown = "";
 
   /** Готовая раскладка кадра: по ней страница ищет строку под курсором. */
   get shot(): Ready {
