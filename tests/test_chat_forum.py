@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import base64
 import json
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.api.chat import _has_picture, _shot_symbol
-from backend.chat.format import link_ranges, message_html, text_html, trade_html
+from backend.api.chat import _has_picture, _shot_symbol, _to_forum
+from backend.chat.format import caption_html, link_ranges, message_html, text_html, trade_html
 from backend.chat.forum import ForumBridge
 from backend.config import BackendConfig
 from backend.main import create_app
@@ -291,6 +292,90 @@ def test_picture_unfolds_only_where_it_is_the_message():
     assert _has_picture({"kind": "trade", "url": "", "trade": {}}) is False
     # Чужая схема в адресе картинкой не станет.
     assert _has_picture({"kind": "shot", "url": "javascript:alert(1)"}) is False
+
+
+def test_photo_goes_without_a_signature():
+    """Под снимком нет ни имени школы, ни слова-ссылки вместо подписи.
+
+    Картинка здесь и есть сообщение. Имя школы под каждым снимком ничего не
+    сообщало - канал один, - а «график» ссылкой изображал подпись там, где её
+    не было, и вёл туда же, куда ведёт кнопка под фотографией.
+    """
+    shot = {"kind": "shot", "url": "https://s.nmnh.trade/abc12345"}
+    assert caption_html("", [], shot) == ""
+    # Слова человека остаются: это подпись, а не наша выдумка.
+    assert caption_html("вот тут отбой", [], shot) == "вот тут отбой"
+
+
+def test_trade_keeps_its_line_under_the_picture():
+    """У сделки подпись по существу: её читают в уведомлении, не открывая фото."""
+    trade = {"kind": "trade", "url": "https://s.nmnh.trade/xyz", "trade": {
+        "symbol": "BTCUSDT", "side": "short", "leverage": 200, "state": "planned",
+    }}
+    assert caption_html("", [], trade) == "<b>BTC · SHORT · ×200 · ждёт входа</b>"
+
+
+class _Forum:
+    """Мост-пустышка: помнит, что ему отдали, и ничего никуда не шлёт."""
+
+    enabled = True
+
+    def __init__(self) -> None:
+        self.jobs: list[dict] = []
+
+    def submit(self, job: dict) -> None:
+        self.jobs.append(job)
+
+
+def _request(forum: _Forum) -> SimpleNamespace:
+    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(forum=forum)))
+
+
+def _said(text: str = "привет", attach: str = "") -> ChatMessage:
+    return ChatMessage(id=1, student_id=1, text=text, attach_json=attach, thread_id=None)
+
+
+def test_words_stay_on_the_site():
+    """Разговор словами в форум не уходит.
+
+    Форум читают с телефона, и открывают его ради показанного - сделок,
+    снимков, итогов. Лента чужих реплик, вырванных из разговора и подписанных
+    именем бота, обесценивает и уведомления, и сам форум.
+    """
+    forum = _Forum()
+    _to_forum(_request(forum), _said(), Student(id=1, tg_id=42, username="trader"), None)
+    assert forum.jobs == []
+
+
+def test_shown_goes_to_the_forum():
+    """Сделка уходит - вместе со словами, сказанными при ней."""
+    forum = _Forum()
+    attach = json.dumps(
+        {
+            "kind": "trade",
+            "url": "https://s.nmnh.trade/xyz98765",
+            "trade": {"symbol": "BTCUSDT"},
+        }
+    )
+    _to_forum(
+        _request(forum),
+        _said("вот отсюда", attach),
+        Student(id=1, tg_id=42, username="trader"),
+        None,
+    )
+    assert len(forum.jobs) == 1
+    job = forum.jobs[0]
+    assert job["symbol"] == "BTCUSDT"
+    assert "вот отсюда" in job["html"]
+
+
+def test_signal_goes_even_without_a_card():
+    """Сигнал - обещание, и в форуме он обязан быть, собралась карточка или нет."""
+    forum = _Forum()
+    message = _said("", "")
+    message.signal_id = 7
+    _to_forum(_request(forum), message, Student(id=1, tg_id=42, username="trader"), None)
+    assert len(forum.jobs) == 1
 
 
 def test_shot_button_takes_the_coin_from_the_record(client):

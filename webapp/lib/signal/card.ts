@@ -242,12 +242,33 @@ async function putStamp(
   ctx.restore();
 }
 
+/**
+ * Сколько ждём заготовку, прежде чем считать, что она не приедет.
+ *
+ * Срок здесь не про терпение, а про то, что бывает без него: браузер на
+ * оборванном соединении не зовёт ни `onload`, ни `onerror` - он просто молчит.
+ * Обещание такой загрузки не разрешается никогда, а вместе с ним навсегда
+ * повисает и отправка сообщения, которая его ждёт: чат замирает с зажатой
+ * кнопкой, и написать что-либо ещё уже нельзя.
+ */
+const LOAD_TIMEOUT_MS = 10_000;
+
 export function load(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.crossOrigin = "anonymous";
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(dict().pnlCard.templateFailed));
+    const timer = setTimeout(() => {
+      image.src = "";
+      reject(new Error(dict().pnlCard.templateFailed));
+    }, LOAD_TIMEOUT_MS);
+    image.onload = () => {
+      clearTimeout(timer);
+      resolve(image);
+    };
+    image.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error(dict().pnlCard.templateFailed));
+    };
     image.src = src;
   });
 }
@@ -257,8 +278,10 @@ export async function renderSignal(
   data: SignalData,
   template: SignalTemplate = templateFor(data.side),
   stamp = true,
+  /** Уже загруженная заготовка: одну и ту же печатают дважды, с оттиском и без. */
+  loaded?: HTMLImageElement,
 ): Promise<HTMLCanvasElement> {
-  const backdrop = await load(template.src);
+  const backdrop = loaded ?? (await load(template.src));
   const canvas = document.createElement("canvas");
   canvas.width = backdrop.naturalWidth * SCALE;
   canvas.height = backdrop.naturalHeight * SCALE;

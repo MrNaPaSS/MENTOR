@@ -78,8 +78,11 @@ export async function share(
   const body = await authReq<{ id: string; url: string }>("/api/shots/pnl", token, {
     method: "POST",
     body: JSON.stringify({
-      image: stamped.toDataURL("image/png"),
-      raw: plain.toDataURL("image/png"),
+      // JPEG, а не PNG: тот же бланк в PNG весит на порядок больше, и на
+      // медленном канале выкладка карточки занимала минуты. В буфер и файлом
+      // карточка по-прежнему уходит PNG - там вес не платится каналом.
+      image: stamped.toDataURL("image/jpeg", 0.92),
+      raw: plain.toDataURL("image/jpeg", 0.92),
       symbol: data.title,
       side: data.side,
       owner: data.owner ?? "",

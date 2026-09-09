@@ -552,14 +552,31 @@ export function paint(
 }
 
 /** Загрузить заготовку. Отдельно от рисования: это единственная сеть здесь. */
+/**
+ * Сколько ждём заготовку. Браузер на оборванном соединении не зовёт ни
+ * `onload`, ни `onerror` - он молчит, и обещание без срока не разрешается
+ * никогда. Ждёт его отправка сообщения, а вместе с ней и человек.
+ */
+const LOAD_TIMEOUT_MS = 10_000;
+
 export function loadBackdrop(variant: Variant): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     // Заготовка лежит на нашем же домене, но холст, тронутый чужой картинкой,
     // перестаёт отдавать пиксели - а нам их читать и класть в буфер.
     image.crossOrigin = "anonymous";
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(dict().pnlCard.templateFailed));
+    const timer = setTimeout(() => {
+      image.src = "";
+      reject(new Error(dict().pnlCard.templateFailed));
+    }, LOAD_TIMEOUT_MS);
+    image.onload = () => {
+      clearTimeout(timer);
+      resolve(image);
+    };
+    image.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error(dict().pnlCard.templateFailed));
+    };
     image.src = variant.src;
   });
 }

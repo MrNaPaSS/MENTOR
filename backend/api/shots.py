@@ -82,12 +82,13 @@ _DIR = Path(__file__).parent.parent.parent / "webapp" / "public" / "uploads" / "
 # больше - или не снимок, или чья-то попытка занять диск.
 MAX_BYTES = 8 * 1024 * 1024
 
-_DATA_URL = re.compile(r"^data:image/png;base64,", re.IGNORECASE)
+_DATA_URL = re.compile(r"^data:image/(?:png|jpeg);base64,", re.IGNORECASE)
 _ID_OK = re.compile(r"^[A-Za-z0-9_-]{8,16}$")
 
-# Первые байты PNG. По ним отличаем картинку от чего угодно другого, что
-# прислали под её видом.
+# Первые байты PNG и JPEG. По ним отличаем картинку от чего угодно другого,
+# что прислали под её видом, и по ним же выбираем, как её положить на диск.
 PNG_MAGIC = bytes([0x89]) + b"PNG"
+JPEG_MAGIC = bytes([0xFF, 0xD8, 0xFF])
 
 
 class ShotIn(BaseModel):
@@ -179,8 +180,15 @@ class CardIn(BaseModel):
     card: CardLook | None = None
 
 
-def _png(payload: str) -> bytes:
-    """Картинка из data-URL. Отказ словами: это приходит снаружи."""
+def _picture(payload: str) -> tuple[bytes, str]:
+    """Картинка из data-URL: байты и расширение. Отказ словами - это снаружи.
+
+    Принимаем и JPEG, а не один PNG. Бланк карточки - это фотография с текстом
+    поверх, и в PNG он весит четыре мегабайта против трёхсот килобайт в JPEG.
+    Две таких картинки (с печатью и без) уходили одним запросом, и на медленном
+    канале отправка сделки в чат тянулась минуту - а вместе с ней стояло и само
+    сообщение, которое ждало ссылку на карточку.
+    """
     raw = _DATA_URL.sub("", payload.strip())
     try:
         data = base64.b64decode(raw, validate=True)
@@ -188,9 +196,11 @@ def _png(payload: str) -> bytes:
         raise HTTPException(400, "Картинку не удалось прочитать") from exc
     if len(data) > MAX_BYTES:
         raise HTTPException(413, "Картинка слишком большая")
-    if not data.startswith(PNG_MAGIC):
-        raise HTTPException(400, "Ожидается PNG")
-    return data
+    if data.startswith(PNG_MAGIC):
+        return data, "png"
+    if data.startswith(JPEG_MAGIC):
+        return data, "jpg"
+    raise HTTPException(400, "Ожидается PNG или JPEG")
 
 
 @api_router.post("/pnl", status_code=201)
@@ -201,13 +211,16 @@ def save_card(
     session=Depends(get_session),
 ):
     """Сохранить карточку сделки и вернуть ссылку на неё."""
-    stamped = _png(body.image)
-    plain = _png(body.raw)
+    stamped, stamped_ext = _picture(body.image)
+    plain, plain_ext = _picture(body.raw)
 
     card_id = secrets.token_urlsafe(9)[:12]
     _DIR.mkdir(parents=True, exist_ok=True)
-    (_DIR / f"{card_id}.png").write_bytes(stamped)
-    (_DIR / f"{card_id}-raw.png").write_bytes(plain)
+    # Имя файла хранит настоящее расширение, а ссылка наружу остаётся прежней,
+    # с `.png`: по ней ходят и Telegram, и страница карточки, и уже отправленные
+    # сообщения. Отдающий её обработчик берёт тот файл, который есть.
+    (_DIR / f"{card_id}.{stamped_ext}").write_bytes(stamped)
+    (_DIR / f"{card_id}-raw.{plain_ext}").write_bytes(plain)
 
     session.add(
         ChartShot(
@@ -223,11 +236,6 @@ def save_card(
     )
     session.commit()
     return {"id": card_id, "url": f"{shot_origin(request)}/{card_id}"}
-
-
-# Первые байты JPEG. Так фотография из Telegram отличается от чего угодно
-# другого, что прислали под её видом.
-JPEG_MAGIC = bytes([0xFF, 0xD8, 0xFF])
 
 
 def save_photo(data: bytes, symbol: str = "", note: str = "") -> str:
@@ -283,10 +291,17 @@ def shot_image(shot_id: str, session=Depends(get_session)):
     if not _ID_OK.match(key):
         raise HTTPException(404, "Снимок не найден")
     shot = session.get(ChartShot, key)
-    path = _DIR / f"{name}.png"
-    if shot is None or not path.exists():
+    if shot is None:
         raise HTTPException(404, "Снимок не найден")
-    return FileResponse(path, media_type="image/png")
+
+    # Ссылка всегда `.png`, а на диске может лежать и JPEG: карточки уходят
+    # именно им. Отдаём то, что есть, и с тем типом, какой это на самом деле -
+    # по типу его читают и браузер, и Telegram, а не по хвосту адреса.
+    for ext, media in (("png", "image/png"), ("jpg", "image/jpeg")):
+        path = _DIR / f"{name}.{ext}"
+        if path.exists():
+            return FileResponse(path, media_type=media)
+    raise HTTPException(404, "Снимок не найден")
 
 
 # Как выглядит карточка, если запись об этом молчит. Так лежат карточки,

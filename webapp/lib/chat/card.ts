@@ -24,18 +24,27 @@
 
 import { absolute, authReq, API_URL } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { defaultVariant, render } from "@/lib/pnl/card";
+import { defaultVariant, loadBackdrop, render } from "@/lib/pnl/card";
 import { cardFromShared } from "@/lib/pnl/data";
 import { share as publishCard } from "@/lib/pnl/share";
-import { renderSignal, templateFor, type SignalSide } from "@/lib/signal/card";
+import { load, renderSignal, templateFor, type SignalSide } from "@/lib/signal/card";
 
 import type { SharedTrade } from "./api";
 
 /** Ссылка на страницу карточки и на саму картинку. */
 export type CardLink = { url: string; image: string };
 
+/**
+ * Холст в строку для отправки - JPEG, а не PNG.
+ *
+ * Бланк карточки это фотография с текстом поверх: в PNG она весит около
+ * четырёх мегабайт, в JPEG - триста килобайт. Уходят две таких (с печатью и
+ * без), и на медленном канале отправка сделки тянулась минуту, а сообщение всё
+ * это время стояло и ждало ссылку. Разницы на глаз между ними нет - буквы на
+ * бланке крупные, а подложка и так была снята с JPEG.
+ */
 function toBlobUrl(canvas: HTMLCanvasElement): string {
-  return canvas.toDataURL("image/png");
+  return canvas.toDataURL("image/jpeg", 0.92);
 }
 
 /**
@@ -62,8 +71,13 @@ async function publishSignal(trade: SharedTrade, at: string): Promise<string | n
     at,
   };
 
-  const stamped = await renderSignal(data, template, true);
-  const plain = await renderSignal(data, template, false);
+  // Заготовку берём один раз на обе печати и печатаем их разом: это одна и та
+  // же картинка, и грузить её дважды подряд значит дважды ждать сеть.
+  const backdrop = await load(template.src);
+  const [stamped, plain] = await Promise.all([
+    renderSignal(data, template, true, backdrop),
+    renderSignal(data, template, false, backdrop),
+  ]);
 
   const body = await authReq<{ id: string; url: string }>("/api/shots/pnl", token, {
     method: "POST",
@@ -86,8 +100,11 @@ async function publishSignal(trade: SharedTrade, at: string): Promise<string | n
 async function publishResult(trade: SharedTrade, at: string, owner: string): Promise<string | null> {
   const data = cardFromShared(trade, at, owner || undefined);
   const variant = defaultVariant(trade.side);
-  const stamped = await render(data, variant, true);
-  const plain = await render(data, variant, false);
+  const backdrop = await loadBackdrop(variant);
+  const [stamped, plain] = await Promise.all([
+    render(data, variant, true, backdrop),
+    render(data, variant, false, backdrop),
+  ]);
   return publishCard(stamped, plain, data, variant);
 }
 

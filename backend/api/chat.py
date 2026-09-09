@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.mentor import is_mentor
-from backend.chat.format import link_ranges, message_html
+from backend.chat.format import caption_html, link_ranges, message_html
 from backend.deps import get_current_student, get_session
 from core.models import ChartShot, ChatMessage, ChatThread, Signal, Student, utcnow
 
@@ -97,6 +97,11 @@ def _has_picture(attach: dict | None) -> bool:
     return bool(_picture(attach))
 
 
+def _shown(attach: dict | None) -> bool:
+    """Показанное, а не сказанное: снимок графика, сделка, карточка итога."""
+    return isinstance(attach, dict) and attach.get("kind") in ("shot", "trade")
+
+
 def _to_forum(request: Request, message: ChatMessage, author: Student, session) -> None:
     """Отправить сообщение в форум. Молча, если моста нет.
 
@@ -115,6 +120,19 @@ def _to_forum(request: Request, message: ChatMessage, author: Student, session) 
         except ValueError:
             attach = None
 
+    # В форум уходит показанное, а не сказанное: снимки, сделки, карточки
+    # итога, сигналы. Разговор словами остаётся на сайте.
+    #
+    # Дело не в объёме. Форум читают с телефона, и туда должно приходить то,
+    # ради чего стоит его открыть; лента чужих реплик, вырванных из разговора и
+    # подписанных именем бота, обесценивает и уведомления, и сам форум - его
+    # перестают открывать вообще, вместе со сделками.
+    #
+    # Слова, сказанные вместе с картинкой, уходят с ней: это подпись к
+    # показанному, а не отдельная реплика.
+    if not _shown(attach) and not message.signal_id:
+        return
+
     who = _who(author)
     symbol = ""
     if isinstance(attach, dict) and isinstance(attach.get("trade"), dict):
@@ -122,13 +140,21 @@ def _to_forum(request: Request, message: ChatMessage, author: Student, session) 
     elif isinstance(attach, dict) and attach.get("kind") == "shot":
         symbol = _shot_symbol(session, str(attach.get("url", "")))
 
+    links = link_ranges(message.links_json)
+    picture = _has_picture(attach)
     forum.submit(
         {
             "op": "send",
             "message_id": message.id,
             "topic_id": _thread_topic(session, message.thread_id),
-            "html": message_html(
-                who["name"], message.text, link_ranges(message.links_json), attach
+            # Под картинкой - только слова человека: имя школы и слово-ссылка
+            # вместо подписи занимали под фотографией две строки, ничего не
+            # сообщая. Уходит текстом - подпись возвращается: там по ней и
+            # видно, кто говорит.
+            "html": (
+                caption_html(message.text, links, attach)
+                if picture
+                else message_html(who["name"], message.text, links, attach)
             ),
             # Кнопка появляется там, где ей есть куда вести: у разговора о
             # монете. Под «привет» она была бы украшением.
@@ -146,8 +172,8 @@ def _to_forum(request: Request, message: ChatMessage, author: Student, session) 
             # Ссылка при этом остаётся - кнопкой под снимком: она ведёт на
             # страницу карточки, а уже оттуда - в терминал на эту монету.
             "photo": _picture(attach),
-            "preview": _has_picture(attach),
-            "open": str(attach.get("url", "")) if _has_picture(attach) else "",
+            "preview": picture,
+            "open": str(attach.get("url", "")) if picture else "",
         }
     )
 
@@ -552,14 +578,18 @@ async def edit(
                 attach = json.loads(row.attach_json)
             except ValueError:
                 attach = None
+        links = link_ranges(row.links_json)
+        picture = _has_picture(attach)
         forum.submit(
             {
                 "op": "edit",
                 "message_id": row.id,
-                "html": message_html(
-                    _who(student)["name"], row.text, link_ranges(row.links_json), attach
+                "html": (
+                    caption_html(row.text, links, attach)
+                    if picture
+                    else message_html(_who(student)["name"], row.text, links, attach)
                 ),
-                "preview": _has_picture(attach),
+                "preview": picture,
             }
         )
     return payload

@@ -334,6 +334,22 @@ export async function older(): Promise<void> {
 }
 
 /**
+ * Сколько ждём карточку, прежде чем отправить сообщение без неё.
+ *
+ * Ждать её вообще - осознанно: сообщение должно уйти в форум уже со ссылкой,
+ * дослать её потом означало бы править в Telegram то, что там уже прочли. Но
+ * ждать бесконечно нельзя: пока карточка выкладывалась, кнопка отправки стояла
+ * зажатой, и человек не мог написать вообще ничего - ни этой сделки, ни
+ * следующего слова. Разговор важнее иллюстрации к нему.
+ */
+const CARD_WAIT_MS = 15_000;
+
+/** Пустое обещание по сроку: им ограничивают ожидание чего-то долгого. */
+function afterMs(ms: number): Promise<null> {
+  return new Promise((resolve) => setTimeout(() => resolve(null), ms));
+}
+
+/**
  * Написать в чат. Сообщение появляется в ленте ответом сервера.
  *
  * Возвращает жалобу сервера на сигнал, если он не собрался: сообщение при этом
@@ -354,7 +370,10 @@ export async function post(
   // которое там уже прочли.
   let ready = attach ?? null;
   if (ready?.kind === "trade" && !ready.url) {
-    const card = await cardLink(ready.trade, state.me?.name ?? "");
+    const card = await Promise.race([
+      cardLink(ready.trade, state.me?.name ?? ""),
+      afterMs(CARD_WAIT_MS),
+    ]);
     if (card) ready = { ...ready, url: card.url, image: card.image };
   }
 
