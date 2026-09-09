@@ -87,9 +87,13 @@ export const metadata: Metadata = {
     // Метка версии - по той же причине, что у значка вкладки: превью
     // кэшируют все, кому его однажды отдали, и старую картинку они держат
     // неделями.
-    images: [{ url: "/og.png?v=2", width: 1200, height: 630 }],
+    //
+    // JPEG, а не PNG: на баннере фотография, и в PNG она весит под мегабайт
+    // против ста семидесяти килобайт - за превью, которое разворачивается на
+    // телефоне, платить мегабайтом незачем.
+    images: [{ url: "/og.jpg?v=3", width: 1200, height: 630, type: "image/jpeg" }],
   },
-  twitter: { card: "summary_large_image", images: ["/og.png?v=2"] },
+  twitter: { card: "summary_large_image", images: ["/og.jpg?v=3"] },
 };
 
 export const viewport: Viewport = {
