@@ -224,7 +224,7 @@ export const dialogs = {
     disconnectFailed: "Couldn't disconnect",
     title: "WEEX exchange account",
     keyTail: (tail: string) => `Key ${tail}`,
-    canPlace: "The terminal will be able to place orders from your account",
+    canPlace: "Connect your API key to trade through the terminal",
     howTo: "Where to get the key - five steps with pictures →",
     unreachable:
       "Couldn't read the account state. Sign in - the trading section belongs to a student; if you already are signed in, the server is unavailable right now.",
@@ -238,8 +238,7 @@ export const dialogs = {
     liveNote:
       "The terminal places orders from this account when live mode is on. The key is stored encrypted and never handed out.",
     replaceKeys: "Replace the keys",
-    keysNote:
-      "Keys are stored encrypted and never handed out. Create a key with trading rights only - the terminal doesn't need withdrawals.",
+    keysNote: "No keys live in the browser: they are encrypted and kept on the server.",
     disconnect: "Disconnect",
     checking: "Checking…",
   },
