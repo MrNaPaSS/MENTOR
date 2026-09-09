@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { bodyFill, candleWidth, referenceVolume } from "@/lib/indicator/volumeCandles";
+import {
+  bodyFill,
+  canBeHollow,
+  candleWidth,
+  referenceVolume,
+} from "@/lib/indicator/volumeCandles";
 
 // Толщина свечи - это утверждение о рынке: движение подкреплено деньгами или
 // нет. Ошибка здесь не видна как ошибка, поэтому правила проверяются здесь.
@@ -83,5 +88,20 @@ describe("заливка тела", () => {
     // Тёмная тема: свечи залиты цветом и в обводке не нуждаются.
     expect(bodyFill("#0ecb81", undefined, false)).toBe("#0ecb81");
     expect(bodyFill("#0ecb81", undefined, true)).toBe("#0ecb81");
+  });
+});
+
+describe("пустое тело", () => {
+  it("три линии - наименьшее, где пустота существует", () => {
+    // Рамка, просвет, рамка. На белом листе свеча роста именно такая.
+    expect(canBeHollow(3, 3, 1)).toBe(true);
+    expect(canBeHollow(2, 8, 1)).toBe(false);
+    expect(canBeHollow(8, 2, 1)).toBe(false);
+  });
+
+  it("на плотном экране линия толще, и порог растёт вместе с ней", () => {
+    // hx = 2: рамка в две точки с каждой стороны, просвет тоже.
+    expect(canBeHollow(5, 8, 2)).toBe(false);
+    expect(canBeHollow(6, 6, 2)).toBe(true);
   });
 });

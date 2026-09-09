@@ -19,7 +19,12 @@ import type {
   Time,
 } from "lightweight-charts";
 import type { Candle } from "@/lib/indicator/types";
-import { bodyFill, candleWidth, referenceVolume } from "@/lib/indicator/volumeCandles";
+import {
+  bodyFill,
+  canBeHollow,
+  candleWidth,
+  referenceVolume,
+} from "@/lib/indicator/volumeCandles";
 
 export type CandlePalette = {
   up: string;
@@ -90,21 +95,26 @@ class VolumeCandlesRenderer implements IPrimitivePaneRenderer {
         const left = Math.round(x - width / 2);
 
         const border = bar.rising ? this.palette.upBorder : this.palette.downBorder;
-        // Помещается ли обводка внутрь тела. Не помещается - тело красится ею
-        // самой: пустая свеча держится обводкой, и без неё на белом листе от
-        // тонкой свечи не остаётся ничего.
-        const roomy = width > line * 2 && height > line * 2;
-
-        context.fillStyle = bodyFill(body, border, roomy);
-        // Доджи рисуем чертой: тело нулевой высоты просто исчезло бы.
-        context.fillRect(left, top, width, height);
+        // Пустой свеча бывает только там, где внутри рамки есть чему быть
+        // пустым: на узком теле от белой середины оставалась щель в пиксель, и
+        // вместо свечи выходила рваная чёрточка со случайным просветом.
+        const roomy = canBeHollow(width, height, line);
 
         if (border && roomy) {
-          // Обводка внутрь и по сетке: иначе она съедает по половине пикселя с
-          // каждой стороны, и тонкие свечи выглядят толще соседей.
-          context.strokeStyle = border;
-          context.lineWidth = line;
-          context.strokeRect(left + half, top + half, width - line, height - line);
+          // Рамка - заливкой, а не обводкой. strokeRect кладёт линию серединой
+          // на контур: половина её приходится на полпикселя за краем тела, и
+          // сглаживание размазывает её на соседний столбец. На свече шириной в
+          // пять точек это половина свечи.
+          context.fillStyle = border;
+          context.fillRect(left, top, width, height);
+          context.fillStyle = body;
+          context.fillRect(left + line, top + line, width - line * 2, height - line * 2);
+        } else {
+          // Тесное тело красится сплошь - и обводкой, если она есть: пустая
+          // свеча держится ею, и без неё на белом листе не остаётся ничего.
+          // Доджи рисуем чертой: тело нулевой высоты просто исчезло бы.
+          context.fillStyle = bodyFill(body, border, false);
+          context.fillRect(left, top, width, height);
         }
       }
     });
