@@ -91,9 +91,9 @@ export const metadata: Metadata = {
     // JPEG, а не PNG: на баннере фотография, и в PNG она весит под мегабайт
     // против ста семидесяти килобайт - за превью, которое разворачивается на
     // телефоне, платить мегабайтом незачем.
-    images: [{ url: "/og.jpg?v=3", width: 1200, height: 630, type: "image/jpeg" }],
+    images: [{ url: "/og.jpg?v=4", width: 1200, height: 630, type: "image/jpeg" }],
   },
-  twitter: { card: "summary_large_image", images: ["/og.jpg?v=3"] },
+  twitter: { card: "summary_large_image", images: ["/og.jpg?v=4"] },
 };
 
 export const viewport: Viewport = {
