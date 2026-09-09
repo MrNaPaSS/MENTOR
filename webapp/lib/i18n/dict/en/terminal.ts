@@ -225,6 +225,7 @@ export const dialogs = {
     title: "WEEX exchange account",
     keyTail: (tail: string) => `Key ${tail}`,
     canPlace: "The terminal will be able to place orders from your account",
+    howTo: "Where to get the key - five steps with pictures →",
     unreachable:
       "Couldn't read the account state. Sign in - the trading section belongs to a student; if you already are signed in, the server is unavailable right now.",
     vaultOff:

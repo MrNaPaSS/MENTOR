@@ -10,6 +10,8 @@ export const shell = {
   },
   coinsTitle: "NMNH coins - what earned them",
   logout: "Log out",
+  connectApi: "Connect",
+  connectApiTitle: "Connect your WEEX account: without keys the platform cannot see your balance or place orders",
 
   radio: {
     play: (station: string) => `Radio - ${station}`,

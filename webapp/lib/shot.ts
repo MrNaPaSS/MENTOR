@@ -79,6 +79,37 @@ export async function share(
 }
 
 /**
+ * Каким снимок уходит по ссылке: не крупнее полутора тысяч точек по ширине.
+ *
+ * Холст собирается в точках экрана, а их на каждую точку разметки приходится
+ * полторы-две: на рабочем столе с плотным экраном снимок выходил под четыре
+ * тысячи точек в ширину и десять мегабайт в PNG. Страница показывает его в
+ * тысячу двести, ссылку ждали полминуты, а сервер такое и вовсе отвергал.
+ *
+ * Файлом и в буфер снимок по-прежнему уходит во всю величину и без потерь -
+ * там вес не платится каналом.
+ */
+const SHARE_MAX_W = 1600;
+const SHARE_MAX_H = 900;
+
+function forShare(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  const scale = Math.min(1, SHARE_MAX_W / canvas.width, SHARE_MAX_H / canvas.height);
+  if (scale >= 1) return canvas;
+
+  const small = document.createElement("canvas");
+  small.width = Math.round(canvas.width * scale);
+  small.height = Math.round(canvas.height * scale);
+  const ctx = small.getContext("2d");
+  if (!ctx) return canvas;
+  // Сглаживание в полную силу: свечи в один пиксель при уменьшении рассыпаются
+  // в крошку, и график перестаёт читаться ровно там, где на него смотрят.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(canvas, 0, 0, small.width, small.height);
+  return small;
+}
+
+/**
  * Тот же снимок, но с его именем.
  *
  * Ссылку хватает тому, кто отправляет её людям. Чату мало: в ленте снимок
@@ -94,7 +125,7 @@ export async function upload(
   const body = await authReq<{ id: string; url: string }>("/api/shots", token, {
     method: "POST",
     body: JSON.stringify({
-      image: canvas.toDataURL("image/png"),
+      image: forShare(canvas).toDataURL("image/jpeg", 0.9),
       symbol: meta.symbol,
       interval: meta.interval,
     }),

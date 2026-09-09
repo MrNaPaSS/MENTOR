@@ -12,6 +12,9 @@ export const shell = {
   },
   coinsTitle: "NMNH монеты - за что начислены",
   logout: "Выйти",
+  /** На месте баланса, пока счёт биржи не подключён. */
+  connectApi: "Подключить",
+  connectApiTitle: "Подключить счёт WEEX: пока ключей нет, платформа не видит ваш баланс и не может выставлять заявки",
 
   radio: {
     play: (station: string) => `Радио - ${station}`,

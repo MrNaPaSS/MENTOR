@@ -37,6 +37,8 @@ import {
   watchTrades,
 } from "@/lib/tradeAlerts";
 import { useTerminalTheme } from "@/lib/terminalTheme";
+import { tradingStatus, type TradingStatus } from "@/lib/trading";
+import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 
 // Названия разделов живут в словаре: здесь только порядок, адрес и картинка.
 const NAV = [
@@ -52,6 +54,12 @@ const NAV = [
   { href: "/app/profile", key: "profile", icon: User, mobile: true },
 ] as const;
 
+// Кнопка справа от монет: в ней либо баланс биржи, либо приглашение
+// подключить счёт. Класс общий на оба случая - это одно и то же место, и
+// разъехавшись, они выглядели бы двумя разными кнопками.
+const BALANCE_CHIP =
+  "hidden items-center rounded-xl border border-border bg-bg-panel/60 px-3 py-1.5 transition hover:border-accent-cyan/40 sm:flex";
+
 const MODE_COLORS: Record<string, string> = {
   moderate: "text-accent-cyan border-accent-cyan/40 bg-accent-cyan/10",
   turbo: "text-accent-gold border-accent-gold/40 bg-accent-gold/10",
@@ -65,6 +73,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const numbers = useIntlLocale();
   const [ready, setReady] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  // Подключён ли биржевой счёт. Пусто - сервер об этом не сказал: тогда шапка
+  // ведёт себя как раньше и лишнего не обещает.
+  const [trading, setTrading] = useState<TradingStatus | null>(null);
+  const [connectOpen, setConnectOpen] = useState(false);
   // Баланс монет обновляется сам: их начисляет ещё и академия — снаружи вкладки.
   const { coins } = useCoins(pathname);
   // Тема терминала красит весь сайт: подписка нужна, чтобы оболочка сменила
@@ -132,6 +144,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     reloadProfile(true);
   }, [router, reloadProfile]);
 
+  /**
+   * Подключён ли счёт биржи.
+   *
+   * Спрашиваем один раз на вход и после каждого подключения. Без этого место
+   * баланса в шапке показывало новому ученику честный ноль - и он читался как
+   * «денег нет», хотя на бирже они есть, а платформа про них просто не знает.
+   */
+  const reloadTrading = useCallback(() => {
+    if (!getAccessToken()) return;
+    tradingStatus()
+      .then(setTrading)
+      .catch(() => setTrading(null));
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    reloadTrading();
+  }, [ready, reloadTrading]);
+
   // Переходы между разделами: ключи подключают в профиле, а цифру видят из
   // любого раздела.
   useEffect(() => {
@@ -174,6 +205,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const balance = parseFloat(profile?.balance_usdt || "0");
   const mode = profile?.mode || "moderate";
+  // Ключей нет - и это точно известно: хранилище на сервере настроено, а счёт
+  // не подключён. Сервер промолчал - ничего не обещаем и показываем баланс.
+  const needsKeys = Boolean(trading?.enabled) && trading?.connected === false;
 
   return (
     <div className="min-h-screen bg-bg-deep">
@@ -249,16 +283,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             )}
 
-            {/* Баланс */}
+            {/* Баланс биржи. Пока ключей нет, в этой же кнопке стоит
+                «Подключиться».
+                Не второй кнопкой рядом: место у баланса одно, и новый ученик
+                смотрит именно сюда - «сколько у меня». Ноль здесь означал бы
+                «денег нет», хотя они есть: платформа про них ещё не знает.
+                Нажатие открывает то же окно ключей, что и в терминале. */}
             {profile && (
-              <Link
-                href="/app/profile"
-                className="hidden items-center rounded-xl border border-border bg-bg-panel/60 px-3 py-1.5 transition hover:border-accent-cyan/40 sm:flex"
-              >
-                <span className="font-mono text-sm font-bold text-text-primary tabular">
-                  ${balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </Link>
+              needsKeys ? (
+                <button
+                  onClick={() => setConnectOpen(true)}
+                  title={t.shell.connectApiTitle}
+                  className={`${BALANCE_CHIP} text-sm font-semibold text-accent-cyan`}
+                >
+                  {t.shell.connectApi}
+                </button>
+              ) : (
+                <Link href="/app/profile" className={BALANCE_CHIP}>
+                  <span className="font-mono text-sm font-bold text-text-primary tabular">
+                    ${balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </Link>
+              )
             )}
 
             {/* Выйти */}
@@ -273,6 +319,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         </header>
       </div>
+
+      {/* Окно подключения счёта - то же самое, что в терминале.
+          Второго такого окна заводить нельзя: ключи - место, где ошибка стоит
+          дорого, и две разные формы для одного действия однажды разойдутся.
+          Оболочка кабинета цветов панелей не знает, поэтому окно живёт внутри
+          тёмной панели - той же, в которой оно живёт в терминале. */}
+      {connectOpen && (
+        <div className="pane-dark">
+          <ExchangeDialog
+            status={
+              trading ?? { enabled: false, connected: false, key_tail: "", updated_at: null }
+            }
+            reachable={trading !== null}
+            onClose={() => setConnectOpen(false)}
+            onSaved={() => {
+              reloadTrading();
+              reloadProfile(false);
+              setConnectOpen(false);
+            }}
+          />
+        </div>
+      )}
 
       {/* Уведомления о сделках. В терминале их показывает он сам - над графиком,
           там, куда смотрят; здесь они висят под шапкой, поверх раздела.

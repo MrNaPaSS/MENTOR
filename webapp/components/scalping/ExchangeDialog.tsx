@@ -210,6 +210,18 @@ export default function ExchangeDialog({
           </div>
         ) : (
           <div className="space-y-3 px-5 py-4">
+            {/* Дорога к ключу - первой строкой, до полей.
+                Три поля с надписями «ключ», «секрет» и «кодовая фраза» тому,
+                кто их ни разу не создавал, не говорят ничего: он ищет не форму,
+                а место на бирже, где эти слова появляются. */}
+            <a
+              href="/app/faq"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+            >
+              {d.howTo}
+            </a>
             <label className="block">
               <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">API Key</span>
               <input

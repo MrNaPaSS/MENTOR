@@ -108,22 +108,13 @@ def save_shot(
     session=Depends(get_session),
 ):
     """Сохранить снимок и вернуть ссылку на него."""
-    raw = _DATA_URL.sub("", body.image.strip())
-    try:
-        data = base64.b64decode(raw, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise HTTPException(400, "Картинку не удалось прочитать") from exc
-
-    if len(data) > MAX_BYTES:
-        raise HTTPException(413, "Снимок слишком большой")
-    if not data.startswith(PNG_MAGIC):
-        raise HTTPException(400, "Ожидается PNG")
+    data, ext = _picture(body.image)
 
     # Идентификатор короткий и непредсказуемый: по порядковому номеру чужие
     # снимки перебирались бы один за другим.
     shot_id = secrets.token_urlsafe(9)[:12]
     _DIR.mkdir(parents=True, exist_ok=True)
-    (_DIR / f"{shot_id}.png").write_bytes(data)
+    (_DIR / f"{shot_id}.{ext}").write_bytes(data)
 
     session.add(
         ChartShot(
