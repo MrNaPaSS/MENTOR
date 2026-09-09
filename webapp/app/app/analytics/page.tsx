@@ -12,7 +12,7 @@ import PnlCard from "@/components/scalping/PnlCard";
 import { price as fmtPrice, type CardData } from "@/lib/pnl/card";
 import { cardFromPeriod, cardFromTrade } from "@/lib/pnl/data";
 import { periodOf, type Span } from "@/lib/pnl/period";
-import { useTerminalTheme } from "@/lib/terminalTheme";
+import { PaneHead, PaneScope } from "@/components/app/Pane";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
 import { Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles, Share2 } from "lucide-react";
@@ -64,10 +64,10 @@ interface Achievement {
 }
 
 const RARITY_STYLES = {
-  common: { border: "border-border", glow: "", badge: "bg-bg-panel/10 text-text-primary" },
+  common: { border: "border-[var(--pane-border)]", glow: "", badge: "bg-[var(--pane-hover)]/10 text-[var(--pane-text)]" },
   rare: { border: "border-blue-400/40", glow: "shadow-[0_0_12px_rgba(96,165,250,0.2)]", badge: "bg-blue-400/20 text-blue-400" },
   epic: { border: "border-purple-400/40", glow: "shadow-[0_0_12px_rgba(167,139,250,0.25)]", badge: "bg-purple-400/20 text-purple-400" },
-  legendary: { border: "border-accent-gold/40", glow: "shadow-[0_0_16px_rgba(255,215,0,0.25)]", badge: "bg-accent-gold/20 text-accent-gold" },
+  legendary: { border: "border-accent-gold/40", glow: "shadow-[0_0_16px_rgba(255,215,0,0.25)]", badge: "bg-[var(--pane-gold)]/20 text-[var(--pane-gold)]" },
 };
 
 const RARITY_COINS: Record<string, number> = {
@@ -147,24 +147,24 @@ function DayCell({ day, onClick, active, isToday }: {
   const borderCls = active
     ? "border-accent-cyan shadow-[0_0_14px_rgba(10,255,224,0.25)]"
     : isToday
-    ? "border-border shadow-[0_0_8px_rgba(255,255,255,0.06)]"
+    ? "border-[var(--pane-border)] shadow-[0_0_8px_rgba(255,255,255,0.06)]"
     : goalMet
-    ? "border-success/30 shadow-[0_0_8px_rgba(0,212,160,0.12)]"
+    ? "border-[var(--pane-up)]/30 shadow-[0_0_8px_rgba(0,212,160,0.12)]"
     : isPos
     ? "border-success/20"
     : isNeg
     ? "border-danger/20"
     : hasDeposit
-    ? "border-accent-cyan/25"
+    ? "border-[var(--pane-accent-soft)]"
     : day.signals > 0
     ? "border-accent-cyan/10"
-    : "border-border";
+    : "border-[var(--pane-border)]";
 
   return (
     <button
       onClick={onClick}
       style={{ aspectRatio: "1", background: bg }}
-      className={`group relative flex flex-col rounded-xl border transition-all duration-150 hover:scale-[1.06] hover:z-10 hover:border-border ${borderCls} p-1.5`}
+      className={`group relative flex flex-col rounded-xl border transition-all duration-150 hover:scale-[1.06] hover:z-10 hover:border-[var(--pane-border)] ${borderCls} p-1.5`}
       title={[
         day.date,
         hasDeposit ? t.analytics.calendar.deposit : "",
@@ -177,7 +177,7 @@ function DayCell({ day, onClick, active, isToday }: {
       ].filter(Boolean).join(" · ")}
     >
       {/* Число месяца */}
-      <span className={`text-[10px] font-bold leading-none ${isToday ? "text-accent-cyan" : "text-text-primary/45"}`}>
+      <span className={`text-[10px] font-bold leading-none ${isToday ? "text-[var(--pane-accent)]" : "text-[var(--pane-text)]/45"}`}>
         {dayNum}
       </span>
 
@@ -189,38 +189,38 @@ function DayCell({ day, onClick, active, isToday }: {
             {isPos ? "+" : ""}{Math.abs(pnl!) >= 10 ? pnl!.toFixed(0) : pnl!.toFixed(1)}%
           </span>
         ) : hasReal && pnl === 0 ? (
-          <span className="text-[9px] font-semibold text-text-primary/18">0%</span>
+          <span className="text-[9px] font-semibold text-[var(--pane-text)]/18">0%</span>
         ) : null}
         {/* Объём — показывается всегда когда есть */}
         {hasTrades && (
-          <span className="text-[8px] font-bold tabular-nums text-accent-gold/70 leading-none">
+          <span className="text-[8px] font-bold tabular-nums text-[var(--pane-gold)]/70 leading-none">
             {fmtVolShort(dayVolume(day))}
           </span>
         )}
         {/* Сигналы без объёма */}
         {!hasTrades && !hasReal && day.signals > 0 && (
-          <span className="text-[8px] font-semibold text-accent-cyan/50 leading-none">
+          <span className="text-[8px] font-semibold text-[var(--pane-accent)]/50 leading-none">
             ⚡{day.signals}
           </span>
         )}
         {/* Депозит без торговли */}
         {!hasTrades && !hasReal && hasDeposit && (
-          <span className="text-[8px] font-semibold text-success/60 leading-none">+$</span>
+          <span className="text-[8px] font-semibold text-[var(--pane-up)]/60 leading-none">+$</span>
         )}
       </div>
 
       {/* Точки событий */}
       {(day.signals > 0 || hasTrades || hasDeposit) && (
         <div className="flex justify-center gap-[3px] mt-[2px]">
-          {day.signals > 0 && <span className="h-[5px] w-[5px] rounded-full bg-accent-cyan" />}
-          {hasTrades && <span className="h-[5px] w-[5px] rounded-full bg-accent-gold" />}
-          {hasDeposit && <span className="h-[5px] w-[5px] rounded-full bg-success" />}
+          {day.signals > 0 && <span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-accent)]" />}
+          {hasTrades && <span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-gold)]" />}
+          {hasDeposit && <span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-up)]" />}
         </div>
       )}
 
       {/* Значок выполненной цели */}
       {goalMet && (
-        <span className="absolute -right-[3px] -top-[3px] flex h-3.5 w-3.5 items-center justify-center rounded-full bg-success shadow-[0_0_6px_rgba(0,212,160,0.5)] text-[7px] font-bold text-black">✓</span>
+        <span className="absolute -right-[3px] -top-[3px] flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--pane-up)] shadow-[0_0_6px_rgba(0,212,160,0.5)] text-[7px] font-bold text-black">✓</span>
       )}
 
       {/* Кольцо "сегодня" */}
@@ -279,7 +279,6 @@ export default function AnalyticsPage() {
   // Карточкой делятся и одной сделкой, и итогом срока - окно одно, а
   // колонку для него собирают в lib/pnl/data.
   const [card, setCard] = useState<CardData | null>(null);
-  const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
   const [owner, setOwner] = useState<string | null>(null);
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
@@ -585,64 +584,65 @@ export default function AnalyticsPage() {
   const totalPnl = realDays.reduce((s, d) => s + (d.pnl_pct ?? 0), 0);
 
   return (
-    <div className="space-y-6">
-      {/* Заголовок */}
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">{t.analytics.title} <span className="text-accent-cyan">{t.analytics.titleAnd}</span> {t.analytics.titleTail}</h1>
-          <p className="text-sm text-text-muted mt-0.5">{t.analytics.subtitle}</p>
-        </div>
+    <PaneScope className="space-y-3">
+      {/* Шапка раздела: название, строка о нём и оборот - всё одной строкой.
+          Прежний заголовок в два сантиметра и подпись под ним занимали столько
+          же места, сколько первая панель с данными. */}
+      <PaneHead
+        title={`${t.analytics.title} ${t.analytics.titleAnd} ${t.analytics.titleTail}`}
+        hint={t.analytics.subtitle}
+      >
         {tradeSummary && (
-          <div className="hidden md:flex items-center gap-3 rounded-xl border border-accent-gold/20 bg-accent-gold/5 px-4 py-2">
-            <span className="text-lg">🏆</span>
-            <div>
-              <p className="font-mono text-xs text-text-primary/40 leading-none">{t.analytics.totalVolume}</p>
-              <p className="font-mono text-base font-extrabold text-accent-gold leading-tight">${fmtDot(Math.round(totalVolume))}</p>
-            </div>
-          </div>
+          <span className="flex items-baseline gap-1.5 rounded-lg border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10 px-2 py-1">
+            <span className="text-[10px] uppercase tracking-wider text-[var(--pane-muted)]">
+              {t.analytics.totalVolume}
+            </span>
+            <span className="font-mono text-[12px] font-bold tabular-nums text-[var(--pane-gold)]">
+              ${fmtDot(Math.round(totalVolume))}
+            </span>
+          </span>
         )}
-      </div>
-
+      </PaneHead>
 
       {/* KPI */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         {/* Объём месяца */}
-        <div className="card flex flex-col items-center gap-2 py-5">
+        <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
           <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)} color="var(--c-accent)" size={72}>
-            <span className="font-mono text-[11px] font-bold text-text-primary leading-tight text-center">
+            <span className="font-mono text-[11px] font-bold text-[var(--pane-text)] leading-tight text-center">
               {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
             </span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">{t.analytics.kpi.monthVolume}</span>
-          <span className="text-[10px] text-accent-cyan">{t.analytics.kpi.monthVolumeGoal}</span>
+          <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.monthVolume}</span>
+          <span className="text-[10px] text-[var(--pane-accent)]">{t.analytics.kpi.monthVolumeGoal}</span>
         </div>
         {/* Стрик активности */}
-        <div className="card flex flex-col items-center gap-2 py-5">
+        <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
           <CircleProgress pct={(activityStreak / 7) * 100} color="var(--c-warn)" size={72}>
             <Flame className="h-5 w-5 text-orange-400" />
-            <span className="font-mono text-sm font-bold text-text-primary">{activityStreak}</span>
+            <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{activityStreak}</span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">{t.analytics.kpi.streak}</span>
+          <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.streak}</span>
           <span className="text-[10px] text-orange-400">{t.analytics.kpi.streakGoal}</span>
         </div>
         {/* Ср. доходность */}
-        <div className="card flex flex-col items-center gap-2 py-5">
+        <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
           <CircleProgress pct={Math.min(Math.abs(avgProfit) / 5 * 100, 100)} color={avgProfit >= 0 ? "var(--c-up)" : "var(--c-down)"} size={72}>
-            <span className={`font-mono text-sm font-bold ${avgProfit >= 0 ? "text-success" : "text-danger"}`}>
+            <span className={`font-mono text-sm font-bold ${avgProfit >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
               {avgProfit >= 0 ? "+" : ""}{avgProfit.toFixed(2)}%
             </span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">{t.analytics.kpi.avgDaily}</span>
-          <span className="text-[10px] text-text-muted">{t.analytics.kpi.overDays(validPnl.length)}</span>
+          <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.avgDaily}</span>
+          <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.kpi.overDays(validPnl.length)}</span>
         </div>
         {/* Дней торговали */}
-        <div className="card flex flex-col items-center gap-2 py-5">
+        <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
           <CircleProgress pct={Math.min((tradingDays / 15) * 100, 100)} color="var(--c-gold)" size={72}>
-            <Calendar className="h-4 w-4 text-accent-gold" />
-            <span className="font-mono text-sm font-bold text-text-primary">{tradingDays}</span>
+            <Calendar className="h-4 w-4 text-[var(--pane-gold)]" />
+            <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{tradingDays}</span>
           </CircleProgress>
-          <span className="text-xs text-text-muted">{t.analytics.kpi.tradingDays}</span>
-          <span className="text-[10px] text-accent-gold">{t.analytics.kpi.tradingDaysGoal}</span>
+          <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.tradingDays}</span>
+          <span className="text-[10px] text-[var(--pane-gold)]">{t.analytics.kpi.tradingDaysGoal}</span>
         </div>
       </div>
 
@@ -662,17 +662,17 @@ export default function AnalyticsPage() {
           : nextIdx === -1 ? 100 : Math.min((totalVolume / VOLUME_MILESTONES[0].vol) * 100, 100);
 
         return (
-          <div className="overflow-hidden rounded-xl border border-border bg-bg-card">
+          <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
             {/* Шапка */}
-            <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-border">
-              <BarChart2 className="h-4 w-4 text-accent-gold" />
+            <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-[var(--pane-border)]">
+              <BarChart2 className="h-4 w-4 text-[var(--pane-gold)]" />
               <div>
-                <h2 className="text-sm font-bold text-text-primary leading-none">{t.analytics.path.title}</h2>
-                <p className="text-[10px] text-text-primary/30 mt-0.5">{t.analytics.path.subtitle}</p>
+                <h2 className="text-[12px] font-semibold text-[var(--pane-text)] leading-none">{t.analytics.path.title}</h2>
+                <p className="text-[10px] text-[var(--pane-text)]/30 mt-0.5">{t.analytics.path.subtitle}</p>
               </div>
               <div className="ml-auto text-right">
-                <span className="font-mono text-base font-extrabold text-accent-gold">${fmtDot(Math.round(totalVolume))}</span>
-                <span className="text-[10px] text-text-primary/30 ml-1">USDT</span>
+                <span className="font-mono text-base font-extrabold text-[var(--pane-gold)]">${fmtDot(Math.round(totalVolume))}</span>
+                <span className="text-[10px] text-[var(--pane-text)]/30 ml-1">USDT</span>
               </div>
             </div>
 
@@ -681,15 +681,15 @@ export default function AnalyticsPage() {
               {nextM && (
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[10px]">
-                    <span className="text-text-primary/30">{prevM ? prevM.label : "0"}</span>
-                    <span className="text-text-primary/50">{t.analytics.path.toNext} <span className="text-accent-gold font-bold">{nextM.label}</span> {t.analytics.path.left} <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
-                    <span className="text-accent-gold font-bold">{nextM.label}</span>
+                    <span className="text-[var(--pane-text)]/30">{prevM ? prevM.label : "0"}</span>
+                    <span className="text-[var(--pane-text)]/50">{t.analytics.path.toNext} <span className="text-[var(--pane-gold)] font-bold">{nextM.label}</span> {t.analytics.path.left} <span className="font-mono">${fmtDot(Math.round(nextM.vol - totalVolume))}</span></span>
+                    <span className="text-[var(--pane-gold)] font-bold">{nextM.label}</span>
                   </div>
-                  <div className="relative h-2 overflow-hidden rounded-full bg-bg-panel/60">
+                  <div className="relative h-2 overflow-hidden rounded-full bg-[var(--pane-hover)]">
                     <div className="h-full rounded-full transition-all duration-1000"
                       style={{ width: `${trackPct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }} />
                   </div>
-                  <p className="text-[10px] text-text-primary/25 text-right">{t.analytics.path.pctToNext(trackPct.toFixed(1))}</p>
+                  <p className="text-[10px] text-[var(--pane-text)]/25 text-right">{t.analytics.path.pctToNext(trackPct.toFixed(1))}</p>
                 </div>
               )}
 
@@ -703,17 +703,17 @@ export default function AnalyticsPage() {
                       {/* Индикатор */}
                       <div className={`relative flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${
                         reached
-                          ? "border-accent-gold bg-accent-gold/15 shadow-[0_0_16px_rgba(251,191,36,0.4)]"
+                          ? "border-accent-gold bg-[var(--pane-gold)]/15 shadow-[0_0_16px_rgba(251,191,36,0.4)]"
                           : isCurrent
-                          ? "border-border bg-bg-panel/60"
-                          : "border-border bg-bg-panel/60"
+                          ? "border-[var(--pane-border)] bg-[var(--pane-hover)]"
+                          : "border-[var(--pane-border)] bg-[var(--pane-hover)]"
                       }`}>
                         <span className={`text-lg leading-none ${reached ? "" : "opacity-25"}`}>{m.emoji}</span>
                         {reached && (
-                          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-accent-gold text-[7px] font-black text-black">✓</span>
+                          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--pane-gold)] text-[7px] font-black text-black">✓</span>
                         )}
                       </div>
-                      <span className={`font-mono text-[10px] font-bold ${reached ? "text-accent-gold" : isCurrent ? "text-text-primary/50" : "text-text-primary/20"}`}>{m.label}</span>
+                      <span className={`font-mono text-[10px] font-bold ${reached ? "text-[var(--pane-gold)]" : isCurrent ? "text-[var(--pane-text)]/50" : "text-[var(--pane-text)]/20"}`}>{m.label}</span>
                     </div>
                   );
                 })}
@@ -734,45 +734,45 @@ export default function AnalyticsPage() {
       {/* Основной блок */}
       <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
         {/* ── Календарь ── */}
-        <div className="overflow-hidden rounded-2xl border border-border bg-bg-card">
+        <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
 
           {/* Шапка */}
           <div
-            className="border-b border-border px-5 pt-5 pb-4"
-            style={{ background: "linear-gradient(135deg, rgba(10,255,224,0.04) 0%, transparent 55%)" }}
+            className="border-b border-[var(--pane-border)] px-5 pt-5 pb-4"
+            style={{ background: "linear-gradient(135deg, var(--pane-accent-faint) 0%, transparent 55%)" }}
           >
             <div className="flex items-center justify-between">
               <button
                 onClick={prevMonth}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-lg text-text-muted transition hover:border-border hover:text-text-primary"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--pane-border)] text-lg text-[var(--pane-muted)] transition hover:border-[var(--pane-border)] hover:text-[var(--pane-text)]"
               >‹</button>
               <div className="text-center">
-                <h2 className="text-xl font-extrabold tracking-tight text-text-primary">
-                  {t.analytics.calendar.months[month]} <span className="text-text-muted font-medium">{year}</span>
+                <h2 className="text-[13px] font-semibold text-[var(--pane-text)]">
+                  {t.analytics.calendar.months[month]} <span className="text-[var(--pane-muted)] font-medium">{year}</span>
                 </h2>
               </div>
               <button
                 onClick={nextMonth}
                 disabled={year === today.getFullYear() && month === today.getMonth()}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-lg text-text-muted transition hover:border-border hover:text-text-primary disabled:opacity-25"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--pane-border)] text-lg text-[var(--pane-muted)] transition hover:border-[var(--pane-border)] hover:text-[var(--pane-text)] disabled:opacity-25"
               >›</button>
             </div>
 
             {/* Статспиллы */}
             <div className="mt-3 flex flex-wrap justify-center gap-2">
-              <span className="flex items-center gap-1 rounded-full bg-success/10 px-3 py-1 text-[11px] font-semibold text-success">
+              <span className="flex items-center gap-1 rounded-full bg-[var(--pane-up)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
                 {t.analytics.calendar.profitDays(profitDays)}
               </span>
-              <span className="flex items-center gap-1 rounded-full bg-danger/10 px-3 py-1 text-[11px] font-semibold text-danger">
+              <span className="flex items-center gap-1 rounded-full bg-[var(--pane-down)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-down)]">
                 {t.analytics.calendar.lossDays(lossDays)}
               </span>
               {tradingDays > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-accent-gold/10 px-3 py-1 text-[11px] font-semibold text-accent-gold">
+                <span className="flex items-center gap-1 rounded-full bg-[var(--pane-gold)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
                   {t.analytics.calendar.tradeDays(tradingDays)}
                 </span>
               )}
               {activeDays > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-accent-cyan/10 px-3 py-1 text-[11px] font-semibold text-accent-cyan">
+                <span className="flex items-center gap-1 rounded-full bg-[var(--pane-accent-faint)] px-3 py-1 text-[11px] font-semibold text-[var(--pane-accent)]">
                   {t.analytics.calendar.signalDays(activeDays)}
                 </span>
               )}
@@ -780,10 +780,10 @@ export default function AnalyticsPage() {
 
             {/* Мини-полоса прогресса профит/лосс */}
             {(profitDays + lossDays) > 0 && (
-              <div className="mt-3 overflow-hidden rounded-full bg-bg-panel/60" style={{ height: 4 }}>
+              <div className="mt-3 overflow-hidden rounded-full bg-[var(--pane-hover)]" style={{ height: 4 }}>
                 <div className="flex h-full">
-                  <div className="bg-success/60 transition-all duration-700" style={{ width: `${(profitDays / (profitDays + lossDays)) * 100}%` }} />
-                  <div className="bg-danger/50 transition-all duration-700" style={{ width: `${(lossDays / (profitDays + lossDays)) * 100}%` }} />
+                  <div className="bg-[var(--pane-up)]/60 transition-all duration-700" style={{ width: `${(profitDays / (profitDays + lossDays)) * 100}%` }} />
+                  <div className="bg-[var(--pane-down)]/50 transition-all duration-700" style={{ width: `${(lossDays / (profitDays + lossDays)) * 100}%` }} />
                 </div>
               </div>
             )}
@@ -794,7 +794,7 @@ export default function AnalyticsPage() {
             {/* Дни недели */}
             <div className="mb-2 grid grid-cols-7 gap-1.5">
               {t.analytics.calendar.weekdays.map(d => (
-                <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest text-text-primary/20">{d}</div>
+                <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest text-[var(--pane-text)]/20">{d}</div>
               ))}
             </div>
 
@@ -812,40 +812,40 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Легенда */}
-            <div className="mt-4 flex flex-wrap justify-center gap-4 text-[10px] text-text-primary/30">
-              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-accent-cyan" />{t.analytics.calendar.legendSignal}</span>
-              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-accent-gold" />{t.analytics.calendar.legendTrade}</span>
-              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-success" />{t.analytics.calendar.legendDeposit}</span>
-              <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full bg-success text-[7px] font-bold text-black flex items-center justify-center">✓</span>{t.analytics.calendar.legendGoal}</span>
+            <div className="mt-4 flex flex-wrap justify-center gap-4 text-[10px] text-[var(--pane-text)]/30">
+              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-accent)]" />{t.analytics.calendar.legendSignal}</span>
+              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-gold)]" />{t.analytics.calendar.legendTrade}</span>
+              <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-up)]" />{t.analytics.calendar.legendDeposit}</span>
+              <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full bg-[var(--pane-up)] text-[7px] font-bold text-black flex items-center justify-center">✓</span>{t.analytics.calendar.legendGoal}</span>
             </div>
           </div>
 
           {/* Детальная карточка выбранного дня */}
           {selectedDay && (
-            <div className="border-t border-border px-5 py-4" style={{ background: "rgba(255,255,255,0.015)" }}>
+            <div className="border-t border-[var(--pane-border)] px-5 py-4" style={{ background: "rgba(255,255,255,0.015)" }}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-text-primary">
+                  <p className="font-bold text-[var(--pane-text)]">
                     {new Date(selectedDay.date + "T12:00:00").toLocaleDateString(numbers, { weekday: "long", day: "numeric", month: "long" })}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedDay.balance !== null && (
-                      <span className="rounded-lg bg-bg-panel/60 px-2.5 py-1 text-[11px] font-semibold text-text-primary">
+                      <span className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-text)]">
                         💰 ${fmtDot(selectedDay.balance, 2)}
                       </span>
                     )}
                     {selectedDay.signals > 0 && (
-                      <span className="rounded-lg bg-accent-cyan/10 px-2.5 py-1 text-[11px] font-semibold text-accent-cyan">
+                      <span className="rounded-lg bg-[var(--pane-accent-faint)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-accent)]">
                         {t.analytics.calendar.daySignals(selectedDay.signals)}
                       </span>
                     )}
                     {dayVolume(selectedDay) > 0 && (
-                      <span className="rounded-lg bg-accent-gold/10 px-2.5 py-1 text-[11px] font-semibold text-accent-gold">
+                      <span className="rounded-lg bg-[var(--pane-gold)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
                         {t.analytics.calendar.dayVolume(fmtDot(dayVolume(selectedDay)))}
                       </span>
                     )}
                     {selectedDay.has_deposit && (
-                      <span className="rounded-lg bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success">
+                      <span className="rounded-lg bg-[var(--pane-up)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
                         {t.analytics.calendar.dayDeposit}
                       </span>
                     )}
@@ -854,15 +854,15 @@ export default function AnalyticsPage() {
                 <div className="shrink-0 text-right">
                   {selectedDay.pnl_pct !== null ? (
                     <>
-                      <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-success" : selectedDay.pnl_pct < 0 ? "text-danger" : "text-text-primary/40"}`}>
+                      <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-[var(--pane-up)]" : selectedDay.pnl_pct < 0 ? "text-[var(--pane-down)]" : "text-[var(--pane-text)]/40"}`}>
                         {selectedDay.pnl_pct > 0 ? "+" : ""}{selectedDay.pnl_pct.toFixed(2)}%
                       </p>
                       {selectedDay.signals > 0 && selectedDay.pnl_pct > 0 && (
-                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">{t.analytics.calendar.dayGoal}</span>
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[var(--pane-up)]/15 px-2 py-0.5 text-[10px] font-bold text-[var(--pane-up)]">{t.analytics.calendar.dayGoal}</span>
                       )}
                     </>
                   ) : (
-                    <p className="text-xs text-text-primary/20">{t.analytics.calendar.noSnapshot}</p>
+                    <p className="text-xs text-[var(--pane-text)]/20">{t.analytics.calendar.noSnapshot}</p>
                   )}
                 </div>
               </div>
@@ -874,14 +874,14 @@ export default function AnalyticsPage() {
               {dayTrades === undefined ? (
                 <div className="mt-3 space-y-1.5">
                   {[...Array(2)].map((_, i) => (
-                    <div key={i} className="h-7 animate-pulse rounded-lg bg-bg-panel/60" />
+                    <div key={i} className="h-7 animate-pulse rounded-lg bg-[var(--pane-hover)]" />
                   ))}
                 </div>
               ) : dayTrades && dayTrades.length > 0 ? (
                 <div className="mt-3 overflow-x-auto">
                   <table className="w-full whitespace-nowrap text-[11px]">
                     <thead>
-                      <tr className="text-[10px] uppercase tracking-wider text-text-primary/30">
+                      <tr className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
                         <th className="py-1 text-left font-medium">{t.analytics.trades.time}</th>
                         <th className="py-1 text-left font-medium">{t.analytics.trades.coin}</th>
                         <th className="py-1 text-right font-medium">{t.analytics.trades.entry}</th>
@@ -892,38 +892,38 @@ export default function AnalyticsPage() {
                     </thead>
                     <tbody className="font-mono tabular-nums">
                       {dayTrades.map((one) => (
-                        <tr key={one.id} className="border-t border-border/40">
-                          <td className="py-1 text-text-primary/40">
+                        <tr key={one.id} className="border-t border-[var(--pane-border)]/40">
+                          <td className="py-1 text-[var(--pane-text)]/40">
                             {new Date(one.closed_at).toLocaleTimeString(numbers, {
                               hour: "2-digit",
                               minute: "2-digit",
                             })}
                           </td>
-                          <td className="py-1 font-sans font-semibold text-text-primary">
+                          <td className="py-1 font-sans font-semibold text-[var(--pane-text)]">
                             {one.symbol.replace(/USDT$/, "")}
                             <span
                               className={`ml-1.5 text-[10px] font-medium ${
-                                one.side === "long" ? "text-success" : "text-danger"
+                                one.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
                               }`}
                             >
                               {one.side === "long" ? t.analytics.trades.long : t.analytics.trades.short}
                             </span>
                           </td>
-                          <td className="py-1 text-right text-text-secondary">
+                          <td className="py-1 text-right text-[var(--pane-text-2)]">
                             {fmtPrice(one.entry)}
                           </td>
-                          <td className="py-1 text-right text-text-secondary">
+                          <td className="py-1 text-right text-[var(--pane-text-2)]">
                             {one.exit_price === null ? "-" : fmtPrice(one.exit_price)}
                           </td>
                           <td
                             className={`py-1 text-right font-semibold ${
-                              one.pnl >= 0 ? "text-success" : "text-danger"
+                              one.pnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
                             }`}
                           >
                             {one.pnl >= 0 ? "+" : "-"}
                             {Math.abs(one.pnl).toFixed(2)} $
                             {one.fee > 0 && (
-                              <span className="ml-1 text-[10px] font-normal text-text-primary/30">
+                              <span className="ml-1 text-[10px] font-normal text-[var(--pane-text)]/30">
                                 -{one.fee.toFixed(2)}
                               </span>
                             )}
@@ -936,7 +936,7 @@ export default function AnalyticsPage() {
                             <button
                               onClick={() => setCard(cardFromTrade(one, owner ?? undefined))}
                               title={t.analytics.trades.cardTitle}
-                              className="text-text-primary/30 transition-colors duration-150 ease-out hover:text-accent-cyan"
+                              className="text-[var(--pane-text)]/30 transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
                             >
                               <Share2 className="h-3.5 w-3.5" />
                             </button>
@@ -947,7 +947,7 @@ export default function AnalyticsPage() {
                   </table>
                 </div>
               ) : dayTrades && dayTrades.length === 0 ? (
-                <p className="mt-3 text-[11px] text-text-primary/30">
+                <p className="mt-3 text-[11px] text-[var(--pane-text)]/30">
                   {t.analytics.trades.none}
                 </p>
               ) : null}
@@ -956,25 +956,25 @@ export default function AnalyticsPage() {
 
           {/* Итоги месяца */}
           {realDays.length >= 2 && (
-            <div className="border-t border-border px-5 py-3">
+            <div className="border-t border-[var(--pane-border)] px-5 py-3">
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div>
-                  <p className={`font-mono text-base font-extrabold ${totalPnl >= 0 ? "text-success" : "text-danger"}`}>
+                  <p className={`font-mono text-base font-extrabold ${totalPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
                     {totalPnl >= 0 ? "+" : ""}{totalPnl.toFixed(1)}%
                   </p>
-                  <p className="text-[10px] text-text-primary/30">{t.analytics.summary.monthResult}</p>
+                  <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.monthResult}</p>
                 </div>
                 <div>
-                  <p className="font-mono text-base font-extrabold text-success">
+                  <p className="font-mono text-base font-extrabold text-[var(--pane-up)]">
                     {bestDay ? `+${bestDay.pnl_pct!.toFixed(1)}%` : "-"}
                   </p>
-                  <p className="text-[10px] text-text-primary/30">{t.analytics.summary.bestDay}</p>
+                  <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.bestDay}</p>
                 </div>
                 <div>
-                  <p className="font-mono text-base font-extrabold text-danger">
+                  <p className="font-mono text-base font-extrabold text-[var(--pane-down)]">
                     {worstDay && worstDay.pnl_pct! < 0 ? `${worstDay.pnl_pct!.toFixed(1)}%` : "-"}
                   </p>
-                  <p className="text-[10px] text-text-primary/30">{t.analytics.summary.worstDay}</p>
+                  <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.worstDay}</p>
                 </div>
               </div>
             </div>
@@ -985,8 +985,8 @@ export default function AnalyticsPage() {
               месяцем делиться было нечем - приходилось слать пять карточек
               подряд. Опорная дата - выбранный день: неделя берётся та, что
               обведена в сетке над кнопками, а не последние семь суток. */}
-          <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
-            <span className="text-[10px] uppercase tracking-wider text-text-primary/30">
+          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--pane-border)] px-5 py-3">
+            <span className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
               {t.analytics.summary.cardFor}
             </span>
             {SPANS.map((id) => {
@@ -1001,7 +1001,7 @@ export default function AnalyticsPage() {
                       ? `${ready.title}: ${ready.roi >= 0 ? "+" : ""}${ready.roi.toFixed(2)}%`
                       : t.analytics.summary.nothingToShow
                   }
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[11px] font-semibold text-text-secondary transition-colors duration-150 ease-out hover:border-accent-cyan/40 hover:text-accent-cyan disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-border disabled:hover:text-text-secondary"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-accent)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[var(--pane-border)] disabled:hover:text-[var(--pane-text-2)]"
                 >
                   <Share2 className="h-3 w-3" />
                   {spanLabel[id]}
@@ -1027,28 +1027,28 @@ export default function AnalyticsPage() {
             const levelTitle = Object.entries(levelTitles).reverse().find(([l]) => level >= +l)?.[1] ?? levelTitles[1];
             const xpSources = t.analytics.level.sources;
             const breakdown = [
-              { icon: BarChart2,    label: xpSources.volume,  val: volXp,      color: "text-accent-cyan", bg: "bg-accent-cyan/10" },
+              { icon: BarChart2,    label: xpSources.volume,  val: volXp,      color: "text-[var(--pane-accent)]", bg: "bg-[var(--pane-accent-faint)]" },
               { icon: Flame,        label: xpSources.streak,  val: streakXp,   color: "text-orange-400",  bg: "bg-orange-400/10" },
-              { icon: Zap,          label: xpSources.hotDays, val: hotXp,      color: "text-accent-gold", bg: "bg-accent-gold/10" },
-              { icon: TrendingUp,   label: xpSources.profit,  val: profitXp,   color: "text-success",     bg: "bg-success/10" },
+              { icon: Zap,          label: xpSources.hotDays, val: hotXp,      color: "text-[var(--pane-gold)]", bg: "bg-[var(--pane-gold)]/10" },
+              { icon: TrendingUp,   label: xpSources.profit,  val: profitXp,   color: "text-[var(--pane-up)]",     bg: "bg-[var(--pane-up)]/10" },
               { icon: CalendarDays, label: xpSources.days,    val: tradeDayXp, color: "text-blue-400",    bg: "bg-blue-400/10" },
               { icon: Target,       label: xpSources.goals,   val: goalXp,     color: "text-purple-400",  bg: "bg-purple-400/10" },
             ];
             return (
-              <div className="relative overflow-hidden rounded-xl border border-border bg-bg-card p-5">
+              <div className="relative overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
                 {/* Заголовок */}
                 <div className="relative flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-gold/15 text-accent-gold">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--pane-gold)]/15 text-[var(--pane-gold)]">
                       <Star className="h-4 w-4" />
                     </div>
-                    <h2 className="text-base font-bold text-text-primary">{t.analytics.level.title}</h2>
+                    <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.level.title}</h2>
                   </div>
                   {coinsBalance !== null && (
-                    <div className="flex items-center gap-1.5 rounded-full border border-accent-gold/30 bg-accent-gold/10 px-2.5 py-1">
-                      <Coins className="h-3.5 w-3.5 text-accent-gold" />
-                      <span className="font-mono text-sm font-extrabold text-accent-gold">{coinsBalance.toLocaleString(numbers)}</span>
-                      <span className="text-[9px] font-bold text-accent-gold/50">NMNH</span>
+                    <div className="flex items-center gap-1.5 rounded-full border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10 px-2.5 py-1">
+                      <Coins className="h-3.5 w-3.5 text-[var(--pane-gold)]" />
+                      <span className="font-mono text-sm font-extrabold text-[var(--pane-gold)]">{coinsBalance.toLocaleString(numbers)}</span>
+                      <span className="text-[9px] font-bold text-[var(--pane-gold)]/50">NMNH</span>
                     </div>
                   )}
                 </div>
@@ -1056,39 +1056,39 @@ export default function AnalyticsPage() {
                 {/* Уровень */}
                 <div className="relative mt-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-14 w-14 flex-col items-center justify-center rounded-2xl border border-accent-gold/30 bg-gradient-to-br from-accent-gold/20 to-accent-gold/5 shadow-[0_4px_16px_-6px_rgba(255,200,0,0.5)]">
-                      <span className="text-[8px] font-bold uppercase tracking-wider text-accent-gold/60 leading-none">{t.analytics.level.short}</span>
-                      <span className="font-mono text-2xl font-black text-accent-gold leading-none">{level}</span>
+                    <div className="flex h-14 w-14 flex-col items-center justify-center rounded-xl border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/12">
+                      <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--pane-gold)]/60 leading-none">{t.analytics.level.short}</span>
+                      <span className="font-mono text-2xl font-black text-[var(--pane-gold)] leading-none">{level}</span>
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-text-primary">{levelTitle}</p>
-                      <p className="mt-0.5 text-[11px] text-text-primary/40">{t.analytics.level.toNext(Math.max(0, xpNeeded - xpInLevel).toLocaleString(numbers), level + 1)}</p>
+                      <p className="text-sm font-bold text-[var(--pane-text)]">{levelTitle}</p>
+                      <p className="mt-0.5 text-[11px] text-[var(--pane-text)]/40">{t.analytics.level.toNext(Math.max(0, xpNeeded - xpInLevel).toLocaleString(numbers), level + 1)}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="font-mono text-2xl font-extrabold leading-none text-text-primary">{xp.toLocaleString(numbers)}</span>
-                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-text-primary/30">{t.analytics.level.totalXp}</p>
+                    <span className="font-mono text-2xl font-extrabold leading-none text-[var(--pane-text)]">{xp.toLocaleString(numbers)}</span>
+                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[var(--pane-text)]/30">{t.analytics.level.totalXp}</p>
                   </div>
                 </div>
 
                 {/* Прогресс */}
-                <div className="relative mt-4 h-2.5 overflow-hidden rounded-full bg-bg-deep/40">
+                <div className="relative mt-4 h-2.5 overflow-hidden rounded-full bg-[var(--pane-hover)]">
                   <div
                     className="h-full rounded-full shadow-[0_0_10px_rgba(255,200,0,0.5)] transition-all duration-700"
                     style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--c-warn), var(--c-warn-soft))" }}
                   />
                 </div>
-                <p className="relative mt-1.5 text-right text-[10px] text-text-primary/30">{xpInLevel.toLocaleString(numbers)} / {xpNeeded.toLocaleString(numbers)} XP</p>
+                <p className="relative mt-1.5 text-right text-[10px] text-[var(--pane-text)]/30">{xpInLevel.toLocaleString(numbers)} / {xpNeeded.toLocaleString(numbers)} XP</p>
 
                 {/* Разбивка XP */}
                 <div className="relative mt-4 grid grid-cols-2 gap-2">
                   {breakdown.map(({ icon: Icon, label, val, color, bg }) => (
-                    <div key={label} className="flex items-center gap-2 rounded-xl border border-border bg-bg-panel/60 px-2.5 py-2">
+                    <div key={label} className="flex items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-2">
                       <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${bg} ${color}`}>
                         <Icon className="h-3.5 w-3.5" />
                       </div>
-                      <span className="flex-1 truncate text-[11px] text-text-muted">{label}</span>
-                      <span className={`font-mono text-[11px] font-bold ${val > 0 ? "text-text-primary" : "text-text-primary/25"}`}>+{val}</span>
+                      <span className="flex-1 truncate text-[11px] text-[var(--pane-muted)]">{label}</span>
+                      <span className={`font-mono text-[11px] font-bold ${val > 0 ? "text-[var(--pane-text)]" : "text-[var(--pane-text)]/25"}`}>+{val}</span>
                     </div>
                   ))}
                 </div>
@@ -1096,30 +1096,30 @@ export default function AnalyticsPage() {
             );
           })()}
 
-          <div className="card space-y-4">
+          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 space-y-3">
             <div className="flex items-center gap-2">
-              <Target className="h-4 w-4 text-accent-cyan" />
-              <h2 className="text-base font-bold text-text-primary">{t.analytics.goalsTitle}</h2>
+              <Target className="h-4 w-4 text-[var(--pane-accent)]" />
+              <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.goalsTitle}</h2>
             </div>
 
             {goals.map((goal) => {
               const Icon = goal.icon;
               const pct = Math.min((goal.current / goal.target) * 100, 100);
               return (
-                <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-success/[0.04]" : "border-border bg-bg-panel/60"}`}>
+                <div key={goal.id} className={`rounded-xl border px-3 py-2.5 transition ${goal.unlocked ? "border-success/25 bg-[var(--pane-up)]/[0.04]" : "border-[var(--pane-border)] bg-[var(--pane-hover)]"}`}>
                   <div className="flex items-center gap-2 mb-1.5">
                     <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: goal.color }} />
-                    <span className="text-[11px] font-semibold text-text-primary flex-1 min-w-0 truncate">{t.analytics.goals[goal.id].label}</span>
+                    <span className="text-[11px] font-semibold text-[var(--pane-text)] flex-1 min-w-0 truncate">{t.analytics.goals[goal.id].label}</span>
                     {goal.unlocked
-                      ? <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
-                      : <span className="font-mono text-[10px] text-text-primary/30 shrink-0">{goal.current}/{goal.target}</span>
+                      ? <CheckCircle2 className="h-3.5 w-3.5 text-[var(--pane-up)] shrink-0" />
+                      : <span className="font-mono text-[10px] text-[var(--pane-text)]/30 shrink-0">{goal.current}/{goal.target}</span>
                     }
                   </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-bg-deep">
+                  <div className="h-1 overflow-hidden rounded-full bg-[var(--pane-bg)]">
                     <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: goal.color }} />
                   </div>
                   {goal.unlocked && (
-                    <p className="mt-1 text-[9px] text-success/70 truncate">{t.analytics.goals[goal.id].reward}</p>
+                    <p className="mt-1 text-[9px] text-[var(--pane-up)]/70 truncate">{t.analytics.goals[goal.id].reward}</p>
                   )}
                 </div>
               );
@@ -1130,16 +1130,16 @@ export default function AnalyticsPage() {
 
 
       {/* Достижения */}
-      <div className="card space-y-4">
+      <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-accent-gold" />
-            <h2 className="text-base font-bold text-text-primary">{t.analytics.achievements.title}</h2>
+            <Trophy className="h-4 w-4 text-[var(--pane-gold)]" />
+            <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.achievements.title}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-accent-gold font-bold">{achievements.filter(a => a.earned).length}/{achievements.length}</span>
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-bg-deep">
-              <div className="h-full rounded-full bg-accent-gold transition-all duration-700"
+            <span className="font-mono text-xs text-[var(--pane-gold)] font-bold">{achievements.filter(a => a.earned).length}/{achievements.length}</span>
+            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--pane-bg)]">
+              <div className="h-full rounded-full bg-[var(--pane-gold)] transition-all duration-700"
                 style={{ width: `${(achievements.filter(a => a.earned).length / achievements.length) * 100}%` }} />
             </div>
           </div>
@@ -1152,10 +1152,10 @@ export default function AnalyticsPage() {
             const total = cat.id === "all" ? achievements.length : achievements.filter(a => a.category === cat.id).length;
             return (
               <button key={cat.id} onClick={() => setAchCategory(cat.id)}
-                className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-accent-gold/10 text-accent-gold" : "border-border bg-bg-panel/60 text-text-primary/40 hover:text-text-primary/70"}`}>
+                className={`shrink-0 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${achCategory === cat.id ? "border-accent-gold/50 bg-[var(--pane-gold)]/10 text-[var(--pane-gold)]" : "border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-text)]/40 hover:text-[var(--pane-text)]/70"}`}>
                 <cat.icon className="h-3 w-3 shrink-0" />
                 <span>{t.analytics.achievements.categories[cat.id]}</span>
-                <span className={`font-mono text-[9px] ${achCategory === cat.id ? "text-accent-gold/60" : "text-text-primary/20"}`}>{count}/{total}</span>
+                <span className={`font-mono text-[9px] ${achCategory === cat.id ? "text-[var(--pane-gold)]/60" : "text-[var(--pane-text)]/20"}`}>{count}/{total}</span>
               </button>
             );
           })}
@@ -1174,22 +1174,22 @@ export default function AnalyticsPage() {
                 <div className="flex items-start gap-3">
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${r.border}`}>
                     {ach.earned ? (
-                      <Icon className="h-5 w-5 text-text-primary" />
+                      <Icon className="h-5 w-5 text-[var(--pane-text)]" />
                     ) : (
-                      <Lock className="h-4 w-4 text-text-muted" />
+                      <Lock className="h-4 w-4 text-[var(--pane-muted)]" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-text-primary">{t.analytics.achievements.items[ach.id].title}</h3>
+                      <h3 className="text-sm font-bold text-[var(--pane-text)]">{t.analytics.achievements.items[ach.id].title}</h3>
                       <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${r.badge}`}>
                         {t.analytics.rarity[ach.rarity]}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-[11px] text-text-muted">{t.analytics.achievements.items[ach.id].desc}</p>
+                    <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">{t.analytics.achievements.items[ach.id].desc}</p>
                     <div className="mt-1.5 flex items-center gap-1">
-                      <Coins className="h-3 w-3 text-accent-gold/70" />
-                      <span className="font-mono text-[10px] font-bold text-accent-gold/80">
+                      <Coins className="h-3 w-3 text-[var(--pane-gold)]/70" />
+                      <span className="font-mono text-[10px] font-bold text-[var(--pane-gold)]/80">
                         {ach.earned ? "" : "+"}{RARITY_COINS[ach.rarity]} NMNH
                       </span>
                     </div>
@@ -1197,7 +1197,7 @@ export default function AnalyticsPage() {
                 </div>
                 {ach.earned && (
                   <div className="absolute right-0 top-0 h-12 w-12 overflow-hidden">
-                    <div className="absolute right-0 top-0 h-12 w-12 -translate-y-6 translate-x-6 rotate-45 bg-success/20" />
+                    <div className="absolute right-0 top-0 h-12 w-12 -translate-y-6 translate-x-6 rotate-45 bg-[var(--pane-up)]/20" />
                   </div>
                 )}
               </div>
@@ -1206,13 +1206,9 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Карточка сделки. Обёртка нужна ради палитры: окно красится
-          переменными панелей терминала, а на этой странице их нет. */}
-      {card && (
-        <div className={pane}>
-          <PnlCard data={card} onClose={() => setCard(null)} />
-        </div>
-      )}
-    </div>
+      {/* Карточка сделки. Палитру панелей ей приносит общая обёртка страницы -
+          своей больше не нужно. */}
+      {card && <PnlCard data={card} onClose={() => setCard(null)} />}
+    </PaneScope>
   );
 }

@@ -129,12 +129,12 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
 
   /* ── Header (shared) ── */
   const Header = () => (
-    <div className="flex items-center justify-between border-b border-border/50 px-3" style={{ height: 36 }}>
+    <div className="flex items-center justify-between border-b border-[var(--pane-border)]/50 px-3" style={{ height: 36 }}>
       <div className="flex items-center gap-3">
         <span
           onClick={() => setTab("book")}
           className={`cursor-pointer text-[11px] font-semibold transition ${
-            tab === "book" ? "text-text-primary" : "text-text-muted hover:text-text-primary"
+            tab === "book" ? "text-[var(--pane-text)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
           }`}
         >
           {t.market.orderBook.book}
@@ -142,7 +142,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
         <span
           onClick={() => setTab("trades")}
           className={`cursor-pointer text-[11px] font-semibold transition ${
-            tab === "trades" ? "text-text-primary" : "text-text-muted hover:text-text-primary"
+            tab === "trades" ? "text-[var(--pane-text)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
           }`}
         >
           {t.market.orderBook.trades}
@@ -156,18 +156,18 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
               key={m}
               onClick={() => setMode(m)}
               className={`flex h-5 w-6 items-center justify-center rounded-sm transition ${
-                mode === m ? "bg-bg-panel/10" : "hover:bg-bg-panel/5"
+                mode === m ? "bg-[var(--pane-hover)]/10" : "hover:bg-[var(--pane-hover)]/5"
               }`}
               title={m}
             >
               {m === "both" && (
                 <span className="flex flex-col gap-[1px]">
-                  <span className="block h-[3px] w-4 rounded-[1px] bg-success/80" />
-                  <span className="block h-[3px] w-4 rounded-[1px] bg-danger/80" />
+                  <span className="block h-[3px] w-4 rounded-[1px] bg-[var(--pane-up)]/80" />
+                  <span className="block h-[3px] w-4 rounded-[1px] bg-[var(--pane-down)]/80" />
                 </span>
               )}
-              {m === "asks" && <span className="block h-[6px] w-4 rounded-[1px] bg-danger/80" />}
-              {m === "bids" && <span className="block h-[6px] w-4 rounded-[1px] bg-success/80" />}
+              {m === "asks" && <span className="block h-[6px] w-4 rounded-[1px] bg-[var(--pane-down)]/80" />}
+              {m === "bids" && <span className="block h-[6px] w-4 rounded-[1px] bg-[var(--pane-up)]/80" />}
             </button>
           ))}
         </div>
@@ -178,21 +178,21 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
   /* ── Trades tab ── */
   if (tab === "trades") {
     return (
-      <div className="flex select-none flex-col bg-bg-deep" style={{ height: "100%" }}>
+      <div className="flex select-none flex-col bg-[var(--pane-bg)]" style={{ height: "100%" }}>
         <Header />
 
         {/* Column labels */}
-        <div className="flex items-center border-b border-border/30 font-mono" style={{ height: 24 }}>
-          <span className="w-[28%] pl-3 text-[9px] uppercase tracking-wider text-text-muted">{t.market.orderBook.time}</span>
-          <span className="w-[28%] text-right text-[9px] uppercase tracking-wider text-text-muted">{t.market.orderBook.price}</span>
-          <span className="w-[22%] text-right text-[9px] uppercase tracking-wider text-text-muted">{ticker}</span>
-          <span className="w-[22%] pr-3 text-right text-[9px] uppercase tracking-wider text-text-muted">USDT</span>
+        <div className="flex items-center border-b border-[var(--pane-border)]/30 font-mono" style={{ height: 24 }}>
+          <span className="w-[28%] pl-3 text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">{t.market.orderBook.time}</span>
+          <span className="w-[28%] text-right text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">{t.market.orderBook.price}</span>
+          <span className="w-[22%] text-right text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">{ticker}</span>
+          <span className="w-[22%] pr-3 text-right text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">USDT</span>
         </div>
 
         {/* Trade rows */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {trades.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center text-[11px] text-text-muted">
+            <div className="flex flex-1 items-center justify-center text-[11px] text-[var(--pane-muted)]">
               {t.common.loading}
             </div>
           ) : (
@@ -209,20 +209,20 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
                     background: t.isBuy ? "rgba(14,203,129,0.6)" : "rgba(246,70,93,0.6)",
                   }}
                 />
-                <span className="w-[28%] pl-4 text-[10px] text-text-muted tabular">
+                <span className="w-[28%] pl-4 text-[10px] text-[var(--pane-muted)] tabular">
                   {fmtTime(t.time)}
                 </span>
                 <span
                   className={`w-[28%] text-right text-[11px] font-medium tabular ${
-                    t.isBuy ? "text-success" : "text-danger"
+                    t.isBuy ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
                   }`}
                 >
                   {fmtPrice(parseFloat(t.price))}
                 </span>
-                <span className="w-[22%] text-right text-[10px] text-text-secondary tabular">
+                <span className="w-[22%] text-right text-[10px] text-[var(--pane-text-2)] tabular">
                   {fmtSize(parseFloat(t.qty))}
                 </span>
-                <span className="w-[22%] pr-3 text-right text-[10px] text-text-muted tabular">
+                <span className="w-[22%] pr-3 text-right text-[10px] text-[var(--pane-muted)] tabular">
                   {fmtUsdt(parseFloat(t.quoteQty))}
                 </span>
               </div>
@@ -271,13 +271,13 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
           className="pointer-events-none absolute inset-y-0 right-0"
           style={{ width: `${depthPct}%`, background: "rgba(246,70,93,0.12)" }}
         />
-        <span className="relative z-10 w-[42%] pl-3 text-[11px] font-medium text-danger tabular">
+        <span className="relative z-10 w-[42%] pl-3 text-[11px] font-medium text-[var(--pane-down)] tabular">
           {fmtPrice(level.price)}
         </span>
-        <span className="relative z-10 w-[30%] text-right text-[11px] text-text-secondary tabular">
+        <span className="relative z-10 w-[30%] text-right text-[11px] text-[var(--pane-text-2)] tabular">
           {fmtSize(level.size)}
         </span>
-        <span className="relative z-10 w-[28%] pr-3 text-right text-[11px] text-text-muted tabular">
+        <span className="relative z-10 w-[28%] pr-3 text-right text-[11px] text-[var(--pane-muted)] tabular">
           {fmtSize(level.cum)}
         </span>
       </div>
@@ -292,13 +292,13 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
           className="pointer-events-none absolute inset-y-0 right-0"
           style={{ width: `${depthPct}%`, background: "rgba(14,203,129,0.10)" }}
         />
-        <span className="relative z-10 w-[42%] pl-3 text-[11px] font-medium text-success tabular">
+        <span className="relative z-10 w-[42%] pl-3 text-[11px] font-medium text-[var(--pane-up)] tabular">
           {fmtPrice(level.price)}
         </span>
-        <span className="relative z-10 w-[30%] text-right text-[11px] text-text-secondary tabular">
+        <span className="relative z-10 w-[30%] text-right text-[11px] text-[var(--pane-text-2)] tabular">
           {fmtSize(level.size)}
         </span>
-        <span className="relative z-10 w-[28%] pr-3 text-right text-[11px] text-text-muted tabular">
+        <span className="relative z-10 w-[28%] pr-3 text-right text-[11px] text-[var(--pane-muted)] tabular">
           {fmtSize(level.cum)}
         </span>
       </div>
@@ -306,18 +306,18 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
   };
 
   return (
-    <div className="flex select-none flex-col bg-bg-deep" style={{ height: "100%" }}>
+    <div className="flex select-none flex-col bg-[var(--pane-bg)]" style={{ height: "100%" }}>
       <Header />
 
       {/* Колонки */}
-      <div className="flex items-center border-b border-border/30 font-mono" style={{ height: 24 }}>
-        <span className="w-[42%] pl-3 text-[9px] uppercase tracking-wider text-text-muted">
+      <div className="flex items-center border-b border-[var(--pane-border)]/30 font-mono" style={{ height: 24 }}>
+        <span className="w-[42%] pl-3 text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
           {t.market.orderBook.priceUsdt}
         </span>
-        <span className="w-[30%] text-right text-[9px] uppercase tracking-wider text-text-muted">
+        <span className="w-[30%] text-right text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
           {t.market.orderBook.amount(ticker)}
         </span>
-        <span className="w-[28%] pr-3 text-right text-[9px] uppercase tracking-wider text-text-muted">
+        <span className="w-[28%] pr-3 text-right text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
           {t.market.orderBook.total(ticker)}
         </span>
       </div>
@@ -331,21 +331,21 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
 
       {/* Текущая цена */}
       <div
-        className="flex items-center justify-between border-y border-border/60 bg-bg-panel px-3"
+        className="flex items-center justify-between border-y border-[var(--pane-border)]/60 bg-[var(--pane-hover)] px-3"
         style={{ height: 36 }}
       >
         <div className="flex items-center gap-1.5">
           <span
             className={`font-mono text-[15px] font-bold tabular transition-colors ${
-              priceDir === "up" ? "text-success" : priceDir === "down" ? "text-danger" : "text-text-primary"
+              priceDir === "up" ? "text-[var(--pane-up)]" : priceDir === "down" ? "text-[var(--pane-down)]" : "text-[var(--pane-text)]"
             }`}
           >
             {fmtPrice(midPrice)}
           </span>
-          {priceDir === "up" && <span className="text-[10px] text-success">▲</span>}
-          {priceDir === "down" && <span className="text-[10px] text-danger">▼</span>}
+          {priceDir === "up" && <span className="text-[10px] text-[var(--pane-up)]">▲</span>}
+          {priceDir === "down" && <span className="text-[10px] text-[var(--pane-down)]">▼</span>}
         </div>
-        <span className="text-[9px] text-text-muted">{t.market.orderBook.spread(spread)}</span>
+        <span className="text-[9px] text-[var(--pane-muted)]">{t.market.orderBook.spread(spread)}</span>
       </div>
 
       {/* Биды */}
@@ -356,18 +356,18 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
       )}
 
       {/* B / S бар */}
-      <div className="mt-auto border-t border-border/50 px-3 py-2">
+      <div className="mt-auto border-t border-[var(--pane-border)]/50 px-3 py-2">
         <div className="flex items-center justify-between mb-1">
-          <span className="font-mono text-[10px] font-semibold text-success">B {bidPct}%</span>
-          <span className="font-mono text-[10px] font-semibold text-danger">{askPct}% S</span>
+          <span className="font-mono text-[10px] font-semibold text-[var(--pane-up)]">B {bidPct}%</span>
+          <span className="font-mono text-[10px] font-semibold text-[var(--pane-down)]">{askPct}% S</span>
         </div>
         <div className="flex h-1.5 overflow-hidden rounded-full">
           <div
-            className="bg-success transition-all duration-500"
+            className="bg-[var(--pane-up)] transition-all duration-500"
             style={{ width: `${bidPct}%` }}
           />
           <div
-            className="bg-danger transition-all duration-500"
+            className="bg-[var(--pane-down)] transition-all duration-500"
             style={{ width: `${askPct}%` }}
           />
         </div>

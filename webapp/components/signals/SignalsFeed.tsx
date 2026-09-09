@@ -17,7 +17,7 @@ interface SegOption<T extends string> {
 
 const STATUS_DOTS: Record<StatusKey, string | undefined> = {
   all: undefined,
-  active: "bg-success shadow-[0_0_6px] shadow-success/60",
+  active: "bg-[var(--pane-up)] shadow-[0_0_6px] shadow-success/60",
   closed: "bg-text-muted",
 };
 
@@ -31,7 +31,7 @@ function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex gap-0.5 rounded-xl border border-border bg-bg-panel/60 p-1">
+    <div className="flex gap-0.5 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] p-1">
       {options.map((o) => {
         const active = value === o.key;
         return (
@@ -40,8 +40,8 @@ function Segmented<T extends string>({
             onClick={() => onChange(o.key)}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
               active
-                ? "bg-bg-panel/60 text-text-primary ring-1 ring-inset ring-white/[0.08]"
-                : "text-text-muted hover:text-text-primary/80"
+                ? "bg-[var(--pane-hover)] text-[var(--pane-text)] ring-1 ring-inset ring-white/[0.08]"
+                : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]/80"
             }`}
           >
             {o.dot && <span className={`h-1.5 w-1.5 rounded-full ${o.dot}`} />}
@@ -97,7 +97,7 @@ export default function SignalsFeed() {
   return (
     <div className="space-y-5">
       {/* ── Панель управления ───────────────────────────────────── */}
-      <div className="rounded-2xl border border-border bg-bg-panel/40 p-3 sm:p-4">
+      <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] p-3 sm:p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           {/* Фильтры */}
           <div className="flex flex-wrap items-center gap-2">
@@ -105,14 +105,14 @@ export default function SignalsFeed() {
           </div>
 
           {/* Депозит для расчёта */}
-          <div className="flex items-center gap-2.5 rounded-xl border border-accent-cyan/20 bg-accent-cyan/[0.05] px-3.5 py-2">
-            <Wallet className="h-4 w-4 shrink-0 text-accent-cyan/70" />
+          <div className="flex items-center gap-2.5 rounded-xl border border-[var(--pane-accent-soft)] bg-[var(--pane-accent)]/[0.05] px-3.5 py-2">
+            <Wallet className="h-4 w-4 shrink-0 text-[var(--pane-accent)]/70" />
             <div className="flex flex-col leading-tight">
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-text-muted">
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--pane-muted)]">
                 {t.signals.depositForCalc}
               </span>
               <div className="flex items-baseline gap-1">
-                <span className="font-mono text-sm text-accent-cyan/60">$</span>
+                <span className="font-mono text-sm text-[var(--pane-accent)]/60">$</span>
                 <input
                   inputMode="numeric"
                   value={balance.toLocaleString("en-US")}
@@ -120,9 +120,9 @@ export default function SignalsFeed() {
                     const n = parseInt(e.target.value.replace(/\D/g, ""), 10);
                     setBalance(Number.isNaN(n) ? 0 : n);
                   }}
-                  className="w-24 bg-transparent font-mono text-sm font-bold text-text-primary outline-none tabular"
+                  className="w-24 bg-transparent font-mono text-sm font-bold text-[var(--pane-text)] outline-none tabular"
                 />
-                <span className="text-[10px] font-medium text-text-muted">USDT</span>
+                <span className="text-[10px] font-medium text-[var(--pane-muted)]">USDT</span>
               </div>
             </div>
           </div>
@@ -130,9 +130,9 @@ export default function SignalsFeed() {
 
         {/* Поиск */}
         <div className="relative mt-3">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--pane-muted)]" />
           <input
-            className="w-full rounded-xl border border-border bg-bg-panel/60 py-2.5 pl-10 pr-3 text-sm text-text-primary placeholder:text-text-muted outline-none transition focus:border-accent-cyan/40 focus:bg-bg-panel/60"
+            className="w-full rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] py-2.5 pl-10 pr-3 text-sm text-[var(--pane-text)] placeholder:text-[var(--pane-muted)] outline-none transition focus:border-accent-cyan/40 focus:bg-[var(--pane-hover)]"
             placeholder={t.signals.searchPlaceholder}
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -144,13 +144,13 @@ export default function SignalsFeed() {
       {!loaded ? (
         <div className="grid gap-4 xl:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="overflow-hidden rounded-2xl border border-border bg-bg-panel">
+            <div key={i} className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)]">
               <div className="skeleton h-64 w-full" />
             </div>
           ))}
         </div>
       ) : visible.length === 0 ? (
-        <div className="grid place-items-center rounded-2xl border border-border bg-bg-panel py-20 text-center text-text-muted">
+        <div className="grid place-items-center rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] py-20 text-center text-[var(--pane-muted)]">
           <Radio className="mb-3 h-10 w-10 opacity-20" />
           <p className="font-medium">{t.signals.notFound}</p>
           <p className="mt-1 text-sm opacity-60">
@@ -160,12 +160,12 @@ export default function SignalsFeed() {
       ) : (
         <>
           <div className="flex items-center justify-between px-1">
-            <span className="text-xs text-text-muted">
-              {t.signals.shown} <span className="font-semibold text-text-primary">{visible.length}</span>
+            <span className="text-xs text-[var(--pane-muted)]">
+              {t.signals.shown} <span className="font-semibold text-[var(--pane-text)]">{visible.length}</span>
               {activeCount > 0 && (
                 <>
                   {" · "}
-                  <span className="text-success">{t.signals.activeCount(activeCount)}</span>
+                  <span className="text-[var(--pane-up)]">{t.signals.activeCount(activeCount)}</span>
                 </>
               )}
             </span>

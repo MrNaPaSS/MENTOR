@@ -14,12 +14,13 @@ import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import { setTerminalTheme, useTerminalTheme } from "@/lib/terminalTheme";
 import { setSoundOn, useSoundOn } from "@/lib/notifySound";
 import { intlLocale, setLocale, useLocale, useT, type Locale } from "@/lib/i18n";
+import { PaneScope } from "@/components/app/Pane";
 
 const ADMIN_WEEX_UID = "6613031308";
 
 // Карточки красятся палитрой темы: страница светлеет вместе с терминалом, а
 // неоновая бирюза, вписанная числом, на белом листе слепит.
-const CARD = "rounded-3xl border border-border bg-bg-card/60 p-6";
+const CARD = "rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -33,10 +34,10 @@ export default function ProfilePage() {
   // человек спрашивал «подключено ли» на этой странице, а отвечать на это его
   // отправляли в другой раздел и искать там нужную кнопку.
   const [keysOpen, setKeysOpen] = useState(false);
-  // Окно красится палитрой панелей терминала, а она живёт на классе. Без него
-  // переменные не подставятся, и окно выйдет бесцветным.
+  // Тема нужна самой странице: переключатель показывает, какая сейчас стоит.
+  // Цвета панелей на страницу приносит PaneScope - окну ключей внутри неё
+  // отдельная обёртка больше не нужна.
   const theme = useTerminalTheme();
-  const pane = theme === "light" ? "pane-light" : "pane-dark";
   const sound = useSoundOn();
   // Браузер сам решает, когда готов установить сайт: кнопку показываем только
   // в этот момент и только тем, у кого кабинет ещё не установлен.
@@ -100,9 +101,9 @@ export default function ProfilePage() {
 
   if (!p) {
     return (
-      <div className="space-y-4">
-        <div className="skeleton h-48 w-full rounded-3xl" />
-        <div className="skeleton h-40 w-full rounded-3xl" />
+      <div className="space-y-3">
+        <div className="skeleton h-32 w-full rounded-xl" />
+        <div className="skeleton h-40 w-full rounded-xl" />
       </div>
     );
   }
@@ -111,18 +112,17 @@ export default function ProfilePage() {
   const isAdmin = p.weex_uid === ADMIN_WEEX_UID;
 
   return (
-    <div className="space-y-4">
+    <PaneScope className="space-y-3">
 
-      {/* ── USER CARD ── */}
-      <div className="relative overflow-hidden rounded-3xl border border-accent-cyan/25 bg-gradient-to-br from-accent-cyan/[0.07] via-bg-card/60 to-bg-card/30 p-6 shadow-card">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-accent-cyan/20 blur-3xl" />
-
-        {/* Avatar + info */}
-        <div className="flex items-center gap-4">
+      {/* Кто я и сколько у меня. Без градиента и свечения: терминал рядом
+          собран из ровных панелей, и цветное пятно здесь читалось бы куском
+          другого приложения. */}
+      <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
+        <div className="flex items-center gap-3">
           {/* Аватарка из Telegram, если она есть. Файл отдаёт бэкенд, поэтому
               к пути добавляем API_URL: сайт живёт на другом домене. Нет
               аватарки - остаётся буква, как было. */}
-          <div className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-accent-cyan/30 bg-accent-cyan/10 text-2xl font-black text-accent-cyan">
+          <div className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-accent-faint)] text-base font-bold text-[var(--pane-accent)]">
             {p.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -134,29 +134,29 @@ export default function ProfilePage() {
               initial
             )}
             {isAdmin && (
-              <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-accent-gold">
-                <ShieldCheck className="h-3 w-3 text-bg-deep" />
+              <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--pane-gold)]">
+                <ShieldCheck className="h-3 w-3 text-[var(--pane-bg)]" />
               </span>
             )}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-lg font-bold text-text-primary">@{p.username || "-"}</div>
-            <div className="mt-0.5 font-mono text-xs text-text-muted">WEEX UID: {maskUid(p.weex_uid)}</div>
+            <div className="truncate text-[13px] font-semibold text-[var(--pane-text)]">@{p.username || "-"}</div>
+            <div className="font-mono text-[11px] text-[var(--pane-muted)]">WEEX UID: {maskUid(p.weex_uid)}</div>
           </div>
         </div>
 
         {/* Balance */}
-        <div className="mt-5 flex items-end justify-between">
+        <div className="mt-3 flex items-end justify-between border-t border-[var(--pane-border)] pt-3">
           <div>
-            <div className="text-xs font-medium text-text-muted uppercase tracking-wider">{t.profile.balance}</div>
-            <div className="mt-1 font-mono text-3xl font-black tabular-nums text-text-primary">
+            <div className="text-[10px] font-medium uppercase tracking-wider text-[var(--pane-muted)]">{t.profile.balance}</div>
+            <div className="font-mono text-xl font-bold tabular-nums text-[var(--pane-text)]">
               {fmtUsd(p.balance_usdt)}
-              <span className="ml-1.5 text-base font-semibold text-text-muted">USDT</span>
+              <span className="ml-1 text-[11px] font-semibold text-[var(--pane-muted)]">USDT</span>
             </div>
             {/* Откуда цифра. Ключи ученика и партнёрская ручка по UID - разные
                 источники, и разница между ними видна: одна показывает то же,
                 что приложение биржи, другая приходит с задержкой. */}
-            <div className="mt-0.5 text-[11px] text-text-muted">
+            <div className="text-[10px] text-[var(--pane-muted)]">
               {p.balance_source === "api_keys"
                 ? t.profile.balanceFromKeys
                 : p.balance_source === "affiliate_api"
@@ -167,7 +167,7 @@ export default function ProfilePage() {
           <button
             onClick={refreshBalance}
             disabled={refreshing}
-            className="flex items-center gap-1.5 rounded-xl border border-accent-cyan/25 bg-accent-cyan/10 px-3 py-2 text-xs font-semibold text-accent-cyan transition-all hover:bg-accent-cyan/15 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-accent)] transition-colors hover:border-[var(--pane-accent-soft)] disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
             {t.common.refresh}
@@ -179,13 +179,13 @@ export default function ProfilePage() {
           Ключи вводятся в терминале, но вопрос «подключено ли» человек задаёт
           себе здесь - и ответа тут не было вовсе. */}
       <div className={CARD}>
-        <div className="mb-4 flex items-center justify-between">
-          <span className="text-sm font-semibold uppercase tracking-widest text-text-muted">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-[12px] font-semibold text-[var(--pane-text)]">
             {t.profile.exchangeTitle}
           </span>
           <span
             className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-              exchange?.connected ? "bg-success/10 text-success" : "bg-bg-panel text-text-muted"
+              exchange?.connected ? "bg-[var(--pane-up)]/10 text-[var(--pane-up)]" : "bg-[var(--pane-hover)] text-[var(--pane-muted)]"
             }`}
           >
             {exchange?.connected ? t.profile.connected : t.profile.disconnected}
@@ -193,12 +193,12 @@ export default function ProfilePage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-bg-panel text-text-secondary">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-text-2)]">
             <Key className="h-4 w-4" />
           </div>
-          <div className="min-w-0 text-sm">
-            <div className="font-semibold text-text-primary">WEEX Futures</div>
-            <div className="mt-0.5 text-[12px] text-text-muted">
+          <div className="min-w-0 text-[12px]">
+            <div className="font-semibold text-[var(--pane-text)]">WEEX Futures</div>
+            <div className="mt-0.5 text-[12px] text-[var(--pane-muted)]">
               {exchange?.connected ? (
                 <>
                   {t.profile.keyTail(exchange.key_tail)}
@@ -219,13 +219,13 @@ export default function ProfilePage() {
           </div>
           <button
             onClick={() => setKeysOpen(true)}
-            className="ml-auto shrink-0 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-text-secondary transition-colors hover:border-accent-cyan/40 hover:text-text-primary"
+            className="ml-auto shrink-0 rounded-xl border border-[var(--pane-border)] px-3 py-2 text-xs font-semibold text-[var(--pane-text-2)] transition-colors hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
           >
             {exchange?.connected ? t.common.change : t.common.connect}
           </button>
         </div>
 
-        <p className="mt-4 text-[11px] leading-relaxed text-text-muted">
+        <p className="mt-4 text-[11px] leading-relaxed text-[var(--pane-muted)]">
           {t.profile.keysNote}
         </p>
       </div>
@@ -240,9 +240,9 @@ export default function ProfilePage() {
           мне турбо» и ставились наугад. Данные никуда не делись - ими
           по-прежнему пользуются рассылка сигналов и калькулятор. */}
       <div className={CARD}>
-        <div className="mb-5 text-sm font-semibold uppercase tracking-widest text-text-muted">{t.profile.settings}</div>
+        <div className="mb-3 text-[12px] font-semibold text-[var(--pane-text)]">{t.profile.settings}</div>
 
-        <div className="space-y-5">
+        <div className="space-y-3">
 
           {/* Тема. Общая на весь кабинет: терминал светлеет вместе с шапкой и
               страницами, иначе панели выглядят вырезанными из другого
@@ -261,14 +261,14 @@ export default function ProfilePage() {
                   <button
                     key={value}
                     onClick={() => setTerminalTheme(value)}
-                    className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-all duration-200 ${
-                      active ? "bg-bg-panel text-accent-cyan" : "text-text-muted hover:text-text-secondary"
+                    className={`relative flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
+                      active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
                     }`}
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {label}
                     {active && (
-                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-accent-cyan" />
+                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
                     )}
                   </button>
                 );
@@ -289,13 +289,13 @@ export default function ProfilePage() {
                     key={l}
                     onClick={() => changeLocale(l)}
                     disabled={saving}
-                    className={`relative flex-1 rounded-lg py-2 text-sm font-bold uppercase tracking-wider transition-all duration-200 disabled:opacity-60 ${
-                      active ? "bg-bg-panel text-accent-cyan" : "text-text-muted hover:text-text-secondary"
+                    className={`relative flex-1 rounded py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors duration-150 disabled:opacity-60 ${
+                      active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
                     }`}
                   >
                     {l}
                     {active && (
-                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-accent-cyan" />
+                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
                     )}
                   </button>
                 );
@@ -320,14 +320,14 @@ export default function ProfilePage() {
                   <button
                     key={label}
                     onClick={() => setSoundOn(value)}
-                    className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-all duration-200 ${
-                      active ? "bg-bg-panel text-accent-cyan" : "text-text-muted hover:text-text-secondary"
+                    className={`relative flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
+                      active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
                     }`}
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {label}
                     {active && (
-                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-accent-cyan" />
+                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
                     )}
                   </button>
                 );
@@ -344,7 +344,7 @@ export default function ProfilePage() {
               <button
                 onClick={() => void installApp()}
                 title={t.profile.installHint}
-                className="flex items-center gap-2 rounded-xl border border-border bg-bg-panel px-3 py-2 text-sm font-semibold text-text-secondary transition-all duration-200 hover:border-accent-cyan/40 hover:text-accent-cyan"
+                className="flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-text-2)] transition-colors duration-150 hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-accent)]"
               >
                 <MonitorDown className="h-4 w-4" />
                 {t.profile.installAction}
@@ -368,7 +368,7 @@ export default function ProfilePage() {
               />
             </div>
           </SettingRow>
-          <p className="-mt-2 text-right text-[11px] text-text-muted">
+          <p className="-mt-2 text-right text-[11px] text-[var(--pane-muted)]">
             {t.profile.cardNameHint}
           </p>
         </div>
@@ -378,22 +378,22 @@ export default function ProfilePage() {
       {isAdmin && (
         <Link
           href="/admin"
-          className="flex items-center justify-between rounded-3xl border border-accent-gold/30 bg-accent-gold/10 px-6 py-4 transition-all duration-200 hover:bg-accent-gold/15"
+          className="flex items-center justify-between rounded-xl border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10 px-3 py-2.5 transition-colors duration-150 hover:bg-[var(--pane-gold)]/15"
         >
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-xl border border-accent-gold/30 bg-accent-gold/15">
-              <ShieldCheck className="h-4 w-4 text-accent-gold" />
+            <div className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/15">
+              <ShieldCheck className="h-4 w-4 text-[var(--pane-gold)]" />
             </div>
-            <span className="font-bold text-text-primary">{t.profile.adminPanel}</span>
+            <span className="text-[12px] font-semibold text-[var(--pane-text)]">{t.profile.adminPanel}</span>
           </div>
-          <span className="text-accent-gold">→</span>
+          <span className="text-[var(--pane-gold)]">→</span>
         </Link>
       )}
 
       {/* ── LOGOUT ── */}
       <button
         onClick={() => { logout(); router.push("/"); }}
-        className="flex w-full items-center justify-center gap-2 rounded-3xl border border-danger/25 bg-danger/10 py-3.5 text-sm font-semibold text-danger transition-all duration-200 hover:bg-danger/15"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--pane-down)]/25 bg-[var(--pane-down)]/10 py-2.5 text-[12px] font-semibold text-[var(--pane-down)] transition-colors duration-150 hover:bg-[var(--pane-down)]/15"
       >
         <LogOut className="h-4 w-4" /> {t.profile.logoutAccount}
       </button>
@@ -402,7 +402,7 @@ export default function ProfilePage() {
           панелей, а она живёт на классе: без обёртки переменные не подставятся
           и окно выйдет бесцветным. */}
       {keysOpen && (
-        <div className={pane}>
+        <div>
           <ExchangeDialog
             status={
               exchange ?? { enabled: false, connected: false, key_tail: "", updated_at: null }
@@ -413,14 +413,14 @@ export default function ProfilePage() {
           />
         </div>
       )}
-    </div>
+    </PaneScope>
   );
 }
 
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="shrink-0 text-sm text-text-secondary">{label}</span>
+      <span className="shrink-0 text-[12px] text-[var(--pane-text-2)]">{label}</span>
       <div className="w-48 shrink-0">{children}</div>
     </div>
   );

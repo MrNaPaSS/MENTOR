@@ -27,6 +27,7 @@ import {
   Search,
 } from "lucide-react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
+import { PaneHead, PaneScope } from "@/components/app/Pane";
 import { useInView } from "@/lib/useInView";
 import FearGreedPane from "@/components/market/FearGreedPane";
 import FundingPane from "@/components/market/FundingPane";
@@ -238,18 +239,13 @@ function CalendarSection() {
 export default function MarketPage() {
   const t = useT();
   const [section, setSection] = useState<Section>("pulse");
-  const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
   const active = t.market.tabs[section];
 
   return (
-    <div className={`${pane} space-y-3`}>
-      {/* Шапка раздела: имя и то, что сейчас открыто. */}
-      <div className="flex items-baseline justify-between gap-3">
-        <h1 className="text-[15px] font-semibold uppercase tracking-[0.16em] text-[var(--pane-text)]">
-          {t.market.title}
-        </h1>
-        <p className="truncate text-[11px] text-[var(--pane-muted)]">{active.hint}</p>
-      </div>
+    <PaneScope className="space-y-3">
+      {/* Шапка раздела - общая для всех разделов кабинета: имя, строка о том,
+          что открыто, и действия справа. */}
+      <PaneHead title={t.market.title} hint={active.hint} />
 
       <GlobalStrip />
 
@@ -280,6 +276,6 @@ export default function MarketPage() {
       {section === "smart" && <SmartMoney />}
       {section === "maps" && <MapsSection />}
       {section === "calendar" && <CalendarSection />}
-    </div>
+    </PaneScope>
   );
 }
