@@ -24,7 +24,6 @@ import {
   Moon,
   Palette,
   Radio,
-  Search,
   Volume2,
   VolumeX,
   PanelLeftClose,
@@ -37,6 +36,7 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
+import CandleLensIcon from "@/components/scalping/CandleLensIcon";
 import ChatRoom from "@/components/chat/ChatRoom";
 import { fromActive, shareShot as shotToChat } from "@/lib/chat/share";
 import type { SharedTrade } from "@/lib/chat/store";
@@ -2910,15 +2910,7 @@ export default function ScalpingPage() {
                       footAvailable ? "" : "cursor-not-allowed opacity-40"
                     }`}
                   >
-                    <span className="relative flex h-3.5 w-3.5 items-center justify-center">
-                      <CandlestickChart className="h-3.5 w-3.5" />
-                      {/* Лупа сидит в углу значка и обведена фоном панели:
-                          без обводки её линии сливались с фитилями свечей. */}
-                      <Search
-                        className="absolute -bottom-1 -right-1 h-2 w-2 rounded-full bg-[var(--pane-bg)]"
-                        strokeWidth={3}
-                      />
-                    </span>
+                    <CandleLensIcon className="h-3.5 w-3.5" />
                   </button>
                 </div>
 
