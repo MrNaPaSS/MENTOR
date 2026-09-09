@@ -737,7 +737,10 @@ export default function ChatRoom({
                       // сообщения: заверять её временем, которого ещё не было,
                       // нельзя.
                       trade.closedAt ?? new Date(m.at).toISOString(),
-                      m.author.name,
+                      // Именем автора, а не подписью из ленты: у наставника
+                      // там стоит школа, и его карточка выходила подписанной
+                      // «NMNH» вместо ника.
+                      m.author.card || m.author.name,
                     ),
                   )
                 }

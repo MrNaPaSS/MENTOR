@@ -238,14 +238,23 @@ MENTOR_NAME = "NMNH"
 
 
 def _who(student: Student) -> dict:
-    """Подпись автора: как он выглядит в ленте прямо сейчас."""
+    """Подпись автора: как он выглядит в ленте прямо сейчас.
+
+    Имён два, и это не дублирование. `name` - подпись в ленте: у наставника
+    там школа, потому что сигналы идут от NMNH, а не от его личного телеграма.
+    `card` - имя на карточке сделки: карточка это результат человека, и
+    подписывать её школой нельзя - в чате нажали на сделку наставника и увидели
+    вместо его ника «NMNH».
+    """
     mentor = is_mentor(student)
-    fallback = MENTOR_NAME if mentor else (student.username or f"id{student.id}")
+    nick = student.username or f"id{student.id}"
+    fallback = MENTOR_NAME if mentor else nick
     return {
         "id": student.id,
         "name": student.card_name or fallback,
         "avatar": student.avatar_url or "",
         "mentor": mentor,
+        "card": student.card_name or nick,
     }
 
 
