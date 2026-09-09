@@ -19,7 +19,7 @@ import type {
   Time,
 } from "lightweight-charts";
 import type { Candle } from "@/lib/indicator/types";
-import { candleWidth, referenceVolume } from "@/lib/indicator/volumeCandles";
+import { bodyFill, candleWidth, referenceVolume } from "@/lib/indicator/volumeCandles";
 
 export type CandlePalette = {
   up: string;
@@ -89,12 +89,17 @@ class VolumeCandlesRenderer implements IPrimitivePaneRenderer {
         const height = Math.max(bottom - top, line);
         const left = Math.round(x - width / 2);
 
-        context.fillStyle = body;
+        const border = bar.rising ? this.palette.upBorder : this.palette.downBorder;
+        // Помещается ли обводка внутрь тела. Не помещается - тело красится ею
+        // самой: пустая свеча держится обводкой, и без неё на белом листе от
+        // тонкой свечи не остаётся ничего.
+        const roomy = width > line * 2 && height > line * 2;
+
+        context.fillStyle = bodyFill(body, border, roomy);
         // Доджи рисуем чертой: тело нулевой высоты просто исчезло бы.
         context.fillRect(left, top, width, height);
 
-        const border = bar.rising ? this.palette.upBorder : this.palette.downBorder;
-        if (border && width > line * 2 && height > line * 2) {
+        if (border && roomy) {
           // Обводка внутрь и по сетке: иначе она съедает по половине пикселя с
           // каждой стороны, и тонкие свечи выглядят толще соседей.
           context.strokeStyle = border;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { candleWidth, referenceVolume } from "@/lib/indicator/volumeCandles";
+import { bodyFill, candleWidth, referenceVolume } from "@/lib/indicator/volumeCandles";
 
 // Толщина свечи - это утверждение о рынке: движение подкреплено деньгами или
 // нет. Ошибка здесь не видна как ошибка, поэтому правила проверяются здесь.
@@ -60,5 +60,28 @@ describe("объёмные свечи", () => {
     // чего мы не знаем.
     expect(candleWidth(0, 100, 10)).toBeCloseTo(6.8, 5);
     expect(candleWidth(100, 0, 10)).toBeCloseTo(6.8, 5);
+  });
+});
+
+describe("заливка тела", () => {
+  const WHITE = "#ffffff";
+  const BLACK = "#000000";
+
+  it("в тесном теле цветом становится обводка", () => {
+    // На белом листе свеча роста белая и держится обводкой. В тело шириной в
+    // пиксель обводка не помещается, и такая свеча пропадала совсем - белое
+    // на белом. Чем меньше объём, тем уже тело: на мелком масштабе исчезала
+    // половина графика.
+    expect(bodyFill(WHITE, BLACK, false)).toBe(BLACK);
+  });
+
+  it("в просторном теле обводка рисуется поверх, а тело своё", () => {
+    expect(bodyFill(WHITE, BLACK, true)).toBe(WHITE);
+  });
+
+  it("без обводки тело всегда своё", () => {
+    // Тёмная тема: свечи залиты цветом и в обводке не нуждаются.
+    expect(bodyFill("#0ecb81", undefined, false)).toBe("#0ecb81");
+    expect(bodyFill("#0ecb81", undefined, true)).toBe("#0ecb81");
   });
 });

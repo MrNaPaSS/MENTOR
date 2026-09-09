@@ -1040,9 +1040,14 @@ function PriceChart({
 
   // Разбор открыли или закрыли на самом графике - панель инструментов обязана
   // это увидеть: иначе её кнопка горит, когда свеча уже закрыта крестиком.
-  useEffect(() => {
-    onFootOpenChange?.(footShown);
-  }, [footShown, onFootOpenChange]);
+  //
+  // Говорим об этом там, где это случилось, а не наблюдением за состоянием.
+  // Наблюдение отвечало и на своё же изменение: пришедшее сверху «открой»
+  // ещё не успевало дойти до состояния, а наверх уже уходило «закрыто» -
+  // кнопка гасла в тот же кадр, в который её нажали, и разбор не открывался
+  // вовсе.
+  const footTellRef = useRef(onFootOpenChange);
+  footTellRef.current = onFootOpenChange;
 
   // Закрыли разбор - отпускаем и его привязку к цене. Открытый он стоит на
   // месте намеренно, а вот следующий обязан встать на нынешнюю цену, а не
@@ -1302,6 +1307,7 @@ function PriceChart({
           // и картинка, пропадающая от любого из них, живёт своей жизнью.
           setPickedBar(null);
           setFollowBar(true);
+          footTellRef.current?.(true);
           return;
         }
       }
@@ -1312,6 +1318,7 @@ function PriceChart({
       const bar = barUnder(scale, series, param.point, dataRef.current);
       if (bar && hasFootprint(intervalRef.current)) {
         setPickedBar(bar.time);
+        footTellRef.current?.(true);
         return;
       }
 
@@ -2912,6 +2919,7 @@ function PriceChart({
             onClick={() => {
               setPickedBar(null);
               setFollowBar(false);
+              onFootOpenChange?.(false);
             }}
             title={t.terminal.chart.footClose}
             className="shrink-0 transition-opacity duration-150 ease-out hover:opacity-70"
