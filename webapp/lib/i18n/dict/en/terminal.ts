@@ -23,6 +23,9 @@ export const terminal = {
 
   timeframe: "Timeframe",
   volumeCandles: "Volume candles: body thickness follows volume - a move without money shows at a glance",
+  candleVolume:
+    "Open the current candle: how much money traded at every price inside it and which side pushed",
+  candleVolumeOff: "Candle volume goes up to one hour: above that a candle holds millions of trades",
   shelvesFrom: (step: string) => `Show shelves from ${step} in the book`,
   clearAlerts: "Clear every alert on this coin",
   alertsCount: (n: number) => `alerts ${n} ✕`,

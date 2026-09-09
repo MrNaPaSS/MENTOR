@@ -53,6 +53,15 @@ export type ChatState = {
   more: boolean;
   /** Непрочитанные: считаются, пока панель закрыта. */
   unread: number;
+  /**
+   * Непрочитанные по веткам: сколько пришло в каждую.
+   *
+   * Общее число говорит, что разговор идёт, но не говорит где, а веток у нас
+   * четыре: человек открывал панель, видел точку и не находил, что изменилось,
+   * - новое лежало в соседней вкладке. Метка на самой вкладке отвечает на это
+   * сразу.
+   */
+  unreadByThread: Record<number, number>;
   /** Живой канал открыт. Нет - лента остаётся, но новое не приедет. */
   live: boolean;
   /** Ветки разговора: те же, что темы форума. */
@@ -68,6 +77,7 @@ const EMPTY: ChatState = {
   me: null,
   more: false,
   unread: 0,
+  unreadByThread: {},
   live: false,
   threads: [],
   thread: 0,
@@ -178,9 +188,19 @@ function connect() {
       // вкладке не начинали. Но счётчик непрочитанного растёт от любой - иначе
       // сообщение в соседней ветке останется незамеченным навсегда.
       const mine = !state.thread || (message.threadId ?? 0) === state.thread;
+      // Открытая ветка при открытой панели прочитана сразу - её и не считаем.
+      // Всё остальное копится по своей ветке: и то, что пришло в соседнюю,
+      // пока трейдер читал эту, и то, что пришло, пока панель была свёрнута.
+      if (reading && mine) {
+        set({ messages: [...state.messages, message] });
+        return;
+      }
+      const at = (message.threadId ?? 0) || state.thread;
+      const counts = { ...state.unreadByThread, [at]: (state.unreadByThread[at] ?? 0) + 1 };
       set({
         messages: mine ? [...state.messages, message] : state.messages,
-        unread: reading && mine ? 0 : state.unread + 1,
+        unreadByThread: counts,
+        unread: total(counts),
       });
     }
   };
@@ -275,14 +295,30 @@ async function reload(thread: number): Promise<void> {
 /** Открыть другую ветку. */
 export function openThread(thread: number): void {
   if (thread === state.thread) return;
-  set({ thread, messages: [], more: false, unread: 0 });
+  set({ thread, messages: [], more: false, ...cleared(thread) });
   void reload(thread);
 }
 
 /** Панель открыта: считать пришедшее прочитанным. */
 export function setReading(value: boolean): void {
   reading = value;
-  if (value && state.unread > 0) set({ unread: 0 });
+  // Прочитанной становится открытая ветка, а не весь чат: в соседних лежит
+  // разговор, которого трейдер не видел, и стирать их метки нечестно.
+  if (value && (state.unreadByThread[state.thread] ?? 0) > 0) set(cleared(state.thread));
+}
+
+/** Сколько всего непрочитанного по всем веткам. */
+function total(counts: Record<number, number>): number {
+  let sum = 0;
+  for (const count of Object.values(counts)) sum += count;
+  return sum;
+}
+
+/** Ветку прочитали: её счётчик обнуляем, общий пересчитываем. */
+function cleared(thread: number): Pick<ChatState, "unread" | "unreadByThread"> {
+  const counts = { ...state.unreadByThread };
+  delete counts[thread];
+  return { unread: total(counts), unreadByThread: counts };
 }
 
 /** Дочитать историю вверх. */

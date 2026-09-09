@@ -24,6 +24,7 @@ import {
   Moon,
   Palette,
   Radio,
+  Search,
   Volume2,
   VolumeX,
   PanelLeftClose,
@@ -62,6 +63,7 @@ import {
 } from "@/lib/indicator/presets";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
+import { hasFootprint } from "@/lib/indicator/footprint";
 import { play } from "@/lib/sound";
 import { asText as logText, clear as clearLog, record } from "@/lib/log";
 import { setSoundOn, useSoundOn } from "@/lib/notifySound";
@@ -104,7 +106,7 @@ import {
   closePosition,
   moveLevels,
   openPosition,
-  openSizes,
+  openPositions,
   limitsOf,
   plansOf,
   positionOf,
@@ -134,6 +136,7 @@ import {
   closeManually,
   closePartially,
   createTrade,
+  pickFilled,
   wasEntered,
   type ActiveTrade,
 } from "@/lib/trade/position";
@@ -622,6 +625,17 @@ export default function ScalpingPage() {
   // свечи приезжает кадром стакана, и сказать серверу, какую именно считать,
   // может только тот, кто держит канал.
   const [footBar, setFootBar] = useState(0);
+  // Разбор свечи: открыт или нет. Держим здесь, потому что открывает его
+  // кнопка в панели инструментов, а закрыть его можно и на самом графике -
+  // крестиком в углу карточки.
+  const [footOpen, setFootOpen] = useState(false);
+  const footAvailable = hasFootprint(timeframe);
+  // Крупная свеча разбора не знает: сделок в ней миллионы, сервер её не
+  // отдаёт. Уходим на такой таймфрейм - карточку закрываем, иначе она висит
+  // пустой и с ошибкой.
+  useEffect(() => {
+    if (!footAvailable) setFootOpen(false);
+  }, [footAvailable]);
   const { screener, dom, connected } = useScalpingFeed({
     symbol,
     rows,
@@ -1012,6 +1026,36 @@ export default function ScalpingPage() {
     // висеть лимитку, которую трейдер считает снятой.
     // Результат с биржи, если она успела его сообщить: наша оценка считается по
     // цене маркировки и без комиссий, а на счёт приходит другое.
+    // Снятый расчёт уходит с экрана сразу.
+    //
+    // Позиции по нему нет: на бирже стоят только ждущие заявки - лимитка
+    // входа, стоп и цели. Снять их - дело сервера и биржи, и занимает оно
+    // секунды; всё это время разметка отменённой сделки продолжала висеть на
+    // графике, и трейдер жал «снять» второй раз, думая, что не попал.
+    //
+    // Порядок «сначала биржа, потом экран» остаётся там, где он и нужен, - у
+    // открытой позиции: пометить её закрытой, не закрыв на бирже, значит
+    // сказать трейдеру, что он вышел, пока деньги стоят в рынке. У ждущей
+    // заявки такой цены у ошибки нет, а не сорвалось - вернём на место и
+    // скажем словами.
+    if (current.status === "planned") {
+      const { remaining } = closePartially(current, share, dom?.mid ?? 0, Date.now());
+      setTrades((list) => list.map((t) => (t.id === current.id ? remaining : t)));
+      setDraft(null);
+      try {
+        const result = await closePosition(current, share);
+        if (result?.note) setOrderNote({ text: t.terminal.notes.exchangeNote(result.note), bad: false });
+      } catch (err) {
+        const text = err instanceof Error ? err.message : t.terminal.notes.closeFailed;
+        // 428 - ключей нет: снимать на бирже нечего, расчёт был только у нас.
+        if (text.includes("подключите") || text.includes("428")) return;
+        // Заявки на бирже остались - значит и на графике им место.
+        setTrades((list) => list.map((t) => (t.id === current.id ? current : t)));
+        setOrderNote({ text, bad: true });
+      }
+      return;
+    }
+
     let settled: number | null = null;
     // Комиссия обеих ног по данным биржи: без неё «плюс 519 там, плюс 487
     // здесь» выглядит расхождением, а это она и есть.
@@ -2121,8 +2165,11 @@ export default function ScalpingPage() {
         sizesRef.current = null;
         return;
       }
-      const sizes = await openSizes().catch(() => null);
-      if (cancelled || !sizes) return;
+      const live = await openPositions().catch(() => null);
+      if (cancelled || !live) return;
+
+      const sizes: Record<string, number> = {};
+      for (const [key, one] of Object.entries(live)) sizes[key] = one.size;
 
       const before = sizesRef.current;
       sizesRef.current = sizes;
@@ -2133,14 +2180,35 @@ export default function ScalpingPage() {
 
       const raise = pushToast;
 
+      // Кто именно налился.
+      //
+      // Позиция приходит одной строкой на монету и сторону, а ждущих заявок в
+      // ту же сторону может стоять несколько: трейдер поставил лимитку ниже,
+      // передумал и добавил вторую выше, не убрав первую. Открытой объявлялась
+      // первая попавшаяся в списке - и трейдер видел вход по цене, которой не
+      // было, с чужим стопом и чужими целями.
+      //
+      // Решаем это до разбора сделок: по каждому ключу, где позиция появилась,
+      // выбираем одну заявку - ближайшую к средней цене входа с биржи.
+      const filled = new Map<string, string>();
+      for (const key of new Set(mine.map((one) => `${one.symbol}:${one.side}`))) {
+        if ((before[key] ?? 0) > 0 || (sizes[key] ?? 0) <= 0) continue;
+        const waiting = mine.filter(
+          (one) => one.status === "planned" && `${one.symbol}:${one.side}` === key,
+        );
+        const chosen = pickFilled(waiting, live[key]?.entry);
+        if (chosen) filled.set(key, chosen.id);
+      }
+
       for (const trade of mine) {
         const key = `${trade.symbol}:${trade.side}`;
         const was = before[key] ?? 0;
         const now = sizes[key] ?? 0;
         const side = trade.side === "long" ? t.terminal.events.long : t.terminal.events.short;
 
-        // Позиции не было - стала: лимитка исполнилась.
-        if (trade.status === "planned" && was <= 0 && now > 0) {
+        // Позиции не было - стала: лимитка исполнилась. Именно эта: какая из
+        // нескольких ждущих, решено выше, по цене входа с биржи.
+        if (trade.status === "planned" && was <= 0 && now > 0 && filled.get(key) === trade.id) {
           raise({
             id: `${trade.id}:in`,
             symbol: trade.symbol,
@@ -2821,6 +2889,37 @@ export default function ScalpingPage() {
                   >
                     <CandlestickChart className="h-3.5 w-3.5" />
                   </button>
+
+                  {/* Свеча с лупой: раскрыть текущую свечу её внутренним
+                      объёмом. Рядом с объёмными свечами не случайно - обе
+                      кнопки про одно и то же, про деньги за движением, только
+                      одна показывает их толщиной тела, а другая раскладывает
+                      по ценам внутри. Открыть разбор можно было и раньше -
+                      нажатием по текущей цене на графике, - но знать об этом
+                      надо было заранее: ни кнопки, ни подписи у того движения
+                      нет. */}
+                  <button
+                    onClick={() => setFootOpen((open) => !open)}
+                    disabled={!footAvailable}
+                    title={
+                      footAvailable
+                        ? t.terminal.candleVolume
+                        : t.terminal.candleVolumeOff
+                    }
+                    className={`${CHIP} ${footOpen ? CHIP_ON : CHIP_OFF} ${
+                      footAvailable ? "" : "cursor-not-allowed opacity-40"
+                    }`}
+                  >
+                    <span className="relative flex h-3.5 w-3.5 items-center justify-center">
+                      <CandlestickChart className="h-3.5 w-3.5" />
+                      {/* Лупа сидит в углу значка и обведена фоном панели:
+                          без обводки её линии сливались с фитилями свечей. */}
+                      <Search
+                        className="absolute -bottom-1 -right-1 h-2 w-2 rounded-full bg-[var(--pane-bg)]"
+                        strokeWidth={3}
+                      />
+                    </span>
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-0.5">
@@ -3211,6 +3310,8 @@ export default function ScalpingPage() {
                   liveCandle={dom?.candle ?? null}
                   liveFoot={dom?.foot ?? null}
                   onFootBar={setFootBar}
+                  footOpen={footOpen}
+                  onFootOpenChange={setFootOpen}
                   onCloseTrade={(t) => {
                     setClosing(t);
                     setCloseOpen(true);
@@ -3254,7 +3355,11 @@ export default function ScalpingPage() {
                     setOrderNote({ text: t.terminal.notes.logCleared, bad: false });
                   }}
                   title={t.terminal.logTitle}
-                  className="absolute bottom-0.5 right-1.5 z-20 rounded border border-[var(--pane-border)] bg-[var(--pane-bg)]/80 p-1 text-[var(--pane-muted)] opacity-40 backdrop-blur-sm transition-opacity duration-150 ease-out hover:opacity-100 hover:text-[var(--pane-text)]"
+                  // Просто листочек, без рамки и подложки: это не орган
+                  // управления графиком, а служебная мелочь в углу. Кнопкой он
+                  // выглядел важнее, чем есть, и вырезал из графика квадрат
+                  // ровно там, где идёт цена.
+                  className="absolute bottom-0.5 right-1.5 z-20 p-1 text-[var(--pane-muted)] opacity-40 transition-opacity duration-150 ease-out hover:opacity-100 hover:text-[var(--pane-text)]"
                 >
                   <ScrollText className="h-3 w-3" />
                 </button>
@@ -3299,15 +3404,19 @@ export default function ScalpingPage() {
                 {/* Колонки одной ширины - как у скринера: иначе точка
                     непрочитанного встаёт мимо оси значка. */}
                 <PanelRightOpen className="h-4 w-4 shrink-0" />
-                {/* Точка непрочитанного: мигает, пока панель свёрнута. Разговор
-                    в торговый час идёт о том, что происходит прямо сейчас, и
-                    узнать о нём через час - всё равно что не узнать. */}
+                {/* Метка непрочитанного: пока панель свёрнута, она числом.
+                    Разговор в торговый час идёт о том, что происходит прямо
+                    сейчас, и узнать о нём через час - всё равно что не узнать.
+                    Точка говорила только «что-то было»; число говорит, стоит
+                    ли раскрывать панель сию минуту. */}
                 {chat.unread > 0 && (
                   <span
                     title={t.chat.unread(chat.unread)}
-                    className="flex h-1.5 w-4 shrink-0 items-center justify-center"
+                    className="flex w-4 shrink-0 items-center justify-center"
                   >
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--pane-accent)]" />
+                    <span className="grid h-4 min-w-4 animate-pulse place-items-center rounded-full bg-[var(--pane-accent)] px-1 text-[9px] font-semibold leading-none text-[var(--pane-bg)]">
+                      {chat.unread > 99 ? "99+" : chat.unread}
+                    </span>
                   </span>
                 )}
                 <span

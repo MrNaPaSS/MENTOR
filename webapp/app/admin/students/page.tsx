@@ -73,14 +73,6 @@ export default function AdminStudents() {
       setBusy(null);
     }
   }
-  async function setMode(s: StudentOut, mode: string) {
-    setBusy(s.id);
-    try {
-      replace(await api.studentPatch(token, s.id, { mode }));
-    } finally {
-      setBusy(null);
-    }
-  }
   async function remove(id: number) {
     if (!confirm("Удалить ученика?")) return;
     setBusy(id);
@@ -163,7 +155,6 @@ export default function AdminStudents() {
               <tr>
                 <th className="py-2">Ник</th>
                 <th>UID</th>
-                <th>Режим</th>
                 <th className="text-right">Баланс</th>
                 <th>Последний вход</th>
                 <th className="text-center">Входов</th>
@@ -179,22 +170,6 @@ export default function AdminStudents() {
                 <tr key={s.id} className="border-t border-border/60">
                   <td className="py-2.5 font-medium text-text-primary">@{s.username || s.id}</td>
                   <td className="font-mono text-text-muted">{maskUid(s.weex_uid)}</td>
-                  <td>
-                    <div className="flex gap-1 rounded-lg border border-border bg-bg-panel p-0.5">
-                      {(["moderate", "turbo"] as const).map((m) => (
-                        <button
-                          key={m}
-                          onClick={() => setMode(s, m)}
-                          disabled={busy === s.id}
-                          className={`rounded px-2 py-1 text-[11px] font-semibold ${
-                            s.mode === m ? "bg-accent-cyan/15 text-accent-cyan" : "text-text-muted"
-                          }`}
-                        >
-                          {m === "turbo" ? "⚡" : "📊"}
-                        </button>
-                      ))}
-                    </div>
-                  </td>
                   <td className="text-right font-mono">{fmtUsd(s.balance_usdt)}$</td>
                   <td
                     className={s.first_login_at ? "text-text-secondary" : "text-text-muted"}

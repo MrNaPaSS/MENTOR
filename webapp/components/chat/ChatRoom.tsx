@@ -57,6 +57,7 @@ import { fromJournal } from "@/lib/chat/share";
 import { journalAvailable, loadTrades, type JournalTrade } from "@/lib/journal";
 import { firstLink, type LinkCard } from "@/lib/chat/link";
 import PnlCard from "@/components/scalping/PnlCard";
+import ThreadTabs from "./ThreadTabs";
 import { cardFromShared } from "@/lib/pnl/data";
 import type { CardData } from "@/lib/pnl/card";
 
@@ -94,6 +95,9 @@ const SKIN: Record<
     /** Кнопка ветки: открытой и всех остальных. */
     threadOn: string;
     threadOff: string;
+    /** Метка непрочитанного на ветке и стрелка листания строки веток. */
+    threadBadge: string;
+    threadArrow: string;
     upDot: string;
     downDot: string;
     pendingDot: string;
@@ -132,6 +136,8 @@ const SKIN: Record<
     edge: "border-border",
     threadOn: "bg-accent-cyan/15 text-text-primary ring-1 ring-accent-cyan/30",
     threadOff: "hover:bg-white/[0.06] hover:text-text-primary",
+    threadBadge: "bg-accent-cyan text-bg-deep",
+    threadArrow: "border border-border bg-bg-panel text-text-secondary hover:text-text-primary",
     upDot: "bg-success",
     downDot: "bg-danger",
     pendingDot: "border-warning",
@@ -175,6 +181,9 @@ const SKIN: Record<
     threadOn:
       "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)] ring-1 ring-[var(--pane-accent-soft)]",
     threadOff: "hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]",
+    threadBadge: "bg-[var(--pane-accent)] text-[var(--pane-bg)]",
+    threadArrow:
+      "border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] hover:text-[var(--pane-text)]",
     upDot: "bg-[var(--pane-up)]",
     downDot: "bg-[var(--pane-down)]",
     pendingDot: "border-[var(--pane-gold)]",
@@ -641,36 +650,25 @@ export default function ChatRoom({
         )}
       </div>
 
-      {/* Ветки разговора - те же, что темы в форуме. Строкой, а не списком в
-          меню: ветка это не настройка, а место, где сейчас идёт разговор, и
-          прятать её за нажатием значит прятать сам разговор.
-
-          При одной ветке строки нет вовсе: выбирать не из чего, а полоса
-          отнимает у ленты высоту.
-
-          Полосу прокрутки под ветками прячем. Windows рисует её всегда, а не
-          на время движения, и под строкой из четырёх кнопок она читается как
-          отдельный элемент интерфейса, который зачем-то нужно тянуть. Ветки
-          листаются колесом, пальцем и самой строкой - ползунок для этого не
-          нужен. */}
+      {/* Ветки разговора. При одной строки нет вовсе: выбирать не из чего, а
+          полоса отнимает у ленты высоту. Всё остальное - листание и метки
+          непрочитанного - в самой строке. */}
       {state.threads.length > 1 && (
-        <div className="no-scrollbar flex gap-1 overflow-x-auto px-2 py-1.5">
-          {state.threads.map((branch) => (
-            <button
-              key={branch.id}
-              onClick={() => openThread(branch.id)}
-              title={branch.forum ? t.chat.threadInForum : undefined}
-              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] transition-colors duration-150 ease-out ${
-                branch.id === state.thread
-                  ? skin.threadOn
-                  : `${skin.muted} ${skin.threadOff}`
-              }`}
-            >
-              {branch.title}
-              {branch.closed && " ·"}
-            </button>
-          ))}
-        </div>
+        <ThreadTabs
+          threads={state.threads}
+          current={state.thread}
+          unread={state.unreadByThread}
+          onPick={openThread}
+          hint={t.chat.threadInForum}
+          unreadTitle={t.chat.unread}
+          skin={{
+            on: skin.threadOn,
+            off: skin.threadOff,
+            muted: skin.muted,
+            badge: skin.threadBadge,
+            arrow: skin.threadArrow,
+          }}
+        />
       )}
 
       <a

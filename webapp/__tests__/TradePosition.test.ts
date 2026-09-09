@@ -8,7 +8,9 @@ import {
   createTrade,
   floatingAt,
   pendingTargets,
+  pickFilled,
   pnlAt,
+  riskBands,
   riskEdge,
   wasEntered,
   type ActiveTrade,
@@ -389,5 +391,79 @@ describe("дальний край риска", () => {
     // сейчас: бокс прежней ширины показывал бы убыток меньше возможного.
     expect(riskEdge({ ...long(), stop: 98 })).toBe(98);
     expect(riskEdge({ ...short(), stop: 103 })).toBe(103);
+  });
+});
+
+describe("полосы риска", () => {
+  it("нетронутый стоп - одна полоса от входа до него", () => {
+    const bands = riskBands(long());
+    expect(bands.live).toEqual({ top: 100, bottom: 99 });
+    expect(bands.spent).toBeNull();
+  });
+
+  it("подтянутый стоп сужает живой риск, остальное бледнеет", () => {
+    // Так и выглядела «прибагованная» разметка лонга: стоп подтянут вплотную,
+    // а красный бокс уходил вниз во всю ширину исходного стопа.
+    const bands = riskBands({ ...long(), stop: 99.8 });
+    expect(bands.live).toEqual({ top: 100, bottom: 99.8 });
+    expect(bands.spent).toEqual({ top: 99.8, bottom: 99 });
+  });
+
+  it("стоп за входом - живого риска нет, память остаётся", () => {
+    const bands = riskBands({ ...long(), stop: 100.4 });
+    expect(bands.live).toBeNull();
+    expect(bands.spent).toEqual({ top: 100, bottom: 99 });
+  });
+
+  it("отодвинутый стоп раздвигает живую полосу целиком", () => {
+    const bands = riskBands({ ...long(), stop: 98 });
+    expect(bands.live).toEqual({ top: 100, bottom: 98 });
+    expect(bands.spent).toBeNull();
+  });
+
+  it("шорт считается зеркально", () => {
+    const tight = riskBands({ ...short(), stop: 100.2 });
+    expect(tight.live).toEqual({ top: 100.2, bottom: 100 });
+    expect(tight.spent).toEqual({ top: 101, bottom: 100.2 });
+
+    const free = riskBands({ ...short(), stop: 99.6 });
+    expect(free.live).toBeNull();
+    expect(free.spent).toEqual({ top: 101, bottom: 100 });
+  });
+});
+
+describe("какая из ждущих заявок налилась", () => {
+  const lower = { id: "low", entry: 78332.3 };
+  const upper = { id: "high", entry: 78576.2 };
+
+  it("одна ждущая - она и есть", () => {
+    expect(pickFilled([upper], null)?.id).toBe("high");
+  });
+
+  it("ждать нечему - и ответа нет", () => {
+    expect(pickFilled([], 78576)).toBeNull();
+  });
+
+  it("выбирается та, к чьей цене ближе вход с биржи", () => {
+    // Трейдер поставил лимитку ниже, передумал и добавил вторую выше, не убрав
+    // первую. Налилась верхняя - её и надо открыть, а не первую в списке.
+    expect(pickFilled([lower, upper], 78576.2)?.id).toBe("high");
+    expect(pickFilled([lower, upper], 78332.3)?.id).toBe("low");
+  });
+
+  it("порядок в списке на выбор не влияет", () => {
+    expect(pickFilled([upper, lower], 78332.3)?.id).toBe("low");
+  });
+
+  it("небольшое расхождение с задуманной ценой выбор не ломает", () => {
+    // Биржа наливает по своей цене: проскальзывание на пару долларов обычное
+    // дело, а до соседней заявки две сотни.
+    expect(pickFilled([lower, upper], 78578.9)?.id).toBe("high");
+  });
+
+  it("без цены с биржи отступаем к первой", () => {
+    // Показать вход не по той заявке всё же лучше, чем не показать его вовсе.
+    expect(pickFilled([lower, upper], null)?.id).toBe("low");
+    expect(pickFilled([lower, upper], 0)?.id).toBe("low");
   });
 });

@@ -107,7 +107,7 @@ import {
   FootprintPrimitive,
   type FootprintSkin,
 } from "./primitives/FootprintPrimitive";
-import { parseFootprint, type FootprintData } from "@/lib/indicator/footprint";
+import { hasFootprint, parseFootprint, type FootprintData } from "@/lib/indicator/footprint";
 import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping";
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
 import DragLevels, { type DragLevel } from "./DragLevels";
@@ -117,7 +117,8 @@ import {
   floatingAt,
   pendingTargets,
   pnlAt,
-  riskEdge,
+  riskBands,
+  riskFree,
   type ActiveTrade,
 } from "@/lib/trade/position";
 
@@ -344,15 +345,6 @@ const SHELF_HIT_PX = 8;
 // значит показывать то, чего там не было.
 const RIGHT_BARS = 14;
 
-/**
- * Таймфреймы, у которых свеча раскрывается объёмом.
- *
- * Крупнее часа профиль не строим: за сутки сделок миллионы, и выкачивать их
- * ради картинки нечестно по отношению к лимиту биржи. Набор обязан совпадать
- * с тем, что принимает эндпоинт, — иначе нажатие давало бы отказ вместо свечи.
- */
-const FOOTPRINT_INTERVALS = new Set(["1m", "3m", "5m", "10m", "15m", "30m", "1h"]);
-
 /** Как часто перезапрашивать профиль текущей свечи. */
 const FOOTPRINT_REFRESH_MS = 3000;
 
@@ -369,6 +361,15 @@ const FOOTPRINT_HIT_PX = 6;
 
 /** Высота меню плюсика: три пункта. По ней решаем, куда его раскрывать. */
 const PLUS_MENU_H = 96;
+
+/**
+ * Насколько плюсик поднят над текущей ценой, точки экрана.
+ *
+ * Кнопка ростом в двадцать точек: половина её высоты ставит середину на цену,
+ * и тогда она сидит верхом на плашке цены и на её линии. Отсюда и число -
+ * высота кнопки с запасом, чтобы под ней осталась видна сама цена.
+ */
+const PLUS_ABOVE_PRICE = -26;
 
 /**
  * Сколько пустых баров дорисовываем за ленту, пока не приехала история.
@@ -471,32 +472,42 @@ function tradeBoxes(
 
   const far = pendingTargets(trade).at(-1);
 
-  // Бокс показывает, чем сделка рискует: от входа до дальнего края риска.
+  // Риск сделки - двумя полосами, и считает их riskBands().
   //
-  // Край не съёживается вслед за подтянутым стопом - иначе с графика пропадает
-  // то, на что трейдер шёл, когда входил, - но расширяется вслед за отодвинутым:
-  // стоп дальше задуманного это не память о риске, а новый риск. Правило целиком
-  // живёт в riskEdge().
+  // Цветом риска красится только живая полоса, от входа до нынешнего стопа:
+  // это те деньги, которыми сделка рискует сию минуту. Подтянутый стоп её
+  // сужает - и правильно делает: трейдер, подтянувший стоп вплотную, видел
+  // под входом красную плиту во всю ширину исходного стопа и справедливо
+  // считал разметку сломанной.
   //
-  // Риск снят не по флагу, а по факту: стоп должен стоять за ценой входа. Флаг
-  // говорил «безубыток» и тогда, когда стоп на бирже не сдвинулся, - и метка BE
-  // оказывалась на исходном стопе, то есть на цене убытка.
-  const safe = riskFree(trade);
-  const risk = riskEdge(trade);
-  const boxes: Shapes["boxes"] = [
-    {
+  // Остальное - бледная память о задуманном риске: с чего сделка начиналась,
+  // с графика пропадать не должно. Без надписей: заливка и метка BE у края и
+  // так всё говорят, а слова поверх свечей мешают читать цену - ради неё
+  // график и открыт.
+  const { live, spent } = riskBands(trade);
+  const boxes: Shapes["boxes"] = [];
+  if (spent) {
+    boxes.push({
       fromTime: anchor as UTCTimestamp,
       toTime: span,
-      top: Math.max(trade.entry, risk),
-      bottom: Math.min(trade.entry, risk),
-      fill: safe ? palette.spentBox : palette.riskBox,
-      border: safe ? palette.spentBorder : palette.riskBorder,
-      // Без надписи: бледная заливка и метка BE у края и так говорят, что
-      // риска в этом боксе больше нет, а слова поверх свечей мешают читать
-      // цену - ради неё график и открыт.
+      top: spent.top,
+      bottom: spent.bottom,
+      fill: palette.spentBox,
+      border: palette.spentBorder,
       labelColor: palette.text,
-    },
-  ];
+    });
+  }
+  if (live) {
+    boxes.push({
+      fromTime: anchor as UTCTimestamp,
+      toTime: span,
+      top: live.top,
+      bottom: live.bottom,
+      fill: palette.riskBox,
+      border: palette.riskBorder,
+      labelColor: palette.text,
+    });
+  }
   // Безубыток подписан у правого края бокса, на той цене, где стоп стоит на
   // самом деле. Ярлык на линии входа врал бы дважды: и местом, и ценой —
   // биржа считает безубыток с комиссией, это заметно выше входа.
@@ -544,17 +555,6 @@ function tradeShapes(
     segments: parts.flatMap((p) => p.segments),
     points: parts.flatMap((p) => p.points),
   };
-}
-
-/**
- * Снят ли риск: стоп стоит по ту сторону цены входа.
- *
- * Именно это значит «безубыток» для трейдера, и проверяется это числами, а не
- * состоянием сделки: пока стоп на бирже не переехал, риск на месте, чего бы
- * ни думал терминал.
- */
-function riskFree(trade: ActiveTrade): boolean {
-  return trade.side === "long" ? trade.stop >= trade.entry : trade.stop <= trade.entry;
 }
 
 /**
@@ -658,6 +658,8 @@ function PriceChart({
   liveCandle,
   liveFoot,
   onFootBar,
+  footOpen,
+  onFootOpenChange,
   onCloseTrade,
   showJournal,
   journalKey,
@@ -724,6 +726,16 @@ function PriceChart({
   } | null;
   /** Какую свечу разобрали: серверу надо знать, чей профиль слать. */
   onFootBar?: (time: number) => void;
+  /**
+   * Разбор свечи открыт - снаружи, кнопкой в панели инструментов.
+   *
+   * Раньше открыть его можно было только нажатием по текущей цене на самом
+   * графике, и знать об этом надо было заранее: ни кнопки, ни подписи у этого
+   * движения нет. Кнопка делает то же самое явным.
+   */
+  footOpen?: boolean;
+  /** Разбор открылся или закрылся - в том числе нажатием по графику. */
+  onFootOpenChange?: (open: boolean) => void;
   /** Закрыть сделку по нажатию на ярлык её позиции. */
   onCloseTrade?: (trade: ActiveTrade) => void;
   /** Показывать отработанные сетапы из журнала прямо на графике. */
@@ -998,6 +1010,31 @@ function PriceChart({
   const openBar = pickedBar ?? (followBar ? liveBar : null);
   const openBarRef = useRef<number | null>(null);
   openBarRef.current = openBar;
+
+  // Разбор свечи открыт - значит трейдер его позвал, а не «уже нарисован»:
+  // живой свече нужен ещё тик часов, чтобы узнать своё начало, и по
+  // нарисованному кнопка в панели мигала бы выключенной в первую секунду.
+  const footShown = pickedBar !== null || followBar;
+  const footShownRef = useRef(false);
+  footShownRef.current = footShown;
+
+  // Кнопка в панели инструментов открывает и закрывает тот же разбор.
+  //
+  // Сверяемся с уже открытым: трейдер мог раскрыть свечу из истории нажатием
+  // по ней, и повторное «открыть» кнопкой не должно сбрасывать его выбор на
+  // живую. Ref, а не состояние, - иначе разбор пересобирался бы на каждой
+  // смене свечи.
+  useEffect(() => {
+    if (footOpen === undefined || footOpen === footShownRef.current) return;
+    setPickedBar(null);
+    setFollowBar(footOpen);
+  }, [footOpen]);
+
+  // Разбор открыли или закрыли на самом графике - панель инструментов обязана
+  // это увидеть: иначе её кнопка горит, когда свеча уже закрыта крестиком.
+  useEffect(() => {
+    onFootOpenChange?.(footShown);
+  }, [footShown, onFootOpenChange]);
   const followRef = useRef(false);
   followRef.current = followBar;
   // Профиль с сервера по запросу: история и те свечи, которых своя лента не
@@ -1233,7 +1270,7 @@ function PriceChart({
       // режима: цена стоит у правого края, панель встаёт рядом с ней — рука
       // тянется туда же, куда и взгляд.
       const live = dataRef.current.at(-1);
-      if (live && FOOTPRINT_INTERVALS.has(intervalRef.current)) {
+      if (live && hasFootprint(intervalRef.current)) {
         const liveX = scale.timeToCoordinate(live.time as UTCTimestamp);
         const liveY = series.priceToCoordinate(live.close);
         if (
@@ -1258,7 +1295,7 @@ function PriceChart({
       // графика. Проверяем и по горизонтали, и по вертикали: клик по пустому месту над свечой - это расчёт сделки от той
       // цены, и отбирать его у трейдера нельзя.
       const bar = barUnder(scale, series, param.point, dataRef.current);
-      if (bar && FOOTPRINT_INTERVALS.has(intervalRef.current)) {
+      if (bar && hasFootprint(intervalRef.current)) {
         setPickedBar(bar.time);
         return;
       }
@@ -1793,7 +1830,10 @@ function PriceChart({
         livePriceRef.current > 0 ? livePriceRef.current : dataRef.current.at(-1)?.close ?? 0;
       const atPrice = price > 0 ? series.priceToCoordinate(price) : null;
       place(clockRef.current, atPrice, 10);
-      if (!plusHeldRef.current) place(plusRef.current, atPrice, -10);
+      // Плюсик стоит над ценой, а не на ней: вровень с ней он спорил с плашкой
+      // текущей цены и с самой линией - под кнопкой пропадало то, ради чего
+      // на неё смотрят.
+      if (!plusHeldRef.current) place(plusRef.current, atPrice, PLUS_ABOVE_PRICE);
 
       // Текст таймера меняется раз в секунду — пишем его только при смене.
       const next = untilClose(interval);

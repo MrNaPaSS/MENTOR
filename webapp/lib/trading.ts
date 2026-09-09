@@ -228,13 +228,26 @@ export type ExchangePosition = {
  * смотрит на другой график, и спрашивать по одной открытой монете значит
  * узнать о своей же сделке в последнюю очередь.
  */
-export async function openSizes(): Promise<Record<string, number> | null> {
+/** Открытая позиция глазами биржи: объём и средняя цена входа. */
+export type LivePosition = {
+  size: number;
+  /**
+   * Средняя цена входа. null - биржа её не назвала.
+   *
+   * По ней разбирается, какая из нескольких ждущих заявок исполнилась: позиция
+   * приходит одной строкой на монету и сторону, а лимиток в лонг может стоять
+   * две - одна выше, другая ниже.
+   */
+  entry: number | null;
+};
+
+export async function openPositions(): Promise<Record<string, LivePosition> | null> {
   const body = await request<{ positions: Record<string, unknown>[] }>(
     "/api/trading/positions",
   );
   if (!body) return null;
 
-  const out: Record<string, number> = {};
+  const out: Record<string, LivePosition> = {};
   for (const row of body.positions) {
     const symbol = String(row.symbol ?? "").toUpperCase();
     if (!symbol) continue;
@@ -248,6 +261,23 @@ export async function openSizes(): Promise<Record<string, number> | null> {
       }
     }
     if (size <= 0) continue;
+
+    // Средней цены входа в ответе WEEX может не быть прямо: тогда считаем её
+    // как «сколько денег зашло» на «какой объём» - то же правило, что и в
+    // разборе одной позиции.
+    const number = (...names: string[]) => {
+      for (const name of names) {
+        const value = Number(row[name]);
+        if (Number.isFinite(value) && value !== 0) return value;
+      }
+      return null;
+    };
+    const openValue = number("cumOpenValue", "openValue") ?? 0;
+    const openSize = number("cumOpenSize") ?? 0;
+    const entry =
+      number("averageOpenPrice", "entryPrice", "avgPrice") ??
+      (openValue > 0 && openSize > 0 ? openValue / openSize : null);
+
     // Сторону биржа называет не всегда: в одностороннем режиме поля может не
     // быть вовсе. Тогда записываем под обе - позиция по монете ровно одна.
     const keys = side.includes("short")
@@ -255,8 +285,25 @@ export async function openSizes(): Promise<Record<string, number> | null> {
       : side.includes("long")
         ? [`${symbol}:long`]
         : [`${symbol}:long`, `${symbol}:short`];
-    for (const key of keys) out[key] = (out[key] ?? 0) + size;
+    for (const key of keys) {
+      const was = out[key];
+      out[key] = {
+        size: (was?.size ?? 0) + size,
+        // Двух строк на один ключ биржа не отдаёт; если всё же отдала, первая
+        // цена честнее среднего от двух неизвестно чего.
+        entry: was?.entry ?? entry,
+      };
+    }
   }
+  return out;
+}
+
+/** Только объёмы: тем местам, которым цена входа не нужна. */
+export async function openSizes(): Promise<Record<string, number> | null> {
+  const rows = await openPositions();
+  if (!rows) return null;
+  const out: Record<string, number> = {};
+  for (const [key, one] of Object.entries(rows)) out[key] = one.size;
   return out;
 }
 

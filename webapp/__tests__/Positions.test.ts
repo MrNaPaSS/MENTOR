@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { positionOf } from "@/lib/trading";
+import { openPositions, positionOf } from "@/lib/trading";
 import { setStudentTokens, logout } from "@/lib/auth";
 
 // В хедже по одному инструменту на бирже стоят две позиции — лонг и шорт.
@@ -53,5 +53,45 @@ describe("позиция глазами биржи", () => {
   it("чужой инструмент не считается своим", async () => {
     vi.stubGlobal("fetch", answer([{ symbol: "ETHUSDT", total: "3" }]));
     expect((await positionOf("BTCUSDT", "long"))?.size).toBe(0);
+  });
+});
+
+describe("средняя цена входа приезжает вместе с объёмом", () => {
+  beforeEach(() => setStudentTokens("a1", "r1"));
+  afterEach(() => {
+    logout();
+    vi.unstubAllGlobals();
+  });
+
+  const stub = (body: { positions: Record<string, unknown>[] }) =>
+    vi.stubGlobal("fetch", answer(body.positions));
+
+  it("берётся прямо, когда биржа её назвала", async () => {
+    // По ней разбирается, какая из нескольких ждущих заявок исполнилась.
+    stub({
+      positions: [
+        { symbol: "BTCUSDT", positionSide: "LONG", total: "0.5", averageOpenPrice: "78576.2" },
+      ],
+    });
+    const rows = await openPositions();
+    expect(rows?.["BTCUSDT:long"]).toEqual({ size: 0.5, entry: 78576.2 });
+  });
+
+  it("считается из оборота, когда прямой цены нет", async () => {
+    // В ответе WEEX средней может не быть: есть «сколько денег зашло» и «на
+    // какой объём», и отношение и есть средняя.
+    stub({
+      positions: [
+        { symbol: "BTCUSDT", holdSide: "long", total: "2", cumOpenValue: "200", cumOpenSize: "2" },
+      ],
+    });
+    const rows = await openPositions();
+    expect(rows?.["BTCUSDT:long"].entry).toBe(100);
+  });
+
+  it("без цены строка всё равно приходит - с объёмом", async () => {
+    stub({ positions: [{ symbol: "BTCUSDT", holdSide: "long", total: "1" }] });
+    const rows = await openPositions();
+    expect(rows?.["BTCUSDT:long"]).toEqual({ size: 1, entry: null });
   });
 });

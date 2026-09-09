@@ -45,6 +45,14 @@ const EDGE_SLACK = 56;
 // больше — трейдер успевает потерять цену из виду.
 const RECENTER_IDLE_MS = 2000;
 
+// Насколько спред стоит выше геометрической середины стакана, строк.
+//
+// Ровно посередине он стоял только на бумаге: сверху над лентой висит шапка
+// объёмов, снизу - подвал со временем, и обе они лежат поверх строк. Спред
+// от этого оказывался ниже той середины, которую видит глаз, и место под
+// заявку - самое нужное в стакане - уходило под подвал.
+const CENTER_LIFT_ROWS = 2;
+
 /** Ячейки истории приходят тройками — раскладываем в карту по цене строки. */
 function indexCells(columns: ClusterColumn[]): Map<number, [number, number]>[] {
   return columns.map((column) => {
@@ -176,7 +184,10 @@ export default function DomTrader({
 
     const target = Math.max(
       0,
-      askCount * ROW_HEIGHT + ROW_HEIGHT / 2 - el.clientHeight / 2,
+      askCount * ROW_HEIGHT +
+        ROW_HEIGHT / 2 -
+        el.clientHeight / 2 +
+        CENTER_LIFT_ROWS * ROW_HEIGHT,
     );
     // Порог в полстроки: без него округление координат гоняло бы прокрутку
     // туда-обратно на каждом кадре.
@@ -442,6 +453,11 @@ function VolumeHeader({ columns }: { columns: ClusterColumn[] }) {
  *
  * Высота приходит от самого графика: её считает библиотека, от шрифта, и
  * подобрать её числом здесь значит однажды разойтись при смене шрифта.
+ *
+ * Фон - общий фон панели, а не тёмная подложка. Тёмной он был один во всём
+ * терминале: у графика рядом шкала времени стоит на своём фоне, и низ стакана
+ * читался чужой полосой, приклеенной снизу. Отделяет его линия сверху - её
+ * достаточно.
  */
 function TimeFooter({
   columns,
@@ -452,7 +468,7 @@ function TimeFooter({
 }) {
   return (
     <div
-      className="sticky bottom-0 z-20 flex items-center bg-[var(--pane-deep)] font-mono text-[10px] text-[var(--pane-muted)] shadow-[0_-1px_0_var(--pane-border)]"
+      className="sticky bottom-0 z-20 flex items-center bg-[var(--pane-bg)] font-mono text-[10px] text-[var(--pane-muted)] shadow-[0_-1px_0_var(--pane-border)]"
       style={height ? { height } : undefined}
     >
       <div className="flex-1" />
@@ -461,7 +477,7 @@ function TimeFooter({
           {clockLabel(column.start)}
         </div>
       ))}
-      <div className={`sticky right-0 ${BOOK_W} bg-[var(--pane-deep)]`} />
+      <div className={`sticky right-0 ${BOOK_W} bg-[var(--pane-bg)]`} />
     </div>
   );
 }

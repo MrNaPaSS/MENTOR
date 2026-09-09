@@ -18,7 +18,7 @@ import {
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
 import { api } from "@/lib/api";
-import { getMentorToken, setMentorToken, logoutMentor } from "@/lib/auth";
+import { getMentorToken, setMentorToken, logoutMentor, onTokensChange } from "@/lib/auth";
 
 const NAV = [
   { href: "/admin", label: "Дашборд", icon: LayoutDashboard },
@@ -39,9 +39,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [token, setToken] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
+  // Токен наставника живёт четверть часа и обновляется прямо посреди работы.
+  // Панель обязана узнать об этом сама: страницы берут токен отсюда, и пока
+  // здесь лежал протухший, ученики и дашборд открывались пустыми до
+  // перезагрузки. Подписка отдаёт им свежий, и списки наливаются сразу.
   useEffect(() => {
     setToken(getMentorToken());
     setReady(true);
+    return onTokensChange(() => setToken(getMentorToken()));
   }, []);
 
   if (!ready) return <div className="grid min-h-screen place-items-center text-text-muted">…</div>;

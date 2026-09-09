@@ -3,12 +3,12 @@
 import {
   logout,
   logoutMentor,
-  getMentorToken,
   getMentorRefreshToken,
-  getAccessToken,
   getRefreshToken,
   setStudentTokens,
   setMentorToken,
+  tokenKind,
+  type TokenKind,
 } from "./auth";
 import { apiAlive, apiDown, isServerGone, setHealthProbe } from "./health";
 
@@ -39,13 +39,14 @@ export function absolute(url: string): string {
   return `${API_URL}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
-type TokenKind = "student" | "mentor";
-
-/** Какому входу принадлежит токен из заголовка запроса. */
+/**
+ * Какому входу принадлежит токен из заголовка запроса.
+ *
+ * Спрашиваем хранилище, а не сравниваем сами: страница могла уйти в запрос со
+ * своим, уже обновлённым из-под неё токеном, и такой запрос всё равно наш.
+ */
 function whoseToken(token: string): TokenKind | null {
-  if (token && token === getMentorToken()) return "mentor";
-  if (token && token === getAccessToken()) return "student";
-  return null;
+  return tokenKind(token);
 }
 
 // Пока обновление в полёте, параллельные запросы ждут его, а не плодят свои:
