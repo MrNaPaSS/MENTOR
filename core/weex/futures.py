@@ -366,12 +366,26 @@ class WeexFutures:
         return data if isinstance(data, list) else []
 
     async def set_leverage(self, symbol: str, leverage: int, margin_coin: str = "USDT") -> Any:
+        """Поставить плечо по монете - и в кросс-режиме, и в изолированном.
+
+        Все три поля разом, одним числом. Биржа проверяет то из них, которое
+        отвечает режиму маржи счёта, а режим этот - свойство счёта, а не наш
+        выбор: у нового ученика он кросс по умолчанию, и запрос без
+        ``crossLeverage`` возвращался отказом «Parameter 'crossLeverage' cannot
+        be empty». Сделка при этом падала целиком, потому что плечо ставится
+        перед заявкой.
+
+        Спрашивать режим отдельным запросом ради этого не стоит: он стоит
+        лишнего похода на биржу перед каждой сделкой, а плечо у нас в обоих
+        режимах одно и то же - то, которое трейдер видит на графике.
+        """
         return await self._request(
             "POST",
             ENDPOINTS["leverage"],
             data={
                 "symbol": symbol,
                 "marginCoin": margin_coin,
+                "crossLeverage": str(leverage),
                 "isolatedLongLeverage": str(leverage),
                 "isolatedShortLeverage": str(leverage),
             },

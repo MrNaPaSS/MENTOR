@@ -21,6 +21,7 @@ import Ambient from "@/components/ui/Ambient";
 import RadioChip from "@/components/app/RadioChip";
 import { api, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
+import { attend } from "@/lib/chat/store";
 import { useCoins } from "@/lib/useCoins";
 import { PROFILE_EVENT } from "@/lib/profileEvent";
 import { fmtUsd, modeLabel } from "@/lib/format";
@@ -77,6 +78,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Пока открыт терминал, наблюдение молчит: там оно своё и знает больше.
   const toasts = useSyncExternalStore(subscribeToasts, snapshotToasts, serverToasts);
   useEffect(() => watchTrades(), []);
+
+  // Присутствие в чате держит вся оболочка, а не одна панель терминала.
+  // «В сети» - это про человека на сайте: ушедший в анализы или в маркет
+  // никуда не делся, а из комнаты пропадал. Ленту при этом не тянем - только
+  // соединение.
+  useEffect(() => {
+    if (!ready) return;
+    return attend();
+  }, [ready]);
 
   // Профиль перечитывается не только при входе.
   //
