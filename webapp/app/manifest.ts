@@ -5,7 +5,8 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "NMNH Platform",
     short_name: "NMNH",
-    description: "Профессиональный торговый терминал: стакан, график, журнал сделок и расчёт риска.",
+    description:
+      "Экосистема трейдера: терминал со стаканом и графиком, живой чат, журнал сделок с активностями и внутренний токен.",
     lang: "ru",
     start_url: "/app/scalping",
     scope: "/",

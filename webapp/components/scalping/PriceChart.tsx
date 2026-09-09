@@ -1062,9 +1062,8 @@ function PriceChart({
   const footTellRef = useRef(onFootOpenChange);
   footTellRef.current = onFootOpenChange;
 
-  // Закрыли разбор - отпускаем и его привязку к цене. Открытый он стоит на
-  // месте намеренно, а вот следующий обязан встать на нынешнюю цену, а не
-  // там, где картинку оставили полчаса назад.
+  // Закрыли разбор - убираем и картинку с холста: её место и подпись над ней
+  // страница считает по примитиву, и пустой он должен быть пустым.
   useEffect(() => {
     if (!footShown) footPrimRef.current?.clear();
   }, [footShown]);

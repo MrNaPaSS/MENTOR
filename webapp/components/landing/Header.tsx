@@ -40,7 +40,8 @@ export default function Header() {
       }`}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 md:px-6">
-        <Logo />
+        {/* Вошедшему знак ведёт в терминал: витрину он уже прочитал. */}
+        <Logo href={authed ? "/app/scalping" : "/"} />
 
         {/* Центральная навигация (десктоп) */}
         <nav className="hidden items-center gap-1 lg:flex">
@@ -100,7 +101,7 @@ export default function Header() {
           }`}
         >
           <div className="mb-4 flex items-center justify-between">
-            <Logo />
+            <Logo href={authed ? "/app/scalping" : "/"} />
             <button
               onClick={() => setOpen(false)}
               className="grid h-10 w-10 place-items-center rounded-lg text-text-primary ring-1 ring-border"

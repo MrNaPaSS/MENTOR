@@ -12,7 +12,7 @@ export const landing = {
     eyebrow: "The trading terminal of the NMNH academy",
     titleTop: "These aren't signals.",
     titleAccent: "This is a trading terminal.",
-    lead: "It connects to your exchange account. Order book, chart, risk sizing and order entry - in one window.",
+    lead: "A trader's ecosystem: a terminal with order book and chart, software wired to your exchange account, a live chat, a trade journal with activities and an in-platform token.",
     bullets: [
       "Free, no subscriptions",
       "Your money stays on your exchange",
