@@ -43,6 +43,26 @@ export function breakevenPrice(entry: number, long: boolean, fee = TAKER_FEE): n
   return long ? (entry * (1 + fee)) / (1 - fee) : (entry * (1 - fee)) / (1 + fee);
 }
 
+/**
+ * Комиссия обеих ног за закрытый объём.
+ *
+ * Оценка, а не факт: настоящую называет биржа, и сопровождение потом
+ * переписывает запись её числом. Но до тех пор в журнале стоял результат до
+ * комиссии - на десятке тысяч оборота это шестнадцать долларов, и трейдер
+ * видел +142 там, где на счёт пришло +126. Оценка по ставке тейкера ближе к
+ * правде, чем ноль, и ошибается она в ту сторону, в которую ошибаться не
+ * страшно.
+ */
+export function roundTripFee(
+  entry: number,
+  exit: number,
+  qty: number,
+  rate = TAKER_FEE,
+): number {
+  if (!(qty > 0) || !(entry > 0) || !(exit > 0)) return 0;
+  return (entry + exit) * qty * rate;
+}
+
 export function takeShare(index: number, count: number): number {
   if (count <= 0 || index < 0 || index >= count) return 0;
   return count === TAKE_SHARES.length ? TAKE_SHARES[index] : 1 / count;
@@ -75,7 +95,13 @@ export type ActiveTrade = {
   takesHit: number;
   /** Стоп переставлен в безубыток. */
   breakeven: boolean;
-  /** Комиссия сделки по данным биржи: обе ноги вместе. */
+  /**
+   * Комиссия сделки: обе ноги вместе.
+   *
+   * До закрытия здесь то, что уже уплачено за взятые цели, после - вся сделка.
+   * Наша оценка по ставке тейкера; сопровождение потом переписывает запись
+   * настоящим числом с биржи.
+   */
   fee?: number;
   /**
    * Плавающий результат по данным биржи.
@@ -256,6 +282,9 @@ export function advance(trade: ActiveTrade, price: number, now: number): ActiveT
 
   const stopped = long ? price <= trade.stop : price >= trade.stop;
   if (stopped) {
+    // Комиссия за этот выход прибавляется к уже накопленной по взятым целям:
+    // каждая часть платит за свои две ноги.
+    const fee = (trade.fee ?? 0) + roundTripFee(trade.entry, trade.stop, trade.qty);
     return {
       ...trade,
       status: "closed",
@@ -264,9 +293,11 @@ export function advance(trade: ActiveTrade, price: number, now: number): ActiveT
       // Безубыток — это тоже стоп, но по деньгам ноль, и в журнале он должен
       // отличаться от сделки, вынесенной в минус.
       outcome: "stop",
+      fee,
       pnl:
         trade.realized +
-        (long ? trade.stop - trade.entry : trade.entry - trade.stop) * trade.qty,
+        (long ? trade.stop - trade.entry : trade.entry - trade.stop) * trade.qty -
+        fee,
     };
   }
 
@@ -283,10 +314,12 @@ export function advance(trade: ActiveTrade, price: number, now: number): ActiveT
   // участвует, и считать её по текущей цене — врать себе.
   let realized = trade.realized;
   let closed = 0;
+  let fee = trade.fee ?? 0;
   for (let i = trade.takesHit; i < hit; i++) {
     const part = trade.initialQty * takeShare(i, trade.targets.length);
     const target = trade.targets[i];
     realized += (long ? target - trade.entry : trade.entry - target) * part;
+    fee += roundTripFee(trade.entry, target, part);
     closed += part;
   }
   const left = Math.max(0, trade.qty - closed);
@@ -302,7 +335,8 @@ export function advance(trade: ActiveTrade, price: number, now: number): ActiveT
       closedAt: now,
       exit: trade.targets[trade.targets.length - 1],
       outcome: "take",
-      pnl: realized,
+      fee,
+      pnl: realized - fee,
     };
   }
 
@@ -315,6 +349,7 @@ export function advance(trade: ActiveTrade, price: number, now: number): ActiveT
     takesHit: hit,
     qty: left,
     realized,
+    fee,
     breakeven: true,
     stop: breakevenPrice(trade.entry, long),
   };
@@ -400,7 +435,9 @@ export function closePartially(
   const exit = price > 0 ? price : trade.entry;
   const long = trade.side === "long";
   const closedQty = trade.qty * part;
-  const pnl = (long ? exit - trade.entry : trade.entry - exit) * closedQty;
+  // Своя комиссия у своей части: закрытая доля платит за две свои ноги.
+  const fee = roundTripFee(trade.entry, exit, closedQty);
+  const pnl = (long ? exit - trade.entry : trade.entry - exit) * closedQty - fee;
 
   const recorded: ActiveTrade = {
     ...trade,
@@ -414,6 +451,7 @@ export function closePartially(
     closedAt: now,
     exit,
     outcome: "manual",
+    fee,
     pnl,
   };
 
@@ -448,16 +486,18 @@ export function closeManually(trade: ActiveTrade, price: number, now: number): A
   if (trade.status === "closed") return trade;
   const long = trade.side === "long";
   const exit = price > 0 ? price : trade.entry;
+  const open = trade.status === "open";
+  const fee = open ? (trade.fee ?? 0) + roundTripFee(trade.entry, exit, trade.qty) : 0;
   return {
     ...trade,
     status: "closed",
     closedAt: now,
     exit,
     outcome: "manual",
-    pnl:
-      trade.status === "open"
-        ? trade.realized + (long ? exit - trade.entry : trade.entry - exit) * trade.qty
-        : 0,
+    fee,
+    pnl: open
+      ? trade.realized + (long ? exit - trade.entry : trade.entry - exit) * trade.qty - fee
+      : 0,
   };
 }
 

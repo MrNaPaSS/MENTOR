@@ -761,10 +761,10 @@ export default function AnalyticsPage() {
             заведомо неполным оборотом нельзя. Вернуть её - убрать эту заглушку.
             <TradersTable /> */}
 
+        {/* Календарь и цифры месяца - рядом: слева когда, справа сколько. */}
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
           {/* ── Календарь ── */}
-          {/* Ширина ограничена: на всю ширину экрана клетка месяца вырастала в
-              ладонь ради одной цифры внутри. */}
-          <div className="w-full max-w-3xl overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+          <div className="w-full overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
 
             {/* Шапка */}
             <div
@@ -1041,51 +1041,10 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-        {/* KPI */}
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-          {/* Объём месяца */}
-          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-            <CircleProgress pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)} color="var(--c-accent)" size={72}>
-              <span className="font-mono text-[11px] font-bold text-[var(--pane-text)] leading-tight text-center">
-                {fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
-              </span>
-            </CircleProgress>
-            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.monthVolume}</span>
-            <span className="text-[10px] text-[var(--pane-accent)]">{t.analytics.kpi.monthVolumeGoal}</span>
-          </div>
-          {/* Стрик активности */}
-          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-            <CircleProgress pct={(activityStreak / 7) * 100} color="var(--c-warn)" size={72}>
-              <Flame className="h-5 w-5 text-orange-400" />
-              <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{activityStreak}</span>
-            </CircleProgress>
-            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.streak}</span>
-            <span className="text-[10px] text-orange-400">{t.analytics.kpi.streakGoal}</span>
-          </div>
-          {/* Ср. доходность */}
-          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-            <CircleProgress pct={Math.min(Math.abs(avgProfit) / 5 * 100, 100)} color={avgProfit >= 0 ? "var(--c-up)" : "var(--c-down)"} size={72}>
-              <span className={`font-mono text-sm font-bold ${avgProfit >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
-                {avgProfit >= 0 ? "+" : ""}{avgProfit.toFixed(2)}%
-              </span>
-            </CircleProgress>
-            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.avgDaily}</span>
-            <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.kpi.overDays(validPnl.length)}</span>
-          </div>
-          {/* Дней торговали */}
-          <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 flex flex-col items-center gap-1 py-3">
-            <CircleProgress pct={Math.min((tradingDays / 15) * 100, 100)} color="var(--c-gold)" size={72}>
-              <Calendar className="h-4 w-4 text-[var(--pane-gold)]" />
-              <span className="font-mono text-sm font-bold text-[var(--pane-text)]">{tradingDays}</span>
-            </CircleProgress>
-            <span className="text-xs text-[var(--pane-muted)]">{t.analytics.kpi.tradingDays}</span>
-            <span className="text-[10px] text-[var(--pane-gold)]">{t.analytics.kpi.tradingDaysGoal}</span>
-          </div>
-        </div>
-
-        {/* Ещё две панели цифр: как прошёл месяц и что со счётом.
-            Показатели над ними отвечают «сколько», эти - «как и почём». */}
-        <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+          {/* Две панели цифр рядом с календарём: календарь отвечает «когда»,
+              они - «как и почём». Столбиком справа, а не полосой под ним:
+              клетки месяца от лишней ширины растут, а цифры - нет. */}
+          <div className="space-y-3">
           <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
             <div className="flex items-baseline gap-2 border-b border-[var(--pane-border)] px-3 py-2">
               <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">
@@ -1169,7 +1128,48 @@ export default function AnalyticsPage() {
               </p>
             )}
           </div>
+          </div>
         </div>
+
+        {/* Показатели месяца - одной строкой.
+            Были четыре карточки с кольцами по семьдесят точек: они занимали
+            высоту панели, а говорили по одному числу каждая. Теперь число,
+            подпись и тонкая полоска до цели - полоска и есть то самое кольцо,
+            только не отнимающее экран. */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Kpi
+            label={t.analytics.kpi.monthVolume}
+            value={fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
+            note={t.analytics.kpi.monthVolumeGoal}
+            pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)}
+            color="var(--pane-accent)"
+          />
+          <Kpi
+            label={t.analytics.kpi.streak}
+            value={String(activityStreak)}
+            note={t.analytics.kpi.streakGoal}
+            pct={Math.min((activityStreak / 7) * 100, 100)}
+            color="var(--c-warn)"
+            icon={<Flame className="h-3.5 w-3.5 text-orange-400" />}
+          />
+          <Kpi
+            label={t.analytics.kpi.avgDaily}
+            value={`${avgProfit >= 0 ? "+" : ""}${avgProfit.toFixed(2)}%`}
+            note={t.analytics.kpi.overDays(validPnl.length)}
+            pct={Math.min((Math.abs(avgProfit) / 5) * 100, 100)}
+            color={avgProfit >= 0 ? "var(--pane-up)" : "var(--pane-down)"}
+            tone={avgProfit >= 0 ? "up" : "down"}
+          />
+          <Kpi
+            label={t.analytics.kpi.tradingDays}
+            value={String(tradingDays)}
+            note={t.analytics.kpi.tradingDaysGoal}
+            pct={Math.min((tradingDays / 15) * 100, 100)}
+            color="var(--pane-gold)"
+            icon={<Calendar className="h-3.5 w-3.5 text-[var(--pane-gold)]" />}
+          />
+        </div>
+
         </>
       )}
 
@@ -1410,6 +1410,55 @@ function Metric({
         <span className={`font-mono text-[12px] font-bold tabular-nums ${color}`}>{value}</span>
         {note && <span className="ml-1.5 text-[10px] text-[var(--pane-muted)]">{note}</span>}
       </dd>
+    </div>
+  );
+}
+
+/**
+ * Показатель месяца: число, подпись и полоска до цели.
+ *
+ * Полоска вместо кольца. Кольцо в семьдесят точек занимало высоту целой
+ * панели ради одного числа внутри себя, а сказать ему нужно ровно то же:
+ * сколько набрано и сколько до цели.
+ */
+function Kpi({
+  label,
+  value,
+  note,
+  pct,
+  color,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  /** Строка под подписью: цель или срок, за который считали. */
+  note: string;
+  pct: number;
+  color: string;
+  icon?: React.ReactNode;
+  tone?: "up" | "down";
+}) {
+  const ink =
+    tone === "up"
+      ? "text-[var(--pane-up)]"
+      : tone === "down"
+        ? "text-[var(--pane-down)]"
+        : "text-[var(--pane-text)]";
+  return (
+    <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-3 py-2">
+      <div className="flex items-baseline gap-1.5">
+        {icon}
+        <span className={`font-mono text-[15px] font-bold tabular-nums ${ink}`}>{value}</span>
+      </div>
+      <div className="mt-0.5 truncate text-[11px] text-[var(--pane-text-2)]">{label}</div>
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--pane-hover)]">
+        <div
+          className="h-full rounded-full transition-[width] duration-700"
+          style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }}
+        />
+      </div>
+      <div className="mt-1 truncate text-[10px] text-[var(--pane-muted)]">{note}</div>
     </div>
   );
 }

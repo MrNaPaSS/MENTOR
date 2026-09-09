@@ -11,6 +11,7 @@ import {
   pickFilled,
   pnlAt,
   riskBands,
+  roundTripFee,
   riskEdge,
   wasEntered,
   type ActiveTrade,
@@ -128,8 +129,16 @@ describe("цели", () => {
     // надбавка над входом уходит бирже комиссией.
     trade = advance(trade, 100, T0 + 2);
     expect(trade.status).toBe("closed");
-    expect(trade.pnl).toBeGreaterThan(3);
-    expect(trade.pnl).toBeCloseTo(3 + (breakevenPrice(100, true) - 100) * 7, 6);
+    // Из взятой цели вычитается комиссия обеих её ног и обеих ног остатка:
+    // на счёт приходит меньше, чем показывал плавающий результат.
+    expect(trade.pnl).toBeCloseTo(
+      3 + (breakevenPrice(100, true) - 100) * 7 - trade.fee!,
+      6,
+    );
+    expect(trade.fee).toBeCloseTo(
+      roundTripFee(100, 101, 3) + roundTripFee(100, breakevenPrice(100, true), 7),
+      6,
+    );
   });
 
   it("рывок через несколько целей засчитывает их все", () => {
@@ -146,7 +155,12 @@ describe("цели", () => {
     trade = advance(trade, 103, T0 + 1);
     expect(trade.status).toBe("closed");
     expect(trade.outcome).toBe("take");
-    expect(trade.pnl).toBeCloseTo(1 * 3 + 2 * 5 + 3 * 2, 6);
+    const gross = 1 * 3 + 2 * 5 + 3 * 2;
+    expect(trade.fee).toBeCloseTo(
+      roundTripFee(100, 101, 3) + roundTripFee(100, 102, 5) + roundTripFee(100, 103, 2),
+      6,
+    );
+    expect(trade.pnl).toBeCloseTo(gross - trade.fee!, 6);
   });
 });
 
@@ -157,7 +171,8 @@ describe("стоп", () => {
     trade = advance(trade, 98, T0 + 1);
     expect(trade.status).toBe("closed");
     expect(trade.exit).toBe(99);
-    expect(trade.pnl).toBeCloseTo(-10, 10);
+    // Минус десять по цене плюс комиссия обеих ног: она платится и на убытке.
+    expect(trade.pnl).toBeCloseTo(-10 - roundTripFee(100, 99, 10), 10);
   });
 
   it("в одном тике стоп важнее цели", () => {
@@ -179,7 +194,7 @@ describe("закрытие руками", () => {
     let trade = advance(long(), 100, T0);
     trade = closeManually(trade, 100.7, T0 + 1);
     expect(trade.outcome).toBe("manual");
-    expect(trade.pnl).toBeCloseTo(7, 10);
+    expect(trade.pnl).toBeCloseTo(7 - roundTripFee(100, 100.7, 10), 10);
   });
 
   it("неоткрытая сделка закрывается в ноль", () => {
@@ -229,7 +244,8 @@ describe("частичная фиксация", () => {
 
     expect(recorded).not.toBeNull();
     expect(recorded!.qty).toBeCloseTo(5, 10);
-    expect(recorded!.pnl).toBeCloseTo(2.5, 10);
+    // У части своя комиссия: две её ноги, а не всей позиции.
+    expect(recorded!.pnl).toBeCloseTo(2.5 - roundTripFee(100, 100.5, 5), 10);
     expect(recorded!.id).not.toBe(opened.id);      // своя запись, не дубликат
 
     expect(remaining.status).toBe("open");
@@ -259,7 +275,7 @@ describe("частичная фиксация", () => {
     const opened = advance(long(), 100, T0);
     const { remaining, recorded } = closePartially(opened, 1, 100.5, T0 + 1);
     expect(remaining.status).toBe("closed");
-    expect(remaining.pnl).toBeCloseTo(5, 10);
+    expect(remaining.pnl).toBeCloseTo(5 - roundTripFee(100, 100.5, 10), 10);
     expect(recorded!.id).toBe(remaining.id);       // одна запись, не две
   });
 
@@ -465,5 +481,28 @@ describe("какая из ждущих заявок налилась", () => {
     // Показать вход не по той заявке всё же лучше, чем не показать его вовсе.
     expect(pickFilled([lower, upper], null)?.id).toBe("low");
     expect(pickFilled([lower, upper], 0)?.id).toBe("low");
+  });
+});
+
+describe("комиссия в результате", () => {
+  it("считается по обеим ногам закрытого объёма", () => {
+    // Ставка 0.08% с ноги: на десяти тысячах оборота это шестнадцать долларов,
+    // и ровно на них журнал расходился с приложением биржи.
+    expect(roundTripFee(2448, 2552, 2)).toBeCloseTo((2448 + 2552) * 2 * 0.0008, 10);
+  });
+
+  it("без объёма или без цены комиссии нет", () => {
+    expect(roundTripFee(100, 101, 0)).toBe(0);
+    expect(roundTripFee(0, 101, 5)).toBe(0);
+    expect(roundTripFee(100, 0, 5)).toBe(0);
+  });
+
+  it("сделка знает свою комиссию, а не только результат", () => {
+    // По ней на карточке видно, почему на счёт пришло меньше, чем показывал
+    // плавающий результат.
+    let trade = advance(long(), 100, T0);
+    trade = closeManually(trade, 100.7, T0 + 1);
+    expect(trade.fee).toBeCloseTo(roundTripFee(100, 100.7, 10), 10);
+    expect(trade.pnl).toBeCloseTo(7 - trade.fee!, 10);
   });
 });
