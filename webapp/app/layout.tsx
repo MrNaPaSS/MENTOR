@@ -38,8 +38,21 @@ import DevBar from "@/components/dev/DevBar";
 import TelegramInit from "@/components/telegram/TelegramInit";
 import ServerUpdating from "@/components/app/ServerUpdating";
 
+/**
+ * Адрес, от которого считаются полные ссылки в метаданных.
+ *
+ * Здесь была причина того, что предпросмотр ссылки приходил без картинки:
+ * основой стоял nmnh.io, а сайт живёт на www.nmnh.trade - и og:image указывал
+ * на чужой домен, где этой картинки нет. Telegram сходил по адресу, ничего не
+ * нашёл и показал одни слова.
+ *
+ * Из окружения, если задано: у ветки для проверки свой адрес, и картинку она
+ * должна отдавать со своего.
+ */
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://www.nmnh.trade";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://nmnh.io"),
+  metadataBase: new URL(SITE),
   title: {
     default: "NMNH - Профессиональный торговый терминал",
     template: "%s - NMNH",
@@ -70,9 +83,13 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ru_RU",
     siteName: "NMNH Platform",
-    images: [{ url: "/og.png", width: 1200, height: 630 }],
+    url: SITE,
+    // Метка версии - по той же причине, что у значка вкладки: превью
+    // кэшируют все, кому его однажды отдали, и старую картинку они держат
+    // неделями.
+    images: [{ url: "/og.png?v=2", width: 1200, height: 630 }],
   },
-  twitter: { card: "summary_large_image", images: ["/og.png"] },
+  twitter: { card: "summary_large_image", images: ["/og.png?v=2"] },
 };
 
 export const viewport: Viewport = {

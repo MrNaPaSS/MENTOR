@@ -112,6 +112,17 @@ const ACH_CATEGORIES: { id: AchCategory; icon: React.ElementType }[] = [
   { id: "special",     icon: Sparkles      },
 ];
 
+/**
+ * Высота клетки календаря, точки.
+ *
+ * Клетки были квадратными, а календарь стоит в половину ширины страницы: на
+ * широком экране квадрат выходил в сто тридцать точек, и полный месяц из шести
+ * рядов растягивал панель на девять сотен - вдвое дольше, чем цифры рядом с
+ * ним. Читают в клетке три коротких строки, и сорока восьми точек им хватает с
+ * запасом.
+ */
+const CELL_H = 48;
+
 // ─── Ячейка дня ─────────────────────────────────────────────────────────────
 function DayCell({ day, onClick, active, isToday, best }: {
   day: CalendarDay | null;
@@ -126,7 +137,7 @@ function DayCell({ day, onClick, active, isToday, best }: {
   // Звезда двух цветов: чёрная на белом листе, зелёная на тёмном. Один рисунок
   // на оба не годится - чёрная звезда на тёмной клетке пропадает.
   const paper = useTerminalTheme();
-  if (!day) return <div style={{ aspectRatio: "1" }} />;
+  if (!day) return <div style={{ height: CELL_H }} />;
 
   const pnl = day.pnl_pct;
   const isPos = pnl !== null && pnl > 0;
@@ -169,7 +180,7 @@ function DayCell({ day, onClick, active, isToday, best }: {
   return (
     <button
       onClick={onClick}
-      style={{ aspectRatio: "1", background: bg }}
+      style={{ height: CELL_H, background: bg }}
       className={`group relative flex flex-col rounded-lg border transition-transform duration-150 hover:scale-[1.06] hover:z-10 ${borderCls} p-1`}
       title={[
         day.date,
@@ -307,6 +318,9 @@ export default function AnalyticsPage() {
    * убирают из-под глаз то, чего сейчас не спрашивают.
    */
   const [tab, setTab] = useState<"results" | "rewards">("results");
+  // Лист терминала: по нему выбирается цвет звезды - чёрная на белом, зелёная
+  // на тёмном.
+  const paper = useTerminalTheme();
   const [owner, setOwner] = useState<string | null>(null);
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
@@ -1249,10 +1263,17 @@ export default function AnalyticsPage() {
                       </div>
                     </div>
                   </div>
+                  {/* Полученная награда помечена звездой - той же, что стоит
+                      на лучшем дне календаря: одна отметка на всё, что
+                      заслужено. Прежний уголок цветной заливкой в углу читался
+                      оформлением рамки, а не отметкой. */}
                   {ach.earned && (
-                    <div className="absolute right-0 top-0 h-12 w-12 overflow-hidden">
-                      <div className="absolute right-0 top-0 h-12 w-12 -translate-y-6 translate-x-6 rotate-45 bg-[var(--pane-up)]/20" />
-                    </div>
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={paper === "light" ? "/marks/star.png" : "/marks/star-green.png"}
+                      alt=""
+                      className="pointer-events-none absolute right-1.5 top-1.5 h-5 w-5"
+                    />
                   )}
                 </div>
               );
