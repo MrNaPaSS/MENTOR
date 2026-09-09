@@ -374,6 +374,14 @@ type Workspace = {
   favorites: string[];
   /** Показывать в скринере только избранное. */
   onlyFavorites: boolean;
+  /**
+   * Открыт ли разбор свечи по объёму.
+   *
+   * Живёт вместе с остальными переключателями по той же причине, что и
+   * объёмные свечи: это способ смотреть на рынок, а не окно, которое открыли
+   * на минуту. Включивший его находит его включённым и завтра.
+   */
+  foot?: boolean;
 };
 
 function readWorkspace(): Partial<Workspace> | null {
@@ -610,6 +618,7 @@ export default function ScalpingPage() {
   // Ряд разметки свёрнут по умолчанию: кнопки слоёв трогают редко, а места они
   // занимают половину строки.
   const [layersOpen, setLayersOpen] = useState(false);
+  const layersRef = useRef<HTMLSpanElement>(null);
   const [screenerW, setScreenerW] = useState(PANE_LIMITS.screener.def);
   // Стакан открывается самым узким из допустимых.
   //
@@ -657,12 +666,6 @@ export default function ScalpingPage() {
   // крестиком в углу карточки.
   const [footOpen, setFootOpen] = useState(false);
   const footAvailable = hasFootprint(timeframe);
-  // Крупная свеча разбора не знает: сделок в ней миллионы, сервер её не
-  // отдаёт. Уходим на такой таймфрейм - карточку закрываем, иначе она висит
-  // пустой и с ошибкой.
-  useEffect(() => {
-    if (!footAvailable) setFootOpen(false);
-  }, [footAvailable]);
   const { screener, dom, connected } = useScalpingFeed({
     symbol,
     rows,
@@ -756,6 +759,7 @@ export default function ScalpingPage() {
       setFavorites(saved.favorites.filter((s) => typeof s === "string" && s));
     }
     if (typeof saved.onlyFavorites === "boolean") setOnlyFavorites(saved.onlyFavorites);
+    if (typeof saved.foot === "boolean") setFootOpen(saved.foot);
     if (Array.isArray(saved.alerts)) {
       setAlerts(
         saved.alerts.filter(
@@ -831,6 +835,24 @@ export default function ScalpingPage() {
     };
   }, [applyWorkspace]);
 
+  /**
+   * Ряд разметки закрывается сам, как только нажали мимо.
+   *
+   * Слои выбирают одним движением - включил, посмотрел, вернулся к цене, - и
+   * оставленный открытым ряд отнимает половину верхней строки у того, ради
+   * чего терминал открыт. Нажатие внутри самого ряда не в счёт: там как раз и
+   * выбирают, иногда по нескольку слоёв подряд.
+   */
+  useEffect(() => {
+    if (!layersOpen) return;
+    function away(event: PointerEvent) {
+      if (layersRef.current?.contains(event.target as Node)) return;
+      setLayersOpen(false);
+    }
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [layersOpen]);
+
   // Нажали пару в бегущей строке, не выходя из терминала. Адрес при этом
   // меняется, а страница остаётся прежней - чтение адреса при появлении здесь
   // уже не сработает, поэтому монета приходит событием.
@@ -858,6 +880,7 @@ export default function ScalpingPage() {
       alerts,
       favorites,
       onlyFavorites,
+      foot: footOpen,
     } satisfies Workspace;
 
     try {
@@ -895,6 +918,7 @@ export default function ScalpingPage() {
     alerts,
     favorites,
     onlyFavorites,
+    footOpen,
   ]);
 
   /**
@@ -2955,6 +2979,10 @@ export default function ScalpingPage() {
 
                       Стрелка смотрит туда, куда поедет ряд: влево - раскроется
                       влево, вправо - уедет обратно. */}
+                  {/* Ряд и его стрелка - одно целое: по этому узлу решается,
+                      нажали внутрь ряда или мимо него. `contents` значит, что
+                      своей рамки у него нет и раскладка строки не меняется. */}
+                  <span ref={layersRef} className="contents">
                   <button
                     onClick={() => setLayersOpen((open) => !open)}
                     title={layersOpen ? t.terminal.layersHide : t.terminal.layersShow}
@@ -2994,6 +3022,7 @@ export default function ScalpingPage() {
                       ))}
                     </>
                   )}
+                  </span>
 
                   {alertPrices.length > 0 && (
                     <button
@@ -3335,8 +3364,15 @@ export default function ScalpingPage() {
                   liveCandle={dom?.candle ?? null}
                   liveFoot={dom?.foot ?? null}
                   onFootBar={setFootBar}
-                  footOpen={footOpen}
-                  onFootOpenChange={setFootOpen}
+                  // Разбор виден там, где он считается: на крупной свече
+                  // сделок миллионы, и сервер её не разбирает. Но выключателя
+                  // это не трогает - ушли на часовик и вернулись, разбор
+                  // снова на месте. Гасит его только сам трейдер: кнопкой или
+                  // крестиком, как и объёмные свечи.
+                  footOpen={footOpen && footAvailable}
+                  onFootOpenChange={(open) => {
+                    if (footAvailable) setFootOpen(open);
+                  }}
                   onCloseTrade={(t) => {
                     setClosing(t);
                     setCloseOpen(true);
