@@ -359,6 +359,14 @@ const FOOTPRINT_LIVE_MS = 500;
 /** Насколько вертикально можно промахнуться мимо свечи, точки экрана. */
 const FOOTPRINT_HIT_PX = 6;
 
+/**
+ * Насколько рука вправе дрогнуть, чтобы нажатие осталось нажатием.
+ *
+ * Нажатие по объёму открывает расчёт сделки, и путать его с переносом нельзя:
+ * четыре точки - это дрожь руки, а не движение.
+ */
+const CLICK_SLACK = 4;
+
 /** Высота меню плюсика: три пункта. По ней решаем, куда его раскрывать. */
 const PLUS_MENU_H = 96;
 
@@ -1035,6 +1043,13 @@ function PriceChart({
   useEffect(() => {
     onFootOpenChange?.(footShown);
   }, [footShown, onFootOpenChange]);
+
+  // Закрыли разбор - отпускаем и его привязку к цене. Открытый он стоит на
+  // месте намеренно, а вот следующий обязан встать на нынешнюю цену, а не
+  // там, где картинку оставили полчаса назад.
+  useEffect(() => {
+    if (!footShown) footPrimRef.current?.clear();
+  }, [footShown]);
   const followRef = useRef(false);
   followRef.current = followBar;
   // Профиль с сервера по запросу: история и те свечи, которых своя лента не
@@ -2150,8 +2165,51 @@ function PriceChart({
       );
     };
 
+    /** Точка экрана в точку холста. */
+    const spot = (event: PointerEvent) => {
+      const rect = box!.getBoundingClientRect();
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+
+    /**
+     * По какой стороне разбора нажали.
+     *
+     * Слева от колонки цен - деньги продавца, справа - покупателя, так они и
+     * подписаны в шапке: «шорт» и «лонг». Нажатие по объёму открывает расчёт с
+     * этой цены в эту же сторону - тем же движением, что и нажатие по уровню в
+     * стакане. Сама колонка цен не в счёт: за неё картинку переносят.
+     */
+    const cell = (event: PointerEvent) => {
+      const body = footPrimRef.current?.body;
+      if (!body || hit(event)) return null;
+      const at = spot(event);
+      const row = footPrimRef.current?.at(at.x, at.y);
+      if (!row) return null;
+      return { price: row.price, side: at.x < body.x ? ("short" as const) : ("long" as const) };
+    };
+
     function onDown(event: PointerEvent) {
-      if (event.button !== 0 || !hit(event)) return;
+      if (event.button !== 0) return;
+
+      // Нажали по объёму - это заявка, а не перенос и не прокрутка графика
+      // под картинкой. Ждём отпускания на месте: тронулись с места - значит
+      // тянули, и сделку никто не просил.
+      const order = cell(event);
+      if (order) {
+        event.preventDefault();
+        event.stopPropagation();
+        const from = { x: event.clientX, y: event.clientY };
+        const done = (up: PointerEvent) => {
+          window.removeEventListener("pointerup", done);
+          const moved = Math.abs(up.clientX - from.x) + Math.abs(up.clientY - from.y);
+          if (moved > CLICK_SLACK) return;
+          orderAddRef.current?.(order.price, currentAtr(dataRef.current), order.side);
+        };
+        window.addEventListener("pointerup", done);
+        return;
+      }
+
+      if (!hit(event)) return;
       event.preventDefault();
       event.stopPropagation();
 
@@ -2178,11 +2236,12 @@ function PriceChart({
     // график проводит уровнем через всё поле.
     function onHover(event: PointerEvent) {
       if (event.buttons !== 0) return;
-      box!.style.cursor = hit(event) ? "grab" : "";
+      // Ладонь над колонкой цены - её тянут; палец над объёмом - по нему
+      // нажимают. Курсор здесь единственное, что об этом говорит заранее.
+      box!.style.cursor = hit(event) ? "grab" : cell(event) ? "pointer" : "";
 
-      const rect = box!.getBoundingClientRect();
-      const row =
-        footPrimRef.current?.at(event.clientX - rect.left, event.clientY - rect.top) ?? null;
+      const at = spot(event);
+      const row = footPrimRef.current?.at(at.x, at.y) ?? null;
       footPrimRef.current?.setHover(row?.price ?? null);
       setFootRow((now) =>
         now?.price === row?.price && now?.total === row?.total ? now : row,
