@@ -81,7 +81,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { coins } = useCoins(pathname);
   // Тема терминала красит весь сайт: подписка нужна, чтобы оболочка сменила
   // цвета в тот же момент, что и панели, а не после перезагрузки.
-  useTerminalTheme();
+  const terminalTheme = useTerminalTheme();
 
   // Сделка идёт на бирже, а не на экране: лимитка исполняется и позиция
   // закрывается, пока трейдер смотрит анализы или выбирает награду в маркете.
@@ -324,9 +324,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           Второго такого окна заводить нельзя: ключи - место, где ошибка стоит
           дорого, и две разные формы для одного действия однажды разойдутся.
           Оболочка кабинета цветов панелей не знает, поэтому окно живёт внутри
-          тёмной панели - той же, в которой оно живёт в терминале. */}
+          панели - и панель берёт тему терминала. Прибитое к тёмной, оно
+          открывалось чёрным поверх белого терминала: окно из другого
+          приложения посреди своего. */}
       {connectOpen && (
-        <div className="pane-dark">
+        <div className={terminalTheme === "light" ? "pane-light" : "pane-dark"}>
           <ExchangeDialog
             status={
               trading ?? { enabled: false, connected: false, key_tail: "", updated_at: null }

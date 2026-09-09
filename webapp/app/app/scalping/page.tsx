@@ -245,6 +245,25 @@ const PANE_LIMITS = {
   chat: { def: 340, min: 260, max: 640 },
 };
 
+/**
+ * Свёрнутая панель: полоса у самого края.
+ *
+ * Одна на обе стороны - скринер слева, чат справа. Классы у них были свои,
+ * зеркальные, и держались одинаковыми только потому, что их однажды написали
+ * рядом: любая правка одной стороны разводила полосы по размеру. Общее здесь
+ * всё, кроме стороны; сторона дописывается своим набором.
+ */
+const EDGE_STRIP =
+  "hidden w-9 shrink-0 flex-col gap-2 rounded-xl border border-[var(--pane-border)] " +
+  "bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 " +
+  "ease-out hover:text-[var(--pane-text)] xl:flex";
+
+/** Полоса слева: уезжает за левый край, содержимое прижато к правому. */
+const EDGE_LEFT = `${EDGE_STRIP} -translate-x-[22px] items-end pr-[4px] xl:-mr-4`;
+
+/** Полоса справа: зеркально. */
+const EDGE_RIGHT = `${EDGE_STRIP} translate-x-[22px] items-start pl-[4px] xl:-ml-4`;
+
 const STORAGE_KEY = "nmnh.scalping.panes";
 
 // Открытая сделка хранится отдельно от настроек: она живёт своей жизнью,
@@ -592,7 +611,15 @@ export default function ScalpingPage() {
   // занимают половину строки.
   const [layersOpen, setLayersOpen] = useState(false);
   const [screenerW, setScreenerW] = useState(PANE_LIMITS.screener.def);
-  const [domW, setDomW] = useState(PANE_LIMITS.dom.def);
+  // Стакан открывается самым узким из допустимых.
+  //
+  // Ширину ему задаёт не он сам, а то, что стоит рядом: график. Пришедший на
+  // терминал впервые видит стакан на треть экрана и график в остаток - а
+  // смотрят в первую очередь на график, стакан же читается и в минимальной
+  // ширине, у него все колонки на месте. Кому нужен широкий - тянет за
+  // разделитель; такая ширина держится, пока не откроют монету из скринера:
+  // выбор монеты - это начало работы с ней, и начинают её с графика.
+  const [domW, setDomW] = useState(PANE_LIMITS.dom.min);
   // Чат закрыт на старте: день начинается с рынка, а не с разговора. Открытый
   // держится до конца сессии, ширина переживает перезагрузку.
   const [chatOpen, setChatOpen] = useState(false);
@@ -2685,7 +2712,7 @@ export default function ScalpingPage() {
           <button
             onClick={() => setScreenerOpen(true)}
             title={t.terminal.expandScreener}
-            className={`hidden w-9 shrink-0 -translate-x-[22px] flex-col items-end gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pr-[4px] text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-mr-4 xl:flex`}
+            className={EDGE_LEFT}
             style={paneStyle}
           >
             {/* Всё содержимое - в колонках одной ширины. Точка вдесятеро уже
@@ -2779,7 +2806,13 @@ export default function ScalpingPage() {
               onToggleFavorite={toggleFavorite}
               sort={sort}
               onSort={setSort}
-              onSelect={selectSymbol}
+              onSelect={(next) => {
+                // Монета из скринера открывает стакан заново - и снова самым
+                // узким: выбор монеты это начало работы с ней, а начинают её
+                // с графика.
+                setDomW(PANE_LIMITS.dom.min);
+                selectSymbol(next);
+              }}
             />
           </div>
         </section>
@@ -3357,68 +3390,6 @@ export default function ScalpingPage() {
                 </button>
               </div>
             </section>
-
-            {/* Чат справа от графика - той же жизнью, что и скринер слева:
-                открывается, тянется за разделитель, сворачивается в полосу.
-                Свёрнутый прячется не совсем: полоса у правого края говорит, где
-                он был, - иначе панель ищут заново каждый раз.
-
-                Только на широком экране. Ниже xl терминал складывается в
-                колонку, и лента разговора между графиком и журналом оказалась
-                бы там, где её никто не ждёт; для узкого экрана есть страница
-                чата в кабинете. */}
-            {chatOpen ? (
-              <>
-                <PaneDivider onResize={resizeChat} title={t.terminal.chatWidth} />
-                <section
-                  className={`hidden shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] xl:flex xl:w-[var(--chat-w)]`}
-                  style={paneStyle}
-                >
-                  <ChatRoom
-                    tone="pane"
-                    symbol={symbol ?? undefined}
-                    own={myShares}
-                    onCopy={copyAllowed ? copyTrade : undefined}
-                    focus={chatFocus}
-                    onClose={() => setChatOpen(false)}
-                  />
-                </section>
-              </>
-            ) : (
-              <button
-                onClick={() => setChatOpen(true)}
-                title={t.terminal.expandChat}
-                // Полоса у правого края - зеркало скринера: почти вся за
-                // краем, неподвижно, значок и название под самым краем.
-                className="hidden w-9 shrink-0 translate-x-[22px] flex-col items-start gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] py-3 pl-[4px] text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] xl:-ml-4 xl:flex"
-                style={paneStyle}
-              >
-                {/* Колонки одной ширины - как у скринера: иначе точка
-                    непрочитанного встаёт мимо оси значка. */}
-                <PanelRightOpen className="h-4 w-4 shrink-0" />
-                {/* Метка непрочитанного: пока панель свёрнута, она числом.
-                    Разговор в торговый час идёт о том, что происходит прямо
-                    сейчас, и узнать о нём через час - всё равно что не узнать.
-                    Точка говорила только «что-то было»; число говорит, стоит
-                    ли раскрывать панель сию минуту. */}
-                {chat.unread > 0 && (
-                  <span
-                    title={t.chat.unread(chat.unread)}
-                    className="flex w-4 shrink-0 items-center justify-center"
-                  >
-                    <span className="grid h-4 min-w-4 animate-pulse place-items-center rounded-full bg-[var(--pane-accent)] px-1 text-[9px] font-semibold leading-none text-[var(--pane-bg)]">
-                      {chat.unread > 99 ? "99+" : chat.unread}
-                    </span>
-                  </span>
-                )}
-                <span
-                  className="w-4 text-center text-[11px]"
-                  style={{ writingMode: "vertical-rl" }}
-                >
-                  {t.chat.title}
-                </span>
-              </button>
-            )}
           </>
         ) : (
           <section
@@ -3428,6 +3399,73 @@ export default function ScalpingPage() {
             {t.terminal.pickSymbol}
           </section>
         )}
+          {/* Чат справа от графика - той же жизнью, что и скринер слева:
+              открывается, тянется за разделитель, сворачивается в полосу.
+              Свёрнутый прячется не совсем: полоса у правого края говорит, где
+              он был, - иначе панель ищут заново каждый раз.
+
+              Стоит снаружи выбора монеты, а не внутри. Пока он жил внутри,
+              на пустом терминале - когда монету ещё не выбрали и нет ни
+              графика, ни стакана - чата не было вовсе: ни панели, ни полосы,
+              ни следа от них. Разговор при этом идёт, и место его от выбора
+              монеты не зависит.
+
+              Только на широком экране. Ниже xl терминал складывается в
+              колонку, и лента разговора между графиком и журналом оказалась
+              бы там, где её никто не ждёт; для узкого экрана есть страница
+              чата в кабинете. */}
+          {chatOpen ? (
+            <>
+              <PaneDivider onResize={resizeChat} title={t.terminal.chatWidth} />
+              <section
+                className={`hidden shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] xl:flex xl:w-[var(--chat-w)]`}
+                style={paneStyle}
+              >
+                <ChatRoom
+                  tone="pane"
+                  symbol={symbol ?? undefined}
+                  own={myShares}
+                  onCopy={copyAllowed ? copyTrade : undefined}
+                  focus={chatFocus}
+                  onClose={() => setChatOpen(false)}
+                />
+              </section>
+            </>
+          ) : (
+            <button
+              onClick={() => setChatOpen(true)}
+              title={t.terminal.expandChat}
+              // Полоса у правого края - зеркало скринера: почти вся за
+              // краем, неподвижно, значок и название под самым краем.
+              className={EDGE_RIGHT}
+              style={paneStyle}
+            >
+              {/* Колонки одной ширины - как у скринера: иначе точка
+                  непрочитанного встаёт мимо оси значка. */}
+              <PanelRightOpen className="h-4 w-4 shrink-0" />
+              {/* Метка непрочитанного: пока панель свёрнута, она числом.
+                  Разговор в торговый час идёт о том, что происходит прямо
+                  сейчас, и узнать о нём через час - всё равно что не узнать.
+                  Точка говорила только «что-то было»; число говорит, стоит
+                  ли раскрывать панель сию минуту. */}
+              {chat.unread > 0 && (
+                <span
+                  title={t.chat.unread(chat.unread)}
+                  className="flex w-4 shrink-0 items-center justify-center"
+                >
+                  <span className="grid h-4 min-w-4 animate-pulse place-items-center rounded-full bg-[var(--pane-accent)] px-1 text-[9px] font-semibold leading-none text-[var(--pane-bg)]">
+                    {chat.unread > 99 ? "99+" : chat.unread}
+                  </span>
+                </span>
+              )}
+              <span
+                className="w-4 text-center text-[11px]"
+                style={{ writingMode: "vertical-rl" }}
+              >
+                {t.chat.title}
+              </span>
+            </button>
+          )}
       </div>
 
       {/* Развилка по уровню из стакана: расчёт сделки или уведомление. */}

@@ -7,6 +7,8 @@
 // проверяет их запросом баланса до сохранения — иначе неверный ключ всплыл бы
 // в момент ордера, то есть в самый неподходящий.
 
+import Link from "next/link";
+
 import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
@@ -213,15 +215,19 @@ export default function ExchangeDialog({
             {/* Дорога к ключу - первой строкой, до полей.
                 Три поля с надписями «ключ», «секрет» и «кодовая фраза» тому,
                 кто их ни разу не создавал, не говорят ничего: он ищет не форму,
-                а место на бирже, где эти слова появляются. */}
-            <a
+                а место на бирже, где эти слова появляются.
+
+                Той же вкладкой, а не новой: новая уводит человека из кабинета
+                в отдельное окно, из которого назад ведёт только кнопка
+                браузера. Инструкция - часть подключения, а не отдельное
+                чтение, и с неё возвращаются в терминал ссылкой сверху. */}
+            <Link
               href="/app/faq"
-              target="_blank"
-              rel="noopener noreferrer"
+              onClick={onClose}
               className="block text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
             >
               {d.howTo}
-            </a>
+            </Link>
             <label className="block">
               <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">API Key</span>
               <input
