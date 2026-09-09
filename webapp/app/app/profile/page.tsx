@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Key, LogOut, Moon, RefreshCw, ShieldCheck, Sun, Volume2, VolumeX } from "lucide-react";
+import { Key, LogOut, MonitorDown, Moon, RefreshCw, ShieldCheck, Sun, Volume2, VolumeX } from "lucide-react";
 import { api, API_URL, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
+import { profileChanged } from "@/lib/profileEvent";
+import { installApp, useCanInstall } from "@/lib/installApp";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fmtUsd, maskUid } from "@/lib/format";
@@ -36,6 +38,9 @@ export default function ProfilePage() {
   const theme = useTerminalTheme();
   const pane = theme === "light" ? "pane-light" : "pane-dark";
   const sound = useSoundOn();
+  // Браузер сам решает, когда готов установить сайт: кнопку показываем только
+  // в этот момент и только тем, у кого кабинет ещё не установлен.
+  const canInstall = useCanInstall();
 
   useEffect(() => {
     const token = getAccessToken();
@@ -74,8 +79,14 @@ export default function ProfilePage() {
     const token = getAccessToken();
     if (!token) return;
     setRefreshing(true);
-    try { setP(await api.refreshBalance(token)); }
-    finally { setRefreshing(false); }
+    try {
+      setP(await api.refreshBalance(token));
+      // Шапке сайта - вслух: баланс в ней из того же профиля, и без этого она
+      // держала бы старую цифру до перезагрузки страницы.
+      profileChanged();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   /** Ключи подключили или сменили: и состояние счёта, и баланс теперь другие. */
@@ -323,6 +334,23 @@ export default function ProfilePage() {
               })}
             </div>
           </SettingRow>
+
+          {/* Установка на рабочий стол. Показываем только там, где браузер и
+              правда готов её выполнить: кнопка, которая ничего не делает,
+              хуже её отсутствия. Уже установленный кабинет её не показывает
+              вовсе. */}
+          {canInstall && (
+            <SettingRow label={t.profile.install}>
+              <button
+                onClick={() => void installApp()}
+                title={t.profile.installHint}
+                className="flex items-center gap-2 rounded-xl border border-border bg-bg-panel px-3 py-2 text-sm font-semibold text-text-secondary transition-all duration-200 hover:border-accent-cyan/40 hover:text-accent-cyan"
+              >
+                <MonitorDown className="h-4 w-4" />
+                {t.profile.installAction}
+              </button>
+            </SettingRow>
+          )}
 
           {/* Подпись на карточке. Отдельно от ника Telegram: тот переписывается
               при каждом входе, а карточку показывают другим. */}

@@ -26,6 +26,7 @@ def _profile(s: Student, admin: bool = False) -> ProfileOut:
         balance_usdt=s.balance_usdt, balance_source=s.balance_source,
         avatar_url=s.avatar_url, card_name=s.card_name,
         copy_allowed=bool(s.copy_allowed),
+        journal_delete_allowed=bool(s.journal_delete_allowed),
         is_admin=admin,
     )
 

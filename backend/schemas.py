@@ -175,6 +175,8 @@ class StudentOut(BaseModel):
     is_approved: bool
     # Допущен к копированию сделок из чата. Выдаётся наставником поимённо.
     copy_allowed: bool = False
+    # Может убирать записи из своего журнала. Тоже поимённо.
+    journal_delete_allowed: bool = False
     coins: int = 0
     # Откуда запись: bot | web | academy
     created_via: str = "bot"
@@ -242,6 +244,9 @@ class ProfileOut(BaseModel):
     # Допуск к копированию сделок из чата. По той же причине приходит вместе с
     # профилем: «войти» под чужой заявкой видит только допущенный.
     copy_allowed: bool = False
+    # Право убирать записи из своего журнала. Кнопку корзины рисует только тот,
+    # у кого оно есть, и знать об этом интерфейсу надо до отрисовки.
+    journal_delete_allowed: bool = False
 
 
 class ProfilePatch(BaseModel):

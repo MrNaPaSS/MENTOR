@@ -44,6 +44,27 @@ export default function AdminStudents() {
     }
   }
 
+  /**
+   * Право убирать записи из своего журнала.
+   *
+   * Поимённо и по умолчанию закрыто: журнал - это статистика, по которой судят
+   * о торговле, и возможность стереть неудачную сделку обесценивает её целиком.
+   * Выдаётся тем, кому доверяют разобрать свой же мусор - двойную запись после
+   * обрыва связи, пробную сделку на копейку.
+   */
+  async function toggleJournal(s: StudentOut) {
+    setBusy(s.id);
+    try {
+      replace(
+        await api.studentPatch(token, s.id, {
+          journal_delete_allowed: !s.journal_delete_allowed,
+        }),
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function toggleActive(s: StudentOut) {
     setBusy(s.id);
     try {
@@ -149,6 +170,7 @@ export default function AdminStudents() {
                 <th>Источник</th>
                 <th className="text-center">Активен</th>
                 <th className="text-center">Копи</th>
+                <th className="text-center">Журнал</th>
                 <th className="text-right">Действия</th>
               </tr>
             </thead>
@@ -207,6 +229,20 @@ export default function AdminStudents() {
                       className={`badge-${s.copy_allowed ? "success" : "muted"}`}
                     >
                       {s.copy_allowed ? "да" : "нет"}
+                    </button>
+                  </td>
+                  <td className="text-center">
+                    <button
+                      onClick={() => toggleJournal(s)}
+                      disabled={busy === s.id}
+                      title={
+                        s.journal_delete_allowed
+                          ? "Может убирать свои записи из журнала"
+                          : "Записи из журнала убирает только наставник"
+                      }
+                      className={`badge-${s.journal_delete_allowed ? "success" : "muted"}`}
+                    >
+                      {s.journal_delete_allowed ? "да" : "нет"}
                     </button>
                   </td>
                   <td className="text-right">

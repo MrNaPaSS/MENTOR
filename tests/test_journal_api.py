@@ -212,6 +212,48 @@ def test_student_cannot_delete_a_trade(client):
     assert client.get("/api/journal/trades").json()["summary"]["count"] == 1
 
 
+def test_allowed_student_deletes_his_own_record(client):
+    """Право выдаётся поимённо - и тогда ученик разбирает свой журнал сам.
+
+    Мусор в нём бывает не только от неудач: сделка записывается дважды после
+    обрыва связи, ученик пробует терминал на копейку. Гонять за этим наставника
+    на каждый чих - лишний круг.
+    """
+    student = client.app.dependency_overrides[get_current_student]()
+    student.journal_delete_allowed = True
+
+    created = client.post("/api/journal/trades", json=trade()).json()
+    assert client.delete(f"/api/journal/trades/{created['id']}").status_code == 200
+    assert client.get("/api/journal/trades").json()["summary"]["count"] == 0
+
+
+def test_allowed_student_does_not_reach_a_stranger_record(client):
+    """Право на свой журнал - это право на свой, а не на любой по номеру.
+
+    Проверки на владельца тут не было вовсе: дойти сюда мог один наставник, а
+    ему чужие записи и положены. Дверь стала шире - проверка стала нужна.
+    """
+    from core.models import ScalpTrade
+
+    session = client.app.dependency_overrides[get_session]()
+    mine = client.app.dependency_overrides[get_current_student]()
+
+    # Чужую запись заводим тем же путём, каким её заводит жизнь, - через ручку
+    # от лица её хозяина. Собранная руками, она разошлась бы с настоящей на
+    # первом же обязательном поле.
+    stranger = Student(tg_id=2, username="stranger")
+    session.add(stranger)
+    session.commit()
+    client.app.dependency_overrides[get_current_student] = lambda: stranger
+    theirs = client.post("/api/journal/trades", json=trade(client_id="theirs")).json()
+    client.app.dependency_overrides[get_current_student] = lambda: mine
+
+    mine.journal_delete_allowed = True
+    # Не 403: чужой номер сделки не должен отвечать «есть такая, но не ваша».
+    assert client.delete(f"/api/journal/trades/{theirs['id']}").status_code == 404
+    assert session.get(ScalpTrade, theirs["id"]) is not None
+
+
 def test_exchange_record_is_not_overwritten_by_the_terminal(client, ):
     """Оценка с экрана не переписывает числа, пришедшие с биржи.
 

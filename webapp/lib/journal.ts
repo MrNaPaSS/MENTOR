@@ -111,8 +111,14 @@ export function removeTrade(id: number) {
 export async function canEditJournal(): Promise<boolean> {
   const token = getAccessToken();
   if (!token) return false;
-  const me = await authReq<{ is_admin?: boolean }>("/api/profile", token).catch(() => null);
-  return Boolean(me?.is_admin);
+  const me = await authReq<{ is_admin?: boolean; journal_delete_allowed?: boolean }>(
+    "/api/profile",
+    token,
+  ).catch(() => null);
+  // Наставнику - всегда, ученику - если наставник выдал это право поимённо.
+  // Спрашивать сервер о самом праве незачем: он всё равно проверит его на
+  // удалении, а здесь решается только то, рисовать ли корзину.
+  return Boolean(me?.is_admin || me?.journal_delete_allowed);
 }
 
 /**

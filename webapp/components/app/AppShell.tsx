@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -22,6 +22,7 @@ import RadioChip from "@/components/app/RadioChip";
 import { api, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { useCoins } from "@/lib/useCoins";
+import { PROFILE_EVENT } from "@/lib/profileEvent";
 import { fmtUsd, modeLabel } from "@/lib/format";
 import { adoptLocale, useIntlLocale, useT } from "@/lib/i18n";
 import MarketTicker from "@/components/market/MarketTicker";
@@ -77,26 +78,71 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const toasts = useSyncExternalStore(subscribeToasts, snapshotToasts, serverToasts);
   useEffect(() => watchTrades(), []);
 
+  // Профиль перечитывается не только при входе.
+  //
+  // Баланс в шапке приезжает отсюда, а новый ученик подключает ключи WEEX уже
+  // внутри кабинета: счёт после этого перестаёт быть нулём, а шапка об этом не
+  // знала и показывала ноль до перезагрузки страницы. Теперь она слушает
+  // событие изнутри вкладки, переходы между разделами и возврат на вкладку -
+  // тем же способом, каким живёт баланс монет.
+  const reloadProfile = useCallback(
+    (first: boolean) => {
+      const token = getAccessToken();
+      if (!token) {
+        if (first) router.replace("/login");
+        return;
+      }
+      api
+        .profile(token)
+        .then((p) => {
+          setProfile(p);
+          // Язык человек выбирает один раз, а заходит с разных устройств:
+          // выбор приезжает вместе с профилем и включается сразу.
+          adoptLocale(p.language);
+        })
+        .catch((err) => {
+          // Выкидываем из кабинета только на первой загрузке. Дальше отказ -
+          // это чаще всего моргнувшая сеть, и выбрасывать за неё человека,
+          // который сидит в терминале, нельзя.
+          if (!first) return;
+          console.error("Auth error, redirecting to login:", err);
+          logout();
+          router.replace("/login");
+        });
+    },
+    [router],
+  );
+
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) {
+    if (!getAccessToken()) {
       router.replace("/login");
       return;
     }
     setReady(true);
-    api.profile(token)
-      .then((p) => {
-        setProfile(p);
-        // Язык человек выбирает один раз, а заходит с разных устройств:
-        // выбор приезжает вместе с профилем и включается сразу.
-        adoptLocale(p.language);
-      })
-      .catch((err) => {
-        console.error("Auth error, redirecting to login:", err);
-        logout();
-        router.replace("/login");
-      });
-  }, [router]);
+    reloadProfile(true);
+  }, [router, reloadProfile]);
+
+  // Переходы между разделами: ключи подключают в профиле, а цифру видят из
+  // любого раздела.
+  useEffect(() => {
+    if (!ready) return;
+    reloadProfile(false);
+  }, [pathname, ready, reloadProfile]);
+
+  useEffect(() => {
+    const again = () => reloadProfile(false);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") again();
+    };
+    window.addEventListener(PROFILE_EVENT, again);
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener(PROFILE_EVENT, again);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [reloadProfile]);
 
   function doLogout() {
     logout();
