@@ -12,7 +12,7 @@
 
 import { useT } from "@/lib/i18n";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, X } from "lucide-react";
+import { Bell, Plus, X } from "lucide-react";
 import {
   CandlestickSeries,
   ColorType,
@@ -388,9 +388,10 @@ const PLUS_MENU_H = 96;
  *
  * Кнопка ростом в двадцать точек: половина её высоты ставит середину на цену,
  * и тогда она сидит верхом на плашке цены и на её линии. Отсюда и число -
- * высота кнопки с запасом, чтобы под ней осталась видна сама цена.
+ * высота кнопки, поле над ней и запас: под плюсиком должна остаться видна не
+ * только сама цена, но и таймер под ней.
  */
-const PLUS_ABOVE_PRICE = -26;
+const PLUS_ABOVE_PRICE = -34;
 
 /**
  * Сколько пустых баров дорисовываем за ленту, пока не приехала история.
@@ -2812,7 +2813,7 @@ function PriceChart({
           было знать, что нажатие по графику что-то делает. */}
       <div
         ref={plusRef}
-        className="absolute right-16 top-0 z-30"
+        className="absolute right-[76px] top-0 z-30"
         style={{ visibility: "hidden" }}
         onPointerEnter={() => {
           plusHeldRef.current = true;
@@ -2837,14 +2838,16 @@ function PriceChart({
           // Подсказка только пока меню закрыто: открытое она перекрывает
           // собой, и пункт «открыть лонг» просто не виден.
           title={plusMenu ? undefined : t.terminal.chart.plusTitle}
-          className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border text-[13px] leading-none shadow transition-colors duration-150 ease-out"
+          className="pointer-events-auto grid h-5 w-5 place-items-center rounded-full border shadow transition-colors duration-150 ease-out"
           style={{
             borderColor: "var(--pane-border)",
             background: "var(--pane-bg)",
             color: "var(--pane-text-2)",
           }}
         >
-          +
+          {/* Значком, а не буквой: текстовый плюс сидит на своей базовой
+              линии, и в круге он всегда чуть ниже середины. */}
+          <Plus className="h-3 w-3" />
         </button>
         {plusMenu && (
           <div

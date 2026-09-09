@@ -6,7 +6,7 @@
 
 import { authReq } from "./api";
 import { getAccessToken } from "./auth";
-import type { ActiveTrade } from "./trade/position";
+import { setTakerFee, type ActiveTrade } from "./trade/position";
 
 export type TradingStatus = {
   /** Хранилище ключей настроено на сервере. */
@@ -15,6 +15,13 @@ export type TradingStatus = {
   connected: boolean;
   key_tail: string;
   updated_at: string | null;
+  /**
+   * Ставка комиссии этого трейдера, доля от оборота одной ноги.
+   *
+   * Считается по его же закрытым сделкам: у каждого она своя, от уровня VIP.
+   * Пусто - сделок с комиссией ещё нет, и терминал считает по справочной.
+   */
+  taker_fee?: number | null;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
@@ -26,8 +33,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   return authReq<T>(path, token, init);
 }
 
-export function tradingStatus() {
-  return request<TradingStatus>("/api/trading/status");
+export async function tradingStatus(): Promise<TradingStatus | null> {
+  const body = await request<TradingStatus>("/api/trading/status");
+  // Ставку запоминаем здесь, а не у каждого, кто спрашивает состояние: считает
+  // по ней расчёт сделки, и знать о ней он должен независимо от того, кто
+  // именно спросил - терминал, профиль или шапка кабинета.
+  if (body) setTakerFee(body.taker_fee);
+  return body;
 }
 
 export function saveKeys(api_key: string, secret_key: string, passphrase: string) {

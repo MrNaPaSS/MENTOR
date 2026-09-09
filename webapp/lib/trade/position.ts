@@ -33,13 +33,42 @@ export const TAKE_SHARES = [0.3, 0.5, 0.2];
 export const TAKER_FEE = 0.0008;
 
 /**
+ * Ставка комиссии этого трейдера.
+ *
+ * У каждого она своя: биржа считает её от уровня VIP, и справочные 0.08% с
+ * ноги верны только для нулевого. Настоящую выводит сервер по его же закрытым
+ * сделкам - удержанная комиссия против оборота обеих ног, - и присылает вместе
+ * с состоянием счёта.
+ *
+ * Отдельной величиной, а не параметром каждой функции: расчёт сделки зовут из
+ * полудюжины мест, и протаскивать ставку через все значит однажды забыть её в
+ * одном - там, где она и понадобится.
+ */
+let taker = TAKER_FEE;
+
+/** Ставка этого трейдера. Пока сервер её не назвал - справочная. */
+export function takerFee(): number {
+  return taker;
+}
+
+/**
+ * Запомнить ставку, названную биржей.
+ *
+ * Мусор отвергаем молча: ставка вне разумных границ - это не ставка, а
+ * следы неполного отчёта, и считать по ней хуже, чем по справочной.
+ */
+export function setTakerFee(rate: number | null | undefined): void {
+  taker = typeof rate === "number" && rate >= 0.0001 && rate <= 0.001 ? rate : TAKER_FEE;
+}
+
+/**
  * Цена, при которой позиция закрывается в настоящий ноль.
  *
  *   лонг:  (P − вход)·объём = комиссия·вход·объём + комиссия·P·объём
  *          → P = вход · (1 + комиссия) / (1 − комиссия)
  *   шорт:  P = вход · (1 − комиссия) / (1 + комиссия)
  */
-export function breakevenPrice(entry: number, long: boolean, fee = TAKER_FEE): number {
+export function breakevenPrice(entry: number, long: boolean, fee = takerFee()): number {
   return long ? (entry * (1 + fee)) / (1 - fee) : (entry * (1 - fee)) / (1 + fee);
 }
 
@@ -57,7 +86,7 @@ export function roundTripFee(
   entry: number,
   exit: number,
   qty: number,
-  rate = TAKER_FEE,
+  rate = takerFee(),
 ): number {
   if (!(qty > 0) || !(entry > 0) || !(exit > 0)) return 0;
   return (entry + exit) * qty * rate;

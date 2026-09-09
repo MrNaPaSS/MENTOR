@@ -377,7 +377,58 @@ async def status(
         "connected": bool(row and row.is_active),
         "key_tail": row.key_tail if row else "",
         "updated_at": iso(row.updated_at) if row else None,
+        "taker_fee": taker_fee(session, student),
     }
+
+
+# Сколько последних сделок берём, чтобы вывести ставку.
+#
+# Двух десятков хватает: ставка меняется со ступенью VIP, то есть раз в
+# несколько недель, а по одной сделке её вывести нельзя - в комиссии одной
+# сделки сидят и вход лимиткой, и выход по рынку, и они считаются по разным
+# ставкам.
+FEE_SAMPLE = 20
+
+
+def taker_fee(session, student: Student) -> float | None:
+    """Ставка комиссии этого трейдера - по его же сделкам.
+
+    У каждого она своя: биржа считает её от уровня VIP, и справочные 0.08% с
+    ноги верны только для нулевого. Спросить её у WEEX напрямую нечем - в
+    ответе по инструменту стоит стандартная ставка, а не ставка счёта.
+
+    Зато есть свои закрытые сделки: в них лежит и удержанная комиссия, и
+    оборот обеих ног. Их отношение и есть настоящая ставка - та, по которой
+    биржа считала.
+
+    Пусто, если сделок с комиссией ещё нет: тогда терминал остаётся на
+    справочной ставке. Врать в меньшую сторону здесь нельзя - оценка результата
+    выйдет выше того, что придёт на счёт.
+    """
+    rows = session.execute(
+        select(ScalpTrade.fee, ScalpTrade.entry, ScalpTrade.exit_price, ScalpTrade.qty)
+        .where(ScalpTrade.student_id == student.id)
+        .where(ScalpTrade.from_exchange.is_(True))
+        .where(ScalpTrade.fee > 0)
+        .order_by(ScalpTrade.closed_at.desc())
+        .limit(FEE_SAMPLE)
+    ).all()
+
+    paid = 0.0
+    turnover = 0.0
+    for fee, entry, exit_price, qty in rows:
+        if not (entry and exit_price and qty):
+            continue
+        paid += float(fee or 0)
+        turnover += (float(entry) + float(exit_price)) * float(qty)
+
+    if paid <= 0 or turnover <= 0:
+        return None
+    rate = paid / turnover
+    # Разумные границы: биржевые ставки лежат между сотой долей процента и
+    # десятой. Число за их пределами - это не ставка, а следы неполного отчёта,
+    # и считать по нему хуже, чем по справочной.
+    return round(rate, 6) if 0.0001 <= rate <= 0.001 else None
 
 
 @router.put("/keys")
