@@ -3,8 +3,15 @@
 import { useEffect, useState } from "react";
 import { Crown, TrendingUp, Medal } from "lucide-react";
 import { useT } from "@/lib/i18n";
-import { api, LeaderboardRow } from "@/lib/api";
+import { api, API_URL, LeaderboardRow } from "@/lib/api";
 import { fmtUsd, modeLabel } from "@/lib/format";
+import { rankFrame } from "@/lib/frames";
+import FramedAvatar from "@/components/avatar/FramedAvatar";
+
+/** Аватар строки: настоящий, если он есть. Раньше тут стояли чужие лица-заглушки. */
+function avatarOf(row: LeaderboardRow): string | null {
+  return row.avatar ? `${API_URL}${row.avatar}` : null;
+}
 
 // ─── Mock-данные лидерборда ──────────────────────────────────────────────────
 const MOCK_ROWS: LeaderboardRow[] = [
@@ -112,13 +119,19 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
                 )}
 
                 <div className="text-3xl">{m.emoji}</div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://i.pravatar.cc/80?u=${r.username ?? r.rank}`}
-                  alt={r.username ?? ""}
-                  className={`mx-auto mt-2 rounded-2xl object-cover ring-2 ring-white/20 ${isFirst ? "h-16 w-16" : "h-12 w-12"}`}
-                  loading="lazy"
-                />
+                {/* Первые три места носят золото, серебро и бронзу - эти рамки
+                    не продаются, их дают только за место. */}
+                <div className="mt-4 flex justify-center">
+                  <FramedAvatar
+                    src={avatarOf(r)}
+                    name={r.username ?? "?"}
+                    size={isFirst ? 64 : 48}
+                    shape="square"
+                    radius={16}
+                    frame={rankFrame(r.rank)}
+                    rank={r.rank}
+                  />
+                </div>
                 <div className="mt-2 font-bold text-text-primary">@{r.username ?? "-"}</div>
                 <div className="text-[10px] text-text-muted">{modeLabel(r.mode)}</div>
                 <div
@@ -154,12 +167,13 @@ export default function Leaderboard({ limit, showHeading = true }: LeaderboardPr
                 <span className="w-7 text-center font-mono text-sm font-bold text-text-muted">
                   {r.rank}
                 </span>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://i.pravatar.cc/64?u=${r.username}`}
-                  alt=""
-                  className="h-8 w-8 rounded-xl ring-1 ring-white/10"
-                  loading="lazy"
+                <FramedAvatar
+                  src={avatarOf(r)}
+                  name={r.username ?? "?"}
+                  size={32}
+                  shape="square"
+                  radius={12}
+                  frame={r.frame}
                 />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-text-primary text-sm">@{r.username}</div>

@@ -58,6 +58,7 @@ def create_all() -> None:
     _normalize_shop_dashes(engine)
     _apply_shop_catalog_v2(engine)
     _apply_shop_catalog_v3(engine)
+    _apply_shop_catalog_v4(engine)
 
 
 def _migrate_add_columns(engine) -> None:
@@ -381,4 +382,50 @@ def _apply_shop_catalog_v3(engine) -> None:
             flag.value = "3"
         else:
             session.add(SettingRow(key="shop_catalog_version", value="3"))
+        session.commit()
+
+
+# Рамки аватара. Кортеж: (title, description, price, feature, sort_order)
+_SHOP_FRAMES_V4 = [
+    ("Рамка «Неон»", "Тёмный обод с зелёными неоновыми дугами и короной NMNH снизу. "
+     "Видна в чате, профиле и лидерборде.", 150, "frame_neon", 50),
+    ("Рамка «Карбон»", "Стальной обод с косыми сколами и зелёной подсветкой изнутри.",
+     250, "frame_carbon", 51),
+    ("Рамка «Пульс»", "Двойное кольцо с бегущим пунктиром, как лента котировок.",
+     250, "frame_pulse", 52),
+    ("Рамка «Свечи»", "Обод со свечами графика по бокам - для тех, кто живёт в стакане.",
+     350, "frame_candles", 53),
+    ("Рамка «Корона»", "Металлический обод с короной NMNH сверху. Самая заметная рамка "
+     "маркета.", 500, "frame_crown", 54),
+]
+
+
+def _apply_shop_catalog_v4(engine) -> None:
+    """Добавить в каталог рамки аватара. Один раз, флагом, как v3."""
+    from sqlalchemy import inspect, select
+    from sqlalchemy.orm import Session
+    from core.models import SettingRow, ShopItem
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names() or "settings" not in inspector.get_table_names():
+        return
+
+    with Session(engine) as session:
+        flag = session.get(SettingRow, "shop_catalog_version")
+        if flag and (flag.value or "").isdigit() and int(flag.value) >= 4:
+            return
+
+        known = set(session.execute(select(ShopItem.title)).scalars().all())
+        for title, desc, price, feature, order in _SHOP_FRAMES_V4:
+            if title in known:
+                continue
+            session.add(ShopItem(
+                title=title, description=desc, price=price, category="frame", section="shop",
+                icon="Crown", feature=feature, sort_order=order,
+            ))
+
+        if flag:
+            flag.value = "4"
+        else:
+            session.add(SettingRow(key="shop_catalog_version", value="4"))
         session.commit()

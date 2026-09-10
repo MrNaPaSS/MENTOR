@@ -15,6 +15,7 @@ import { setTerminalTheme, useTerminalTheme } from "@/lib/terminalTheme";
 import { setSoundOn, useSoundOn } from "@/lib/notifySound";
 import { intlLocale, setLocale, useLocale, useT, type Locale } from "@/lib/i18n";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
+import FramedAvatar from "@/components/avatar/FramedAvatar";
 
 const ADMIN_WEEX_UID = "6613031308";
 
@@ -128,17 +129,17 @@ export default function ProfilePage() {
             {/* Аватарка из Telegram, если она есть. Файл отдаёт бэкенд, поэтому
                 к пути добавляем API_URL: сайт живёт на другом домене. Нет
                 аватарки - остаётся буква, как было. */}
-            <div className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-accent-faint)] text-base font-bold text-[var(--pane-accent)]">
-              {p.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={`${API_URL}${p.avatar_url}`}
-                  alt={p.username || t.profile.avatarAlt}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                initial
-              )}
+            {/* В рамке, купленной в маркете: квадрат со скруглением 8 точек,
+                как в наборе рамок. Рамка выходит наружу и места не занимает. */}
+            <div className="relative shrink-0">
+              <FramedAvatar
+                src={p.avatar_url ? `${API_URL}${p.avatar_url}` : null}
+                name={p.username || initial || t.profile.avatarAlt}
+                size={44}
+                shape="square"
+                radius={8}
+                frame={p.avatar_frame}
+              />
               {isAdmin && (
                 <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--pane-gold)]">
                   <ShieldCheck className="h-3 w-3 text-[var(--pane-bg)]" />

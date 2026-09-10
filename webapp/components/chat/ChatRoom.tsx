@@ -57,6 +57,7 @@ import { fromJournal } from "@/lib/chat/share";
 import { journalAvailable, loadTrades, type JournalTrade } from "@/lib/journal";
 import { firstLink, type LinkCard } from "@/lib/chat/link";
 import PnlCard from "@/components/scalping/PnlCard";
+import FramedAvatar from "@/components/avatar/FramedAvatar";
 import ThreadTabs from "./ThreadTabs";
 import { cardFromShared } from "@/lib/pnl/data";
 import type { CardData } from "@/lib/pnl/card";
@@ -218,34 +219,19 @@ function dayKey(at: number): string {
  * профиле. Без фотографии - кружок с первой буквой ника, а не общий силуэт: по
  * силуэтам собеседники неразличимы.
  */
-function Avatar({ src, name, size = 24 }: { src?: string | null; name: string; size?: number }) {
-  const [broken, setBroken] = useState(false);
-  const side = { width: size, height: size };
-
-  if (src && !broken) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt={name}
-        style={side}
-        onError={() => setBroken(true)}
-        className="shrink-0 rounded-full object-cover ring-1 ring-black/10"
-      />
-    );
-  }
-
-  // Цвет по имени, а не случайный: у одного человека он один и тот же всегда.
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % 360;
-  return (
-    <span
-      style={{ ...side, background: `hsl(${hash} 45% 40%)`, fontSize: size * 0.45 }}
-      className="grid shrink-0 place-items-center rounded-full font-semibold uppercase text-white/90"
-    >
-      {name.slice(0, 1)}
-    </span>
-  );
+function Avatar({
+  src,
+  name,
+  size = 24,
+  frame,
+}: {
+  src?: string | null;
+  name: string;
+  size?: number;
+  /** Рамка, купленная в маркете: её видят все в ленте. */
+  frame?: string;
+}) {
+  return <FramedAvatar src={src} name={name} size={size} frame={frame} />;
 }
 
 function money(value: number): string {
@@ -629,7 +615,7 @@ export default function ChatRoom({
       <div className={`flex items-center gap-2 ${skin.head}`}>
         <div className="flex -space-x-1.5">
           {state.people.slice(0, 5).map((p) => (
-            <Avatar key={p.id} src={p.avatar} name={p.name} size={tone === "pane" ? 20 : 26} />
+            <Avatar key={p.id} src={p.avatar} name={p.name} size={tone === "pane" ? 20 : 26} frame={p.frame} />
           ))}
         </div>
         {/* Сколько нас: в комнате сейчас и в форуме всего. Второе число - от
@@ -1107,7 +1093,7 @@ function Bubble({
         self ? "justify-end" : "justify-start"
       }`}
     >
-      {!self && <Avatar src={message.author.avatar} name={message.author.name} size={size} />}
+      {!self && <Avatar src={message.author.avatar} name={message.author.name} size={size} frame={message.author.frame} />}
       <div className={`max-w-[85%] rounded-2xl px-3 py-1.5 ${self ? skin.bubbleSelf : skin.bubbleOther}`}>
         <div className="mb-0.5 flex items-center gap-1 text-[11px]">
           {/* Точка присутствия. Стоит перед ником, а не после: по ней взгляд
@@ -1299,7 +1285,7 @@ function Bubble({
           </a>
         )}
       </div>
-      {self && <Avatar src={message.author.avatar} name={message.author.name} size={size} />}
+      {self && <Avatar src={message.author.avatar} name={message.author.name} size={size} frame={message.author.frame} />}
     </div>
   );
 }

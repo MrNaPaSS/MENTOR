@@ -1,25 +1,24 @@
-// Маркет: на что тратить монеты NMNH - функции платформы, менторство, наш софт.
+// Маркет: на что тратить монеты NMNH - функции платформы, оформление,
+// менторство, наш софт.
 
 export const shop = {
   title: "Маркет",
   hint: "На что потратить монеты NMNH",
 
-  tabs: {
+  cats: {
+    all: "Все",
     features: "Функции",
+    frames: "Оформление",
     people: "Менторство",
     software: "Наш софт",
-  },
-  tabHints: {
-    features: "Включаются сразу после покупки",
-    people: "Выдаёт ментор вручную",
-    software: "Наши продукты и доступ к индикаторам",
   },
   empty: "Здесь пока пусто.",
 
   balance: "Баланс",
   waiting: (n: number) => `Ждут получения: ${n}`,
   claim: "Забрать",
-  earnTitle: "Как заработать",
+  goal: (title: string, n: string) => `До «${title}» осталось ${n}`,
+  earnToggle: "Как заработать",
   earnLines: [
     "Плюсовая сделка: +10",
     "Серия 3, 5 и 10 плюсов подряд: +15, +30, +100",
@@ -27,11 +26,15 @@ export const shop = {
     "Достижения, уровни и уроки академии",
     "За сделки не больше 150 в день",
   ],
-  historyTitle: "История начислений",
-  historyEmpty: "Начислений пока не было.",
 
-  accessTitle: "Мои доступы",
-  accessEmpty: "Купленные функции появятся здесь.",
+  activity: {
+    access: "Доступы",
+    history: "История",
+    orders: "Заказы",
+  },
+  historyEmpty: "Начислений пока не было.",
+  accessEmpty: "Купленные функции и рамки появятся здесь.",
+  ordersEmpty: "Заказов пока не было.",
   forever: "навсегда",
   until: (date: string) => `до ${date}`,
   chargesLeft: (n: number) => `зарядов: ${n}`,
@@ -42,6 +45,7 @@ export const shop = {
     charges: (n: number) => `Зарядов: ${n}`,
     instant: "Включается сразу",
     manual: "Выдаёт ментор",
+    free: "Бесплатно",
   },
 
   buy: "Купить",
@@ -49,14 +53,18 @@ export const shop = {
   buyMore: "Купить ещё",
   bought: "Куплено",
   notEnough: (n: string) => `Не хватает ${n}`,
+  saved: (n: string) => `Накоплено ${n}%`,
   details: "Подробнее",
   openLink: "Открыть",
   soon: "Скоро",
 
-  indicatorsTitle: "Индикаторы TradingView",
-  indicatorsHint: "Доступ выдаёт ментор на ваш ник TradingView",
+  equip: "Надеть",
+  equipped: "Надето",
+  unequip: "Снять",
+  yourPreview: "Так будет у вас",
+  rankOnly: (n: number) => `Даётся за ${n} место в лидерборде. Не продаётся.`,
+  rankLock: (n: number) => `Топ-${n}`,
 
-  ordersSection: "Мои заказы",
   status: {
     pending: "Ожидает выдачи",
     fulfilled: "Выполнен",
@@ -81,5 +89,16 @@ export const shop = {
     streak_freeze: "Заморозка серии",
     streak_boost: "Удвоение бонуса за серию",
     journal_export: "Выгрузка журнала в CSV",
+    frame_neon: "Рамка «Неон»",
+    frame_carbon: "Рамка «Карбон»",
+    frame_pulse: "Рамка «Пульс»",
+    frame_candles: "Рамка «Свечи»",
+    frame_crown: "Рамка «Корона»",
+  } as Record<string, string>,
+
+  rankFrames: {
+    gold: "Рамка «Золото»",
+    silver: "Рамка «Серебро»",
+    bronze: "Рамка «Бронза»",
   } as Record<string, string>,
 };

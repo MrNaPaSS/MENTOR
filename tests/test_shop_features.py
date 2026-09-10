@@ -246,6 +246,45 @@ def test_навсегда_купленное_второй_раз_не_прода
     assert client.get("/api/coins", headers=auth).json()["balance"] == 800
 
 
+def _frame_of(uid: str) -> str | None:
+    from core.db import SessionLocal
+
+    with SessionLocal() as s:
+        return s.query(Student).filter_by(weex_uid=uid).one().avatar_frame
+
+
+def test_рамки_есть_в_каталоге(client):
+    features = {it["feature"] for it in client.get("/api/shop/items").json()}
+    assert {"frame_neon", "frame_carbon", "frame_pulse", "frame_candles", "frame_crown"} <= features
+
+
+def test_первая_купленная_рамка_надевается_сама(client):
+    auth = _rich_student(client, "700010", 1000)
+    order = client.post("/api/shop/orders", json={"item_id": _feature_item("Рамка «Неон»")}, headers=auth)
+    assert order.json()["status"] == "fulfilled"
+    assert _frame_of("700010") == "neon"
+
+    # Вторая рамка уже надетую не подменяет - её надевают руками.
+    client.post("/api/shop/orders", json={"item_id": _feature_item("Рамка «Карбон»")}, headers=auth)
+    assert _frame_of("700010") == "neon"
+    assert client.post("/api/shop/frame", json={"frame": "carbon"}, headers=auth).status_code == 200
+    assert _frame_of("700010") == "carbon"
+
+
+def test_некупленную_рамку_не_надеть(client):
+    auth = _rich_student(client, "700011", 0)
+    assert client.post("/api/shop/frame", json={"frame": "crown"}, headers=auth).status_code == 403
+    # Золото лидерборда не продаётся и не надевается.
+    assert client.post("/api/shop/frame", json={"frame": "gold"}, headers=auth).status_code == 400
+
+
+def test_рамку_можно_снять(client):
+    auth = _rich_student(client, "700012", 1000)
+    client.post("/api/shop/orders", json={"item_id": _feature_item("Рамка «Неон»")}, headers=auth)
+    assert client.post("/api/shop/frame", json={"frame": ""}, headers=auth).status_code == 200
+    assert _frame_of("700012") is None
+
+
 def test_ручной_товар_по_прежнему_ждёт_ментора(client):
     auth = _rich_student(client, "700003", 1000)
     item_id = _feature_item("Разбор сделки с ментором")

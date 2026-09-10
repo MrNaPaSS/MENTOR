@@ -13,6 +13,8 @@ export type ChatAuthor = {
   name: string;
   /** Путь на бэкенде; к нему уже добавлен адрес сервера. Пусто - фото нет. */
   avatar: string;
+  /** Надетая рамка аватара (lib/frames.ts). Пусто или нет поля - без рамки. */
+  frame?: string;
   mentor: boolean;
   /**
    * Имя на карточке сделки.

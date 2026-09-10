@@ -253,6 +253,8 @@ def _who(student: Student) -> dict:
         "id": student.id,
         "name": student.card_name or fallback,
         "avatar": student.avatar_url or "",
+        # Надетая рамка аватара: её видят все в ленте.
+        "frame": student.avatar_frame or "",
         "mentor": mentor,
         "card": student.card_name or nick,
     }

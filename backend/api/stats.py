@@ -34,7 +34,10 @@ def leaderboard(session=Depends(get_session)):
         .order_by(Student.balance_usdt.desc().nullslast())
     ).scalars().all()
     return [
-        LeaderboardRow(rank=i + 1, username=s.username, mode=s.mode, balance=s.balance_usdt)
+        LeaderboardRow(
+            rank=i + 1, username=s.username, mode=s.mode, balance=s.balance_usdt,
+            avatar=s.avatar_url, frame=s.avatar_frame or "",
+        )
         for i, s in enumerate(rows)
     ]
 

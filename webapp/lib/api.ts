@@ -238,6 +238,10 @@ export interface LeaderboardRow {
   username: string | null;
   mode: string;
   balance: string | null;
+  /** Путь к аватару на бэкенде. Пусто - фото нет. */
+  avatar?: string | null;
+  /** Надетая рамка аватара. */
+  frame?: string | null;
 }
 
 export interface TakeProfit {
@@ -313,6 +317,8 @@ export interface Profile {
    * файлы отдаёт бэкенд, а сайт живёт на другом домене.
    */
   avatar_url?: string | null;
+  /** Надетая рамка аватара (lib/frames.ts). Пусто - без рамки. */
+  avatar_frame?: string | null;
   /**
    * Подпись на карточке сделки.
    *
@@ -543,6 +549,9 @@ export const api = {
   shopMyOrders: (token: string) => authReq<ShopOrder[]>("/api/shop/orders", token),
   /** Купленные функции платформы: что действует, до какого срока, сколько зарядов. */
   shopEntitlements: (token: string) => authReq<Entitlement[]>("/api/shop/entitlements", token),
+  /** Надеть купленную рамку аватара; пустая строка - снять. */
+  shopSetFrame: (token: string, frame: string) =>
+    authReq<{ frame: string }>("/api/shop/frame", token, { method: "POST", body: JSON.stringify({ frame }) }),
   shopBuy: (token: string, item_id: number, contact: string) =>
     authReq<ShopOrder>("/api/shop/orders", token, {
       method: "POST",

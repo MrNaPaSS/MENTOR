@@ -103,6 +103,7 @@ async def ws_chat(websocket: WebSocket, token: str = Query(default="")):
             "id": student.id,
             "name": student.card_name or (MENTOR_NAME if mentor else student.username or f"id{student.id}"),
             "avatar": student.avatar_url or "",
+            "frame": student.avatar_frame or "",
             "mentor": mentor,
         }
     finally:

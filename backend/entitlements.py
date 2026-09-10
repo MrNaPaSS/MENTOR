@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, update
 
+from backend import frames
 from core.models import Entitlement, ShopItem, utcnow
 
 # Функции, которые платформа умеет выдавать сама. Товар с ключом не из этого
@@ -25,6 +26,8 @@ FEATURES: dict[str, str] = {
     "streak_freeze": "Заморозка серии",
     "streak_boost": "Удвоение бонуса за серию",
     "journal_export": "Выгрузка журнала",
+    # Рамки аватара - по одной на ключ: купленная остаётся навсегда.
+    **{frames.feature_of(key): f"Рамка «{name}»" for key, name in frames.FRAMES.items()},
 }
 
 

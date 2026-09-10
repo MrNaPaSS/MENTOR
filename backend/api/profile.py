@@ -25,7 +25,7 @@ def _profile(s: Student, admin: bool = False) -> ProfileOut:
         id=s.id, username=s.username, weex_uid=s.weex_uid, mode=s.mode,
         language=s.language, risk_percent=s.risk_percent, turbo_leverage=s.turbo_leverage,
         balance_usdt=s.balance_usdt, balance_source=s.balance_source,
-        avatar_url=s.avatar_url, card_name=s.card_name,
+        avatar_url=s.avatar_url, avatar_frame=s.avatar_frame or "", card_name=s.card_name,
         copy_allowed=bool(s.copy_allowed),
         journal_delete_allowed=bool(s.journal_delete_allowed),
         is_admin=admin,

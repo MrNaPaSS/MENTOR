@@ -11,11 +11,14 @@ import { NUM, PaneScope } from "@/components/app/Pane";
 export default function BuyDialog({
   item,
   balance,
+  preview,
   onConfirm,
   onClose,
 }: {
   item: ShopItem;
   balance: number;
+  /** Что получит покупатель - например, свой аватар в покупаемой рамке. */
+  preview?: React.ReactNode;
   /** Отдаёт контакт; бросает ошибку с понятным текстом, если покупка не прошла. */
   onConfirm: (contact: string) => Promise<void>;
   onClose: () => void;
@@ -73,6 +76,11 @@ export default function BuyDialog({
         </header>
 
         <div className="space-y-3 px-4 py-3">
+          {preview && (
+            <div className="rounded-lg border border-[var(--pane-border)] bg-[radial-gradient(circle_at_50%_40%,rgba(25,230,140,0.12),transparent_70%)]">
+              {preview}
+            </div>
+          )}
           <p className="text-[12px] text-[var(--pane-text)]">
             <span className="font-semibold">{item.title}</span> {t.shop.confirmFor}{" "}
             <span className={`${NUM} font-semibold`} style={{ color: "var(--pane-gold)" }}>

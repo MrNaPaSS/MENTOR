@@ -21,11 +21,11 @@ from sqlalchemy import select
 import logging
 
 from core.models import iso, CoinTransaction, ShopItem, ShopOrder, Student, utcnow
-from backend import entitlements
+from backend import entitlements, frames
 from backend.deps import get_session, get_current_student, get_current_mentor, get_config, get_notifier
 from backend.config import BackendConfig
 from backend.schemas import (
-    EntitlementOut, ShopItemOut, ShopItemIn, ShopItemPatch,
+    EntitlementOut, FrameIn, ShopItemOut, ShopItemIn, ShopItemPatch,
     ShopOrderOut, ShopOrderCreate, ShopOrderResolve,
 )
 
@@ -189,6 +189,24 @@ def my_entitlements(student: Student = Depends(get_current_student), session=Dep
     ]
 
 
+@router.post("/frame")
+def set_frame(
+    body: FrameIn,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Надеть купленную рамку аватара или снять рамку (пустое значение)."""
+    frame = body.frame.strip()
+    if frame and frame not in frames.FRAMES:
+        raise HTTPException(400, "Такой рамки нет")
+    if frame and not entitlements.has_feature(session, student.id, frames.feature_of(frame)):
+        raise HTTPException(403, "Эта рамка не куплена")
+    fresh = session.get(Student, student.id)
+    fresh.avatar_frame = frame or None
+    session.commit()
+    return {"frame": frame}
+
+
 @router.post("/orders", response_model=ShopOrderOut)
 async def create_order(
     body: ShopOrderCreate,
@@ -246,6 +264,11 @@ async def create_order(
         # Доступ - в той же операции, что и списание: монеты без доступа или
         # доступ без монет здесь невозможны.
         entitlements.grant(session, fresh.id, item)
+        # Первая купленная рамка надевается сама: купивший хочет её видеть,
+        # а не искать, где она включается. Уже надетую не подменяем.
+        bought_frame = frames.frame_of(feature)
+        if bought_frame and not fresh.avatar_frame:
+            fresh.avatar_frame = bought_frame
         order.status = "fulfilled"
         order.resolved_at = utcnow()
         order.mentor_note = "Выдано автоматически"

@@ -2,22 +2,20 @@ export const shop = {
   title: "Store",
   hint: "What to spend your NMNH coins on",
 
-  tabs: {
+  cats: {
+    all: "All",
     features: "Features",
+    frames: "Style",
     people: "Mentoring",
     software: "Our software",
-  },
-  tabHints: {
-    features: "Switched on right after purchase",
-    people: "Granted by the mentor by hand",
-    software: "Our products and indicator access",
   },
   empty: "Nothing here yet.",
 
   balance: "Balance",
   waiting: (n: number) => `Waiting to be claimed: ${n}`,
   claim: "Claim",
-  earnTitle: "How to earn",
+  goal: (title: string, n: string) => `${n} left to "${title}"`,
+  earnToggle: "How to earn",
   earnLines: [
     "Winning trade: +10",
     "Streak of 3, 5 and 10 wins: +15, +30, +100",
@@ -25,11 +23,15 @@ export const shop = {
     "Achievements, levels and academy lessons",
     "Trades pay no more than 150 a day",
   ],
-  historyTitle: "Coin history",
-  historyEmpty: "No coins yet.",
 
-  accessTitle: "My access",
-  accessEmpty: "Purchased features will show up here.",
+  activity: {
+    access: "Access",
+    history: "History",
+    orders: "Orders",
+  },
+  historyEmpty: "No coins yet.",
+  accessEmpty: "Purchased features and frames will show up here.",
+  ordersEmpty: "No orders yet.",
   forever: "forever",
   until: (date: string) => `until ${date}`,
   chargesLeft: (n: number) => `charges: ${n}`,
@@ -40,6 +42,7 @@ export const shop = {
     charges: (n: number) => `Charges: ${n}`,
     instant: "Switched on at once",
     manual: "Granted by the mentor",
+    free: "Free",
   },
 
   buy: "Buy",
@@ -47,14 +50,18 @@ export const shop = {
   buyMore: "Buy more",
   bought: "Owned",
   notEnough: (n: string) => `${n} short`,
+  saved: (n: string) => `${n}% saved`,
   details: "Details",
   openLink: "Open",
   soon: "Soon",
 
-  indicatorsTitle: "TradingView indicators",
-  indicatorsHint: "The mentor grants access to your TradingView username",
+  equip: "Wear",
+  equipped: "Wearing",
+  unequip: "Take off",
+  yourPreview: "How it looks on you",
+  rankOnly: (n: number) => `Given for place ${n} on the leaderboard. Not for sale.`,
+  rankLock: (n: number) => `Top ${n}`,
 
-  ordersSection: "My orders",
   status: {
     pending: "Awaiting delivery",
     fulfilled: "Delivered",
@@ -79,5 +86,16 @@ export const shop = {
     streak_freeze: "Streak freeze",
     streak_boost: "Double streak bonus",
     journal_export: "Journal export to CSV",
+    frame_neon: "Neon frame",
+    frame_carbon: "Carbon frame",
+    frame_pulse: "Pulse frame",
+    frame_candles: "Candles frame",
+    frame_crown: "Crown frame",
+  } as Record<string, string>,
+
+  rankFrames: {
+    gold: "Gold frame",
+    silver: "Silver frame",
+    bronze: "Bronze frame",
   } as Record<string, string>,
 };

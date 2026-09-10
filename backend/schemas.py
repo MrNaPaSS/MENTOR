@@ -89,6 +89,9 @@ class LeaderboardRow(BaseModel):
     username: Optional[str]
     mode: str
     balance: Optional[Decimal]
+    # Аватар и надетая рамка: лидерборд показывает людей, а не заглушки.
+    avatar: Optional[str] = None
+    frame: Optional[str] = None
 
 
 class TraderRow(BaseModel):
@@ -237,6 +240,8 @@ class ProfileOut(BaseModel):
     balance_usdt: Optional[Decimal]
     balance_source: str
     avatar_url: Optional[str] = None
+    # Надетая рамка аватара. Пусто - без рамки.
+    avatar_frame: Optional[str] = None
     card_name: Optional[str] = None
     # Права наставника. Интерфейсу нужно знать их до отрисовки: кнопки, которой
     # у ученика быть не должно, он не нарисует и на мгновение.
@@ -397,6 +402,11 @@ class EntitlementOut(BaseModel):
     permanent: bool
     expires_at: Optional[str] = None
     charges: int = 0
+
+
+class FrameIn(BaseModel):
+    # Пусто - снять рамку.
+    frame: str = Field(default="", max_length=32)
 
 
 class ShopItemIn(BaseModel):
