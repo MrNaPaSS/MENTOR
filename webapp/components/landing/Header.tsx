@@ -9,7 +9,24 @@ import { NAV_ANCHORS } from "@/lib/content";
 import { useT } from "@/lib/i18n";
 import { getAccessToken } from "@/lib/auth";
 
-export default function Header() {
+export interface HeaderLink {
+  href: string;
+  label: string;
+}
+
+interface HeaderProps {
+  /**
+   * Свой набор ссылок вместо якорей главной.
+   *
+   * Шапка одна на весь сайт, а якоря у страниц разные: на витрине
+   * брокерской программы «Сигналы» и «Результаты» ведут в пустоту, потому
+   * что таких разделов на ней нет. Ссылка, которая никуда не ведёт, дороже
+   * отсутствующей: человек считает её сломанным сайтом, а не своей ошибкой.
+   */
+  links?: readonly HeaderLink[];
+}
+
+export default function Header({ links }: HeaderProps = {}) {
   const t = useT();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -31,6 +48,9 @@ export default function Header() {
     };
   }, [open]);
 
+  const nav: readonly HeaderLink[] =
+    links ?? NAV_ANCHORS.map((l) => ({ href: l.href, label: t.landing.nav[l.key] }));
+
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
@@ -45,13 +65,13 @@ export default function Header() {
 
         {/* Центральная навигация (десктоп) */}
         <nav className="hidden items-center gap-1 lg:flex">
-          {NAV_ANCHORS.map((l) => (
+          {nav.map((l) => (
             <a
               key={l.href}
               href={l.href}
               className="rounded-lg px-3 py-2 text-sm text-text-secondary transition hover:text-text-primary"
             >
-              {t.landing.nav[l.key]}
+              {l.label}
             </a>
           ))}
         </nav>
@@ -110,14 +130,14 @@ export default function Header() {
               <X className="h-5 w-5" />
             </button>
           </div>
-          {NAV_ANCHORS.map((l) => (
+          {nav.map((l) => (
             <a
               key={l.href}
               href={l.href}
               onClick={() => setOpen(false)}
               className="rounded-xl px-3 py-3 text-base text-text-secondary transition hover:bg-bg-panel/5 hover:text-text-primary"
             >
-              {t.landing.nav[l.key]}
+              {l.label}
             </a>
           ))}
           <LocaleSwitch className="mt-4 self-start" />

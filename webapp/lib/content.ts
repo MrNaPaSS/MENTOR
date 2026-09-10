@@ -61,6 +61,7 @@ export const HOW_STEPS = [
  * их все разом.
  */
 export const SEO_PAGES = [
+  { key: "broker", href: "/broker" },
   { key: "terminal", href: "/terminal" },
   { key: "scalping", href: "/scalping" },
   { key: "community", href: "/community" },

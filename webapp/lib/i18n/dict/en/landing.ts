@@ -171,6 +171,7 @@ export const landing = {
     navHeading: "Navigation",
     pagesHeading: "Sections",
     pages: {
+      broker: "Fee rebates",
       terminal: "Trading terminal",
       scalping: "Crypto scalping",
       community: "Trading community",

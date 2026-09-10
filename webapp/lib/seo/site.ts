@@ -30,6 +30,7 @@ export interface PublicRoute {
  */
 export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   { path: "/", priority: 1.0, changeFrequency: "weekly" },
+  { path: "/broker", priority: 0.9, changeFrequency: "monthly" },
   { path: "/terminal", priority: 0.9, changeFrequency: "monthly" },
   { path: "/scalping", priority: 0.9, changeFrequency: "monthly" },
   { path: "/community", priority: 0.8, changeFrequency: "monthly" },

@@ -173,6 +173,7 @@ export const landing = {
     navHeading: "Навигация",
     pagesHeading: "Разделы",
     pages: {
+      broker: "Возврат комиссии",
       terminal: "Торговый терминал",
       scalping: "Скальпинг криптовалют",
       community: "Сообщество трейдеров",
