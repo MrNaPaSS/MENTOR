@@ -15,6 +15,7 @@
 | [tz/webapp-tz.md](tz/webapp-tz.md) | ТЗ NMNH Platform WebApp (доработанное, v2.1) |
 | [tz/telegram-login-tz.md](tz/telegram-login-tz.md) | ТЗ: вход на сайт одноразовым паролем от бота академии |
 | [features/scalping.md](features/scalping.md) | Скринер и стакан заявок: источник данных, метрики, лимиты биржи |
+| [integrations/broker-program-plan.md](integrations/broker-program-plan.md) | **План брокерской программы**: ребейт бирж, кэшбэк трейдерам, все биржи, этапы |
 | [worklog/2026-09-08-terminal.md](worklog/2026-09-08-terminal.md) | Журнал, комиссия, радио и разметка: что чинилось и почему |
 | [worklog/2026-09-08-journal-duplicates.md](worklog/2026-09-08-journal-duplicates.md) | Двойная запись в журнале, комиссия на три четверти, боксы на графике |
 
