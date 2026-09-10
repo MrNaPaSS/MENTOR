@@ -140,6 +140,7 @@ import {
   wasEntered,
   type ActiveTrade,
 } from "@/lib/trade/position";
+import PositionsChip from "@/components/scalping/PositionsChip";
 import {
   base,
   money,
@@ -2411,6 +2412,8 @@ export default function ScalpingPage() {
 
   // Сделки по открытой монете: их рисует график, остальные ждут своей.
   const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
+  // Все идущие сделки, по всем монетам: их показывает кнопка «позиции».
+  const active = trades.filter((t) => t.status !== "closed");
 
   /**
    * Свои сделки для скрепки: и ждущие входа, и уже идущие.
@@ -3053,19 +3056,18 @@ export default function ScalpingPage() {
                     </button>
                   )}
 
-                  {mine.length > 0 && (
-                    <button
-                      onClick={() => {
-                        // Последняя открытая по этой монете: остальные
-                        // закрываются со своего ярлыка на графике.
-                        setClosing(mine[mine.length - 1]);
-                        setCloseOpen(true);
-                      }}
-                      title={t.terminal.closePosition}
+                  {/* Позиции и лимитки по всем монетам. Закрытие ушло отсюда
+                      на ярлык сделки на графике: нажатие на пару в окне туда
+                      и ведёт. */}
+                  {active.length > 0 && (
+                    <PositionsChip
+                      trades={active}
+                      current={symbol}
                       className={`${CHIP} ${CHIP_ON}`}
-                    >
-                      {t.terminal.tradeChip} ✕{mine.length > 1 ? ` (${mine.length})` : ""}
-                    </button>
+                      onPick={(next) => {
+                        if (next !== symbol) selectSymbol(next);
+                      }}
+                    />
                   )}
 
                   <button
