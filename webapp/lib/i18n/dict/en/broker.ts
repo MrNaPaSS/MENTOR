@@ -209,7 +209,7 @@ export const broker = {
     status: {
       live: "Live",
       connecting: "Partnered, connecting",
-      planned: "Application queued",
+      planned: "Application in preparation",
     },
     note: (share: string) =>
       `The "after rebate" column uses the ${share} tier - the base one, which every participant gets from day one.`,
