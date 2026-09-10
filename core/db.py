@@ -59,6 +59,7 @@ def create_all() -> None:
     _apply_shop_catalog_v2(engine)
     _apply_shop_catalog_v3(engine)
     _apply_shop_catalog_v4(engine)
+    _apply_shop_catalog_v5(engine)
 
 
 def _migrate_add_columns(engine) -> None:
@@ -428,4 +429,76 @@ def _apply_shop_catalog_v4(engine) -> None:
             flag.value = "4"
         else:
             session.add(SettingRow(key="shop_catalog_version", value="4"))
+        session.commit()
+
+
+# Мерч NMNH: физические товары, едут почтой, выдаёт ментор.
+# Цены высокие намеренно: мерч - цель на месяцы работы, а не на неделю.
+# Кортеж: (title, description, price, image, options, sort_order)
+_COLORS = ["Чёрный", "Белый"]
+_SIZES = ["S", "M", "L", "XL", "XXL"]
+_SHOP_MERCH_V5 = [
+    ("Торговый пульт NMNH",
+     "Макропад для терминала: кнопки BUY, SELL, OPEN, CLOSE и крутилка с экраном свечей. "
+     "Металлический корпус, неоновая подсветка по краю, плетёный кабель. Главный трофей маркета.",
+     25000, "/merch/keypad.webp", {"color": _COLORS}, 60),
+    ("Комплект: футболка + шорты",
+     "Футболка и шорты NMNH TRADE одного цвета: свечи графика, горы и «Better trader, a brighter you» "
+     "на спине, молнии на карманах. Дешевле, чем по отдельности.",
+     12000, "/merch/set.webp", {"color": _COLORS, "size": _SIZES}, 61),
+    ("Футболка NMNH TRADE",
+     "Оверсайз-футболка: крупный логотип и свечи спереди, горы и слоган на спине, "
+     "«Discipline creates freedom» на рукаве.",
+     7000, "/merch/tshirt.webp", {"color": _COLORS, "size": _SIZES}, 62),
+    ("Шорты NMNH TRADE",
+     "Шорты с логотипом и свечами, карманы на молнии с короной, металлические наконечники шнурка.",
+     6000, "/merch/shorts.webp", {"color": _COLORS, "size": _SIZES}, 63),
+    ("Кепка NMNH TRADE",
+     "Объёмная вышивка логотипа, свечи на козырьке с неоновым кантом, металлическая пряжка с короной.",
+     5500, "/merch/cap.webp", {"color": _COLORS}, 64),
+    ("Торговый журнал с ручкой",
+     "Журнал сделок в твёрдой обложке: на каждой странице вход, выход, результат, эмоции и уроки. "
+     "Ручка и закладка NMNH в комплекте.",
+     4500, "/merch/journal.webp", {"color": _COLORS}, 65),
+    ("Термобутылка NMNH",
+     "Стальная термобутылка с защёлкой: свечи графика поднимаются над горами, "
+     "«Discipline creates freedom» по низу.",
+     4000, "/merch/bottle.webp", {"color": _COLORS}, 66),
+    ("Брелок NMNH",
+     "Кожаный ремешок, металлическая пластина с логотипом и жетон со свечами и короной.",
+     2500, "/merch/keychain.webp", {"color": _COLORS}, 67),
+]
+
+
+def _apply_shop_catalog_v5(engine) -> None:
+    """Добавить в каталог мерч NMNH. Один раз, флагом, как v3 и v4."""
+    import json
+
+    from sqlalchemy import inspect, select
+    from sqlalchemy.orm import Session
+    from core.models import SettingRow, ShopItem
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names() or "settings" not in inspector.get_table_names():
+        return
+
+    with Session(engine) as session:
+        flag = session.get(SettingRow, "shop_catalog_version")
+        if flag and (flag.value or "").isdigit() and int(flag.value) >= 5:
+            return
+
+        known = set(session.execute(select(ShopItem.title)).scalars().all())
+        for title, desc, price, image, options, order in _SHOP_MERCH_V5:
+            if title in known:
+                continue
+            session.add(ShopItem(
+                title=title, description=desc, price=price, category="merch", section="shop",
+                icon="Gift", image_url=image, options=json.dumps(options, ensure_ascii=False),
+                sort_order=order,
+            ))
+
+        if flag:
+            flag.value = "5"
+        else:
+            session.add(SettingRow(key="shop_catalog_version", value="5"))
         session.commit()

@@ -9,6 +9,7 @@ export const shop = {
     all: "Все",
     features: "Функции",
     frames: "Оформление",
+    merch: "Мерч",
     people: "Менторство",
     software: "Наш софт",
   },
@@ -45,7 +46,17 @@ export const shop = {
     charges: (n: number) => `Зарядов: ${n}`,
     instant: "Включается сразу",
     manual: "Выдаёт ментор",
+    delivery: "Доставка",
     free: "Бесплатно",
+  },
+
+  pick: {
+    colorLabel: "Цвет",
+    sizeLabel: "Размер",
+    color: (value: string) => `Цвет: ${value}`,
+    size: (value: string) => `Размер: ${value}`,
+    addressLabel: "Telegram и адрес доставки",
+    addressPlaceholder: "@username, город, улица, дом, квартира, индекс",
   },
 
   buy: "Купить",
@@ -75,6 +86,7 @@ export const shop = {
   confirmFor: "за",
   confirmInstant: "Доступ включится сразу после покупки.",
   confirmNote: "Монеты спишутся сразу, ментор выдаст доступ вручную.",
+  confirmMerch: "Монеты спишутся сразу. Ментор свяжется с вами и отправит заказ по адресу.",
   after: (n: string) => `После покупки останется ${n} NMNH`,
   tvLabel: "Ваш ник TradingView (обязательно для выдачи доступа)",
   contactLabel: "Контакт для связи (Telegram / email)",

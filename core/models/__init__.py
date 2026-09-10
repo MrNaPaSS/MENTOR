@@ -245,6 +245,9 @@ class ShopItem(Base):
     # если оба нуля, навсегда.
     duration_days: Mapped[int] = mapped_column(Integer, default=0)
     charges: Mapped[int] = mapped_column(Integer, default=0)
+    # Что покупатель выбирает при заказе, JSON: {"color": [...], "size": [...]}.
+    # Нужно мерчу: у кепки два цвета, у футболки ещё и размер.
+    options: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     orders: Mapped[list["ShopOrder"]] = relationship(back_populates="item")

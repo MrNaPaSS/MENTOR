@@ -285,6 +285,33 @@ def test_рамку_можно_снять(client):
     assert _frame_of("700012") is None
 
 
+def test_мерч_в_каталоге_и_пульт_самый_дорогой(client):
+    items = client.get("/api/shop/items").json()
+    merch = [it for it in items if it["category"] == "merch"]
+    assert len(merch) == 8
+    assert all(it["image_url"].startswith("/merch/") for it in merch)
+    top = max(items, key=lambda it: it["price"])
+    assert top["title"] == "Торговый пульт NMNH"
+    shirt = next(it for it in merch if it["title"] == "Футболка NMNH TRADE")
+    import json
+    assert json.loads(shirt["options"])["size"] == ["S", "M", "L", "XL", "XXL"]
+
+
+def test_мерч_без_адреса_не_продаётся(client):
+    auth = _rich_student(client, "700020", 10000)
+    item_id = _feature_item("Брелок NMNH")
+    assert client.post("/api/shop/orders", json={"item_id": item_id}, headers=auth).status_code == 400
+    assert client.get("/api/coins", headers=auth).json()["balance"] == 10000
+
+    order = client.post(
+        "/api/shop/orders",
+        json={"item_id": item_id, "contact": "Цвет: Чёрный; @me; Москва, ул. Пример 1"},
+        headers=auth,
+    )
+    assert order.json()["status"] == "pending"
+    assert client.get("/api/coins", headers=auth).json()["balance"] == 7500
+
+
 def test_ручной_товар_по_прежнему_ждёт_ментора(client):
     auth = _rich_student(client, "700003", 1000)
     item_id = _feature_item("Разбор сделки с ментором")

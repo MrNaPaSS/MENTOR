@@ -395,6 +395,8 @@ class ShopItemOut(BaseModel):
     feature: str = ""
     duration_days: int = 0
     charges: int = 0
+    # Выбор при заказе, JSON: {"color": [...], "size": [...]}. Пусто - выбирать нечего.
+    options: str = ""
 
 
 class EntitlementOut(BaseModel):
@@ -424,6 +426,7 @@ class ShopItemIn(BaseModel):
     feature: str = Field(default="", max_length=32)
     duration_days: int = Field(default=0, ge=0)
     charges: int = Field(default=0, ge=0)
+    options: str = Field(default="", max_length=2000)
 
 
 class ShopItemPatch(BaseModel):
@@ -441,6 +444,7 @@ class ShopItemPatch(BaseModel):
     feature: Optional[str] = Field(default=None, max_length=32)
     duration_days: Optional[int] = Field(default=None, ge=0)
     charges: Optional[int] = Field(default=None, ge=0)
+    options: Optional[str] = Field(default=None, max_length=2000)
 
 
 class ShopOrderCreate(BaseModel):

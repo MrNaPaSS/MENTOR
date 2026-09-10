@@ -6,6 +6,7 @@ export const shop = {
     all: "All",
     features: "Features",
     frames: "Style",
+    merch: "Merch",
     people: "Mentoring",
     software: "Our software",
   },
@@ -42,7 +43,17 @@ export const shop = {
     charges: (n: number) => `Charges: ${n}`,
     instant: "Switched on at once",
     manual: "Granted by the mentor",
+    delivery: "Delivery",
     free: "Free",
+  },
+
+  pick: {
+    colorLabel: "Colour",
+    sizeLabel: "Size",
+    color: (value: string) => `Colour: ${value}`,
+    size: (value: string) => `Size: ${value}`,
+    addressLabel: "Telegram and delivery address",
+    addressPlaceholder: "@username, city, street, building, flat, postcode",
   },
 
   buy: "Buy",
@@ -72,6 +83,7 @@ export const shop = {
   confirmFor: "for",
   confirmInstant: "Access switches on right after the purchase.",
   confirmNote: "Coins are deducted immediately, the mentor grants access manually.",
+  confirmMerch: "Coins are deducted immediately. The mentor will contact you and ship the order.",
   after: (n: string) => `${n} NMNH will be left after the purchase`,
   tvLabel: "Your TradingView username (required to grant access)",
   contactLabel: "Contact for follow-up (Telegram / email)",

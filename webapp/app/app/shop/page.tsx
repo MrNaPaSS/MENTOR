@@ -13,7 +13,7 @@
 // справка, её читают один раз.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Cpu, Crown, GraduationCap, LayoutGrid, X, Zap, type LucideIcon } from "lucide-react";
+import { Cpu, Crown, GraduationCap, LayoutGrid, Shirt, X, Zap, type LucideIcon } from "lucide-react";
 import { api, API_URL, type CoinTx, type Profile, type ShopItem, type ShopOrder } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
@@ -28,23 +28,25 @@ import BalanceCard from "@/components/shop/BalanceCard";
 import ActivityPane from "@/components/shop/ActivityPane";
 import BuyDialog from "@/components/shop/BuyDialog";
 
-type Cat = "all" | "features" | "frames" | "people" | "software";
+type Cat = "all" | "features" | "frames" | "merch" | "people" | "software";
 
 const CATS: { id: Cat; icon: LucideIcon }[] = [
   { id: "all", icon: LayoutGrid },
   { id: "features", icon: Zap },
   { id: "frames", icon: Crown },
+  { id: "merch", icon: Shirt },
   { id: "people", icon: GraduationCap },
   { id: "software", icon: Cpu },
 ];
 
 /** Порядок групп во вкладке «Все»: то, что включается сразу, - первым. */
-const ORDER: Record<Exclude<Cat, "all">, number> = { features: 0, frames: 1, people: 2, software: 3 };
+const ORDER: Record<Exclude<Cat, "all">, number> = { features: 0, frames: 1, merch: 2, people: 3, software: 4 };
 
 function catOf(item: ShopItem): Exclude<Cat, "all"> {
   // Подписки на индикаторы TradingView - доступ к чужой площадке, а не наш
   // терминал: их место в «Нашем софте», рядом с остальными ссылками.
   if (item.section === "software" || item.category === "indicator") return "software";
+  if (item.category === "merch") return "merch";
   if (frameOfFeature(item.feature)) return "frames";
   if (item.feature) return "features";
   return "people";
@@ -120,7 +122,7 @@ export default function ShopPage() {
   const equipped = profile?.avatar_frame ?? "";
 
   const counts = useMemo(() => {
-    const out: Record<Cat, number> = { all: items.length, features: 0, frames: 0, people: 0, software: 0 };
+    const out: Record<Cat, number> = { all: items.length, features: 0, frames: 0, merch: 0, people: 0, software: 0 };
     for (const item of items) out[catOf(item)] += 1;
     return out;
   }, [items]);

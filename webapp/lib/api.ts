@@ -818,6 +818,8 @@ export interface ShopItem {
   duration_days?: number;
   /** Сколько зарядов даёт покупка расходуемой функции. */
   charges?: number;
+  /** Выбор при заказе, JSON: {"color": [...], "size": [...]} (lib/shopOptions.ts). */
+  options?: string;
 }
 
 /** Столп сертификата трейдера: знания, практика, дисциплина, развитие. */
@@ -869,6 +871,7 @@ export interface ShopItemInput {
   feature?: string;
   duration_days?: number;
   charges?: number;
+  options?: string;
 }
 
 export interface ShopOrder {

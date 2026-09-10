@@ -19,7 +19,7 @@ import FramedAvatar from "@/components/avatar/FramedAvatar";
 import ShopIcon from "./ShopIcon";
 
 /** Как продаётся товар - от этого цвет карточки, как редкость у достижений. */
-export type Tier = "forever" | "days" | "charges" | "manual" | "free" | "rank";
+export type Tier = "forever" | "days" | "charges" | "manual" | "merch" | "free" | "rank";
 
 const TIER: Record<Tier, { border: string; glow: string; badge: string; tint: string }> = {
   forever: {
@@ -46,6 +46,12 @@ const TIER: Record<Tier, { border: string; glow: string; badge: string; tint: st
     badge: "bg-black/40 text-white/85",
     tint: "rgba(10,255,224,0.10)",
   },
+  merch: {
+    border: "border-accent-gold/30",
+    glow: "shadow-[0_0_16px_rgba(240,185,11,0.18)]",
+    badge: "bg-accent-gold/20 text-[var(--pane-gold)]",
+    tint: "rgba(25,230,140,0.14)",
+  },
   free: {
     border: "border-[var(--pane-border)]",
     glow: "",
@@ -61,6 +67,7 @@ const TIER: Record<Tier, { border: string; glow: string; badge: string; tint: st
 };
 
 export function tierOf(item: ShopItem): Tier {
+  if (item.category === "merch") return "merch";
   if (!item.feature) return item.price > 0 ? "manual" : "free";
   if ((item.charges ?? 0) > 0) return "charges";
   if ((item.duration_days ?? 0) > 0) return "days";
@@ -118,7 +125,9 @@ export default function ShopCard({
           ? t.shop.terms.forever
           : tier === "manual"
             ? t.shop.terms.manual
-            : t.shop.terms.free;
+            : tier === "merch"
+              ? t.shop.terms.delivery
+              : t.shop.terms.free;
 
   let status = "";
   if (access && !frame) {
@@ -294,17 +303,28 @@ function Preview({
   }
 
   if (image && !broken) {
+    // Мерч показываем целиком, на подсветке: у кепки или пульта обрезанный
+    // край - это обрезанный товар. Снимки TradingView и обложки - во всю
+    // ширину, как было.
+    const merch = item.category === "merch";
     return (
-      <div className="relative h-32 overflow-hidden border-b border-[var(--pane-border)]">
+      <div
+        className={`relative overflow-hidden border-b border-[var(--pane-border)] ${merch ? "h-40" : "h-32"}`}
+        style={merch ? glow : undefined}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={image}
           alt=""
           loading="lazy"
           onError={() => setBroken(true)}
-          className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04] motion-reduce:transform-none"
+          className={`h-full w-full transition-transform duration-500 ease-out group-hover:scale-[1.04] motion-reduce:transform-none ${
+            merch ? "object-contain p-2" : "object-cover"
+          }`}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[var(--pane-bg)] via-transparent to-transparent" />
+        {!merch && (
+          <div className="absolute inset-0 bg-gradient-to-t from-[var(--pane-bg)] via-transparent to-transparent" />
+        )}
       </div>
     );
   }

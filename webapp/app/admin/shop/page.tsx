@@ -6,13 +6,14 @@ import { api, ShopItem, ShopItemInput, ShopOrder } from "@/lib/api";
 import { useMentorToken } from "@/components/admin/AdminShell";
 import { cardImage } from "@/lib/tvImage";
 import ShopIcon, { ICON_NAMES } from "@/components/shop/ShopIcon";
+import { parseOptions, splitList, stringifyOptions } from "@/lib/shopOptions";
 
 type Tab = "items" | "orders";
 
 const EMPTY: ShopItemInput = {
   title: "", description: "", price: 0, category: "indicator",
   section: "shop", icon: "Gift", link_url: "", image_url: "", requires_tv: false, is_active: true, sort_order: 0,
-  feature: "", duration_days: 0, charges: 0,
+  feature: "", duration_days: 0, charges: 0, options: "",
 };
 
 // Функции платформы, которые магазин выдаёт сам. Ключи - те же, что в
@@ -284,6 +285,7 @@ function ItemEditor({ token, item, onClose, onSaved }: {
     section: item.section, icon: item.icon, link_url: item.link_url, image_url: item.image_url,
     requires_tv: item.requires_tv, is_active: item.is_active, sort_order: item.sort_order,
     feature: item.feature ?? "", duration_days: item.duration_days ?? 0, charges: item.charges ?? 0,
+    options: item.options ?? "",
   } : EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -404,6 +406,25 @@ function ItemEditor({ token, item, onClose, onSaved }: {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={cardImage(form.image_url, form.link_url)!} alt="превью" className="h-32 w-full rounded-xl border border-border object-cover" />
           )}
+          {/* Выбор покупателя при заказе - для мерча: цвета и размеры. */}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Цвета через запятую">
+              <input
+                value={parseOptions(form.options).color.join(", ")}
+                onChange={(e) => set("options", stringifyOptions({ ...parseOptions(form.options), color: splitList(e.target.value) }))}
+                className="input"
+                placeholder="Чёрный, Белый"
+              />
+            </Field>
+            <Field label="Размеры через запятую">
+              <input
+                value={parseOptions(form.options).size.join(", ")}
+                onChange={(e) => set("options", stringifyOptions({ ...parseOptions(form.options), size: splitList(e.target.value) }))}
+                className="input"
+                placeholder="S, M, L, XL"
+              />
+            </Field>
+          </div>
           <Field label="Функция платформы (выдаётся сразу, без ментора)">
             <select value={form.feature ?? ""} onChange={(e) => set("feature", e.target.value)} className="input">
               {FEATURES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}

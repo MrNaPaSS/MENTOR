@@ -136,6 +136,7 @@ def _item_out(it: ShopItem) -> ShopItemOut:
         category=it.category, section=it.section, icon=it.icon, link_url=it.link_url,
         image_url=it.image_url, requires_tv=it.requires_tv, is_active=it.is_active, sort_order=it.sort_order,
         feature=it.feature or "", duration_days=it.duration_days or 0, charges=it.charges or 0,
+        options=it.options or "",
     )
 
 
@@ -235,6 +236,10 @@ async def create_order(
     contact = body.contact.strip()[:255]
     if item.requires_tv and not contact:
         raise HTTPException(400, "Укажите ваш ник TradingView для выдачи доступа")
+    # Мерч едет почтой: без контакта и адреса ментору некуда его отправить,
+    # а монеты уже списаны.
+    if item.category == "merch" and not contact:
+        raise HTTPException(400, "Укажите Telegram и адрес доставки")
 
     fresh = session.get(Student, student.id)
     if (fresh.coins or 0) < item.price:
@@ -351,6 +356,7 @@ async def admin_create_item(body: ShopItemIn, session=Depends(get_session)):
         link_url=body.link_url, image_url=body.image_url, requires_tv=body.requires_tv,
         is_active=body.is_active, sort_order=body.sort_order,
         feature=body.feature.strip(), duration_days=body.duration_days, charges=body.charges,
+        options=body.options.strip(),
     )
     await _autofill_image(item)
     session.add(item)
