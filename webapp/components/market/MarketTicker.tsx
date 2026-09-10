@@ -18,13 +18,14 @@
 // откуда начинала первая, и возврат в ноль не виден.
 
 import { useT } from "@/lib/i18n";
-import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import { askSymbol } from "@/lib/openSymbol";
 import { authReq } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import type { ScreenerRow } from "@/lib/scalping";
+import { keepOrder, sameRow, sameRows } from "@/lib/tickerRows";
 
 /** Как часто спрашиваем цены. */
 const POLL_MS = 15_000;
@@ -77,9 +78,8 @@ export default function MarketTicker() {
   const star = useTerminalTheme() === "light" ? "/marks/star.png" : "/marks/star-green.png";
   const trackRef = useRef<HTMLDivElement>(null);
   const halfRef = useRef<HTMLDivElement>(null);
-  // Ширина одной половины: по ней считается длительность круга. Лента едет
-  // ровно на половину своей ширины, поэтому это и есть длина пути.
-  const [span, setSpan] = useState(0);
+  const motionRef = useRef<Animation | null>(null);
+  const shown = rows.length > 0;
 
   useEffect(() => {
     let stopped = false;
@@ -92,7 +92,14 @@ export default function MarketTicker() {
           `/api/scalping/screener?sort=volume&limit=${SHOWN}`,
           token,
         );
-        if (!stopped && Array.isArray(body?.rows)) setRows(body.rows);
+        // Пустой ответ - сбой скринера, а не пустой рынок: оставляем прошлые
+        // цены, а не прячем ленту до следующего опроса.
+        if (stopped || !Array.isArray(body?.rows) || !body.rows.length) return;
+        const fresh = body.rows;
+        setRows((prev) => {
+          const next = keepOrder(prev, fresh);
+          return sameRows(prev, next) ? prev : next;
+        });
       } catch {
         // Не ответил - показываем прошлые цены, они секундной давности.
       }
@@ -121,23 +128,81 @@ export default function MarketTicker() {
     };
   }, []);
 
-  // Меряем половину и пересчитываем длительность. Не на каждый рендер, а когда
-  // ширина действительно изменилась: смена длительности на ходу переставляет
-  // ленту, и делать это из-за дрожания в пиксель - хуже, чем не делать вовсе.
+  // Движение ленты.
+  //
+  // Раньше это была CSS-анимация, и длительность круга стояла в стиле. Цены
+  // приходят раз в пятнадцать секунд, цифры меняют ширину - и с ней менялась
+  // длительность. Браузер на смене длительности пересчитывает, где лента
+  // должна быть в этот момент, и переставляет её туда: строка то дёргалась
+  // назад, то догоняла себя.
+  //
+  // Здесь анимация одна на всё время жизни ленты. Сменилась ширина - берём
+  // пройденный путь, подставляем новую длину круга и ставим ленту ровно туда,
+  // где она стояла. Считает движение по-прежнему видеокарта, поэтому тяжёлый
+  // график в терминале его не тормозит.
   useEffect(() => {
-    const node = halfRef.current;
-    if (!node) return;
-    function measure() {
-      const width = node!.getBoundingClientRect().width;
-      setSpan((old) => (Math.abs(old - width) > 2 ? width : old));
-    }
-    measure();
-    const watcher = new ResizeObserver(measure);
-    watcher.observe(node);
-    return () => watcher.disconnect();
-  }, [rows]);
+    const track = trackRef.current;
+    const half = halfRef.current;
+    if (!track || !half || typeof track.animate !== "function") return;
+    // Кто попросил систему не двигать интерфейс - получает строку, которую
+    // можно читать, а не догонять.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-  if (!rows.length) return null;
+    let span = 0;
+    let motion: Animation | null = null;
+
+    function fit() {
+      // Круг округляем до пикселя: половина ленты меряется по тексту и
+      // шириной выходит дробной, а стык на дробном сдвиге дрожит краями.
+      const width = Math.round(half!.getBoundingClientRect().width);
+      if (!width || width === span) return;
+      const travelled = motion && span ? ((Number(motion.currentTime) || 0) / 1000) * SPEED : 0;
+      const frames = [
+        { transform: "translate3d(0, 0, 0)" },
+        { transform: `translate3d(${-width}px, 0, 0)` },
+      ];
+      const duration = (width / SPEED) * 1000;
+      if (motion?.effect instanceof KeyframeEffect) {
+        motion.effect.setKeyframes(frames);
+        motion.effect.updateTiming({ duration });
+      } else {
+        motion = track!.animate(frames, { duration, iterations: Infinity, easing: "linear" });
+        motionRef.current = motion;
+      }
+      // Половины одинаковые, поэтому место на круге - остаток от деления.
+      motion.currentTime = (((span ? travelled % span : 0) % width) / SPEED) * 1000;
+      span = width;
+    }
+
+    fit();
+    // Наблюдатель срабатывает после раскладки и до отрисовки: новая длина
+    // круга встаёт в том же кадре, где поменялись цифры, и скачка не видно.
+    const watcher = new ResizeObserver(fit);
+    watcher.observe(half);
+    return () => {
+      watcher.disconnect();
+      motion?.cancel();
+      motionRef.current = null;
+    };
+  }, [shown]);
+
+  // Звезда одна на всю ленту: она отмечает не «крупную плиту» - для этого есть
+  // золото, - а самую крупную из всех. Две звезды в строке не значили бы
+  // ничего. Если крупных плит нет вовсе, звезды нет тоже: отмечать лучшего из
+  // мелких незачем.
+  const king = useMemo(
+    () =>
+      rows.reduce<ScreenerRow | null>(
+        (best, row) =>
+          row.wall_notional >= BIG_WALL && (!best || row.wall_notional > best.wall_notional)
+            ? row
+            : best,
+        null,
+      )?.symbol,
+    [rows],
+  );
+
+  if (!shown) return null;
 
   return (
     // У строки свой набор цветов на каждую тему - он задан переменными
@@ -145,7 +210,14 @@ export default function MarketTicker() {
     // у панелей терминала, а подобран отдельно: витрина рынка не обязана
     // совпадать с ними, но на белой странице обязана быть белой.
     <div
-      className="group overflow-hidden border-b"
+      className="overflow-hidden border-b"
+      // Курсор на строке останавливает её.
+      //
+      // Прочитать цену бегущей пары нельзя, а нажать на неё - тем более: к
+      // моменту нажатия под курсором уже соседняя. Пауза на всю строку, а не
+      // на одну пару: остановить надо ленту, по которой ведут курсор.
+      onMouseEnter={() => motionRef.current?.pause()}
+      onMouseLeave={() => motionRef.current?.play()}
       style={{
         background: "var(--tick-bg)",
         borderColor: "var(--tick-line)",
@@ -157,35 +229,14 @@ export default function MarketTicker() {
     >
       <div
         ref={trackRef}
-        // Курсор на строке останавливает её.
-        //
-        // Прочитать цену бегущей пары нельзя, а нажать на неё - тем более: к
-        // моменту нажатия под курсором уже соседняя. Пауза на всю строку, а не
-        // на одну пару: остановить надо ленту, по которой ведут курсор.
         // py-1.5 вместе с отступом самой пары держит прежнюю высоту строки: на
         // неё рассчитан отступ содержимого под шапкой.
-        className="flex w-max animate-marquee py-1.5 [backface-visibility:hidden] will-change-transform group-hover:[animation-play-state:paused]"
-        // Пока не измерились - идём с длительностью по умолчанию: лента поедет
-        // сразу, а через кадр возьмёт свою.
-        //
-        // Сдвиг округляем до пикселя: половина ленты меряется по тексту и
-        // шириной выходит дробной. Кадр за кадром лента вставала между
-        // пикселями, и точка направления - круг в шесть пикселей - дрожала
-        // краями. Стык от округления уходит меньше чем на полпикселя, а
-        // половины одинаковые - его не видно.
-        style={
-          span > 0
-            ? ({
-                animationDuration: `${span / SPEED}s`,
-                "--marquee-span": `${Math.round(span)}px`,
-              } as CSSProperties)
-            : undefined
-        }
+        className="flex w-max py-1.5 [backface-visibility:hidden] will-change-transform"
       >
         {/* Две одинаковые половины. Вторая - для глаза, а не для чтения: она
             повторяет первую, и озвучивать её ещё раз незачем. */}
-        <Half rows={rows} innerRef={halfRef} star={star} />
-        <Half rows={rows} clone star={star} />
+        <Half rows={rows} king={king} innerRef={halfRef} star={star} />
+        <Half rows={rows} king={king} clone star={star} />
       </div>
     </div>
   );
@@ -193,27 +244,17 @@ export default function MarketTicker() {
 
 function Half({
   rows,
+  king,
   clone,
   innerRef,
   star,
 }: {
   rows: ScreenerRow[];
+  king?: string;
   clone?: boolean;
   innerRef?: React.Ref<HTMLDivElement>;
   star: string;
 }) {
-  // Звезда одна на всю ленту: она отмечает не «крупную плиту» - для этого есть
-  // золото, - а самую крупную из всех. Две звезды в строке не значили бы
-  // ничего. Если крупных плит нет вовсе, звезды нет тоже: отмечать лучшего из
-  // мелких незачем.
-  const king = rows.reduce<ScreenerRow | null>(
-    (best, row) =>
-      row.wall_notional >= BIG_WALL && (!best || row.wall_notional > best.wall_notional)
-        ? row
-        : best,
-    null,
-  )?.symbol;
-
   return (
     // Отступ справа вместо зазора после последней пары: зазор ставится только
     // между соседями, и на стыке половин его не хватало - лента дёргалась на
@@ -230,9 +271,9 @@ function Half({
 /**
  * Пара в ленте.
  *
- * Через memo: цены приезжают раз в пятнадцать секунд, и без него React
- * перебирал бы все строки, включая те, у которых ничего не менялось, - прямо
- * посреди движения ленты.
+ * Через memo со своим сравнением: цены приезжают раз в пятнадцать секунд
+ * новым массивом, и обычный memo пропустил бы всё - объекты-то новые. Здесь
+ * пара перерисовывается, только когда поменялось то, что в ней видно.
  */
 const Pair = memo(function Pair({
   row,
@@ -311,4 +352,5 @@ const Pair = memo(function Pair({
       )}
     </Link>
   );
-});
+},
+(a, b) => a.crowned === b.crowned && a.star === b.star && sameRow(a.row, b.row));

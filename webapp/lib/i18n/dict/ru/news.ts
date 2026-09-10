@@ -1,23 +1,31 @@
 // Раздел «ТВ»: прямые эфиры, лента TradingView и крипто-новости.
 
 export const news = {
-  title: "Новости & ТВ",
+  title: "ТВ",
   subtitle: "Прямые эфиры, TradingView лента и крипто-новости",
 
-  tabLive: "📺 Live TV",
-  tabFeed: "📊 TV Timeline",
-  tabCrypto: "📰 Крипто",
+  tabLive: "Эфиры",
+  tabFeed: "Лента TradingView",
+  tabCrypto: "Крипто-новости",
+
+  tabHints: {
+    live: "прямые эфиры деловых и новостных каналов",
+    feed: "новости по рынкам от TradingView",
+    crypto: "свежие заголовки криптоизданий",
+  },
 
   loadingStream: "Загрузка эфира...",
   offline: "Канал не в эфире прямо сейчас",
-  openOnYoutube: "▶ Открыть на YouTube",
-  closeFullscreen: "✕ Закрыть",
+  openOnYoutube: "Открыть на YouTube",
+  closeFullscreen: "Закрыть",
+  fullscreen: "Во весь экран",
+  grid: "Сетка",
 
-  cryptoTitle: "Крипто-новости (English)",
-  cryptoSource: "источник: CryptoCompare",
+  cryptoTitle: "Крипто-новости",
+  cryptoSource: "CryptoCompare · на английском",
   loadFailed: "Не удалось загрузить новости",
 
   youtubeNote:
-    "⚠ Если канал не в эфире - отображается заглушка с кнопкой открыть на YouTube. Работа зависит от расписания канала.",
+    "Канал не в эфире - вместо трансляции заглушка со ссылкой на YouTube. Зависит от расписания канала.",
   pickChannels: "Выберите каналы выше",
 };

@@ -1,58 +1,59 @@
-﻿"use client";
+"use client";
+
+// Раздел «ТВ»: прямые эфиры, лента TradingView и крипто-новости.
+//
+// Собран из тех же панелей, что терминал и «Рынок»: рамка, шапка в строку,
+// чипы вместо крупных кнопок. Раньше здесь были просторные карточки со своими
+// цветами, и раздел выглядел вставкой из другого приложения.
 
 import { useT } from "@/lib/i18n";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ExternalLink, Maximize2, Newspaper, Radio, Tv, X } from "lucide-react";
+import { useTerminalTheme } from "@/lib/terminalTheme";
+import { CHIP, CHIP_OFF, CHIP_ON, Pane, PaneHead, PaneScope } from "@/components/app/Pane";
 
 // ─── Каналы с настоящими YouTube Channel ID (не handle!) ───────────────────
 // Важно: каналы должны разрешать embedding. CNBC и Al Jazeera - блокируют.
 const CHANNELS = [
-  {
-    id: "bloomberg",
-    name: "Bloomberg Markets",
-    category: "Finance 🇺🇸",
-    channelId: "UCIALMKvObZNtJ6AmdCLP7Lg",
-    color: "#1a56db",
-  },
-  {
-    id: "dw",
-    name: "DW News",
-    category: "World 🇩🇪",
-    channelId: "UCknLrEdhRCp1aegoMqRaCZg",
-    color: "#cc0000",
-  },
-  {
-    id: "france24",
-    name: "France 24 English",
-    category: "World 🇫🇷",
-    channelId: "UCQfwfsi5VrQ8yKZ-UWmAEFg",
-    color: "#0050a0",
-  },
-  {
-    id: "skynews",
-    name: "Sky News",
-    category: "World 🇬🇧",
-    channelId: "UCoMdktPbSTixAyNGwb-UYkQ",
-    color: "#cc2200",
-  },
-  {
-    id: "euronews",
-    name: "Euronews English",
-    category: "World 🇪🇺",
-    channelId: "UCg2JZBwgSYMaFQFm26LQZEQ",
-    color: "#ff6600",
-  },
-  {
-    id: "wion",
-    name: "WION",
-    category: "World 🌏",
-    channelId: "UCbRNB7d5AKF1HxlHFVkdSqw",
-    color: "#e00000",
-  },
+  { id: "bloomberg", name: "Bloomberg Markets", category: "Finance 🇺🇸", channelId: "UCIALMKvObZNtJ6AmdCLP7Lg", color: "#1a56db" },
+  { id: "dw", name: "DW News", category: "World 🇩🇪", channelId: "UCknLrEdhRCp1aegoMqRaCZg", color: "#cc0000" },
+  { id: "france24", name: "France 24 English", category: "World 🇫🇷", channelId: "UCQfwfsi5VrQ8yKZ-UWmAEFg", color: "#0050a0" },
+  { id: "skynews", name: "Sky News", category: "World 🇬🇧", channelId: "UCoMdktPbSTixAyNGwb-UYkQ", color: "#cc2200" },
+  { id: "euronews", name: "Euronews English", category: "World 🇪🇺", channelId: "UCg2JZBwgSYMaFQFm26LQZEQ", color: "#ff6600" },
+  { id: "wion", name: "WION", category: "World 🌏", channelId: "UCbRNB7d5AKF1HxlHFVkdSqw", color: "#e00000" },
 ];
 
+type Channel = (typeof CHANNELS)[number];
 type GridSize = 1 | 2 | 4 | 6;
+type Tab = "live" | "feed" | "crypto";
 
-// ─── Компонент одного стрима ────────────────────────────────────────────────
+const GRIDS: { size: GridSize; label: string }[] = [
+  { size: 1, label: "1×1" },
+  { size: 2, label: "1×2" },
+  { size: 4, label: "2×2" },
+  { size: 6, label: "2×3" },
+];
+
+const GRID_CLASS: Record<GridSize, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-1 md:grid-cols-2",
+  4: "grid-cols-1 md:grid-cols-2",
+  6: "grid-cols-1 md:grid-cols-2 xl:grid-cols-3",
+};
+
+const TABS: { key: Tab; icon: React.ReactNode }[] = [
+  { key: "live", icon: <Tv className="h-3.5 w-3.5" /> },
+  { key: "feed", icon: <Radio className="h-3.5 w-3.5" /> },
+  { key: "crypto", icon: <Newspaper className="h-3.5 w-3.5" /> },
+];
+
+/** Страница канала на YouTube: по идентификатору, а не по имени - имени у нас нет. */
+function channelUrl(channelId: string): string {
+  return `https://www.youtube.com/channel/${channelId}/live`;
+}
+
+// ─── Эфир ────────────────────────────────────────────────────────────────────
+
 function LiveStream({ channelId, name, muted = true }: { channelId: string; name: string; muted?: boolean }) {
   const t = useT();
   const [offline, setOffline] = useState(false);
@@ -66,27 +67,27 @@ function LiveStream({ channelId, name, muted = true }: { channelId: string; name
     `&controls=1&rel=0&modestbranding=1&iv_load_policy=3`;
 
   return (
+    // Экран эфира чёрный в обеих темах: видео светлее не станет, а белая
+    // рамка вокруг тёмного кадра читается как незагрузившаяся картинка.
     <div className="relative h-full w-full bg-black">
-      {/* Скелетон пока грузится */}
       {!loaded && !offline && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent-cyan/20 border-t-accent-cyan" />
-          <span className="text-xs text-text-muted">{t.news.loadingStream}</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
+          <span className="text-[11px] text-white/50">{t.news.loadingStream}</span>
         </div>
       )}
 
-      {/* Оффлайн-заглушка */}
       {offline && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black">
-          <span className="text-3xl">📡</span>
-          <p className="text-sm font-semibold text-text-primary">{name}</p>
-          <p className="text-xs text-text-muted">{t.news.offline}</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <p className="text-[12px] font-semibold text-white/90">{name}</p>
+          <p className="text-[11px] text-white/50">{t.news.offline}</p>
           <a
-            href={`https://www.youtube.com/@${channelId}/live`}
+            href={channelUrl(channelId)}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-1 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-text-primary hover:bg-red-500"
+            className={`${CHIP} mt-1 inline-flex items-center gap-1 bg-white/10 text-white/80 hover:bg-white/20 hover:text-white`}
           >
+            <ExternalLink className="h-3 w-3" />
             {t.news.openOnYoutube}
           </a>
         </div>
@@ -97,6 +98,7 @@ function LiveStream({ channelId, name, muted = true }: { channelId: string; name
           key={channelId}
           src={src}
           title={name}
+          loading="lazy"
           className="absolute inset-0 h-full w-full"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
@@ -108,9 +110,55 @@ function LiveStream({ channelId, name, muted = true }: { channelId: string; name
   );
 }
 
-// ─── TradingView лента новостей ──────────────────────────────────────────────
+/** Метка прямого эфира - та же, что у живых данных в терминале. */
+function LiveBadge() {
+  return (
+    <span className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--pane-down)]">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+      Live
+    </span>
+  );
+}
+
+function StreamPane({ channel, onExpand }: { channel: Channel; onExpand: () => void }) {
+  const t = useT();
+  return (
+    <section className="group overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+      <header className="flex items-center justify-between gap-2 border-b border-[var(--pane-border)] px-3 py-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: channel.color }} />
+          <h2 className="truncate text-[12px] font-semibold text-[var(--pane-text)]">{channel.name}</h2>
+          <LiveBadge />
+        </div>
+        <button
+          onClick={onExpand}
+          title={t.news.fullscreen}
+          aria-label={t.news.fullscreen}
+          className={`${CHIP} ${CHIP_OFF} opacity-60 group-hover:opacity-100`}
+        >
+          <Maximize2 className="h-3.5 w-3.5" />
+        </button>
+      </header>
+      <div className="relative" style={{ aspectRatio: "16/9" }}>
+        <LiveStream channelId={channel.channelId} name={channel.name} />
+      </div>
+    </section>
+  );
+}
+
+// ─── Лента TradingView ───────────────────────────────────────────────────────
+
+/**
+ * Лента новостей TradingView в нашей панели.
+ *
+ * Тему чужой скрипт берёт один раз, при сборке, поэтому на смене темы виджет
+ * собирается заново. Фон - цветом панели: своей рамки у него нет, и любое
+ * расхождение цвета читается швом.
+ */
 function TradingViewNews() {
   const ref = useRef<HTMLDivElement>(null);
+  const theme = useTerminalTheme();
+
   useEffect(() => {
     const container = ref.current;
     if (!container) return;
@@ -126,21 +174,61 @@ function TradingViewNews() {
     script.async = true;
     script.innerHTML = JSON.stringify({
       feedMode: "all_symbols",
-      isTransparent: true,
+      isTransparent: false,
+      backgroundColor: theme === "light" ? "#ffffff" : "#181a20",
       displayMode: "regular",
       width: "100%",
       height: "100%",
-      colorTheme: "dark",
+      colorTheme: theme,
       locale: "ru",
     });
     container.appendChild(script);
-    return () => { if (container) container.innerHTML = ""; };
-  }, []);
+    return () => {
+      container.innerHTML = "";
+    };
+  }, [theme]);
+
   return <div ref={ref} className="tradingview-widget-container h-full w-full" />;
 }
 
-// ─── Крипто-новости через RSS прокси ────────────────────────────────────────
-interface NewsItem { title: string; url: string; source: string; publishedAt: string; body: string; }
+// ─── Крипто-новости ──────────────────────────────────────────────────────────
+
+interface NewsItem {
+  title: string;
+  url: string;
+  source: string;
+  publishedAt: string;
+  body: string;
+}
+
+/** То, что отдаёт CryptoCompare, - только нужные поля, остальное не читаем. */
+interface RawNews {
+  title?: string;
+  url?: string;
+  source?: string;
+  source_info?: { name?: string };
+  published_on?: number;
+  body?: string;
+}
+
+function toItem(raw: RawNews): NewsItem | null {
+  if (!raw.title || !raw.url) return null;
+  const body = raw.body ?? "";
+  return {
+    title: raw.title,
+    url: raw.url,
+    source: raw.source_info?.name || raw.source || "",
+    publishedAt: raw.published_on
+      ? new Date(raw.published_on * 1000).toLocaleString("ru", {
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "",
+    body: body.length > 140 ? `${body.slice(0, 140)}…` : body,
+  };
+}
 
 function CryptoNewsFeed() {
   const t = useT();
@@ -148,83 +236,120 @@ function CryptoNewsFeed() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
     // CryptoCompare public API (бесплатно, без ключа)
     fetch("https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest")
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.Data?.length) {
-          setNews(data.Data.slice(0, 30).map((n: any) => ({
-            title: n.title,
-            url: n.url,
-            source: n.source_info?.name || n.source,
-            publishedAt: new Date(n.published_on * 1000).toLocaleString("ru", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
-            body: n.body?.slice(0, 120) + "...",
-          })));
-        }
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { Data?: RawNews[] } | null) => {
+        if (!alive || !Array.isArray(data?.Data)) return;
+        setNews(data.Data.slice(0, 30).map(toItem).filter((n): n is NewsItem => n !== null));
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  if (loading) return (
-    <div className="flex h-40 items-center justify-center">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent-cyan/20 border-t-accent-cyan" />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="space-y-2 p-3">
+        {[...Array(6)].map((_, i) => (
+          <div
+            key={i}
+            className="h-14 animate-pulse rounded-md bg-[var(--pane-hover)]"
+            style={{ animationDelay: `${i * 80}ms` }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (!news.length) {
+    return <p className="py-10 text-center text-[12px] text-[var(--pane-muted)]">{t.news.loadFailed}</p>;
+  }
 
   return (
-    <div className="space-y-2 overflow-y-auto" style={{ maxHeight: 560 }}>
-      {news.map((n, i) => (
-        <a
-          key={i}
-          href={n.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex gap-3 rounded-xl border border-border/40 bg-bg-panel/40 p-3 transition hover:border-accent-cyan/30 hover:bg-accent-cyan/5"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-text-primary leading-snug line-clamp-2">{n.title}</p>
-            <p className="mt-0.5 text-[11px] text-text-muted line-clamp-2">{n.body}</p>
-            <div className="mt-1.5 flex items-center gap-2 text-[10px] text-text-muted">
-              <span className="font-semibold text-accent-cyan">{n.source}</span>
-              <span>·</span>
-              <span>{n.publishedAt}</span>
+    <ul className="max-h-[640px] divide-y divide-[var(--pane-border)] overflow-y-auto">
+      {news.map((n) => (
+        <li key={n.url}>
+          <a
+            href={n.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-3 py-2.5 transition-colors duration-150 hover:bg-[var(--pane-hover)]"
+          >
+            <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-[var(--pane-text)]">{n.title}</p>
+            {n.body && <p className="mt-0.5 line-clamp-2 text-[11px] text-[var(--pane-muted)]">{n.body}</p>}
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-[var(--pane-muted)]">
+              <span className="font-semibold text-[var(--pane-chip)]">{n.source}</span>
+              {n.publishedAt && (
+                <>
+                  <span>·</span>
+                  <span className="font-mono tabular-nums">{n.publishedAt}</span>
+                </>
+              )}
             </div>
-          </div>
-        </a>
+          </a>
+        </li>
       ))}
-      {news.length === 0 && (
-        <p className="text-center text-sm text-text-muted py-8">{t.news.loadFailed}</p>
-      )}
-    </div>
+    </ul>
   );
 }
 
-// ─── Индикатор LIVE ──────────────────────────────────────────────────────────
-function LiveIndicator() {
+// ─── Во весь экран ───────────────────────────────────────────────────────────
+
+function Fullscreen({ channel, onClose }: { channel: Channel; onClose: () => void }) {
+  const t = useT();
+
+  // Выход по Esc: так закрывается любое окно, и искать кнопку глазами поверх
+  // видео незачем.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <span className="flex items-center gap-1 rounded-full bg-danger/10 px-2 py-0.5 text-[10px] font-semibold text-danger">
-      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-danger" />
-      LIVE
-    </span>
+    <PaneScope className="fixed inset-0 z-[100] flex flex-col bg-black">
+      <div className="flex items-center justify-between border-b border-[var(--pane-border)] bg-[var(--pane-bg)] px-3 py-1.5">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: channel.color }} />
+          <span className="text-[12px] font-semibold text-[var(--pane-text)]">{channel.name}</span>
+          <LiveBadge />
+        </div>
+        <button onClick={onClose} className={`${CHIP} ${CHIP_OFF} inline-flex items-center gap-1`}>
+          <X className="h-3.5 w-3.5" />
+          {t.news.closeFullscreen}
+        </button>
+      </div>
+      <div className="relative flex-1">
+        <LiveStream channelId={channel.channelId} name={channel.name} muted={false} />
+      </div>
+    </PaneScope>
   );
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+// ─── Страница ────────────────────────────────────────────────────────────────
+
 export default function NewsPage() {
   const t = useT();
   const [gridSize, setGridSize] = useState<GridSize>(4);
   const [activeIds, setActiveIds] = useState<string[]>(CHANNELS.slice(0, 4).map((c) => c.id));
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"live" | "feed" | "crypto">("live");
+  const [tab, setTab] = useState<Tab>("live");
+
+  const labels: Record<Tab, string> = { live: t.news.tabLive, feed: t.news.tabFeed, crypto: t.news.tabCrypto };
 
   function toggleChannel(id: string) {
     setActiveIds((prev) =>
       prev.includes(id)
         ? prev.filter((x) => x !== id)
         : prev.length >= gridSize
-        ? [...prev.slice(1), id]
-        : [...prev, id]
+          ? [...prev.slice(1), id]
+          : [...prev, id],
     );
   }
 
@@ -233,164 +358,112 @@ export default function NewsPage() {
     setActiveIds(CHANNELS.slice(0, n).map((c) => c.id));
   }
 
-  const visibleChannels = CHANNELS.filter((c) => activeIds.includes(c.id));
-  const fullscreenCh = fullscreenId ? CHANNELS.find((c) => c.id === fullscreenId) : null;
+  const visible = CHANNELS.filter((c) => activeIds.includes(c.id));
+  const fullscreen = fullscreenId ? CHANNELS.find((c) => c.id === fullscreenId) : null;
 
-  const gridClass = {
-    1: "grid-cols-1",
-    2: "grid-cols-1 md:grid-cols-2",
-    4: "grid-cols-1 md:grid-cols-2",
-    6: "grid-cols-1 md:grid-cols-2 xl:grid-cols-3",
-  }[gridSize];
-
-  // Полноэкранный режим
-  if (fullscreenCh) {
-    return (
-      <div className="fixed inset-0 z-[100] flex flex-col bg-black">
-        <div className="flex items-center justify-between bg-bg-panel px-4 py-2">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-text-primary">{fullscreenCh.name}</span>
-            <LiveIndicator />
-          </div>
-          <button onClick={() => setFullscreenId(null)} className="btn-outline px-3 py-1.5 text-xs">
-            {t.news.closeFullscreen}
-          </button>
-        </div>
-        <div className="relative flex-1">
-          <LiveStream channelId={fullscreenCh.channelId} name={fullscreenCh.name} muted={false} />
-        </div>
-      </div>
-    );
+  if (fullscreen) {
+    return <Fullscreen channel={fullscreen} onClose={() => setFullscreenId(null)} />;
   }
 
   return (
-    <div className="space-y-5">
-      {/* Заголовок + табы */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-extrabold text-text-primary">{t.news.title}</h1>
-          <p className="text-sm text-text-muted">{t.news.subtitle}</p>
-        </div>
+    <PaneScope className="space-y-3">
+      <PaneHead title={t.news.title} hint={t.news.tabHints[tab]}>
+        {tab === "live" &&
+          GRIDS.map(({ size, label }) => (
+            <button
+              key={size}
+              onClick={() => setGrid(size)}
+              title={t.news.grid}
+              className={`${CHIP} font-mono tabular-nums ${gridSize === size ? CHIP_ON : CHIP_OFF}`}
+            >
+              {label}
+            </button>
+          ))}
+      </PaneHead>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Табы */}
-          <div className="flex gap-1 rounded-xl border border-border bg-bg-panel p-1">
-            {([
-              { key: "live", label: t.news.tabLive },
-              { key: "feed", label: t.news.tabFeed },
-              { key: "crypto", label: t.news.tabCrypto },
-            ] as const).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${tab === key ? "bg-accent-cyan text-bg-deep" : "text-text-muted hover:text-text-primary"}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+      {/* Вкладки сегментами, как на «Рынке» и в терминале. */}
+      <nav className="no-scrollbar flex overflow-x-auto rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] p-0.5">
+        {TABS.map(({ key, icon }) => {
+          const on = tab === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              title={t.news.tabHints[key]}
+              className="flex shrink-0 items-center gap-1.5 rounded px-3 py-1.5 text-[11px] font-semibold transition-colors duration-150"
+              style={{
+                background: on ? "var(--pane-chip-faint)" : "transparent",
+                color: on ? "var(--pane-chip)" : "var(--pane-muted)",
+              }}
+            >
+              {icon}
+              {labels[key]}
+            </button>
+          );
+        })}
+      </nav>
 
-          {/* Сетка (только для Live TV) */}
-          {tab === "live" && (
-            <div className="flex gap-1 rounded-xl border border-border bg-bg-panel p-1">
-              {([1, 2, 4, 6] as GridSize[]).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setGrid(n)}
-                  className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${gridSize === n ? "bg-bg-panel/15 text-text-primary" : "text-text-muted hover:text-text-primary"}`}
-                >
-                  {n === 1 ? "1×1" : n === 2 ? "1×2" : n === 4 ? "2×2" : "2×3"}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ─── TradingView лента ─── */}
       {tab === "feed" && (
-        <div className="card overflow-hidden p-0" style={{ height: 640 }}>
+        <Pane
+          title={t.news.tabFeed}
+          actions={
+            <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--pane-muted)]">
+              TradingView
+            </span>
+          }
+          body="h-[640px]"
+        >
           <TradingViewNews />
-        </div>
+        </Pane>
       )}
 
-      {/* ─── Крипто-новости ─── */}
       {tab === "crypto" && (
-        <div className="card">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-bold text-text-primary">{t.news.cryptoTitle}</h2>
-            <span className="text-[10px] text-text-muted">{t.news.cryptoSource}</span>
-          </div>
+        <Pane title={t.news.cryptoTitle} hint={t.news.cryptoSource} body="">
           <CryptoNewsFeed />
-        </div>
+        </Pane>
       )}
 
-      {/* ─── Live TV ─── */}
       {tab === "live" && (
         <>
-          {/* Выбор каналов */}
-          <div className="flex flex-wrap gap-2">
+          {/* Каналы - чипами в одну строку: выбор здесь делают на ходу, между
+              сделками, и крупные карточки для этого лишние. */}
+          <div className="flex flex-wrap items-center gap-1">
             {CHANNELS.map((ch) => {
-              const active = activeIds.includes(ch.id);
+              const on = activeIds.includes(ch.id);
               return (
                 <button
                   key={ch.id}
                   onClick={() => toggleChannel(ch.id)}
-                  className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                    active
-                      ? "border-accent-cyan/50 bg-accent-cyan/10 text-accent-cyan"
-                      : "border-border bg-bg-panel text-text-muted hover:text-text-primary"
+                  className={`${CHIP} inline-flex items-center gap-1.5 border ${
+                    on ? `${CHIP_ON} border-[var(--pane-chip-faint)]` : `${CHIP_OFF} border-[var(--pane-border)]`
                   }`}
                 >
-                  {active && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-cyan" />}
-                  <span>{ch.name}</span>
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: on ? ch.color : "var(--pane-muted)" }}
+                  />
+                  <span className="font-semibold">{ch.name}</span>
                   <span className="text-[9px] opacity-70">{ch.category}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Примечание о YouTube */}
-          <div className="rounded-xl border border-accent-gold/20 bg-accent-gold/5 px-4 py-2 text-[11px] text-accent-gold">
-            {t.news.youtubeNote}
-          </div>
+          <p className="text-[11px] text-[var(--pane-muted)]">{t.news.youtubeNote}</p>
 
-          {/* Сетка трансляций */}
-          {visibleChannels.length === 0 ? (
-            <div className="card grid place-items-center py-20 text-text-muted">
+          {visible.length === 0 ? (
+            <Pane body="grid place-items-center py-20 text-[12px] text-[var(--pane-muted)]">
               {t.news.pickChannels}
-            </div>
+            </Pane>
           ) : (
-            <div className={`grid gap-4 ${gridClass}`}>
-              {visibleChannels.map((ch) => (
-                <div key={ch.id} className="card group overflow-hidden p-0">
-                  <div className="flex items-center justify-between bg-bg-panel px-4 py-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: ch.color }}
-                      />
-                      <span className="text-sm font-semibold text-text-primary">{ch.name}</span>
-                      <LiveIndicator />
-                    </div>
-                    <div className="flex gap-2 opacity-0 transition group-hover:opacity-100">
-                      <button
-                        onClick={() => setFullscreenId(ch.id)}
-                        className="rounded-lg bg-bg-panel/5 px-2 py-1 text-[10px] text-text-muted hover:text-text-primary"
-                      >
-                        ⛶ Fullscreen
-                      </button>
-                    </div>
-                  </div>
-                  <div className="relative bg-black" style={{ aspectRatio: "16/9" }}>
-                    <LiveStream channelId={ch.channelId} name={ch.name} />
-                  </div>
-                </div>
+            <div className={`grid gap-3 ${GRID_CLASS[gridSize]}`}>
+              {visible.map((ch) => (
+                <StreamPane key={ch.id} channel={ch} onExpand={() => setFullscreenId(ch.id)} />
               ))}
             </div>
           )}
         </>
       )}
-    </div>
+    </PaneScope>
   );
 }
