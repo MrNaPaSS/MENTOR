@@ -265,6 +265,21 @@ _FOOT_DONE_TTL = 900.0
 _FOOT_CACHE_MAX = 96
 _foot_cache: "OrderedDict[str, tuple[float, dict]]" = OrderedDict()
 
+# Сделки текущей свечи, уже выкачанные с биржи: когда свеча кончается, номер
+# последней сделки и сами сделки. Следующий запрос дочитывает только новое.
+#
+# Без этого текущая свеча каждые две секунды выкачивалась заново с самого
+# начала - до шести страниц по двадцать единиц веса. Две вкладки, смотрящие на
+# одну свечу, выбирали так весь бюджет запросов за минуту, и стакан со свечами
+# графика в эту минуту получали отказ.
+_foot_live: dict[str, tuple[int, int, list[tuple[float, float, bool]], bool]] = {}
+
+
+def _foot_live_prune(now: int) -> None:
+    """Забыть сделки закрывшихся свечей: дальше их профиль отдаёт кэш."""
+    for key in [k for k, v in _foot_live.items() if v[0] <= now]:
+        _foot_live.pop(key, None)
+
 
 def _foot_remember(key: str, payload: dict) -> None:
     """Положить ответ в кэш, вытеснив самый старый.
@@ -279,23 +294,27 @@ def _foot_remember(key: str, payload: dict) -> None:
 
 
 async def _load_trades(
-    rest, symbol: str, start_ms: int, end_ms: int
-) -> tuple[list[tuple[float, float, bool]], bool]:
-    """Сделки за окно свечи постранично. Второе значение — окно неполно.
+    rest, symbol: str, start_ms: int, end_ms: int, from_id: int | None = None
+) -> tuple[list[tuple[float, float, bool]], bool, int | None]:
+    """Сделки за окно свечи постранично.
+
+    Возвращает сделки, признак «окно неполно» и номер последней прочитанной
+    сделки - с него следующий запрос дочитывает текущую свечу. `from_id` -
+    начать не с начала свечи, а с этой сделки.
 
     Продолжение берём по номеру сделки, а не по времени: в одну миллисекунду
     попадает десяток сделок, и переход по времени терял бы часть из них на
     каждой границе страниц.
     """
     out: list[tuple[float, float, bool]] = []
-    from_id: int | None = None
+    last: int | None = None
 
     for _ in range(_FOOT_PAGES):
         batch = await rest.agg_trades(symbol, start_ms, end_ms, from_id=from_id)
         if not batch:
             # Пустая страница — либо сделок больше нет, либо биржа отказала.
             # Отличать их здесь незачем: и там, и там читать дальше нечего.
-            return out, False
+            return out, False, last
 
         last_id: int | None = None
         done = False
@@ -313,11 +332,13 @@ async def _load_trades(
             except (KeyError, TypeError, ValueError):
                 continue
 
+        if last_id is not None:
+            last = last_id
         if done or len(batch) < 1000 or last_id is None:
-            return out, False
+            return out, False, last
         from_id = last_id + 1
 
-    return out, True
+    return out, True, last
 
 
 @router.get("/footprint/{symbol}")
@@ -370,7 +391,24 @@ async def footprint(
             f"{collector.rest.blocked_for:.0f} с",
         )
 
-    trades, partial = await _load_trades(collector.rest, sym, start * 1000, end * 1000)
+    # Текущую свечу дочитываем с последней уже скачанной сделки, а не заново:
+    # обычно это одна страница вместо шести.
+    live_candle = end > now
+    _foot_live_prune(now)
+    known = _foot_live.get(key) if live_candle else None
+    if known is not None:
+        _, last_id, earlier, _ = known
+        fresh, partial, last = await _load_trades(
+            collector.rest, sym, start * 1000, end * 1000, from_id=last_id + 1
+        )
+        trades = earlier + fresh
+        if last is None:
+            last = last_id
+    else:
+        trades, partial, last = await _load_trades(collector.rest, sym, start * 1000, end * 1000)
+    if live_candle and last is not None:
+        _foot_live[key] = (end, last, trades, partial)
+
     if not trades:
         # Пустая свеча бывает на неликвиде, и это ответ, а не ошибка: сделок в
         # эту минуту не было вовсе.

@@ -161,6 +161,35 @@ def trade(price: float, qty: float, ts_ms: int, maker: bool = True) -> dict:
 def setup_function() -> None:
     """Кэш профилей общий на процесс — между тестами он не должен течь."""
     scalping_api._foot_cache.clear()
+    scalping_api._foot_live.clear()
+
+
+def test_live_candle_is_read_on_from_the_last_trade_not_from_its_start():
+    """Текущая свеча дочитывается с последней сделки, а не выкачивается заново.
+
+    Раньше каждые две секунды она выкачивалась с самого начала - до шести
+    страниц по двадцать единиц веса, - и две вкладки на одной свече выбирали
+    весь бюджет запросов к бирже: стакан и свечи графика получали отказ.
+    """
+    # Свеча должна оставаться текущей оба запроса: у края минуты подождём.
+    if int(time.time()) % 60 > 55:
+        time.sleep(5)
+    start = (int(time.time()) // 60) * 60
+    first = trade(100.0, 1.0, start * 1000 + 100)
+    second = trade(100.1, 2.0, start * 1000 + 200)
+    rest = StubRest([[first], [second]])
+    app, _ = make_app(rest)
+
+    with TestClient(app) as client:
+        client.get("/api/scalping/footprint/btcusdt", params={"time": start})
+        # Кэш ответа живёт две секунды - сбрасываем, чтобы спросить снова.
+        scalping_api._foot_cache.clear()
+        body = client.get("/api/scalping/footprint/btcusdt", params={"time": start}).json()
+
+    # Второй раз - только новое, с сделки после последней прочитанной.
+    assert [c["from_id"] for c in rest.calls] == [None, first["a"] + 1]
+    # А в профиле обе.
+    assert body["sell"] == pytest.approx(100.0 + 200.2)
 
 
 def test_footprint_comes_from_our_own_tape_without_touching_the_exchange():

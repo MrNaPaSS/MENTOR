@@ -307,8 +307,10 @@ class ScalpingCollector:
         try:
             state = self.state.ensure(symbol)
             state.book.reset()
-            limit = SNAPSHOT_LIMIT_PINNED if symbol in self._pinned else SNAPSHOT_LIMIT
-            snapshot = await self.rest.depth(symbol, limit)
+            pinned = symbol in self._pinned
+            limit = SNAPSHOT_LIMIT_PINNED if pinned else SNAPSHOT_LIMIT
+            # Стакан, открытый у трейдера, - не фон: его ждут на экране.
+            snapshot = await self.rest.depth(symbol, limit, background=not pinned)
             if not snapshot:
                 # Не получилось — придерживаем этот инструмент. Без паузы
                 # следующее же событие потока запустит новый запрос, и на

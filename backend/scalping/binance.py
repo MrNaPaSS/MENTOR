@@ -172,16 +172,21 @@ class BinanceRest:
             logger.warning("Binance %s недоступен: %s", path, exc)
             return None
 
-    async def depth(self, symbol: str, limit: int = 1000) -> dict | None:
+    async def depth(
+        self, symbol: str, limit: int = 1000, background: bool = True
+    ) -> dict | None:
         """Снимок стакана. Берётся один раз на подписку, дальше — поток.
 
-        Фоновый запрос: снимки берёт сборщик сам, трейдер их не ждёт.
+        Обычно фоновый: снимки монет скринера берёт сборщик сам, их никто не
+        ждёт. Но стакан монеты, открытой у трейдера на экране, ждут - такой
+        снимок идёт наравне со свечами, иначе при запуске он стоял в очереди за
+        полусотней чужих, и стакан пропадал с экрана.
         """
         data = await self._get(
             "/fapi/v1/depth",
             {"symbol": symbol.upper(), "limit": limit},
             weight=depth_weight(limit),
-            background=True,
+            background=background,
         )
         return data if isinstance(data, dict) else None
 

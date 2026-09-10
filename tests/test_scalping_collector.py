@@ -50,7 +50,9 @@ class FakeRest:
         self._tickers = tickers or []
         self.depth_calls: list[tuple[str, int]] = []
 
-    async def depth(self, symbol: str, limit: int = 1000) -> dict | None:
+    async def depth(
+        self, symbol: str, limit: int = 1000, background: bool = True
+    ) -> dict | None:
         self.depth_calls.append((symbol, limit))
         return self._depth
 
