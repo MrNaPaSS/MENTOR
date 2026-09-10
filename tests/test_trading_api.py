@@ -768,3 +768,99 @@ def test_cancelling_a_waiting_limit_never_closes_the_position(app_and_exchange):
     assert answer["remaining"] == 0.01
     # А сама заявка снята.
     assert "e2" in exchange.cancelled
+
+
+def test_live_trades_lists_what_the_watcher_still_leads(app_and_exchange):
+    """Второе мнение о том, жива ли сделка.
+
+    Терминал хоронил разметку по пустому ответу биржи: 10 сентября две живые
+    позиции по ETH ушли с графика за две секунды, пока на бирже они стояли.
+    Теперь перед похоронами он спрашивает сервер, и пока сопровождение сделку
+    ведёт, она остаётся на экране.
+    """
+    import json as _json
+
+    client, _, session = app_and_exchange
+    student = session.query(Student).one()
+
+    from core.models import LiveTrade
+
+    session.add_all(
+        [
+            LiveTrade(
+                student_id=student.id,
+                client_id="ETHUSDT-1789062954087",
+                symbol="ETHUSDT",
+                side="long",
+                entry=2464.0,
+                initial_stop=2459.0,
+                current_stop=2459.0,
+                targets_json=_json.dumps([2470.0]),
+                tp_orders_json="[]",
+                qty=40.584,
+                leverage=200,
+                status="open",
+                takes_hit=1,
+            ),
+            LiveTrade(
+                student_id=student.id,
+                client_id="BTCUSDT-done",
+                symbol="BTCUSDT",
+                side="short",
+                entry=80_000.0,
+                initial_stop=80_200.0,
+                current_stop=80_200.0,
+                targets_json="[]",
+                tp_orders_json="[]",
+                qty=0.01,
+                leverage=10,
+                status="closed",
+            ),
+        ]
+    )
+    session.commit()
+
+    body = client.get("/api/trading/live").json()
+    ids = [row["client_id"] for row in body["trades"]]
+    # Закрытой сделки в списке нет: её сервер уже не ведёт.
+    assert ids == ["ETHUSDT-1789062954087"]
+
+    one = body["trades"][0]
+    assert one["symbol"] == "ETHUSDT"
+    assert one["side"] == "long"
+    assert one["status"] == "open"
+    assert one["takes_hit"] == 1
+    assert one["qty"] == pytest.approx(40.584)
+
+
+def test_live_trades_hide_other_students(app_and_exchange):
+    """Чужая сделка в ответ не попадает: список читается по своему ученику."""
+    import json as _json
+
+    client, _, session = app_and_exchange
+
+    from core.models import LiveTrade
+
+    stranger = Student(tg_id=777)
+    session.add(stranger)
+    session.commit()
+    session.add(
+        LiveTrade(
+            student_id=stranger.id,
+            client_id="ETHUSDT-stranger",
+            symbol="ETHUSDT",
+            side="short",
+            entry=2464.0,
+            initial_stop=2470.0,
+            current_stop=2470.0,
+            targets_json=_json.dumps([2450.0]),
+            tp_orders_json="[]",
+            qty=1.0,
+            leverage=10,
+            status="open",
+        )
+    )
+    session.commit()
+
+    body = client.get("/api/trading/live").json()
+    assert body["trades"] == []

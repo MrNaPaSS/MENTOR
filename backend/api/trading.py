@@ -167,6 +167,61 @@ def _fail(exc: WeexTradeError) -> HTTPException:
     return HTTPException(status, explain(str(exc)))
 
 
+@router.get("/live")
+async def live_trades(
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Сделки, которые сопровождение считает живыми - по всем монетам.
+
+    Второе мнение о том, жива ли сделка. Биржа отвечает пустым списком позиций
+    и на своей заминке, а терминал по такому ответу хоронил разметку: 10
+    сентября две живые позиции по ETH исчезли с графика от двух пустых ответов
+    подряд, пришедших за две секунды. Позиция при этом стояла на бирже.
+
+    Здесь ходить на биржу не нужно вовсе: это память сервера. Сопровождение
+    обходит биржу само, со своей выдержкой, и пока сделка у него в работе,
+    терминалу хоронить её нельзя.
+
+    Отдаём сделку целиком, а не одним опознавателем: по этим полям терминал
+    возвращает разметку на график, если её у него нет. Разметка живёт в
+    браузере, а браузер - вещь ненадёжная: другая машина, режим инкогнито,
+    очищенное хранилище, ошибочные похороны вроде тех же. Позиция от этого не
+    закрывается, и сделка, которую сервер ведёт, а биржа показывает, обязана
+    быть на графике.
+    """
+    rows = (
+        session.execute(
+            select(LiveTrade)
+            .where(LiveTrade.student_id == student.id)
+            .where(LiveTrade.status.in_(("waiting", "open")))
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "trades": [
+            {
+                "client_id": row.client_id,
+                "symbol": row.symbol,
+                "side": row.side,
+                "status": row.status,
+                "qty": float(row.qty),
+                "entry": float(row.entry),
+                "stop": float(row.current_stop),
+                "initial_stop": float(row.initial_stop),
+                "targets": json.loads(row.targets_json or "[]"),
+                "leverage": row.leverage,
+                "margin": float(row.margin),
+                "takes_hit": row.takes_hit,
+                "created_at": _iso(row.created_at),
+                "opened_at": _iso(row.opened_at),
+            }
+            for row in rows
+        ]
+    }
+
+
 @router.get("/plans/{symbol}")
 async def plans(
     symbol: str,
