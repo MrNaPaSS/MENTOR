@@ -20,7 +20,7 @@
 import { useT } from "@/lib/i18n";
 import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { Crown } from "lucide-react";
+import { useTerminalTheme } from "@/lib/terminalTheme";
 import { askSymbol } from "@/lib/openSymbol";
 import { authReq } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
@@ -72,6 +72,9 @@ function money(value: number): string {
 
 export default function MarketTicker() {
   const [rows, setRows] = useState<ScreenerRow[]>([]);
+  // Звезда двух цветов: чёрная на белой ленте, зелёная на тёмной - чёрная на
+  // тёмной пропадает.
+  const star = useTerminalTheme() === "light" ? "/marks/star.png" : "/marks/star-green.png";
   const trackRef = useRef<HTMLDivElement>(null);
   const halfRef = useRef<HTMLDivElement>(null);
   // Ширина одной половины: по ней считается длительность круга. Лента едет
@@ -181,8 +184,8 @@ export default function MarketTicker() {
       >
         {/* Две одинаковые половины. Вторая - для глаза, а не для чтения: она
             повторяет первую, и озвучивать её ещё раз незачем. */}
-        <Half rows={rows} innerRef={halfRef} />
-        <Half rows={rows} clone />
+        <Half rows={rows} innerRef={halfRef} star={star} />
+        <Half rows={rows} clone star={star} />
       </div>
     </div>
   );
@@ -192,14 +195,16 @@ function Half({
   rows,
   clone,
   innerRef,
+  star,
 }: {
   rows: ScreenerRow[];
   clone?: boolean;
   innerRef?: React.Ref<HTMLDivElement>;
+  star: string;
 }) {
-  // Корона одна на всю ленту: она отмечает не «крупную плиту» - для этого есть
-  // золото, - а самую крупную из всех. Две короны в строке не значили бы
-  // ничего. Если крупных плит нет вовсе, короны нет тоже: венчать лучшего из
+  // Звезда одна на всю ленту: она отмечает не «крупную плиту» - для этого есть
+  // золото, - а самую крупную из всех. Две звезды в строке не значили бы
+  // ничего. Если крупных плит нет вовсе, звезды нет тоже: отмечать лучшего из
   // мелких незачем.
   const king = rows.reduce<ScreenerRow | null>(
     (best, row) =>
@@ -216,7 +221,7 @@ function Half({
     // половина ленты.
     <div ref={innerRef} className="flex gap-8 pr-8" aria-hidden={clone}>
       {rows.map((row) => (
-        <Pair key={row.symbol} row={row} crowned={row.symbol === king} />
+        <Pair key={row.symbol} row={row} crowned={row.symbol === king} star={star} />
       ))}
     </div>
   );
@@ -232,9 +237,12 @@ function Half({
 const Pair = memo(function Pair({
   row,
   crowned,
+  star,
 }: {
   row: ScreenerRow;
   crowned?: boolean;
+  /** Рисунок звезды под лист ленты: чёрная на белом, зелёная на тёмном. */
+  star: string;
 }) {
   const t = useT();
   const pos = row.change_pct >= 0;
@@ -266,10 +274,13 @@ const Pair = memo(function Pair({
         className="inline-block h-1.5 w-1.5 rounded-full"
         style={{ backgroundColor: pos ? "var(--tick-up)" : "var(--tick-down)" }}
       />
-      {/* Корона - у самой крупной плиты дня. Значком, а не цветом: цвет плиты
-          уже занят золотом, и «крупная» от «самой крупной» им не отличить. */}
+      {/* Звезда - у самой крупной плиты дня. Значком, а не цветом: цвет плиты
+          уже занят золотом, и «крупная» от «самой крупной» им не отличить.
+          Звездой, а не короной: это наша отметка - та же, что на лучшем дне
+          календаря и на полученных наградах. */}
       {crowned && (
-        <Crown className="h-3 w-3 shrink-0" style={{ color: "var(--tick-heavy-ink)" }} />
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={star} alt="" className="h-3.5 w-3.5 shrink-0" />
       )}
       <span
         className="font-semibold"

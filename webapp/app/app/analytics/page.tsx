@@ -113,31 +113,44 @@ const ACH_CATEGORIES: { id: AchCategory; icon: React.ElementType }[] = [
 ];
 
 /**
- * Высота клетки календаря, точки.
+ * Высота клетки календаря - от числа рядов в месяце.
  *
- * Клетки были квадратными, а календарь стоит в половину ширины страницы: на
- * широком экране квадрат выходил в сто тридцать точек, и полный месяц из шести
- * рядов растягивал панель на девять сотен - вдвое дольше, чем цифры рядом с
- * ним. Читают в клетке три коротких строки, и сорока восьми точек им хватает с
- * запасом.
+ * Не одно число на все случаи. Квадратные клетки растягивали полный месяц на
+ * девять сотен точек, а жёсткие сорок восемь стягивали неполный: в начале
+ * сентября рядов два, и панель наполовину стояла пустой при мелких клетках.
+ *
+ * Поэтому делим отведённую сетке высоту на ряды: два ряда - клетки крупные и
+ * поле заполнено, шесть - клетки мельче, но всё те же три строки внутри
+ * читаются. Границы держат обе крайности в разумном: ниже сорока четырёх
+ * строки начинают наезжать, выше девяноста шести клетка превращается в плитку
+ * с цифрой посередине пустоты.
  */
-const CELL_H = 48;
+const GRID_H = 300;
+const CELL_MIN = 44;
+const CELL_MAX = 96;
+
+function cellHeight(rows: number): number {
+  if (rows <= 0) return CELL_MIN;
+  return Math.round(Math.max(CELL_MIN, Math.min(CELL_MAX, GRID_H / rows)));
+}
 
 // ─── Ячейка дня ─────────────────────────────────────────────────────────────
-function DayCell({ day, onClick, active, isToday, best }: {
+function DayCell({ day, onClick, active, isToday, best, height }: {
   day: CalendarDay | null;
   onClick?: () => void;
   active: boolean;
   isToday?: boolean;
   /** Лучший день месяца: на нём стоит звезда. */
   best?: boolean;
+  /** Высота клетки: её считает календарь по числу своих рядов. */
+  height: number;
 }) {
   const t = useT();
   const numbers = useIntlLocale();
   // Звезда двух цветов: чёрная на белом листе, зелёная на тёмном. Один рисунок
   // на оба не годится - чёрная звезда на тёмной клетке пропадает.
   const paper = useTerminalTheme();
-  if (!day) return <div style={{ height: CELL_H }} />;
+  if (!day) return <div style={{ height }} />;
 
   const pnl = day.pnl_pct;
   const isPos = pnl !== null && pnl > 0;
@@ -180,7 +193,7 @@ function DayCell({ day, onClick, active, isToday, best }: {
   return (
     <button
       onClick={onClick}
-      style={{ height: CELL_H, background: bg }}
+      style={{ height, background: bg }}
       className={`group relative flex flex-col rounded-lg border transition-transform duration-150 hover:scale-[1.06] hover:z-10 ${borderCls} p-1`}
       title={[
         day.date,
@@ -874,6 +887,7 @@ export default function AnalyticsPage() {
                     active={selectedDay?.date === day?.date}
                     isToday={day?.date === todayStr}
                     best={Boolean(day && bestDay && day.date === bestDay.date && (bestDay.pnl_pct ?? 0) > 0)}
+                    height={cellHeight(cells.length / 7)}
                     onClick={() => day && setSelectedDay(day)}
                   />
                 ))}
