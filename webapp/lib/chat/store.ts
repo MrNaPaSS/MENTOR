@@ -86,9 +86,75 @@ const EMPTY: ChatState = {
 let state: ChatState = EMPTY;
 const listeners = new Set<() => void>();
 
+/**
+ * Лента каждой ветки, уже привезённая с сервера.
+ *
+ * Без неё переключение ветки очищало ленту и ждало ответа: запрос идёт через
+ * туннель, и каждое переключение было пустой панелью на полсекунды и дольше.
+ * Теперь ветка открывается сразу тем, что уже видели, а свежее догружается
+ * следом.
+ */
+type Page = { messages: ChatMessage[]; more: boolean };
+const cache = new Map<number, Page>();
+
+/** Под этим ключом браузер помнит последнюю открытую ветку. */
+const THREAD_KEY = "nmnh.chat.thread";
+
+function rememberedThread(): number {
+  try {
+    return Number(localStorage.getItem(THREAD_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function rememberThread(thread: number): void {
+  try {
+    localStorage.setItem(THREAD_KEY, String(thread));
+  } catch {
+    // Хранилище закрыто - в следующий раз начнём с ветки по умолчанию.
+  }
+}
+
 function set(patch: Partial<ChatState>) {
   state = { ...state, ...patch };
+  // Открытая ветка и её копия в кэше - одно и то же: что бы ни поменялось в
+  // ленте, при возвращении в ветку оно должно быть на месте.
+  if (state.thread && ("messages" in patch || "more" in patch)) {
+    cache.set(state.thread, { messages: state.messages, more: state.more });
+  }
   for (const fn of listeners) fn();
+}
+
+/** Лента ветки из кэша, а если её ещё не привозили - пустая. */
+function cached(thread: number): Page {
+  return cache.get(thread) ?? { messages: [], more: false };
+}
+
+/** Поправить неоткрытые ветки в кэше: правка и удаление приходят без ветки. */
+function patchCached(fn: (list: ChatMessage[]) => ChatMessage[]): void {
+  for (const [thread, page] of cache) {
+    if (thread !== state.thread) cache.set(thread, { ...page, messages: fn(page.messages) });
+  }
+}
+
+/**
+ * Свежая страница поверх того, что уже было.
+ *
+ * Сервер отдаёт последние полсотни, а в ленте их может быть больше: трейдер
+ * листал вверх. Старое выше свежей страницы остаётся, как и пришедшее сокетом
+ * после неё, - иначе возвращение в ветку обрезало бы прочитанное и прыгало.
+ */
+function merge(kept: Page, fresh: Page): Page {
+  if (fresh.messages.length === 0) return kept.messages.length ? kept : fresh;
+  const first = fresh.messages[0].id;
+  const last = fresh.messages[fresh.messages.length - 1].id;
+  const above = kept.messages.filter((m) => m.id < first);
+  const below = kept.messages.filter((m) => m.id > last);
+  return {
+    messages: [...above, ...fresh.messages, ...below],
+    more: above.length > 0 ? kept.more : fresh.more,
+  };
 }
 
 export function subscribe(fn: () => void): () => void {
@@ -170,11 +236,13 @@ function connect() {
     }
     if (frame.event === "edited") {
       const edited = normalize(frame.payload as never);
+      patchCached((list) => list.map((m) => (m.id === edited.id ? edited : m)));
       set({ messages: state.messages.map((m) => (m.id === edited.id ? edited : m)) });
       return;
     }
     if (frame.event === "removed") {
       const id = Number(frame.payload.id);
+      patchCached((list) => list.filter((m) => m.id !== id));
       set({ messages: state.messages.filter((m) => m.id !== id) });
       return;
     }
@@ -188,6 +256,15 @@ function connect() {
       // вкладке не начинали. Но счётчик непрочитанного растёт от любой - иначе
       // сообщение в соседней ветке останется незамеченным навсегда.
       const mine = !state.thread || (message.threadId ?? 0) === state.thread;
+      // Сообщение соседней ветки ложится в её кэш: открыв её, трейдер увидит
+      // его сразу, а не после ответа сервера.
+      if (!mine) {
+        const at = message.threadId ?? 0;
+        const page = cache.get(at);
+        if (page && !page.messages.some((m) => m.id === message.id)) {
+          cache.set(at, { ...page, messages: [...page.messages, message] });
+        }
+      }
       // Открытая ветка при открытой панели прочитана сразу - её и не считаем.
       // Всё остальное копится по своей ветке: и то, что пришло в соседнюю,
       // пока трейдер читал эту, и то, что пришло, пока панель была свёрнута.
@@ -233,22 +310,31 @@ export function open(): () => void {
   const leave = attend();
   readers += 1;
   if (readers === 1) {
+    // Ветку, открытую в прошлый раз, просим сразу - вместе со списком веток, а
+    // не после него. Раньше до первого сообщения шло два запроса подряд, а
+    // между ними мелькала общая лента без веток, которую тут же выбрасывали.
+    const early = state.thread || rememberedThread();
+    if (early) {
+      if (!state.thread) set({ thread: early, ...cached(early) });
+      void reload(early);
+    }
     // Ветки тянем один раз вместе с историей: переключатель обязан появиться
     // сразу, а не после первого сообщения.
     void loadThreads().then((rows) => {
-      if (rows.length === 0) return;
-      const chosen = state.thread || (rows.find((r) => r.default) ?? rows[0]).id;
-      set({ threads: rows, thread: chosen });
-      // История приезжала до того, как стало известно, какая ветка открыта:
-      // перечитываем её уже по ветке.
-      void reload(chosen);
-    });
-    void history().then(({ messages, more }) => {
-      // История приходит один раз: если пока её везли, сокет успел принести
-      // новое, дописываем его следом, а не затираем.
-      const known = new Set(messages.map((m) => m.id));
-      const later = state.messages.filter((m) => !known.has(m.id));
-      set({ messages: [...messages, ...later], more });
+      if (rows.length === 0) {
+        // Веток нет - чат остаётся общей лентой, как до них.
+        if (state.thread) set({ thread: 0, messages: [], more: false });
+        void loadFeed();
+        return;
+      }
+      set({ threads: rows });
+      const known = rows.some((r) => r.id === state.thread);
+      const chosen = known ? state.thread : (rows.find((r) => r.default) ?? rows[0]).id;
+      if (chosen !== state.thread) openThread(chosen);
+      // Остальные ветки - в фоне: переключение на них тоже должно быть сразу.
+      for (const row of rows) {
+        if (row.id !== chosen && !cache.has(row.id)) void reload(row.id);
+      }
     });
   }
   return () => {
@@ -288,14 +374,34 @@ export function attend(): () => void {
  * одну ленту - это чат, в котором ответы стоят под чужими вопросами.
  */
 async function reload(thread: number): Promise<void> {
-  const { messages, more } = await history(undefined, thread);
-  set({ messages, more });
+  const fresh = await history(undefined, thread);
+  // Пока ехал ответ, могли открыть другую ветку: он ложится в свою, а не в
+  // открытую. Раньше быстрое переключение показывало разговор соседней ветки.
+  if (thread !== state.thread) {
+    cache.set(thread, merge(cached(thread), fresh));
+    return;
+  }
+  set(merge({ messages: state.messages, more: state.more }, fresh));
 }
 
-/** Открыть другую ветку. */
+/** Общая лента без веток - так чат жил до них, и так живёт, если их нет. */
+async function loadFeed(): Promise<void> {
+  const fresh = await history();
+  // Ветки успели появиться - общая лента уже не нужна.
+  if (state.thread) return;
+  set(merge({ messages: state.messages, more: state.more }, fresh));
+}
+
+/**
+ * Открыть другую ветку.
+ *
+ * Сразу тем, что уже привезли, и следом - свежим с сервера: ждать ответа с
+ * пустой панелью незачем, если разговор этой ветки уже лежит здесь.
+ */
 export function openThread(thread: number): void {
   if (thread === state.thread) return;
-  set({ thread, messages: [], more: false, ...cleared(thread) });
+  rememberThread(thread);
+  set({ thread, ...cached(thread), ...cleared(thread) });
   void reload(thread);
 }
 
@@ -325,7 +431,10 @@ function cleared(thread: number): Pick<ChatState, "unread" | "unreadByThread"> {
 export async function older(): Promise<void> {
   const oldest = state.messages[0];
   if (!oldest || !state.more) return;
-  const { messages, more } = await history(oldest.id, state.thread || null);
+  const thread = state.thread;
+  const { messages, more } = await history(oldest.id, thread || null);
+  // Пока листали, открыли другую ветку - старое этой ветки туда не кладём.
+  if (thread !== state.thread) return;
   if (messages.length === 0) {
     set({ more: false });
     return;
