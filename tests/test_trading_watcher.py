@@ -396,6 +396,41 @@ def test_entry_fee_is_counted_when_the_fill_came_before_it_was_noticed():
     assert float(saved.fee) == pytest.approx(16.0)
 
 
+def test_waiting_order_does_not_claim_a_position_far_from_its_price():
+    """Заявка по 78 160 не забирает позицию, набранную по 76 950.
+
+    Так и было: запись старой заявки, которой на бирже давно нет, забрала
+    новый лонг BTC и поставила на него свои цели.
+    """
+    row = trade(status="waiting", entry=78160.0)
+    far = {"symbol": "BTCUSDT", "total": "1.2", "cumOpenValue": str(76950 * 1.2), "cumOpenSize": "1.2"}
+    near = {"symbol": "BTCUSDT", "total": "1.2", "cumOpenValue": str(78160 * 1.2), "cumOpenSize": "1.2"}
+
+    assert decide(row, far, set(), None, 0, resting=False).opened is False
+    assert decide(row, near, set(), None, 0, resting=False).opened is True
+
+
+def test_market_entry_without_a_price_still_opens():
+    """У входа по рынку цены заявки нет - сверять не с чем, открываем."""
+    row = trade(status="waiting", entry=0.0)
+    where = {"symbol": "BTCUSDT", "total": "1", "cumOpenValue": "76950", "cumOpenSize": "1"}
+    assert decide(row, where, set(), None, 0, resting=False).opened is True
+
+
+def test_newer_waiting_records_claim_positions_first():
+    """Открытые - первыми, ждущие - от новых к старым."""
+    from backend.trading.watcher import claim_order
+
+    old = trade(status="waiting")
+    old.id = 1
+    opened = trade(status="open")
+    opened.id = 3
+    new = trade(status="waiting")
+    new.id = 5
+
+    assert [t.id for t in claim_order([old, opened, new])] == [3, 5, 1]
+
+
 def test_entry_is_collected_no_further_than_the_trade_volume():
     """Добор входа не забирает лишнего: только объём сделки, от поздних к ранним."""
     from backend.trading.watcher import entry_fills

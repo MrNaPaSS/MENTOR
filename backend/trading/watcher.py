@@ -69,6 +69,12 @@ RECORD_ATTEMPTS = 8
 
 MISSING_TOLERANCE = 2
 
+# Насколько средняя цена позиции может отойти от цены ждущей заявки, чтобы
+# позиция считалась набранной именно ею. Лимитка исполняется по своей цене,
+# и позиция, набранная ею, стоит рядом с ней; полпроцента - запас на
+# частичные исполнения и округление.
+ENTRY_MATCH = 0.005
+
 # Какую долю объёма отчёт об исполнениях должен покрыть, чтобы результату по
 # нему можно было верить. Не единица: биржа округляет объёмы своим шагом, и
 # точное равенство здесь давало бы ложную тревогу на каждой сделке.
@@ -162,9 +168,12 @@ def decide(
         # неё вставали вторая лестница целей и второй стоп, а в журнал уходили
         # две записи с одним итогом и разными ценами входа - 1368 у той, что
         # действительно исполнилась, и 1341.62 у той, что только собиралась.
-        return Decision(
-            trade.takes_hit, opened=size > 0 and not resting and not taken, size=size
-        )
+        #
+        # И третье: позиция набрана по цене этой заявки. Заявка, которой давно
+        # нет на бирже, тоже «не стоит в стакане» - и такая запись забирала
+        # новую позицию: лонг BTC по 76 950 получил цели заявки по 78 160.
+        ours = size > 0 and not resting and not taken and entry_matches(trade, position)
+        return Decision(trade.takes_hit, opened=ours, size=size)
 
     takes: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
 
@@ -424,7 +433,7 @@ class PositionWatcher:
         # две ждущие лимитки не должны разобрать одну позицию на двоих.
         owned = {(t.symbol.upper(), t.side) for t in trades if t.status == "open"}
 
-        for trade in trades:
+        for trade in claim_order(trades):
             position = position_for(positions, trade.symbol, trade.side)
             streak = self._missing.get(trade.id, 0)
             self._missing[trade.id] = streak + 1 if position_size(position) <= 0 else 0
@@ -1572,6 +1581,33 @@ def average_entry(position: dict[str, Any] | None) -> float | None:
     value = _f(position, "cumOpenValue", "openValue")
     size = _f(position, "cumOpenSize") or position_size(position)
     return value / size if value > 0 and size > 0 else None
+
+
+def entry_matches(trade: LiveTrade, position: dict[str, Any] | None) -> bool:
+    """Набрана ли позиция по цене этой заявки.
+
+    Цены у заявки нет (вход по рынку) или биржа не назвала среднюю - не
+    мешаем: сверять не с чем, и остальные проверки на месте.
+    """
+    entry = float(trade.entry or 0)
+    avg = average_entry(position)
+    if entry <= 0 or avg is None:
+        return True
+    return abs(avg - entry) / entry <= ENTRY_MATCH
+
+
+def claim_order(trades: Iterable[LiveTrade]) -> list[LiveTrade]:
+    """В каком порядке сделки ученика разбирают позиции.
+
+    Открытые - первыми: позиция уже их. Ждущие - от новых к старым: из двух
+    записей на одну монету и сторону позицию скорее набрала свежая заявка, чем
+    та, что висит в базе с прошлой ночи. Раньше порядок был порядком базы -
+    старая запись шла первой и забирала чужую позицию.
+    """
+    rows = list(trades)
+    opened = [t for t in rows if t.status == "open"]
+    waiting = sorted((t for t in rows if t.status != "open"), key=lambda t: t.id or 0, reverse=True)
+    return opened + waiting
 
 
 def mark_price(position: dict[str, Any] | None) -> float | None:

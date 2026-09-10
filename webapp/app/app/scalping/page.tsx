@@ -214,6 +214,11 @@ const CHIP_OFF = "text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
 // идёт раз в четыре секунды, а сопровождение само не принимает просьб чаще.
 const NUDGE_EVERY_MS = 3000;
 
+// Через сколько смотрим второй раз, если позиции не видно. Два пустых ответа
+// подряд - и сделка закрыта; ждать второго полный интервал значило держать
+// закрытую сделку на графике лишние секунды.
+const MISSING_RECHECK_MS = 800;
+
 // Высота рабочей области: всё окно за вычетом шапки приложения. Заголовок
 // раздела убран — он занимал полсотни пикселей и не нёс ничего, чего не видно
 // по самим панелям. Стакан и график получают одинаковую высоту и заканчиваются
@@ -1760,10 +1765,15 @@ export default function ScalpingPage() {
         // Биржа не ответила - остаёмся при осторожном предположении.
       }
 
+      // Позиции не видно - второй взгляд через мгновение, а не через весь
+      // интервал: закрытая сделка висела на графике лишние секунды, пока
+      // терминал ждал очередной проверки, чтобы убедиться, что позиции нет.
+      let again = false;
       for (const watched of watching) {
         try {
           const position = await positionOf(symbol!, watched.side);
           if (cancelled || !position) continue;
+          if (position.size <= 0 && watched.status === "open") again = true;
 
           setTrades((list) =>
             list.map((current) => {
@@ -1876,6 +1886,7 @@ export default function ScalpingPage() {
           // Биржа не ответила — разметку не трогаем.
         }
       }
+      if (again && !cancelled) setTimeout(() => void check(), MISSING_RECHECK_MS);
     }
 
     async function guard() {
@@ -1973,8 +1984,12 @@ export default function ScalpingPage() {
             // чему: подставить две цены на три цели значит соврать о том,
             // какая из них где.
             const ahead = t.targets.length - hit;
+            //
+            // И не сразу после переноса: заявка заменяется, и список на бирже
+            // ещё показывает прежнюю цену. Линия цели возвращалась на старое
+            // место и лишь потом вставала на новое.
             const live =
-              Array.isArray(body.take_prices) && body.take_prices.length === ahead
+              !quiet && Array.isArray(body.take_prices) && body.take_prices.length === ahead
                 ? [...body.take_prices].sort((a, b) =>
                     t.side === "long" ? a - b : b - a,
                   )
