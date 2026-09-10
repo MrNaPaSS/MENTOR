@@ -125,6 +125,12 @@ const ACH_CATEGORIES: { id: AchCategory; icon: React.ElementType }[] = [
  * строки начинают наезжать, выше девяноста шести клетка превращается в плитку
  * с цифрой посередине пустоты.
  */
+//
+// Это нижняя граница ряда, а не его высота. Сверх неё ряды делят всё, что
+// осталось в панели: колонка цифр справа выше календаря, и клетки с жёсткой
+// высотой оставляли под кнопками карточки пустое поле. Теперь сетка
+// растягивается до низа панели, а число здесь держит её на узком экране, где
+// соседней колонки нет и растягиваться не до чего.
 const GRID_H = 300;
 const CELL_MIN = 44;
 const CELL_MAX = 96;
@@ -135,22 +141,21 @@ function cellHeight(rows: number): number {
 }
 
 // ─── Ячейка дня ─────────────────────────────────────────────────────────────
-function DayCell({ day, onClick, active, isToday, best, height }: {
+function DayCell({ day, onClick, active, isToday, best }: {
   day: CalendarDay | null;
   onClick?: () => void;
   active: boolean;
   isToday?: boolean;
   /** Лучший день месяца: на нём стоит звезда. */
   best?: boolean;
-  /** Высота клетки: её считает календарь по числу своих рядов. */
-  height: number;
 }) {
   const t = useT();
   const numbers = useIntlLocale();
   // Звезда двух цветов: чёрная на белом листе, зелёная на тёмном. Один рисунок
   // на оба не годится - чёрная звезда на тёмной клетке пропадает.
   const paper = useTerminalTheme();
-  if (!day) return <div style={{ height }} />;
+  // Высоту клетке задаёт ряд сетки: она заполняет его целиком.
+  if (!day) return <div />;
 
   const pnl = day.pnl_pct;
   const isPos = pnl !== null && pnl > 0;
@@ -193,8 +198,8 @@ function DayCell({ day, onClick, active, isToday, best, height }: {
   return (
     <button
       onClick={onClick}
-      style={{ height, background: bg }}
-      className={`group relative flex flex-col rounded-lg border transition-transform duration-150 hover:scale-[1.06] hover:z-10 ${borderCls} p-1`}
+      style={{ background: bg }}
+      className={`group relative flex h-full min-h-0 flex-col rounded-lg border transition-transform duration-150 hover:scale-[1.06] hover:z-10 ${borderCls} p-1`}
       title={[
         day.date,
         hasDeposit ? t.analytics.calendar.deposit : "",
@@ -814,7 +819,7 @@ export default function AnalyticsPage() {
             пустоту. */}
         <div className="grid gap-3 xl:grid-cols-2">
           {/* ── Календарь ── */}
-          <div className="w-full overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+          <div className="flex w-full flex-col overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
 
             {/* Шапка */}
             <div
@@ -870,7 +875,9 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Тело календаря */}
-            <div className="p-4">
+            {/* Тело забирает всю свободную высоту панели, а внутри неё - сетка
+                дней: итоги и кнопки карточки остаются прижатыми к низу. */}
+            <div className="flex flex-1 flex-col p-4">
               {/* Дни недели */}
               <div className="mb-1.5 grid grid-cols-7 gap-1">
                 {t.analytics.calendar.weekdays.map(d => (
@@ -879,7 +886,12 @@ export default function AnalyticsPage() {
               </div>
 
               {/* Ячейки */}
-              <div className="grid grid-cols-7 gap-1">
+              <div
+                className="grid flex-1 grid-cols-7 gap-1"
+                style={{
+                  gridTemplateRows: `repeat(${Math.max(1, cells.length / 7)}, minmax(${cellHeight(cells.length / 7)}px, 1fr))`,
+                }}
+              >
                 {cells.map((day, i) => (
                   <DayCell
                     key={i}
@@ -887,7 +899,6 @@ export default function AnalyticsPage() {
                     active={selectedDay?.date === day?.date}
                     isToday={day?.date === todayStr}
                     best={Boolean(day && bestDay && day.date === bestDay.date && (bestDay.pnl_pct ?? 0) > 0)}
-                    height={cellHeight(cells.length / 7)}
                     onClick={() => day && setSelectedDay(day)}
                   />
                 ))}
