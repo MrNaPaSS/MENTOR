@@ -16,6 +16,7 @@ import { periodOf, type Span } from "@/lib/pnl/period";
 import { CHIP, CHIP_OFF, CHIP_ON, PaneHead, PaneScope } from "@/components/app/Pane";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
+import CertificatesPanel from "@/components/cert/CertificatesPanel";
 import { X, Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles, Share2 } from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
@@ -1236,6 +1237,9 @@ export default function AnalyticsPage() {
               })}
             </div>
           </div>
+        {/* Сертификаты трейдера - над достижениями: это итог тех же усилий. */}
+        <CertificatesPanel />
+
         {/* Достижения */}
         <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 space-y-3">
           <div className="flex items-center justify-between">

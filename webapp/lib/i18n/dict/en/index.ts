@@ -5,6 +5,7 @@ import type { Dict } from "../..";
 import { analytics } from "./analytics";
 import { auth } from "./auth";
 import { broker } from "./broker";
+import { cert } from "./cert";
 import { chat } from "./chat";
 import { common } from "./common";
 import { format } from "./format";
@@ -24,6 +25,7 @@ export const en: Dict = {
   analytics,
   auth,
   broker,
+  cert,
   chat,
   common,
   format,

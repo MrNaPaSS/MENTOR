@@ -24,6 +24,7 @@ import { attend } from "@/lib/chat/store";
 import { useCoins } from "@/lib/useCoins";
 import { useRewardNotices } from "@/lib/rewards";
 import RewardsChip from "@/components/app/RewardsChip";
+import CertificateHost from "@/components/cert/CertificateHost";
 import { PROFILE_EVENT } from "@/lib/profileEvent";
 import { fmtUsd, modeLabel } from "@/lib/format";
 import { adoptLocale, useT } from "@/lib/i18n";
@@ -348,6 +349,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {!isActive("/app/scalping") && (
         <Toasts items={toasts} onClose={dismissToast} onPick={dismissSymbol} place="shell" />
       )}
+
+      {/* Сертификаты трейдера: уведомление о новом и окно с подписью и печатью. */}
+      <CertificateHost pathKey={pathname} />
 
       {/* ─── Контент (отступ под header + ticker = 14px + 38px ≈ 96px) ─── */}
       <main className="px-4 pb-24 pt-[96px] md:px-6 lg:pb-8">

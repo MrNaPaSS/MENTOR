@@ -549,6 +549,10 @@ export const api = {
   shopMyOrders: (token: string) => authReq<ShopOrder[]>("/api/shop/orders", token),
   /** Купленные функции платформы: что действует, до какого срока, сколько зарядов. */
   shopEntitlements: (token: string) => authReq<Entitlement[]>("/api/shop/entitlements", token),
+  /** Столпы и сертификаты трейдера. Уровень вырос - сервер выдаёт новый здесь же. */
+  certificates: (token: string) => authReq<CertificatesOut>("/api/certificates", token),
+  certificateSeen: (token: string, id: number) =>
+    authReq<{ ok: boolean }>(`/api/certificates/${id}/seen`, token, { method: "POST" }),
   /** Надеть купленную рамку аватара; пустая строка - снять. */
   shopSetFrame: (token: string, frame: string) =>
     authReq<{ frame: string }>("/api/shop/frame", token, { method: "POST", body: JSON.stringify({ frame }) }),
@@ -814,6 +818,32 @@ export interface ShopItem {
   duration_days?: number;
   /** Сколько зарядов даёт покупка расходуемой функции. */
   charges?: number;
+}
+
+/** Столп сертификата трейдера: знания, практика, дисциплина, развитие. */
+export interface CertPillar {
+  key: "knowledge" | "practice" | "discipline" | "growth";
+  done: boolean;
+  value: number;
+  target: number;
+}
+
+export interface Certificate {
+  id: number;
+  level: "bronze" | "silver" | "gold";
+  number: string;
+  issued_at: string;
+  /** false - выдан, но ещё не открыт: горит уведомление. */
+  seen: boolean;
+  /** Столпы на момент выдачи. */
+  pillars: CertPillar[];
+}
+
+export interface CertificatesOut {
+  pillars: CertPillar[];
+  level: "bronze" | "silver" | "gold" | null;
+  certificates: Certificate[];
+  owner: string;
 }
 
 /** Купленная функция платформы. */

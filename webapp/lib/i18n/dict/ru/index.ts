@@ -4,6 +4,7 @@
 import { analytics } from "./analytics";
 import { auth } from "./auth";
 import { broker } from "./broker";
+import { cert } from "./cert";
 import { chat } from "./chat";
 import { common } from "./common";
 import { format } from "./format";
@@ -23,6 +24,7 @@ export const ru = {
   analytics,
   auth,
   broker,
+  cert,
   chat,
   common,
   format,

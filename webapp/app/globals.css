@@ -654,6 +654,44 @@
   }
 }
 
+/* Сертификат трейдера: лист не печатается, его подписывают.
+   Ручка ведёт маску по линии подписи с ровной скоростью, как пишет рука, -
+   поэтому linear. Отрывы ручки в пути - это разрывы подпутей, дальше пера по
+   ним маска не тянется. Когда подпись дописана, падает печать - тем же ударом,
+   что на карточке сделки, - и лист коротко вздрагивает. */
+.cert-pen {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: cert-pen 2.4s linear 0.4s forwards;
+}
+@keyframes cert-pen {
+  to { stroke-dashoffset: 0; }
+}
+.cert-stamp {
+  transform: rotate(-8deg);
+  opacity: 0.96;
+  pointer-events: none;
+  animation: cert-slam 0.42s cubic-bezier(0.2, 1.5, 0.35, 1) 2.95s both;
+}
+@keyframes cert-slam {
+  0% { transform: scale(2.3) rotate(-28deg); opacity: 0; }
+  60% { opacity: 0.96; }
+  100% { transform: scale(1) rotate(-8deg); opacity: 0.96; }
+}
+.cert-sheet {
+  animation: pnl-shock 0.18s ease-out 3.2s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cert-pen {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .cert-stamp,
+  .cert-sheet {
+    animation: none;
+  }
+}
+
 /* Подсветка сообщения, к которому увела цитата в чате.
 
    Классом, а не рамкой в разметке: подсветка живёт секунду, и держать ради неё

@@ -632,4 +632,25 @@ class Entitlement(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "LeverageCap", "Entitlement", "utcnow"]
+class Certificate(Base):
+    """Сертификат трейдера NMNH: уровень и снимок столпов на момент выдачи.
+
+    Картинку не храним: её собирает кабинет из бланка, имени и этих чисел.
+    См. backend/certificates.py.
+    """
+
+    __tablename__ = "certificates"
+    __table_args__ = (UniqueConstraint("student_id", "level", name="uq_certificate_level"),)
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    # bronze | silver | gold
+    level: Mapped[str] = mapped_column(String(8))
+    # Столпы на момент выдачи: сертификат заверяет то, что было, а не то, что есть.
+    pillars_json: Mapped[str] = mapped_column(Text, default="[]")
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Когда ученик открыл сертификат. Пусто - ещё не получен: горит уведомление.
+    seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "LeverageCap", "Entitlement", "Certificate", "utcnow"]

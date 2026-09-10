@@ -28,6 +28,7 @@ from backend.api import chat_bridge as chat_bridge_api
 from backend.api import scalping as scalping_api
 from backend.api import trading_move
 from backend.api import trading_nudge
+from backend.api import certificates as certificates_api
 from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
@@ -195,6 +196,7 @@ def create_app(
     app.include_router(coins.router)
     app.include_router(shop.router)
     app.include_router(shop.admin_router)
+    app.include_router(certificates_api.router)
     app.include_router(chat_api.router)
     app.include_router(chat_bridge_api.router)
     app.include_router(scalping_api.router)
