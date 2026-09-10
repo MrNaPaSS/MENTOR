@@ -112,9 +112,13 @@ function Row({
       }`}
     >
       <span className="min-w-0 flex-1 truncate font-semibold">{trade.symbol}</span>
-      {trade.status === "planned" && (
+      {trade.status === "open" ? (
+        <span className="rounded bg-[var(--pane-chip-faint)] px-1 text-[10px] text-[var(--pane-chip)]">
+          {p.active}
+        </span>
+      ) : (
         <span className="rounded bg-[var(--pane-hover)] px-1 text-[10px] text-[var(--pane-muted)]">
-          {p.limit}
+          {p.waiting}
         </span>
       )}
       <span

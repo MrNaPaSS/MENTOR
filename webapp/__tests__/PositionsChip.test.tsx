@@ -53,6 +53,7 @@ describe("кнопка позиций", () => {
 
     const row = screen.getByTitle("Открыть график ETHUSDT");
     expect(row.textContent).toContain("ETHUSDT");
+    expect(row.textContent).toContain("активный");
     expect(row.textContent).toContain("шорт");
     expect(row.textContent).toContain("×200");
     // Три цели, одна взята.
@@ -60,12 +61,13 @@ describe("кнопка позиций", () => {
     expect(row.querySelectorAll('[data-taken="true"]')).toHaveLength(1);
   });
 
-  it("лимитка помечена, у неё ни одной взятой цели", () => {
+  it("ждущая входа помечена «ожидаем», у неё ни одной взятой цели", () => {
     chip([trade("b", "SOLUSDT", "long")]);
     fireEvent.click(screen.getByRole("button"));
 
     const row = screen.getByTitle("Открыть график SOLUSDT");
-    expect(row.textContent).toContain("лимитка");
+    expect(row.textContent).toContain("ожидаем");
+    expect(row.textContent).not.toContain("активный");
     expect(row.querySelectorAll('[data-taken="true"]')).toHaveLength(0);
   });
 

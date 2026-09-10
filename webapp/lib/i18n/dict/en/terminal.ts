@@ -32,10 +32,11 @@ export const terminal = {
   closePosition: "Close the position",
   positions: {
     chip: (n: number) => `positions ${n}`,
-    title: (open: number, limits: number) => `Open positions: ${open}, limit orders: ${limits}`,
+    title: (open: number, limits: number) => `Active: ${open}, waiting: ${limits}`,
     long: "long",
     short: "short",
-    limit: "limit",
+    active: "active",
+    waiting: "waiting",
     takes: (hit: number, total: number) => `Targets taken: ${hit} of ${total}`,
     open: (symbol: string) => `Open the ${symbol} chart`,
   },

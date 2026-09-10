@@ -36,10 +36,11 @@ export const terminal = {
   closePosition: "Зафиксировать позицию",
   positions: {
     chip: (n: number) => `позиции ${n}`,
-    title: (open: number, limits: number) => `Открытых позиций: ${open}, лимиток: ${limits}`,
+    title: (open: number, limits: number) => `Активных: ${open}, ожидаем: ${limits}`,
     long: "лонг",
     short: "шорт",
-    limit: "лимитка",
+    active: "активный",
+    waiting: "ожидаем",
     takes: (hit: number, total: number) => `Взято целей: ${hit} из ${total}`,
     open: (symbol: string) => `Открыть график ${symbol}`,
   },
