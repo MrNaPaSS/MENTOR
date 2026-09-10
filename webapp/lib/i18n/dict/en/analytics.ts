@@ -86,6 +86,7 @@ export const analytics = {
     legendGoal: "Goal",
     daySignals: (n: number) => `⚡ ${n} signals`,
     dayVolume: (amount: string) => `↕ $${amount} volume`,
+    dayTrades: (n: number) => `${n} ${n === 1 ? "trade" : "trades"}`,
     dayDeposit: "+$ Deposit",
     dayGoal: "✓ Goal",
     noSnapshot: "No snapshot",

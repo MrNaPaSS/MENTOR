@@ -81,6 +81,7 @@ import { readTrades, writeTrades } from "@/lib/tradeStore";
 import {
   dismissSymbol,
   dismissToast,
+  dismissTrade,
   holdTerminal,
   pushToast,
   serverSnapshot as serverToasts,
@@ -2283,18 +2284,27 @@ export default function ScalpingPage() {
           tone: row.side === "long" ? "up" : "down",
         });
       } else if (row.status === "closed") {
+        // Всё, что говорилось по дороге, снимается с экрана. Цель и правда
+        // была взята, но «взята цель 3» рядом с сообщением о стопе читается
+        // как два разных исхода одной сделки, и трейдер разбирается в них
+        // вместо того, чтобы увидеть главное: сделки больше нет.
+        dismissTrade(row.id);
+
         const done =
           row.outcome === "take"
-            ? { sound: "profit" as const, title: t.terminal.events.worked, tone: "up" as const }
+            ? { sound: "profit" as const, note: t.terminal.events.worked, tone: "up" as const }
             : row.outcome === "stop"
-              ? { sound: "stop" as const, title: t.terminal.events.stopped, tone: "down" as const }
-              : { sound: "close" as const, title: t.terminal.events.closed, tone: "plain" as const };
+              ? { sound: "stop" as const, note: t.terminal.events.stopped, tone: "down" as const }
+              : { sound: "close" as const, note: t.terminal.events.closedByHand, tone: "plain" as const };
         play(done.sound);
         pushToast({
           id: `${row.id}:out`,
           symbol: row.symbol,
-          title: `${coin} - ${done.title}`,
-          text: `${side} · ${row.pnl >= 0 ? "+" : "-"}${Math.abs(row.pnl).toFixed(2)} $`,
+          // В заголовке - факт, в строке под ним - чем закончилось и на
+          // сколько. Раньше заголовок называл причину, и сумму приходилось
+          // искать глазами во второй строке.
+          title: t.terminal.events.closedTitle(coin),
+          text: `${done.note} · ${row.pnl >= 0 ? "+" : "-"}${Math.abs(row.pnl).toFixed(2)} $`,
           tone: done.tone,
         });
       }

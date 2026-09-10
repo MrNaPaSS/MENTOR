@@ -89,6 +89,11 @@ export const analytics = {
     legendGoal: "Цель",
     daySignals: (n: number) => `⚡ ${n} сигналов`,
     dayVolume: (amount: string) => `↕ $${amount} объём`,
+    dayTrades: (n: number) => {
+      const tail = n % 100 >= 11 && n % 100 <= 14 ? 0 : n % 10;
+      const word = tail === 1 ? "сделка" : tail >= 2 && tail <= 4 ? "сделки" : "сделок";
+      return `${n} ${word}`;
+    },
     dayDeposit: "+$ Пополнение",
     dayGoal: "✓ Цель",
     noSnapshot: "Нет снимка",

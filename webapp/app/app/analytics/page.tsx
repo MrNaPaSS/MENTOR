@@ -164,6 +164,10 @@ function DayCell({ day, onClick, active, isToday, best }: {
   const hasTrades = dayVolume(day) > 0;
   const hasDeposit = day.has_deposit === true;
   const goalMet = day.signals > 0 && isPos;
+  // Сколько сделок закрыто за день. Процент говорит, как сходили, а это -
+  // сколько раз: +2% одной сделкой и +2% после двенадцати заходов означают
+  // совершенно разные дни, и по одной клетке их было не различить.
+  const dayTrades = day.journal_trades ?? 0;
 
   const intensity = hasReal ? Math.min(Math.abs(pnl!) / 6, 1) : 0;
   let bg = "rgba(255,255,255,0.015)";
@@ -209,11 +213,19 @@ function DayCell({ day, onClick, active, isToday, best }: {
             )
           : "",
         hasReal ? `PnL ${pnl!.toFixed(2)}%` : "",
+        dayTrades > 0 ? t.analytics.calendar.dayTrades(dayTrades) : "",
       ].filter(Boolean).join(" · ")}
     >
       {/* Число месяца */}
-      <span className={`text-[10px] font-bold leading-none ${isToday ? "text-[var(--pane-accent)]" : "text-[var(--pane-text)]/45"}`}>
-        {dayNum}
+      <span className="flex items-baseline justify-between gap-1 leading-none">
+        <span className={`text-[10px] font-bold ${isToday ? "text-[var(--pane-accent)]" : "text-[var(--pane-text)]/45"}`}>
+          {dayNum}
+        </span>
+        {dayTrades > 0 && (
+          <span className="text-[8px] font-bold tabular-nums text-[var(--pane-text)]/35">
+            ×{dayTrades}
+          </span>
+        )}
       </span>
 
       {/* Центр ячейки: PnL если есть, иначе объём/сигналы */}

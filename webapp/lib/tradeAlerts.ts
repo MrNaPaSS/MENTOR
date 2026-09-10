@@ -71,6 +71,17 @@ export function dismissToast(id: string): void {
   emit(toasts.filter((one) => one.id !== id));
 }
 
+/**
+ * Убрать всё, что было сказано об этой сделке.
+ *
+ * Сделка закрылась - и «взята цель 3», висящее рядом с сообщением о стопе,
+ * читается как два разных исхода одной сделки. Опознаватели всех её
+ * уведомлений начинаются с её же идентификатора, поэтому снимаются разом.
+ */
+export function dismissTrade(tradeId: string): void {
+  emit(toasts.filter((one) => !one.id.startsWith(`${tradeId}:`)));
+}
+
 /** Убрать всё по этой монете: её уже открыли, сообщать больше не о чем. */
 export function dismissSymbol(symbol: string): void {
   emit(toasts.filter((one) => one.symbol !== symbol));
