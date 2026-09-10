@@ -332,6 +332,84 @@ def test_journal_entry_keeps_the_targets_of_the_trade():
     assert float(saved.pnl) == pytest.approx(-1.5)
 
 
+def test_entry_fee_is_counted_when_the_fill_came_before_it_was_noticed():
+    """Комиссия входа попадает в журнал, хотя вход исполнился до отметки «открыта».
+
+    `opened_at` ставит проход сопровождения, увидевший позицию, - позже самого
+    исполнения лимитки. Окно отчёта от этой отметки теряло вход: по лонгу ZEC
+    в журнал ушло +125.63 при +117.63 на счёте, ровно на 8.00 за вход.
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from backend.trading.watcher import PositionWatcher
+    from core.models import Base, ScalpTrade, Student
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    student = Student(tg_id=1)
+    session.add(student)
+    session.commit()
+
+    def ms(minute: int, second: int) -> int:
+        return int(datetime(2026, 9, 10, 9, minute, second, tzinfo=timezone.utc).timestamp() * 1000)
+
+    row = trade(
+        student_id=student.id,
+        symbol="ZECUSDT",
+        side="long",
+        entry=1215.0,
+        qty=41.152,
+        created_at=datetime(2026, 9, 10, 9, 43, 20, tzinfo=timezone.utc),
+        opened_at=datetime(2026, 9, 10, 9, 43, 45, tzinfo=timezone.utc),
+        closed_at=datetime(2026, 9, 10, 9, 50, 0, tzinfo=timezone.utc),
+    )
+
+    class Exchange:
+        async def user_trades(self, symbol, limit=100):
+            return [
+                # Закрытие прошлой сделки по той же монете - до постановки заявки.
+                {"time": ms(43, 10), "side": "SELL", "qty": "41", "price": "1214",
+                 "realizedPnl": "50", "commission": "8"},
+                # Вход: исполнился раньше, чем его заметило сопровождение.
+                {"time": ms(43, 29), "side": "BUY", "qty": "41.152", "price": "1215",
+                 "realizedPnl": "0", "commission": "8"},
+                # Выход.
+                {"time": ms(49, 50), "side": "SELL", "qty": "41.152", "price": "1218.25",
+                 "realizedPnl": "133.63", "commission": "8"},
+            ]
+
+    watcher = PositionWatcher(lambda: session, lambda: None)
+    asyncio.run(watcher._record(session, Exchange(), row))
+    session.commit()
+
+    saved = session.execute(select(ScalpTrade)).scalar_one()
+    # 133.63 по бирже минус комиссия входа и выхода - ровно то, что на счёте.
+    assert float(saved.pnl) == pytest.approx(117.63)
+    assert float(saved.fee) == pytest.approx(16.0)
+
+
+def test_entry_is_collected_no_further_than_the_trade_volume():
+    """Добор входа не забирает лишнего: только объём сделки, от поздних к ранним."""
+    from backend.trading.watcher import entry_fills
+
+    fills = [
+        {"time": 100, "side": "SELL", "qty": "1"},   # чужой вход, раньше
+        {"time": 200, "side": "SELL", "qty": "1"},   # наш вход
+        {"time": 250, "side": "BUY", "qty": "1"},    # закрытие чужой сделки
+        {"time": 400, "side": "BUY", "qty": "1"},    # уже после отметки
+    ]
+    taken = entry_fills(fills, "short", 1.0, placed_ms=50, opened_ms=300)
+    assert [f["time"] for f in taken] == [200]
+
+
 # ── сторона позиции ──────────────────────────────────────────────────────────
 
 def test_position_side_reads_the_name_or_the_sign():

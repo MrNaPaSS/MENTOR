@@ -701,11 +701,23 @@ class PositionWatcher:
                 since if since is None or since.tzinfo else since.replace(tzinfo=timezone.utc)
             )
             opened_ms = int(aware.timestamp() * 1000) if aware else 0
-            fills = [
-                f
-                for f in await client.user_trades(trade.symbol, limit=100)
-                if not opened_ms or fill_time(f) >= opened_ms
-            ]
+            report = await client.user_trades(trade.symbol, limit=100)
+            fills = [f for f in report if not opened_ms or fill_time(f) >= opened_ms]
+            # Вход исполнился раньше, чем мы его заметили: `opened_at` - это
+            # проход сопровождения, увидевший позицию, а не само исполнение.
+            # Без этого добора комиссия входа в журнал не попадала вовсе - по
+            # лонгу ZEC записалось +125.63 при +117.63 на счёте, ровно на 8.00
+            # удержанных за вход. Комиссию берём ту, что назвала биржа по этому
+            # исполнению: у каждого трейдера она своя.
+            created = trade.created_at
+            if created is not None and created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            placed_ms = int(created.timestamp() * 1000) if created else 0
+            if opened_ms and placed_ms and placed_ms < opened_ms:
+                fills = (
+                    entry_fills(report, trade.side, float(trade.qty), placed_ms, opened_ms)
+                    + fills
+                )
             hit = trade.takes_hit
 
             # Закрывающее исполнение идёт против стороны сделки. Пока его нет,
@@ -1115,6 +1127,41 @@ def closed_size(fills: list[dict[str, Any]], side: str) -> float:
     return sum(
         abs(_first(row, _SIZE_FIELDS) or 0.0) for row in fills if is_closing(row, side)
     )
+
+
+def entry_fills(
+    fills: list[dict[str, Any]], side: str, qty: float, placed_ms: int, opened_ms: int
+) -> list[dict[str, Any]]:
+    """Исполнения входа, случившиеся до того, как сопровождение увидело позицию.
+
+    Лимитка исполняется между обходами, и отметку «открыта» сделка получает
+    уже после самого исполнения. Окно отчёта от этой отметки теряло вход, а с
+    ним и комиссию за него.
+
+    Добираем осторожно: только после постановки заявки, только в сторону
+    входа (лонг - покупки, шорт - продажи) и не больше объёма сделки, от самых
+    поздних к ранним. Закрытие прошлой сделки по той же монете идёт в обратную
+    сторону и сюда не попадает.
+    """
+    opening = "buy" if side == "long" else "sell"
+    early = sorted(
+        (
+            f
+            for f in fills
+            if placed_ms <= fill_time(f) < opened_ms
+            and opening in str(f.get("side") or "").lower()
+        ),
+        key=fill_time,
+        reverse=True,
+    )
+    taken: list[dict[str, Any]] = []
+    got = 0.0
+    for row in early:
+        if qty > 0 and got >= qty * FILLS_ENOUGH:
+            break
+        taken.append(row)
+        got += abs(_first(row, _SIZE_FIELDS) or 0.0)
+    return taken
 
 
 def settle(
