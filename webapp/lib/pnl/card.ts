@@ -635,12 +635,17 @@ async function putMark(
 
   // Место - над нижней панелью, по её правому краю: панель с QR занимает низ
   // листа целиком, и оттиск на ней читался бы её частью.
-  const room = { w: w * 0.2, h: h * 0.05 };
+  //
+  // Размер - как у печати на бланке сигнала, а не значок в углу: прежний
+  // оттиск в пять процентов высоты и полупрозрачный терялся среди свечей
+  // заготовки. Левее 0,76 ширины он не заходит - там кончается строка даты
+  // с поясом, самая длинная в колонке.
+  const room = { w: w * 0.19, h: h * 0.15 };
   const scale = Math.min(room.w / mark.naturalWidth, room.h / mark.naturalHeight);
   const iw = mark.naturalWidth * scale;
   const ih = mark.naturalHeight * scale;
-  const right = (variant.panel.x + variant.panel.w) * w;
-  const bottom = variant.panel.y * h - h * 0.018;
+  const right = (variant.panel.x + variant.panel.w) * w - w * 0.03;
+  const bottom = variant.panel.y * h - h * 0.012;
 
   // Оттиск нарисован чёрным. На тёмном полотне его не видно вовсе -
   // перекрашиваем по маске, как на бланке сигнала: цвет меняется, а рваные
@@ -657,9 +662,13 @@ async function putMark(
 
   ctx.save();
   ctx.translate(right - iw / 2, bottom - ih / 2);
-  // Косо, как и всякая печать: ровно поставленная читается наклейкой.
-  ctx.rotate((-4.5 * Math.PI) / 180);
-  ctx.globalAlpha = 0.42;
+  // Косо, как и всякая печать: ровно поставленная читается наклейкой. Наклон,
+  // плотность и свечение - те же, что на бланке сигнала.
+  ctx.rotate((-6 * Math.PI) / 180);
+  ctx.globalAlpha = 0.95;
+  // Свечение цветом рамок заготовки: им же горит и наборная печать слева вверху.
+  ctx.shadowColor = variant.ink;
+  ctx.shadowBlur = ih * 0.22;
   ctx.drawImage(tinted, -iw / 2, -ih / 2, iw, ih);
   ctx.restore();
 }
