@@ -31,7 +31,7 @@ export default function FeeFlow() {
           сделать подписи нечитаемыми. Поэтому у неё своя горизонтальная
           прокрутка, а страница под ней не едет. */}
       <Reveal className="mt-14">
-        <div className="overflow-x-auto rounded-2xl border border-border bg-bg-card/70 p-4 md:p-6">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-bg-card/95 backdrop-blur-sm p-4 md:p-6">
           <svg
             viewBox="0 0 860 300"
             className="mx-auto block h-auto w-full min-w-[560px] max-w-3xl"
@@ -116,7 +116,7 @@ export default function FeeFlow() {
           const Icon = ICONS[i % ICONS.length];
           return (
             <Reveal as="article" key={step.title} delay={i * 0.1}>
-              <div className="h-full rounded-2xl border border-border bg-bg-card/70 p-5">
+              <div className="h-full rounded-2xl border border-border bg-bg-card/95 backdrop-blur-sm p-5">
                 <span className="grid h-11 w-11 place-items-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/25">
                   <Icon className="h-5 w-5" />
                 </span>

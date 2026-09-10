@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Header from "@/components/landing/Header";
+import PageBackdrop from "@/components/ui/PageBackdrop";
 import Footer from "@/components/landing/Footer";
 import JsonLd from "@/components/seo/JsonLd";
 import { breadcrumbLd, faqLd, webPageLd } from "@/lib/seo/jsonLd";
@@ -45,6 +46,11 @@ export default function SeoArticle({ page }: { page: SeoPage }) {
         ]}
       />
 
+      {/* Тот же фон, что на главной: клетка и объёмная сцена позади текста.
+          Страница остаётся серверной - фон ничего не дорисовывает к тексту,
+          ради которого она существует, а сцена грузится отдельным куском
+          после него. */}
+      <PageBackdrop />
       <Header />
 
       <main className="mx-auto max-w-3xl px-4 pb-24 pt-28 md:px-6 md:pt-32">

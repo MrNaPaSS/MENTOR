@@ -160,7 +160,7 @@ export const landing = {
 
   socials: {
     eyebrow: "Social",
-    title: "Keep up with the trades",
+    title: "Stay in the loop",
     channel: "CHANNEL",
     academy: "ACADEMY",
   },

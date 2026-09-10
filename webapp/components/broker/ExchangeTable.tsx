@@ -11,8 +11,7 @@ import { useLocale, useT } from "@/lib/i18n";
 /** Цвет метки статуса. Работающая биржа зелёная, остальные приглушены. */
 const STATUS_STYLE: Record<ExchangeStatus, string> = {
   live: "bg-success/10 text-success ring-success/25",
-  connecting: "bg-accent-gold/10 text-accent-gold ring-accent-gold/25",
-  planned: "bg-bg-panel text-text-muted ring-border",
+  soon: "bg-bg-panel text-text-muted ring-border",
 };
 
 /**
@@ -34,7 +33,7 @@ export default function ExchangeTable() {
       <SectionHeading eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.subtitle} />
 
       <Reveal className="mt-14">
-        <div className="overflow-x-auto rounded-2xl border border-border bg-bg-card/80 p-5 md:p-6">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-bg-card/95 backdrop-blur-sm p-5 md:p-6">
           <table className="w-full min-w-[620px] border-collapse text-left">
             <thead>
               <tr className="text-xs uppercase tracking-wider text-text-muted">
@@ -92,7 +91,7 @@ export default function ExchangeTable() {
       </Reveal>
 
       <Reveal delay={0.15}>
-        <div className="mt-8 flex flex-col items-start gap-4 rounded-2xl border border-border bg-bg-panel/70 p-6 sm:flex-row sm:items-center">
+        <div className="mt-8 flex flex-col items-start gap-4 rounded-2xl border border-border bg-bg-panel/95 p-6 sm:flex-row sm:items-center">
           <div className="flex-1">
             <p className="font-bold text-text-primary">{copy.waitlist.title}</p>
             <p className="mt-1 text-sm text-text-secondary">{copy.waitlist.text}</p>

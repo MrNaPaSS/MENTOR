@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Header from "@/components/landing/Header";
+import PageBackdrop from "@/components/ui/PageBackdrop";
 import Footer from "@/components/landing/Footer";
 import CalculatorIntro from "@/components/landing/CalculatorIntro";
 
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 export default function CalculatorPage() {
   return (
     <>
+      <PageBackdrop />
       <Header />
       <CalculatorIntro />
       <Footer />

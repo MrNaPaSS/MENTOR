@@ -18,10 +18,15 @@
 export type ExchangeStatus =
   /** Подключена, торговля и возврат работают сегодня. */
   | "live"
-  /** Партнёрство есть, терминал ещё не подключён. */
-  | "connecting"
-  /** Заявка подана или готовится, сроков не обещаем. */
-  | "planned";
+  /**
+   * Ещё не подключена.
+   *
+   * Одно слово на все неподключённые биржи намеренно. Промежуточные степени
+   * готовности - «партнёрство есть», «заявка подана» - читаются как обещание
+   * срока, которого мы не давали: для трейдера разницы нет, торговать нельзя
+   * ни там, ни там.
+   */
+  | "soon";
 
 export interface Exchange {
   id: string;
@@ -40,11 +45,11 @@ export interface Exchange {
  */
 export const EXCHANGES: readonly Exchange[] = [
   { id: "weex", name: "WEEX", status: "live", makerRate: 0.0002, takerRate: 0.0008 },
-  { id: "bingx", name: "BingX", status: "connecting", makerRate: 0.0002, takerRate: 0.0005 },
-  { id: "bybit", name: "Bybit", status: "planned", makerRate: 0.0002, takerRate: 0.00055 },
-  { id: "okx", name: "OKX", status: "planned", makerRate: 0.0002, takerRate: 0.0005 },
-  { id: "binance", name: "Binance", status: "planned", makerRate: 0.0002, takerRate: 0.0005 },
-  { id: "bitget", name: "Bitget", status: "planned", makerRate: 0.0002, takerRate: 0.0006 },
+  { id: "bingx", name: "BingX", status: "soon", makerRate: 0.0002, takerRate: 0.0005 },
+  { id: "bybit", name: "Bybit", status: "soon", makerRate: 0.0002, takerRate: 0.00055 },
+  { id: "okx", name: "OKX", status: "soon", makerRate: 0.0002, takerRate: 0.0005 },
+  { id: "binance", name: "Binance", status: "soon", makerRate: 0.0002, takerRate: 0.0005 },
+  { id: "bitget", name: "Bitget", status: "soon", makerRate: 0.0002, takerRate: 0.0006 },
 ] as const;
 
 /** Биржа, с которой открывается калькулятор: единственная работающая. */

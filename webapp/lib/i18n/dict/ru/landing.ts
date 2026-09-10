@@ -7,7 +7,7 @@ export const landing = {
     how: "Как работает",
     signals: "Сигналы",
     results: "Результаты",
-    faq: "FAQ",
+    faq: "Вопросы",
   },
 
   hero: {
@@ -162,7 +162,7 @@ export const landing = {
 
   socials: {
     eyebrow: "Соцсети",
-    title: "Будь в курсе сделок",
+    title: "Будь в курсе событий",
     channel: "КАНАЛ",
     academy: "АКАДЕМИЯ",
   },

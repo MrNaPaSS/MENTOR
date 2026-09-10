@@ -98,7 +98,7 @@ export default function BrokerHero() {
         {/* Лестница уровней. Не таблица - четыре ступени в строку: их читают
             глазами за секунду, и видно, что ступень одна другой шире по
             обороту, а не по цене. */}
-        <div className="mt-14 rounded-2xl border border-border bg-bg-card/70 p-5 backdrop-blur-sm md:mt-16 md:p-6">
+        <div className="mt-14 rounded-2xl border border-border bg-bg-card/95 backdrop-blur-sm p-5 backdrop-blur-sm md:mt-16 md:p-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="text-sm font-semibold uppercase tracking-wider text-text-muted">
               {t.broker.hero.ticker.label}
@@ -110,7 +110,7 @@ export default function BrokerHero() {
             {CASHBACK_TIERS.map((tier, i) => (
               <div
                 key={tier.id}
-                className="relative overflow-hidden rounded-xl border border-border/70 bg-bg-panel/40 px-4 py-3"
+                className="relative overflow-hidden rounded-xl border border-border/70 bg-bg-panel/80 px-4 py-3"
               >
                 <div className="font-mono text-2xl font-black tabular-nums text-accent-cyan">
                   {share(tier.share, locale)}
