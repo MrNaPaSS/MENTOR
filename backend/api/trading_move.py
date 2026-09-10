@@ -150,12 +150,19 @@ def _trigger(order: dict[str, Any]) -> float:
 
 
 async def _protection(
-    client: WeexFutures, live: LiveTrade
+    client: WeexFutures, live: LiveTrade, siblings: list[LiveTrade] | None = None
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Что из защиты стоит на бирже: цели и стопы, каждый со своей ценой.
 
     Сначала по нашим меткам, и только потом по виду заявки: имена видов у биржи
     свои, и по ним мы уже принимали цели за чужое.
+
+    Цели узнаём и по меткам соседних записей на ту же позицию - так же, как их
+    узнаёт график (`/plans`). Иначе график показывает цель, а перенос её не
+    видит и отвечает «такой цели на бирже нет».
+
+    Заявки другой стороны пропускаем: в хедже по монете стоят две позиции, и
+    лестница шорта к переносу лонга отношения не имеет.
     """
     try:
         orders = await client.algo_orders(live.symbol)
@@ -163,9 +170,14 @@ async def _protection(
         raise _fail(exc) from exc
 
     my_takes, my_stops = _mine(live)
+    for row in siblings or []:
+        my_takes |= _mine(row)[0]
+    other = "short" if live.side == "long" else "long"
     takes: list[dict[str, Any]] = []
     stops: list[dict[str, Any]] = []
     for order in orders:
+        if str(order.get("positionSide") or "").lower() == other:
+            continue
         marks = order_marks(order)
         kind = _kind(order)
         if marks & my_takes or "profit" in kind or kind.endswith("tp"):
@@ -205,11 +217,30 @@ async def move_levels(
         market = mark_price(position)
         if market is None:
             market = await public_price(await _get_session(), live.symbol)
-        result = await _move_open(client, live, body, tick, market)
+        result = await _move_open(client, live, body, tick, market, _siblings(session, live))
 
     live.updated_at = utcnow()
     session.commit()
     return result
+
+
+def _siblings(session, live: LiveTrade) -> list[LiveTrade]:
+    """Другие живые записи этого ученика на ту же монету и сторону.
+
+    Позиция на бирже одна на монету и сторону, а записей о ней бывает больше
+    одной - и цели на бирже тогда записаны за соседней. График их показывает:
+    он сверяется со всеми записями по монете. Перенос обязан искать там же.
+    """
+    return list(
+        session.execute(
+            select(LiveTrade)
+            .where(LiveTrade.student_id == live.student_id)
+            .where(LiveTrade.symbol == live.symbol)
+            .where(LiveTrade.side == live.side)
+            .where(LiveTrade.status.in_(("waiting", "open")))
+            .where(LiveTrade.id != live.id)
+        ).scalars()
+    )
 
 
 async def _move_waiting(
@@ -286,6 +317,7 @@ async def _move_open(
     body: MoveIn,
     tick: float,
     market: float | None = None,
+    siblings: list[LiveTrade] | None = None,
 ) -> dict[str, Any]:
     """Подвинуть защиту открытой позиции.
 
@@ -301,7 +333,8 @@ async def _move_open(
     if body.entry is not None:
         raise HTTPException(409, "Позиция уже открыта - вход не переносится")
 
-    takes, _stops = await _protection(client, live)
+    siblings = siblings or []
+    takes, _stops = await _protection(client, live, siblings)
     targets: list[float] = json.loads(live.targets_json or "[]")
 
     if body.stop is not None:
@@ -399,8 +432,14 @@ async def _move_open(
         if old is None:
             ladder = sorted(takes, key=_trigger, reverse=live.side == "short")
             if body.take_index >= len(ladder):
+                await _log_missing(client, live, siblings, body.take_index)
                 raise HTTPException(409, "Такой цели на бирже нет")
             old = ladder[body.take_index]
+
+        # Чья это цель. Бывает, что соседней записи той же позиции: тогда и
+        # новую заявку записываем за ней - иначе её сопровождение ждало бы
+        # исполнения снятой и засчитало бы цель взятой.
+        owner = _owner(old, [live, *siblings])
 
         size = _size(old)
         if size <= 0:
@@ -448,26 +487,24 @@ async def _move_open(
                 409, f"Цель снята, но новая не встала: {exc}. Поставьте её заново."
             ) from exc
 
-        while len(targets) <= body.take_index:
-            targets.append(take)
-        targets[body.take_index] = take
-        live.targets_json = json.dumps(targets)
-
         # Запоминаем новую заявку на месте прежней: по её идентификатору
         # сопровождение узнаёт, что цель взята, и по нему же мы найдём эту цель
         # при следующем переносе. Со старым оно ждало бы исполнения снятой.
         fresh = {"price": take, "order_id": plan_order_id(placed), "filled": False}
-        at = next(
-            (i for i, t in enumerate(recorded) if want and str(t.get("order_id") or "") == want),
-            -1,
-        )
-        if at >= 0:
-            recorded[at] = fresh
-        else:
-            while len(recorded) <= body.take_index:
-                recorded.append({"price": take, "order_id": "", "filled": False})
-            recorded[body.take_index] = fresh
-        live.tp_orders_json = json.dumps(recorded, ensure_ascii=False)
+        _replace_take(owner, old, fresh, body.take_index)
+        if owner is not live:
+            owner.updated_at = utcnow()
+            logger.info(
+                "Цель %s перенесена в соседней записи %s", live.symbol, owner.client_id
+            )
+        # В ответе - цели впереди, по порядку: терминал берёт из них ту, что
+        # тянул, по её номеру среди оставшихся.
+        ahead = [
+            float(t.get("price") or 0)
+            for t in json.loads(owner.tp_orders_json or "[]")
+            if not t.get("filled")
+        ]
+        targets = ahead or json.loads(owner.targets_json or "[]")
 
     return {
         "entry": live.entry,
@@ -475,6 +512,78 @@ async def _move_open(
         "takes": targets,
         "planned": False,
     }
+
+
+def _owner(order: dict[str, Any], rows: list[LiveTrade]) -> LiveTrade:
+    """Запись, за которой числится заявка. Не опознали - та, что двигают."""
+    marks = order_marks(order)
+    for row in rows:
+        if marks & _mine(row)[0]:
+            return row
+    return rows[0]
+
+
+def _replace_take(
+    row: LiveTrade, old: dict[str, Any], fresh: dict[str, Any], index: int
+) -> None:
+    """Записать новую цель на место прежней - и в заявках, и в ценах сделки.
+
+    Место ищем по самой снятой заявке: по её номеру в записи или по нашей
+    метке. По номеру в строке графика - только если не нашли ни того, ни
+    другого: у взятых целей свои места в записи, и номер среди оставшихся с
+    ними не совпадает.
+    """
+    recorded = json.loads(row.tp_orders_json or "[]")
+    marks = order_marks(old)
+    at = next(
+        (i for i, t in enumerate(recorded) if str(t.get("order_id") or "") in marks), -1
+    )
+    if at < 0:
+        at = next(
+            (i for i in range(max(len(recorded), 3)) if take_label(row.client_id, i) in marks),
+            -1,
+        )
+    if at < 0:
+        at = index
+    while len(recorded) <= at:
+        recorded.append({"price": fresh["price"], "order_id": "", "filled": False})
+    recorded[at] = fresh
+    row.tp_orders_json = json.dumps(recorded, ensure_ascii=False)
+
+    targets = json.loads(row.targets_json or "[]")
+    while len(targets) <= at:
+        targets.append(fresh["price"])
+    targets[at] = fresh["price"]
+    row.targets_json = json.dumps(targets)
+
+
+async def _log_missing(
+    client: WeexFutures, live: LiveTrade, siblings: list[LiveTrade], index: int
+) -> None:
+    """Выложить в журнал сервера всё, по чему цель не нашлась.
+
+    Отказ «такой цели нет» трейдер видит, а мы - нет: какие заявки вернула
+    биржа и какие метки мы в них искали. Без этого расхождение с графиком
+    разбирать не по чему.
+    """
+    try:
+        orders = await client.algo_orders(live.symbol)
+    except WeexTradeError as exc:
+        logger.warning("Цель %d %s не найдена, заявки не получены: %s", index + 1, live.symbol, exc)
+        return
+    marks = _mine(live)[0]
+    for row in siblings:
+        marks |= _mine(row)[0]
+    logger.warning(
+        "Цель %d %s (%s) не найдена. Искали по: %s; соседние записи: %s",
+        index + 1,
+        live.symbol,
+        live.client_id,
+        ", ".join(sorted(marks)) or "-",
+        ", ".join(row.client_id for row in siblings) or "нет",
+    )
+    for order in orders:
+        logger.warning("  заявка: %s", order)
 
 
 def _size(order: dict[str, Any]) -> float:

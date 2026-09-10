@@ -510,3 +510,83 @@ def test_a_target_can_be_moved_again_and_again(moving):
     # Первые две цели никто не трогал.
     assert "t1" not in exchange.algo_cancelled
     assert "t2" not in exchange.algo_cancelled
+
+
+def test_target_recorded_on_a_neighbour_record_is_still_moved(moving):
+    """Цель записана за соседней записью той же позиции - и всё равно переносится.
+
+    Позиция на бирже одна на монету и сторону, а записей о ней бывает две.
+    График узнаёт цели по меткам всех записей и рисует их, а перенос искал
+    только среди меток своей - и отвечал «такой цели на бирже нет», хотя цель
+    стояла на бирже и была видна на графике.
+    """
+    client, exchange, session, live = moving
+    live.status = "open"
+    session.commit()
+    neighbour = LiveTrade(
+        student_id=live.student_id,
+        client_id="BTCUSDT-0",
+        symbol="BTCUSDT",
+        side="long",
+        entry=80_000.0,
+        initial_stop=79_900.0,
+        current_stop=79_900.0,
+        targets_json=json.dumps([80_400.0]),
+        tp_orders_json=json.dumps([{"price": 80_400.0, "order_id": "n1", "filled": False}]),
+        qty=0.01,
+        leverage=10,
+        status="open",
+    )
+    session.add(neighbour)
+    session.commit()
+
+    exchange.position = {"symbol": "BTCUSDT", "positionSide": "LONG", "size": "0.01"}
+    exchange.plans_open = [
+        # Вид незнакомый: узнать заявку можно только по номеру у соседней записи.
+        {"orderId": "n1", "planType": "CONDITIONAL", "triggerPrice": "80400", "quantity": "0.01"},
+    ]
+
+    answer = move(client, take=80_700.0, trade_id="BTCUSDT-1")
+
+    assert answer.status_code == 200, answer.json()
+    assert "n1" in exchange.algo_cancelled
+    assert exchange.plans[-1]["trigger_price"] == "80700"
+    # Новая заявка записана за той записью, чья была прежняя.
+    session.refresh(neighbour)
+    session.refresh(live)
+    assert json.loads(neighbour.tp_orders_json)[0]["order_id"] == f"p{len(exchange.plans)}"
+    assert json.loads(neighbour.targets_json) == [80_700.0]
+    assert json.loads(live.tp_orders_json or "[]") == []
+
+
+def test_other_side_target_is_never_moved(moving):
+    """В хедже по монете две позиции - цель шорта перенос лонга не трогает."""
+    client, exchange, session, live = moving
+    live.status = "open"
+    session.commit()
+
+    exchange.position = {"symbol": "BTCUSDT", "positionSide": "LONG", "size": "0.01"}
+    exchange.plans_open = [
+        # Ниже по цене - и без фильтра по стороне встала бы первой в лестнице лонга.
+        {
+            "orderId": "x1",
+            "planType": "TAKE_PROFIT",
+            "positionSide": "SHORT",
+            "triggerPrice": "79000",
+            "quantity": "0.02",
+        },
+        {
+            "orderId": "p1",
+            "planType": "TAKE_PROFIT",
+            "positionSide": "LONG",
+            "triggerPrice": "80400",
+            "quantity": "0.01",
+        },
+    ]
+
+    answer = move(client, take=80_700.0)
+
+    assert answer.status_code == 200, answer.json()
+    assert "x1" not in exchange.algo_cancelled
+    assert "p1" in exchange.algo_cancelled
+    assert exchange.plans[-1]["quantity"] == "0.01"
