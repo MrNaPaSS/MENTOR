@@ -157,6 +157,17 @@ export function plansOf(symbol: string) {
   return request<ExchangePlans>(`/api/trading/plans/${symbol.toUpperCase()}`);
 }
 
+/**
+ * Попросить сопровождение проверить сделки сейчас, не дожидаясь его обхода.
+ *
+ * Стоп в безубыток после взятой цели переставляет сервер, а терминал видит
+ * цель раньше него. Без просьбы стоп переезжал с опозданием - и цена успевала
+ * вернуться к старому.
+ */
+export function nudgeWatcher() {
+  return request<{ checked: boolean }>("/api/trading/nudge", { method: "POST" });
+}
+
 /** Куда трейдер перетащил уровень. Шлём только то, что сдвинулось. */
 export type LevelMove = {
   symbol: string;

@@ -27,6 +27,7 @@ from backend.api import chat as chat_api
 from backend.api import chat_bridge as chat_bridge_api
 from backend.api import scalping as scalping_api
 from backend.api import trading_move
+from backend.api import trading_nudge
 from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
@@ -139,6 +140,9 @@ def create_app(
     app.state.price_collector = collector
     app.state.scalping = scalping
     app.state.scalping_hub = scalping_hub
+    # Сопровождение позиций: к нему обращается просьба терминала проверить
+    # сделки ученика вне очереди - после взятой цели стоп ждать обхода не должен.
+    app.state.position_watcher = watcher
 
     # Rate limiting на /api/auth/* (ТЗ §4.3, A-08).
     limiter = RateLimiter(config.rate_limit_max, config.rate_limit_window)
@@ -187,6 +191,7 @@ def create_app(
     app.include_router(journal.router)
     app.include_router(trading.router)
     app.include_router(trading_move.router)
+    app.include_router(trading_nudge.router)
     app.include_router(coins.router)
     app.include_router(shop.router)
     app.include_router(shop.admin_router)

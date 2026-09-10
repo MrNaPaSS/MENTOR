@@ -49,7 +49,16 @@ logger = logging.getLogger("nmnh.trading.watcher")
 # Как часто обходим позиции. Пятнадцать секунд — как в боте: цель исполняется
 # мгновенно, но перенос стопа секундой позже ничего не меняет, а каждый обход
 # это запрос на биржу за каждого ученика.
-POLL_INTERVAL = 15.0
+POLL_INTERVAL = 5.0
+# Пятнадцать секунд между обходами плюс сам обход по всем ученикам подряд -
+# и стоп в безубыток после первой цели переезжал через полминуты: ровно
+# столько цене хватало, чтобы вернуться к старому стопу. Пять секунд - это
+# около запроса в секунду на ключ ученика, биржа держит это спокойно.
+
+# Как часто на одного ученика принимаем просьбу терминала проверить его
+# сделки вне очереди. Просят все его открытые вкладки, каждая раз в несколько
+# секунд, а обход между ними одинаковый.
+NUDGE_GAP = 2.0
 
 # Сколько проверок подряд позиция может отсутствовать, прежде чем считать её
 # закрытой. Ответ приходит не мгновенно, и одна пустая выдача сразу после
@@ -286,6 +295,11 @@ class PositionWatcher:
         self._missing: dict[int, int] = {}
         # Сколько проходов ждём исполнения выхода по каждой сделке.
         self._pending: dict[int, int] = {}
+        # Обход и внеочередная проверка ученика не идут одновременно: вдвоём они
+        # переставили бы один и тот же стоп дважды.
+        self._lock = asyncio.Lock()
+        # Когда ученика последний раз проверяли по просьбе терминала.
+        self._nudged: dict[int, float] = {}
 
     def start(self) -> None:
         if not keystore.enabled():
@@ -315,6 +329,47 @@ class PositionWatcher:
                 logger.warning("Сбой ведения позиций: %s", exc)
 
     async def tick(self) -> None:
+        """Один обход - под замком, общим с внеочередной проверкой ученика."""
+        async with self._lock:
+            await self._tick()
+
+    async def check_student(self, student_id: int) -> bool:
+        """Проверить сделки одного ученика сейчас, не дожидаясь обхода.
+
+        Терминал видит взятую цель раньше сопровождения: он спрашивает биржу
+        раз в несколько секунд, а обход идёт по всем ученикам подряд. Стоп в
+        безубыток переставляет сопровождение - и ждать его очереди значит
+        стоять со старым стопом уже после взятой цели.
+
+        `False` - проверять было нечего или ученика только что проверяли.
+        """
+        now = asyncio.get_running_loop().time()
+        last = self._nudged.get(student_id)
+        if last is not None and now - last < NUDGE_GAP:
+            return False
+        self._nudged[student_id] = now
+
+        async with self._lock:
+            session = self._sessions()
+            try:
+                trades = (
+                    session.execute(
+                        select(LiveTrade)
+                        .where(LiveTrade.student_id == student_id)
+                        .where(LiveTrade.status.in_(("waiting", "open")))
+                    )
+                    .scalars()
+                    .all()
+                )
+                if not trades:
+                    return False
+                await self._handle_student(session, student_id, trades)
+                session.commit()
+                return True
+            finally:
+                session.close()
+
+    async def _tick(self) -> None:
         """Один обход: по одному запросу позиций на ученика."""
         session = self._sessions()
         try:

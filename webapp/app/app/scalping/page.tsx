@@ -105,6 +105,7 @@ import { fmtUsd } from "@/lib/format";
 import {
   closePosition,
   moveLevels,
+  nudgeWatcher,
   openPosition,
   openPositions,
   limitsOf,
@@ -208,6 +209,10 @@ const CHIP =
   "rounded px-1.5 py-0.5 text-[11px] transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]";
 const CHIP_ON = "bg-[var(--pane-chip-faint)] text-[var(--pane-chip)]";
 const CHIP_OFF = "text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
+
+// Не чаще этого просим сервер проверить сделки вне очереди: сверка с биржей
+// идёт раз в четыре секунды, а сопровождение само не принимает просьб чаще.
+const NUDGE_EVERY_MS = 3000;
 
 // Высота рабочей области: всё окно за вычетом шапки приложения. Заголовок
 // раздела убран — он занимал полсотни пикселей и не нёс ничего, чего не видно
@@ -434,6 +439,8 @@ export default function ScalpingPage() {
   const [closing, setClosing] = useState<ActiveTrade | null>(null);
   const tradesRef = useRef<ActiveTrade[]>([]);
   tradesRef.current = trades;
+  // Когда последний раз просили сопровождение проверить сделки вне очереди.
+  const nudgedRef = useRef(0);
   // Встречная позиция на бирже: на одностороннем счёте ордер против неё её же
   // и уменьшает, а не создаёт вторую сделку. Трейдер должен знать это до
   // нажатия, а не по факту закрытия своего лонга.
@@ -1883,6 +1890,25 @@ export default function ScalpingPage() {
         const body = await plansOf(symbol!);
         if (cancelled || !body) return;
         setPlans(body);
+
+        // Цель ушла с биржи, а сопровождение её ещё не засчитало - просим его
+        // проверить сделки сейчас. Стоп в безубыток переставляет оно, и ждать
+        // его обхода значит стоять со старым стопом уже после взятой цели.
+        // Переносимую цель в расчёт не берём: в миг замены целей на бирже
+        // тоже меньше, и это не исполнение.
+        const lagging = tradesRef.current.some((t) => {
+          if (t.symbol !== symbol || t.status !== "open") return false;
+          if (Date.now() - (movedRef.current.get(t.id) ?? 0) < MOVE_QUIET_MS) return false;
+          const gone =
+            body.placed_takes > 0 && Array.isArray(body.take_prices)
+              ? t.targets.length - body.take_prices.length
+              : 0;
+          return gone > body.takes_hit;
+        });
+        if (lagging && Date.now() - nudgedRef.current > NUDGE_EVERY_MS) {
+          nudgedRef.current = Date.now();
+          void nudgeWatcher().catch(() => undefined);
+        }
 
         // Стоп и взятые цели - с биржи. Свой расчёт здесь только мешал: он
         // решал, что цель взята, ставил безубыток и рисовал стоп формулой, а на
