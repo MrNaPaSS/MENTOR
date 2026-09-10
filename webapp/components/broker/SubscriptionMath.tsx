@@ -6,7 +6,7 @@ import Reveal from "@/components/ui/Reveal";
 import { subscriptionBreakeven, upgradeBreakeven } from "@/lib/broker/economics";
 import { FEATURE_ROWS, RIVAL_PLANS } from "@/lib/broker/rivals";
 import { compactMoney, share } from "@/lib/broker/format";
-import { useIntlLocale, useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 
 /**
  * Ставка, на которой считаются пороги: 0,05% - тейкер базового уровня на
@@ -30,7 +30,7 @@ function planName(id: string): string {
  */
 export default function SubscriptionMath() {
   const t = useT();
-  const locale = useIntlLocale();
+  const locale = useLocale();
   const copy = t.broker.plans;
 
   return (

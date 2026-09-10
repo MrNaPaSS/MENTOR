@@ -6,7 +6,7 @@ import Reveal from "@/components/ui/Reveal";
 import { CASHBACK_TIERS, EXCHANGES, type ExchangeStatus } from "@/lib/broker/program";
 import { rate, share } from "@/lib/broker/format";
 import { PARTNER_EMAIL, SOCIAL_LINKS } from "@/lib/content";
-import { useIntlLocale, useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 
 /** Цвет метки статуса. Работающая биржа зелёная, остальные приглушены. */
 const STATUS_STYLE: Record<ExchangeStatus, string> = {
@@ -25,7 +25,7 @@ const STATUS_STYLE: Record<ExchangeStatus, string> = {
  */
 export default function ExchangeTable() {
   const t = useT();
-  const locale = useIntlLocale();
+  const locale = useLocale();
   const copy = t.broker.exchanges;
   const baseShare = CASHBACK_TIERS[0].share;
 

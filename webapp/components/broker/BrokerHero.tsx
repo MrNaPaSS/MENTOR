@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Check, Calculator } from "lucide-react";
 import { CASHBACK_TIERS } from "@/lib/broker/program";
 import { compactMoney, share } from "@/lib/broker/format";
-import { useIntlLocale, useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 
 /**
  * Первый экран: обещание, снимок рабочего места и лестница уровней.
@@ -16,14 +16,17 @@ import { useIntlLocale, useT } from "@/lib/i18n";
  */
 export default function BrokerHero() {
   const t = useT();
-  const locale = useIntlLocale();
+  const locale = useLocale();
 
   return (
     <section id="about" className="relative overflow-hidden pt-28 pb-14 md:pt-36 md:pb-20">
       <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
 
       <div className="relative mx-auto max-w-6xl px-4 md:px-6">
-        <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr]">
+        {/* Снимок шире колонки с текстом: на нём видно рабочее место целиком,
+            а это половина обещания страницы. Строка текста от этого не
+            страдает - её длина всё равно ограничена сверху. */}
+        <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-12">
           <div>
             <span className="eyebrow">
               <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-glow-cyan" />
@@ -70,7 +73,10 @@ export default function BrokerHero() {
               вдвое легче, а jpg остаётся для тех, кто его не понимает.
               Обычный img, а не next/image: сборка статическая, оптимизатор
               выключен, и компонент дал бы только лишнюю обёртку. */}
-          <div className="relative">
+          {/* На широком экране снимок выходит за поле текста вправо, к самому
+              краю страницы: центральная колонка сделана под чтение, а не под
+              картинку, и внутри неё терминал пришлось бы уменьшать. */}
+          <div className="relative lg:-mr-8 xl:-mr-20 2xl:-mr-32">
             <div
               className="pointer-events-none absolute -inset-6 rounded-[2rem] opacity-60 blur-2xl"
               style={{ background: "radial-gradient(60% 60% at 50% 40%, rgba(6,182,212,0.20), transparent 70%)" }}

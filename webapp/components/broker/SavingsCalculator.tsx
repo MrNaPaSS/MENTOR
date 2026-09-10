@@ -13,7 +13,7 @@ import {
 import { EXCHANGES, DEFAULT_EXCHANGE, exchangeById } from "@/lib/broker/program";
 import { RIVAL_TOP } from "@/lib/broker/rivals";
 import { compactMoney, money, moneyPrecise, rate, share } from "@/lib/broker/format";
-import { useIntlLocale, useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 
 /** Границы оборота на слайдере: от новичка до объёма фонда. */
 const MIN_VOLUME = 10_000;
@@ -36,7 +36,7 @@ function positionToVolume(position: number): number {
 
 export default function SavingsCalculator() {
   const t = useT();
-  const locale = useIntlLocale();
+  const locale = useLocale();
 
   // Стартовые значения - не самые выгодные для нас, а самые частые: полмиллиона
   // оборота и торговля по рынку. Подкрученный старт калькулятор обесценивает.

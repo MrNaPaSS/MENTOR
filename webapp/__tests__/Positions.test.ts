@@ -112,7 +112,7 @@ describe("средняя цена входа приезжает вместе с 
       ],
     });
     const rows = await openPositions();
-    expect(rows?.["BTCUSDT:long"]).toEqual({ size: 0.5, entry: 78576.2 });
+    expect(rows?.["BTCUSDT:long"]).toMatchObject({ size: 0.5, entry: 78576.2 });
   });
 
   it("считается из оборота, когда прямой цены нет", async () => {
@@ -130,6 +130,6 @@ describe("средняя цена входа приезжает вместе с 
   it("без цены строка всё равно приходит - с объёмом", async () => {
     stub({ positions: [{ symbol: "BTCUSDT", holdSide: "long", total: "1" }] });
     const rows = await openPositions();
-    expect(rows?.["BTCUSDT:long"]).toEqual({ size: 1, entry: null });
+    expect(rows?.["BTCUSDT:long"]).toMatchObject({ size: 1, entry: null });
   });
 });

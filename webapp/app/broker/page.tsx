@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import ScrollSceneMount from "@/components/landing/ScrollSceneMount";
 import BackdropGrid from "@/components/ui/BackdropGrid";
 import BrokerHeader from "@/components/broker/BrokerHeader";
 import Footer from "@/components/landing/Footer";
@@ -60,7 +61,9 @@ export default function BrokerPage() {
           faqLd(broker.faq.items),
         ]}
       />
+      {/* Клетка ниже сцены: сначала фон страницы, поверх него объём. */}
       <BackdropGrid />
+      <ScrollSceneMount />
       <BrokerHeader />
       <main>
         <BrokerHero />

@@ -7,6 +7,9 @@
 import { authReq } from "./api";
 import { getAccessToken } from "./auth";
 import { setTakerFee, type ActiveTrade } from "./trade/position";
+import { readBook, type LivePosition, type PositionBook } from "./trade/exchange";
+
+export type { LivePosition, PositionBook };
 
 export type TradingStatus = {
   /** Хранилище ключей настроено на сервере. */
@@ -225,12 +228,7 @@ export function limitsOf(symbol: string) {
 }
 
 /** Открытая позиция по инструменту глазами биржи. */
-export type ExchangePosition = {
-  size: number;
-  entry: number | null;
-  unrealized: number | null;
-  /** Цена безубытка по расчёту биржи: с комиссией, фандингом и реальным входом. */
-  breakeven: number | null;
+export type ExchangePosition = LivePosition & {
   /**
    * Сколько строк биржа вернула по этому инструменту и нашлась ли среди них
    * наша сторона.
@@ -242,92 +240,64 @@ export type ExchangePosition = {
    */
   rows: number;
   matched: boolean;
+  /** Сколько строк было во всём ответе. Ноль при живой позиции - заминка биржи. */
+  total: number;
 };
+
+/** Пустая позиция: биржа ответила, но нашей строки в ответе нет. */
+const NO_POSITION = {
+  size: 0,
+  entry: null,
+  unrealized: null,
+  breakeven: null,
+} as const;
 
 /**
- * Объёмы всех открытых позиций счёта: ключ «монета:сторона».
+ * Все открытые позиции счёта одним снимком.
  *
- * Одним запросом по всем монетам. Лимитка исполняется тогда, когда трейдер
- * смотрит на другой график, и спрашивать по одной открытой монете значит
- * узнать о своей же сделке в последнюю очередь.
+ * Одним запросом по всем монетам, а не по одной открытой. Лимитка исполняется
+ * тогда, когда трейдер смотрит на другой график, и спрашивать по одной монете
+ * значит узнать о своей же сделке в последнюю очередь. Этим же снимком живёт
+ * зеркало сделки: раньше оно спрашивало биржу отдельно на каждую идущую
+ * сделку, и по три-четыре запроса в секунду биржа отвечала пустотой.
  */
-/** Открытая позиция глазами биржи: объём и средняя цена входа. */
-export type LivePosition = {
-  size: number;
-  /**
-   * Средняя цена входа. null - биржа её не назвала.
-   *
-   * По ней разбирается, какая из нескольких ждущих заявок исполнилась: позиция
-   * приходит одной строкой на монету и сторону, а лимиток в лонг может стоять
-   * две - одна выше, другая ниже.
-   */
-  entry: number | null;
-};
-
-export async function openPositions(): Promise<Record<string, LivePosition> | null> {
+export async function openBook(): Promise<PositionBook | null> {
   const body = await request<{ positions: Record<string, unknown>[] }>(
     "/api/trading/positions",
   );
   if (!body) return null;
+  return readBook(body.positions ?? []);
+}
 
-  const out: Record<string, LivePosition> = {};
-  for (const row of body.positions) {
-    const symbol = String(row.symbol ?? "").toUpperCase();
-    if (!symbol) continue;
-    const side = String(row.positionSide ?? row.holdSide ?? row.side ?? "").toLowerCase();
-    let size = 0;
-    for (const name of ["total", "size", "positionAmt", "available"]) {
-      const value = Math.abs(Number(row[name]));
-      if (Number.isFinite(value) && value > 0) {
-        size = value;
-        break;
-      }
-    }
-    if (size <= 0) continue;
-
-    // Средней цены входа в ответе WEEX может не быть прямо: тогда считаем её
-    // как «сколько денег зашло» на «какой объём» - то же правило, что и в
-    // разборе одной позиции.
-    const number = (...names: string[]) => {
-      for (const name of names) {
-        const value = Number(row[name]);
-        if (Number.isFinite(value) && value !== 0) return value;
-      }
-      return null;
-    };
-    const openValue = number("cumOpenValue", "openValue") ?? 0;
-    const openSize = number("cumOpenSize") ?? 0;
-    const entry =
-      number("averageOpenPrice", "entryPrice", "avgPrice") ??
-      (openValue > 0 && openSize > 0 ? openValue / openSize : null);
-
-    // Сторону биржа называет не всегда: в одностороннем режиме поля может не
-    // быть вовсе. Тогда записываем под обе - позиция по монете ровно одна.
-    const keys = side.includes("short")
-      ? [`${symbol}:short`]
-      : side.includes("long")
-        ? [`${symbol}:long`]
-        : [`${symbol}:long`, `${symbol}:short`];
-    for (const key of keys) {
-      const was = out[key];
-      out[key] = {
-        size: (was?.size ?? 0) + size,
-        // Двух строк на один ключ биржа не отдаёт; если всё же отдала, первая
-        // цена честнее среднего от двух неизвестно чего.
-        entry: was?.entry ?? entry,
-      };
-    }
-  }
-  return out;
+/** Объёмы и цены входа по ключу «монета:сторона». */
+export async function openPositions(): Promise<Record<string, LivePosition> | null> {
+  const book = await openBook();
+  return book ? book.byKey : null;
 }
 
 /** Только объёмы: тем местам, которым цена входа не нужна. */
 export async function openSizes(): Promise<Record<string, number> | null> {
-  const rows = await openPositions();
-  if (!rows) return null;
+  const book = await openBook();
+  if (!book) return null;
   const out: Record<string, number> = {};
-  for (const [key, one] of Object.entries(rows)) out[key] = one.size;
+  for (const [key, one] of Object.entries(book.byKey)) out[key] = one.size;
   return out;
+}
+
+/** Позиция по инструменту из готового снимка. */
+export function positionIn(
+  book: PositionBook,
+  symbol: string,
+  side: "long" | "short",
+): ExchangePosition {
+  const sym = symbol.toUpperCase();
+  const one = book.byKey[`${sym}:${side}`];
+  return {
+    ...(one ?? NO_POSITION),
+    rows: book.rowsOf[sym] ?? 0,
+    matched: Boolean(one),
+    total: book.total,
+  };
 }
 
 /**
@@ -335,67 +305,42 @@ export async function openSizes(): Promise<Record<string, number> | null> {
  *
  * Терминал обязан быть зеркалом биржи, а не жить своей арифметикой: он уже
  * закрывал сделку у себя, пока позиция оставалась открытой.
+ *
+ * Сторона обязательна: в хедже по одному инструменту их две - лонг и шорт, - и
+ * без стороны зеркало показывало бы обеим сделкам одну и ту же чужую.
  */
 export async function positionOf(
   symbol: string,
-  /**
-   * Сторона позиции. В хедже по одному инструменту их две — лонг и шорт, — и
-   * без стороны зеркало показывало бы обеим сделкам одну и ту же чужую.
-   */
-  side?: "long" | "short",
+  side: "long" | "short",
 ): Promise<ExchangePosition | null> {
-  const body = await request<{ positions: Record<string, unknown>[] }>(
-    "/api/trading/positions",
-  );
-  if (!body) return null;
+  const book = await openBook();
+  return book ? positionIn(book, symbol, side) : null;
+}
 
-  const mine = body.positions.filter(
-    (p) => String(p.symbol ?? "").toUpperCase() === symbol.toUpperCase(),
-  );
-  const sideOf = (p: Record<string, unknown>) =>
-    String(p.positionSide ?? p.holdSide ?? p.side ?? "").toLowerCase();
-  // Сторону сверяем, только если биржа её назвала: в одностороннем режиме поля
-  // может не быть вовсе, и тогда позиция по инструменту ровно одна.
-  const row = side
-    ? mine.find((p) => sideOf(p).includes(side)) ??
-      (mine.length === 1 && !sideOf(mine[0]) ? mine[0] : undefined)
-    : mine[0];
-  if (!row) {
-    return { size: 0, entry: null, unrealized: null, breakeven: null, rows: mine.length, matched: false };
-  }
+/**
+ * Сделка глазами сопровождения на сервере.
+ *
+ * Второе мнение о том, жива ли сделка. Биржа отвечает пустым списком позиций и
+ * на своей заминке, а терминал по такому ответу хоронил разметку: трейдер
+ * оставался с живой позицией на бирже и пустым экраном. Сопровождение обходит
+ * биржу со своей стороны, со своей выдержкой, и пока оно сделку ведёт, хоронить
+ * её нельзя.
+ */
+export type ServerTrade = {
+  /** Наш опознаватель сделки: тот же, что у неё на графике. */
+  client_id: string;
+  symbol: string;
+  side: "long" | "short";
+  /** waiting - вход ещё ждёт своей цены, open - позиция набрана. */
+  status: string;
+  qty: number;
+  entry: number;
+  stop: number;
+  takes_hit: number;
+  opened_at: string | null;
+};
 
-  const numeric = (...names: string[]) => {
-    for (const name of names) {
-      const value = Number(row[name]);
-      if (Number.isFinite(value) && value !== 0) return value;
-    }
-    return null;
-  };
-
-  // Средней цены входа в ответе WEEX нет - есть «сколько денег зашло» и «на
-  // какой объём». Отношение и есть средняя, и считать результат нужно от неё:
-  // от задуманного уровня цифра расходится с биржевой в разы.
-  const openValue = numeric("cumOpenValue", "openValue") ?? 0;
-  const openSize = numeric("cumOpenSize") ?? 0;
-  const average = openValue > 0 && openSize > 0 ? openValue / openSize : null;
-  const size = Math.abs(numeric("total", "size", "positionAmt", "available") ?? 0);
-
-  // Плавающий результат - за вычетом комиссии, удержанной на входе.
-  //
-  // `unrealizePnl` биржа отдаёт до неё, а в своём приложении показывает уже
-  // после: по шорту ETH на 20,225 по 2472,11 терминал писал +36,05, а биржа
-  // +28,05 - ровно на 8,00, уплаченные за вход. Вычитаем только долю остатка:
-  // часть позиции, закрытая целями, свою долю комиссии уже унесла.
-  const raw = numeric("unrealizePnl", "unrealizedPnl", "unrealizedProfit", "unrealisedPnl");
-  const openFee = Math.abs(numeric("cumOpenFee") ?? 0);
-  const spent = openSize > 0 ? openFee * Math.min(1, size / openSize) : 0;
-
-  return {
-    rows: mine.length,
-    matched: true,
-    size,
-    entry: numeric("averageOpenPrice", "entryPrice", "avgPrice") ?? average,
-    unrealized: raw === null ? null : raw - spent,
-    breakeven: numeric("breakEvenPrice", "breakevenPrice", "breakEven", "bePrice"),
-  };
+/** Живые сделки по всем монетам. Память сервера, а не поход на биржу. */
+export function liveTrades() {
+  return request<{ trades: ServerTrade[] }>("/api/trading/live");
 }
