@@ -13,9 +13,12 @@
 
 import { useIntlLocale, useT, type Dict } from "@/lib/i18n";
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Share2, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
 import { cardFromTrade } from "@/lib/pnl/data";
+import { useEntitlements } from "@/lib/entitlements";
+import { journalCsv, saveCsv } from "@/lib/journalCsv";
 import {
   loadCalendar,
   loadTrades,
@@ -191,6 +194,28 @@ export default function JournalPanel({
     setMonth(next.getUTCMonth() + 1);
   }
 
+  // Выгрузка в CSV - функция из маркета. Не куплена - на её месте замок,
+  // который ведёт туда, где её купить.
+  const access = useEntitlements();
+  const canExport = access.has("journal_export");
+  const [exporting, setExporting] = useState(false);
+
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      // За год, а не за те девяносто дней, что на экране: файл берут для
+      // разбора целиком. Сервер отдаёт не больше пятисот сделок за раз.
+      const list = await loadTrades(365, onlySymbol ? symbol : undefined);
+      if (!list) throw new Error();
+      const stamp = new Date().toISOString().slice(0, 10);
+      saveCsv(`nmnh-journal-${stamp}.csv`, journalCsv(list.trades));
+    } catch {
+      setError(t.journal.exportFailed);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="flex h-full flex-col text-[12px]">
       <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-3 py-2">
@@ -208,6 +233,26 @@ export default function JournalPanel({
               {t.journal.onlyCoin(symbol.replace(/USDT$/, ""))}
             </button>
           )}
+          {access.loaded &&
+            (canExport ? (
+              <button
+                onClick={exportCsv}
+                disabled={exporting}
+                title={t.journal.exportCsv}
+                className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] disabled:opacity-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <Link
+                href="/app/shop"
+                title={t.journal.exportLocked}
+                className="flex items-center text-[var(--pane-muted)] opacity-60 transition-opacity duration-150 ease-out hover:opacity-100"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <Lock className="-ml-1 h-2.5 w-2.5" />
+              </Link>
+            ))}
           <button
             onClick={reload}
             title={t.journal.refresh}

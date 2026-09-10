@@ -20,11 +20,12 @@ from sqlalchemy import select
 
 import logging
 
-from core.models import iso, CoinTransaction, ShopItem, ShopOrder, Student
+from core.models import iso, CoinTransaction, ShopItem, ShopOrder, Student, utcnow
+from backend import entitlements
 from backend.deps import get_session, get_current_student, get_current_mentor, get_config, get_notifier
 from backend.config import BackendConfig
 from backend.schemas import (
-    ShopItemOut, ShopItemIn, ShopItemPatch,
+    EntitlementOut, ShopItemOut, ShopItemIn, ShopItemPatch,
     ShopOrderOut, ShopOrderCreate, ShopOrderResolve,
 )
 
@@ -134,6 +135,7 @@ def _item_out(it: ShopItem) -> ShopItemOut:
         id=it.id, title=it.title, description=it.description, price=it.price,
         category=it.category, section=it.section, icon=it.icon, link_url=it.link_url,
         image_url=it.image_url, requires_tv=it.requires_tv, is_active=it.is_active, sort_order=it.sort_order,
+        feature=it.feature or "", duration_days=it.duration_days or 0, charges=it.charges or 0,
     )
 
 
@@ -173,6 +175,20 @@ def my_orders(student: Student = Depends(get_current_student), session=Depends(g
     return [_order_out(o) for o in rows]
 
 
+@router.get("/entitlements", response_model=list[EntitlementOut])
+def my_entitlements(student: Student = Depends(get_current_student), session=Depends(get_session)):
+    """Действующие функции ученика: что куплено, до какого срока, сколько зарядов."""
+    return [
+        EntitlementOut(
+            feature=row.feature,
+            permanent=bool(row.permanent),
+            expires_at=iso(row.expires_at),
+            charges=row.charges or 0,
+        )
+        for row in entitlements.active_for(session, student.id)
+    ]
+
+
 @router.post("/orders", response_model=ShopOrderOut)
 async def create_order(
     body: ShopOrderCreate,
@@ -181,12 +197,22 @@ async def create_order(
     config: BackendConfig = Depends(get_config),
     notifier=Depends(get_notifier),
 ):
-    """Купить товар: проверить баланс, списать монеты, создать заказ ``pending``."""
+    """Купить товар: проверить баланс, списать монеты, создать заказ.
+
+    Функция платформы выдаётся сразу, той же операцией: заказ сразу
+    ``fulfilled``, ментору писать не о чем. Остальное ждёт ментора (``pending``).
+    """
     item = session.get(ShopItem, body.item_id)
     if item is None or not item.is_active:
         raise HTTPException(404, "Товар не найден или снят с продажи")
     if item.price <= 0:
         raise HTTPException(400, "Этот товар нельзя купить за монеты")
+
+    feature = (item.feature or "").strip()
+    if feature and feature not in entitlements.FEATURES:
+        raise HTTPException(400, "Эта функция пока недоступна")
+    if feature and entitlements.already_owned(session, student.id, item):
+        raise HTTPException(400, "Уже куплено: этот доступ у вас навсегда")
 
     contact = body.contact.strip()[:255]
     if item.requires_tv and not contact:
@@ -216,11 +242,20 @@ async def create_order(
     ))
     fresh.coins = (fresh.coins or 0) - item.price
 
+    if feature:
+        # Доступ - в той же операции, что и списание: монеты без доступа или
+        # доступ без монет здесь невозможны.
+        entitlements.grant(session, fresh.id, item)
+        order.status = "fulfilled"
+        order.resolved_at = utcnow()
+        order.mentor_note = "Выдано автоматически"
+
     session.commit()
     session.refresh(order)
 
-    # Уведомление ментору в Telegram (не критично — покупка уже проведена)
-    await _notify_mentor(config, notifier, fresh, item, order)
+    if not feature:
+        # Уведомление ментору в Telegram (не критично — покупка уже проведена)
+        await _notify_mentor(config, notifier, fresh, item, order)
 
     return _order_out(order)
 
@@ -292,6 +327,7 @@ async def admin_create_item(body: ShopItemIn, session=Depends(get_session)):
         category=body.category, section=body.section, icon=body.icon,
         link_url=body.link_url, image_url=body.image_url, requires_tv=body.requires_tv,
         is_active=body.is_active, sort_order=body.sort_order,
+        feature=body.feature.strip(), duration_days=body.duration_days, charges=body.charges,
     )
     await _autofill_image(item)
     session.add(item)

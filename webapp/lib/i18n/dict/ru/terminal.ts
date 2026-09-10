@@ -338,6 +338,9 @@ export const dialogs = {
 };
 
 export const journal = {
+  exportCsv: "Выгрузить журнал в CSV (за год)",
+  exportLocked: "Выгрузка журнала в CSV - откройте её в Маркете",
+  exportFailed: "Не получилось выгрузить журнал",
   title: "Журнал сделок",
   onlyCoin: (coin: string) => `только ${coin}`,
   refresh: "Обновить",

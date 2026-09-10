@@ -28,7 +28,7 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from backend import coin_ledger
+from backend import coin_ledger, entitlements
 from core.models import CoinTransaction, ScalpTrade, Student, utcnow
 
 logger = logging.getLogger("nmnh.trading.rewards")
@@ -67,6 +67,17 @@ STREAK_LOOKBACK = 20
 REASON_WIN = "trade_win"
 REASON_LOSS = "trade_loss"
 REASON_STREAK = "trade_streak"
+
+# Заморозка серии (товар магазина): убыток, встретивший серию не короче этой,
+# тратит заряд и серию не обрывает. С одного плюса беречь нечего - заряд ушёл
+# бы на пустом месте.
+FREEZE_MIN_STREAK = 2
+REASON_FREEZE = "streak_freeze"
+FREEZE_REF = "freeze_"
+
+# Удвоение бонуса за серию (товар магазина, на срок). Дневной потолок
+# начислений остаётся прежним.
+BOOST_FACTOR = 2
 
 
 def award_trade_coins(session, trade: ScalpTrade) -> int:
@@ -109,6 +120,7 @@ def award_trade_coins(session, trade: ScalpTrade) -> int:
         return 0
 
     if pnl < 0:
+        _freeze_streak(session, student, trade)
         return _charge_loss(session, student, ref, client_id)
 
     # Плюс: обычное начисление и, если серия дотянула до ступени, бонус.
@@ -116,6 +128,8 @@ def award_trade_coins(session, trade: ScalpTrade) -> int:
 
     streak = _win_streak(session, trade)
     bonus = STREAK_BONUS.get(streak, 0)
+    if bonus and entitlements.has_feature(session, student.id, "streak_boost"):
+        bonus *= BOOST_FACTOR
     if bonus:
         entries.append((REASON_STREAK, f"streak_{client_id}_{streak}", bonus))
 
@@ -172,12 +186,16 @@ def _earned_today(session, student_id: int) -> int:
     return sum(int(a) for a in rows if a and int(a) > 0)
 
 
-def _win_streak(session, trade: ScalpTrade) -> int:
+def _win_streak(session, trade: ScalpTrade, *, before: bool = False) -> int:
     """Длина серии плюсовых сделок, оканчивающейся этой.
 
     Считается по журналу, а не по счётчику в профиле: счётчик пришлось бы
     чинить руками после каждого пересчёта журнала, а журнал - это и есть
     история, по которой серия определена однозначно.
+
+    Убыток, на который потрачен заряд заморозки, серию не обрывает и в неё не
+    входит. `before` - серия до этой сделки, без неё самой: так спрашивает
+    заморозка, решая, есть ли что беречь.
     """
     session.flush()
 
@@ -190,13 +208,48 @@ def _win_streak(session, trade: ScalpTrade) -> int:
         .limit(STREAK_LOOKBACK)
     ).all()
 
+    frozen = set(
+        session.execute(
+            select(CoinTransaction.ref)
+            .where(CoinTransaction.student_id == trade.student_id)
+            .where(CoinTransaction.reason == REASON_FREEZE)
+        ).scalars().all()
+    )
+
     streak = 0
-    for pnl, _closed_at, _client_id in rows:
+    for pnl, _closed_at, client_id in rows:
+        if before and client_id == trade.client_id:
+            continue
         if float(pnl or 0) > 0:
             streak += 1
+        elif f"{FREEZE_REF}{client_id}"[:64] in frozen:
+            continue
         else:
             break
     return streak
+
+
+def _freeze_streak(session, student: Student, trade: ScalpTrade) -> bool:
+    """Потратить заряд заморозки, если убыток встретил серию, которую стоит беречь.
+
+    Монеты за убыток снимаются всё равно: заморозка бережёт серию, а не
+    баланс. Отметка о заморозке - запись на ноль монет с ref сделки: по ней
+    `_win_streak` пропускает этот убыток.
+    """
+    if _win_streak(session, trade, before=True) < FREEZE_MIN_STREAK:
+        return False
+    if not entitlements.use_charge(session, student.id, "streak_freeze"):
+        return False
+    session.add(
+        CoinTransaction(
+            student_id=student.id,
+            amount=0,
+            reason=REASON_FREEZE,
+            ref=f"{FREEZE_REF}{trade.client_id}"[:64],
+        )
+    )
+    logger.info("Серия ученика %s заморожена на сделке %s", student.id, trade.client_id)
+    return True
 
 
 def _reward(session, student: Student, entries: list[tuple[str, str, int]]) -> int:

@@ -325,6 +325,9 @@ export const dialogs = {
 };
 
 export const journal = {
+  exportCsv: "Export the journal to CSV (last year)",
+  exportLocked: "Journal export to CSV - unlock it in the Store",
+  exportFailed: "Could not export the journal",
   title: "Trade journal",
   onlyCoin: (coin: string) => `${coin} only`,
   refresh: "Refresh",

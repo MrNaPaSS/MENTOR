@@ -31,6 +31,7 @@ export const rewards = {
     trade_win: "Плюсовая сделка",
     trade_streak: "Серия плюсов",
     trade_loss: "Долг за убыток",
+    streak_freeze: "Серия заморожена",
     achievement: "Достижение",
     level_up: "Новый уровень",
     volume_milestone: "Веха объёма",

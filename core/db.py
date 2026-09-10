@@ -57,6 +57,7 @@ def create_all() -> None:
     _seed_shop_items(engine)
     _normalize_shop_dashes(engine)
     _apply_shop_catalog_v2(engine)
+    _apply_shop_catalog_v3(engine)
 
 
 def _migrate_add_columns(engine) -> None:
@@ -123,6 +124,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
         Signal,
         ScalpTrade,
         ScalpWorkspace,
+        ShopItem,
         Student,
         WeexCredential,
     )
@@ -130,6 +132,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
     tables = set(inspector.get_table_names())
     for model in (
         CoinTransaction,
+        ShopItem,
         ScalpTrade,
         ScalpWorkspace,
         WeexCredential,
@@ -311,4 +314,71 @@ def _apply_shop_catalog_v2(engine) -> None:
             flag.value = "2"
         else:
             session.add(SettingRow(key="shop_catalog_version", value="2"))
+        session.commit()
+
+
+# Функции платформы за монеты: выдаются сразу, без ментора.
+# Кортеж: (title, description, price, category, icon, feature, duration_days, charges, sort_order)
+_SHOP_FEATURES_V3 = [
+    (
+        "Заморозка серии",
+        "Один убыток не обрывает серию плюсов: бонусы за 3, 5 и 10 сделок подряд "
+        "остаются в досягаемости. Заряд тратится сам, когда серия из двух и больше "
+        "плюсов встречает убыток.",
+        120, "platform", "Sparkles", "streak_freeze", 0, 1, 1,
+    ),
+    (
+        "Удвоение бонуса за серию - 7 дней",
+        "Неделю бонусы за серию плюсов идут вдвойне: 30, 60 и 200 монет вместо 15, "
+        "30 и 100. Дневной потолок начислений прежний. Повторная покупка продлевает срок.",
+        400, "platform", "Zap", "streak_boost", 7, 0, 2,
+    ),
+    (
+        "Выгрузка журнала в CSV",
+        "Кнопка в журнале терминала: все сделки файлом для Excel и Google Таблиц - "
+        "вход, выход, объём, итог, комиссия. Покупается один раз, навсегда.",
+        200, "platform", "LineChart", "journal_export", 0, 0, 3,
+    ),
+    (
+        "Разбор сделки с ментором",
+        "Ментор разбирает одну вашу сделку: вход, сопровождение, выход и что сделать "
+        "иначе. В контакте укажите Telegram и какую сделку разобрать.",
+        500, "mentorship", "GraduationCap", "", 0, 0, 35,
+    ),
+]
+
+
+def _apply_shop_catalog_v3(engine) -> None:
+    """Добавить в каталог функции платформы за монеты. Один раз.
+
+    Флагом ``shop_catalog_version``, как и v2: товар, который ментор потом
+    удалил или спрятал, не должен возвращаться при каждом рестарте. Товар с
+    таким же названием, заведённый руками, не дублируем.
+    """
+    from sqlalchemy import inspect, select
+    from sqlalchemy.orm import Session
+    from core.models import SettingRow, ShopItem
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names() or "settings" not in inspector.get_table_names():
+        return
+
+    with Session(engine) as session:
+        flag = session.get(SettingRow, "shop_catalog_version")
+        if flag and (flag.value or "").isdigit() and int(flag.value) >= 3:
+            return
+
+        known = set(session.execute(select(ShopItem.title)).scalars().all())
+        for title, desc, price, cat, icon, feature, days, charges, order in _SHOP_FEATURES_V3:
+            if title in known:
+                continue
+            session.add(ShopItem(
+                title=title, description=desc, price=price, category=cat, section="shop",
+                icon=icon, feature=feature, duration_days=days, charges=charges, sort_order=order,
+            ))
+
+        if flag:
+            flag.value = "3"
+        else:
+            session.add(SettingRow(key="shop_catalog_version", value="3"))
         session.commit()

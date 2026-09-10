@@ -236,6 +236,13 @@ class ShopItem(Base):
     requires_tv: Mapped[bool] = mapped_column(Boolean, default=False)    # требовать ник TradingView при покупке
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Функция платформы, которую открывает товар (backend/entitlements.py).
+    # Пусто - обычный товар, его выдаёт ментор. Есть - доступ пишется сразу.
+    feature: Mapped[str] = mapped_column(String(32), default="")
+    # Как продаётся функция: заряды (расходуются по одному), срок в днях или,
+    # если оба нуля, навсегда.
+    duration_days: Mapped[int] = mapped_column(Integer, default=0)
+    charges: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     orders: Mapped[list["ShopOrder"]] = relationship(back_populates="item")
@@ -604,4 +611,23 @@ class LeverageCap(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "LeverageCap", "utcnow"]
+class Entitlement(Base):
+    """Функция платформы, купленная учеником за монеты. См. backend/entitlements.py."""
+
+    __tablename__ = "entitlements"
+    __table_args__ = (UniqueConstraint("student_id", "feature", name="uq_entitlement"),)
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    feature: Mapped[str] = mapped_column(String(32))
+    # Куплено навсегда.
+    permanent: Mapped[bool] = mapped_column(Boolean, default=False)
+    # До какого времени действует доступ на срок. Пусто - срока нет.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Сколько осталось зарядов у расходуемой функции.
+    charges: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "LeverageCap", "Entitlement", "utcnow"]

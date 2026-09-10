@@ -26,6 +26,7 @@ export const rewards = {
     trade_win: "Winning trade",
     trade_streak: "Winning streak",
     trade_loss: "Loss debt",
+    streak_freeze: "Streak frozen",
     achievement: "Achievement",
     level_up: "New level",
     volume_milestone: "Volume milestone",

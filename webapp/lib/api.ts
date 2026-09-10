@@ -541,6 +541,8 @@ export const api = {
   // ── Магазин (ученик) ──
   shopItems: (token: string) => authReq<ShopItem[]>("/api/shop/items", token),
   shopMyOrders: (token: string) => authReq<ShopOrder[]>("/api/shop/orders", token),
+  /** Купленные функции платформы: что действует, до какого срока, сколько зарядов. */
+  shopEntitlements: (token: string) => authReq<Entitlement[]>("/api/shop/entitlements", token),
   shopBuy: (token: string, item_id: number, contact: string) =>
     authReq<ShopOrder>("/api/shop/orders", token, {
       method: "POST",
@@ -797,6 +799,20 @@ export interface ShopItem {
   requires_tv: boolean;
   is_active: boolean;
   sort_order: number;
+  /** Функция платформы, которую открывает товар. Пусто - выдаёт ментор. */
+  feature?: string;
+  /** Срок доступа в днях. Ноль вместе с нулём зарядов - навсегда. */
+  duration_days?: number;
+  /** Сколько зарядов даёт покупка расходуемой функции. */
+  charges?: number;
+}
+
+/** Купленная функция платформы. */
+export interface Entitlement {
+  feature: string;
+  permanent: boolean;
+  expires_at: string | null;
+  charges: number;
 }
 
 export interface ShopItemInput {
@@ -811,6 +827,9 @@ export interface ShopItemInput {
   requires_tv?: boolean;
   is_active?: boolean;
   sort_order?: number;
+  feature?: string;
+  duration_days?: number;
+  charges?: number;
 }
 
 export interface ShopOrder {

@@ -386,6 +386,17 @@ class ShopItemOut(BaseModel):
     requires_tv: bool
     is_active: bool
     sort_order: int
+    # Функция платформы, которую открывает товар. Пусто - выдаёт ментор.
+    feature: str = ""
+    duration_days: int = 0
+    charges: int = 0
+
+
+class EntitlementOut(BaseModel):
+    feature: str
+    permanent: bool
+    expires_at: Optional[str] = None
+    charges: int = 0
 
 
 class ShopItemIn(BaseModel):
@@ -400,6 +411,9 @@ class ShopItemIn(BaseModel):
     requires_tv: bool = False
     is_active: bool = True
     sort_order: int = 0
+    feature: str = Field(default="", max_length=32)
+    duration_days: int = Field(default=0, ge=0)
+    charges: int = Field(default=0, ge=0)
 
 
 class ShopItemPatch(BaseModel):
@@ -414,6 +428,9 @@ class ShopItemPatch(BaseModel):
     requires_tv: Optional[bool] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
+    feature: Optional[str] = Field(default=None, max_length=32)
+    duration_days: Optional[int] = Field(default=None, ge=0)
+    charges: Optional[int] = Field(default=None, ge=0)
 
 
 class ShopOrderCreate(BaseModel):

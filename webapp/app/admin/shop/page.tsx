@@ -12,7 +12,17 @@ type Tab = "items" | "orders";
 const EMPTY: ShopItemInput = {
   title: "", description: "", price: 0, category: "indicator",
   section: "shop", icon: "Gift", link_url: "", image_url: "", requires_tv: false, is_active: true, sort_order: 0,
+  feature: "", duration_days: 0, charges: 0,
 };
+
+// Функции платформы, которые магазин выдаёт сам. Ключи - те же, что в
+// backend/entitlements.py: товар с другим ключом сервер не продаст.
+const FEATURES: [string, string][] = [
+  ["", "Нет - выдаёт ментор вручную"],
+  ["streak_freeze", "Заморозка серии (заряды)"],
+  ["streak_boost", "Удвоение бонуса за серию (срок)"],
+  ["journal_export", "Выгрузка журнала в CSV (навсегда)"],
+];
 
 // Сжать выбранный файл в браузере (canvas) до компактного JPEG data-URL.
 // Хранится прямо в БД и встраивается в <img> — работает при любом хостинге.
@@ -273,6 +283,7 @@ function ItemEditor({ token, item, onClose, onSaved }: {
     title: item.title, description: item.description, price: item.price, category: item.category,
     section: item.section, icon: item.icon, link_url: item.link_url, image_url: item.image_url,
     requires_tv: item.requires_tv, is_active: item.is_active, sort_order: item.sort_order,
+    feature: item.feature ?? "", duration_days: item.duration_days ?? 0, charges: item.charges ?? 0,
   } : EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -392,6 +403,21 @@ function ItemEditor({ token, item, onClose, onSaved }: {
           {cardImage(form.image_url, form.link_url) && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={cardImage(form.image_url, form.link_url)!} alt="превью" className="h-32 w-full rounded-xl border border-border object-cover" />
+          )}
+          <Field label="Функция платформы (выдаётся сразу, без ментора)">
+            <select value={form.feature ?? ""} onChange={(e) => set("feature", e.target.value)} className="input">
+              {FEATURES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </Field>
+          {form.feature && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Срок, дней (0 - без срока)">
+                <input type="number" min={0} value={form.duration_days ?? 0} onChange={(e) => set("duration_days", Number(e.target.value))} className="input" />
+              </Field>
+              <Field label="Зарядов за покупку (0 - не заряды)">
+                <input type="number" min={0} value={form.charges ?? 0} onChange={(e) => set("charges", Number(e.target.value))} className="input" />
+              </Field>
+            </div>
           )}
           <label className="flex items-center gap-2 text-sm text-text-secondary">
             <input type="checkbox" checked={form.requires_tv} onChange={(e) => set("requires_tv", e.target.checked)} className="h-4 w-4 accent-accent-gold" />
