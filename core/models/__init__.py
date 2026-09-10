@@ -584,4 +584,24 @@ class LiveTrade(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "utcnow"]
+class LeverageCap(Base):
+    """Предел позиции по монете на плече - так, как его назвала биржа.
+
+    WEEX держит предел ступенями по плечу, а в справочнике инструментов
+    ступеней нет. Точное число приходит только в отказе «position exceed max
+    size X for leverage 'L'» - его и храним, общим для всех учеников: предел
+    принадлежит монете, а не счёту. См. backend/trading/leverage_caps.py.
+    """
+
+    __tablename__ = "leverage_caps"
+    __table_args__ = (UniqueConstraint("symbol", "leverage", name="uq_leverage_cap"),)
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    leverage: Mapped[int] = mapped_column(Integer)
+    # Предел в самой монете, как в ответе биржи.
+    max_size: Mapped[float] = mapped_column(Numeric(24, 10))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "LeverageCap", "utcnow"]

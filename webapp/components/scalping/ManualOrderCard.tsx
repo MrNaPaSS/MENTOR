@@ -48,6 +48,8 @@ export default function ManualOrderCard({
   takerFee = TAKER_FEE,
   maxQty,
   maxPosition,
+  leverageCaps,
+  used = 0,
   free = 0,
   onChange,
   onSubmit,
@@ -63,6 +65,10 @@ export default function ManualOrderCard({
   maxQty?: number;
   /** Потолок всей позиции по монете. */
   maxPosition?: number;
+  /** Пределы позиции по плечам, узнанные из отказов биржи. */
+  leverageCaps?: Record<string, number>;
+  /** Сколько монеты уже занято позицией и ждущими заявками: предел общий. */
+  used?: number;
   /** Свободные деньги счёта: маржу больше остатка внести нечем. */
   free?: number;
   onChange: (next: ManualDraft) => void;
@@ -102,7 +108,12 @@ export default function ManualOrderCard({
   // Предельная сумма: остаток счёта и потолки биржи по этой монете. Ноль -
   // предел неизвестен, и тогда не ограничиваем: запретить возможное хуже, чем
   // не подсказать.
-  const ceiling = maxMargin(draft.entry, draft.leverage, free, { maxQty, maxPosition });
+  const ceiling = maxMargin(draft.entry, draft.leverage, free, {
+    maxQty,
+    maxPosition,
+    leverageCaps,
+    used,
+  });
   const margins = ceiling > 0 ? capped(MARGINS, ceiling) : MARGINS;
   const overSize = ceiling > 0 && draft.margin > ceiling;
 

@@ -33,7 +33,8 @@ from core.trading.position import (
     breakeven_price,
     should_move_stop,
 )
-from backend.trading.refusals import explain
+from backend.trading import leverage_caps
+from backend.trading.refusals import explain, max_size_in
 from core.weex import keys as keystore
 from backend.trading.rewards import award_trade_coins
 from backend.trading.watcher import (
@@ -395,7 +396,11 @@ def _trigger_price(order: dict[str, Any]) -> float | None:
 
 
 @router.get("/limits/{symbol}")
-async def limits(symbol: str, student: Student = Depends(get_current_student)):
+async def limits(
+    symbol: str,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
     """Пределы инструмента: плечо, комиссия, шаги.
 
     Нужны до отправки ордера, а не после: у большинства монет биржи потолок
@@ -418,7 +423,49 @@ async def limits(symbol: str, student: Student = Depends(get_current_student)):
         # уже после нажатия, а знать предел нужно до.
         "max_qty": float(filters.get("max_qty") or 0.0),
         "max_position": float(filters.get("max_position") or 0.0),
+        # Пределы по плечам, узнанные из отказов биржи: плечо -> позиция в
+        # монете. Справочный max_position верен только для малого плеча.
+        "leverage_caps": {
+            str(lev): size for lev, size in leverage_caps.caps_for(session, symbol).items()
+        },
     }
+
+
+def _order_left(order: dict[str, Any]) -> float:
+    """Сколько ещё не исполнено в заявке. Имена полей у биржи свои."""
+    total = 0.0
+    for name in ("origQty", "quantity", "size", "qty"):
+        try:
+            total = abs(float(order.get(name)))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if total > 0:
+            break
+    try:
+        done = abs(float(order.get("executedQty") or 0))
+    except (TypeError, ValueError):
+        done = 0.0
+    return max(0.0, total - done)
+
+
+async def _exposure(client: WeexFutures, symbol: str) -> float | None:
+    """Сколько монеты уже занято на бирже: позиции обеих сторон и ждущие входы.
+
+    Предел биржа считает по всему сразу. None - биржа не ответила, и тогда
+    проверку не делаем: не пускать сделку из-за заминки хуже, чем получить
+    отказ самой биржи.
+    """
+    try:
+        rows = await client.positions()
+        orders = await client.open_orders(symbol)
+    except WeexTradeError:
+        return None
+    held = sum(
+        abs(float(row.get("size") or row.get("total") or 0))
+        for row in rows or []
+        if str(row.get("symbol", "")).upper() == symbol
+    )
+    return held + sum(_order_left(order) for order in orders or [])
 
 
 @router.get("/status")
@@ -652,6 +699,20 @@ async def open_position(
     entry_price = round_to_tick(body.entry, filters["tick"]) if body.entry else None
     stop_price = round_to_tick(body.stop, filters["tick"])
 
+    # Предел позиции на этом плече, если биржа его уже называла. Проверяем до
+    # отправки: отказ «position exceed max size» после нажатия - это заявка,
+    # которую трейдер уже считал поставленной.
+    cap = leverage_caps.cap_at(leverage_caps.caps_for(session, symbol), body.leverage)
+    if cap is not None:
+        used = await _exposure(client, symbol)
+        if used is not None:
+            note = leverage_caps.room_note(
+                quantity=quantity, cap=cap, used=used, leverage=body.leverage,
+                coin=symbol[:-4] or symbol, step=filters["step"],
+            )
+            if note:
+                raise HTTPException(422, note)
+
     # Вход и цели — два разных шага с разной ценой ошибки.
     #
     # Сорвался вход — не открылось ничего, и об этом надо сказать отказом.
@@ -671,6 +732,11 @@ async def open_position(
             client_order_id=body.client_order_id,
         )
     except WeexTradeError as exc:
+        # Отказ по пределу называет точное число - запоминаем его, и терминал
+        # всех учеников ограничит сумму заранее.
+        found = max_size_in(str(exc))
+        if found:
+            leverage_caps.learn(session, symbol, found[1], found[0])
         raise _fail(exc) from exc
 
     # Цели ставятся только когда позиция уже есть.

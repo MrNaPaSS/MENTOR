@@ -220,9 +220,16 @@ const CHIP =
 const CHIP_ON = "bg-[var(--pane-chip-faint)] text-[var(--pane-chip)]";
 const CHIP_OFF = "text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
 
-// Не чаще этого просим сервер проверить сделки вне очереди: сверка с биржей
-// идёт раз в четыре секунды, а сопровождение само не принимает просьб чаще.
-const NUDGE_EVERY_MS = 3000;
+// Не чаще этого просим сервер проверить сделки вне очереди. Сопровождение само
+// не принимает просьб чаще раза в две секунды (NUDGE_GAP), и просьба раньше
+// ушла бы впустую.
+const NUDGE_EVERY_MS = 2100;
+
+// Цена дошла до цели: сколько после этого спрашиваем биржу часто и как часто.
+// Стоп в безубыток сервер переставляет за секунду-две, а обычный опрос раз в
+// четыре секунды показывал это на экране секунд через восемь-десять.
+const RUSH_MS = 15000;
+const RUSH_POLL_MS = 700;
 
 // Высота рабочей области: всё окно за вычетом шапки приложения. Заголовок
 // раздела убран — он занимал полсотни пикселей и не нёс ничего, чего не видно
@@ -449,6 +456,21 @@ export default function ScalpingPage() {
   tradesRef.current = trades;
   // Когда последний раз просили сопровождение проверить сделки вне очереди.
   const nudgedRef = useRef(0);
+  // Сделки, у которых цена дошла до цели: при каком числе взятых и каком стопе
+  // это случилось и до какого времени спрашиваем биржу часто. Запись остаётся
+  // и после конца - иначе цена, стоящая за целью, запускала бы спешку заново.
+  const rushRef = useRef(
+    new Map<string, { hit: number; stop: number; until: number; done: boolean }>(),
+  );
+  // Спросить биржу о защите сейчас, не дожидаясь круга. Живёт в круге опроса.
+  const kickRef = useRef<(() => void) | null>(null);
+  // Чей стоп сейчас едет в безубыток: на графике у него своя подпись.
+  const [movingStops, setMovingStops] = useState<ReadonlySet<string>>(() => new Set());
+  const syncMoving = useCallback(() => {
+    setMovingStops(
+      new Set([...rushRef.current].filter(([, rush]) => !rush.done).map(([id]) => id)),
+    );
+  }, []);
   // Встречная позиция на бирже: на одностороннем счёте ордер против неё её же
   // и уменьшает, а не создаёт вторую сделку. Трейдер должен знать это до
   // нажатия, а не по факту закрытия своего лонга.
@@ -463,6 +485,8 @@ export default function ScalpingPage() {
   // плечо упирается в ×20 или ×50, а кнопки предлагают до ×400 - без этого
   // отказ приходил уже после нажатия «Войти».
   const [limits, setLimits] = useState<SymbolLimits | null>(null);
+  // Перезапрос пределов: после отказа биржи сервер мог узнать новый.
+  const [limitsAsked, setLimitsAsked] = useState(0);
 
   // Отметки на ценах: терминал скажет, когда уровень пересекут.
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
@@ -1029,6 +1053,8 @@ export default function ScalpingPage() {
         // Та же осторожность, что и у своей заявки: биржа отказала - убираем и
         // с графика, иначе трейдер ждёт вход, которого нет.
         setTrades((list) => list.filter((t) => t.id !== next.id));
+        // Отказ мог назвать предел позиции на плече - сервер его запомнил.
+        setLimitsAsked((n) => n + 1);
         setOrderNote({
           text: err instanceof Error ? err.message : t.terminal.notes.orderRejected,
           bad: true,
@@ -1338,6 +1364,7 @@ export default function ScalpingPage() {
       // Заявка не встала - убираем её и с графика: нарисованная лимитка,
       // которой нет на бирже, хуже отсутствия лимитки.
       setTrades((list) => list.filter((t) => t.id !== next.id));
+      setLimitsAsked((n) => n + 1);
       setOrderNote({
         text: err instanceof Error ? err.message : t.terminal.notes.limitRejected,
         bad: true,
@@ -1570,6 +1597,9 @@ export default function ScalpingPage() {
         why: err instanceof Error ? err.message : String(err),
       });
       setTrades((list) => list.filter((t) => t.id !== next.id));
+      // Отказ мог назвать предел позиции на плече - сервер его запомнил, и
+      // следующая заявка должна упереться в него ещё в окне, а не на бирже.
+      setLimitsAsked((n) => n + 1);
       setOrderNote({
         text: err instanceof Error ? err.message : t.terminal.notes.orderRejected,
         bad: true,
@@ -1717,6 +1747,44 @@ export default function ScalpingPage() {
       return changed ? updated : list;
     });
   }, [dom?.best_bid, dom?.best_ask, live]);
+
+  // Цена дошла до цели идущей сделки - стоп вот-вот поедет в безубыток.
+  //
+  // Переносит его сервер, а экран узнавал об этом опросом раз в четыре
+  // секунды - и ещё столько же о том, что стоп уже переставлен: трейдер видел
+  // старый стоп секунд десять после взятой цели. Стакан показывает касание
+  // сразу, и с этого мгновения мы зовём сервер и спрашиваем биржу часто, пока
+  // стоп на ней не сменится.
+  //
+  // Сама линия едет только по ответу биржи: стакан у нас с другой площадки, и
+  // касание его цены ещё не исполнение. До ответа на стопе подпись, что
+  // перенос идёт.
+  useEffect(() => {
+    if (!live || !symbol) return;
+    const bid = dom?.best_bid ?? 0;
+    const ask = dom?.best_ask ?? 0;
+    if (!(bid > 0) || !(ask > 0)) return;
+    const now = Date.now();
+    let fresh = false;
+    for (const trade of tradesRef.current) {
+      if (trade.symbol !== symbol || trade.status !== "open") continue;
+      const next = trade.targets[trade.takesHit];
+      if (!(next > 0)) continue;
+      const reached = trade.side === "long" ? bid >= next : ask <= next;
+      if (!reached) continue;
+      if (rushRef.current.get(trade.id)?.hit === trade.takesHit) continue;
+      rushRef.current.set(trade.id, {
+        hit: trade.takesHit,
+        stop: trade.stop,
+        until: now + RUSH_MS,
+        done: false,
+      });
+      fresh = true;
+    }
+    if (!fresh) return;
+    syncMoving();
+    kickRef.current?.();
+  }, [dom?.best_bid, dom?.best_ask, live, symbol, syncMoving]);
 
   // Позиция глазами биржи. Терминал обязан быть её зеркалом: своё состояние он
   // может держать сколько угодно, но правда о том, открыта ли позиция, — там.
@@ -2084,7 +2152,61 @@ export default function ScalpingPage() {
       });
     }
 
+    // Опрос защиты - один за раз. Круг, частый опрос после цели и проверка
+    // после ответа сервера сходятся во времени, и ответ, пришедший не по
+    // порядку, затирал бы свежий стоп старым.
+    let guarding = false;
     async function guard() {
+      if (guarding) return;
+      guarding = true;
+      try {
+        await inspect();
+      } finally {
+        guarding = false;
+      }
+    }
+
+    /**
+     * Попросить сопровождение проверить сделки - и сразу посмотреть, что
+     * вышло, а не ждать круга: стоп переставлен, и показать его надо сейчас.
+     */
+    function nudge() {
+      if (Date.now() - nudgedRef.current <= NUDGE_EVERY_MS) return;
+      nudgedRef.current = Date.now();
+      nudgeWatcher()
+        .then((answer) => {
+          if (!cancelled && answer?.checked) void guard();
+        })
+        .catch(() => undefined);
+    }
+
+    /**
+     * Частый опрос после взятой цели. Идёт, пока стоп на бирже не сменился
+     * или не вышло время, и заканчивается сам.
+     */
+    function rushTick() {
+      const now = Date.now();
+      let active = false;
+      let changed = false;
+      for (const [id, rush] of rushRef.current) {
+        if (rush.done) continue;
+        const trade = tradesRef.current.find((t) => t.id === id);
+        const moved =
+          trade !== undefined &&
+          trade.takesHit > rush.hit &&
+          Math.abs(trade.stop - rush.stop) > Math.max(rush.stop, 1) * 0.00001;
+        if (!trade || trade.status !== "open" || moved || now > rush.until) {
+          rushRef.current.set(id, { ...rush, done: true });
+          changed = true;
+        } else {
+          active = true;
+        }
+      }
+      if (changed) syncMoving();
+      if (active) void guard();
+    }
+
+    async function inspect() {
       // Защита спрашивается по монете: без открытого стакана спрашивать не о
       // чем, а сделки по другим монетам стережёт круг выше.
       const open = symbol
@@ -2113,10 +2235,7 @@ export default function ScalpingPage() {
               : 0;
           return gone > body.takes_hit;
         });
-        if (lagging && Date.now() - nudgedRef.current > NUDGE_EVERY_MS) {
-          nudgedRef.current = Date.now();
-          void nudgeWatcher().catch(() => undefined);
-        }
+        if (lagging) nudge();
 
         // Стоп и взятые цели - с биржи. Свой расчёт здесь только мешал: он
         // решал, что цель взята, ставил безубыток и рисовал стоп формулой, а на
@@ -2226,10 +2345,18 @@ export default function ScalpingPage() {
     guard();
     const id = setInterval(check, 3000);
     const watch = setInterval(guard, 4000);
+    const rush = setInterval(rushTick, RUSH_POLL_MS);
+    // Касание цели в стакане: позвать сервер и спросить биржу сразу.
+    kickRef.current = () => {
+      nudge();
+      void guard();
+    };
     return () => {
       cancelled = true;
       clearInterval(id);
       clearInterval(watch);
+      clearInterval(rush);
+      kickRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, symbol, watchKey]);
@@ -2426,15 +2553,33 @@ export default function ScalpingPage() {
     setAlerts((list) => list.filter((a) => !done.has(a.id)));
   }, [dom?.mid, dom?.tick, alerts, symbol]);
 
+  // Сколько монеты уже занято на бирже: позиции обеих сторон и ждущие входы.
+  // Предел позиции биржа считает по всему сразу, и окну заявки нужно знать,
+  // сколько места осталось, а не только сам предел.
+  const usedQty = useMemo(() => {
+    if (!live || !symbol) return 0;
+    const sym = symbol.toUpperCase();
+    const held = Object.entries(liveSizes)
+      .filter(([key]) => key.startsWith(`${sym}:`))
+      .reduce((sum, [, size]) => sum + Math.max(0, size), 0);
+    const resting = trades
+      .filter((t) => t.symbol === symbol && t.status === "planned")
+      .reduce((sum, t) => sum + Math.max(0, t.qty || 0), 0);
+    return held + resting;
+  }, [live, symbol, liveSizes, trades]);
+
   // Пределы спрашиваем на смену монеты: они не меняются месяцами и лежат в
-  // кэше сервера, но у каждой монеты свои.
+  // кэше сервера, но у каждой монеты свои. И после отказа биржи: он мог
+  // назвать предел на плече, и сервер его запомнил.
   useEffect(() => {
     if (!symbol) {
       setLimits(null);
       return;
     }
     let cancelled = false;
-    setLimits(null);
+    // Смена монеты - прежние пределы не годятся. Перезапрос по той же монете
+    // оставляет их до ответа: окно заявки не должно мигать без них.
+    setLimits((prev) => (prev?.symbol === symbol.toUpperCase() ? prev : null));
     limitsOf(symbol)
       .then((body) => {
         if (!cancelled) setLimits(body);
@@ -2446,7 +2591,7 @@ export default function ScalpingPage() {
     return () => {
       cancelled = true;
     };
-  }, [symbol]);
+  }, [symbol, limitsAsked]);
 
   /**
    * Чип ждущей лимитки: он же и способ поставить стоп с целью.
@@ -3484,6 +3629,8 @@ export default function ScalpingPage() {
                     takerFee={limits?.taker_fee}
                     maxQty={limits?.max_qty}
                     maxPosition={limits?.max_position}
+                    leverageCaps={limits?.leverage_caps}
+                    used={usedQty}
                     free={Number(balance ?? 0) || 0}
                     onChange={setManual}
                     onSubmit={sendManual}
@@ -3501,6 +3648,7 @@ export default function ScalpingPage() {
                   indicators={indicators}
                   trades={mine}
                   preview={preview}
+                  movingStops={movingStops}
                   livePrice={chartPrice}
                   liveCandle={dom?.candle ?? null}
                   liveFoot={dom?.foot ?? null}
@@ -3747,6 +3895,8 @@ export default function ScalpingPage() {
           takerFee={limits?.taker_fee}
           maxQty={limits?.max_qty}
           maxPosition={limits?.max_position}
+          leverageCaps={limits?.leverage_caps}
+          used={usedQty}
         />
       )}
     </div>

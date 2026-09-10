@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 import { computeTrade, sideForShelf, DEFAULT_TAKES } from "@/lib/trade/plan";
+import { maxMargin } from "@/lib/trade/manual";
 import { TAKER_FEE } from "@/lib/trade/position";
 
 export type TradeDraft = {
@@ -70,6 +71,8 @@ export default function TradeDialog({
   takerFee,
   maxQty,
   maxPosition,
+  leverageCaps,
+  used = 0,
   opposing = 0,
 }: {
   draft: TradeDraft;
@@ -98,6 +101,15 @@ export default function TradeDialog({
    */
   maxQty?: number;
   maxPosition?: number;
+  /** Пределы позиции по плечам, узнанные из отказов биржи. */
+  leverageCaps?: Record<string, number>;
+  /**
+   * Сколько монеты уже занято позицией и ждущими заявками.
+   *
+   * Предел биржа считает по всему, что стоит на монете: сумма, которая
+   * проходит одна, получает отказ вместе с соседними заявками.
+   */
+  used?: number;
   /**
    * Объём встречной позиции по этой монете.
    *
@@ -134,22 +146,30 @@ export default function TradeDialog({
     : LEVERAGES;
   const overLimit = cap !== null && draft.leverage > cap;
 
-  // Крупная сумма - только если она пройдёт на этой монете. Считаем так же, как
-  // считает сам расчёт сделки: объём есть сумма на плечо, делённая на цену.
-  //
-  // Потолка биржа называет два, и меньший из них и есть настоящий предел. Не
-  // назвала ни одного - показываем: запрещать по незнанию хуже, чем показать
-  // кнопку, на которую в редком случае ответит отказом биржа.
+  // Предельная сумма на этой монете и этом плече - тем же расчётом, что и в
+  // ручной заявке: потолок заявки, ступень предела позиции по плечу и то, что
+  // уже занято позицией и заявками. Ноль - предел неизвестен, не ограничиваем:
+  // запрещать по незнанию хуже, чем показать кнопку, на которую в редком
+  // случае ответит отказом биржа.
+  const ceiling = maxMargin(draft.shelf.price, draft.leverage, 0, {
+    maxQty,
+    maxPosition,
+    leverageCaps,
+    used,
+  });
+  const overSize = ceiling > 0 && draft.margin > ceiling;
+
+  // Суммы, которые пройдут. Кнопка, гарантированно ведущая к отказу биржи, -
+  // это ловушка, а встать ровно в предел трейдер вправе.
   const margins = useMemo(() => {
-    const price = draft.shelf.price;
-    if (!(price > 0)) return MARGINS;
-
-    const caps = [maxQty, maxPosition].filter((v): v is number => Boolean(v && v > 0));
-    if (caps.length === 0) return [...MARGINS, BIG_MARGIN];
-
-    const qty = (BIG_MARGIN * draft.leverage) / price;
-    return qty <= Math.min(...caps) ? [...MARGINS, BIG_MARGIN] : MARGINS;
-  }, [draft.shelf.price, draft.leverage, maxQty, maxPosition]);
+    if (!(draft.shelf.price > 0)) return MARGINS;
+    const all = [...MARGINS, BIG_MARGIN];
+    if (!(ceiling > 0)) return all;
+    const fits = all.filter((value) => value <= ceiling);
+    const top = Math.floor(ceiling);
+    if (top > 0 && !fits.includes(top)) fits.push(top);
+    return fits.length > 0 ? fits : [MARGINS[0]];
+  }, [draft.shelf.price, ceiling]);
 
   // Плечо выше потолка монеты подводим к потолку, как только его узнали.
   // Вниз и только вниз: поднимать плечо за трейдера нельзя, это его риск.
@@ -343,6 +363,14 @@ export default function TradeDialog({
               </p>
             )}
 
+            {/* Предел позиции на этом плече. Отказ «position exceed max size»
+                приходит после нажатия - сказать надо до. */}
+            {overSize && (
+              <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
+                {d.ceiling(ceiling.toFixed(0), draft.leverage)}
+              </p>
+            )}
+
             {plan.liquidatedFirst && (
               <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
                 {d.liqWarning}
@@ -377,7 +405,7 @@ export default function TradeDialog({
             </button>
             <button
               onClick={onConfirm}
-              disabled={!plan || overLimit || !live}
+              disabled={!plan || overLimit || overSize || !live}
               className={`${BUTTON} ${
                 long ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]" : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
               } disabled:opacity-40`}

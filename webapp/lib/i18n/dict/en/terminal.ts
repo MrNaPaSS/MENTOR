@@ -149,6 +149,7 @@ export const terminal = {
     entry: "entry",
     stop: "stop",
     breakEven: "b/e",
+    movingToBe: "stop → b/e…",
     take: (n: number) => `take ${n}`,
     exit: "exit",
     entryUp: "entry ↑",
@@ -314,6 +315,8 @@ export const dialogs = {
       `There's an opposing position of ${qty} on this coin. In one-way mode this order will reduce it rather than open a new trade.`,
     capWarning: (cap: number, leverage: number) =>
       `The exchange caps this coin at x${cap}. At x${leverage} the order will be rejected.`,
+    ceiling: (cap: string, leverage: number) =>
+      `The exchange won't take more than ${cap} $ at ×${leverage}: the cap counts the open position and orders on this coin together.`,
     liqWarning: "At this leverage the position is wiped out before the stop triggers. Lower the leverage or move the stop.",
     fillHint: "Enter the amount, leverage and stop - the numbers will appear here",
     willGoLive: "The order goes to the exchange",

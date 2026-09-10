@@ -133,12 +133,47 @@ export function moveLevel(
 }
 
 /**
+ * Предел всей позиции по монете на этом плече, в самой монете.
+ *
+ * Биржа держит предел ступенями: чем выше плечо, тем меньше позиция. Справочный
+ * `maxPosition` верен для малого плеча, а точные ступени сервер узнаёт из
+ * отказов биржи (`leverageCaps`). Предел, узнанный на ×L, действует и на любом
+ * плече выше - там он не больше, - поэтому берём наименьший из узнанных на
+ * плечах не выше выбранного.
+ *
+ * Ноль - предел неизвестен.
+ */
+export function positionCap(
+  leverage: number,
+  maxPosition?: number,
+  leverageCaps?: Record<string, number>,
+): number {
+  const caps: number[] = [];
+  if (maxPosition && maxPosition > 0) caps.push(maxPosition);
+  for (const [lev, size] of Object.entries(leverageCaps ?? {})) {
+    if (Number(lev) <= leverage && size > 0) caps.push(size);
+  }
+  return caps.length > 0 ? Math.min(...caps) : 0;
+}
+
+/**
+ * Места нет совсем. Не ноль: ноль у `maxMargin` значит «предел неизвестен», и
+ * заполненный до предела счёт выглядел бы неограниченным.
+ */
+const NO_ROOM = 0.01;
+
+/**
  * Наибольшая сумма, с которой сделку вообще примут.
  *
  * Ограничений три, и берётся самое строгое: свободные деньги счёта - маржу
  * больше остатка внести нечем; потолок одной заявки по монете; потолок всей
- * позиции. Два последних биржа держит в монете, поэтому переводим их в деньги
- * через цену входа и плечо.
+ * позиции на этом плече. Два последних биржа держит в монете, поэтому
+ * переводим их в деньги через цену входа и плечо.
+ *
+ * Потолок позиции считается по всему, что уже стоит на монете: открытая
+ * позиция и ждущие заявки (`used`) занимают его наравне с новой заявкой.
+ * Биржа считает именно так, и сумма, прошедшая проверку одна, получала отказ
+ * вместе с соседними заявками.
  *
  * Ноль означает «предел неизвестен»: биржа его не назвала, и выдумывать за неё
  * нельзя - лучше не ограничивать вовсе, чем запретить возможное.
@@ -147,17 +182,25 @@ export function maxMargin(
   entry: number,
   leverage: number,
   free: number,
-  caps: { maxQty?: number; maxPosition?: number } = {},
+  caps: {
+    maxQty?: number;
+    maxPosition?: number;
+    leverageCaps?: Record<string, number>;
+    used?: number;
+  } = {},
 ): number {
   if (!(entry > 0) || !(leverage >= 1)) return 0;
 
   const limits: number[] = [];
   if (free > 0) limits.push(free);
-  for (const qty of [caps.maxQty, caps.maxPosition]) {
-    if (qty && qty > 0) limits.push((qty * entry) / leverage);
+  if (caps.maxQty && caps.maxQty > 0) limits.push((caps.maxQty * entry) / leverage);
+  const position = positionCap(leverage, caps.maxPosition, caps.leverageCaps);
+  if (position > 0) {
+    const room = Math.max(0, position - Math.max(0, caps.used ?? 0));
+    limits.push((room * entry) / leverage);
   }
   if (limits.length === 0) return 0;
-  return Math.min(...limits);
+  return Math.max(Math.min(...limits), NO_ROOM);
 }
 
 /**

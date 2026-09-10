@@ -34,6 +34,17 @@ _FUNDS = re.compile(r"insufficient|not\s+enough\s+(balance|margin)", re.IGNORECA
 _LEVERAGE = re.compile(r"leverage.*(not\s+support|invalid|exceed)", re.IGNORECASE)
 
 
+def max_size_in(message: str) -> tuple[float, int] | None:
+    """Предел позиции и плечо из отказа биржи, если это отказ по пределу."""
+    found = _MAX_SIZE.search(message or "")
+    if not found:
+        return None
+    try:
+        return float(found.group(1)), int(found.group(2))
+    except ValueError:
+        return None
+
+
 def explain(message: str) -> str:
     """Отказ биржи одной понятной фразой. Незнакомый - без изменений."""
     text = (message or "").strip()

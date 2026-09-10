@@ -559,7 +559,9 @@ class PositionWatcher:
             logger.info("Цель взята: %s, всего %d", trade.symbol, trade.takes_hit)
 
         if decision.move_stop_to is not None:
-            if await self._set_stop(client, trade, decision.move_stop_to, price):
+            if await self._set_stop(
+                client, trade, decision.move_stop_to, price, held=decision.size or None
+            ):
                 trade.current_stop = decision.move_stop_to
                 changed = True
 
@@ -648,8 +650,9 @@ class PositionWatcher:
         trade: LiveTrade,
         stop: float,
         market: float | None = None,
+        held: float | None = None,
     ) -> bool:
-        return await set_stop(client, trade, stop, market)
+        return await set_stop(client, trade, stop, market, held=held)
 
     async def _drop_old_stops(self, client: WeexFutures, trade: LiveTrade, keep: str) -> None:
         await drop_old_stops(client, trade, keep)
@@ -876,6 +879,7 @@ async def set_stop(
     stop: float,
     market: float | None = None,
     label: str | None = None,
+    held: float | None = None,
 ) -> bool:
     """Поставить стоп на новую цену: снять старый и выставить новый.
 
@@ -888,12 +892,18 @@ async def set_stop(
     это окно, в котором позиция стоит вообще без защиты.
     """
     filters = await client.symbol_filters(trade.symbol)
-    size = float(trade.qty)
-    try:
-        positions = await client.positions()
-        size = position_size(position_for(positions, trade.symbol, trade.side)) or size
-    except WeexTradeError:
-        pass
+    if held and held > 0:
+        # Объём обход уже знает: он спросил биржу мгновение назад. Второй
+        # запрос за тем же числом стоил заметной доли секунды на каждом
+        # переносе, а стоп после взятой цели ждать не должен.
+        size = held
+    else:
+        size = float(trade.qty)
+        try:
+            positions = await client.positions()
+            size = position_size(position_for(positions, trade.symbol, trade.side)) or size
+        except WeexTradeError:
+            pass
 
     quantity = floor_to_step(size, filters["step"])
     if quantity < filters["min_qty"]:

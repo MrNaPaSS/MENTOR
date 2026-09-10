@@ -676,6 +676,9 @@ function toLine(candles: Candle[], values: number[]) {
   return out;
 }
 
+/** Ни у одной сделки стоп не едет: постоянный, чтобы не перерисовывать линии зря. */
+const NO_MOVES: ReadonlySet<string> = new Set();
+
 function PriceChart({
   symbol,
   interval,
@@ -686,6 +689,7 @@ function PriceChart({
   preset,
   trades,
   preview,
+  movingStops = NO_MOVES,
   livePrice,
   liveCandle,
   liveFoot,
@@ -724,6 +728,14 @@ function PriceChart({
    * разметку идущей сделки терминал не вправе.
    */
   trades: ActiveTrade[];
+  /**
+   * Сделки, у которых цель только что взята и стоп едет в безубыток.
+   *
+   * Линия стопа двигается по ответу биржи, а до него стоит на месте - и
+   * трейдер несколько секунд смотрел на старый стоп, не зная, что перенос уже
+   * идёт. Подпись говорит об этом сразу.
+   */
+  movingStops?: ReadonlySet<string>;
   /**
    * Расчёт из открытого окна: показывается целиком, пока трейдер смотрит.
    *
@@ -1723,6 +1735,8 @@ function PriceChart({
       // Стоп за ценой входа - это уже не стоп, а безубыток, и на шкале он так
       // и подписан: трейдер читает подпись, а не сравнивает цены глазами.
       if (riskFree(trade)) line(`${trade.id}:stop`, trade.stop, palette.mtf, t.terminal.levels.breakEven, 2);
+      else if (movingStops.has(trade.id))
+        line(`${trade.id}:stop`, trade.stop, palette.mtf, t.terminal.levels.movingToBe, 2);
       else line(`${trade.id}:stop`, trade.stop, palette.askLine, t.terminal.levels.stop, 2);
 
       pendingTargets(trade).forEach((price, i) => {
@@ -1748,7 +1762,7 @@ function PriceChart({
       dataRef.current,
     );
     pushShapes();
-  }, [trades, preview, shown, skin, pushShapes]);
+  }, [trades, preview, movingStops, shown, skin, pushShapes]);
 
   // Вертикальное перетаскивание прямо по свечам.
   //

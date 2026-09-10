@@ -5,6 +5,7 @@ import {
   flip,
   maxMargin,
   moveLevel,
+  positionCap,
   qtyOf,
   riskOf,
   rewardOf,
@@ -139,5 +140,35 @@ describe("предельная сумма", () => {
   it("бессмысленный ввод не считает", () => {
     expect(maxMargin(0, 10, 500)).toBe(0);
     expect(maxMargin(80_000, 0, 500)).toBe(0);
+  });
+
+  it("на высоком плече берёт предел, названный биржей для этого плеча", () => {
+    // Справочный предел 10 монет, а на ×100 биржа держит 3.
+    // 3 монеты по 100 на ×100 - это 3 $ маржи.
+    expect(maxMargin(100, 100, 1e9, { maxPosition: 10, leverageCaps: { "100": 3 } })).toBeCloseTo(3, 9);
+    // На ×50 ступень ×100 не действует - остаётся справочная.
+    expect(maxMargin(100, 50, 1e9, { maxPosition: 10, leverageCaps: { "100": 3 } })).toBeCloseTo(20, 9);
+  });
+
+  it("вычитает то, что уже стоит на монете", () => {
+    // Предел 10 монет, 7 уже заняты позицией и заявками: остаётся 3.
+    expect(maxMargin(100, 10, 1e9, { maxPosition: 10, used: 7 })).toBeCloseTo(30, 9);
+  });
+
+  it("заполненный до предела счёт - это «места нет», а не «предел неизвестен»", () => {
+    const ceiling = maxMargin(100, 10, 1e9, { maxPosition: 10, used: 12 });
+    expect(ceiling).toBeGreaterThan(0);
+    expect(ceiling).toBeLessThan(1);
+  });
+});
+
+describe("предел позиции по плечу", () => {
+  it("наименьший из узнанных на плечах не выше выбранного", () => {
+    const caps = { "50": 500, "100": 337.57 };
+    expect(positionCap(100, undefined, caps)).toBe(337.57);
+    expect(positionCap(125, undefined, caps)).toBe(337.57);
+    expect(positionCap(75, undefined, caps)).toBe(500);
+    expect(positionCap(20, 1000, caps)).toBe(1000);
+    expect(positionCap(20)).toBe(0);
   });
 });
