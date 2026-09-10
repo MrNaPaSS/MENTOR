@@ -12,6 +12,7 @@ import { landing } from "./landing";
 import { market } from "./market";
 import { news } from "./news";
 import { profile } from "./profile";
+import { rewards } from "./rewards";
 import { shell } from "./shell";
 import { smart } from "./smart";
 import { shop } from "./shop";
@@ -30,6 +31,7 @@ export const en: Dict = {
   market,
   news,
   profile,
+  rewards,
   shell,
   shop,
   smart,

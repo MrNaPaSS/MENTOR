@@ -210,6 +210,11 @@ class CoinTransaction(Base):
     reason: Mapped[str] = mapped_column(String(32))   # achievement | level_up | volume_milestone | academy
     ref: Mapped[str] = mapped_column(String(64))       # achievement_id, level number, or milestone label
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Награда начислена, но ещё не забрана: в балансе её нет, пока ученик не
+    # нажмёт «Забрать». Покупки, возвраты и списания за убыток идут мимо
+    # ожидания - это не награды. См. backend/coin_ledger.py.
+    pending: Mapped[bool] = mapped_column(Boolean, default=False)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     student: Mapped["Student"] = relationship(back_populates="coin_transactions")
 

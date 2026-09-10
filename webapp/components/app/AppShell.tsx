@@ -12,7 +12,6 @@ import {
   LogOut,
   ChevronDown,
   ImageIcon,
-  Coins,
   ShoppingBag,
   Waves,
 } from "lucide-react";
@@ -23,9 +22,11 @@ import { api, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { attend } from "@/lib/chat/store";
 import { useCoins } from "@/lib/useCoins";
+import { useRewardNotices } from "@/lib/rewards";
+import RewardsChip from "@/components/app/RewardsChip";
 import { PROFILE_EVENT } from "@/lib/profileEvent";
 import { fmtUsd, modeLabel } from "@/lib/format";
-import { adoptLocale, useIntlLocale, useT } from "@/lib/i18n";
+import { adoptLocale, useT } from "@/lib/i18n";
 import MarketTicker from "@/components/market/MarketTicker";
 import Toasts from "@/components/scalping/Toasts";
 import {
@@ -70,7 +71,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const t = useT();
-  const numbers = useIntlLocale();
   const [ready, setReady] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   // Подключён ли биржевой счёт. Пусто - сервер об этом не сказал: тогда шапка
@@ -78,7 +78,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [trading, setTrading] = useState<TradingStatus | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   // Баланс монет обновляется сам: их начисляет ещё и академия — снаружи вкладки.
-  const { coins } = useCoins(pathname);
+  // Шапка ещё и спрашивает сервер раз в двадцать секунд: награда за сделку
+  // приходит, пока трейдер сидит в терминале, и о ней надо сказать сразу.
+  const { coins, pending, pendingTotal, pendingCount } = useCoins(pathname, { poll: 20_000 });
+  useRewardNotices(pending, coins !== null);
   // Тема терминала красит весь сайт: подписка нужна, чтобы оболочка сменила
   // цвета в тот же момент, что и панели, а не после перезагрузки.
   const terminalTheme = useTerminalTheme();
@@ -267,23 +270,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Правая часть - баланс + профиль */}
           <div className="flex items-center gap-3">
-            {/* Монеты NMNH */}
+            {/* Монеты NMNH и награды, ждущие получения. Нажатие открывает
+                окно наград; из него же - история в аналитике и маркет. */}
             {coins !== null && (
-              // Монеты ведут в аналитику, а не в маркет: там видно, за что они
-              // начислены и что осталось сделать до следующей награды. Маркет
-              // отвечает на вопрос «на что потратить», а нажимают на счётчик,
-              // чтобы понять, откуда он взялся.
-              <Link
-                href="/app/analytics"
-                className="coin-chip hidden items-center gap-1.5 rounded-xl border px-3 py-1.5 sm:flex"
-                title={t.shell.coinsTitle}
-              >
-                <Coins className="h-3.5 w-3.5" />
-                <span className="font-mono text-sm font-bold tabular">
-                  {coins.toLocaleString(numbers)}
-                </span>
-                <span className="text-[9px] font-bold opacity-60">NMNH</span>
-              </Link>
+              <RewardsChip
+                coins={coins}
+                pending={pending}
+                pendingTotal={pendingTotal}
+                pendingCount={pendingCount}
+              />
             )}
 
             {/* Баланс биржи. Пока ключей нет, в этой же кнопке стоит

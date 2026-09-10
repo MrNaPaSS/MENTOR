@@ -125,4 +125,63 @@ describe("useCoins", () => {
     });
     await waitFor(() => expect(result.current.coins).toBe(195));
   });
+
+  const waiting = [
+    { id: 2, amount: 10, reason: "trade_win", ref: "trade_t2", created_at: "2026-09-10T10:00:00Z", pending: true },
+    { id: 1, amount: -3, reason: "trade_loss", ref: "trade_t1", created_at: "2026-09-10T09:00:00Z", pending: true },
+  ];
+
+  function mockWaiting() {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ balance: 40, transactions: [], pending: waiting }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("отдаёт ожидающие награды: долг вычтен из итога, но не считается наградой", async () => {
+    mockWaiting();
+    const { result } = renderHook(() => useCoins());
+    await waitFor(() => expect(result.current.pendingCount).toBe(1));
+    expect(result.current.pendingTotal).toBe(7);
+    expect(result.current.coins).toBe(40);
+  });
+
+  it("событие получения гасит значок и двигает баланс без лишнего запроса", async () => {
+    const f = mockWaiting();
+    const { result } = renderHook(() => useCoins());
+    await waitFor(() => expect(result.current.pendingCount).toBe(1));
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(COINS_EVENT, { detail: { balance: 47, pending: [] } }));
+    });
+    expect(result.current.pendingCount).toBe(0);
+    expect(result.current.coins).toBe(47);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it("шапка сама спрашивает сервер, пока вкладка на экране", async () => {
+    const f = mockCoins([195, 205]);
+    const { result } = renderHook(() => useCoins(undefined, { poll: 20_000 }));
+    await waitFor(() => expect(result.current.coins).toBe(195));
+
+    await act(async () => {
+      vi.advanceTimersByTime(20_000);
+    });
+    await waitFor(() => expect(result.current.coins).toBe(205));
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+
+  it("без опроса сам по себе в сеть не ходит", async () => {
+    const f = mockCoins([195]);
+    renderHook(() => useCoins());
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(f).toHaveBeenCalledTimes(1);
+  });
 });

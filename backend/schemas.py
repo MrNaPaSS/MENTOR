@@ -285,10 +285,26 @@ class CoinTxOut(BaseModel):
     reason: str
     ref: str
     created_at: str
+    # true - награда ждёт, пока ученик её заберёт; в балансе её ещё нет.
+    pending: bool = False
 
 
 class CoinsBalance(BaseModel):
     balance: int
+    # История: то, что уже в балансе или списано.
+    transactions: list[CoinTxOut]
+    # Ждёт получения, свежее первым.
+    pending: list[CoinTxOut] = []
+    # Сколько прибавится к балансу, если забрать всё (награды минус долги).
+    pending_total: int = 0
+    # Сколько наград ждёт - число на значке в шапке.
+    pending_count: int = 0
+
+
+class CoinClaimOut(BaseModel):
+    balance: int
+    # На сколько вырос баланс. Ноль - забирать было нечего.
+    claimed: int
     transactions: list[CoinTxOut]
 
 
@@ -300,8 +316,11 @@ class CoinSyncIn(BaseModel):
 
 class CoinSyncOut(BaseModel):
     balance: int
+    # Сколько встало в ожидание этим вызовом.
     added: int
     new_transactions: list[CoinTxOut]
+    pending_total: int = 0
+    pending_count: int = 0
 
 
 class CoinGrantIn(BaseModel):
@@ -329,6 +348,8 @@ class CoinBalanceOut(BaseModel):
     exists: bool
     student_id: Optional[int] = None
     balance: int = 0
+    # Начислено, но не забрано: забирают в кабинете. Повод позвать туда.
+    pending: int = 0
     tg_id: Optional[int] = None
     weex_uid: Optional[str] = None
     created_via: Optional[str] = None
@@ -338,8 +359,12 @@ class CoinBalanceOut(BaseModel):
 
 class CoinGrantOut(BaseModel):
     student_id: int
+    # Баланс, который можно тратить. Начисление в него не входит, пока
+    # ученик не заберёт награду в кабинете.
     balance: int
     added: int
+    # Сколько всего ждёт получения, вместе с этим начислением.
+    pending: int = 0
     # false, если ref уже был начислен раньше — вызов признан повтором.
     granted: bool
     # true, если ученика завели прямо сейчас: в академии он есть, в кабинет не заходил.

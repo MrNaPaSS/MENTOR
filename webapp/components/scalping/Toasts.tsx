@@ -24,7 +24,12 @@ export type Toast = {
   symbol?: string;
   title: string;
   text: string;
-  tone: "up" | "down" | "plain";
+  tone: "up" | "down" | "plain" | "gold";
+  /**
+   * Что сделать по нажатию. Важнее монеты: уведомление о награде открывает
+   * окно получения, а не график.
+   */
+  action?: () => void;
 };
 
 /** Сколько уведомление висит само, миллисекунды. */
@@ -76,16 +81,25 @@ export default function Toasts({
             ? "var(--pane-up)"
             : item.tone === "down"
               ? "var(--pane-down)"
-              : "var(--pane-accent)";
+              : item.tone === "gold"
+                ? "var(--pane-gold)"
+                : "var(--pane-accent)";
         return (
           <div
             key={item.id}
-            onClick={() => item.symbol && onPick?.(item.symbol)}
+            onClick={() => {
+              if (item.action) {
+                item.action();
+                onClose(item.id);
+                return;
+              }
+              if (item.symbol) onPick?.(item.symbol);
+            }}
             className={
               "pointer-events-auto flex max-w-full animate-fade-in items-center gap-3 rounded-xl " +
               "border px-4 py-2.5 backdrop-blur-sm transition-shadow duration-200 " +
               "motion-reduce:animate-none " +
-              (item.symbol ? "cursor-pointer" : "")
+              (item.symbol || item.action ? "cursor-pointer" : "")
             }
             style={{
               borderColor: tone,

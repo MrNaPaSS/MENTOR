@@ -148,10 +148,12 @@ def test_grant_same_ref_different_students_both_pass(client):
     assert b.json()["granted"] is True
 
 
-def test_grant_accumulates_balance(client):
+def test_grant_accumulates_pending(client):
+    """Награды академии копятся в ожидании: забирают их в кабинете."""
     grant(client, tg_id=555013, ref="m1", reason="module_completed")   # 15
     r = grant(client, tg_id=555013, ref="t1", reason="test_passed")    # 25
-    assert r.json()["balance"] == 40
+    assert r.json()["pending"] == 40
+    assert r.json()["balance"] == 0
 
 
 def test_grant_explicit_amount_wins(client):
@@ -187,9 +189,15 @@ def test_granted_coins_visible_to_student(client):
     assert login.status_code == 200
     token = login.json()["access_token"]
 
-    coins = client.get("/api/coins", headers={"Authorization": f"Bearer {token}"})
+    auth = {"Authorization": f"Bearer {token}"}
+    coins = client.get("/api/coins", headers=auth)
     assert coins.status_code == 200
-    assert coins.json()["balance"] == 100
+    # Видны сразу, но ждут получения: в баланс попадают по нажатию.
+    assert coins.json()["balance"] == 0
+    assert coins.json()["pending_total"] == 100
+
+    claimed = client.post("/api/coins/claim", headers=auth)
+    assert claimed.json()["balance"] == 100
 
 
 # ── Учёт входов ──────────────────────────────────────────────────────────────
@@ -299,7 +307,9 @@ def test_balance_returns_current_amount(client):
     assert r.status_code == 200
     body = r.json()
     assert body["exists"] is True
-    assert body["balance"] == 40
+    # Не забрано - значит, не в балансе. Мини-апп показывает, сколько ждёт.
+    assert body["balance"] == 0
+    assert body["pending"] == 40
     assert body["tg_id"] == 556001
     assert body["created_via"] == "academy"
 
@@ -309,7 +319,7 @@ def test_balance_for_unknown_student_is_not_an_error(client):
     r = balance(client, tg_id=999999999)
     assert r.status_code == 200
     assert r.json() == {
-        "exists": False, "student_id": None, "balance": 0,
+        "exists": False, "student_id": None, "balance": 0, "pending": 0,
         "tg_id": None, "weex_uid": None, "created_via": None, "first_login_at": None,
     }
 

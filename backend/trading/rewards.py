@@ -15,6 +15,10 @@
 `ref` транзакции, а на паре «ученик + ref» в базе стоит уникальный индекс.
 Пересчёт журнала, повторная доставка отчёта и одновременная запись из двух мест
 упрутся в него, а не удвоят баланс.
+
+Награда не падает в баланс сама, а встаёт в ожидание: ученик забирает её в
+кабинете (backend/coin_ledger.py). Списание за убыток идёт сразу, а то, что
+не поместилось в баланс, ждёт долгом и вычтется при получении наград.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from backend import coin_ledger
 from core.models import CoinTransaction, ScalpTrade, Student, utcnow
 
 logger = logging.getLogger("nmnh.trading.rewards")
@@ -67,9 +72,10 @@ REASON_STREAK = "trade_streak"
 def award_trade_coins(session, trade: ScalpTrade) -> int:
     """Начислить или снять монеты за закрытую сделку.
 
-    Возвращает изменение баланса: положительное за плюсовую сделку с бонусом,
-    отрицательное за убыток, ноль - если сделка не подходит под правила или
-    уже была учтена.
+    Возвращает сумму: положительную - столько встало в ожидание за плюсовую
+    сделку с бонусом, отрицательную - столько списано за убыток (часть могла
+    уйти в долг), ноль - если сделка не подходит под правила или уже была
+    учтена.
 
     Транзакции добавляются в переданную сессию, коммит остаётся за вызывающим:
     начисление обязано попасть в базу той же операцией, что и сама сделка,
@@ -103,7 +109,7 @@ def award_trade_coins(session, trade: ScalpTrade) -> int:
         return 0
 
     if pnl < 0:
-        return _apply(session, student, [(REASON_LOSS, ref, -LOSS_COINS)])
+        return _charge_loss(session, student, ref, client_id)
 
     # Плюс: обычное начисление и, если серия дотянула до ступени, бонус.
     entries: list[tuple[str, str, int]] = [(REASON_WIN, ref, WIN_COINS)]
@@ -130,7 +136,7 @@ def award_trade_coins(session, trade: ScalpTrade) -> int:
         trimmed.append((reason, entry_ref, take))
         left -= take
 
-    return _apply(session, student, trimmed)
+    return _reward(session, student, trimmed)
 
 
 def _notional(trade: ScalpTrade) -> float:
@@ -193,38 +199,53 @@ def _win_streak(session, trade: ScalpTrade) -> int:
     return streak
 
 
-def _apply(session, student: Student, entries: list[tuple[str, str, int]]) -> int:
-    """Записать транзакции и подвинуть баланс.
-
-    Баланс не уходит в минус: долг по монетам нечем отдать, а отрицательное
-    число на витрине магазина не значит ничего, кроме сломанного экрана.
-    """
-    if not entries:
-        return 0
-
-    delta = 0
+def _reward(session, student: Student, entries: list[tuple[str, str, int]]) -> int:
+    """Поставить награды в ожидание. Баланс не трогаем: его двигает получение."""
+    added = 0
     for reason, ref, amount in entries:
-        if amount == 0:
+        if amount <= 0:
             continue
+        coin_ledger.add_reward(session, student.id, amount, reason, ref)
+        added += amount
+
+    if added == 0:
+        return 0
+    return added if _flush(session) else 0
+
+
+def _charge_loss(session, student: Student, ref: str, client_id: str) -> int:
+    """Списать за убыток: из баланса сколько есть, остальное - долгом.
+
+    Баланс не уходит в минус: отрицательное число на витрине магазина не
+    значит ничего, кроме сломанного экрана. Но и прощать недостачу нельзя -
+    иначе ожидающие награды стали бы щитом от списаний. Поэтому то, что не
+    поместилось, встаёт в ожидание долгом и вычтется при получении наград.
+    """
+    balance = int(student.coins or 0)
+    take = min(balance, LOSS_COINS)
+    short = LOSS_COINS - take
+
+    if take:
         session.add(
             CoinTransaction(
                 student_id=student.id,
-                amount=amount,
-                reason=reason,
+                amount=-take,
+                reason=REASON_LOSS,
                 ref=ref,
             )
         )
-        delta += amount
+        student.coins = balance - take
+    if short:
+        # Без списания из баланса долг сам несёт ref сделки: по нему
+        # `_already_counted` узнает, что сделка учтена. Иначе у долга свой
+        # ref - с другим началом, чтобы обрезка до 64 знаков их не склеила.
+        debt_ref = f"debt_{client_id}" if take else ref
+        coin_ledger.add_debt(session, student.id, short, REASON_LOSS, debt_ref)
 
-    if delta == 0:
-        return 0
+    return -LOSS_COINS if _flush(session) else 0
 
-    balance = int(student.coins or 0)
-    student.coins = max(0, balance + delta)
-    # Если списание упёрлось в ноль, в истории останется полная сумма, а
-    # баланс просто не уйдёт ниже. Правдой считается баланс.
-    applied = student.coins - balance
 
+def _flush(session) -> bool:
     try:
         session.flush()
     except IntegrityError:
@@ -232,6 +253,5 @@ def _apply(session, student: Student, entries: list[tuple[str, str, int]]) -> in
         # процессе: уникальный индекс на «ученик + ref» сработал как задумано.
         session.rollback()
         logger.info("Монеты за сделку уже начислены другим потоком, пропускаем")
-        return 0
-
-    return applied
+        return False
+    return True

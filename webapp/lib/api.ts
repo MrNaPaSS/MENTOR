@@ -534,6 +534,9 @@ export const api = {
   coins: (token: string) => authReq<CoinsBalance>("/api/coins", token),
   coinsSync: (token: string, body: CoinSyncIn) =>
     authReq<CoinSyncOut>("/api/coins/sync", token, { method: "POST", body: JSON.stringify(body) }),
+  /** Забрать все ожидающие награды в баланс. Повтор безопасен: вернёт ноль. */
+  coinsClaim: (token: string) =>
+    authReq<CoinClaimOut>("/api/coins/claim", token, { method: "POST" }),
 
   // ── Магазин (ученик) ──
   shopItems: (token: string) => authReq<ShopItem[]>("/api/shop/items", token),
@@ -745,10 +748,24 @@ export interface CoinTx {
   reason: string;
   ref: string;
   created_at: string;
+  /** true - награда ждёт, пока её заберут; в балансе её ещё нет. */
+  pending?: boolean;
 }
 
 export interface CoinsBalance {
   balance: number;
+  /** История: то, что уже в балансе или списано. */
+  transactions: CoinTx[];
+  /** Ждёт получения, свежее первым. */
+  pending?: CoinTx[];
+  pending_total?: number;
+  pending_count?: number;
+}
+
+export interface CoinClaimOut {
+  balance: number;
+  /** На сколько вырос баланс. Ноль - забирать было нечего. */
+  claimed: number;
   transactions: CoinTx[];
 }
 
@@ -760,8 +777,11 @@ export interface CoinSyncIn {
 
 export interface CoinSyncOut {
   balance: number;
+  /** Сколько встало в ожидание этим вызовом. */
   added: number;
   new_transactions: CoinTx[];
+  pending_total?: number;
+  pending_count?: number;
 }
 
 export interface ShopItem {

@@ -118,6 +118,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
         ChatBridge,
         ChatMessage,
         ChatThread,
+        CoinTransaction,
         LiveTrade,
         Signal,
         ScalpTrade,
@@ -128,6 +129,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
 
     tables = set(inspector.get_table_names())
     for model in (
+        CoinTransaction,
         ScalpTrade,
         ScalpWorkspace,
         WeexCredential,

@@ -467,7 +467,9 @@ export default function AnalyticsPage() {
       reached_volume_milestones: reachedMilestones,
     }).then(r => {
       setCoinsBalance(r.balance);
-      window.dispatchEvent(new CustomEvent(COINS_EVENT, { detail: { balance: r.balance } }));
+      // Новые достижения встали в ожидание: пусть шапка перечитает монеты
+      // целиком и скажет о наградах. Без новых хватит самого числа.
+      window.dispatchEvent(new CustomEvent(COINS_EVENT, { detail: r.added > 0 ? {} : { balance: r.balance } }));
     }).catch(() => {});
   }, [tradeSummary, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 

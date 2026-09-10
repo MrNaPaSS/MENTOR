@@ -10,11 +10,12 @@ from sqlalchemy.exc import IntegrityError
 
 from core.weex.uid import clean_uid
 from core.models import iso, CoinTransaction, Student
+from backend import coin_ledger
 from backend.config import BackendConfig
 from backend.deps import get_config, get_session, get_current_student
 from backend.schemas import (
-    CoinBalanceOut, CoinGrantIn, CoinGrantOut, CoinsBalance, CoinSyncIn, CoinSyncOut,
-    CoinTxOut,
+    CoinBalanceOut, CoinClaimOut, CoinGrantIn, CoinGrantOut, CoinsBalance, CoinSyncIn,
+    CoinSyncOut, CoinTxOut,
 )
 
 router = APIRouter(prefix="/api/coins", tags=["coins"])
@@ -123,6 +124,7 @@ def _tx_to_out(tx: CoinTransaction) -> CoinTxOut:
         reason=tx.reason,
         ref=tx.ref,
         created_at=iso(tx.created_at),
+        pending=bool(tx.pending),
     )
 
 
@@ -131,13 +133,47 @@ def get_coins(
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
-    txs = session.execute(
+    history = session.execute(
         select(CoinTransaction)
         .where(CoinTransaction.student_id == student.id)
+        .where(CoinTransaction.pending.is_(False))
         .order_by(CoinTransaction.created_at.desc())
         .limit(50)
     ).scalars().all()
-    return CoinsBalance(balance=student.coins, transactions=[_tx_to_out(t) for t in txs])
+    waiting = coin_ledger.pending_of(session, student.id)
+    summary = coin_ledger.summary(waiting)
+    return CoinsBalance(
+        balance=student.coins or 0,
+        transactions=[_tx_to_out(t) for t in history],
+        pending=[_tx_to_out(t) for t in waiting],
+        pending_total=summary.total,
+        pending_count=summary.count,
+    )
+
+
+@router.post("/claim", response_model=CoinClaimOut)
+def claim_coins(
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Забрать все ожидающие награды в баланс.
+
+    Повторное нажатие безопасно: забранное второй раз не найдётся, и ответ
+    придёт с нулём.
+    """
+    result = coin_ledger.claim_all(session, student.id)
+    session.commit()
+    return CoinClaimOut(
+        balance=result.balance,
+        claimed=result.amount,
+        transactions=[
+            CoinTxOut(
+                id=r.id, amount=r.amount, reason=r.reason, ref=r.ref,
+                created_at=iso(r.created_at), pending=False,
+            )
+            for r in result.transactions
+        ],
+    )
 
 
 @router.post("/sync", response_model=CoinSyncOut)
@@ -156,65 +192,52 @@ def sync_coins(
         ).scalars().all()
     )
 
+    # Всё найденное встаёт в ожидание: баланс вырастет, когда ученик заберёт
+    # награды, а не в момент, когда страница аналитики их насчитала.
     new_txs: list[CoinTransaction] = []
+
+    def reward(amount: int, reason: str, ref: str) -> None:
+        if ref in existing_refs or amount <= 0:
+            return
+        # Один ref дважды в одном запросе упёрся бы в уникальный индекс.
+        existing_refs.add(ref)
+        new_txs.append(coin_ledger.add_reward(session, fresh.id, amount, reason, ref))
 
     # Достижения
     for ach_id in body.earned_achievement_ids:
-        if ach_id in existing_refs:
-            continue
         rarity = ACHIEVEMENT_RARITY.get(ach_id, "common")
-        amount = RARITY_COINS[rarity]
-        tx = CoinTransaction(
-            student_id=fresh.id,
-            amount=amount,
-            reason="achievement",
-            ref=ach_id,
-        )
-        new_txs.append(tx)
+        reward(RARITY_COINS[rarity], "achievement", ach_id)
 
     # Уровни (за каждый уровень до текущего)
     for lvl in range(2, body.current_level + 1):
-        ref = f"level_{lvl}"
-        if ref in existing_refs:
-            continue
-        tx = CoinTransaction(
-            student_id=fresh.id,
-            amount=lvl * 10,
-            reason="level_up",
-            ref=ref,
-        )
-        new_txs.append(tx)
+        reward(lvl * 10, "level_up", f"level_{lvl}")
 
     # Вехи объёма
     for milestone_label in body.reached_volume_milestones:
-        ref = f"vol_milestone_{milestone_label}"
-        if ref in existing_refs:
-            continue
-        amount = VOLUME_MILESTONE_COINS.get(milestone_label, 0)
-        if amount == 0:
-            continue
-        tx = CoinTransaction(
-            student_id=fresh.id,
-            amount=amount,
-            reason="volume_milestone",
-            ref=ref,
+        reward(
+            VOLUME_MILESTONE_COINS.get(milestone_label, 0),
+            "volume_milestone",
+            f"vol_milestone_{milestone_label}",
         )
-        new_txs.append(tx)
 
+    added = sum(t.amount for t in new_txs)
     if new_txs:
-        session.add_all(new_txs)
-        added = sum(t.amount for t in new_txs)
-        fresh.coins = (fresh.coins or 0) + added
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError:
+            # Соседняя вкладка прислала те же достижения на мгновение раньше.
+            session.rollback()
+            new_txs, added = [], 0
         for t in new_txs:
             session.refresh(t)
-    else:
-        added = 0
 
+    summary = coin_ledger.summary(coin_ledger.pending_of(session, fresh.id))
     return CoinSyncOut(
-        balance=fresh.coins,
+        balance=fresh.coins or 0,
         added=added,
         new_transactions=[_tx_to_out(t) for t in new_txs],
+        pending_total=summary.total,
+        pending_count=summary.count,
     )
 
 
@@ -301,14 +324,9 @@ def grant_coins(body: CoinGrantIn, session=Depends(get_session)):
 
     amount = body.amount if body.amount is not None else academy_amount(body.reason)
 
-    tx = CoinTransaction(
-        student_id=student.id,
-        amount=amount,
-        reason=body.reason[:32],
-        ref=body.ref[:64],
-    )
-    session.add(tx)
-    student.coins = (student.coins or 0) + amount
+    # В ожидание, а не в баланс: награду за урок ученик забирает в кабинете.
+    # Это и есть повод туда зайти.
+    coin_ledger.add_reward(session, student.id, amount, body.reason, body.ref)
 
     try:
         session.commit()
@@ -321,6 +339,7 @@ def grant_coins(body: CoinGrantIn, session=Depends(get_session)):
             student_id=fresh.id,
             balance=fresh.coins or 0,
             added=0,
+            pending=coin_ledger.summary(coin_ledger.pending_of(session, fresh.id)).total,
             granted=False,
             student_created=False,
         )
@@ -328,8 +347,9 @@ def grant_coins(body: CoinGrantIn, session=Depends(get_session)):
     session.refresh(student)
     return CoinGrantOut(
         student_id=student.id,
-        balance=student.coins,
+        balance=student.coins or 0,
         added=amount,
+        pending=coin_ledger.summary(coin_ledger.pending_of(session, student.id)).total,
         granted=True,
         student_created=created,
     )
@@ -372,6 +392,7 @@ def service_balance(
         exists=True,
         student_id=student.id,
         balance=student.coins or 0,
+        pending=coin_ledger.summary(coin_ledger.pending_of(session, student.id)).total,
         tg_id=student.tg_id,
         weex_uid=student.weex_uid,
         created_via=student.created_via or "bot",
