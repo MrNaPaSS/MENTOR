@@ -27,11 +27,14 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Awaitable
 
 import aiohttp
+
+from core.broker import BrokerMark, weex_mark
 
 logger = logging.getLogger("nmnh.weex.futures")
 
@@ -296,11 +299,20 @@ class WeexFutures:
         session_factory: Callable[[], Awaitable[aiohttp.ClientSession]],
         base_url: str = BASE_URL,
         timeout: float = 15.0,
+        broker_id: str | None = None,
     ):
         self.creds = creds
         self._session_factory = session_factory
         self.base_url = base_url
         self.timeout = timeout
+        # Метка брокера. По умолчанию — из окружения, чтобы её получили все
+        # места, где создаётся клиент (терминал, сопровождение, пересчёт,
+        # перевод средств), а не только те, куда не забыли её передать.
+        # Пустая переменная значит «мы ещё не брокер»: заявки уходят как
+        # раньше, ни одно поведение не меняется.
+        self.mark: BrokerMark = weex_mark(
+            broker_id if broker_id is not None else os.getenv("WEEX_BROKER_ID", "")
+        )
 
     async def _request(
         self,
@@ -460,7 +472,7 @@ class WeexFutures:
         elif time_in_force:
             data["timeInForce"] = time_in_force
         if client_order_id:
-            data["newClientOrderId"] = client_order_id
+            data["newClientOrderId"] = self.mark.tag(client_order_id)
         if tp_trigger:
             data["tpTriggerPrice"] = tp_trigger
         if sl_trigger:
@@ -492,6 +504,12 @@ class WeexFutures:
         такого резерва не требует.
 
         `execute_price = "0"` значит исполнение по рынку после срабатывания.
+
+        Метку брокера сюда не ставим. Документация WEEX описывает её только для
+        `newClientOrderId`, а `clientAlgoId` короче вдвое и по нему сопровождение
+        ищет свои стопы и цели. Ставить метку вслепую значит рискнуть защитой
+        позиции ради ребейта, в котором никто не уверен: засчитывает ли биржа
+        условные заявки — вопрос к менеджеру WEEX (см. план брокерской программы).
         """
         data: dict[str, Any] = {
             "symbol": symbol,
@@ -540,15 +558,28 @@ class WeexFutures:
         data = await self._request(
             "GET", ENDPOINTS["order"], params={"symbol": symbol, "orderId": order_id}
         )
-        return data if isinstance(data, dict) else {}
+        return self.mark.clean(data) if isinstance(data, dict) else {}
+
+    def _unmarked(self, data: Any) -> list[dict]:
+        """Список заявок без метки брокера.
+
+        Метка живёт только на стороне биржи. Внутри терминала идентификатор
+        заявки должен выглядеть ровно так, как его создал терминал: по нему
+        сопровождение узнаёт свою позицию, а журнал — свою сделку.
+        """
+        if not isinstance(data, list):
+            return []
+        if not self.mark.enabled:
+            return data
+        return [self.mark.clean(row) if isinstance(row, dict) else row for row in data]
 
     async def open_orders(self, symbol: str) -> list[dict]:
         data = await self._request("GET", ENDPOINTS["open_orders"], params={"symbol": symbol})
-        return data if isinstance(data, list) else []
+        return self._unmarked(data)
 
     async def algo_orders(self, symbol: str) -> list[dict]:
         data = await self._request("GET", ENDPOINTS["algo_orders"], params={"symbol": symbol})
-        return data if isinstance(data, list) else []
+        return self._unmarked(data)
 
     async def cancel_order(self, symbol: str, order_id: str) -> Any:
         return await self._request(
@@ -578,4 +609,4 @@ class WeexFutures:
         if symbol:
             params["symbol"] = symbol
         data = await self._request("GET", ENDPOINTS["user_trades"], params=params)
-        return data if isinstance(data, list) else []
+        return self._unmarked(data)
