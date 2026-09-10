@@ -66,6 +66,16 @@ const TIER: Record<Tier, { border: string; glow: string; badge: string; tint: st
   },
 };
 
+/**
+ * Иллюстрации функций маркета. Берутся, когда у товара нет своей обложки:
+ * ментор может заменить её в админке, а без этого карточка не пустая.
+ */
+const FEATURE_ART: Record<string, string> = {
+  streak_freeze: "/shop/streak-freeze.webp",
+  streak_boost: "/shop/streak-boost.webp",
+  journal_export: "/shop/journal-export.webp",
+};
+
 export function tierOf(item: ShopItem): Tier {
   if (item.category === "merch") return "merch";
   if (!item.feature) return item.price > 0 ? "manual" : "free";
@@ -288,7 +298,9 @@ function Preview({
   me: Me;
   tint: string;
 }) {
-  const image = frame ? null : cardImage(item.image_url, item.link_url);
+  const own = frame ? null : cardImage(item.image_url, item.link_url);
+  const art = !frame && !own && item.feature ? FEATURE_ART[item.feature] ?? null : null;
+  const image = own ?? art;
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [image]);
   const glow = { background: `radial-gradient(circle at 50% 42%, ${tint}, transparent 70%)` };
@@ -303,10 +315,10 @@ function Preview({
   }
 
   if (image && !broken) {
-    // Мерч показываем целиком, на подсветке: у кепки или пульта обрезанный
-    // край - это обрезанный товар. Снимки TradingView и обложки - во всю
-    // ширину, как было.
-    const merch = item.category === "merch";
+    // Мерч и иллюстрации функций показываем целиком, на подсветке: у кепки
+    // или пульта обрезанный край - это обрезанный товар. Снимки TradingView
+    // и обложки - во всю ширину, как было.
+    const merch = item.category === "merch" || (art !== null && image === art);
     return (
       <div
         className={`relative overflow-hidden border-b border-[var(--pane-border)] ${merch ? "h-40" : "h-32"}`}

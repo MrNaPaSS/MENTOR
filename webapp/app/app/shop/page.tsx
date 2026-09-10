@@ -39,8 +39,12 @@ const CATS: { id: Cat; icon: LucideIcon }[] = [
   { id: "software", icon: Cpu },
 ];
 
-/** Порядок групп во вкладке «Все»: то, что включается сразу, - первым. */
-const ORDER: Record<Group, number> = { features: 0, frames: 1, merch: 2, software: 3 };
+/**
+ * Порядок групп во вкладке «Все»: то, что включается сразу, - первым. Рамки
+ * - в самом низу: это оформление, а не инструмент, и пять карточек с
+ * аватарами отодвигали мерч и софт за сгиб экрана.
+ */
+const ORDER: Record<Group, number> = { features: 0, merch: 1, software: 2, frames: 3 };
 
 /**
  * Группа товара в маркете. null - товар в маркете не показывается.
