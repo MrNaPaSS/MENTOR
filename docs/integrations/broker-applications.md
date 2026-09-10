@@ -38,7 +38,7 @@
 |---|---|---|---|---|
 | 1 | **WEEX** | участие в партнёрке и KYC - у нас есть | чат партнёрского менеджера (группа «Weex Affiliate API» в Telegram) | 3 рабочих дня, интеграция 4-5 дней |
 | 2 | **BingX** | не объявлен | `broker@bingx.com`; партнёрка у нас уже есть | менеджер в течение 48 часов |
-| 3 | **Bitget** | не объявлен | [bitget.com/broker](https://www.bitget.com/broker); регистрация **без реферального кода** | идёт акция Broker Max Check: до 12 000 USDT сверх комиссии за оборот первых 60 дней, только новым брокерам |
+| 3 | **Bitget** | не объявлен | [bitget.com/broker](https://www.bitget.com/broker); регистрация **без реферального кода** | акция Broker Max Check: до 12 000 USDT сверх комиссии за оборот первых 60 дней, для брокеров, подключившихся с 1 апреля 2026. Дату окончания Bitget не объявлял - уточнять у менеджера |
 | 4 | **Gate** | ставка от оборота | [gate.io/institution/broker](https://www.gate.io/institution/broker) | до 60% бессрочно, онбординг за неделю |
 | 5 | **KuCoin** | не объявлен | [форма](https://forms.office.com/r/Se2Wa2pU7J), Telegram **@KuCoin_Broker** | до 55% |
 | 6 | **MEXC** | не объявлен | `broker@mexc.com`, Telegram **@MEXCAPIsupport** | 24 часа |
