@@ -17,6 +17,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from core.weex.base import WeexClient
+from core.weex.uid import clean_uid, looks_like_uid
 
 logger = logging.getLogger("nmnh.weex")
 
@@ -76,6 +77,19 @@ def _search_field(payload, fields) -> Optional[Decimal]:
     return None
 
 
+def _short(text: str, limit: int = 300) -> str:
+    """Ответ биржи для журнала: одной строкой и без простыни."""
+    one = " ".join((text or "").split())
+    return one[:limit] + ("..." if len(one) > limit else "") or "пусто"
+
+
+def _safe_params(params: dict | None) -> str:
+    """Запрос для журнала. Ключей и подписи здесь нет - они в заголовках."""
+    if not params:
+        return ""
+    return "?" + "&".join(f"{k}={v}" for k, v in params.items())
+
+
 class RealWeexClient(WeexClient):
     """Реальный клиент WEEX. Требует ключи; работает поверх aiohttp."""
 
@@ -131,7 +145,14 @@ class RealWeexClient(WeexClient):
         try:
             async with session.get(base + path, params=params, headers=headers) as resp:
                 if resp.status != 200:
-                    logger.warning("WEEX %s%s -> HTTP %s", base, path, resp.status)
+                    # С телом ответа и запросом. Раньше в журнале стояло голое
+                    # «HTTP 400», и по нему нельзя было понять ни какой ученик,
+                    # ни чем биржа недовольна: причину искали, читая код.
+                    logger.warning(
+                        "WEEX %s%s %s -> HTTP %s: %s",
+                        base, path, _safe_params(params), resp.status,
+                        _short(await resp.text()),
+                    )
                     return None
                 return await resp.json(content_type=None)
         except Exception as exc:  # noqa: BLE001
@@ -176,6 +197,10 @@ class RealWeexClient(WeexClient):
         try:
             async with session.post(base + path, data=raw, headers=headers) as resp:
                 if resp.status != 200:
+                    logger.warning(
+                        "WEEX POST %s%s -> HTTP %s: %s",
+                        base, path, resp.status, _short(await resp.text()),
+                    )
                     return None
                 return await resp.json(content_type=None)
         except Exception as exc:  # noqa: BLE001
@@ -333,8 +358,23 @@ class RealWeexClient(WeexClient):
         return results
 
     async def get_agency_assert(self, user_id: str, start_date: str = "", end_date: str = "") -> dict:
-        """Asset snapshot for a referral. Dates in yyyy-MM-dd format (WEEX requirement)."""
-        params: dict = {"userId": user_id}
+        """Снимок активов реферала. Даты в формате yyyy-MM-dd - так требует WEEX.
+
+        UID уходит цифрами. Он приходит к нам от ученика или от бота, и вместе
+        с цифрами копируется всё, что стоит рядом: пробелы, дефис, буквенный
+        префикс из интерфейса биржи. На ``userId=PO6067083524`` партнёрская
+        ручка отвечает отказом, и в журнале от этого остаётся голое «HTTP 400».
+        """
+        uid = clean_uid(user_id)
+        if not looks_like_uid(user_id):
+            # На биржу с этим идти незачем: она откажет, а место в её счётчике
+            # запросов уйдёт. Зато в журнале будет видно, что именно у нас
+            # записано вместо опознавателя.
+            logger.warning("UID %r не похож на опознаватель WEEX - не спрашиваем", user_id)
+            return {}
+        if uid != str(user_id).strip():
+            logger.info("UID %r спрошен как %s", user_id, uid)
+        params: dict = {"userId": uid}
         if start_date:
             params["startTime"] = start_date
         if end_date:

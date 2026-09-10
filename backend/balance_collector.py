@@ -17,6 +17,7 @@ from backend.trading.funds import balance_by_keys, futures_volume_by_keys
 from core.db import SessionLocal
 from core.models import BalanceSnapshot, Student, WeexCredential
 from core.weex.base import WeexClient
+from core.weex.uid import clean_uid
 
 logger = logging.getLogger("nmnh.balance")
 
@@ -60,7 +61,10 @@ async def snapshot_all(weex: WeexClient) -> int:
         try:
             rows = await weex.get_channel_trade_asset(start_ms, end_ms, page=1)
             for row in rows:
-                uid = str(row.get("uid", ""))
+                # По цифрам: в отчёте UID число, а у ученика в базе он мог
+                # осесть с префиксом или пробелом - строка тогда не находилась,
+                # и оборот дня оставался пустым.
+                uid = clean_uid(row.get("uid"))
                 if uid:
                     volume_by_uid[uid] = row
         except Exception as exc:
@@ -70,7 +74,7 @@ async def snapshot_all(weex: WeexClient) -> int:
             # Пустая строка, а не "None": с тех пор как в обход попали ученики
             # без UID, str(None) превращался в строку и уходил на биржу как
             # настоящий идентификатор.
-            uid = str(student.weex_uid).strip() if student.weex_uid else ""
+            uid = clean_uid(student.weex_uid)
             existing = session.execute(
                 select(BalanceSnapshot).where(
                     BalanceSnapshot.student_id == student.id,
@@ -159,9 +163,12 @@ async def snapshot_all(weex: WeexClient) -> int:
                     logger.warning(
                         "Оборот ученика %s не с чего взять: "
                         "лента исполнений недоступна (ключи/keystore), "
-                        "партнёрская строка по uid=%r не пришла",
+                        "партнёрской строки по uid=%r нет "
+                        "(в базе записано %r, в отчёте %d строк)",
                         student.id,
                         uid,
+                        student.weex_uid,
+                        len(volume_by_uid),
                     )
 
                 if futures is not None:

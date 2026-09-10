@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from core.weex.uid import clean_uid
 from core.models import iso, CoinTransaction, Student
 from backend.config import BackendConfig
 from backend.deps import get_config, get_session, get_current_student
@@ -294,7 +295,7 @@ def grant_coins(body: CoinGrantIn, session=Depends(get_session)):
     student, created = find_or_create_student(
         session,
         tg_id=body.tg_id,
-        weex_uid=(body.weex_uid or "").strip() or None,
+        weex_uid=clean_uid(body.weex_uid) or (body.weex_uid or "").strip() or None,
         username=body.username,
     )
 

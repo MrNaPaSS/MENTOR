@@ -111,8 +111,11 @@ def build_student_router(
     async def set_weex_uid(message: Message, state: FSMContext, weex: WeexClient):
         from sqlalchemy import select as sa_select
         from core.models import Student
+        from core.weex.uid import clean_uid
 
-        uid = (message.text or "").strip()
+        # Цифрами: ученик копирует опознаватель из приложения биржи вместе с
+        # тем, что стоит рядом, а биржа ждёт число.
+        uid = clean_uid(message.text) or (message.text or "").strip()
         tg_id = message.from_user.id
 
         # Проверяем: есть ли уже зарегистрированный с таким UID в базе.

@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from core import repo
+from core.weex.uid import clean_uid
 from backend.config import BackendConfig
 from backend.deps import get_config, get_session, get_weex, get_notifier
 from backend.security import (
@@ -141,6 +142,20 @@ def _seed_demo(session, demo_student) -> None:
         )
 
 
+def _uid(raw: str | None) -> str:
+    """UID из ввода - цифрами.
+
+    Ученик копирует опознаватель из приложения биржи, и вместе с цифрами
+    приезжает всё, что стоит рядом: пробел, дефис, буквенный префикс. Биржа на
+    такое отвечает отказом, а в отчёте партнёрской программы UID лежит числом -
+    и ученик с прилипшим префиксом оставался без баланса и оборота вовсе.
+
+    Цифр не нашлось - возвращаем что прислали: пусть на отказ ответит проверка,
+    а не молчание.
+    """
+    return clean_uid(raw) or (raw or "").strip()
+
+
 @router.post("/request-code", response_model=RequestCodeOut)
 async def request_code(
     body: RequestCodeIn,
@@ -150,7 +165,7 @@ async def request_code(
     notifier=Depends(get_notifier),
 ):
     _uid_login_open(config)
-    uid = body.weex_uid.strip()
+    uid = _uid(body.weex_uid)
     # UID должен существовать в WEEX и принадлежать одобренному ученику.
     balance = await weex.get_affiliate_balance(uid)
     if balance is None:
@@ -187,7 +202,7 @@ def verify(
     session=Depends(get_session),
 ):
     _uid_login_open(config)
-    uid = body.weex_uid.strip()
+    uid = _uid(body.weex_uid)
     row = repo.get_active_auth_code(session, uid)
     if row is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Код не запрашивался")
@@ -230,7 +245,7 @@ async def login_by_uid(
     _uid_login_open(config)
     from core.models import Student as StudentModel
 
-    uid = body.weex_uid.strip()
+    uid = _uid(body.weex_uid)
     student = repo.get_student_by_weex_uid(session, uid)
 
     # Всегда проверяем WEEX: подтверждаем аффилиат и получаем актуальный баланс.
@@ -334,7 +349,7 @@ async def tg_code(
     его. Ученик нажал кнопку дважды - он ждёт один пароль, а не гадает, какой из
     двух рабочий.
     """
-    uid = body.weex_uid.strip()
+    uid = _uid(body.weex_uid)
     if not uid:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен weex_uid")
 

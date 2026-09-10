@@ -11,6 +11,7 @@ from typing import Optional
 from sqlalchemy import select
 
 from core.db import SessionLocal
+from core.weex.uid import clean_uid, uid_variants
 from core.models import (
     AuthCode,
     SettingRow,
@@ -137,9 +138,34 @@ def set_balance(session, student: Student, balance: Optional[Decimal], source: s
 
 
 def get_student_by_weex_uid(session, weex_uid: str) -> Optional[Student]:
-    return session.execute(
-        select(Student).where(Student.weex_uid == weex_uid)
-    ).scalar_one_or_none()
+    """Ученик по UID - в любом его написании.
+
+    Опознаватель приходит то цифрами, то с префиксом из интерфейса биржи, то с
+    пробелом на конце: ученик вводит его руками, а бот передаёт то, что у него
+    записано. Искать по одной строке значит не найти своего же ученика и завести
+    рядом второго - с тем же счётом на бирже и пустой историей.
+
+    Сначала точное совпадение, потом по цифрам: у заведённых раньше в базе
+    лежит то написание, с которым они пришли.
+    """
+    for one in uid_variants(weex_uid):
+        found = session.execute(
+            select(Student).where(Student.weex_uid == one)
+        ).scalars().first()
+        if found is not None:
+            return found
+
+    digits = clean_uid(weex_uid)
+    if not digits:
+        return None
+    # Наконец, по цифрам того, что записано у учеников: префикс мог прилипнуть
+    # не к нашему запросу, а к записи в базе.
+    for student in session.execute(
+        select(Student).where(Student.weex_uid.isnot(None))
+    ).scalars():
+        if clean_uid(student.weex_uid) == digits:
+            return student
+    return None
 
 
 # ── Коды авторизации (web auth-flow, A-10) ──
