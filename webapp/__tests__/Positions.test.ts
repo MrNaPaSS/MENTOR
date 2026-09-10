@@ -54,6 +54,44 @@ describe("позиция глазами биржи", () => {
     vi.stubGlobal("fetch", answer([{ symbol: "ETHUSDT", total: "3" }]));
     expect((await positionOf("BTCUSDT", "long"))?.size).toBe(0);
   });
+
+  it("плавающий результат - за вычетом комиссии входа, как в приложении биржи", async () => {
+    // Ровно этот случай: терминал писал +36,05, биржа +28,05.
+    vi.stubGlobal(
+      "fetch",
+      answer([
+        {
+          symbol: "ETHUSDT",
+          positionSide: "SHORT",
+          size: "20.225",
+          cumOpenSize: "20.225",
+          cumOpenValue: "49998.42",
+          cumOpenFee: "8",
+          unrealizePnl: "36.05",
+        },
+      ]),
+    );
+    expect((await positionOf("ETHUSDT", "short"))?.unrealized).toBeCloseTo(28.05, 6);
+  });
+
+  it("после взятой цели вычитается только доля комиссии на остаток", async () => {
+    // 30% позиции закрыто первой целью: её доля комиссии ушла вместе с ней.
+    vi.stubGlobal(
+      "fetch",
+      answer([
+        {
+          symbol: "ETHUSDT",
+          positionSide: "SHORT",
+          size: "14.1575",
+          cumOpenSize: "20.225",
+          cumOpenValue: "49998.42",
+          cumOpenFee: "8",
+          unrealizePnl: "20",
+        },
+      ]),
+    );
+    expect((await positionOf("ETHUSDT", "short"))?.unrealized).toBeCloseTo(20 - 5.6, 6);
+  });
 });
 
 describe("средняя цена входа приезжает вместе с объёмом", () => {

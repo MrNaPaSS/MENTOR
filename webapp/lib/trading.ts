@@ -367,13 +367,24 @@ export async function positionOf(
   const openValue = numeric("cumOpenValue", "openValue") ?? 0;
   const openSize = numeric("cumOpenSize") ?? 0;
   const average = openValue > 0 && openSize > 0 ? openValue / openSize : null;
+  const size = Math.abs(numeric("total", "size", "positionAmt", "available") ?? 0);
+
+  // Плавающий результат - за вычетом комиссии, удержанной на входе.
+  //
+  // `unrealizePnl` биржа отдаёт до неё, а в своём приложении показывает уже
+  // после: по шорту ETH на 20,225 по 2472,11 терминал писал +36,05, а биржа
+  // +28,05 - ровно на 8,00, уплаченные за вход. Вычитаем только долю остатка:
+  // часть позиции, закрытая целями, свою долю комиссии уже унесла.
+  const raw = numeric("unrealizePnl", "unrealizedPnl", "unrealizedProfit", "unrealisedPnl");
+  const openFee = Math.abs(numeric("cumOpenFee") ?? 0);
+  const spent = openSize > 0 ? openFee * Math.min(1, size / openSize) : 0;
 
   return {
     rows: mine.length,
     matched: true,
-    size: Math.abs(numeric("total", "size", "positionAmt", "available") ?? 0),
+    size,
     entry: numeric("averageOpenPrice", "entryPrice", "avgPrice") ?? average,
-    unrealized: numeric("unrealizePnl", "unrealizedPnl", "unrealizedProfit", "unrealisedPnl"),
+    unrealized: raw === null ? null : raw - spent,
     breakeven: numeric("breakEvenPrice", "breakevenPrice", "breakEven", "bePrice"),
   };
 }
