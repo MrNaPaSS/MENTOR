@@ -42,6 +42,7 @@ from sqlalchemy import select
 # запускают отдельно, и без этой строки он падал на первом же ученике с
 # «WEEX_KEYS_SECRET не задан».
 import backend.config  # noqa: F401
+from backend.trading.rewards import award_trade_coins
 from core.db import SessionLocal, init_engine
 from core.models import ScalpTrade, WeexCredential, utcnow
 from core.weex import keys as keystore
@@ -242,6 +243,10 @@ async def _one(
             trade.exit_price = exit_price
         trade.from_exchange = True
         trade.note = "биржа"
+        # Пересчёт добирает и монеты: до него сделка была оценкой с экрана и
+        # награды не давала. Повторно та же сделка не начислится - на паре
+        # «ученик + ref» стоит уникальный индекс.
+        award_trade_coins(session, trade)
     return 1
 
 

@@ -24,6 +24,7 @@ from typing import Any, Iterable
 
 from sqlalchemy import select
 
+from backend.trading.rewards import award_trade_coins
 from core.models import LiveTrade, ScalpTrade, WeexCredential, utcnow
 from core.trading.position import (
     DEFAULT_TAKER_FEE,
@@ -849,6 +850,9 @@ class PositionWatcher:
         record.from_exchange = True
         if exists is None:
             session.add(record)
+        # Монеты за результат: сделка закрылась на бирже, пока трейдер спал, и
+        # награда должна прийти так же сама.
+        award_trade_coins(session, record)
         self._pending.pop(trade.id, None)
         return True
 

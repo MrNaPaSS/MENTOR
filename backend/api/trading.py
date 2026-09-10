@@ -35,6 +35,7 @@ from core.trading.position import (
 )
 from backend.trading.refusals import explain
 from core.weex import keys as keystore
+from backend.trading.rewards import award_trade_coins
 from backend.trading.watcher import (
     fill_time,
     order_marks,
@@ -960,6 +961,9 @@ def _journal(
     row.closed_at = utcnow()
     row.note = "биржа"
     row.from_exchange = True
+    # Монеты начисляются здесь же, до коммита: сделка и награда за неё обязаны
+    # попасть в базу одной операцией.
+    award_trade_coins(session, row)
     session.commit()
     logger.info(
         "В журнал: %s %s, итог %.4f (комиссия %.4f)", live.symbol, live.side, pnl, fee or 0.0
