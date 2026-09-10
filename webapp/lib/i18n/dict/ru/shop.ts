@@ -10,7 +10,6 @@ export const shop = {
     features: "Функции",
     frames: "Оформление",
     merch: "Мерч",
-    people: "Менторство",
     software: "Наш софт",
   },
   empty: "Здесь пока пусто.",

@@ -7,7 +7,6 @@ export const shop = {
     features: "Features",
     frames: "Style",
     merch: "Merch",
-    people: "Mentoring",
     software: "Our software",
   },
   empty: "Nothing here yet.",

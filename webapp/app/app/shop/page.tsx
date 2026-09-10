@@ -13,7 +13,7 @@
 // справка, её читают один раз.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Cpu, Crown, GraduationCap, LayoutGrid, Shirt, X, Zap, type LucideIcon } from "lucide-react";
+import { Cpu, Crown, LayoutGrid, Shirt, X, Zap, type LucideIcon } from "lucide-react";
 import { api, API_URL, type CoinTx, type Profile, type ShopItem, type ShopOrder } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
@@ -28,28 +28,39 @@ import BalanceCard from "@/components/shop/BalanceCard";
 import ActivityPane from "@/components/shop/ActivityPane";
 import BuyDialog from "@/components/shop/BuyDialog";
 
-type Cat = "all" | "features" | "frames" | "merch" | "people" | "software";
+type Cat = "all" | "features" | "frames" | "merch" | "software";
+type Group = Exclude<Cat, "all">;
 
 const CATS: { id: Cat; icon: LucideIcon }[] = [
   { id: "all", icon: LayoutGrid },
   { id: "features", icon: Zap },
   { id: "frames", icon: Crown },
   { id: "merch", icon: Shirt },
-  { id: "people", icon: GraduationCap },
   { id: "software", icon: Cpu },
 ];
 
 /** Порядок групп во вкладке «Все»: то, что включается сразу, - первым. */
-const ORDER: Record<Exclude<Cat, "all">, number> = { features: 0, frames: 1, merch: 2, people: 3, software: 4 };
+const ORDER: Record<Group, number> = { features: 0, frames: 1, merch: 2, software: 3 };
 
-function catOf(item: ShopItem): Exclude<Cat, "all"> {
+/**
+ * Группа товара в маркете. null - товар в маркете не показывается.
+ *
+ * Менторство из маркета убрано: разбор и сопровождение продаёт сам ментор,
+ * а не витрина за монеты. Такие товары остаются в админке - их можно
+ * выключить или удалить там, - но ученику не видны.
+ */
+function catOf(item: ShopItem): Group | null {
   // Подписки на индикаторы TradingView - доступ к чужой площадке, а не наш
   // терминал: их место в «Нашем софте», рядом с остальными ссылками.
   if (item.section === "software" || item.category === "indicator") return "software";
   if (item.category === "merch") return "merch";
   if (frameOfFeature(item.feature)) return "frames";
   if (item.feature) return "features";
-  return "people";
+  return null;
+}
+
+function groupOf(item: ShopItem): Group {
+  return catOf(item) ?? "software";
 }
 
 /** Карточка рамки лидерборда: не товар, а место, показываем для мотивации. */
@@ -121,26 +132,30 @@ export default function ShopPage() {
   };
   const equipped = profile?.avatar_frame ?? "";
 
+  // Только то, что маркет показывает: менторство сюда не попадает вовсе.
+  const shown = useMemo(() => items.filter((item) => catOf(item) !== null), [items]);
+
   const counts = useMemo(() => {
-    const out: Record<Cat, number> = { all: items.length, features: 0, frames: 0, merch: 0, people: 0, software: 0 };
-    for (const item of items) out[catOf(item)] += 1;
+    const out: Record<Cat, number> = { all: shown.length, features: 0, frames: 0, merch: 0, software: 0 };
+    for (const item of shown) out[groupOf(item)] += 1;
     return out;
-  }, [items]);
+  }, [shown]);
 
   const visible = useMemo(() => {
-    const list = cat === "all" ? items : items.filter((item) => catOf(item) === cat);
+    const list = cat === "all" ? shown : shown.filter((item) => catOf(item) === cat);
     // Внутри группы - порядок каталога, между группами - наш.
-    return [...list].sort((a, b) => ORDER[catOf(a)] - ORDER[catOf(b)] || a.sort_order - b.sort_order);
-  }, [items, cat]);
+    return [...list].sort((a, b) => ORDER[groupOf(a)] - ORDER[groupOf(b)] || a.sort_order - b.sort_order);
+  }, [shown, cat]);
 
-  // Ближайшая цель: самый дешёвый товар, на который пока не хватает.
+  // Ближайшая цель: самый дешёвый из видимых товаров, на который пока не
+  // хватает. Спрятанный товар целью быть не может - к нему не дойти.
   const goal = useMemo(() => {
-    const next = items
+    const next = shown
       .filter((item) => item.price > balance)
       .filter((item) => !(item.feature && owned.find(item.feature)?.permanent))
       .sort((a, b) => a.price - b.price)[0];
     return next ? { title: next.title, price: next.price } : null;
-  }, [items, balance, owned]);
+  }, [shown, balance, owned]);
 
   async function buy(item: ShopItem, contact: string) {
     const token = getAccessToken();
