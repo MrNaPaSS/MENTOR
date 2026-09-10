@@ -167,7 +167,7 @@ export const landing = {
 
   footer: {
     about:
-      "The fintech platform of trading mentor No Money No Honey. Signals sized to your deposit, analytics and a private community.",
+      "The No Money No Honey trader ecosystem: a free terminal wired to your own exchange account, exchange fee rebates, a journal built from exchange reports and a private community.",
     navHeading: "Navigation",
     pagesHeading: "Sections",
     pages: {
