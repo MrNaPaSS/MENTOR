@@ -21,7 +21,6 @@ export default function BrokerHero() {
   return (
     <section id="about" className="relative overflow-hidden pt-28 pb-14 md:pt-36 md:pb-20">
       <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
-      <div className="pointer-events-none absolute inset-0 bg-grid-faint [background-size:48px_48px] opacity-30 [mask-image:radial-gradient(70%_60%_at_50%_30%,black,transparent)]" />
 
       <div className="relative mx-auto max-w-6xl px-4 md:px-6">
         <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr]">
@@ -93,7 +92,7 @@ export default function BrokerHero() {
         {/* Лестница уровней. Не таблица - четыре ступени в строку: их читают
             глазами за секунду, и видно, что ступень одна другой шире по
             обороту, а не по цене. */}
-        <div className="mt-14 rounded-2xl border border-border bg-bg-card/40 p-5 backdrop-blur-sm md:mt-16 md:p-6">
+        <div className="mt-14 rounded-2xl border border-border bg-bg-card/70 p-5 backdrop-blur-sm md:mt-16 md:p-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="text-sm font-semibold uppercase tracking-wider text-text-muted">
               {t.broker.hero.ticker.label}

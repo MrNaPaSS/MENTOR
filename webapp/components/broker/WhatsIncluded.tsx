@@ -40,7 +40,7 @@ export default function WhatsIncluded() {
           const Icon = ICONS[i % ICONS.length];
           return (
             <Reveal as="article" key={item.title} delay={i * 0.07}>
-              <div className="group h-full rounded-2xl border border-border bg-bg-card/40 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-accent-cyan/30">
+              <div className="group h-full rounded-2xl border border-border bg-bg-card/70 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-accent-cyan/30">
                 <span className="grid h-11 w-11 place-items-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/25 transition-transform duration-300 group-hover:scale-110">
                   <Icon className="h-5 w-5" />
                 </span>

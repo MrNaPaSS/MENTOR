@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import BackdropGrid from "@/components/ui/BackdropGrid";
 import BrokerHeader from "@/components/broker/BrokerHeader";
 import Footer from "@/components/landing/Footer";
 import BrokerHero from "@/components/broker/BrokerHero";
@@ -59,6 +60,7 @@ export default function BrokerPage() {
           faqLd(broker.faq.items),
         ]}
       />
+      <BackdropGrid />
       <BrokerHeader />
       <main>
         <BrokerHero />

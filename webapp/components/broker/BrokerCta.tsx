@@ -21,9 +21,8 @@ export default function BrokerCta() {
   return (
     <section className="mx-auto max-w-6xl px-4 pb-24 md:px-6 md:pb-32">
       <Reveal>
-        <div className="relative overflow-hidden rounded-3xl border border-border bg-bg-card/60 p-8 text-center md:p-14">
+        <div className="relative overflow-hidden rounded-3xl border border-border bg-bg-card/85 p-8 text-center md:p-14">
           <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-60" />
-          <div className="pointer-events-none absolute inset-0 bg-grid-faint [background-size:48px_48px] opacity-20 [mask-image:radial-gradient(60%_60%_at_50%_50%,black,transparent)]" />
 
           <div className="relative">
             <h2 className="text-h2 text-text-primary">{t.broker.cta.title}</h2>

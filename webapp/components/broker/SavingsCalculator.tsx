@@ -75,7 +75,7 @@ export default function SavingsCalculator() {
       <Reveal className="mt-14">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           {/* Ввод */}
-          <div className="rounded-2xl border border-border bg-bg-card/50 p-5 md:p-6">
+          <div className="rounded-2xl border border-border bg-bg-card/80 p-5 md:p-6">
             <label className="block">
               <span className="text-sm font-semibold text-text-primary">
                 {t.broker.calculator.volumeLabel}
@@ -199,7 +199,7 @@ export default function SavingsCalculator() {
 
       {/* Сравнение с подпиской */}
       <Reveal delay={0.15} className="mt-6">
-        <div className="rounded-2xl border border-border bg-bg-card/50 p-5 md:p-6">
+        <div className="rounded-2xl border border-border bg-bg-card/80 p-5 md:p-6">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h3 className="text-lg font-bold text-text-primary">
               {t.broker.calculator.versus.title}

@@ -39,7 +39,7 @@ export default function SubscriptionMath() {
 
       {/* 1. Когда абонплата отбивается возвратом */}
       <Reveal className="mt-14">
-        <div className="rounded-2xl border border-border bg-bg-card/50 p-5 md:p-6">
+        <div className="rounded-2xl border border-border bg-bg-card/80 p-5 md:p-6">
           <h3 className="text-lg font-bold text-text-primary">{copy.breakeven.title}</h3>
           <p className="mt-1 text-sm text-text-muted">{copy.breakeven.subtitle}</p>
 
@@ -77,7 +77,7 @@ export default function SubscriptionMath() {
 
       {/* 2. Когда окупается переход на тариф выше */}
       <Reveal delay={0.1} className="mt-6">
-        <div className="rounded-2xl border border-border bg-bg-card/50 p-5 md:p-6">
+        <div className="rounded-2xl border border-border bg-bg-card/80 p-5 md:p-6">
           <h3 className="text-lg font-bold text-text-primary">{copy.upgrade.title}</h3>
           <p className="mt-1 text-sm text-text-muted">{copy.upgrade.subtitle}</p>
 
@@ -114,7 +114,7 @@ export default function SubscriptionMath() {
 
       {/* 3. Что режут по ступеням */}
       <Reveal delay={0.15} className="mt-6">
-        <div className="rounded-2xl border border-border bg-bg-card/50 p-5 md:p-6">
+        <div className="rounded-2xl border border-border bg-bg-card/80 p-5 md:p-6">
           <h3 className="text-lg font-bold text-text-primary">{copy.cuts.title}</h3>
           <p className="mt-1 text-sm text-text-muted">{copy.cuts.subtitle}</p>
 

@@ -224,7 +224,7 @@ export const broker = {
 
   steps: {
     eyebrow: "Getting started",
-    title: "Four steps, about fifteen minutes",
+    title: "Four steps, seven minutes",
     subtitle: "No applications, no interviews, no waiting for approval.",
     items: [
       {
@@ -309,7 +309,7 @@ export const broker = {
 
   cta: {
     title: "Last month's fees are already paid",
-    text: "Those you cannot get back. Next month's you can start recovering today, and it takes about fifteen minutes.",
+    text: "Those you cannot get back. Next month's you can start recovering today, and it takes seven minutes.",
     primary: "Open the terminal",
     secondary: "Open a WEEX account",
     note: "No subscription, no application, no call with a manager.",

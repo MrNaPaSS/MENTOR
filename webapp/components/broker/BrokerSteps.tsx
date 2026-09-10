@@ -36,7 +36,7 @@ export default function BrokerSteps() {
 
         {t.broker.steps.items.map((step, i) => (
           <Reveal as="article" key={step.title} delay={i * 0.1}>
-            <div className="relative h-full overflow-hidden rounded-2xl border border-border bg-bg-card/40 p-5">
+            <div className="relative h-full overflow-hidden rounded-2xl border border-border bg-bg-card/70 p-5">
               <span
                 className="absolute right-4 top-2 select-none font-mono text-6xl font-black leading-none"
                 style={{ color: "rgba(255,255,255,0.04)", WebkitTextStroke: "1px rgba(255,255,255,0.08)" }}
