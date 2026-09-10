@@ -340,3 +340,33 @@ def test_spent_weight_forgets_the_previous_minute():
     now = time.monotonic()
     rest._spent.append((now - WEIGHT_WINDOW - 1, 1000))
     assert rest._spent_weight(now) == 0
+
+
+def test_background_requests_leave_room_for_the_trader():
+    """Снимки стаканов не выбирают весь бюджет: свечи трейдера должны пройти.
+
+    После запуска сервер берёт снимки по всем монетам скринера разом, и график
+    у трейдера отвечал 502 - его свечи стояли в той же очереди.
+    """
+    import asyncio
+
+    from backend.scalping.binance import INTERACTIVE_RESERVE, WEIGHT_BUDGET, BinanceRest
+
+    rest = BinanceRest(lambda: None)           # type: ignore[arg-type]
+
+    async def run():
+        while await rest._reserve("/fapi/v1/depth", 10, background=True):
+            pass
+        return await rest._reserve("/fapi/v1/klines")
+
+    assert asyncio.run(run()) is True
+    assert rest._spent_weight(time.monotonic()) <= WEIGHT_BUDGET - INTERACTIVE_RESERVE + 2
+
+
+def test_a_deeper_snapshot_weighs_more():
+    """Снимок на тысячу уровней стоит у биржи вдвое дороже, чем на пятьсот."""
+    from backend.scalping.binance import depth_weight
+
+    assert depth_weight(100) == 5
+    assert depth_weight(500) == 10
+    assert depth_weight(1000) == 20

@@ -3,6 +3,7 @@
 import {
   logout,
   logoutMentor,
+  getAccessToken,
   getMentorRefreshToken,
   getRefreshToken,
   setStudentTokens,
@@ -79,6 +80,33 @@ function refreshAccessToken(kind: TokenKind): Promise<string | null> {
       });
   }
   return refreshing[kind]!;
+}
+
+/** Истекает ли токен в ближайшие `marginSec` секунд. Не разобрали - считаем живым. */
+function expiresSoon(token: string, marginSec = 60): boolean {
+  try {
+    const part = token.split(".")[1] ?? "";
+    const claims = JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof claims.exp === "number" && claims.exp * 1000 - Date.now() < marginSec * 1000;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Живой access-токен ученика: сохранённый, а если он истёк или вот-вот
+ * истечёт - обновлённый.
+ *
+ * Нужен тем, кто ходит мимо fetch. Сокет чата уходит с токеном в адресе, и на
+ * отказ его повторить нечем - сервер просто закрывает соединение. Ученик с
+ * токеном, истёкшим час назад, стучался в чат с ним же раз за разом и получал
+ * 403, пока не перезагрузил страницу.
+ */
+export async function liveAccessToken(): Promise<string | null> {
+  const token = getAccessToken();
+  if (!token) return null;
+  if (!expiresSoon(token)) return token;
+  return refreshAccessToken("student");
 }
 
 function endSession(kind: TokenKind) {

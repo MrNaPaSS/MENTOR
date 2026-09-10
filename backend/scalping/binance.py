@@ -48,14 +48,31 @@ BAN_BACKOFF_MAX = 600.0
 WEIGHT_BUDGET = 1200
 WEIGHT_WINDOW = 60.0
 
+# Сколько веса фоновым запросам не достаётся никогда: его держим за запросами
+# трейдера - свечами графика и разбором свечи. После запуска сервер берёт
+# снимки стаканов по всем монетам скринера разом и выбирал бюджет до дна, а
+# график у трейдера в эту минуту отвечал 502: его свечи стояли в той же очереди.
+INTERACTIVE_RESERVE = 300
+
 # Вес известных запросов по документации биржи.
 WEIGHTS = {
-    "/fapi/v1/depth": 10,       # при лимите до 500 уровней
+    "/fapi/v1/depth": 10,       # при лимите до 500 уровней; глубже - см. depth_weight
     "/fapi/v1/klines": 2,
     "/fapi/v1/aggTrades": 20,   # страница сделок, до тысячи штук
     "/fapi/v1/ticker/24hr": 40,  # сводка по всем инструментам
 }
 DEFAULT_WEIGHT = 5
+
+
+def depth_weight(limit: int) -> int:
+    """Вес снимка стакана: у биржи он растёт с глубиной - 2/5/10/20."""
+    if limit <= 50:
+        return 2
+    if limit <= 100:
+        return 5
+    if limit <= 500:
+        return 10
+    return 20
 
 
 class BinanceRest:
@@ -93,27 +110,41 @@ class BinanceRest:
             self._spent.popleft()
         return sum(w for _, w in self._spent)
 
-    async def _reserve(self, path: str) -> bool:
-        """Занять вес под запрос. False — бюджет исчерпан, запрос не пойдёт."""
-        weight = WEIGHTS.get(path, DEFAULT_WEIGHT)
+    async def _reserve(
+        self, path: str, weight: int | None = None, background: bool = False
+    ) -> bool:
+        """Занять вес под запрос. False — бюджет исчерпан, запрос не пойдёт.
+
+        Фоновым достаётся не весь бюджет: INTERACTIVE_RESERVE держится за
+        запросами трейдера.
+        """
+        weight = weight or WEIGHTS.get(path, DEFAULT_WEIGHT)
         now = time.monotonic()
-        if self._spent_weight(now) + weight > WEIGHT_BUDGET:
-            logger.warning(
-                "Бюджет запросов исчерпан (%d из %d за минуту), %s отложен",
-                self._spent_weight(now),
-                WEIGHT_BUDGET,
-                path,
-            )
+        spent = self._spent_weight(now)
+        ceiling = WEIGHT_BUDGET - INTERACTIVE_RESERVE if background else WEIGHT_BUDGET
+        if spent + weight > ceiling:
+            # Фоновый отказ - обычное дело при запуске, когда снимки берутся по
+            # всем монетам разом: сорок одинаковых строк в журнале ничего не
+            # говорят. Отказ трейдеру - повод для предупреждения.
+            log = logger.debug if background else logger.warning
+            log("Бюджет запросов исчерпан (%d из %d за минуту), %s отложен", spent, ceiling, path)
             return False
         self._spent.append((now, weight))
         return True
 
-    async def _get(self, path: str, params: dict | None = None) -> Any:
+    async def _get(
+        self,
+        path: str,
+        params: dict | None = None,
+        *,
+        weight: int | None = None,
+        background: bool = False,
+    ) -> Any:
         if self.blocked:
             return None
         # Держим себя в лимите сами. Дожидаться предупреждения от биржи поздно:
         # за 429 приходит 418, а это бан адреса на десятки минут.
-        if not await self._reserve(path):
+        if not await self._reserve(path, weight, background):
             return None
 
         session = await self._session_factory()
@@ -142,8 +173,16 @@ class BinanceRest:
             return None
 
     async def depth(self, symbol: str, limit: int = 1000) -> dict | None:
-        """Снимок стакана. Берётся один раз на подписку, дальше — поток."""
-        data = await self._get("/fapi/v1/depth", {"symbol": symbol.upper(), "limit": limit})
+        """Снимок стакана. Берётся один раз на подписку, дальше — поток.
+
+        Фоновый запрос: снимки берёт сборщик сам, трейдер их не ждёт.
+        """
+        data = await self._get(
+            "/fapi/v1/depth",
+            {"symbol": symbol.upper(), "limit": limit},
+            weight=depth_weight(limit),
+            background=True,
+        )
         return data if isinstance(data, dict) else None
 
     async def klines(self, symbol: str, interval: str = "1m", limit: int = 240) -> list[list]:
@@ -189,8 +228,8 @@ class BinanceRest:
         return data if isinstance(data, list) else []
 
     async def tickers_24h(self) -> list[dict]:
-        """Суточная сводка по всем инструментам одним запросом."""
-        data = await self._get("/fapi/v1/ticker/24hr")
+        """Суточная сводка по всем инструментам одним запросом. Фоновый."""
+        data = await self._get("/fapi/v1/ticker/24hr", background=True)
         return data if isinstance(data, list) else []
 
 

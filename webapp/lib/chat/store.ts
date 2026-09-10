@@ -14,8 +14,7 @@
 // Сообщения хранит сервер, здесь только их копия и живой канал: историю
 // спрашиваем страницами, новое приезжает сокетом.
 
-import { API_URL } from "@/lib/api";
-import { getAccessToken } from "@/lib/auth";
+import { API_URL, liveAccessToken } from "@/lib/api";
 
 import { cardLink } from "./card";
 import {
@@ -196,9 +195,26 @@ let wait = 1000;
 /** Панель открыта и её видно: пришедшее считается прочитанным сразу. */
 let reading = false;
 
+/** Идёт подключение: токен обновляется, сокета ещё нет. */
+let dialing = false;
+
 function connect() {
-  const token = getAccessToken();
-  if (!token || socket || users === 0) return;
+  if (socket || dialing || users === 0) return;
+  dialing = true;
+  // Токен - живой, а не тот, что лежит в хранилище. Он живёт четверть часа, а
+  // сокет переподключается сам, без запроса, который обновил бы его на отказе:
+  // ученик с истёкшим токеном стучался в чат с ним же и получал 403, пока не
+  // перезагрузил страницу.
+  void liveAccessToken()
+    .catch(() => null)
+    .then((token) => {
+      dialing = false;
+      if (token) dial(token);
+    });
+}
+
+function dial(token: string) {
+  if (socket || users === 0) return;
 
   const base = API_URL.replace(/^http/, "ws");
   const ws = new WebSocket(`${base}/ws/chat?token=${encodeURIComponent(token)}`);
