@@ -18,8 +18,10 @@ import { ChevronLeft, ChevronRight, Copy, Download, Link2, X } from "lucide-reac
 import {
   defaultVariant,
   loadBackdrop,
+  MARK_SRC,
   render,
   resultInk,
+  sealFrame,
   variantsFor,
   type CardData,
 } from "@/lib/pnl/card";
@@ -60,6 +62,7 @@ export default function PnlCard({
   const here = Math.max(0, choices.indexOf(fallback));
   const variant =
     pick === null ? fallback : choices[((pick % choices.length) + choices.length) % choices.length];
+  const seal = sealFrame(variant);
 
   // Лист без печати: её ставит разметка поверх, и она же движется. Картинка с
   // готовым оттиском собирается отдельно - для буфера, файла и ссылки.
@@ -166,6 +169,13 @@ export default function PnlCard({
           "--pnl-y": `${variant.stamp.y * 100}%`,
           "--pnl-w": `${variant.stamp.w * 100}%`,
           "--pnl-h": `${variant.stamp.h * 100}%`,
+          // Оттиск на планете: место считает та же функция, что и для холста,
+          // а светится он цветом рамок заготовки - как на бланке сигнала.
+          "--pnl-seal-x": `${seal.x * 100}%`,
+          "--pnl-seal-y": `${seal.y * 100}%`,
+          "--pnl-seal-w": `${seal.w * 100}%`,
+          "--pnl-seal-h": `${seal.h * 100}%`,
+          "--pnl-glow": variant.ink,
         } as React.CSSProperties
       }
     >
@@ -238,6 +248,12 @@ export default function PnlCard({
                   <span className="pnl-creed">TRADE · DISCIPLINE · PROFIT</span>
                 </div>
               </div>
+              <div
+                aria-hidden
+                className="pnl-seal"
+                data-paper={variant.paper}
+                style={{ backgroundImage: `url(${MARK_SRC})` }}
+              />
             </div>
           ) : (
             <div className="grid aspect-[640/852] place-items-center rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[12px] text-[var(--pane-muted)]">

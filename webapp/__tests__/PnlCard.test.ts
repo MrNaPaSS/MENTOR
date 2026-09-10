@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { defaultVariant, price, resultInk, VARIANTS } from "@/lib/pnl/card";
+import { defaultVariant, price, resultInk, sealFrame, VARIANTS } from "@/lib/pnl/card";
 import { cardFromTrade, roiOf } from "@/lib/pnl/data";
 import type { JournalTrade } from "@/lib/journal";
 
@@ -114,6 +114,19 @@ describe("заготовка карточки", () => {
     expect((box("chart-long").y + box("chart-long").h) * 781).toBeCloseTo(103, 6);
     expect(box("chart-short").x * 586).toBeCloseTo(18, 6);
     expect((box("chart-short").y + box("chart-short").h) * 780).toBeCloseTo(97, 6);
+  });
+
+  it("оттиск внизу стоит на планете и не выходит из нижней панели", () => {
+    // Планета нарисована в правой четверти панели. Выйдет оттиск из панели
+    // вверх - ляжет на цифры итога; уедет влево - на надписи и QR.
+    for (const one of VARIANTS) {
+      const seal = sealFrame(one);
+      const { panel } = one;
+      expect(seal.x).toBeGreaterThanOrEqual(panel.x + panel.w * 0.72);
+      expect(seal.x + seal.w).toBeLessThanOrEqual(panel.x + panel.w);
+      expect(seal.y).toBeGreaterThanOrEqual(panel.y);
+      expect(seal.y + seal.h).toBeLessThanOrEqual(panel.y + panel.h);
+    }
   });
 
   it("надпись не сливается со своим полотном", () => {

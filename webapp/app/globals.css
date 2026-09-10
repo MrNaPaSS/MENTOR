@@ -504,7 +504,7 @@
   container-type: inline-size;
   transform-origin: 50% 0;
   animation: pnl-feed 1.15s cubic-bezier(0.22, 0.61, 0.36, 1) 0.15s both,
-    pnl-shock 0.18s ease-out 1.35s;
+    pnl-shock 0.18s ease-out 1.35s, pnl-shock 0.18s ease-out 1.85s;
 }
 .pnl-paper img {
   display: block;
@@ -589,6 +589,35 @@
   100% { transform: scale(1) rotate(-4.5deg); opacity: 1; }
 }
 
+/* Оттиск-логотип на планете нижней панели. Место, наклон и свечение - те же,
+   что холст ставит на скачиваемую картинку (sealFrame и putMark в
+   webapp/lib/pnl/card.ts). Падает вторым, тем же ударом, что печать сверху.
+   Фоном, а не картинкой: правило для картинки листа растянуло бы его на всю
+   ширину. */
+.pnl-seal {
+  position: absolute;
+  left: var(--pnl-seal-x);
+  top: var(--pnl-seal-y);
+  width: var(--pnl-seal-w);
+  height: var(--pnl-seal-h);
+  background: center / contain no-repeat;
+  pointer-events: none;
+  /* Оттиск нарисован чёрным: на светлом полотне он остаётся тёмным, на
+     тёмном выворачивается в белый - иначе его не видно вовсе. */
+  filter: brightness(0) drop-shadow(0 0 5cqw var(--pnl-glow));
+  opacity: 0.95;
+  transform: rotate(-6deg);
+  animation: pnl-seal 0.42s cubic-bezier(0.2, 1.5, 0.35, 1) 1.85s both;
+}
+.pnl-seal[data-paper="dark"] {
+  filter: brightness(0) invert(1) drop-shadow(0 0 5cqw var(--pnl-glow));
+}
+@keyframes pnl-seal {
+  0% { transform: scale(2.4) rotate(-24deg); opacity: 0; }
+  60% { opacity: 0.95; }
+  100% { transform: scale(1) rotate(-6deg); opacity: 0.95; }
+}
+
 /* Щель принтера: без неё движение читается как «картинка приехала». */
 .pnl-slot {
   height: 10px;
@@ -602,7 +631,8 @@
    Печать - событие первого показа; на смене заготовки прогонять принтер заново
    значит превращать движение в помеху тому, кто выбирает. */
 .pnl-still .pnl-paper,
-.pnl-still .pnl-stamp {
+.pnl-still .pnl-stamp,
+.pnl-still .pnl-seal {
   animation: none;
 }
 
@@ -618,7 +648,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .pnl-paper,
-  .pnl-stamp {
+  .pnl-stamp,
+  .pnl-seal {
     animation: none;
   }
 }

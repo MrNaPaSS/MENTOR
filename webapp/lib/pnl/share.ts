@@ -12,7 +12,7 @@ import { dict } from "@/lib/i18n";
 import { absolute, authReq } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 
-import { resultInk } from "./card";
+import { resultInk, sealFrame } from "./card";
 import type { CardData, Variant } from "./card";
 
 function toBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
@@ -94,6 +94,11 @@ export async function share(
         variant: variant.id,
         ink: resultInk(variant.paper, data.pnl),
         stamp: variant.stamp,
+        // Оттиск на планете нижней панели: где стоит, чем светится и на каком
+        // полотне - от полотна зависит, тёмным он будет или белым.
+        seal: sealFrame(variant),
+        glow: variant.ink,
+        paper: variant.paper,
       },
     }),
   });

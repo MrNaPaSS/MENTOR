@@ -20,6 +20,7 @@ import json
 import os
 import re
 import secrets
+from dataclasses import dataclass
 from datetime import timezone
 from html import escape
 from pathlib import Path
@@ -145,6 +146,12 @@ class CardLook(BaseModel):
     # страницы, и чужая строка там - открытая дверь.
     ink: str = Field(default="#22E07A", pattern="^#[0-9A-Fa-f]{6}$")
     stamp: CardFrame
+    # Оттиск-логотип на планете нижней панели: где стоит, чем светится и на
+    # каком полотне - от полотна зависит его цвет. Необязательны: карточки,
+    # выложенные до него, приходят без этих полей.
+    seal: CardFrame | None = None
+    glow: str = Field(default="#22E07A", pattern="^#[0-9A-Fa-f]{6}$")
+    paper: str = Field(default="light", pattern="^(light|dark)$")
 
 
 class CardIn(BaseModel):
@@ -304,29 +311,56 @@ _CARD_FALLBACK = {
 _STAMP_FALLBACK = {"x": 20 / 640, "y": 23 / 852, "w": 371 / 640, "h": 89 / 852}
 
 
-def _card_look(shot: ChartShot) -> tuple[str, dict[str, float]]:
-    """Цвет печати и её место в долях - из записи, а не из таблицы здесь.
+@dataclass(frozen=True)
+class _Look:
+    """Как карточка выглядит на странице: печать сверху и оттиск внизу."""
+
+    ink: str
+    stamp: dict[str, float]
+    # Нет у карточек, выложенных до оттиска на планете: у них знак уже
+    # впечатан в сам лист, и второй поверх лёг бы рядом с ним.
+    seal: dict[str, float] | None
+    glow: str
+    paper: str
+
+
+def _frame(value: object) -> dict[str, float] | None:
+    """Прямоугольник в долях из записи. Не разобрали - None, а не исключение."""
+    if not isinstance(value, dict):
+        return None
+    try:
+        return {k: float(value[k]) for k in ("x", "y", "w", "h")}
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _hex(value: object, fallback: str) -> str:
+    """Цвет из записи. Уходит прямо в стили страницы - поэтому только #RRGGBB."""
+    text = str(value or "")
+    return text if re.fullmatch(r"#[0-9A-Fa-f]{6}", text) else fallback
+
+
+def _card_look(shot: ChartShot) -> _Look:
+    """Цвета и места печатей в долях - из записи, а не из таблицы здесь.
 
     Числа приходят оттуда же, откуда рисуется сама карточка. Держать их копию
     на сервере значит однажды нарисовать новую заготовку и получить печать
     мимо рамки.
     """
     ink = _CARD_FALLBACK.get(shot.side, _CARD_FALLBACK["long"])["ink"]
-    box = dict(_STAMP_FALLBACK)
     try:
         saved = json.loads(shot.card_json or "null")
     except (TypeError, ValueError):
         saved = None
-    if isinstance(saved, dict):
-        if re.fullmatch(r"#[0-9A-Fa-f]{6}", str(saved.get("ink", ""))):
-            ink = str(saved["ink"])
-        frame = saved.get("stamp")
-        if isinstance(frame, dict):
-            try:
-                box = {k: float(frame[k]) for k in ("x", "y", "w", "h")}
-            except (KeyError, TypeError, ValueError):
-                box = dict(_STAMP_FALLBACK)
-    return ink, box
+    if not isinstance(saved, dict):
+        return _Look(ink=ink, stamp=dict(_STAMP_FALLBACK), seal=None, glow=ink, paper="light")
+    return _Look(
+        ink=_hex(saved.get("ink"), ink),
+        stamp=_frame(saved.get("stamp")) or dict(_STAMP_FALLBACK),
+        seal=_frame(saved.get("seal")),
+        glow=_hex(saved.get("glow"), ink),
+        paper="dark" if saved.get("paper") == "dark" else "light",
+    )
 
 
 def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
@@ -341,7 +375,8 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
     скачиваемый PNG (`drawStamp` в webapp/lib/pnl/card.ts) - размеры здесь
     повторяют тамошние доли, и менять их нужно в обоих местах сразу.
     """
-    accent, box = _card_look(shot)
+    look = _card_look(shot)
+    accent, box = look.ink, look.stamp
     symbol = escape(shot.symbol)
     note = escape(shot.note or "")
     title = f"{symbol} · NMNH"
@@ -370,16 +405,22 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
         else f'<a class="logo" href="https://www.nmnh.trade">{mark}</a>'
     )
 
-    # Оттиск. У сигнала это тот же логотип, который холст ставит на скачиваемую
-    # картинку, - иначе страница и картинка заверялись бы разными печатями.
-    # Наш знак в правом нижнем углу карточки итога - тот же оттиск, что холст
-    # ставит на скачиваемую картинку. У сигнала он и так стоит в рамке печати,
-    # второй раз ему там делать нечего.
-    watermark = (
-        ""
-        if shot.kind == "signal"
-        else '<img class="watermark" src="' + SITE_URL + '/cards/signal-stamp.png" alt="NMNH">'
-    )
+    # Оттиск-логотип на планете нижней панели - тот же, что холст ставит на
+    # скачиваемую картинку, и на том же месте. У сигнала его нет: там этот
+    # оттиск и так стоит в рамке печати. Нет его и у карточек, выложенных
+    # раньше: у них знак впечатан в сам лист.
+    seal = look.seal if shot.kind != "signal" else None
+    watermark = '<div class="watermark" aria-hidden="true"></div>' if seal else ""
+    seal_vars = ""
+    if seal:
+        # Оттиск нарисован чёрным: на светлом полотне он остаётся тёмным, на
+        # тёмном выворачивается в белый.
+        tint = "brightness(0)" if look.paper == "light" else "brightness(0) invert(1)"
+        seal_vars = (
+            f" --seal-x: {seal['x'] * 100:.4f}%; --seal-y: {seal['y'] * 100:.4f}%;"
+            f" --seal-w: {seal['w'] * 100:.4f}%; --seal-h: {seal['h'] * 100:.4f}%;"
+            f" --seal-tint: {tint}; --glow: {look.glow};"
+        )
 
     if shot.kind == "signal":
         ink = (
@@ -405,7 +446,7 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
 <meta property="og:image" content="{image}">
 <meta name="twitter:card" content="summary_large_image">
 <style>
-  :root {{ color-scheme: dark; --accent: {accent}; }}
+  :root {{ color-scheme: dark; --accent: {accent};{seal_vars} }}
   * {{ box-sizing: border-box; }}
   body {{
     margin: 0; min-height: 100vh; padding: 28px 16px 40px;
@@ -492,7 +533,10 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
     100% {{ transform: scale(1) rotate(-4.5deg); opacity: 1; }}
   }}
   /* Удар отдаётся в лист - коротко и почти незаметно. */
-  .paper.hit {{ animation: feed 1.15s cubic-bezier(.22,.61,.36,1) .15s both, shock .18s ease-out 1.35s; }}
+  .paper.hit {{
+    animation: feed 1.15s cubic-bezier(.22,.61,.36,1) .15s both,
+      shock .18s ease-out 1.35s, shock .18s ease-out 1.85s;
+  }}
   @keyframes shock {{ 0%,100% {{ scale: 1; }} 40% {{ scale: 1.006; }} }}
 
   /* Лист под светлой карточкой.
@@ -563,21 +607,26 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
     97% {{ transform: translate(2px, -1px); opacity: .6; }}
   }}
 
-  /* Наш знак в правом нижнем углу - над нижней панелью с QR: панель занимает
-     низ листа целиком, и оттиск на ней читался бы её частью. Полупрозрачный и
-     косой: это заверение, а не подпись автора. Тот же файл и то же место, что
-     холст ставит на скачиваемую картинку. */
+  /* Оттиск-логотип на планете нижней панели. Место, наклон и свечение - те
+     же, что холст ставит на скачиваемую картинку (sealFrame и putMark в
+     webapp/lib/pnl/card.ts). Падает вторым, тем же ударом, что печать
+     сверху. Фоном, а не картинкой: правило для картинки листа растянуло бы
+     его на всю ширину. */
   .watermark {{
-    position: absolute; right: 4%; bottom: 21%;
-    width: 20%; height: auto; object-fit: contain; pointer-events: none;
-    transform: rotate(-4.5deg);
-    /* Разностью, а не цветом: заготовки бывают и белые, и почти чёрные, и
-       один цвет оттиска на одной из них пропадал бы. Разность выворачивает
-       то, что под ним, - оттиск виден на любой. Так же сделан знак на
-       странице снимка графика. */
-    filter: brightness(0) invert(1);
-    mix-blend-mode: difference; opacity: .5;
-    animation: slam .4s cubic-bezier(.2,1.5,.35,1) 1.5s both;
+    position: absolute;
+    left: var(--seal-x); top: var(--seal-y);
+    width: var(--seal-w); height: var(--seal-h);
+    background: url("{SITE_URL}/cards/signal-stamp.png") center / contain no-repeat;
+    pointer-events: none;
+    transform: rotate(-6deg);
+    filter: var(--seal-tint) drop-shadow(0 0 5cqw var(--glow));
+    opacity: .95;
+    animation: seal .42s cubic-bezier(.2,1.5,.35,1) 1.85s both;
+  }}
+  @keyframes seal {{
+    0%   {{ transform: scale(2.4) rotate(-24deg); opacity: 0; }}
+    60%  {{ opacity: .95; }}
+    100% {{ transform: scale(1) rotate(-6deg); opacity: .95; }}
   }}
 
   /* Кому движение мешает - лист уже лежит, печать уже стоит. */
@@ -612,7 +661,7 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
   }}
 
   @media (prefers-reduced-motion: reduce) {{
-    .paper, .paper.hit, .stamp, .slot::after, .go,
+    .paper, .paper.hit, .stamp, .watermark, .slot::after, .go,
     .glitch::before, .glitch::after {{ animation: none; }}
   }}
 </style>
