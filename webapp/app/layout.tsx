@@ -37,6 +37,8 @@ import InstallPrompt from "@/components/pwa/InstallPrompt";
 import DevBar from "@/components/dev/DevBar";
 import TelegramInit from "@/components/telegram/TelegramInit";
 import ServerUpdating from "@/components/app/ServerUpdating";
+import JsonLd from "@/components/seo/JsonLd";
+import { organizationLd, webSiteLd } from "@/lib/seo/jsonLd";
 
 /**
  * Адрес, от которого считаются полные ссылки в метаданных.
@@ -53,12 +55,41 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://www.nmnh.trade";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
+  // Заголовок и описание - это и есть строка, которую человек читает в
+  // Google, и по ней же поисковик понимает, о чём сайт. Прежний заголовок
+  // говорил «профессиональный терминал», но не говорил, для чего он: ни
+  // «скальпинга», ни «криптовалют» в нём не было, и по этим словам сайт не
+  // показывался вовсе. Длина держится в пределах 60 знаков - дальше выдача
+  // обрезает.
   title: {
-    default: "NMNH - Профессиональный торговый терминал",
+    default: "Торговый терминал для скальпинга криптовалют - NMNH",
     template: "%s - NMNH",
   },
   description:
-    "Терминал с софтом под твою биржу, живой чат трейдеров, журнал сделок с аналитикой активности трейдера и внутренний токен - в одной экосистеме.",
+    "Бесплатный торговый терминал для скальпинга криптовалют: биржевой стакан, кластеры, расчёт риска под депозит, стоп и цели на бирже. Сообщество трейдеров и журнал сделок.",
+  keywords: [
+    "торговый терминал",
+    "терминал для трейдинга",
+    "скальпинг криптовалют",
+    "трейдинг",
+    "сообщество трейдеров",
+    "журнал сделок",
+    "биржевой стакан",
+    "криптовалютные фьючерсы",
+  ],
+  // Канонический адрес: у сайта два входа - с www и без, - и без этой строки
+  // поисковик считает их разными сайтами и делит вес страницы надвое.
+  alternates: { canonical: "/" },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   applicationName: "NMNH Platform",
   manifest: "/manifest.webmanifest",
   // Метка версии в адресах значков - не украшение. Браузер держит значок
@@ -77,9 +108,9 @@ export const metadata: Metadata = {
     title: "NMNH",
   },
   openGraph: {
-    title: "NMNH - Профессиональный торговый терминал",
+    title: "Торговый терминал для скальпинга криптовалют - NMNH",
     description:
-      "Терминал с софтом под твою биржу, живой чат трейдеров, журнал сделок с аналитикой активности трейдера и внутренний токен - в одной экосистеме.",
+      "Бесплатный торговый терминал: стакан, кластеры, расчёт риска под депозит, стоп и цели на бирже. Сообщество трейдеров и журнал сделок с аналитикой.",
     type: "website",
     locale: "ru_RU",
     siteName: "NMNH Platform",
@@ -114,6 +145,9 @@ export default function RootLayout({
     // трейдера перебивает скрипт темы при первом же рендере в браузере.
     <html lang="ru" data-terminal="light" className={`${inter.variable} ${mono.variable}`}>
       <body className="min-h-screen bg-bg-deep font-sans text-text-primary antialiased">
+        {/* Кто мы и что это за сайт - на каждой странице: страницы витрины
+            ссылаются на эти два узла по «@id», и без них ссылка повисает. */}
+        <JsonLd nodes={[organizationLd(), webSiteLd()]} />
         {/* Телеграмовский скрипт больше не стоит перед страницей.
             Он нужен одному входу из нескольких - тем, кто открыл кабинет
             внутри Telegram, - а грузился у всех и до отрисовки: пока чужой

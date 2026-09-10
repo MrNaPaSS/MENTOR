@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { SiTelegram } from "@icons-pack/react-simple-icons";
 import Logo from "@/components/ui/Logo";
-import { NAV_ANCHORS, SOCIAL_LINKS, weexRegisterUrl } from "@/lib/content";
+import { NAV_ANCHORS, SEO_PAGES, SOCIAL_LINKS, weexRegisterUrl } from "@/lib/content";
 import { useLocale, useT } from "@/lib/i18n";
 
 export default function Footer() {
@@ -13,7 +13,7 @@ export default function Footer() {
   return (
     <footer className="border-t border-border bg-bg-panel/60">
       <div className="mx-auto max-w-6xl px-4 py-14 md:px-6">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
             <Logo />
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-text-secondary">
@@ -41,6 +41,21 @@ export default function Footer() {
                   {t.landing.footer.calculator}
                 </Link>
               </li>
+            </ul>
+          </div>
+
+          {/* Отдельные страницы витрины. Ссылки на них нужны и человеку, и
+              поисковику: по этим ссылкам он их и находит. */}
+          <div>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-text-muted">{t.landing.footer.pagesHeading}</h4>
+            <ul className="mt-4 space-y-2.5 text-sm">
+              {SEO_PAGES.map((page) => (
+                <li key={page.href}>
+                  <Link href={page.href} className="text-text-secondary transition hover:text-text-primary">
+                    {t.landing.footer.pages[page.key]}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 

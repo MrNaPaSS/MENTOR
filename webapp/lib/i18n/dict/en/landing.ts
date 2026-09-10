@@ -169,6 +169,13 @@ export const landing = {
     about:
       "The fintech platform of trading mentor No Money No Honey. Signals sized to your deposit, analytics and a private community.",
     navHeading: "Navigation",
+    pagesHeading: "Sections",
+    pages: {
+      terminal: "Trading terminal",
+      scalping: "Crypto scalping",
+      community: "Trading community",
+      journal: "Trade journal",
+    },
     calculator: "Calculator",
     partnerHeading: "Partner",
     weexButton: "WEEX exchange →",

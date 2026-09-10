@@ -171,6 +171,13 @@ export const landing = {
     about:
       "Финтех-платформа торгового ментора No Money No Honey. Персональные сигналы под депозит, аналитика и закрытое сообщество.",
     navHeading: "Навигация",
+    pagesHeading: "Разделы",
+    pages: {
+      terminal: "Торговый терминал",
+      scalping: "Скальпинг криптовалют",
+      community: "Сообщество трейдеров",
+      journal: "Журнал сделок",
+    },
     calculator: "Калькулятор",
     partnerHeading: "Партнёр",
     weexButton: "Биржа WEEX →",

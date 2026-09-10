@@ -51,3 +51,20 @@ export const HOW_STEPS = [
   { num: "03", icon: "key" },
   { num: "04", icon: "trending" },
 ] as const;
+
+/**
+ * Страницы витрины, написанные под поисковые запросы.
+ *
+ * Стоят в футере не для красоты: поисковик обходит сайт по ссылкам, и
+ * страница, на которую не ведёт ни одна ссылка, для него не существует - даже
+ * если она есть в карте сайта. Футер виден с любой страницы, поэтому связывает
+ * их все разом.
+ */
+export const SEO_PAGES = [
+  { key: "terminal", href: "/terminal" },
+  { key: "scalping", href: "/scalping" },
+  { key: "community", href: "/community" },
+  { key: "journal", href: "/journal" },
+] as const;
+
+export type SeoPageKey = (typeof SEO_PAGES)[number]["key"];
