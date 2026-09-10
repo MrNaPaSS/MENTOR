@@ -69,6 +69,8 @@ async def recount(days: int, apply: bool, student: int | None) -> int:
     # Сделки, до которых не дозвонились. Молчать о них нельзя: «менять нечего»
     # при четырёх ошибках подряд читается как «всё в порядке».
     failed = 0
+    # Итог журнала по проверенным сделкам: до пересчёта и после.
+    totals: dict[str, float] = {}
     try:
         since = utcnow() - timedelta(days=days)
         query = (
@@ -134,15 +136,18 @@ async def recount(days: int, apply: bool, student: int | None) -> int:
                 reports: dict[str, list[dict]] = {}
                 for trade in group:
                     try:
-                        changed += await _one(session, client, trade, reports, apply)
+                        changed += await _one(session, client, trade, reports, apply, totals)
                     except WeexTradeError as exc:
                         failed += 1
-                        print(f"  {trade.symbol} {trade.client_id}: биржа молчит - {exc}")
+                        print(f"  {_head(trade)}  биржа молчит - {exc}")
                     except Exception as exc:  # noqa: BLE001 - одна сделка не мешает другим
                         failed += 1
-                        print(f"  {trade.symbol} {trade.client_id}: не вышло - {exc}")
+                        print(f"  {_head(trade)}  не вышло - {exc}")
 
         print()
+        if "was" in totals:
+            was, now = totals["was"], totals.get("now", 0.0)
+            print(f"Итог по проверенным сделкам: {was:+.2f} → {now:+.2f} ({now - was:+.2f})")
         if apply and changed:
             session.commit()
             print(f"Записано изменений: {changed}")
@@ -166,8 +171,12 @@ async def _one(
     trade: ScalpTrade,
     reports: dict[str, list[dict]],
     apply: bool,
+    totals: dict[str, float] | None = None,
 ) -> int:
-    """Пересчитать одну запись. Возвращает 1, если она изменилась."""
+    """Пересчитать одну запись. Возвращает 1, если она изменилась.
+
+    `totals` копит итог журнала до пересчёта и после - по всем проверенным.
+    """
     if trade.symbol not in reports:
         reports[trade.symbol] = await client.user_trades(trade.symbol, limit=100)
     fills = reports[trade.symbol]
@@ -188,7 +197,7 @@ async def _one(
     if not mine:
         # Биржа этих исполнений уже не помнит. Записать по ним ноль значило бы
         # стереть настоящую сделку - оставляем как есть.
-        print(f"  {trade.symbol} {trade.client_id}: исполнений в отчёте нет, пропуск")
+        print(f"  {_head(trade)}  исполнений в отчёте нет, пропуск")
         return 0
 
     taker = 0.0
@@ -204,14 +213,25 @@ async def _one(
     was_pnl = float(trade.pnl or 0)
     was_fee = float(trade.fee or 0)
     was_hit = int(trade.takes_hit or 0)
+    was_exit = float(trade.exit_price or 0)
+    now_exit = float(exit_price or was_exit)
+    if totals is not None:
+        totals["was"] = totals.get("was", 0.0) + was_pnl
+        totals["now"] = totals.get("now", 0.0) + pnl
     if abs(pnl - was_pnl) < EPS and abs(fee - was_fee) < EPS and hit == was_hit:
+        # И то, что не меняется, показываем: иначе не видно, проверена ли
+        # сделка вообще или её пропустили.
+        print(f"  {_head(trade)}  без изменений: итог {pnl:+.2f}, комиссия {fee:.2f}, цели {hit}")
         return 0
 
+    # Что на что поменяется - каждое поле отдельно, и разница итога рядом: по
+    # одной стрелке не видно, в какую сторону ушли деньги и на сколько.
     print(
-        f"  {trade.symbol} {trade.client_id}: "
-        f"итог {was_pnl:+.2f} → {pnl:+.2f}, "
-        f"комиссия {was_fee:.2f} → {fee:.2f}, "
-        f"цели {was_hit} → {hit}"
+        f"  {_head(trade)}  "
+        f"итог {_pair(was_pnl, pnl, lambda v: f'{v:+.2f}')} ({pnl - was_pnl:+.2f}) · "
+        f"комиссия {_pair(was_fee, fee, lambda v: f'{v:.2f}')} · "
+        f"выход {_pair(was_exit, now_exit, _price)} · "
+        f"цели {_pair(was_hit, hit, str)}"
     )
 
     if apply:
@@ -223,6 +243,28 @@ async def _one(
         trade.from_exchange = True
         trade.note = "биржа"
     return 1
+
+
+def _head(trade) -> str:
+    """Начало строки: когда закрыта, монета, сторона - по ним сделку находят в журнале."""
+    at = trade.closed_at
+    if at is not None and at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    when = at.astimezone().strftime("%d.%m %H:%M") if at else "--.-- --:--"
+    side = "лонг" if trade.side == "long" else "шорт"
+    return f"{when}  {trade.symbol:<10} {side:<4}  {trade.client_id}"
+
+
+def _pair(was, now, show) -> str:
+    """«было → стало», если поменялось, и одно значение, если нет."""
+    if abs(float(now) - float(was)) < EPS:
+        return show(now)
+    return f"{show(was)} → {show(now)}"
+
+
+def _price(value: float) -> str:
+    """Цена без хвоста нулей: 1218.25, а не 1218.25000000."""
+    return f"{value:.8f}".rstrip("0").rstrip(".") if value else "-"
 
 
 def main() -> None:

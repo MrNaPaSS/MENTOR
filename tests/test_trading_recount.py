@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -184,3 +185,32 @@ def test_the_report_is_asked_once_per_coin():
     asyncio.run(_one(None, client, trade(client_id="eth-2"), reports, apply=False))
 
     assert client.asked == 1
+
+
+def test_dry_run_shows_what_would_change_into_what(capsys):
+    """В сухом прогоне видно, что на что поменялось бы: итог с разницей, комиссия, цели."""
+    asyncio.run(_one(None, Exchange(fills()), trade(), {}, apply=False))
+    out = capsys.readouterr().out
+
+    assert "ETHUSDT" in out and "лонг" in out and "eth-1" in out
+    assert re.search(r"итог \+98\.71 → \+90\.\d\d \(-8\.\d\d\)", out)
+    assert "комиссия 24.08 → 32.06" in out
+    assert "цели 3 → 2" in out
+
+
+def test_unchanged_trade_is_listed_too(capsys):
+    """Сделка, которой менять нечего, тоже в выводе - иначе не видно, проверена ли она."""
+    row = trade()
+    asyncio.run(_one(None, Exchange(fills()), row, {}, apply=True))
+    capsys.readouterr()
+
+    asyncio.run(_one(None, Exchange(fills()), row, {}, apply=True))
+    assert "без изменений" in capsys.readouterr().out
+
+
+def test_totals_add_up_before_and_after():
+    totals: dict[str, float] = {}
+    asyncio.run(_one(None, Exchange(fills()), trade(), {}, apply=False, totals=totals))
+
+    assert totals["was"] == pytest.approx(98.71)
+    assert totals["now"] == pytest.approx(90.70, abs=0.05)
