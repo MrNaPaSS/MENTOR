@@ -11,7 +11,7 @@
  * components/seo/JsonLd.tsx.
  */
 import { SITE_URL, absoluteUrl } from "./site";
-import { SOCIAL_LINKS } from "@/lib/content";
+import { PARTNER_EMAIL, SOCIAL_LINKS } from "@/lib/content";
 
 /** Узел разметки: свободная форма, её описывает сам schema.org. */
 export type JsonLdNode = Record<string, unknown>;
@@ -43,6 +43,16 @@ export function organizationLd(): JsonLdNode {
     description:
       "Торговая академия NMNH: бесплатный терминал для скальпинга криптовалют, сообщество трейдеров и журнал сделок с аналитикой.",
     foundingDate: "2020",
+    // Адрес для деловых писем - не украшение разметки: Google строже смотрит
+    // на сайты про деньги и ищет, с кем вообще имеет дело. Организация без
+    // контактов ранжируется хуже той, у которой они есть.
+    email: PARTNER_EMAIL,
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "business",
+      email: PARTNER_EMAIL,
+      availableLanguage: ["ru", "en"],
+    },
     sameAs: [SOCIAL_LINKS.telegram, SOCIAL_LINKS.youtube, SOCIAL_LINKS.tiktok],
   };
 }

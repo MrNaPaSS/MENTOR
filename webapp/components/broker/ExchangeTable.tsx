@@ -1,11 +1,11 @@
 "use client";
 
-import { Send } from "lucide-react";
+import { Mail, Send } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
 import { CASHBACK_TIERS, EXCHANGES, type ExchangeStatus } from "@/lib/broker/program";
 import { rate, share } from "@/lib/broker/format";
-import { SOCIAL_LINKS } from "@/lib/content";
+import { PARTNER_EMAIL, SOCIAL_LINKS } from "@/lib/content";
 import { useIntlLocale, useT } from "@/lib/i18n";
 
 /** Цвет метки статуса. Работающая биржа зелёная, остальные приглушены. */
@@ -97,15 +97,27 @@ export default function ExchangeTable() {
             <p className="font-bold text-text-primary">{copy.waitlist.title}</p>
             <p className="mt-1 text-sm text-text-secondary">{copy.waitlist.text}</p>
           </div>
-          <a
-            href={SOCIAL_LINKS.telegram}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-border px-5 py-2.5 text-sm font-semibold text-text-primary transition hover:border-accent-cyan/40"
-          >
-            <Send className="h-4 w-4" />
-            {copy.waitlist.button}
-          </a>
+          {/* Два канала, потому что просьбы приходят разные: трейдер пишет в
+              чат, а площадка или биржа - письмом, и адрес ей нужен раньше,
+              чем ссылка на Telegram. */}
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <a
+              href={SOCIAL_LINKS.telegram}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl border border-border px-5 py-2.5 text-sm font-semibold text-text-primary transition hover:border-accent-cyan/40"
+            >
+              <Send className="h-4 w-4" />
+              {copy.waitlist.button}
+            </a>
+            <a
+              href={`mailto:${PARTNER_EMAIL}`}
+              className="inline-flex items-center gap-2 rounded-xl border border-border px-5 py-2.5 text-sm font-semibold text-text-secondary transition hover:border-accent-cyan/40 hover:text-text-primary"
+            >
+              <Mail className="h-4 w-4" />
+              {PARTNER_EMAIL}
+            </a>
+          </div>
         </div>
       </Reveal>
     </section>

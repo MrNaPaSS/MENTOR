@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { SiTelegram } from "@icons-pack/react-simple-icons";
 import Logo from "@/components/ui/Logo";
-import { NAV_ANCHORS, SEO_PAGES, SOCIAL_LINKS, weexRegisterUrl } from "@/lib/content";
+import { NAV_ANCHORS, PARTNER_EMAIL, SEO_PAGES, SOCIAL_LINKS, weexRegisterUrl } from "@/lib/content";
 import { useLocale, useT } from "@/lib/i18n";
 
 export default function Footer() {
@@ -69,6 +69,20 @@ export default function Footer() {
             >
               {t.landing.footer.weexButton}
             </a>
+
+            {/* Адрес для деловых писем. Не «свяжитесь с нами» и не форма:
+                биржи и площадки пишут почтой, и адрес должен копироваться
+                глазами, а не открывать окно с полями. */}
+            <h4 className="mt-8 text-sm font-semibold uppercase tracking-wider text-text-muted">
+              {t.landing.footer.emailHeading}
+            </h4>
+            <a
+              href={`mailto:${PARTNER_EMAIL}`}
+              className="mt-3 block text-sm font-semibold text-text-primary transition hover:text-accent-cyan"
+            >
+              {PARTNER_EMAIL}
+            </a>
+            <p className="mt-1 text-xs text-text-muted">{t.landing.footer.emailHint}</p>
           </div>
         </div>
 

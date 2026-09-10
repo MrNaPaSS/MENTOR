@@ -180,6 +180,8 @@ export const landing = {
     calculator: "Calculator",
     partnerHeading: "Partner",
     weexButton: "WEEX exchange →",
+    emailHeading: "Partnerships",
+    emailHint: "Exchanges, venues and affiliate programmes",
     rights: "© 2020 NMNH. All rights reserved.",
     disclaimer:
       "Crypto trading carries high risk, especially with high leverage (up to x400 in turbo mode). You can lose your entire deposit. This is not financial advice.",
