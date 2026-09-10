@@ -20,7 +20,6 @@ export const news = {
   grid: "Grid",
 
   cryptoTitle: "Crypto news",
-  cryptoSource: "CryptoCompare",
   loadFailed: "Couldn't load the news",
 
   youtubeNote:

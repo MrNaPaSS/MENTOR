@@ -1327,6 +1327,24 @@ export default function AnalyticsPage() {
               <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">
                 {t.analytics.calendar.dayTitle}
               </h2>
+              <div className="flex-1" />
+              {/* Карточка этого дня - прямо из разбора. Кнопка под календарём
+                  делает то же, но до неё надо закрыть окно, а смотрят день и
+                  решают им поделиться именно здесь. */}
+              {(() => {
+                const ready = periodOf(calData, "day", selectedDay.date);
+                return (
+                  <button
+                    disabled={!ready}
+                    onClick={() => ready && setCard(cardFromPeriod(ready, owner ?? undefined))}
+                    title={ready ? undefined : t.analytics.summary.nothingToShow}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-accent)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[var(--pane-border)] disabled:hover:text-[var(--pane-text-2)]"
+                  >
+                    <Share2 className="h-3 w-3" />
+                    {t.analytics.calendar.dayCard}
+                  </button>
+                );
+              })()}
               <button
                 onClick={() => setSelectedDay(null)}
                 className="text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)]"

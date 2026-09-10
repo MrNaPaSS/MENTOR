@@ -6,7 +6,9 @@
 // чипы вместо крупных кнопок. Раньше здесь были просторные карточки со своими
 // цветами, и раздел выглядел вставкой из другого приложения.
 
-import { useT } from "@/lib/i18n";
+import { useIntlLocale, useT } from "@/lib/i18n";
+import { useLocale, type Locale } from "@/lib/i18n/locale";
+import { API_URL } from "@/lib/api";
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink, Maximize2, Newspaper, Radio, Tv, X } from "lucide-react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -193,65 +195,49 @@ function TradingViewNews() {
 
 // ─── Крипто-новости ──────────────────────────────────────────────────────────
 
+// Новости берём у своего сервера, а он - из RSS самих изданий. Раньше лента
+// шла от CryptoCompare прямо из браузера; тот закрыл бесплатный доступ ключом,
+// и раздел молча опустел.
+
+/** Строка ленты - так её отдаёт `/api/market/news`. */
 interface NewsItem {
   title: string;
   url: string;
   source: string;
-  publishedAt: string;
-  body: string;
+  /** Время публикации, секунды; 0 - издание его не указало. */
+  published: number;
+  summary: string;
 }
 
-/** То, что отдаёт CryptoCompare, - только нужные поля, остальное не читаем. */
-interface RawNews {
-  title?: string;
-  url?: string;
-  source?: string;
-  source_info?: { name?: string };
-  published_on?: number;
-  body?: string;
-}
+/** Откуда лента на каждом языке - подписью в шапке панели. */
+const NEWS_SOURCES: Record<Locale, string> = {
+  ru: "ForkLog · Bits.media · Incrypted",
+  en: "Cointelegraph · Decrypt · The Block",
+};
 
-function toItem(raw: RawNews): NewsItem | null {
-  if (!raw.title || !raw.url) return null;
-  const body = raw.body ?? "";
-  return {
-    title: raw.title,
-    url: raw.url,
-    source: raw.source_info?.name || raw.source || "",
-    publishedAt: raw.published_on
-      ? new Date(raw.published_on * 1000).toLocaleString("ru", {
-          day: "numeric",
-          month: "short",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      : "",
-    body: body.length > 140 ? `${body.slice(0, 140)}…` : body,
-  };
-}
-
-function CryptoNewsFeed() {
+function CryptoNewsFeed({ lang }: { lang: Locale }) {
   const t = useT();
-  const [news, setNews] = useState<NewsItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const numbers = useIntlLocale();
+  // null - ещё грузится; пустой массив - сервер ответил, но новостей нет.
+  const [news, setNews] = useState<NewsItem[] | null>(null);
 
   useEffect(() => {
     let alive = true;
-    // CryptoCompare public API (бесплатно, без ключа)
-    fetch("https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest")
+    setNews(null);
+    fetch(`${API_URL}/api/market/news?lang=${lang}`, {
+      headers: { "ngrok-skip-browser-warning": "1" },
+    })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { Data?: RawNews[] } | null) => {
-        if (!alive || !Array.isArray(data?.Data)) return;
-        setNews(data.Data.slice(0, 30).map(toItem).filter((n): n is NewsItem => n !== null));
+      .then((data: { items?: NewsItem[] } | null) => {
+        if (alive) setNews(Array.isArray(data?.items) ? data.items : []);
       })
-      .catch(() => {})
-      .finally(() => alive && setLoading(false));
+      .catch(() => alive && setNews([]));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [lang]);
 
-  if (loading) {
+  if (news === null) {
     return (
       <div className="space-y-2 p-3">
         {[...Array(6)].map((_, i) => (
@@ -280,13 +266,20 @@ function CryptoNewsFeed() {
             className="block px-3 py-2.5 transition-colors duration-150 hover:bg-[var(--pane-hover)]"
           >
             <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-[var(--pane-text)]">{n.title}</p>
-            {n.body && <p className="mt-0.5 line-clamp-2 text-[11px] text-[var(--pane-muted)]">{n.body}</p>}
+            {n.summary && <p className="mt-0.5 line-clamp-2 text-[11px] text-[var(--pane-muted)]">{n.summary}</p>}
             <div className="mt-1 flex items-center gap-1.5 text-[10px] text-[var(--pane-muted)]">
               <span className="font-semibold text-[var(--pane-chip)]">{n.source}</span>
-              {n.publishedAt && (
+              {n.published > 0 && (
                 <>
                   <span>·</span>
-                  <span className="font-mono tabular-nums">{n.publishedAt}</span>
+                  <span className="font-mono tabular-nums">
+                    {new Date(n.published * 1000).toLocaleString(numbers, {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
                 </>
               )}
             </div>
@@ -340,6 +333,11 @@ export default function NewsPage() {
   const [activeIds, setActiveIds] = useState<string[]>(CHANNELS.slice(0, 4).map((c) => c.id));
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("live");
+  // Язык ленты - по языку интерфейса, пока человек не выбрал другой сам:
+  // англоязычные издания быстрее, русские - понятнее.
+  const locale = useLocale();
+  const [newsLang, setNewsLang] = useState<Locale | null>(null);
+  const feedLang = newsLang ?? locale;
 
   const labels: Record<Tab, string> = { live: t.news.tabLive, feed: t.news.tabFeed, crypto: t.news.tabCrypto };
 
@@ -418,8 +416,21 @@ export default function NewsPage() {
       )}
 
       {tab === "crypto" && (
-        <Pane title={t.news.cryptoTitle} hint={t.news.cryptoSource} body="">
-          <CryptoNewsFeed />
+        <Pane
+          title={t.news.cryptoTitle}
+          hint={NEWS_SOURCES[feedLang]}
+          body=""
+          actions={(["ru", "en"] as const).map((lang) => (
+            <button
+              key={lang}
+              onClick={() => setNewsLang(lang)}
+              className={`${CHIP} font-semibold uppercase ${feedLang === lang ? CHIP_ON : CHIP_OFF}`}
+            >
+              {lang}
+            </button>
+          ))}
+        >
+          <CryptoNewsFeed lang={feedLang} />
         </Pane>
       )}
 

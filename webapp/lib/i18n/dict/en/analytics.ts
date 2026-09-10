@@ -73,6 +73,7 @@ export const analytics = {
   calendar: {
     /** Заголовок окна, которое открывается нажатием по дню. */
     dayTitle: "The day in detail",
+    dayCard: "Card for the day",
     deposit: "Deposit",
     volume: (amount: string) => `Volume $${amount}`,
     profitDays: (n: number) => `↑ ${n} up`,

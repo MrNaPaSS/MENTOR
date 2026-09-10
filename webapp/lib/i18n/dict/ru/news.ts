@@ -22,7 +22,6 @@ export const news = {
   grid: "Сетка",
 
   cryptoTitle: "Крипто-новости",
-  cryptoSource: "CryptoCompare · на английском",
   loadFailed: "Не удалось загрузить новости",
 
   youtubeNote:
