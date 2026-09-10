@@ -107,9 +107,7 @@ import {
   moveLevels,
   nudgeWatcher,
   openPosition,
-  openBook,
-  positionIn,
-  liveTrades,
+  openPositions,
   limitsOf,
   plansOf,
   positionOf,
@@ -149,7 +147,6 @@ import {
   money,
   price as fmtPrice,
   type LadderRow,
-  type ScreenerRow,
   type Wall,
   useScalpingFeed,
   SORT_KEYS,
@@ -216,6 +213,11 @@ const CHIP_OFF = "text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
 // Не чаще этого просим сервер проверить сделки вне очереди: сверка с биржей
 // идёт раз в четыре секунды, а сопровождение само не принимает просьб чаще.
 const NUDGE_EVERY_MS = 3000;
+
+// Через сколько смотрим второй раз, если позиции не видно. Два пустых ответа
+// подряд - и сделка закрыта; ждать второго полный интервал значило держать
+// закрытую сделку на графике лишние секунды.
+const MISSING_RECHECK_MS = 800;
 
 // Высота рабочей области: всё окно за вычетом шапки приложения. Заголовок
 // раздела убран — он занимал полсотни пикселей и не нёс ничего, чего не видно
@@ -302,34 +304,12 @@ const STORAGE_KEY = "nmnh.scalping.panes";
 /**
  * Сколько пустых ответов биржи подряд означают закрытую позицию.
  *
- * Один не означает ничего: биржа отвечает пустым списком и на своей заминке, и
- * тем чаще, чем чаще её спрашивают.
+ * Один не означает ничего: биржа отвечает пустым списком и на своей заминке.
+ * Столько же выдержки держит сопровождение на сервере (MISSING_TOLERANCE в
+ * backend/trading/watcher.py) - расхождение здесь означало бы, что экран и
+ * сервер расходятся во мнении, жива ли сделка.
  */
-const MISSING_TOLERANCE = 3;
-
-/**
- * И сколько времени эта пустота должна продержаться.
- *
- * Одного счёта промахов мало. После первого пустого ответа терминал смотрел
- * второй раз через восемь десятых секунды, и обоих хватало, чтобы похоронить
- * сделку: 10 сентября две живые позиции по ETH ушли с графика за две секунды,
- * пока на бирже они стояли. Пустота, длящаяся десять секунд, - это уже не
- * заминка.
- *
- * Сопровождение на сервере держит свою выдержку в два обхода по пять секунд -
- * столько же по времени. Расхождение здесь означало бы, что экран и сервер
- * расходятся во мнении, жива ли сделка.
- */
-const MISSING_HOLD_MS = 10_000;
-
-/**
- * Не чаще этого засчитываем пустой ответ.
- *
- * Круги опроса бывают чаще выдержки - от переподключения, от возвращения на
- * вкладку, от соседней сделки на той же монете. Промах, засчитанный дважды за
- * секунду, - это не два мнения биржи, а одно.
- */
-const MISSING_STEP_MS = 2000;
+const MISSING_TOLERANCE = 2;
 
 // Столько же выдержки - пропавшей с биржи цели. Перенос цели делается заменой:
 // прежняя условная заявка снимается, новая ставится, и между этими двумя
@@ -1738,74 +1718,29 @@ export default function ScalpingPage() {
   // Позиция глазами биржи. Терминал обязан быть её зеркалом: своё состояние он
   // может держать сколько угодно, но правда о том, открыта ли позиция, — там.
   //
-  // Спрашиваем биржу одним снимком по всем монетам, а не по сделке за раз.
-  // Раньше на каждую идущую сделку уходил свой запрос каждые три секунды, и
-  // вместе с опросом объёмов их набиралось по нескольку в секунду. На такую
-  // частоту биржа отвечает пустотой - а пустота здесь означала закрытую
-  // позицию.
-  //
-  // Пустота, которой биржа не показала позицию: когда началась, когда
-  // засчитана последний раз и сколько промахов накопилось. Меряем временем, а
-  // не числом кругов: после первого промаха включалась перепроверка через
-  // восемь десятых секунды, и вся выдержка съедалась за две секунды одной
-  // заминкой биржи. Именно так 10 сентября с графика ушли две живые позиции
-  // по ETH - на бирже они стояли, на экране их не стало.
-  const missingRef = useRef(new Map<string, { since: number; at: number; seen: number }>());
-  /**
-   * Объёмы прошлого круга опроса: по ним видно переход «не было - стало».
-   *
-   * Опрос теперь один - тот, что стережёт сделки. Их было два: зеркало сделки
-   * спрашивало биржу по каждой открытой монете каждые три секунды, а этот -
-   * все позиции разом каждые пять. На двух идущих сделках выходило по три-
-   * четыре запроса позиций в секунду, и биржа отвечала на них пустотой - той
-   * самой, по которой разметка уходила с графика.
-   */
-  const sizesRef = useRef<Record<string, number> | null>(null);
-
+  // Спрашиваем по каждой идущей сделке отдельно и со стороной: в хедже по
+  // одному инструменту стоят две позиции, и без стороны лонг увидел бы объём
+  // шорта.
+  // Сколько раз подряд биржа не показала позицию. Живёт между кругами опроса:
+  // выдержка иначе не выдержка.
+  const missingRef = useRef(new Map<string, number>());
   // Сколько кругов подряд цели нет на бирже и когда трейдер последний раз
   // двигал уровни этой сделки. Оба живут между кругами опроса.
   const goneRef = useRef(new Map<string, number>());
   const movedRef = useRef(new Map<string, number>());
-  // Цена монеты для записи о закрытии: по открытой - из стакана, по остальным -
-  // из списка. Сделок несколько и монет у них несколько, а стакан всегда один.
-  const screenerRef = useRef<ScreenerRow[]>([]);
-  screenerRef.current = screener;
-  // Стережём все идущие сделки, а не только показанную монету. Позиция по ETH
-  // закрывается, пока трейдер смотрит BTC, и узнать об этом он должен тогда
-  // же, а не вернувшись на её график.
   const watchKey = trades
-    .filter((t) => t.status !== "closed")
+    .filter((t) => t.symbol === symbol && t.status !== "closed")
     .map((t) => `${t.id}:${t.status}`)
     .join("|");
 
   useEffect(() => {
-    if (!live || !watchKey) return;
+    if (!live || !symbol || !watchKey) return;
     let cancelled = false;
 
-    /** Цена монеты: по открытой - из стакана, по остальным - из списка. */
-    function priceOf(sym: string): number {
-      if (sym === symbol) return midRef.current;
-      return screenerRef.current.find((row) => row.symbol === sym)?.price ?? 0;
-    }
-
     async function check() {
-      const watching = tradesRef.current.filter((t) => t.status !== "closed");
-      if (watching.length === 0) {
-        sizesRef.current = null;
-        return;
-      }
-
-      // Один снимок на круг - на все сделки сразу.
-      const book = await openBook().catch(() => null);
-      if (cancelled || !book) return;
-
-      // Объёмы прошлого круга: без «до» переход «не было - стало» не отличить
-      // от позиции, стоявшей всё это время.
-      const sizes: Record<string, number> = {};
-      for (const [key, one] of Object.entries(book.byKey)) sizes[key] = one.size;
-      const before = sizesRef.current;
-      sizesRef.current = sizes;
-      setLiveSizes(sizes);
+      const watching = tradesRef.current.filter(
+        (t) => t.symbol === symbol && t.status !== "closed",
+      );
 
       // Чьи входы ещё стоят на бирже. Без этого списка сводная позиция по
       // монете открывала все ждущие заявки разом: зацепило верхнюю лимитку, а
@@ -1813,242 +1748,151 @@ export default function ScalpingPage() {
       //
       // Не спросили - считаем, что стоят все ждущие: показать заявку ждущей
       // лишние три секунды не страшно, а открыть несуществующую - страшно.
-      let resting = new Set(
-        watching.filter((t) => t.symbol === symbol && t.status === "planned").map((t) => t.id),
-      );
+      let resting = new Set(watching.filter((t) => t.status === "planned").map((t) => t.id));
       // Когда вход состоялся на самом деле - по сделкам сервера.
       const opened = new Map<string, number>();
-      if (symbol) {
-        try {
-          const body = await plansOf(symbol);
-          if (cancelled) return;
-          if (body) {
-            resting = new Set(body.resting);
-            for (const [id, at] of Object.entries(body.opened ?? {})) {
-              const ms = at ? new Date(at).getTime() : NaN;
-              if (Number.isFinite(ms)) opened.set(id, ms);
-            }
-          }
-        } catch {
-          // Биржа не ответила - остаёмся при осторожном предположении.
-        }
-      }
-
-      // Кого биржа не показала. Хоронить по этому ещё рано: пустой ответ
-      // приходит и на её заминке.
-      const missed = watching.filter(
-        (t) => t.status === "open" && !(book.byKey[`${t.symbol}:${t.side}`]?.size > 0),
-      );
-      // Видим позицию - забываем прошлые пустые ответы.
-      for (const t of watching) {
-        if (!missed.includes(t)) missingRef.current.delete(t.id);
-      }
-
-      // Второе мнение - у сопровождения на сервере. Оно обходит биржу само,
-      // со своей выдержкой, и пока сделка у него в работе, хоронить её нельзя.
-      // Спрашиваем только когда кого-то не показала биржа: это память сервера,
-      // но и её незачем тревожить каждые три секунды.
-      let served: Set<string> | null = null;
-      if (missed.length > 0) {
-        const body = await liveTrades().catch(() => null);
+      try {
+        const body = await plansOf(symbol!);
         if (cancelled) return;
-        if (body) served = new Set(body.trades.map((one) => one.client_id));
+        if (body) {
+          resting = new Set(body.resting);
+          for (const [id, at] of Object.entries(body.opened ?? {})) {
+            const ms = at ? new Date(at).getTime() : NaN;
+            if (Number.isFinite(ms)) opened.set(id, ms);
+          }
+        }
+      } catch {
+        // Биржа не ответила - остаёмся при осторожном предположении.
       }
 
-      const now = Date.now();
+      // Позиции не видно - второй взгляд через мгновение, а не через весь
+      // интервал: закрытая сделка висела на графике лишние секунды, пока
+      // терминал ждал очередной проверки, чтобы убедиться, что позиции нет.
+      let again = false;
+      for (const watched of watching) {
+        try {
+          const position = await positionOf(symbol!, watched.side);
+          if (cancelled || !position) continue;
+          if (position.size <= 0 && watched.status === "open") again = true;
 
-      // Решение по каждой сделке считаем здесь, а не внутри пересборки
-      // состояния: там нельзя ни считать промахи, ни писать в журнал - React
-      // вправе позвать пересборку дважды, и выдержка сгорала бы вдвое быстрее.
-      const bury = new Set<string>();
-      for (const trade of missed) {
-        const one = positionIn(book, trade.symbol, trade.side);
-        const was = missingRef.current.get(trade.id);
-        // Повтор в пределах пары секунд - тот же самый пустой ответ, а не
-        // второе мнение биржи. Выдержка меряется временем, а не запросами.
-        const miss =
-          was && now - was.at < MISSING_STEP_MS
-            ? was
-            : { since: was?.since ?? now, at: now, seen: (was?.seen ?? 0) + 1 };
-        missingRef.current.set(trade.id, miss);
-        const held = now - miss.since;
-        // Знает ли о сделке сервер: да, нет или «не спросили».
-        const alive = served ? served.has(trade.id) : null;
+          setTrades((list) =>
+            list.map((current) => {
+              if (current.id !== watched.id || current.status === "closed") return current;
 
-        // Пишем каждый пустой ответ, а не только последний: по одной записи
-        // «закрыли» нельзя понять, что показывала биржа до этого - пустоту,
-        // чужую сторону или пустой ответ целиком.
-        record("position.missing", {
-          id: trade.id,
-          symbol: trade.symbol,
-          side: trade.side,
-          seen: miss.seen,
-          of: MISSING_TOLERANCE,
-          held,
-          rows: one.rows,
-          total: one.total,
-          matched: one.matched,
-          server: alive,
-          takesHit: trade.takesHit,
-          targets: trade.targets.length,
-        });
+              if (position.size > 0) {
+                // Видим позицию - забываем прошлые пустые ответы.
+                missingRef.current.delete(current.id);
+                // Позиция набрана: у нас она могла ещё ждать входа. Но только
+                // если исполнилась именно эта заявка - соседняя, всё ещё
+                // стоящая, к чужой позиции отношения не имеет.
+                if (current.status === "planned") {
+                  if (resting.has(current.id)) return current;
+                  // Время входа - серверное, а «сейчас» только если сервер его
+                  // ещё не записал. Терминал следит за одной монетой, и вход,
+                  // случившийся на другой, он замечает лишь при возвращении:
+                  // взяв «сейчас», сделка начиналась там, где на неё
+                  // посмотрели, - бокс на графике вставал не у своей свечи.
+                  record("trade.opened", {
+                    id: current.id,
+                    symbol: current.symbol,
+                    size: position.size,
+                    entry: position.entry,
+                  });
+                  return {
+                    ...current,
+                    status: "open",
+                    openedAt: opened.get(current.id) ?? Date.now(),
+                  };
+                }
+                // Объём и безубыток берём биржевые: по ним считается результат
+                // на экране и туда же сопровождение переставляет стоп. Наша
+                // формула не знает ни реальной цены исполнения, ни комиссии,
+                // ни фандинга.
+                const qty =
+                  Math.abs(current.qty - position.size) > position.size * 0.01
+                    ? position.size
+                    : current.qty;
+                // Стопа здесь нет намеренно. Раньше сюда писалась цена
+                // безубытка по расчёту биржи - справочное число, а не заявка, -
+                // и она раз в три секунды затирала настоящий стоп. Трейдер
+                // переносил стоп руками, на бирже он переезжал, а на графике не
+                // менялось ничего. Цену стопа приносит опрос заявок ниже: там
+                // она и есть, а не выводится формулой.
+                //
+                // Цена входа и плавающий результат - биржевые. Своя средняя
+                // берётся от задуманного уровня, а исполнилось по другой цене:
+                // у биржи +25, у нас +5.
+                const entry = position.entry && position.entry > 0 ? position.entry : current.entry;
+                const unrealized = position.unrealized ?? undefined;
+                if (
+                  qty === current.qty &&
+                  entry === current.entry &&
+                  unrealized === current.unrealized
+                ) {
+                  return current;
+                }
+                return { ...current, qty, entry, unrealized };
+              }
 
-        if (miss.seen < MISSING_TOLERANCE || held < MISSING_HOLD_MS) continue;
-        // Сопровождение всё ещё ведёт сделку - значит позиция жива, а пустой
-        // ответ был заминкой. Не спросили - тоже ждём: пустой экран при живой
-        // позиции дороже лишней минуты разметки на графике.
-        if (alive !== false) continue;
-        bury.add(trade.id);
-        missingRef.current.delete(trade.id);
-        // Пишем сделку сразу и своей оценкой: сопровождение на сервере
-        // поправит её настоящими числами с биржи в ближайшие секунды. Молчать
-        // нельзя - если сервер до неё не дойдёт, сделка не попадёт в журнал
-        // вовсе, а именно так и терялись закрытые по стопу.
-        record("trade.closed", {
-          id: trade.id,
-          symbol: trade.symbol,
-          why: "позиции нет на бирже",
-          at: priceOf(trade.symbol),
-          held,
-          takesHit: trade.takesHit,
-          targets: trade.targets.length,
-        });
-      }
+              if (current.status === "open") {
+                // Позиции не видно. Но не с первого раза.
+                //
+                // Пустой ответ - это ещё не закрытая сделка. Биржа отвечает
+                // пустым списком и на своей заминке, и в тот момент, когда
+                // позицию переоткрывают частями; ключи могли на секунду
+                // отвалиться. А цена такой ошибки высокая: разметка уходит с
+                // графика, сделка пишется в журнал, и трейдер остаётся с живой
+                // позицией на бирже и пустым экраном - именно так она и
+                // пропадала. Столько же выдержки держит сопровождение на
+                // сервере.
+                const seen = (missingRef.current.get(current.id) ?? 0) + 1;
+                missingRef.current.set(current.id, seen);
+                // Пишем каждый пустой ответ, а не только последний: по одной
+                // записи «закрыли» нельзя понять, что именно показывала биржа
+                // до этого - пустоту или чужую сторону.
+                record("position.missing", {
+                  id: current.id,
+                  symbol: current.symbol,
+                  side: current.side,
+                  seen,
+                  of: MISSING_TOLERANCE,
+                  rows: position.rows,
+                  matched: position.matched,
+                  takesHit: current.takesHit,
+                  targets: current.targets.length,
+                });
+                if (seen < MISSING_TOLERANCE) return current;
 
-      // Кто именно налился.
-      //
-      // Позиция приходит одной строкой на монету и сторону, а ждущих заявок в
-      // ту же сторону может стоять несколько: трейдер поставил лимитку ниже,
-      // передумал и добавил вторую выше, не убрав первую. Открытой объявлялась
-      // первая попавшаяся в списке - и трейдер видел вход по цене, которой не
-      // было, с чужим стопом и чужими целями.
-      //
-      // Решаем это до разбора сделок: по каждому ключу, где позиция появилась,
-      // выбираем одну заявку - ближайшую к средней цене входа с биржи.
-      const filled = new Map<string, string>();
-      if (before) {
-        for (const key of new Set(watching.map((one) => `${one.symbol}:${one.side}`))) {
-          if ((before[key] ?? 0) > 0 || (sizes[key] ?? 0) <= 0) continue;
-          const queue = watching.filter(
-            (one) => one.status === "planned" && `${one.symbol}:${one.side}` === key,
+                // Пишем сделку сразу и своей оценкой: сопровождение на сервере
+                // поправит её настоящими числами с биржи в ближайшие секунды.
+                // Молчать нельзя - если сервер до неё не дойдёт, сделка не
+                // попадёт в журнал вовсе, а именно так и терялись закрытые по
+                // стопу.
+                missingRef.current.delete(current.id);
+                record("trade.closed", {
+                  id: current.id,
+                  symbol: current.symbol,
+                  why: "позиции нет на бирже",
+                  at: dom?.mid ?? 0,
+                  takesHit: current.takesHit,
+                  targets: current.targets.length,
+                });
+                return closeManually(current, dom?.mid ?? 0, Date.now());
+              }
+              return current;
+            }),
           );
-          const chosen = pickFilled(queue, book.byKey[key]?.entry ?? null);
-          if (chosen) filled.set(key, chosen.id);
+        } catch {
+          // Биржа не ответила — разметку не трогаем.
         }
       }
-
-      // Что биржа рассказала о живых позициях.
-      const patch = new Map<string, Partial<ActiveTrade>>();
-      for (const trade of watching) {
-        const key = `${trade.symbol}:${trade.side}`;
-        const one = positionIn(book, trade.symbol, trade.side);
-        const side = trade.side === "long" ? t.terminal.events.long : t.terminal.events.short;
-
-        // Была - не стало: сделка закрылась. Стопом, целью или руками - об
-        // этом скажет журнал, а знать о самом событии трейдер должен сразу,
-        // даже если смотрит на другую монету.
-        if (before && trade.status === "open" && (before[key] ?? 0) > 0 && !(one.size > 0)) {
-          pushToast({
-            id: `${trade.id}:out`,
-            symbol: trade.symbol,
-            title: t.terminal.events.closedTitle(base(trade.symbol)),
-            text: t.terminal.events.closedText(side),
-            tone: "plain",
-          });
-          play("order");
-
-          // Перечитываем журнал: в боевом режиме сделку пишет сервер, по
-          // исполнениям с биржи, и терминалу об этом никто не сообщает - запись
-          // появлялась только после перезагрузки страницы.
-          //
-          // Несколько раз с растущим шагом, а не дважды. Сервер ждёт, пока
-          // биржа покажет закрывающее исполнение, а она показывает его когда
-          // захочет: бывает сразу, бывает через полминуты.
-          for (const wait of JOURNAL_RETRIES) {
-            if (wait === 0) setJournalKey((n) => n + 1);
-            else window.setTimeout(() => setJournalKey((n) => n + 1), wait);
-          }
-        }
-
-        if (!(one.size > 0)) continue;
-
-        // Позиция набрана: у нас она могла ещё ждать входа. Но только если
-        // исполнилась именно эта заявка - соседняя, всё ещё стоящая, к чужой
-        // позиции отношения не имеет.
-        //
-        // По открытой монете это решает список стоящих заявок с сервера, по
-        // остальным - появление позиции в этом круге и цена входа с биржи.
-        if (trade.status === "planned") {
-          const ours =
-            trade.symbol === symbol ? !resting.has(trade.id) : filled.get(key) === trade.id;
-          if (!ours) continue;
-
-          pushToast({
-            id: `${trade.id}:in`,
-            symbol: trade.symbol,
-            title: t.terminal.events.entered(base(trade.symbol)),
-            text: t.terminal.events.enteredAt(side, fmtPrice(trade.entry, limits?.tick ?? 0)),
-            tone: trade.side === "long" ? "up" : "down",
-          });
-          play("entry");
-          record("trade.opened", {
-            id: trade.id,
-            symbol: trade.symbol,
-            size: one.size,
-            entry: one.entry,
-          });
-          patch.set(trade.id, {
-            status: "open",
-            // Время входа - серверное, а «сейчас» только если сервер его ещё
-            // не записал. Взяв «сейчас», сделка начиналась там, где на неё
-            // посмотрели, - бокс на графике вставал не у своей свечи.
-            openedAt: opened.get(trade.id) ?? Date.now(),
-          });
-          continue;
-        }
-
-        // Объём и цену входа берём биржевые: по ним считается результат на
-        // экране. Наша формула не знает ни реальной цены исполнения, ни
-        // комиссии, ни фандинга.
-        //
-        // Стопа здесь нет намеренно. Раньше сюда писалась цена безубытка по
-        // расчёту биржи - справочное число, а не заявка, - и она раз в три
-        // секунды затирала настоящий стоп. Цену стопа приносит опрос заявок:
-        // там она и есть, а не выводится формулой.
-        const qty =
-          Math.abs(trade.qty - one.size) > one.size * 0.01 ? one.size : trade.qty;
-        const entry = one.entry && one.entry > 0 ? one.entry : trade.entry;
-        const unrealized = one.unrealized ?? undefined;
-        if (qty === trade.qty && entry === trade.entry && unrealized === trade.unrealized) {
-          continue;
-        }
-        patch.set(trade.id, { qty, entry, unrealized });
-      }
-
-      if (cancelled || (bury.size === 0 && patch.size === 0)) return;
-      setTrades((list) => {
-        let changed = false;
-        const next = list.map((current) => {
-          if (current.status === "closed") return current;
-          if (bury.has(current.id) && current.status === "open") {
-            changed = true;
-            return closeManually(current, priceOf(current.symbol), Date.now());
-          }
-          const fields = patch.get(current.id);
-          if (!fields) return current;
-          changed = true;
-          return { ...current, ...fields };
-        });
-        return changed ? next : list;
-      });
+      if (again && !cancelled) setTimeout(() => void check(), MISSING_RECHECK_MS);
     }
 
     async function guard() {
-      // Защита спрашивается по монете: без открытого стакана спрашивать не о
-      // чем, а сделки по другим монетам стережёт круг выше.
-      const open = symbol
-        ? tradesRef.current.filter((t) => t.symbol === symbol && t.status === "open")
-        : [];
+      const open = tradesRef.current.filter(
+        (t) => t.symbol === symbol && t.status === "open",
+      );
       if (open.length === 0) {
         setPlans(null);
         return;
@@ -2409,6 +2253,140 @@ export default function ScalpingPage() {
       onCancel: () => setManual(null),
     };
   }, [manual, limits?.tick]);
+
+  /**
+   * Исполнение лимитки по любой монете, а не только по открытой.
+   *
+   * Заявка срабатывает сама и почти всегда тогда, когда трейдер смотрит на
+   * другой график. Зеркало биржи спрашивает только текущую монету, и о своей
+   * же сделке трейдер узнавал последним - открыв её монету через полчаса.
+   *
+   * Спрашиваем объёмы всех позиций одним запросом и следим за переходом «не
+   * было - стало»: именно он и означает, что вход состоялся.
+   */
+  const sizesRef = useRef<Record<string, number> | null>(null);
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+
+    async function look() {
+      const mine = tradesRef.current.filter((t) => t.status !== "closed");
+      if (mine.length === 0) {
+        sizesRef.current = null;
+        return;
+      }
+      const live = await openPositions().catch(() => null);
+      if (cancelled || !live) return;
+
+      const sizes: Record<string, number> = {};
+      for (const [key, one] of Object.entries(live)) sizes[key] = one.size;
+
+      const before = sizesRef.current;
+      sizesRef.current = sizes;
+      setLiveSizes(sizes);
+      // Первый круг только запоминает: без «до» переход не отличить от того,
+      // что позиция стояла всё это время.
+      if (!before) return;
+
+      const raise = pushToast;
+
+      // Кто именно налился.
+      //
+      // Позиция приходит одной строкой на монету и сторону, а ждущих заявок в
+      // ту же сторону может стоять несколько: трейдер поставил лимитку ниже,
+      // передумал и добавил вторую выше, не убрав первую. Открытой объявлялась
+      // первая попавшаяся в списке - и трейдер видел вход по цене, которой не
+      // было, с чужим стопом и чужими целями.
+      //
+      // Решаем это до разбора сделок: по каждому ключу, где позиция появилась,
+      // выбираем одну заявку - ближайшую к средней цене входа с биржи.
+      const filled = new Map<string, string>();
+      for (const key of new Set(mine.map((one) => `${one.symbol}:${one.side}`))) {
+        if ((before[key] ?? 0) > 0 || (sizes[key] ?? 0) <= 0) continue;
+        const waiting = mine.filter(
+          (one) => one.status === "planned" && `${one.symbol}:${one.side}` === key,
+        );
+        const chosen = pickFilled(waiting, live[key]?.entry);
+        if (chosen) filled.set(key, chosen.id);
+      }
+
+      for (const trade of mine) {
+        const key = `${trade.symbol}:${trade.side}`;
+        const was = before[key] ?? 0;
+        const now = sizes[key] ?? 0;
+        const side = trade.side === "long" ? t.terminal.events.long : t.terminal.events.short;
+
+        // Позиции не было - стала: лимитка исполнилась. Именно эта: какая из
+        // нескольких ждущих, решено выше, по цене входа с биржи.
+        if (trade.status === "planned" && was <= 0 && now > 0 && filled.get(key) === trade.id) {
+          raise({
+            id: `${trade.id}:in`,
+            symbol: trade.symbol,
+            title: t.terminal.events.entered(base(trade.symbol)),
+            text: t.terminal.events.enteredAt(side, fmtPrice(trade.entry, limits?.tick ?? 0)),
+            tone: trade.side === "long" ? "up" : "down",
+          });
+          play("entry");
+
+          // Сделка становится открытой здесь же, а не только когда трейдер
+          // вернётся к её монете.
+          //
+          // Раньше «ждёт» превращалось в «открыта» единственным местом - тем,
+          // что следит за показанной парой. Пока трейдер смотрел на другую,
+          // исполнившаяся лимитка оставалась ждущей: разметки позиции нет,
+          // журнал о ней не знает, а уведомление приходило в тот момент, когда
+          // он возвращался, - о входе, случившемся десять минут назад.
+          //
+          // Опрос объёмов видит все пары сразу, и знать о входе он начинает
+          // первым. Ему и переводить.
+          setTrades((list) =>
+            list.map((one) =>
+              one.id === trade.id && one.status === "planned"
+                ? { ...one, status: "open", openedAt: Date.now() }
+                : one,
+            ),
+          );
+          continue;
+        }
+
+        // Была - не стало: сделка закрылась. Стопом, целью или руками - об
+        // этом скажет журнал, а знать о самом событии трейдер должен сразу,
+        // даже если смотрит на другую монету.
+        if (trade.status === "open" && was > 0 && now <= 0) {
+          raise({
+            id: `${trade.id}:out`,
+            symbol: trade.symbol,
+            title: t.terminal.events.closedTitle(base(trade.symbol)),
+            text: t.terminal.events.closedText(side),
+            tone: "plain",
+          });
+          play("order");
+
+          // Перечитываем журнал: в боевом режиме сделку пишет сервер, по
+          // исполнениям с биржи, и терминалу об этом никто не сообщает - запись
+          // появлялась только после перезагрузки страницы.
+          //
+          // Несколько раз с растущим шагом, а не дважды. Сервер ждёт, пока
+          // биржа покажет закрывающее исполнение, а она показывает его когда
+          // захочет: бывает сразу, бывает через полминуты. Двух попыток на это
+          // не хватало, и в журнале оставалась наша оценка - та, что считана по
+          // цене стакана и без комиссии.
+          for (const wait of JOURNAL_RETRIES) {
+            if (wait === 0) setJournalKey((key) => key + 1);
+            else window.setTimeout(() => setJournalKey((key) => key + 1), wait);
+          }
+        }
+      }
+    }
+
+    look();
+    const id = setInterval(look, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live]);
 
   /**
    * На телефоне терминала нет.
