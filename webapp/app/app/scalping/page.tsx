@@ -3897,6 +3897,7 @@ export default function ScalpingPage() {
           maxPosition={limits?.max_position}
           leverageCaps={limits?.leverage_caps}
           used={usedQty}
+          free={Number(balance ?? 0) || 0}
         />
       )}
     </div>

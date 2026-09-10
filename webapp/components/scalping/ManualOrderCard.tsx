@@ -114,7 +114,7 @@ export default function ManualOrderCard({
     leverageCaps,
     used,
   });
-  const margins = ceiling > 0 ? capped(MARGINS, ceiling) : MARGINS;
+  const margins = ceiling > 0 ? MARGINS.filter((value) => value <= ceiling) : MARGINS;
   const overSize = ceiling > 0 && draft.margin > ceiling;
 
   const long = draft.side === "long";
@@ -241,6 +241,8 @@ export default function ManualOrderCard({
           current={draft.margin}
           format={(v) => `${v}`}
           onPick={(value) => onChange({ ...draft, margin: value })}
+          max={ceiling > 0 ? ceiling : undefined}
+          maxTitle={d.maxTitle}
         />
         <Chips
           label={d.leverage}
@@ -363,49 +365,53 @@ function PriceRow({
   );
 }
 
-/**
- * Готовые суммы не выше предела, и сам предел последней кнопкой.
- *
- * Так же, как с плечом: кнопка, которая гарантированно приведёт к отказу
- * биржи, - это не выбор, а ловушка. А встать ровно в потолок трейдер вправе.
- */
-function capped(values: number[], ceiling: number): number[] {
-  const fits = values.filter((value) => value <= ceiling);
-  const top = Math.floor(ceiling);
-  if (top > 0 && !fits.includes(top)) fits.push(top);
-  return fits.length > 0 ? fits : [top > 0 ? top : values[0]];
-}
-
 function Chips({
   label,
   values,
   current,
   format,
   onPick,
+  max,
+  maxTitle,
 }: {
   label: string;
   values: number[];
   current: number;
   format: (value: number) => string;
   onPick: (value: number) => void;
+  /**
+   * Наибольшее значение, которое сейчас пройдёт: последней кнопкой «max».
+   * Самим числом не пишем - готовые суммы не выше предела, а встать ровно в
+   * потолок трейдер вправе одним нажатием.
+   */
+  max?: number;
+  maxTitle?: string;
 }) {
+  const top = max !== undefined ? Math.floor(max) : 0;
+  const chip = (on: boolean) =>
+    `${CHIP} ${
+      on
+        ? "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]"
+        : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+    }`;
   return (
     <div className="flex items-center gap-1">
       <span className="w-10 shrink-0 text-[10px] text-[var(--pane-muted)]">{label}</span>
       <div className="flex flex-wrap gap-0.5">
         {values.map((value) => (
-          <button
-            key={value}
-            onClick={() => onPick(value)}
-            className={`${CHIP} ${
-              current === value
-                ? "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]"
-                : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
-            }`}
-          >
+          <button key={value} onClick={() => onPick(value)} className={chip(current === value)}>
             {format(value)}
           </button>
         ))}
+        {top >= 1 && !values.includes(top) && (
+          <button
+            onClick={() => onPick(top)}
+            title={maxTitle ? `${maxTitle}: ${top}` : String(top)}
+            className={`${chip(current === top)} text-[9px] font-semibold uppercase`}
+          >
+            max
+          </button>
+        )}
       </div>
     </div>
   );

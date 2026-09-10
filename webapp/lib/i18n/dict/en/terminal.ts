@@ -285,6 +285,7 @@ export const dialogs = {
     liquidation: "liquidation",
     liqCloser: "Liquidation is closer than the stop - lower the leverage",
     ceiling: (cap: string, leverage: number) => `The exchange won't take more than ${cap} $ at ×${leverage}`,
+    maxTitle: "The largest amount that will go through now",
     place: (side: string) => `Place ${side}`,
     dragHint: "The levels drag right on the chart",
     removeOrder: "Remove the order",
@@ -316,7 +317,8 @@ export const dialogs = {
     capWarning: (cap: number, leverage: number) =>
       `The exchange caps this coin at x${cap}. At x${leverage} the order will be rejected.`,
     ceiling: (cap: string, leverage: number) =>
-      `The exchange won't take more than ${cap} $ at ×${leverage}: the cap counts the open position and orders on this coin together.`,
+      `More than ${cap} $ at ×${leverage} won't go through now: free funds, the open position and orders on this coin are counted.`,
+    maxTitle: "The largest amount that will go through now",
     liqWarning: "At this leverage the position is wiped out before the stop triggers. Lower the leverage or move the stop.",
     fillHint: "Enter the amount, leverage and stop - the numbers will appear here",
     willGoLive: "The order goes to the exchange",

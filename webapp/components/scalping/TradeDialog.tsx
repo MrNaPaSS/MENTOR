@@ -73,6 +73,7 @@ export default function TradeDialog({
   maxPosition,
   leverageCaps,
   used = 0,
+  free = 0,
   opposing = 0,
 }: {
   draft: TradeDraft;
@@ -110,6 +111,11 @@ export default function TradeDialog({
    * проходит одна, получает отказ вместе с соседними заявками.
    */
   used?: number;
+  /**
+   * Свободные деньги счёта. Без них «max» у суммы подставлял бы предел биржи -
+   * сотни тысяч долларов, которых на счёте нет.
+   */
+  free?: number;
   /**
    * Объём встречной позиции по этой монете.
    *
@@ -151,7 +157,7 @@ export default function TradeDialog({
   // уже занято позицией и заявками. Ноль - предел неизвестен, не ограничиваем:
   // запрещать по незнанию хуже, чем показать кнопку, на которую в редком
   // случае ответит отказом биржа.
-  const ceiling = maxMargin(draft.shelf.price, draft.leverage, 0, {
+  const ceiling = maxMargin(draft.shelf.price, draft.leverage, free, {
     maxQty,
     maxPosition,
     leverageCaps,
@@ -160,15 +166,13 @@ export default function TradeDialog({
   const overSize = ceiling > 0 && draft.margin > ceiling;
 
   // Суммы, которые пройдут. Кнопка, гарантированно ведущая к отказу биржи, -
-  // это ловушка, а встать ровно в предел трейдер вправе.
+  // это ловушка. Сам предел отдельной кнопкой с числом не показываем: число
+  // вроде 919992 под ровными 10-25-50 читалось как ошибка. Встать ровно в
+  // предел можно кнопкой «max» в самом поле.
   const margins = useMemo(() => {
     if (!(draft.shelf.price > 0)) return MARGINS;
     const all = [...MARGINS, BIG_MARGIN];
-    if (!(ceiling > 0)) return all;
-    const fits = all.filter((value) => value <= ceiling);
-    const top = Math.floor(ceiling);
-    if (top > 0 && !fits.includes(top)) fits.push(top);
-    return fits.length > 0 ? fits : [MARGINS[0]];
+    return ceiling > 0 ? all.filter((value) => value <= ceiling) : all;
   }, [draft.shelf.price, ceiling]);
 
   // Плечо выше потолка монеты подводим к потолку, как только его узнали.
@@ -298,6 +302,8 @@ export default function TradeDialog({
             presets={margins}
             format={(v) => String(v)}
             onPick={(margin) => onChange({ ...draft, margin })}
+            max={ceiling > 0 ? ceiling : undefined}
+            maxTitle={d.maxTitle}
           />
           <Field
             label={cap ? d.leverageCap(cap) : d.leverage}
@@ -437,10 +443,19 @@ function Field({
   format,
   onPick,
   inputRef,
+  max,
+  maxTitle,
 }: {
   label: string;
   value: number;
   presets: number[];
+  /**
+   * Наибольшее значение, которое сейчас пройдёт. Есть - слева в поле кнопка
+   * «max», которая его подставляет. Самого числа на экране нет: оно нужно,
+   * чтобы встать в него, а не чтобы его разглядывать.
+   */
+  max?: number;
+  maxTitle?: string;
   /**
    * Разложить готовые значения сеткой по столько в ряд.
    *
@@ -462,27 +477,50 @@ function Field({
     setText((current) => (Number(current.replace(",", ".")) === value ? current : String(value)));
   }, [value]);
 
+  // Целое: копейки в сумме сделки ни к чему. Меньше доллара - места нет, и
+  // кнопка подставила бы ноль.
+  const top = max !== undefined ? Math.floor(max) : 0;
+
   return (
     <div>
       <span className="mb-1.5 block text-[11px] text-[var(--pane-muted)]">{label}</span>
-      <input
-        ref={inputRef}
-        type="text"
-        inputMode="decimal"
-        value={text}
-        onChange={(e) => {
-          const raw = e.target.value;
-          setText(raw);
-          const parsed = Number(raw.replace(",", "."));
-          if (Number.isFinite(parsed) && parsed > 0) onPick(parsed);
-        }}
-        onBlur={() => {
-          // Ушли из поля с мусором — возвращаем последнее рабочее число.
-          const parsed = Number(text.replace(",", "."));
-          if (!Number.isFinite(parsed) || parsed <= 0) setText(String(value));
-        }}
-        className={FIELD}
-      />
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="decimal"
+          value={text}
+          onChange={(e) => {
+            const raw = e.target.value;
+            setText(raw);
+            const parsed = Number(raw.replace(",", "."));
+            if (Number.isFinite(parsed) && parsed > 0) onPick(parsed);
+          }}
+          onBlur={() => {
+            // Ушли из поля с мусором — возвращаем последнее рабочее число.
+            const parsed = Number(text.replace(",", "."));
+            if (!Number.isFinite(parsed) || parsed <= 0) setText(String(value));
+          }}
+          className={`${FIELD} ${top >= 1 ? "pl-11" : ""}`}
+        />
+        {top >= 1 && (
+          <button
+            type="button"
+            onClick={() => {
+              onPick(top);
+              setText(String(top));
+            }}
+            title={maxTitle ? `${maxTitle}: ${top}` : String(top)}
+            className={`absolute left-1.5 top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide transition-colors duration-150 ease-out ${
+              value === top
+                ? "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]"
+                : "text-[var(--pane-muted)] hover:bg-[var(--pane-accent-faint)] hover:text-[var(--pane-accent)]"
+            }`}
+          >
+            max
+          </button>
+        )}
+      </div>
       <div
         className={
           columns === 4 ? "mt-1.5 grid grid-cols-4 gap-1" : "mt-1.5 flex flex-wrap gap-1"
