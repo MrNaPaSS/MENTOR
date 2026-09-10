@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 
+from core.weex.uid import clean_uid
 from core.models import ScalpTrade, Student
 from backend.deps import get_current_student, get_session, get_weex
 from backend.trading.funds import trade_volume
@@ -93,11 +94,14 @@ async def trades_me(
             "needs_uid": True,
         }
 
-    uid = str(student.weex_uid).strip()
+    # Цифрами: в отчёте UID число, а у ученика он мог осесть с префиксом из
+    # приложения биржи - строка тогда не находилась, и путь трейдера считался
+    # по одному журналу, будто торговли на бирже не было вовсе.
+    uid = clean_uid(student.weex_uid) or str(student.weex_uid).strip()
 
     # Торговий підсумок за період
     all_rows = await weex.get_channel_trade_asset(start_ms, end_ms, page=1)
-    user_row = next((r for r in all_rows if str(r.get("uid", "")) == uid), None)
+    user_row = next((r for r in all_rows if clean_uid(r.get("uid")) == uid), None)
 
     summary = None
     if user_row:

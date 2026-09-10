@@ -165,3 +165,25 @@ def test_exchange_report_wins_when_it_is_bigger(ctx):
     assert summary["futures_volume"] > 0.2
     # Пополнения и комиссия остаются биржиными в любом случае.
     assert summary["deposit_total"] > 0
+
+
+def test_partner_row_is_found_when_the_uid_carries_a_prefix(ctx):
+    """UID с приставкой из приложения биржи находит свою строку в отчёте.
+
+    У ученика №26 в базе лежало `PO6067083524`. В партнёрском отчёте UID
+    числом, сравнение шло строкой - и строка не находилась: путь трейдера
+    считался по одному журналу, будто торговли на бирже не было вовсе.
+    """
+    client = ctx
+    # Первый UID мока - он же первая строка его партнёрского отчёта.
+    sid, h = _student(client, uid="3066862000")
+    with SessionLocal() as s:
+        s.get(Student, sid).weex_uid = "PO3066862000"
+        s.commit()
+
+    body = client.get("/api/trades/me?days=90", headers=h).json()
+    summary = body["summary"]
+    assert summary is not None
+    # Числа отчёта, а не пустой журнал: сделок в нём нет вовсе.
+    assert summary["futures_volume"] > 0
+    assert summary["deposit_total"] > 0

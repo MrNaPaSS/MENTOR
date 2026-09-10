@@ -8,6 +8,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
+from core.weex.uid import clean_uid
 from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student
 from backend.trading.funds import trade_roi, trade_volume
 from backend.api.journal import is_admin
@@ -148,7 +149,7 @@ async def analytics_calendar(
     # ── WEEX: депозиты (live) ───────────────────────────────────────────────
     deposit_dates: set[str] = set()
     if student.weex_uid:
-        uid = str(student.weex_uid).strip()
+        uid = clean_uid(student.weex_uid) or str(student.weex_uid).strip()
         try:
             assets = await weex.get_agency_assert(uid)
             for dep in assets.get("depositList", []):
