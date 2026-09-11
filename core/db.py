@@ -61,6 +61,7 @@ def create_all() -> None:
     _apply_shop_catalog_v4(engine)
     _apply_shop_catalog_v5(engine)
     _apply_shop_catalog_v6(engine)
+    _apply_shop_catalog_v7(engine)
 
 
 def _migrate_add_columns(engine) -> None:
@@ -511,8 +512,8 @@ def _apply_shop_catalog_v5(engine) -> None:
 # Кортеж: (title, description, price, icon, feature, sort_order)
 _SHOP_TOOLS_V6 = [
     ("NMNH VISION",
-     "Вся разметка графика одной покупкой: тренд, структура рынка, ордер-блоки, FVG, "
-     "зоны и EMA. Полки ликвидности остаются бесплатными. Навсегда.",
+     "Разметка графика одной покупкой: тренд, структура рынка, ордер-блоки, FVG и "
+     "зоны. Полки ликвидности, объём и EMA остаются бесплатными. Навсегда.",
      3000, "Eye", "tool_vision", 1),
     ("Кластерная свеча",
      "Разбор любой свечи по уровням: сколько купили и продали на каждой цене, где "
@@ -590,4 +591,35 @@ def _apply_shop_catalog_v6(engine) -> None:
             flag.value = "6"
         else:
             session.add(SettingRow(key="shop_catalog_version", value="6"))
+        session.commit()
+
+
+def _apply_shop_catalog_v7(engine) -> None:
+    """EMA стала бесплатной: описание NMNH VISION больше её не обещает. Один раз.
+
+    Каталог, заведённый v6, уже лежит в базе со старым описанием - правим его
+    там, где товар есть. Цена не меняется: остальная разметка на месте.
+    """
+    from sqlalchemy import inspect, update
+    from sqlalchemy.orm import Session
+    from core.models import SettingRow, ShopItem
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names() or "settings" not in inspector.get_table_names():
+        return
+
+    with Session(engine) as session:
+        flag = session.get(SettingRow, "shop_catalog_version")
+        if flag and (flag.value or "").isdigit() and int(flag.value) >= 7:
+            return
+
+        description = next(desc for _, desc, _, _, feature, _ in _SHOP_TOOLS_V6 if feature == "tool_vision")
+        session.execute(
+            update(ShopItem).where(ShopItem.feature == "tool_vision").values(description=description)
+        )
+
+        if flag:
+            flag.value = "7"
+        else:
+            session.add(SettingRow(key="shop_catalog_version", value="7"))
         session.commit()

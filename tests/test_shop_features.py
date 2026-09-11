@@ -459,3 +459,10 @@ def test_права_по_токену_учитывают_vip(client):
     _make_vip("700073")
     assert tools.rights_from_token(token, "test-secret") >= {"tool_dom_depth", "tool_footprint"}
     assert tools.rights_from_token("мусор", "test-secret") == frozenset()
+
+
+def test_ema_бесплатна_и_vision_её_не_обещает(client):
+    """EMA открыта у всех: описание NMNH VISION её в покупку не включает."""
+    items = {it["title"]: it for it in client.get("/api/shop/items").json()}
+    desc = items["NMNH VISION"]["description"]
+    assert "EMA остаются бесплатными" in desc

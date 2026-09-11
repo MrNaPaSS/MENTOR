@@ -149,9 +149,10 @@ export default function ProfilePage() {
             src="/art/profile/card-crown.webp"
             alt=""
             aria-hidden
-            // Место картинки - рамка от 40% ширины до колонки с кнопкой: на
+            // Место картинки - рамка от трети ширины почти до правого края: её
+            // правый склон уходит под девиз и кнопку, они стоят поверх. На
             // узкой карточке она уменьшается, а не наезжает на баланс.
-            className="profile-art pointer-events-none absolute bottom-0 left-[40%] right-[140px] top-2 hidden h-[calc(100%-0.5rem)] w-[calc(60%-140px)] object-contain object-bottom sm:block"
+            className="profile-art pointer-events-none absolute bottom-0 left-[34%] right-[72px] top-1 hidden h-[calc(100%-0.25rem)] w-[calc(66%-72px)] object-contain object-bottom sm:block"
             style={{
               maskImage: "linear-gradient(90deg, transparent 0%, #000 14%)",
               WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 14%)",
@@ -463,18 +464,18 @@ export default function ProfilePage() {
         <ChevronRight className="h-4 w-4 text-[var(--pane-muted)]" />
       </button>
 
-      {/* Нижний баннер бренда: горы, терминал и корона - без рамки, тает в
-          фон страницы. */}
-      <div className="relative mx-auto mt-auto hidden w-full max-w-[1280px] sm:block">
+      {/* Нижний баннер бренда: горы, планета, терминал и корона на ночном
+          поле. Девиз, слова сообщества и строка внизу впечатаны в саму
+          картинку - поверх ничего не набираем, иначе они встали бы дважды.
+          Баннер тёмный и в светлой теме: это витрина, а не панель. */}
+      <div className="mx-auto mt-auto hidden w-full max-w-[1280px] overflow-hidden rounded-xl sm:block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/art/profile/bottom-banner.webp" alt="" aria-hidden className="profile-art w-full" />
-        <Motto
-          lines={BRAND_MOTTO}
-          className="absolute left-[1.5%] top-[10%] !text-[12px] !tracking-[0.42em] !text-[var(--pane-text-2)]"
-        />
-        <Motto
-          lines={t.profile.bannerWords}
-          className="absolute right-[1.5%] top-[8%] !text-[10px] !tracking-[0.3em] !text-[var(--pane-text-2)]"
+        <img
+          src="/art/profile/bottom-nmnh.webp"
+          alt=""
+          aria-hidden
+          loading="lazy"
+          className="block aspect-[1800/596] w-full object-cover"
         />
       </div>
 
