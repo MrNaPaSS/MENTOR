@@ -41,7 +41,7 @@ export default function PulsePromo({ className = "" }: { className?: string }) {
         <Link
           href="/app/scalping"
           title={t.market.promo.ctaHint}
-          className="group flex items-center justify-between gap-4 rounded-xl border border-accent-gold/50 bg-[var(--pane-gold)]/10 px-4 py-3 transition-[transform,background-color] duration-150 ease-out hover:bg-[var(--pane-gold)]/15 active:scale-[0.98]"
+          className="group flex items-center justify-between gap-4 rounded-xl border border-accent-gold/50 bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-4 py-3 transition-[transform,background-color] duration-150 ease-out hover:bg-[color:color-mix(in_srgb,var(--pane-gold)_15%,transparent)] active:scale-[0.98]"
         >
           <span className="text-[15px] font-extrabold uppercase leading-tight tracking-wide text-[var(--pane-text)]">
             {t.market.promo.cta.map((line) => (

@@ -154,14 +154,14 @@ const SKIN: Record<
     bannerText: "text-[var(--pane-text-2)]",
     bannerArrow: "text-[var(--pane-accent)]",
     pinned:
-      "mx-2 mt-2 rounded-lg border border-[var(--pane-gold)]/40 bg-[var(--pane-gold)]/10 px-2.5 py-1.5",
+      "mx-2 mt-2 rounded-lg border border-[color:color-mix(in_srgb,var(--pane-gold)_40%,transparent)] bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-2.5 py-1.5",
     pinnedIcon: "text-[var(--pane-gold)]",
     pinnedText: "text-[11px] leading-snug text-[var(--pane-text-2)]",
     pinnedName: "font-semibold text-[var(--pane-gold)]",
     feed: "no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2",
     stack: "mt-auto space-y-2",
     bubbleSelf:
-      "bg-[var(--pane-accent)]/15 text-[var(--pane-text)] ring-1 ring-[var(--pane-accent)]/30",
+      "bg-[color:color-mix(in_srgb,var(--pane-accent)_15%,transparent)] text-[var(--pane-text)] ring-1 ring-[color:color-mix(in_srgb,var(--pane-accent)_30%,transparent)]",
     bubbleOther: "bg-[var(--pane-hover)] text-[var(--pane-text)] ring-1 ring-[var(--pane-border)]",
     nameMentor: "text-[var(--pane-gold)]",
     nameSelf: "text-[var(--pane-accent)]",
@@ -171,7 +171,7 @@ const SKIN: Record<
     input:
       "min-w-0 flex-1 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2 py-1.5 text-[12px] text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)] focus:border-[var(--pane-accent)]",
     button:
-      "shrink-0 rounded-lg border border-[var(--pane-accent)]/50 px-2.5 text-[var(--pane-accent)] transition-colors hover:bg-[var(--pane-accent)]/10",
+      "shrink-0 rounded-lg border border-[color:color-mix(in_srgb,var(--pane-accent)_50%,transparent)] px-2.5 text-[var(--pane-accent)] transition-colors hover:bg-[color:color-mix(in_srgb,var(--pane-accent)_10%,transparent)]",
     ghost:
       "h-full shrink-0 rounded-lg border border-[var(--pane-border)] px-2 text-[var(--pane-text-2)] transition-colors hover:border-[var(--pane-accent)] hover:text-[var(--pane-text)]",
     note: "px-2 pb-2 text-center text-[10px] text-[var(--pane-muted)]",
@@ -189,8 +189,8 @@ const SKIN: Record<
     downDot: "bg-[var(--pane-down)]",
     pendingDot: "border-[var(--pane-gold)]",
     doneDot: "bg-[var(--pane-muted)]",
-    upBox: "bg-[var(--pane-up)]/12 text-[var(--pane-up)] ring-1 ring-[var(--pane-up)]/25",
-    downBox: "bg-[var(--pane-down)]/12 text-[var(--pane-down)] ring-1 ring-[var(--pane-down)]/25",
+    upBox: "bg-[color:color-mix(in_srgb,var(--pane-up)_12%,transparent)] text-[var(--pane-up)] ring-1 ring-[color:color-mix(in_srgb,var(--pane-up)_25%,transparent)]",
+    downBox: "bg-[color:color-mix(in_srgb,var(--pane-down)_12%,transparent)] text-[var(--pane-down)] ring-1 ring-[color:color-mix(in_srgb,var(--pane-down)_25%,transparent)]",
     chip: "bg-[var(--pane-hover)] text-[var(--pane-muted)]",
   },
 };

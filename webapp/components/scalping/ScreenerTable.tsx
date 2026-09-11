@@ -143,10 +143,10 @@ const Row = memo(function Row({
       // Реакция на нажатие, а не на отпускание: подсветка должна появиться в тот
       // момент, когда палец коснулся строки.
       onPointerDown={() => onSelect(row.symbol)}
-      className={`cursor-pointer border-b border-[var(--pane-border)]/40 transition-colors duration-150 ease-out ${
+      className={`cursor-pointer border-b border-[color:color-mix(in_srgb,var(--pane-border)_40%,transparent)] transition-colors duration-150 ease-out ${
         selected
           ? "bg-[var(--pane-accent-faint)] shadow-[inset_2px_0_0_#0AFFE0]"
-          : "hover:bg-[var(--pane-bg)]/60 active:bg-[var(--pane-bg)]"
+          : "hover:bg-[color:color-mix(in_srgb,var(--pane-bg)_60%,transparent)] active:bg-[var(--pane-bg)]"
       }`}
     >
       {/* Тикер фиксированной ширины, цена и изменение — по своим местам:

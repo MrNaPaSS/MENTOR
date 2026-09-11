@@ -9,6 +9,8 @@ export const signals = {
   tabSignals: "Сигналы",
   noActiveSignals: "Нет активных сигналов",
   analysisBadge: "Анализ",
+  readMore: "Читать полностью",
+  readLess: "Свернуть",
   openChart: "Открыть график",
   chart: "График",
   chartTitle: "Открыть график и стакан",

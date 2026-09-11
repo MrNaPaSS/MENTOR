@@ -129,7 +129,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
 
   /* ── Header (shared) ── */
   const Header = () => (
-    <div className="flex items-center justify-between border-b border-[var(--pane-border)]/50 px-3" style={{ height: 36 }}>
+    <div className="flex items-center justify-between border-b border-[color:color-mix(in_srgb,var(--pane-border)_50%,transparent)] px-3" style={{ height: 36 }}>
       <div className="flex items-center gap-3">
         <span
           onClick={() => setTab("book")}
@@ -156,18 +156,18 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
               key={m}
               onClick={() => setMode(m)}
               className={`flex h-5 w-6 items-center justify-center rounded-sm transition ${
-                mode === m ? "bg-[var(--pane-hover)]/10" : "hover:bg-[var(--pane-hover)]/5"
+                mode === m ? "bg-[color:color-mix(in_srgb,var(--pane-hover)_10%,transparent)]" : "hover:bg-[color:color-mix(in_srgb,var(--pane-hover)_5%,transparent)]"
               }`}
               title={m}
             >
               {m === "both" && (
                 <span className="flex flex-col gap-[1px]">
-                  <span className="block h-[3px] w-4 rounded-[1px] bg-[var(--pane-up)]/80" />
-                  <span className="block h-[3px] w-4 rounded-[1px] bg-[var(--pane-down)]/80" />
+                  <span className="block h-[3px] w-4 rounded-[1px] bg-[color:color-mix(in_srgb,var(--pane-up)_80%,transparent)]" />
+                  <span className="block h-[3px] w-4 rounded-[1px] bg-[color:color-mix(in_srgb,var(--pane-down)_80%,transparent)]" />
                 </span>
               )}
-              {m === "asks" && <span className="block h-[6px] w-4 rounded-[1px] bg-[var(--pane-down)]/80" />}
-              {m === "bids" && <span className="block h-[6px] w-4 rounded-[1px] bg-[var(--pane-up)]/80" />}
+              {m === "asks" && <span className="block h-[6px] w-4 rounded-[1px] bg-[color:color-mix(in_srgb,var(--pane-down)_80%,transparent)]" />}
+              {m === "bids" && <span className="block h-[6px] w-4 rounded-[1px] bg-[color:color-mix(in_srgb,var(--pane-up)_80%,transparent)]" />}
             </button>
           ))}
         </div>
@@ -182,7 +182,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
         <Header />
 
         {/* Column labels */}
-        <div className="flex items-center border-b border-[var(--pane-border)]/30 font-mono" style={{ height: 24 }}>
+        <div className="flex items-center border-b border-[color:color-mix(in_srgb,var(--pane-border)_30%,transparent)] font-mono" style={{ height: 24 }}>
           <span className="w-[28%] pl-3 text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">{t.market.orderBook.time}</span>
           <span className="w-[28%] text-right text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">{t.market.orderBook.price}</span>
           <span className="w-[22%] text-right text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">{ticker}</span>
@@ -310,7 +310,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
       <Header />
 
       {/* Колонки */}
-      <div className="flex items-center border-b border-[var(--pane-border)]/30 font-mono" style={{ height: 24 }}>
+      <div className="flex items-center border-b border-[color:color-mix(in_srgb,var(--pane-border)_30%,transparent)] font-mono" style={{ height: 24 }}>
         <span className="w-[42%] pl-3 text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
           {t.market.orderBook.priceUsdt}
         </span>
@@ -331,7 +331,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
 
       {/* Текущая цена */}
       <div
-        className="flex items-center justify-between border-y border-[var(--pane-border)]/60 bg-[var(--pane-hover)] px-3"
+        className="flex items-center justify-between border-y border-[color:color-mix(in_srgb,var(--pane-border)_60%,transparent)] bg-[var(--pane-hover)] px-3"
         style={{ height: 36 }}
       >
         <div className="flex items-center gap-1.5">
@@ -356,7 +356,7 @@ export default function OrderBook({ symbol, rows = 14, compact = false }: Props)
       )}
 
       {/* B / S бар */}
-      <div className="mt-auto border-t border-[var(--pane-border)]/50 px-3 py-2">
+      <div className="mt-auto border-t border-[color:color-mix(in_srgb,var(--pane-border)_50%,transparent)] px-3 py-2">
         <div className="flex items-center justify-between mb-1">
           <span className="font-mono text-[10px] font-semibold text-[var(--pane-up)]">B {bidPct}%</span>
           <span className="font-mono text-[10px] font-semibold text-[var(--pane-down)]">{askPct}% S</span>

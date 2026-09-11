@@ -440,7 +440,7 @@ function CotSection() {
                 );
               })}
             </div>
-            <div className="mt-1.5 flex justify-between text-[8px] text-[var(--pane-text)]/15">
+            <div className="mt-1.5 flex justify-between text-[8px] text-[color:color-mix(in_srgb,var(--pane-text)_15%,transparent)]">
               <span>{t.smart.cot.older}</span><span>{t.smart.cot.newer}</span>
             </div>
           </div>
@@ -673,7 +673,7 @@ function EtfSection() {
           })}
         </div>
 
-        <p className="text-[9px] text-[var(--pane-text)]/15">{t.smart.etf.sources}</p>
+        <p className="text-[9px] text-[color:color-mix(in_srgb,var(--pane-text)_15%,transparent)]">{t.smart.etf.sources}</p>
       </div>}
     </Section>
   );
@@ -792,7 +792,7 @@ function DerivativesSection() {
           })}
         </div>
 
-        <p className="mt-3 text-[8.5px] text-[var(--pane-text)]/15">
+        <p className="mt-3 text-[8.5px] text-[color:color-mix(in_srgb,var(--pane-text)_15%,transparent)]">
           {t.smart.oi.footnote}
         </p>
       </>}

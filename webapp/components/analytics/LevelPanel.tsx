@@ -47,19 +47,19 @@ export default function LevelPanel({
           <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.level.title}</h2>
         </div>
         {coins !== null && (
-          <div className="flex items-center gap-1.5 rounded-full border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10 px-2.5 py-1">
+          <div className="flex items-center gap-1.5 rounded-full border border-[var(--pane-gold-soft)] bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-2.5 py-1">
             <CoinIcon size={15} />
             <span className="font-mono text-sm font-extrabold tabular-nums text-[var(--pane-gold)]">
               {coins.toLocaleString(numbers)}
             </span>
-            <span className="text-[9px] font-bold text-[var(--pane-gold)]/60">NMNH</span>
+            <span className="text-[9px] font-bold text-[color:color-mix(in_srgb,var(--pane-gold)_60%,transparent)]">NMNH</span>
           </div>
         )}
       </header>
 
       <div className="mt-3 flex items-center gap-3">
-        <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10">
-          <span className="text-[8px] font-bold uppercase leading-none tracking-wider text-[var(--pane-gold)]/70">
+        <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl border border-[var(--pane-gold-soft)] bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)]">
+          <span className="text-[8px] font-bold uppercase leading-none tracking-wider text-[color:color-mix(in_srgb,var(--pane-gold)_70%,transparent)]">
             {t.analytics.level.short}
           </span>
           <span className="font-mono text-2xl font-black leading-none text-[var(--pane-gold)]">{level}</span>
@@ -112,7 +112,7 @@ export default function LevelPanel({
             </span>
             <span
               className={`font-mono text-[12px] font-bold tabular-nums ${
-                val > 0 ? "text-[var(--pane-text)]" : "text-[var(--pane-muted)]/60"
+                val > 0 ? "text-[var(--pane-text)]" : "text-[color:color-mix(in_srgb,var(--pane-muted)_60%,transparent)]"
               }`}
             >
               +{val.toLocaleString(numbers)}

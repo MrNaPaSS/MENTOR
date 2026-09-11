@@ -41,7 +41,7 @@ function Segmented<T extends string>({
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
               active
                 ? "bg-[var(--pane-hover)] text-[var(--pane-text)] ring-1 ring-inset ring-white/[0.08]"
-                : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]/80"
+                : "text-[var(--pane-muted)] hover:text-[color:color-mix(in_srgb,var(--pane-text)_80%,transparent)]"
             }`}
           >
             {o.dot && <span className={`h-1.5 w-1.5 rounded-full ${o.dot}`} />}
@@ -105,14 +105,14 @@ export default function SignalsFeed() {
           </div>
 
           {/* Депозит для расчёта */}
-          <div className="flex items-center gap-2.5 rounded-xl border border-[var(--pane-accent-soft)] bg-[var(--pane-accent)]/[0.05] px-3.5 py-2">
-            <Wallet className="h-4 w-4 shrink-0 text-[var(--pane-accent)]/70" />
+          <div className="flex items-center gap-2.5 rounded-xl border border-[var(--pane-accent-soft)] bg-[color:color-mix(in_srgb,var(--pane-accent)_5%,transparent)] px-3.5 py-2">
+            <Wallet className="h-4 w-4 shrink-0 text-[color:color-mix(in_srgb,var(--pane-accent)_70%,transparent)]" />
             <div className="flex flex-col leading-tight">
               <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--pane-muted)]">
                 {t.signals.depositForCalc}
               </span>
               <div className="flex items-baseline gap-1">
-                <span className="font-mono text-sm text-[var(--pane-accent)]/60">$</span>
+                <span className="font-mono text-sm text-[color:color-mix(in_srgb,var(--pane-accent)_60%,transparent)]">$</span>
                 <input
                   inputMode="numeric"
                   value={balance.toLocaleString("en-US")}

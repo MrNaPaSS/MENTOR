@@ -191,7 +191,7 @@ export default function ProfilePage() {
             </span>
             <span
               className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                exchange?.connected ? "bg-[var(--pane-up)]/10 text-[var(--pane-up)]" : "bg-[var(--pane-hover)] text-[var(--pane-muted)]"
+                exchange?.connected ? "bg-[color:color-mix(in_srgb,var(--pane-up)_10%,transparent)] text-[var(--pane-up)]" : "bg-[var(--pane-hover)] text-[var(--pane-muted)]"
               }`}
             >
               {exchange?.connected ? t.profile.connected : t.profile.disconnected}
@@ -390,10 +390,10 @@ export default function ProfilePage() {
       {isAdmin && (
         <Link
           href="/admin"
-          className="flex items-center justify-between rounded-xl border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10 px-3 py-2.5 transition-colors duration-150 hover:bg-[var(--pane-gold)]/15"
+          className="flex items-center justify-between rounded-xl border border-[var(--pane-gold-soft)] bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-3 py-2.5 transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--pane-gold)_15%,transparent)]"
         >
           <div className="flex items-center gap-3">
-            <div className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/15">
+            <div className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--pane-gold-soft)] bg-[color:color-mix(in_srgb,var(--pane-gold)_15%,transparent)]">
               <ShieldCheck className="h-4 w-4 text-[var(--pane-gold)]" />
             </div>
             <span className="text-[12px] font-semibold text-[var(--pane-text)]">{t.profile.adminPanel}</span>
@@ -405,7 +405,7 @@ export default function ProfilePage() {
       {/* ── LOGOUT ── */}
       <button
         onClick={() => { logout(); router.push("/"); }}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--pane-down)]/25 bg-[var(--pane-down)]/10 py-2.5 text-[12px] font-semibold text-[var(--pane-down)] transition-colors duration-150 hover:bg-[var(--pane-down)]/15"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-[color:color-mix(in_srgb,var(--pane-down)_25%,transparent)] bg-[color:color-mix(in_srgb,var(--pane-down)_10%,transparent)] py-2.5 text-[12px] font-semibold text-[var(--pane-down)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--pane-down)_15%,transparent)]"
       >
         <LogOut className="h-4 w-4" /> {t.profile.logoutAccount}
       </button>

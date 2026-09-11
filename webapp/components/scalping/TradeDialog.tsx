@@ -323,7 +323,7 @@ export default function TradeDialog({
         </div>
 
         {plan ? (
-          <div className="border-t border-[var(--pane-border)] bg-[var(--pane-deep)]/40 px-5 py-4">
+          <div className="border-t border-[var(--pane-border)] bg-[color:color-mix(in_srgb,var(--pane-deep)_40%,transparent)] px-5 py-4">
             <Row
               label={d.entry}
               price={fmtPrice(plan.entry, tick)}

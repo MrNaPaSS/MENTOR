@@ -83,9 +83,9 @@ function PriceTrack({ signal, currentPrice }: { signal: SignalOut; currentPrice?
       <div className="relative h-2 rounded-full bg-[var(--pane-hover)]">
         {/* Loss zone */}
         {longDir ? (
-          <div className="absolute inset-y-0 left-0 rounded-l-full bg-[var(--pane-down)]/25" style={{ width: `${entryPct}%` }} />
+          <div className="absolute inset-y-0 left-0 rounded-l-full bg-[color:color-mix(in_srgb,var(--pane-down)_25%,transparent)]" style={{ width: `${entryPct}%` }} />
         ) : (
-          <div className="absolute inset-y-0 right-0 rounded-r-full bg-[var(--pane-down)]/25" style={{ width: `${100 - entryPct}%` }} />
+          <div className="absolute inset-y-0 right-0 rounded-r-full bg-[color:color-mix(in_srgb,var(--pane-down)_25%,transparent)]" style={{ width: `${100 - entryPct}%` }} />
         )}
         {/* Profit zone */}
         {longDir ? (
@@ -113,7 +113,7 @@ function PriceTrack({ signal, currentPrice }: { signal: SignalOut; currentPrice?
           pos={entryPct}
           value={fmtUsd(entry, 4)}
           caption={`${curVsEntry >= 0 ? "+" : ""}${curVsEntry.toFixed(2)}%`}
-          tone="text-[var(--pane-text)]/80"
+          tone="text-[color:color-mix(in_srgb,var(--pane-text)_80%,transparent)]"
           captionTone={curVsEntry >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
         />
         <Label pos={tp3Pct} value={fmtUsd(tp3val, 4)} caption="TP" tone="text-[var(--pane-accent)]" />
@@ -149,7 +149,7 @@ function Label({
   return (
     <div className={`absolute flex flex-col ${align}`} style={style}>
       <span className={`font-bold ${tone}`}>{value}</span>
-      <span className={`text-[9px] font-semibold uppercase tracking-wider ${captionTone ?? "text-[var(--pane-text)]/30"}`}>
+      <span className={`text-[9px] font-semibold uppercase tracking-wider ${captionTone ?? "text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]"}`}>
         {caption}
       </span>
     </div>
@@ -159,7 +159,7 @@ function Label({
 function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <div className="flex flex-col items-center gap-1 py-3">
-      <span className="text-[8px] font-semibold uppercase tracking-[0.15em] text-[var(--pane-text)]/30">{label}</span>
+      <span className="text-[8px] font-semibold uppercase tracking-[0.15em] text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">{label}</span>
       <span className={`font-mono text-[13px] font-bold tabular-nums ${tone}`}>{value}</span>
     </div>
   );
@@ -199,7 +199,7 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
           <div className="flex items-center gap-3">
             <div
               className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${
-                long ? "border-success/25 bg-[var(--pane-up)]/[0.12] text-[var(--pane-up)]" : "border-danger/25 bg-[var(--pane-down)]/[0.12] text-[var(--pane-down)]"
+                long ? "border-success/25 bg-[color:color-mix(in_srgb,var(--pane-up)_12%,transparent)] text-[var(--pane-up)]" : "border-danger/25 bg-[color:color-mix(in_srgb,var(--pane-down)_12%,transparent)] text-[var(--pane-down)]"
               }`}
             >
               <DirectionIcon className="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -207,15 +207,15 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
             </div>
             <div className="flex flex-col leading-tight">
               <span className="font-mono text-[17px] font-extrabold tracking-tight text-[var(--pane-text)]">{s.symbol}</span>
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--pane-text)]/30">{t.signals.leverage(s.leverage)}</span>
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">{t.signals.leverage(s.leverage)}</span>
             </div>
           </div>
           <div
             className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-              active ? "border-success/20 bg-[var(--pane-up)]/[0.08] text-[var(--pane-up)]" : "border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-text)]/30"
+              active ? "border-success/20 bg-[color:color-mix(in_srgb,var(--pane-up)_8%,transparent)] text-[var(--pane-up)]" : "border-[var(--pane-border)] bg-[var(--pane-hover)] text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]"
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-[var(--pane-up)] shadow-[0_0_6px] shadow-success/70" : "bg-[var(--pane-hover)]/30"}`} />
+            <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-[var(--pane-up)] shadow-[0_0_6px] shadow-success/70" : "bg-[color:color-mix(in_srgb,var(--pane-hover)_30%,transparent)]"}`} />
             {active ? "Live" : "Closed"}
           </div>
         </div>
@@ -258,7 +258,7 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
           {calc && (
             <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)]">
               <div className="grid grid-cols-3 divide-x divide-white/[0.05]">
-                <Metric label={t.signals.margin} value={`$${calc.margin.toFixed(0)}`} tone="text-[var(--pane-text)]/80" />
+                <Metric label={t.signals.margin} value={`$${calc.margin.toFixed(0)}`} tone="text-[color:color-mix(in_srgb,var(--pane-text)_80%,transparent)]" />
                 <Metric label={t.signals.risk} value={`-$${calc.risk.toFixed(0)}`} tone="text-[var(--pane-down)]" />
                 <Metric
                   label={t.signals.profitTp(calc.tp3_profit > 0 ? 3 : calc.tp2_profit > 0 ? 2 : 1)}
@@ -267,7 +267,7 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
                 />
               </div>
               <div className="flex items-center justify-between border-t border-[var(--pane-border)] bg-[var(--pane-hover)] px-4 py-2.5">
-                <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--pane-text)]/30">Risk / Reward</span>
+                <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">Risk / Reward</span>
                 <span className="bg-gradient-to-r from-accent-gold to-yellow-300 bg-clip-text font-mono text-sm font-black text-transparent">
                   1 : {calc.rr1.toFixed(1)}
                 </span>
@@ -289,7 +289,7 @@ export default function SignalCard({ signal: s, balance = 1000, currentPrice }: 
             <button
               onClick={() => setChartOpen(true)}
               title={t.signals.chartTitle}
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-[var(--pane-hover)] px-3.5 py-2.5 text-[12px] font-semibold text-[var(--pane-text)]/50 ring-1 ring-inset ring-white/[0.07] transition-all duration-150 hover:text-[var(--pane-text)]/80 hover:ring-white/[0.16]"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-[var(--pane-hover)] px-3.5 py-2.5 text-[12px] font-semibold text-[color:color-mix(in_srgb,var(--pane-text)_50%,transparent)] ring-1 ring-inset ring-white/[0.07] transition-all duration-150 hover:text-[color:color-mix(in_srgb,var(--pane-text)_80%,transparent)] hover:ring-white/[0.16]"
             >
               <CandlestickChart className="h-3.5 w-3.5" />
               {t.signals.chart}

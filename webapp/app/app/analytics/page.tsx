@@ -151,7 +151,7 @@ function DayCell({ day, onClick, active, isToday, best }: {
     : isToday
     ? "border-[var(--pane-border)] shadow-[0_0_8px_rgba(255,255,255,0.06)]"
     : goalMet
-    ? "border-[var(--pane-up)]/30 shadow-[0_0_8px_rgba(0,212,160,0.12)]"
+    ? "border-[color:color-mix(in_srgb,var(--pane-up)_30%,transparent)] shadow-[0_0_8px_rgba(0,212,160,0.12)]"
     : isPos
     ? "border-success/20"
     : isNeg
@@ -181,11 +181,11 @@ function DayCell({ day, onClick, active, isToday, best }: {
     >
       {/* Число месяца */}
       <span className="flex items-baseline justify-between gap-1 leading-none">
-        <span className={`text-[10px] font-bold ${isToday ? "text-[var(--pane-accent)]" : "text-[var(--pane-text)]/45"}`}>
+        <span className={`text-[10px] font-bold ${isToday ? "text-[var(--pane-accent)]" : "text-[color:color-mix(in_srgb,var(--pane-text)_45%,transparent)]"}`}>
           {dayNum}
         </span>
         {dayTrades > 0 && (
-          <span className="text-[8px] font-bold tabular-nums text-[var(--pane-text)]/35">
+          <span className="text-[8px] font-bold tabular-nums text-[color:color-mix(in_srgb,var(--pane-text)_35%,transparent)]">
             ×{dayTrades}
           </span>
         )}
@@ -199,23 +199,23 @@ function DayCell({ day, onClick, active, isToday, best }: {
             {isPos ? "+" : ""}{Math.abs(pnl!) >= 10 ? pnl!.toFixed(0) : pnl!.toFixed(1)}%
           </span>
         ) : hasReal && pnl === 0 ? (
-          <span className="text-[9px] font-semibold text-[var(--pane-text)]/18">0%</span>
+          <span className="text-[9px] font-semibold text-[color:color-mix(in_srgb,var(--pane-text)_18%,transparent)]">0%</span>
         ) : null}
         {/* Объём — показывается всегда когда есть */}
         {hasTrades && (
-          <span className="text-[8px] font-bold tabular-nums text-[var(--pane-gold)]/70 leading-none">
+          <span className="text-[8px] font-bold tabular-nums text-[color:color-mix(in_srgb,var(--pane-gold)_70%,transparent)] leading-none">
             {fmtVolShort(dayVolume(day))}
           </span>
         )}
         {/* Сигналы без объёма */}
         {!hasTrades && !hasReal && day.signals > 0 && (
-          <span className="text-[8px] font-semibold text-[var(--pane-accent)]/50 leading-none">
+          <span className="text-[8px] font-semibold text-[color:color-mix(in_srgb,var(--pane-accent)_50%,transparent)] leading-none">
             ⚡{day.signals}
           </span>
         )}
         {/* Депозит без торговли */}
         {!hasTrades && !hasReal && hasDeposit && (
-          <span className="text-[8px] font-semibold text-[var(--pane-up)]/60 leading-none">+$</span>
+          <span className="text-[8px] font-semibold text-[color:color-mix(in_srgb,var(--pane-up)_60%,transparent)] leading-none">+$</span>
         )}
       </div>
 
@@ -658,7 +658,7 @@ export default function AnalyticsPage() {
           </button>
         ))}
         {tradeSummary && (
-          <span className="flex items-baseline gap-1.5 rounded-lg border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10 px-2 py-1">
+          <span className="flex items-baseline gap-1.5 rounded-lg border border-[var(--pane-gold-soft)] bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-2 py-1">
             <span className="text-[10px] uppercase tracking-wider text-[var(--pane-muted)]">
               {t.analytics.totalVolume}
             </span>
@@ -747,7 +747,7 @@ export default function AnalyticsPage() {
                               ? "text-[var(--pane-gold)]"
                               : target
                                 ? "text-[var(--pane-text-2)]"
-                                : "text-[var(--pane-muted)]/50"
+                                : "text-[color:color-mix(in_srgb,var(--pane-muted)_50%,transparent)]"
                           }`}
                         >
                           {m.label}
@@ -817,14 +817,14 @@ export default function AnalyticsPage() {
 
               {/* Статспиллы */}
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <span className="flex items-center gap-1 rounded-full bg-[var(--pane-up)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
+                <span className="flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--pane-up)_10%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
                   {t.analytics.calendar.profitDays(profitDays)}
                 </span>
-                <span className="flex items-center gap-1 rounded-full bg-[var(--pane-down)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-down)]">
+                <span className="flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--pane-down)_10%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--pane-down)]">
                   {t.analytics.calendar.lossDays(lossDays)}
                 </span>
                 {tradingDays > 0 && (
-                  <span className="flex items-center gap-1 rounded-full bg-[var(--pane-gold)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
+                  <span className="flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
                     {t.analytics.calendar.tradeDays(tradingDays)}
                   </span>
                 )}
@@ -839,8 +839,8 @@ export default function AnalyticsPage() {
               {(profitDays + lossDays) > 0 && (
                 <div className="mt-2 overflow-hidden rounded-full bg-[var(--pane-hover)]" style={{ height: 4 }}>
                   <div className="flex h-full">
-                    <div className="bg-[var(--pane-up)]/60 transition-all duration-700" style={{ width: `${(profitDays / (profitDays + lossDays)) * 100}%` }} />
-                    <div className="bg-[var(--pane-down)]/50 transition-all duration-700" style={{ width: `${(lossDays / (profitDays + lossDays)) * 100}%` }} />
+                    <div className="bg-[color:color-mix(in_srgb,var(--pane-up)_60%,transparent)] transition-all duration-700" style={{ width: `${(profitDays / (profitDays + lossDays)) * 100}%` }} />
+                    <div className="bg-[color:color-mix(in_srgb,var(--pane-down)_50%,transparent)] transition-all duration-700" style={{ width: `${(lossDays / (profitDays + lossDays)) * 100}%` }} />
                   </div>
                 </div>
               )}
@@ -866,7 +866,7 @@ export default function AnalyticsPage() {
               {/* Дни недели */}
               <div className="mb-1.5 grid grid-cols-7 gap-1">
                 {t.analytics.calendar.weekdays.map(d => (
-                  <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest text-[var(--pane-text)]/20">{d}</div>
+                  <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest text-[color:color-mix(in_srgb,var(--pane-text)_20%,transparent)]">{d}</div>
                 ))}
               </div>
 
@@ -890,7 +890,7 @@ export default function AnalyticsPage() {
               </div>
 
               {/* Легенда */}
-              <div className="mt-4 flex flex-wrap justify-center gap-4 text-[10px] text-[var(--pane-text)]/30">
+              <div className="mt-4 flex flex-wrap justify-center gap-4 text-[10px] text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">
                 <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-accent)]" />{t.analytics.calendar.legendSignal}</span>
                 <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-gold)]" />{t.analytics.calendar.legendTrade}</span>
                 <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[var(--pane-up)]" />{t.analytics.calendar.legendDeposit}</span>
@@ -907,19 +907,19 @@ export default function AnalyticsPage() {
                     <p className={`font-mono text-base font-extrabold ${totalPnl >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}>
                       {totalPnl >= 0 ? "+" : ""}{totalPnl.toFixed(1)}%
                     </p>
-                    <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.monthResult}</p>
+                    <p className="text-[10px] text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">{t.analytics.summary.monthResult}</p>
                   </div>
                   <div>
                     <p className="font-mono text-base font-extrabold text-[var(--pane-up)]">
                       {bestDay ? `+${bestDay.pnl_pct!.toFixed(1)}%` : "-"}
                     </p>
-                    <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.bestDay}</p>
+                    <p className="text-[10px] text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">{t.analytics.summary.bestDay}</p>
                   </div>
                   <div>
                     <p className="font-mono text-base font-extrabold text-[var(--pane-down)]">
                       {worstDay && worstDay.pnl_pct! < 0 ? `${worstDay.pnl_pct!.toFixed(1)}%` : "-"}
                     </p>
-                    <p className="text-[10px] text-[var(--pane-text)]/30">{t.analytics.summary.worstDay}</p>
+                    <p className="text-[10px] text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">{t.analytics.summary.worstDay}</p>
                   </div>
                 </div>
               </div>
@@ -931,7 +931,7 @@ export default function AnalyticsPage() {
                 подряд. Опорная дата - выбранный день: неделя берётся та, что
                 обведена в сетке над кнопками, а не последние семь суток. */}
             <div className="flex flex-wrap items-center gap-2 border-t border-[var(--pane-border)] px-3 py-2.5">
-              <span className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
+              <span className="text-[10px] uppercase tracking-wider text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">
                 {t.analytics.summary.cardFor}
               </span>
               {SPANS.map((id) => {
@@ -1196,12 +1196,12 @@ export default function AnalyticsPage() {
                       </span>
                     )}
                     {dayVolume(selectedDay) > 0 && (
-                      <span className="rounded-lg bg-[var(--pane-gold)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
+                      <span className="rounded-lg bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
                         {t.analytics.calendar.dayVolume(fmtDot(dayVolume(selectedDay)))}
                       </span>
                     )}
                     {selectedDay.has_deposit && (
-                      <span className="rounded-lg bg-[var(--pane-up)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
+                      <span className="rounded-lg bg-[color:color-mix(in_srgb,var(--pane-up)_10%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
                         {t.analytics.calendar.dayDeposit}
                       </span>
                     )}
@@ -1210,15 +1210,15 @@ export default function AnalyticsPage() {
                 <div className="shrink-0 text-right">
                   {selectedDay.pnl_pct !== null ? (
                     <>
-                      <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-[var(--pane-up)]" : selectedDay.pnl_pct < 0 ? "text-[var(--pane-down)]" : "text-[var(--pane-text)]/40"}`}>
+                      <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-[var(--pane-up)]" : selectedDay.pnl_pct < 0 ? "text-[var(--pane-down)]" : "text-[color:color-mix(in_srgb,var(--pane-text)_40%,transparent)]"}`}>
                         {selectedDay.pnl_pct > 0 ? "+" : ""}{selectedDay.pnl_pct.toFixed(2)}%
                       </p>
                       {selectedDay.signals > 0 && selectedDay.pnl_pct > 0 && (
-                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[var(--pane-up)]/15 px-2 py-0.5 text-[10px] font-bold text-[var(--pane-up)]">{t.analytics.calendar.dayGoal}</span>
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--pane-up)_15%,transparent)] px-2 py-0.5 text-[10px] font-bold text-[var(--pane-up)]">{t.analytics.calendar.dayGoal}</span>
                       )}
                     </>
                   ) : (
-                    <p className="text-xs text-[var(--pane-text)]/20">{t.analytics.calendar.noSnapshot}</p>
+                    <p className="text-xs text-[color:color-mix(in_srgb,var(--pane-text)_20%,transparent)]">{t.analytics.calendar.noSnapshot}</p>
                   )}
                 </div>
               </div>
@@ -1237,7 +1237,7 @@ export default function AnalyticsPage() {
                 <div className="mt-3 overflow-x-auto">
                   <table className="w-full whitespace-nowrap text-[11px]">
                     <thead>
-                      <tr className="text-[10px] uppercase tracking-wider text-[var(--pane-text)]/30">
+                      <tr className="text-[10px] uppercase tracking-wider text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">
                         <th className="py-1 text-left font-medium">{t.analytics.trades.time}</th>
                         <th className="py-1 text-left font-medium">{t.analytics.trades.coin}</th>
                         <th className="py-1 text-right font-medium">{t.analytics.trades.entry}</th>
@@ -1248,8 +1248,8 @@ export default function AnalyticsPage() {
                     </thead>
                     <tbody className="font-mono tabular-nums">
                       {dayTrades.map((one) => (
-                        <tr key={one.id} className="border-t border-[var(--pane-border)]/40">
-                          <td className="py-1 text-[var(--pane-text)]/40">
+                        <tr key={one.id} className="border-t border-[color:color-mix(in_srgb,var(--pane-border)_40%,transparent)]">
+                          <td className="py-1 text-[color:color-mix(in_srgb,var(--pane-text)_40%,transparent)]">
                             {new Date(one.closed_at).toLocaleTimeString(numbers, {
                               hour: "2-digit",
                               minute: "2-digit",
@@ -1279,7 +1279,7 @@ export default function AnalyticsPage() {
                             {one.pnl >= 0 ? "+" : "-"}
                             {Math.abs(one.pnl).toFixed(2)} $
                             {one.fee > 0 && (
-                              <span className="ml-1 text-[10px] font-normal text-[var(--pane-text)]/30">
+                              <span className="ml-1 text-[10px] font-normal text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">
                                 -{one.fee.toFixed(2)}
                               </span>
                             )}
@@ -1292,7 +1292,7 @@ export default function AnalyticsPage() {
                             <button
                               onClick={() => setCard(cardFromTrade(one, owner ?? undefined))}
                               title={t.analytics.trades.cardTitle}
-                              className="text-[var(--pane-text)]/30 transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
+                              className="text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
                             >
                               <Share2 className="h-3.5 w-3.5" />
                             </button>
@@ -1303,7 +1303,7 @@ export default function AnalyticsPage() {
                   </table>
                 </div>
               ) : dayTrades && dayTrades.length === 0 ? (
-                <p className="mt-3 text-[11px] text-[var(--pane-text)]/30">
+                <p className="mt-3 text-[11px] text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">
                   {t.analytics.trades.none}
                 </p>
               ) : null}

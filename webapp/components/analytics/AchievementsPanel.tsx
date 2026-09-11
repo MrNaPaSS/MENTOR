@@ -54,7 +54,7 @@ const RARITY: Record<Rarity, { border: string; glow: string; badge: string }> = 
   legendary: {
     border: "border-accent-gold/45",
     glow: "shadow-[0_0_16px_rgba(240,185,11,0.22)]",
-    badge: "bg-[var(--pane-gold)]/15 text-[var(--pane-gold)]",
+    badge: "bg-[color:color-mix(in_srgb,var(--pane-gold)_15%,transparent)] text-[var(--pane-gold)]",
   },
 };
 
@@ -109,13 +109,13 @@ export default function AchievementsPanel({
               onClick={() => setCategory(cat.id)}
               className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors duration-150 ease-out ${
                 on
-                  ? "border-accent-gold/50 bg-[var(--pane-gold)]/10 text-[var(--pane-gold)]"
+                  ? "border-accent-gold/50 bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] text-[var(--pane-gold)]"
                   : "border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
               }`}
             >
               <cat.icon className="h-3 w-3 shrink-0" />
               <span>{t.analytics.achievements.categories[cat.id]}</span>
-              <span className={`font-mono text-[9px] ${on ? "text-[var(--pane-gold)]/70" : "opacity-60"}`}>
+              <span className={`font-mono text-[9px] ${on ? "text-[color:color-mix(in_srgb,var(--pane-gold)_70%,transparent)]" : "opacity-60"}`}>
                 {inCat.filter((a) => a.earned).length}/{inCat.length}
               </span>
             </button>
@@ -139,7 +139,7 @@ function Card({ ach, star }: { ach: Achievement; star: string }) {
   return (
     <div
       className={`group relative flex items-start gap-3 rounded-xl border p-3 transition-[transform,box-shadow] duration-200 ease-out ${r.border} ${
-        ach.earned ? `${r.glow} bg-[var(--pane-hover)]/50 hover:-translate-y-0.5` : ""
+        ach.earned ? `${r.glow} bg-[color:color-mix(in_srgb,var(--pane-hover)_50%,transparent)] hover:-translate-y-0.5` : ""
       }`}
     >
       <div className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-xl border bg-[var(--pane-hover)] ${r.border}`}>

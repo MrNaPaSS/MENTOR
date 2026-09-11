@@ -7,6 +7,8 @@ export const signals = {
   tabSignals: "Signals",
   noActiveSignals: "No active signals",
   analysisBadge: "Analysis",
+  readMore: "Read in full",
+  readLess: "Collapse",
   openChart: "Open the chart",
   chart: "Chart",
   chartTitle: "Open the chart and order book",

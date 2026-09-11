@@ -42,7 +42,7 @@ export default function GoalsPanel({ goals }: { goals: Goal[] }) {
               key={goal.id}
               className={`flex items-center gap-3 rounded-xl border py-2 pl-3 pr-2 transition-colors duration-200 ease-out ${
                 goal.unlocked
-                  ? "border-[var(--pane-up)]/30 bg-[var(--pane-up)]/[0.05]"
+                  ? "border-[color:color-mix(in_srgb,var(--pane-up)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--pane-up)_5%,transparent)]"
                   : "border-[var(--pane-border)] bg-[var(--pane-hover)]"
               }`}
             >
@@ -67,7 +67,7 @@ export default function GoalsPanel({ goals }: { goals: Goal[] }) {
                 </div>
                 <p
                   className={`mt-1 truncate text-[10px] ${
-                    goal.unlocked ? "text-[var(--pane-up)]" : "text-[var(--pane-muted)]/70"
+                    goal.unlocked ? "text-[var(--pane-up)]" : "text-[color:color-mix(in_srgb,var(--pane-muted)_70%,transparent)]"
                   }`}
                 >
                   {copy.reward}

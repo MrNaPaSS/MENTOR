@@ -82,7 +82,7 @@ export function PaneHead({
         {children && (
           // Подложка под кнопками: они стоят поверх гор и без неё терялись бы
           // на снегу.
-          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)]/90 p-0.5 backdrop-blur-sm">
+          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-[var(--pane-border)] bg-[color:color-mix(in_srgb,var(--pane-bg)_90%,transparent)] p-0.5 backdrop-blur-sm">
             {children}
           </div>
         )}

@@ -59,7 +59,7 @@ export default function ChartOverlay({ symbol, direction, onClose }: Props) {
       {/* Затемнение */}
       <div
         onClick={handleClose}
-        className={`absolute inset-0 bg-[var(--pane-bg)]/75 backdrop-blur-sm transition-opacity duration-500 ${show ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-[color:color-mix(in_srgb,var(--pane-bg)_75%,transparent)] backdrop-blur-sm transition-opacity duration-500 ${show ? "opacity-100" : "opacity-0"}`}
       />
 
       {/* Панель — переворачивается при появлении */}
@@ -79,21 +79,21 @@ export default function ChartOverlay({ symbol, direction, onClose }: Props) {
               {long !== null && (
                 <span
                   className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                    long ? "border-success/25 bg-[var(--pane-up)]/[0.1] text-[var(--pane-up)]" : "border-danger/25 bg-[var(--pane-down)]/[0.1] text-[var(--pane-down)]"
+                    long ? "border-success/25 bg-[color:color-mix(in_srgb,var(--pane-up)_10%,transparent)] text-[var(--pane-up)]" : "border-danger/25 bg-[color:color-mix(in_srgb,var(--pane-down)_10%,transparent)] text-[var(--pane-down)]"
                   }`}
                 >
                   <DirectionIcon className="h-3 w-3" strokeWidth={2.5} />
                   {direction}
                 </span>
               )}
-              <span className="rounded-md border border-accent-cyan/25 bg-[var(--pane-accent)]/[0.08] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--pane-accent)]">
+              <span className="rounded-md border border-accent-cyan/25 bg-[color:color-mix(in_srgb,var(--pane-accent)_8%,transparent)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--pane-accent)]">
                 Heikin-Ashi
               </span>
             </div>
             <button
               onClick={handleClose}
               title={t.market.overlay.closeTitle}
-              className="flex items-center gap-1.5 rounded-lg bg-[var(--pane-hover)] px-3 py-1.5 text-[12px] font-semibold text-[var(--pane-text)]/70 ring-1 ring-inset ring-white/[0.08] transition hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--pane-hover)] px-3 py-1.5 text-[12px] font-semibold text-[color:color-mix(in_srgb,var(--pane-text)_70%,transparent)] ring-1 ring-inset ring-white/[0.08] transition hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
             >
               {t.common.close}
               <X className="h-4 w-4" />
