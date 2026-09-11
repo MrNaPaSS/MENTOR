@@ -13,7 +13,7 @@
 
 import { Gauge as GaugeIcon } from "lucide-react";
 import { useT } from "@/lib/i18n";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api, type FearGreedPoint } from "@/lib/api";
 import Pane, { PaneLabel, type PaneState } from "./Pane";
 
@@ -38,56 +38,66 @@ function valueOf(point: FearGreedPoint | undefined): number | null {
 }
 
 /**
- * Стрелка полукруглой шкалы.
+ * Шкала индекса: дуга в 220 градусов с переходом цвета от страха к жадности.
  *
- * Полукруг, а не кольцо: у индекса есть низ и верх, и разомкнутая шкала
- * показывает их концами, а замкнутая заставляет искать, где начало.
+ * Разомкнутая дуга, а не кольцо: у индекса есть низ и верх, и концы шкалы
+ * показывают их. Число и название зоны стоят под стрелкой, внутри дуги, -
+ * как на макете. Переход цвета плавный, но зоны названы в легенде рядом:
+ * по ней видно, кончился ли страх.
  */
-function Gauge({ value }: { value: number }) {
-  const zone = zoneOf(value);
-  // Ноль слева, сотня справа: полукруг проходит через верх.
-  const angle = Math.PI * (1 - value / 100);
-  const cx = 60;
-  const cy = 56;
-  const r = 44;
-  const nx = cx + Math.cos(angle) * r;
-  const ny = cy - Math.sin(angle) * r;
+const CX = 100;
+const CY = 92;
+const R = 78;
+const FROM = 200;
+const SWEEP = 220;
+
+function point(deg: number, r = R): [number, number] {
+  const a = (deg * Math.PI) / 180;
+  return [CX + Math.cos(a) * r, CY - Math.sin(a) * r];
+}
+
+function Gauge({ value, color, label }: { value: number; color: string; label: string }) {
+  const id = useId().replace(/:/g, "");
+  const [x0, y0] = point(FROM);
+  const [x1, y1] = point(FROM - SWEEP);
+  const needle = FROM - (SWEEP * Math.max(0, Math.min(100, value))) / 100;
+  const [nx, ny] = point(needle, R - 26);
 
   return (
-    <svg viewBox="0 0 120 66" className="w-full max-w-[168px]" aria-hidden>
-      {/* Дуга по зонам: каждая своим цветом, встык. */}
-      {ZONES.map((z, i) => {
-        const from = i === 0 ? 0 : ZONES[i - 1].upto;
-        const a0 = Math.PI * (1 - from / 100);
-        const a1 = Math.PI * (1 - z.upto / 100);
-        const x0 = cx + Math.cos(a0) * r;
-        const y0 = cy - Math.sin(a0) * r;
-        const x1 = cx + Math.cos(a1) * r;
-        const y1 = cy - Math.sin(a1) * r;
-        return (
-          <path
-            key={z.key}
-            d={`M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`}
-            fill="none"
-            stroke={z.color}
-            strokeWidth={7}
-            strokeLinecap="butt"
-            opacity={z === zone ? 1 : 0.28}
-          />
-        );
-      })}
-      {/* Стрелка. Тонкая: она указывает, а не спорит с дугой за внимание. */}
-      <line
-        x1={cx}
-        y1={cy}
-        x2={nx}
-        y2={ny}
-        stroke={zone.color}
-        strokeWidth={2}
-        strokeLinecap="round"
-      />
-      <circle cx={cx} cy={cy} r={3.5} fill="var(--pane-bg)" stroke={zone.color} strokeWidth={2} />
-    </svg>
+    <div className="relative w-[210px] shrink-0 pb-7">
+      <svg viewBox="0 0 200 130" className="w-full" aria-hidden>
+        <defs>
+          <linearGradient id={`fg-${id}`} x1="0" x2="1" y1="0" y2="0">
+            {ZONES.map((z, i) => (
+              <stop key={z.key} offset={i / (ZONES.length - 1)} stopColor={z.color} />
+            ))}
+          </linearGradient>
+        </defs>
+        <path
+          d={`M ${x0} ${y0} A ${R} ${R} 0 1 1 ${x1} ${y1}`}
+          fill="none"
+          stroke={`url(#fg-${id})`}
+          strokeWidth={14}
+          strokeLinecap="round"
+        />
+        {/* Тонкая внутренняя дуга - глубина шкалы, как на циферблате. */}
+        <path
+          d={`M ${point(FROM, R - 20).join(" ")} A ${R - 20} ${R - 20} 0 1 1 ${point(FROM - SWEEP, R - 20).join(" ")}`}
+          fill="none"
+          stroke="var(--pane-border)"
+          strokeWidth={1}
+        />
+        <line x1={CX} y1={CY} x2={nx} y2={ny} stroke="var(--pane-text)" strokeWidth={3} strokeLinecap="round" />
+        <circle cx={CX} cy={CY} r={5} fill="var(--pane-text)" />
+      </svg>
+      {/* Число - под осью стрелки, между концами дуги; название зоны - под ним. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[64%] text-center">
+        <div className="font-mono text-[34px] font-bold leading-none tabular-nums text-[var(--pane-text)]">{value}</div>
+        <div className="mt-0.5 text-[13px] font-semibold" style={{ color }}>
+          {label}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -98,7 +108,7 @@ function History({ points }: { points: FearGreedPoint[] }) {
   const rows = [...points].reverse();
   return (
     <div>
-      <div className="flex h-12 items-end gap-[2px]">
+      <div className="flex h-14 items-end gap-[2px]">
         {rows.map((p, i) => {
           const v = valueOf(p) ?? 0;
           const zone = zoneOf(v);
@@ -110,7 +120,7 @@ function History({ points }: { points: FearGreedPoint[] }) {
               style={{
                 height: `${Math.max(6, v)}%`,
                 background: zone.color,
-                opacity: last ? 1 : 0.42,
+                opacity: last ? 1 : 0.85,
               }}
               title={`${v} - ${t.market.fearGreed.levels[zone.key]}`}
             />
@@ -193,18 +203,7 @@ export default function FearGreedPane({ className = "" }: { className?: string }
               Легенда нужна не для красоты: без неё «56» на шкале не говорит,
               далеко ли до жадности. */}
           <div className="flex items-center gap-4">
-            <div className="flex w-[168px] shrink-0 flex-col items-center">
-              <Gauge value={now} />
-              <div
-                className="-mt-1 font-mono text-[34px] font-bold leading-none tabular-nums"
-                style={{ color: zone.color }}
-              >
-                {now}
-              </div>
-              <div className="mt-1 truncate text-[12px] font-semibold" style={{ color: zone.color }}>
-                {t.market.fearGreed.levels[zone.key]}
-              </div>
-            </div>
+            <Gauge value={now} color={zone.color} label={t.market.fearGreed.levels[zone.key]} />
 
             <ul className="min-w-0 flex-1 space-y-1.5">
               {ZONES.map((z, i) => {
@@ -232,7 +231,7 @@ export default function FearGreedPane({ className = "" }: { className?: string }
             <img
               src="/art/market/bull-geo.webp"
               alt=""
-              className="pointer-events-none -my-4 hidden h-40 w-auto shrink-0 drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)] min-[1500px]:block"
+              className="pointer-events-none -my-4 hidden h-44 w-auto shrink-0 drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)] min-[1400px]:block"
             />
           </div>
 

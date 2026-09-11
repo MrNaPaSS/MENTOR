@@ -58,6 +58,9 @@ export const market = {
     retarget: "Difficulty retarget",
     retargetTitle: "How much mining difficulty will change at the end of the period",
     retargetProgress: (pct: string) => `${pct}% of the period done`,
+    priceHint: "Price, positions and two days of candles",
+    networkTitle: "Bitcoin network",
+    networkHint: "Fees, hash rate and transfers",
   },
 
   /** Decoration column in Pulse: banners, a quote and a step to the terminal. */

@@ -2,14 +2,14 @@
 
 // Монета NMNH - та, что на самой монете: логотип, корона и свечи.
 //
-// Две чеканки под две темы: на светлой - белая монета с чёрным рисунком, на
-// тёмной - чёрная с белым. Одна монета на обе темы терялась бы на одной из
-// них: белая сливается со светлым листом, чёрная - с тёмным.
+// Две чеканки под две темы: на светлой - тёмная монета, на тёмной - светлая.
+// Контраст с листом: светлая монета на белом листе сливалась бы с ним, тёмная
+// на чёрном - тоже.
 
 import { useTerminalTheme, type TerminalTheme } from "@/lib/terminalTheme";
 
 export function coinSrc(theme: TerminalTheme): string {
-  return theme === "light" ? "/coin/coin-light.webp" : "/coin/coin-dark.webp";
+  return theme === "light" ? "/coin/coin-dark.webp" : "/coin/coin-light.webp";
 }
 
 export default function CoinIcon({ size = 14, className = "" }: { size?: number; className?: string }) {

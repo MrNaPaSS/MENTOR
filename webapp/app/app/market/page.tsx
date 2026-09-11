@@ -166,16 +166,26 @@ const TABS: { key: Section; icon: React.ReactNode }[] = [
 // ── Пульс ─────────────────────────────────────────────────────────────────────
 
 // Раскладка по макету: сверху настроение, деньги за позиции и то, о чём
-// говорят; снизу биткоин и колонка оформления. На среднем экране - по две
-// панели в ряд, на узком - столбиком.
+// говорят; снизу цена биткоина со свечами, его сеть под баннером и колонка
+// оформления. На среднем экране - по две панели в ряд, на узком - столбиком.
 function PulseSection() {
+  const t = useT();
   return (
     <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-12">
       <FearGreedPane className="xl:col-span-5" />
       <FundingPane className="xl:col-span-4" />
       <TrendingPane className="xl:col-span-3" />
-      <BitcoinPane className="xl:col-span-6" />
-      <PulsePromo className="xl:col-span-6" />
+      <BitcoinPane part="price" className="xl:col-span-5" />
+      <div className="flex flex-col gap-3 xl:col-span-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/market/bitcoin-leads.webp"
+          alt={t.market.promo.bitcoinAlt}
+          className="w-full rounded-xl border border-[var(--pane-border)] object-cover"
+        />
+        <BitcoinPane part="network" className="flex-1" />
+      </div>
+      <PulsePromo className="xl:col-span-4" />
     </div>
   );
 }
@@ -272,8 +282,8 @@ export default function MarketPage() {
 
       <GlobalStrip />
 
-      {/* Вкладки сегментами, как переключатели в терминале. */}
-      <nav className="no-scrollbar flex overflow-x-auto rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] p-0.5">
+      {/* Вкладки - отдельными кнопками, выбранная золотом, как на макете. */}
+      <nav className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5">
         {TABS.map((tab) => {
           const on = section === tab.key;
           return (
@@ -281,11 +291,11 @@ export default function MarketPage() {
               key={tab.key}
               onClick={() => setSection(tab.key)}
               title={t.market.tabs[tab.key].hint}
-              className="flex shrink-0 items-center gap-1.5 rounded px-3 py-1.5 text-[11px] font-semibold transition-colors duration-150"
-              style={{
-                background: on ? "var(--pane-chip-faint)" : "transparent",
-                color: on ? "var(--pane-chip)" : "var(--pane-muted)",
-              }}
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3.5 py-2 text-[12px] font-semibold transition-colors duration-150 ease-out ${
+                on
+                  ? "border-accent-gold/60 bg-[color:color-mix(in_srgb,var(--pane-gold)_12%,transparent)] text-[var(--pane-text)]"
+                  : "border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+              }`}
             >
               {tab.icon}
               {t.market.tabs[tab.key].label}

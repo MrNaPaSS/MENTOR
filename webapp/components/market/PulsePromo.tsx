@@ -17,21 +17,18 @@ export default function PulsePromo({ className = "" }: { className?: string }) {
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
       <img
-        src="/art/market/bitcoin-leads.webp"
-        alt={t.market.promo.bitcoinAlt}
-        className="w-full rounded-xl border border-[var(--pane-border)] object-cover"
-      />
-      <img
         src="/art/market/global-market.webp"
         alt={t.market.promo.globalAlt}
         className="w-full rounded-xl border border-[var(--pane-border)] object-cover"
       />
 
-      <div className="grid flex-1 gap-3 sm:grid-cols-[1fr_auto]">
-        <figure className="flex items-start gap-3 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
-          <Quote className="h-6 w-6 shrink-0 text-[var(--pane-gold)]" />
+      {/* Цитата и кнопка друг под другом: колонка ровняется по низу с
+          соседними панелями, а рядом кнопка вытягивалась в столб. */}
+      <div className="flex flex-1 flex-col gap-3">
+        <figure className="flex flex-1 items-center gap-3 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-4">
+          <Quote className="h-8 w-8 shrink-0 text-[var(--pane-gold)]" />
           <div className="min-w-0">
-            <blockquote className="text-[12px] leading-snug text-[var(--pane-text)]">{t.market.promo.quote}</blockquote>
+            <blockquote className="text-[13px] leading-snug text-[var(--pane-text)]">{t.market.promo.quote}</blockquote>
             <figcaption className="mt-1.5 text-right text-[11px] font-semibold text-[var(--pane-muted)]">
               - {t.market.promo.author}
             </figcaption>

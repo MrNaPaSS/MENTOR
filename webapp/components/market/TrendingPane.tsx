@@ -10,6 +10,7 @@
 // переводить самим значило бы выдавать свой пересчёт за его число.
 
 import { Flame } from "lucide-react";
+import CoinLogo from "./CoinLogo";
 import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type TrendingCoin } from "@/lib/api";
@@ -63,6 +64,7 @@ export default function TrendingPane({ className = "" }: { className?: string })
             <span className="w-4 shrink-0 text-right font-mono text-[11px] tabular-nums text-[var(--pane-muted)]">
               {i + 1}
             </span>
+            <CoinLogo symbol={c.symbol} src={c.thumb} size={20} />
             <span className="min-w-0 flex-1 truncate">
               <span className="font-mono text-[12px] font-semibold text-[var(--pane-text)]">
                 {c.symbol}

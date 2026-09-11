@@ -12,6 +12,7 @@
 // показаны прочерком и уходят вниз списка.
 
 import { Percent } from "lucide-react";
+import CoinLogo from "./CoinLogo";
 import { useT, type Dict } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type FundingRate } from "@/lib/api";
@@ -145,8 +146,11 @@ export default function FundingPane({ className = "" }: { className?: string }) 
                         : t.market.funding.shortsPay
                   }
                 >
-                  <td className="px-1 py-1.5 font-mono text-[12px] font-semibold text-[var(--pane-text)]">
-                    {base(r.symbol)}
+                  <td className="px-1 py-1.5">
+                    <span className="flex items-center gap-2 font-mono text-[12px] font-semibold text-[var(--pane-text)]">
+                      <CoinLogo symbol={base(r.symbol)} size={18} />
+                      {base(r.symbol)}
+                    </span>
                   </td>
                   <td
                     className="px-1 py-1.5 text-right font-mono text-[12px] tabular-nums"

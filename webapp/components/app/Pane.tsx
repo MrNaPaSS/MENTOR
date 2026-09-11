@@ -63,10 +63,10 @@ export function PaneHead({
     <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-2 md:min-h-[64px]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/art/profile/head-bg.webp"
+        src="/art/brand/mountains.webp"
         alt=""
         aria-hidden
-        className="head-ridge pointer-events-none absolute -top-4 right-24 -z-10 hidden h-[150px] w-auto md:block"
+        className="head-ridge pointer-events-none absolute -top-8 right-40 -z-10 hidden h-[140px] w-auto md:block"
       />
 
       <div className="flex min-w-0 items-baseline gap-2.5">
