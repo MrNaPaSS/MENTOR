@@ -138,7 +138,9 @@ export default function ProfilePage() {
         {/* Кто я и сколько у меня. Без градиента и свечения: терминал рядом
             собран из ровных панелей, и цветное пятно здесь читалось бы куском
             другого приложения. */}
-        <div className="relative overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-4">
+        {/* Без обрезки содержимого: вершина горы выходит за верхний край
+            карточки, и обрезка срезала бы корону. */}
+        <div className="relative rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-4">
           {/* Горы с короной, свечами и граффити NMNH - на прозрачном фоне, по
               середине карточки и растянуты вширь. Края растворяются, чтобы
               под балансом и у кнопки «Обновить» оставалось чистое поле. */}
@@ -148,12 +150,13 @@ export default function ProfilePage() {
             alt=""
             aria-hidden
             // Рамка 3:1 при картинке 2.6:1 - это и есть растяжение вширь, не
-            // больше 18%. Высота рамки упирается в карточку, ширина в 42rem:
-            // так растяжение не растёт на очень широкой карточке, а на узкой
-            // картинка просто уменьшается, никогда не сжимаясь. В половине
-            // экрана (lg) карточка узкая, и центр съезжает вправо: иначе левый
-            // склон ложится под баланс.
-            className="profile-art pointer-events-none absolute bottom-0 left-1/2 hidden aspect-[3/1] lg:left-[58%] 2xl:left-1/2 max-h-full w-[64%] max-w-[42rem] -translate-x-1/2 object-fill sm:block"
+            // больше 18%. Высота считается от ширины и карточкой не
+            // ограничена: гора выше карточки, и вершина с короной выходит за
+            // её верхний край. Ширина упёрта в 46rem, чтобы растяжение не
+            // росло на очень широкой карточке. В половине экрана (lg) карточка
+            // узкая, и центр съезжает вправо: иначе левый склон ложится под
+            // баланс.
+            className="profile-art pointer-events-none absolute bottom-0 left-1/2 hidden aspect-[3/1] w-[72%] max-w-[46rem] -translate-x-1/2 object-fill sm:block lg:left-[58%] 2xl:left-1/2"
             style={{
               maskImage: "linear-gradient(90deg, transparent 0%, #000 18%, #000 90%, transparent 100%)",
               WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 18%, #000 90%, transparent 100%)",
