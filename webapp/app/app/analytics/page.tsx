@@ -1409,9 +1409,9 @@ function Kpi({
 /**
  * Картинка сбоку панели цифр и девиз при ней.
  *
- * Картинка слева в обоих раскладах. «side» - девиз справа посередине: у
- * столбцов месяца так и просторно. «top» - девиз сверху справа, над
- * монетами: широкий девиз счёта посередине наезжал на них.
+ * «side» - девиз слева чуть выше середины, картинка справа: так у столбцов
+ * месяца. «top» - монеты слева, девиз сверху справа над ними: широкий девиз
+ * счёта посередине наезжал на монеты.
  *
  * Только с ширины планшета: на телефоне колонка цифр и так узкая, и картинка
  * отняла бы у неё половину.
@@ -1429,24 +1429,25 @@ function PanelArt({
     return (
       <div className="relative hidden w-[44%] max-w-[360px] shrink-0 sm:block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
+        {/* Монеты чуть меньше панели и прижаты книзу, девиз опущен к ним. */}
         <img
           src={src}
           alt=""
-          className="pointer-events-none absolute inset-y-1 left-0 h-[calc(100%-0.5rem)] w-[calc(100%-8.5rem)] object-contain object-center drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+          className="pointer-events-none absolute bottom-1 left-2 h-[80%] w-[calc(100%-9rem)] object-contain object-bottom drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
         />
-        <Motto lines={motto} className="absolute right-3 top-3 text-right !tracking-[0.24em]" />
+        <Motto lines={motto} className="absolute right-3 top-[22%] text-right !tracking-[0.24em]" />
       </div>
     );
   }
   return (
-    <div className="relative hidden w-[44%] max-w-[360px] shrink-0 sm:block">
+    <div className="relative hidden w-[48%] max-w-[420px] shrink-0 sm:block">
+      <Motto lines={motto} className="absolute left-3 top-[38%] -translate-y-1/2 !tracking-[0.24em]" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
         alt=""
-        className="pointer-events-none absolute inset-y-1 left-0 h-[calc(100%-0.5rem)] w-[calc(100%-8.5rem)] object-contain object-center drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+        className="pointer-events-none absolute inset-y-1 right-1 h-[calc(100%-0.5rem)] w-[calc(100%-11.5rem)] object-contain object-right drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
       />
-      <Motto lines={motto} className="absolute right-3 top-1/2 -translate-y-1/2 !tracking-[0.24em]" />
     </div>
   );
 }

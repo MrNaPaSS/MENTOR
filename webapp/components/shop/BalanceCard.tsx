@@ -40,14 +40,15 @@ export default function BalanceCard({
         className="pointer-events-none absolute -right-12 -top-14 h-44 w-44 rounded-full"
         style={{ background: "radial-gradient(circle, rgba(240,185,11,0.22), transparent 70%)" }}
       />
-      {/* Граффити NMNH в углу - знак школы на её казне. Невысоко: полоса
-          цели под числом остаётся открытой. */}
+      {/* Граффити NMNH с короной в круге - знак школы на её казне. Невысоко:
+          полоса цели под числом остаётся открытой. Рисунок тёмный; на тёмном
+          листе он перекрашивается в светлый (класс graffiti-ink). */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/art/brand/logo.webp"
+        src="/art/brand/graffiti.webp"
         alt=""
         aria-hidden
-        className="pointer-events-none absolute right-3 top-2 h-16 w-auto -rotate-6 drop-shadow-[0_6px_14px_rgba(0,0,0,0.35)]"
+        className="graffiti-ink pointer-events-none absolute right-3 top-2 h-16 w-auto opacity-90"
       />
 
       <div className="relative flex items-center gap-3">

@@ -708,3 +708,8 @@
 .pane-dark .profile-art {
   opacity: 0.85;
 }
+
+/* Тёмное граффити NMNH на тёмном листе пропадало бы - там оно светлое. */
+.pane-dark .graffiti-ink {
+  filter: invert(1) brightness(0.92);
+}
