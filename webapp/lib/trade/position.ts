@@ -149,6 +149,15 @@ export type ActiveTrade = {
   pnl: number;
   /** Сколько раз позицию уже частично фиксировали. */
   partials: number;
+  /**
+   * Сделку закрыла биржа, а не кнопка в терминале: стоп, цель, ликвидация или
+   * рука трейдера в приложении биржи.
+   *
+   * Нужно уведомлению. Исход такой сделки терминал выводит сам, по цене
+   * выхода, и когда вывести его не из чего, честнее сказать «позиция
+   * закрыта», чем «закрыто вручную» - руками её, может, никто и не трогал.
+   */
+  onExchange?: boolean;
 };
 
 export type TradeSeed = {
@@ -509,6 +518,73 @@ export function closePartially(
  */
 export function wasEntered(trade: ActiveTrade): boolean {
   return Boolean(trade.openedAt) || trade.status === "open";
+}
+
+/**
+ * Насколько близко к линии должен выйти результат, чтобы считать выход по ней.
+ *
+ * Доля пути от стопа до ближайшей невзятой цели. Стоп - рыночная заявка, она
+ * проскальзывает, и выход на бирже почти никогда не ровно на линии; четверть
+ * пути покрывает проскальзывание с запасом и не путает стоп с целью - между
+ * ними всегда вход.
+ */
+export const EXIT_NEAR = 0.25;
+
+/**
+ * Чем закончилась сделка, которую закрыла биржа.
+ *
+ * Раньше терминал этого не знал вовсе и называл любое такое закрытие ручным.
+ * А биржа по пути рассказывала лишнее: стоп снимает позицию целиком, вместе с
+ * ней с биржи уходят все цели, и по пустой лестнице терминал успевал объявить
+ * «взята цель 3» - а следом приходил стоп. Два уведомления на одно событие, и
+ * первое из них неправда.
+ *
+ * Исход решает цена выхода: у стопа - стоп, у цели - цель, где-то посередине -
+ * закрыли руками или ликвидация, и тогда честнее не называть причину.
+ */
+export function exitReason(trade: ActiveTrade, exit: number): TradeOutcome {
+  if (!(exit > 0) || trade.targets.length === 0) return "manual";
+  // Все цели уже взяты - позицию закрыла последняя.
+  if (trade.takesHit >= trade.targets.length) return "take";
+
+  const long = trade.side === "long";
+  const next = trade.targets[trade.takesHit];
+  const span = Math.abs(next - trade.stop);
+  if (!(span > 0)) return "manual";
+
+  // Сколько не дошло до линии. Ноль и меньше - дошло или проскочило.
+  const toStop = long ? exit - trade.stop : trade.stop - exit;
+  const toTake = long ? next - exit : exit - next;
+  if (toStop <= span * EXIT_NEAR) return "stop";
+  if (toTake <= span * EXIT_NEAR) return "take";
+  return "manual";
+}
+
+/** Настоящий итог закрытия - с биржи, после комиссии. */
+export type Booked = { exit: number | null; pnl: number; fee: number };
+
+/**
+ * Закрыть сделку, которую закрыла биржа.
+ *
+ * Итог берём у биржи, когда он уже есть: сопровождение записывает сделку по
+ * исполнениям раньше, чем перестаёт её вести. Нет - оцениваем сами по
+ * последней цене, как при ручном закрытии; поправит журнал.
+ */
+export function closeOnExchange(
+  trade: ActiveTrade,
+  price: number,
+  now: number,
+  booked?: Booked | null,
+): ActiveTrade {
+  if (trade.status === "closed") return trade;
+  const exit = booked?.exit && booked.exit > 0 ? booked.exit : price;
+  const priced = closeManually(trade, exit, now);
+  return {
+    ...priced,
+    outcome: exitReason(trade, exit),
+    onExchange: true,
+    ...(booked ? { pnl: booked.pnl, fee: booked.fee } : {}),
+  };
 }
 
 export function closeManually(trade: ActiveTrade, price: number, now: number): ActiveTrade {

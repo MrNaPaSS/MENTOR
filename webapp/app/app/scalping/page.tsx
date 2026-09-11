@@ -79,9 +79,9 @@ import { setTerminalTheme } from "@/lib/terminalTheme";
 import { onSymbolAsked, symbolFromUrl } from "@/lib/openSymbol";
 import { readTrades, writeTrades } from "@/lib/tradeStore";
 import {
+  announceClose,
   dismissSymbol,
   dismissToast,
-  dismissTrade,
   holdTerminal,
   pushToast,
   serverSnapshot as serverToasts,
@@ -143,7 +143,7 @@ import {
 } from "@/lib/trade/missing";
 import {
   advanceQuote,
-  closeManually,
+  closeOnExchange,
   closePartially,
   createTrade,
   pickFilled,
@@ -597,6 +597,9 @@ export default function ScalpingPage() {
   }, [full]);
   const [journalOpen, setJournalOpen] = useState(false);
   const [exchange, setExchange] = useState<TradingStatus | null>(null);
+  // Ответил ли сервер о счёте хотя бы раз. Пока нет - неизвестно, чья правда
+  // о сделке: биржевая или своя, и двигать сделку нельзя ни той, ни другой.
+  const [exchangeKnown, setExchangeKnown] = useState(false);
   const [exchangeOpen, setExchangeOpen] = useState(false);
   // Чего не хватает, чтобы торговать. Null - всё на месте.
   const [need, setNeed] = useState<ConnectNeed | null>(null);
@@ -838,8 +841,14 @@ export default function ScalpingPage() {
   // Состояние биржевого счёта: подключены ли ключи и включено ли хранилище.
   const loadExchange = useCallback(() => {
     tradingStatus()
-      .then((body) => setExchange(body))
-      .catch(() => setExchange(null));
+      .then((body) => {
+        setExchange(body);
+        setExchangeKnown(true);
+      })
+      // Не ответил - оставляем прежнее. Сброс в «не подключено» переводил
+      // терминал на свою арифметику по стакану, и она закрывала живые
+      // биржевые сделки по ценам, до которых биржа ничего не исполняла.
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -1735,11 +1744,24 @@ export default function ScalpingPage() {
   useEffect(() => {
     const bid = dom?.best_bid ?? 0;
     const ask = dom?.best_ask ?? 0;
-    if (!(bid > 0) || !(ask > 0)) return;
+    const book = dom?.symbol ?? "";
+    if (!(bid > 0) || !(ask > 0) || !book) return;
+    // Пока сервер не сказал, подключён ли счёт, неизвестно, кто ведёт сделку.
+    //
+    // При переходе в терминал стакан приезжает по сокету раньше, чем ответ о
+    // счёте, и первые кадры шли в свою арифметику, как у сделки без биржи. Она
+    // закрывала живые биржевые сделки по цене стакана: трейдер видел «сделка
+    // отработала», хотя на бирже позиция стояла, а после F5 сервер возвращал
+    // её на график.
+    if (!exchangeKnown) return;
     setTrades((list) => {
       let changed = false;
       const now = Date.now();
       const updated = list.map((current) => {
+        // Цена стакана - только своей монете. Сделки идут по нескольким
+        // монетам, а стакан один: цена BTC, приложенная к лонгу ETH,
+        // «брала» все его цели разом, к шорту - выбивала стоп.
+        if (current.symbol !== book) return current;
         // При подключённом счёте вход и выход подтверждает биржа: наша
         // арифметика ведёт только разметку идущей позиции.
         const next = advanceQuote(current, { bid, ask }, now, live);
@@ -1748,7 +1770,7 @@ export default function ScalpingPage() {
       });
       return changed ? updated : list;
     });
-  }, [dom?.best_bid, dom?.best_ask, live]);
+  }, [dom?.best_bid, dom?.best_ask, dom?.symbol, live, exchangeKnown]);
 
   // Цена дошла до цели идущей сделки - стоп вот-вот поедет в безубыток.
   //
@@ -1862,6 +1884,9 @@ export default function ScalpingPage() {
       if (cancelled) return;
       const served = mind ? new Set(mind.trades.map((one) => one.client_id)) : null;
       const serverSays = new Map((mind?.trades ?? []).map((one) => [one.client_id, one]));
+      // Только что закрытые - с настоящими ценой выхода и итогом. По ним
+      // уведомление говорит, чем кончилась сделка, а не угадывает.
+      const booked = new Map((mind?.closed ?? []).map((one) => [one.client_id, one]));
       // Ни на графике, ни у сервера ничего нет - биржу не тревожим.
       const knows = (mind?.trades ?? []).some((one) => one.status === "open");
       if (watching.length === 0 && !knows) {
@@ -2141,7 +2166,13 @@ export default function ScalpingPage() {
           if (current.status === "closed") return current;
           if (bury.has(current.id) && current.status === "open") {
             changed = true;
-            return closeManually(current, priceOf(current.symbol), Date.now());
+            const said = booked.get(current.id);
+            return closeOnExchange(
+              current,
+              priceOf(current.symbol),
+              Date.now(),
+              said ? { exit: said.exit_price, pnl: said.pnl, fee: said.fee } : null,
+            );
           }
           const fields = patch.get(current.id);
           if (!fields) return current;
@@ -2239,6 +2270,34 @@ export default function ScalpingPage() {
         });
         if (lagging) nudge();
 
+        // Жива ли позиция у тех, чья лестница на бирже поредела.
+        //
+        // Пропавшая цель - это исполнение, только пока позиция стоит. Стоп
+        // закрывает позицию целиком, и вместе с ней с биржи разом уходят все
+        // оставшиеся цели: по пустой лестнице терминал объявлял «взята цель
+        // 3», а следом приходил стоп - два уведомления на одно событие, и
+        // первое из них неправда. Позиции нет - значит сделка закрылась, и
+        // чем именно, скажет закрытие, по цене выхода.
+        //
+        // Биржу спрашиваем только когда дырка в лестнице есть: это редкость, а
+        // не каждый круг. Не ответила - не засчитываем: подождать круг
+        // дешевле, чем объявить цель, которой не было.
+        const gaps = open.filter((t) => {
+          const gone =
+            body.placed_takes > 0 && Array.isArray(body.take_prices)
+              ? t.targets.length - body.take_prices.length
+              : 0;
+          return gone > t.takesHit;
+        });
+        const standingNow = new Set<string>();
+        if (gaps.length > 0) {
+          const book = await openBook().catch(() => null);
+          if (cancelled) return;
+          for (const t of gaps) {
+            if ((book?.byKey[`${t.symbol}:${t.side}`]?.size ?? 0) > 0) standingNow.add(t.id);
+          }
+        }
+
         // Стоп и взятые цели - с биржи. Свой расчёт здесь только мешал: он
         // решал, что цель взята, ставил безубыток и рисовал стоп формулой, а на
         // бирже в это время стояла прежняя заявка.
@@ -2271,7 +2330,7 @@ export default function ScalpingPage() {
             // обе. Ошибка была необратимой - число взятых только растёт.
             const quiet = Date.now() - (movedRef.current.get(t.id) ?? 0) < MOVE_QUIET_MS;
             let standing = 0;
-            if (gone > t.takesHit && !quiet) {
+            if (gone > t.takesHit && !quiet && standingNow.has(t.id)) {
               const seen = (goneRef.current.get(t.id) ?? 0) + 1;
               goneRef.current.set(t.id, seen);
               if (seen >= TAKES_TOLERANCE) standing = gone;
@@ -2413,29 +2472,9 @@ export default function ScalpingPage() {
           tone: row.side === "long" ? "up" : "down",
         });
       } else if (row.status === "closed") {
-        // Всё, что говорилось по дороге, снимается с экрана. Цель и правда
-        // была взята, но «взята цель 3» рядом с сообщением о стопе читается
-        // как два разных исхода одной сделки, и трейдер разбирается в них
-        // вместо того, чтобы увидеть главное: сделки больше нет.
-        dismissTrade(row.id);
-
-        const done =
-          row.outcome === "take"
-            ? { sound: "profit" as const, note: t.terminal.events.worked, tone: "up" as const }
-            : row.outcome === "stop"
-              ? { sound: "stop" as const, note: t.terminal.events.stopped, tone: "down" as const }
-              : { sound: "close" as const, note: t.terminal.events.closedByHand, tone: "plain" as const };
-        play(done.sound);
-        pushToast({
-          id: `${row.id}:out`,
-          symbol: row.symbol,
-          // В заголовке - факт, в строке под ним - чем закончилось и на
-          // сколько. Раньше заголовок называл причину, и сумму приходилось
-          // искать глазами во второй строке.
-          title: t.terminal.events.closedTitle(coin),
-          text: `${done.note} · ${row.pnl >= 0 ? "+" : "-"}${Math.abs(row.pnl).toFixed(2)} $`,
-          tone: done.tone,
-        });
+        // Одно уведомление на закрытие - то же, что поднимает оболочка
+        // кабинета: с исходом и итогом, а сказанное по дороге снимается.
+        announceClose(row);
       }
     }
     // Забываем ушедшие: карта не должна расти вместе с историей за день.

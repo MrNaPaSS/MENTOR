@@ -142,6 +142,7 @@ export const terminal = {
     enteredAt: (side: string, price: string) => `${side} по ${price}`,
     worked: "сделка отработала",
     stopped: "сработал стоп",
+    stoppedEven: "стоп в безубыток",
     closed: "позиция закрыта",
     closedByHand: "закрыто вручную",
     closedTitle: (coin: string) => `${coin} - сделка закрыта`,

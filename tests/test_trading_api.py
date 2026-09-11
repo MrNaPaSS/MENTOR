@@ -864,3 +864,51 @@ def test_live_trades_hide_other_students(app_and_exchange):
 
     body = client.get("/api/trading/live").json()
     assert body["trades"] == []
+
+
+def test_live_trades_carry_what_just_closed(app_and_exchange):
+    """Только что закрытая сделка приходит с настоящими ценой выхода и итогом.
+
+    По ним терминал говорит, чем кончилась сделка. Раньше он угадывал: по
+    снятым вместе со стопом целям объявлял «взята цель 3», а следом - «стоп».
+    Старые записи в ответ не попадают - список должен оставаться коротким.
+    """
+    from datetime import timedelta
+
+    from core.models import ScalpTrade, utcnow
+
+    client, _, session = app_and_exchange
+    student = session.query(Student).one()
+
+    def journal(client_id: str, closed_at, pnl: float) -> ScalpTrade:
+        return ScalpTrade(
+            student_id=student.id,
+            client_id=client_id,
+            symbol="ETHUSDT",
+            side="long",
+            entry=2464.0,
+            stop=2459.0,
+            exit_price=2458.6,
+            qty=40.0,
+            margin=100.0,
+            leverage=200,
+            outcome="stop",
+            pnl=pnl,
+            fee=1.2,
+            closed_at=closed_at,
+        )
+
+    session.add_all(
+        [
+            journal("ETHUSDT-fresh", utcnow() - timedelta(minutes=1), -21.5),
+            journal("ETHUSDT-old", utcnow() - timedelta(hours=2), -3.0),
+        ]
+    )
+    session.commit()
+
+    body = client.get("/api/trading/live").json()
+    assert [row["client_id"] for row in body["closed"]] == ["ETHUSDT-fresh"]
+    one = body["closed"][0]
+    assert one["exit_price"] == pytest.approx(2458.6)
+    assert one["pnl"] == pytest.approx(-21.5)
+    assert one["fee"] == pytest.approx(1.2)

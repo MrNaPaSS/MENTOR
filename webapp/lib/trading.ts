@@ -356,7 +356,24 @@ export type ServerTrade = {
   opened_at: string | null;
 };
 
-/** Живые сделки по всем монетам. Память сервера, а не поход на биржу. */
+/**
+ * Сделка, только что закрытая на бирже, - как её записало сопровождение.
+ *
+ * Сервер пишет её в журнал по исполнениям раньше, чем перестаёт вести, так что
+ * к моменту, когда терминал убедился в закрытии, здесь уже настоящие цена
+ * выхода и итог после комиссии.
+ */
+export type ClosedTrade = {
+  client_id: string;
+  exit_price: number | null;
+  pnl: number;
+  fee: number;
+  takes_hit: number;
+  outcome: string;
+  closed_at: string | null;
+};
+
+/** Живые сделки по всем монетам и только что закрытые. Память сервера, а не поход на биржу. */
 export function liveTrades() {
-  return request<{ trades: ServerTrade[] }>("/api/trading/live");
+  return request<{ trades: ServerTrade[]; closed?: ClosedTrade[] }>("/api/trading/live");
 }

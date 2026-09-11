@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import ssl
 from collections.abc import Iterable, Sequence
 from typing import Any
@@ -220,8 +220,50 @@ async def live_trades(
                 "opened_at": _iso(row.opened_at),
             }
             for row in rows
-        ]
+        ],
+        "closed": _just_closed(session, student.id),
     }
+
+
+# Сколько закрытая сделка остаётся в ответе. Терминал хоронит сделку через
+# десяток секунд после закрытия, а вкладка могла быть свёрнута - четверти часа
+# хватает с запасом, и список при этом остаётся коротким.
+JUST_CLOSED_WINDOW = timedelta(minutes=15)
+
+
+def _just_closed(session, student_id: int) -> list[dict[str, Any]]:
+    """Сделки, закрытые за последние минуты, - с ценой выхода и итогом.
+
+    Чем закончилась сделка, терминал раньше угадывал сам: позиции на бирже нет
+    - значит закрыта, а чем именно, неизвестно. Отсюда и два уведомления на
+    одном стопе: сначала «взята цель 3» по снятым с биржи целям, потом «стоп».
+
+    Сопровождение пишет сделку в журнал раньше, чем перестаёт её вести, - по
+    исполнениям с биржи. Поэтому к моменту, когда терминал убедился в
+    закрытии, здесь уже лежат настоящая цена выхода и итог после комиссии.
+    """
+    since = utcnow() - JUST_CLOSED_WINDOW
+    rows = (
+        session.execute(
+            select(ScalpTrade)
+            .where(ScalpTrade.student_id == student_id)
+            .where(ScalpTrade.closed_at >= since)
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "client_id": row.client_id,
+            "exit_price": float(row.exit_price) if row.exit_price is not None else None,
+            "pnl": float(row.pnl or 0),
+            "fee": float(row.fee or 0),
+            "takes_hit": row.takes_hit,
+            "outcome": row.outcome,
+            "closed_at": _iso(row.closed_at),
+        }
+        for row in rows
+    ]
 
 
 @router.get("/plans/{symbol}")

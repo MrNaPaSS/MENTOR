@@ -134,6 +134,7 @@ export const terminal = {
     enteredAt: (side: string, price: string) => `${side} at ${price}`,
     worked: "the trade worked",
     stopped: "stop triggered",
+    stoppedEven: "stopped at break-even",
     closed: "position closed",
     closedByHand: "closed by hand",
     closedTitle: (coin: string) => `${coin} - trade closed`,

@@ -18,9 +18,11 @@
 
 import { dict } from "@/lib/i18n";
 import type { Toast } from "@/components/scalping/Toasts";
-import { readTrades } from "@/lib/tradeStore";
-import { openSizes, tradingStatus } from "@/lib/trading";
+import { readTrades, writeTrades } from "@/lib/tradeStore";
+import { liveTrades, openSizes, tradingStatus } from "@/lib/trading";
 import { play } from "@/lib/sound";
+import { closeOnExchange, riskFree, type ActiveTrade } from "@/lib/trade/position";
+import { noteMiss, shouldBury, type Miss } from "@/lib/trade/missing";
 
 /** Как часто спрашиваем биржу об открытых объёмах. */
 const POLL_MS = 5000;
@@ -82,6 +84,46 @@ export function dismissTrade(tradeId: string): void {
   emit(toasts.filter((one) => !one.id.startsWith(`${tradeId}:`)));
 }
 
+/**
+ * Сообщить о закрытии сделки. Одна строка на сделку, кто бы её ни поднял.
+ *
+ * Всё, что говорилось по дороге, снимается: «взята цель» рядом с сообщением о
+ * стопе читается как два разных исхода одной сделки. В заголовке - факт, под
+ * ним - чем кончилось и на сколько.
+ *
+ * Одна функция на терминал и на оболочку кабинета: две копии текста уже
+ * расходились, и одна из них называла закрытие на бирже ручным.
+ */
+export function announceClose(row: ActiveTrade): void {
+  const t = dict().terminal.events;
+  const coin = row.symbol.replace(/USDT$/, "");
+  dismissTrade(row.id);
+
+  // Стоп после снятого риска - это не убыток, и называть его так же, как
+  // выбитую сделку, значит пугать зря. Закрытие на бирже без понятной
+  // причины - «позиция закрыта»: руками её, может, никто и не трогал.
+  const done =
+    row.outcome === "take"
+      ? { sound: "profit" as const, note: t.worked, tone: "up" as const }
+      : row.outcome === "stop"
+        ? riskFree(row)
+          ? { sound: "close" as const, note: t.stoppedEven, tone: "plain" as const }
+          : { sound: "stop" as const, note: t.stopped, tone: "down" as const }
+        : {
+            sound: "close" as const,
+            note: row.onExchange ? t.closed : t.closedByHand,
+            tone: "plain" as const,
+          };
+  play(done.sound);
+  pushToast({
+    id: `${row.id}:out`,
+    symbol: row.symbol,
+    title: t.closedTitle(coin),
+    text: `${done.note} · ${row.pnl >= 0 ? "+" : "-"}${Math.abs(row.pnl).toFixed(2)} $`,
+    tone: done.tone,
+  });
+}
+
 /** Убрать всё по этой монете: её уже открыли, сообщать больше не о чем. */
 export function dismissSymbol(symbol: string): void {
   emit(toasts.filter((one) => one.symbol !== symbol));
@@ -113,6 +155,15 @@ export function terminalOpen(): boolean {
 
 /** Объёмы прошлого круга: без «до» переход не отличить от стоящей позиции. */
 let before: Record<string, number> | null = null;
+
+/**
+ * Пустота по каждой открытой сделке: с какого круга биржа её не показывает.
+ *
+ * Раньше «сделка закрыта» поднималось по первому же пустому ответу. Биржа
+ * отвечает пустым и на своей заминке - трейдер переходил в терминал, а там
+ * висело «закрыта» рядом с живой позицией на графике.
+ */
+const misses = new Map<string, Miss>();
 
 /**
  * Следить за сделками из любого раздела кабинета.
@@ -147,7 +198,9 @@ export function watchTrades(): () => void {
 
     const was = before;
     before = sizes;
-    if (!was) return;
+
+    await settle(mine, sizes);
+    if (!was || stopped) return;
 
     for (const trade of mine) {
       const key = `${trade.symbol}:${trade.side}`;
@@ -170,19 +223,54 @@ export function watchTrades(): () => void {
         continue;
       }
 
-      // Была - не стало: сделка закрылась. Чем именно, скажет журнал, а знать
-      // о самом событии трейдер должен сразу, в каком бы разделе ни был.
-      if (trade.status === "open" && had > 0 && now <= 0) {
-        play("order");
-        pushToast({
-          id: `${trade.id}:out`,
-          symbol: trade.symbol,
-          title: t.closedTitle(coin),
-          text: t.closedText(side),
-          tone: "plain",
-        });
-      }
     }
+  }
+
+  /**
+   * Закрытые сделки: сообщить и убрать из хранилища.
+   *
+   * Не по первому пустому ответу, а так же, как в терминале: пустота держится
+   * и сопровождение на сервере сделку больше не ведёт. Тогда у сервера уже
+   * лежит итог по исполнениям, и уведомление говорит, чем кончилось и на
+   * сколько.
+   *
+   * Сделка уходит из хранилища здесь же. Иначе, вернувшись в терминал,
+   * трейдер получал о ней второе уведомление - терминал хоронил её заново.
+   */
+  async function settle(mine: ActiveTrade[], sizes: Record<string, number>) {
+    const missed = mine.filter(
+      (t) => t.status === "open" && !((sizes[`${t.symbol}:${t.side}`] ?? 0) > 0),
+    );
+    for (const t of mine) {
+      if (!missed.includes(t)) misses.delete(t.id);
+    }
+    if (missed.length === 0) return;
+
+    const mind = await liveTrades().catch(() => null);
+    if (stopped || terminalOpen()) return;
+    const served = mind ? new Set(mind.trades.map((one) => one.client_id)) : null;
+    const booked = new Map((mind?.closed ?? []).map((one) => [one.client_id, one]));
+
+    const now = Date.now();
+    const gone = new Set<string>();
+    for (const trade of missed) {
+      const miss = noteMiss(misses.get(trade.id), now);
+      misses.set(trade.id, miss);
+      if (!shouldBury(miss, now, served ? served.has(trade.id) : null)) continue;
+      misses.delete(trade.id);
+      gone.add(trade.id);
+
+      const said = booked.get(trade.id);
+      announceClose(
+        closeOnExchange(
+          trade,
+          0,
+          now,
+          said ? { exit: said.exit_price, pnl: said.pnl, fee: said.fee } : null,
+        ),
+      );
+    }
+    if (gone.size > 0) writeTrades(readTrades().filter((t) => !gone.has(t.id)));
   }
 
   // Наблюдаем только при подключённом счёте: без ключей биржа не ответит, и
@@ -202,5 +290,6 @@ export function watchTrades(): () => void {
     stopped = true;
     if (timer !== null) window.clearInterval(timer);
     before = null;
+    misses.clear();
   };
 }
