@@ -158,6 +158,13 @@ export default function ShopCard({
       );
   }
 
+  // Полоса накопления - у того, что ещё можно купить.
+  const progressShown = !owned && !rank && item.price > 0;
+  // Где полосы нет, метка срока встаёт на её место в нижней строке, напротив
+  // «Куплено». Отдельной строкой в тексте она удлиняла карточку, и нижний ряд
+  // при открытии страницы обрезался краем экрана.
+  const statusBelow = Boolean(status) && !progressShown;
+
   const title = rank && frame ? t.shop.rankFrames[frame] ?? item.title : itemTitle(item, locale);
   const description = rank ? t.shop.rankOnly(rank) : itemDescription(item, locale);
 
@@ -255,7 +262,7 @@ export default function ShopCard({
         {description && (
           <p className="line-clamp-3 text-[11px] leading-snug text-[var(--pane-muted)]">{description}</p>
         )}
-        {status && (
+        {status && !statusBelow && (
           <span className="w-fit rounded bg-[var(--pane-up-faint)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--pane-up)]">
             {status}
           </span>
@@ -275,9 +282,14 @@ export default function ShopCard({
         {/* Низ карточки по макету: сколько накоплено, цена и кнопка - одной
             строкой. Полоса стоит и у доступного товара: полная, она говорит
             «хватает» раньше, чем прочитана цена. */}
-        <div className="mt-auto flex items-end gap-2 pt-2">
+        <div className={`mt-auto flex gap-2 pt-2 ${statusBelow ? "items-center" : "items-end"}`}>
           <div className="min-w-0 flex-1">
-            {!owned && !rank && item.price > 0 && (
+            {statusBelow && (
+              <span className="w-fit rounded bg-[var(--pane-up-faint)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--pane-up)]">
+                {status}
+              </span>
+            )}
+            {progressShown && (
               <>
                 <p className="text-[10px] text-[var(--pane-muted)]">{t.shop.saved(String(progress))}</p>
                 <div className="mt-1 h-1 overflow-hidden rounded-full bg-[var(--pane-hover)]">
@@ -289,7 +301,7 @@ export default function ShopCard({
               </>
             )}
           </div>
-          {!owned && !rank && item.price > 0 && (
+          {progressShown && (
             <span className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--pane-border)] px-2 py-1 font-mono text-[12px] font-bold tabular-nums text-[var(--pane-gold)]">
               <CoinIcon size={13} />
               {item.price.toLocaleString(numbers)}
