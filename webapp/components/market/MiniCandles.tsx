@@ -6,7 +6,7 @@
 // видеть, откуда пришла цена на карточке. Свечи берём с той же ручки, что и
 // терминал, - те же данные, что человек увидит, открыв монету.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/lib/api";
 
 interface Candle {
@@ -18,8 +18,9 @@ interface Candle {
   volume: number;
 }
 
-const W = 480;
-const H = 130;
+/** Высота рисунка постоянная: с шириной экрана растёт только ширина, и
+ *  панель не вытягивается вниз на широком мониторе. */
+const H = 118;
 /** Поле справа под подписи цены. */
 const AXIS = 44;
 /** Высота полосы объёма внизу. */
@@ -46,6 +47,16 @@ export default function MiniCandles({
 }) {
   const [rows, setRows] = useState<Candle[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(480);
+
+  useEffect(() => {
+    const node = box.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => setW(Math.max(240, Math.round(entry.contentRect.width))));
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [rows]);
 
   useEffect(() => {
     let dropped = false;
@@ -73,7 +84,7 @@ export default function MiniCandles({
 
   if (!rows) {
     return failed ? null : (
-      <div className={`animate-pulse rounded-lg bg-[var(--pane-hover)] ${className}`} style={{ aspectRatio: `${W} / ${H}` }} />
+      <div className={`animate-pulse rounded-lg bg-[var(--pane-hover)] ${className}`} style={{ height: H }} />
     );
   }
 
@@ -89,11 +100,12 @@ export default function MiniCandles({
   const ticks = [0, 1 / 3, 2 / 3, 1].map((f) => hi - f * span);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={`w-full ${className}`} role="img" aria-label={symbol}>
+    <div ref={box} className={`w-full ${className}`}>
+    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block w-full" role="img" aria-label={symbol}>
       {ticks.map((p) => (
         <g key={p}>
           <line x1={0} x2={plotW} y1={y(p)} y2={y(p)} stroke="var(--pane-border)" strokeWidth={0.5} strokeDasharray="2 3" />
-          <text x={W - 2} y={y(p) + 3} textAnchor="end" fontSize={8} fill="var(--pane-muted)" fontFamily="ui-monospace, monospace">
+          <text x={W - 2} y={y(p) + 3} textAnchor="end" fontSize={9} fill="var(--pane-muted)" fontFamily="ui-monospace, monospace">
             {label(p)}
           </text>
         </g>
@@ -114,5 +126,6 @@ export default function MiniCandles({
         );
       })}
     </svg>
+    </div>
   );
 }

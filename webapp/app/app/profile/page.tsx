@@ -125,7 +125,9 @@ export default function ProfilePage() {
   const isAdmin = p.weex_uid === ADMIN_WEEX_UID;
 
   return (
-    <PaneScope className="space-y-3">
+    // Колонкой во всю высоту окна: нижний баннер прижат к низу страницы, а не
+    // висит сразу под кнопкой выхода. 128 - отступы кабинета сверху и снизу.
+    <PaneScope className="flex flex-col gap-3 lg:min-h-[calc(100dvh-128px)]">
       <PaneHead title={t.shell.nav.profile} hint={`@${p.username || "-"}`} />
 
       {/* Два столбца на широком экране: слева про счёт, справа про
@@ -458,7 +460,7 @@ export default function ProfilePage() {
 
       {/* Нижний баннер бренда: горы, терминал и корона - без рамки, тает в
           фон страницы. */}
-      <div className="relative mx-auto hidden w-full max-w-[1280px] sm:block">
+      <div className="relative mx-auto mt-auto hidden w-full max-w-[1280px] sm:block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/art/profile/bottom-banner.webp" alt="" aria-hidden className="profile-art w-full" />
         <Motto

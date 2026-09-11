@@ -44,7 +44,7 @@ function Cell({
   }[tone];
   return (
     <div
-      className="flex min-w-0 items-center gap-3 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-3.5 py-3 transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-16px_rgba(0,0,0,0.45)]"
+      className="flex min-w-0 items-center gap-3 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-3.5 py-2 transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-16px_rgba(0,0,0,0.45)]"
       title={hint}
     >
       <span className="grid h-10 w-10 shrink-0 place-items-center">{icon}</span>

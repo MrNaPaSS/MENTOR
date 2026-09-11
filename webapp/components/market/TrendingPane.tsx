@@ -14,7 +14,7 @@ import CoinLogo from "./CoinLogo";
 import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type TrendingCoin } from "@/lib/api";
-import Pane, { PaneLabel, type PaneState } from "./Pane";
+import Pane, { type PaneState } from "./Pane";
 
 /** Цена в биткоинах: у трендовых монет она уходит в восьмой знак. */
 function btc(value: number): string {
@@ -50,7 +50,7 @@ export default function TrendingPane({ className = "" }: { className?: string })
     <Pane
       icon={<Flame className="h-3.5 w-3.5" />}
       title={t.market.trending.title}
-      hint={t.market.trending.hint}
+      hint={`${t.market.trending.hint} · ${t.market.trending.priceInBtc}`}
       state={state}
       emptyNote={t.market.trending.emptyNote}
       className={className}
@@ -59,7 +59,7 @@ export default function TrendingPane({ className = "" }: { className?: string })
         {coins.map((c, i) => (
           <li
             key={c.id || c.symbol}
-            className="flex items-center gap-2.5 rounded px-1 py-1 transition-colors hover:bg-[var(--pane-hover)]"
+            className="flex items-center gap-2.5 rounded px-1 py-[3px] transition-colors hover:bg-[var(--pane-hover)]"
           >
             <span className="w-4 shrink-0 text-right font-mono text-[11px] tabular-nums text-[var(--pane-muted)]">
               {i + 1}
@@ -85,9 +85,6 @@ export default function TrendingPane({ className = "" }: { className?: string })
           </li>
         ))}
       </ol>
-      <div className="mt-2 border-t border-[var(--pane-border)] pt-2 text-right">
-        <PaneLabel>{t.market.trending.priceInBtc}</PaneLabel>
-      </div>
     </Pane>
   );
 }

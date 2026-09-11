@@ -278,31 +278,37 @@ export default function MarketPage() {
     <PaneScope className="space-y-3">
       {/* Шапка раздела - общая для всех разделов кабинета: имя, строка о том,
           что открыто, и действия справа. */}
-      <PaneHead title={t.market.title} hint={active.hint} />
+      {/* Вкладки - в строке названия, отдельными кнопками, выбранная золотом:
+          раздел не тратит на них отдельную строку и помещается на экран. */}
+      <PaneHead
+        title={t.market.title}
+        hint={active.hint}
+        nav={
+          <nav className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5">
+            {TABS.map((tab) => {
+              const on = section === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setSection(tab.key)}
+                  title={t.market.tabs[tab.key].hint}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3.5 py-2 text-[12px] font-semibold transition-colors duration-150 ease-out ${
+                    on
+                      ? "border-accent-gold/60 bg-[color:color-mix(in_srgb,var(--pane-gold)_12%,transparent)] text-[var(--pane-text)]"
+                      : "border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+                  }`}
+                >
+                  {tab.icon}
+                  {t.market.tabs[tab.key].label}
+                </button>
+              );
+            })}
+          </nav>
+        }
+      />
 
       <GlobalStrip />
 
-      {/* Вкладки - отдельными кнопками, выбранная золотом, как на макете. */}
-      <nav className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5">
-        {TABS.map((tab) => {
-          const on = section === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setSection(tab.key)}
-              title={t.market.tabs[tab.key].hint}
-              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3.5 py-2 text-[12px] font-semibold transition-colors duration-150 ease-out ${
-                on
-                  ? "border-accent-gold/60 bg-[color:color-mix(in_srgb,var(--pane-gold)_12%,transparent)] text-[var(--pane-text)]"
-                  : "border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
-              }`}
-            >
-              {tab.icon}
-              {t.market.tabs[tab.key].label}
-            </button>
-          );
-        })}
-      </nav>
 
       {section === "pulse" && <PulseSection />}
       {section === "screener" && <MarketScreener />}

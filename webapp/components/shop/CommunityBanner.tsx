@@ -1,7 +1,8 @@
 "use client";
 
 // Баннер сообщества в Маркете: монеты зарабатываются вместе с остальными, и
-// дорога к ним - через общий чат.
+// дорога к ним - через общий чат. Ведёт в терминал с открытой панелью чата:
+// там человек и торгует, и общается, отдельная страница чата его уводила.
 //
 // Всегда тёмный, в обеих темах: это плакат, а не панель, и золото на нём
 // читается только на чёрном.
@@ -16,7 +17,7 @@ export default function CommunityBanner() {
   const t = useT();
   return (
     <Link
-      href="/app/chat"
+      href="/app/scalping?chat=open"
       className="group relative block overflow-hidden rounded-xl border border-accent-gold/40 p-4 text-white transition-[transform,box-shadow] duration-200 ease-out hover:shadow-[0_10px_30px_-12px_rgba(240,185,11,0.55)] active:scale-[0.99]"
       style={{
         background:

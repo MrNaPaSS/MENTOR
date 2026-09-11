@@ -107,7 +107,7 @@ export default function FundingPane({ className = "" }: { className?: string }) 
       emptyNote={t.market.funding.emptyNote}
       className={className}
     >
-      <div className="-mx-1 max-h-[320px] overflow-y-auto">
+      <div className="-mx-1 max-h-[244px] overflow-y-auto">
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-[var(--pane-bg)]">
             <tr>

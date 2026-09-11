@@ -64,7 +64,7 @@ function Gauge({ value, color, label }: { value: number; color: string; label: s
   const [nx, ny] = point(needle, R - 26);
 
   return (
-    <div className="relative w-[210px] shrink-0 pb-7">
+    <div className="relative w-[184px] shrink-0 pb-7">
       <svg viewBox="0 0 200 130" className="w-full" aria-hidden>
         <defs>
           <linearGradient id={`fg-${id}`} x1="0" x2="1" y1="0" y2="0">
@@ -108,7 +108,7 @@ function History({ points }: { points: FearGreedPoint[] }) {
   const rows = [...points].reverse();
   return (
     <div>
-      <div className="flex h-14 items-end gap-[2px]">
+      <div className="flex h-10 items-end gap-[2px]">
         {rows.map((p, i) => {
           const v = valueOf(p) ?? 0;
           const zone = zoneOf(v);
@@ -198,7 +198,7 @@ export default function FearGreedPane({ className = "" }: { className?: string }
       className={className}
     >
       {now !== null && zone && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* Шкала с числом, рядом - все пять зон с границами, справа бык.
               Легенда нужна не для красоты: без неё «56» на шкале не говорит,
               далеко ли до жадности. */}
@@ -231,7 +231,7 @@ export default function FearGreedPane({ className = "" }: { className?: string }
             <img
               src="/art/market/bull-geo.webp"
               alt=""
-              className="pointer-events-none -my-4 hidden h-44 w-auto shrink-0 drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)] min-[1400px]:block"
+              className="pointer-events-none -my-4 hidden h-40 w-auto shrink-0 drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)] min-[1400px]:block"
             />
           </div>
 

@@ -6,15 +6,14 @@
 // за чем идёшь, а не безликий замок на каждой второй карточке. Полученные
 // стоят первыми - их и ищут глазами, открыв раздел.
 //
-// Строки сетки держат высоту по содержимому (auto-rows-max). Коробка на
-// широком экране высотой ровно в соседние цели, и без этого сетка ужимала
-// ряды под её высоту: карточки наезжали друг на друга, вместо того чтобы
-// список прокручивался.
+// Страницами по восемь карточек, а не прокруткой: при прокрутке нижний ряд
+// всегда стоял обрезанным по краю коробки. Восемь - четыре ряда, это как раз
+// высота соседних целей месяца.
 
 /* eslint-disable @next/next/no-img-element */
 
 import { useState } from "react";
-import { BarChart2, CalendarDays, Lock, Sparkles, TrendingUp, Trophy, Wallet } from "lucide-react";
+import { BarChart2, CalendarDays, ChevronLeft, ChevronRight, Lock, Sparkles, TrendingUp, Trophy, Wallet } from "lucide-react";
 import CoinIcon from "@/components/app/CoinIcon";
 import { useT } from "@/lib/i18n";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -34,6 +33,9 @@ const CATEGORIES: { id: AchCategory; icon: React.ElementType }[] = [
   { id: "deposit", icon: Wallet },
   { id: "special", icon: Sparkles },
 ];
+
+/** Карточек на странице: четыре ряда по две. */
+const PAGE = 8;
 
 const RARITY: Record<Rarity, { border: string; glow: string; badge: string }> = {
   common: {
@@ -68,6 +70,7 @@ export default function AchievementsPanel({
   const t = useT();
   const paper = useTerminalTheme();
   const [category, setCategory] = useState<AchCategory>("all");
+  const [page, setPage] = useState(0);
   const earned = achievements.filter((a) => a.earned).length;
   const shown = achievements
     .filter((a) => category === "all" || a.category === category)
@@ -75,6 +78,9 @@ export default function AchievementsPanel({
     .map((a, i) => ({ a, i }))
     .sort((x, y) => Number(y.a.earned) - Number(x.a.earned) || x.i - y.i)
     .map(({ a }) => a);
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE));
+  const at = Math.min(page, pages - 1);
+  const slice = shown.slice(at * PAGE, at * PAGE + PAGE);
 
   return (
     <section
@@ -106,7 +112,10 @@ export default function AchievementsPanel({
             <button
               key={cat.id}
               type="button"
-              onClick={() => setCategory(cat.id)}
+              onClick={() => {
+                setCategory(cat.id);
+                setPage(0);
+              }}
               className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors duration-150 ease-out ${
                 on
                   ? "border-accent-gold/50 bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] text-[var(--pane-gold)]"
@@ -123,11 +132,48 @@ export default function AchievementsPanel({
         })}
       </div>
 
-      <div className="grid min-h-0 flex-1 auto-rows-max content-start gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-        {shown.map((ach) => (
+      <div key={`${category}-${at}`} className="grid animate-fade-in auto-rows-max content-start gap-2 motion-reduce:animate-none sm:grid-cols-2">
+        {slice.map((ach) => (
           <Card key={ach.id} ach={ach} star={paper === "light" ? "/marks/star.png" : "/marks/star-green.png"} />
         ))}
       </div>
+
+      {pages > 1 && (
+        <div className="mt-auto flex items-center justify-center gap-3 pt-1">
+          <button
+            type="button"
+            onClick={() => setPage(Math.max(0, at - 1))}
+            disabled={at === 0}
+            aria-label="‹"
+            className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--pane-border)] text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)] disabled:opacity-30"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="flex items-center gap-1.5">
+            {Array.from({ length: pages }, (_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setPage(i)}
+                aria-label={String(i + 1)}
+                aria-current={i === at}
+                className={`h-1.5 rounded-full transition-[width,background-color] duration-200 ease-out ${
+                  i === at ? "w-5 bg-[var(--pane-gold)]" : "w-1.5 bg-[var(--pane-border)] hover:bg-[var(--pane-muted)]"
+                }`}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setPage(Math.min(pages - 1, at + 1))}
+            disabled={at === pages - 1}
+            aria-label="›"
+            className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--pane-border)] text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)] disabled:opacity-30"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </section>
   );
 }

@@ -52,19 +52,26 @@ export function PaneScope({
 export function PaneHead({
   title,
   hint,
+  nav,
   children,
 }: {
   title: string;
   hint?: string;
+  /** Вкладки раздела - сразу за названием: так раздел не тратит на них
+   *  отдельную строку и помещается на экран без прокрутки. */
+  nav?: React.ReactNode;
   /** Кнопки и переключатели раздела - справа, на той же строке. */
   children?: React.ReactNode;
 }) {
   return (
-    <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-2 md:min-h-[64px]">
+    <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-2 md:min-h-[46px]">
 
-      <div className="flex min-w-0 items-baseline gap-2.5">
-        <h1 className="text-[20px] font-bold tracking-tight text-[var(--pane-text)]">{title}</h1>
-        {hint && <p className="truncate text-[11px] text-[var(--pane-muted)]">{hint}</p>}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
+        <div className="flex min-w-0 items-baseline gap-2.5">
+          <h1 className="text-[20px] font-bold tracking-tight text-[var(--pane-text)]">{title}</h1>
+          {hint && <p className="truncate text-[11px] text-[var(--pane-muted)]">{hint}</p>}
+        </div>
+        {nav}
       </div>
 
       <div className="flex items-center gap-4">
@@ -84,7 +91,15 @@ export function PaneHead({
             <img
               src="/art/brand/mountains.webp"
               alt=""
-              className="head-ridge pointer-events-none absolute -top-9 right-2 -z-10 h-[140px] w-auto max-w-none"
+              className="head-ridge pointer-events-none absolute -top-12 right-0 -z-10 h-[170px] w-auto max-w-none opacity-45 saturate-[0.6]"
+              style={{
+                maskImage:
+                  "linear-gradient(to bottom, #000 30%, transparent 78%), linear-gradient(to right, transparent, #000 45%)",
+                maskComposite: "intersect",
+                WebkitMaskImage:
+                  "linear-gradient(to bottom, #000 30%, transparent 78%), linear-gradient(to right, transparent, #000 45%)",
+                WebkitMaskComposite: "source-in",
+              }}
             />
           </span>
           <Motto lines={BRAND_MOTTO} />

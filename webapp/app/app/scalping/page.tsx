@@ -709,10 +709,12 @@ export default function ScalpingPage() {
    * его позвали.
    */
   const params = useSearchParams();
-  const chatFocus = Number(params.get("chat")) || null;
+  const chatParam = params.get("chat");
+  const chatFocus = Number(chatParam) || null;
+  // ?chat=open - просто открыть чат: так ведёт баннер сообщества из Маркета.
   useEffect(() => {
-    if (chatFocus) setChatOpen(true);
-  }, [chatFocus]);
+    if (chatFocus || chatParam === "open") setChatOpen(true);
+  }, [chatFocus, chatParam]);
 
   // Свеча, разобранная на графике. Живёт здесь, а не в графике: профиль этой
   // свечи приезжает кадром стакана, и сказать серверу, какую именно считать,

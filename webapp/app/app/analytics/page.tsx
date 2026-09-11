@@ -1036,7 +1036,7 @@ export default function AnalyticsPage() {
                   tone={tradeSummary ? (depositTotal - withdrawTotal >= 0 ? "up" : "down") : undefined}
                 />
               </dl>
-            <PanelArt src="/art/analytics/coin-stacks.webp" motto={t.analytics.mottos.account} />
+            <PanelArt src="/art/analytics/coin-stacks.webp" motto={t.analytics.mottos.account} layout="top" />
             </div>
           </div>
 
@@ -1118,7 +1118,7 @@ export default function AnalyticsPage() {
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               <GoalsPanel goals={goals} />
-              <AchievementsPanel achievements={achievements} className="lg:h-0 lg:min-h-full" />
+              <AchievementsPanel achievements={achievements} className="h-full" />
             </div>
           </div>
         );
@@ -1404,12 +1404,37 @@ function Kpi({
 }
 
 /**
- * Картинка сбоку панели цифр и девиз под ней.
+ * Картинка сбоку панели цифр и девиз при ней.
+ *
+ * Два расклада. «side» - картинка слева, девиз справа посередине: у столбцов
+ * месяца так и просторно. «top» - девиз сверху справа, над картинкой: у монет
+ * счёта широкий девиз сбоку наезжал на них.
  *
  * Только с ширины планшета: на телефоне колонка цифр и так узкая, и картинка
  * отняла бы у неё половину.
  */
-function PanelArt({ src, motto }: { src: string; motto: readonly string[] }) {
+function PanelArt({
+  src,
+  motto,
+  layout = "side",
+}: {
+  src: string;
+  motto: readonly string[];
+  layout?: "side" | "top";
+}) {
+  if (layout === "top") {
+    return (
+      <div className="relative hidden w-[42%] max-w-[360px] shrink-0 sm:block">
+        <Motto lines={motto} className="absolute right-4 top-3 text-right !tracking-[0.24em]" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt=""
+          className="pointer-events-none absolute bottom-1 right-2 top-12 h-[calc(100%-3.25rem)] w-[calc(100%-1rem)] object-contain object-right-bottom drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+        />
+      </div>
+    );
+  }
   return (
     <div className="relative hidden w-[44%] max-w-[360px] shrink-0 sm:block">
       {/* eslint-disable-next-line @next/next/no-img-element */}
