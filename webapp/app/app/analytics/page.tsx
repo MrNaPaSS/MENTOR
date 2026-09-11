@@ -968,8 +968,9 @@ export default function AnalyticsPage() {
               <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.month.hint}</span>
             </div>
             <div className="flex">
-            {monthTrades > 0 || tradingDays > 0 ? (
-              <dl className="min-w-0 flex-1 divide-y divide-[var(--pane-border)]">
+            {/* Строки есть и в пустом месяце - прочерками: панель держит
+                высоту, и колонка справа ровняется с календарём. */}
+            <dl className="min-w-0 flex-1 divide-y divide-[var(--pane-border)]">
                 <Metric label={t.analytics.month.trades} value={fmtDot(monthTrades)} />
                 <Metric
                   label={t.analytics.month.profitDays}
@@ -978,8 +979,8 @@ export default function AnalyticsPage() {
                 />
                 <Metric
                   label={t.analytics.month.result}
-                  value={`${monthPnl >= 0 ? "+" : ""}${monthPnl.toFixed(2)} $`}
-                  tone={monthPnl >= 0 ? "up" : "down"}
+                  value={monthTrades > 0 ? `${monthPnl >= 0 ? "+" : ""}${monthPnl.toFixed(2)} $` : "-"}
+                  tone={monthTrades > 0 ? (monthPnl >= 0 ? "up" : "down") : undefined}
                 />
                 <Metric
                   label={t.analytics.month.best}
@@ -991,13 +992,8 @@ export default function AnalyticsPage() {
                   value={worstDay ? `${worstDay.pnl_pct!.toFixed(1)}%` : "-"}
                   tone={worstDay && (worstDay.pnl_pct ?? 0) < 0 ? "down" : undefined}
                 />
-                <Metric label={t.analytics.month.perDay} value={`$${fmtVolShort(volumePerDay)}`} />
+                <Metric label={t.analytics.month.perDay} value={volumePerDay > 0 ? `$${fmtVolShort(volumePerDay)}` : "-"} />
               </dl>
-            ) : (
-              <p className="min-w-0 flex-1 px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
-                {t.analytics.month.empty}
-              </p>
-            )}
             <PanelArt src="/art/analytics/growth-bars.webp" motto={t.analytics.mottos.month} />
             </div>
           </div>
@@ -1012,40 +1008,34 @@ export default function AnalyticsPage() {
               </span>
             </div>
             <div className="flex">
-            {tradeSummary ? (
-              <dl className="min-w-0 flex-1 divide-y divide-[var(--pane-border)]">
+            <dl className="min-w-0 flex-1 divide-y divide-[var(--pane-border)]">
                 <Metric
                   label={t.analytics.account.futures}
-                  value={`$${fmtVolShort(tradeSummary.futures_volume)}`}
+                  value={tradeSummary ? `$${fmtVolShort(tradeSummary.futures_volume)}` : "-"}
                 />
                 <Metric
                   label={t.analytics.account.spot}
-                  value={`$${fmtVolShort(tradeSummary.spot_volume)}`}
+                  value={tradeSummary ? `$${fmtVolShort(tradeSummary.spot_volume)}` : "-"}
                 />
                 <Metric
                   label={t.analytics.account.commission}
-                  value={`$${fmtDot(Math.round(commission))}`}
+                  value={tradeSummary ? `$${fmtDot(Math.round(commission))}` : "-"}
                   note={commission > 0 ? t.analytics.account.ofVolume(commissionPct.toFixed(3)) : undefined}
                 />
                 <Metric
                   label={t.analytics.account.deposits}
-                  value={`$${fmtDot(Math.round(depositTotal))}`}
+                  value={tradeSummary ? `$${fmtDot(Math.round(depositTotal))}` : "-"}
                 />
                 <Metric
                   label={t.analytics.account.withdrawals}
-                  value={`$${fmtDot(Math.round(withdrawTotal))}`}
+                  value={tradeSummary ? `$${fmtDot(Math.round(withdrawTotal))}` : "-"}
                 />
                 <Metric
                   label={t.analytics.account.net}
-                  value={`$${fmtDot(Math.round(depositTotal - withdrawTotal))}`}
-                  tone={depositTotal - withdrawTotal >= 0 ? "up" : "down"}
+                  value={tradeSummary ? `$${fmtDot(Math.round(depositTotal - withdrawTotal))}` : "-"}
+                  tone={tradeSummary ? (depositTotal - withdrawTotal >= 0 ? "up" : "down") : undefined}
                 />
               </dl>
-            ) : (
-              <p className="min-w-0 flex-1 px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
-                {t.analytics.account.empty}
-              </p>
-            )}
             <PanelArt src="/art/analytics/coin-stacks.webp" motto={t.analytics.mottos.account} />
             </div>
           </div>
@@ -1426,7 +1416,7 @@ function PanelArt({ src, motto }: { src: string; motto: readonly string[] }) {
       <img
         src={src}
         alt=""
-        className="pointer-events-none absolute inset-y-1 left-0 h-[calc(100%-0.5rem)] w-[calc(100%-6.5rem)] object-contain object-center drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+        className="pointer-events-none absolute inset-y-1 left-0 h-[calc(100%-0.5rem)] w-[calc(100%-8.5rem)] object-contain object-center drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
       />
       <Motto lines={motto} className="absolute right-3 top-1/2 -translate-y-1/2 !tracking-[0.24em]" />
     </div>

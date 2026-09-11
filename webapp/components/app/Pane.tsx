@@ -61,13 +61,6 @@ export function PaneHead({
 }) {
   return (
     <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-2 md:min-h-[64px]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/art/brand/mountains.webp"
-        alt=""
-        aria-hidden
-        className="head-ridge pointer-events-none absolute -top-8 right-40 -z-10 hidden h-[140px] w-auto md:block"
-      />
 
       <div className="flex min-w-0 items-baseline gap-2.5">
         <h1 className="text-[20px] font-bold tracking-tight text-[var(--pane-text)]">{title}</h1>
@@ -82,7 +75,18 @@ export function PaneHead({
             {children}
           </div>
         )}
+        {/* Горы, девиз и корона - одним блоком: место под горы занято в строке,
+            и кнопки раздела встают левее, а не поверх снега. Подножие гор
+            уходит под панели первого ряда. */}
         <div aria-hidden className="hidden items-center gap-2 xl:flex">
+          <span className="relative h-10 w-52 shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/art/brand/mountains.webp"
+              alt=""
+              className="head-ridge pointer-events-none absolute -top-9 right-2 -z-10 h-[140px] w-auto max-w-none"
+            />
+          </span>
           <Motto lines={BRAND_MOTTO} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/art/brand/crown.webp" alt="" className="h-11 w-auto drop-shadow-[0_4px_10px_rgba(240,185,11,0.35)]" />

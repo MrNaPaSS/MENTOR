@@ -90,7 +90,7 @@ export default function CertificatesPanel({ className = "" }: { className?: stri
               <img
                 src={stampSrc(level)}
                 alt=""
-                className={`h-14 w-14 shrink-0 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.25)] ${reached ? "" : "opacity-55 saturate-[0.7]"}`}
+                className={`h-14 w-14 shrink-0 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.25)] ${reached ? "" : "opacity-90"}`}
               />
               <div className="min-w-0">
                 <p className="text-[13px] font-bold text-[var(--pane-text)]">{t.cert.levels[level]}</p>

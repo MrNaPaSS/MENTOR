@@ -16,6 +16,7 @@ import { setSoundOn, useSoundOn } from "@/lib/notifySound";
 import { intlLocale, setLocale, useLocale, useT, type Locale } from "@/lib/i18n";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import FramedAvatar from "@/components/avatar/FramedAvatar";
+import Motto, { BRAND_MOTTO } from "@/components/app/Motto";
 
 const ADMIN_WEEX_UID = "6613031308";
 
@@ -143,11 +144,17 @@ export default function ProfilePage() {
             src="/art/profile/card-banner.webp"
             alt=""
             aria-hidden
-            className="profile-art pointer-events-none absolute inset-y-0 right-0 hidden h-full w-[62%] object-cover object-[78%_50%] sm:block"
+            className="profile-art pointer-events-none absolute inset-0 hidden h-full w-full object-cover object-right sm:block"
             style={{
-              maskImage: "linear-gradient(90deg, transparent 0%, #000 30%)",
-              WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 30%)",
+              maskImage: "linear-gradient(90deg, transparent 30%, #000 55%)",
+              WebkitMaskImage: "linear-gradient(90deg, transparent 30%, #000 55%)",
             }}
+          />
+          {/* Девиз набран текстом, а не впечатан в картинку: так он читается и
+              на тёмной теме. */}
+          <Motto
+            lines={BRAND_MOTTO}
+            className="absolute right-5 top-5 hidden !text-[11px] !tracking-[0.42em] !text-[var(--pane-text-2)] md:block"
           />
           <div className="relative flex items-center gap-4">
             {/* Аватарка из Telegram, если она есть. Файл отдаёт бэкенд, поэтому
@@ -451,13 +458,18 @@ export default function ProfilePage() {
 
       {/* Нижний баннер бренда: горы, терминал и корона - без рамки, тает в
           фон страницы. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/art/profile/bottom-banner.webp"
-        alt=""
-        aria-hidden
-        className="profile-art mx-auto hidden w-full max-w-[1280px] sm:block"
-      />
+      <div className="relative mx-auto hidden w-full max-w-[1280px] sm:block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/art/profile/bottom-banner.webp" alt="" aria-hidden className="profile-art w-full" />
+        <Motto
+          lines={BRAND_MOTTO}
+          className="absolute left-[1.5%] top-[10%] !text-[12px] !tracking-[0.42em] !text-[var(--pane-text-2)]"
+        />
+        <Motto
+          lines={t.profile.bannerWords}
+          className="absolute right-[1.5%] top-[8%] !text-[10px] !tracking-[0.3em] !text-[var(--pane-text-2)]"
+        />
+      </div>
 
       {/* Окно ключей - то же самое, что в терминале. Оно красится палитрой
           панелей, а она живёт на классе: без обёртки переменные не подставятся
