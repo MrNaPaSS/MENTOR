@@ -287,6 +287,7 @@ export default function MarketPage() {
       <PaneHead
         title={t.market.title}
         hint={active.hint}
+        hintBelow
         nav={
           <nav className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5">
             {TABS.map((tab) => {

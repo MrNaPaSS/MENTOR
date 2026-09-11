@@ -7,9 +7,17 @@ import { TrendingUp, ImageIcon, Radio, Lock } from "lucide-react";
 import SignalsFeed from "@/components/signals/SignalsFeed";
 import BroadcastCard from "@/components/analysis/BroadcastCard";
 import { useT } from "@/lib/i18n";
-import { CHIP, CHIP_OFF, CHIP_ON, PaneHead, PaneScope } from "@/components/app/Pane";
+import { PaneHead, PaneScope } from "@/components/app/Pane";
 
 type Tab = "analysis" | "signals";
+
+// Вкладки раздела - тем же видом, что в маркете и аналитике: рамка, выбранная
+// золотом.
+const TAB =
+  "flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors duration-150 ease-out";
+const TAB_ON = "border-accent-gold/50 bg-accent-gold/10 text-[var(--pane-gold)]";
+const TAB_OFF =
+  "border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
 
 function AnalysisFeed() {
   const t = useT();
@@ -88,44 +96,48 @@ export default function AnalysisPage() {
 
   return (
     <PaneScope className="space-y-3">
-      {/* Название, строка о разделе и вкладки - одной строкой: заголовок в два
-          сантиметра высотой ничего не добавляет тому, кто сам сюда нажал. */}
+      {/* Вкладки сразу за названием, как в маркете и на рынке, строка о
+          разделе - под ними. */}
       <PaneHead
         title={t.signals.analysisTitle}
         hint={tab === "analysis" ? t.signals.analysisSubtitle : t.signals.signalsSubtitle}
-      >
-        <button
-          onClick={() => setTab("analysis")}
-          className={`flex items-center gap-1.5 ${CHIP} ${
-            tab === "analysis" ? CHIP_ON : CHIP_OFF
-          }`}
-        >
-          <ImageIcon className="h-3.5 w-3.5" />
-          {t.signals.tabAnalysis}
-        </button>
+        hintBelow
+        nav={
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setTab("analysis")}
+              className={`${TAB} ${tab === "analysis" ? TAB_ON : TAB_OFF}`}
+            >
+              <ImageIcon className="h-3 w-3 shrink-0" />
+              {t.signals.tabAnalysis}
+            </button>
 
-        {/* Сигналы открыты, только пока есть хоть один живой. */}
-        <button
-          onClick={() => !signalsLocked && setTab("signals")}
-          disabled={signalsLocked}
-          title={signalsLocked ? t.signals.noActiveSignals : undefined}
-          className={`flex items-center gap-1.5 ${CHIP} ${
-            signalsLocked
-              ? "cursor-not-allowed text-[color:color-mix(in_srgb,var(--pane-muted)_40%,transparent)]"
-              : tab === "signals"
-                ? CHIP_ON
-                : CHIP_OFF
-          }`}
-        >
-          {signalsLocked ? <Lock className="h-3 w-3" /> : <Radio className="h-3.5 w-3.5" />}
-          {t.signals.tabSignals}
-          {!signalsLocked && activeCount !== null && activeCount > 0 && (
-            <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--pane-accent-soft)] px-1 text-[10px] font-bold text-[var(--pane-accent)]">
-              {activeCount}
-            </span>
-          )}
-        </button>
-      </PaneHead>
+            {/* Сигналы открыты, только пока есть хоть один живой. */}
+            <button
+              type="button"
+              onClick={() => !signalsLocked && setTab("signals")}
+              disabled={signalsLocked}
+              title={signalsLocked ? t.signals.noActiveSignals : undefined}
+              className={`${TAB} ${
+                signalsLocked
+                  ? "cursor-not-allowed border-[var(--pane-border)] bg-[var(--pane-bg)] text-[color:color-mix(in_srgb,var(--pane-muted)_40%,transparent)]"
+                  : tab === "signals"
+                    ? TAB_ON
+                    : TAB_OFF
+              }`}
+            >
+              {signalsLocked ? <Lock className="h-3 w-3 shrink-0" /> : <Radio className="h-3 w-3 shrink-0" />}
+              {t.signals.tabSignals}
+              {!signalsLocked && activeCount !== null && activeCount > 0 && (
+                <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--pane-accent-soft)] px-1 text-[10px] font-bold text-[var(--pane-accent)]">
+                  {activeCount}
+                </span>
+              )}
+            </button>
+          </div>
+        }
+      />
 
       {tab === "analysis" ? <AnalysisFeed /> : <SignalsFeed />}
     </PaneScope>

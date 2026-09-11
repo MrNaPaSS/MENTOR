@@ -290,7 +290,7 @@ export default function ShopPage() {
 
   return (
     <PaneScope className="space-y-3">
-      <PaneHead title={t.shop.title} hint={t.shop.hint} nav={toolbar} />
+      <PaneHead title={t.shop.title} hint={t.shop.hint} hintBelow nav={toolbar} />
 
       {note && (
         <div className="flex animate-fade-in items-center justify-between gap-3 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-up-faint)] px-3 py-2 text-[12px] text-[var(--pane-up)] motion-reduce:animate-none">
