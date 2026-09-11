@@ -53,11 +53,15 @@ export function PaneScope({
 export function PaneHead({
   title,
   hint,
+  hintBelow = false,
   nav,
   children,
 }: {
   title: string;
   hint?: string;
+  /** Подпись под названием, а не справа от него: строка остаётся вкладкам,
+   *  и они встают вплотную к названию. */
+  hintBelow?: boolean;
   /** Вкладки раздела - сразу за названием: так раздел не тратит на них
    *  отдельную строку и помещается на экран без прокрутки. */
   nav?: React.ReactNode;
@@ -68,13 +72,25 @@ export function PaneHead({
     <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-2 md:min-h-[46px]">
       <PageRidge />
 
-      <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
-        <div className="flex min-w-0 items-baseline gap-2.5">
-          <h1 className="text-[20px] font-bold tracking-tight text-[var(--pane-text)]">{title}</h1>
+      {hintBelow ? (
+        // Вкладки в строке названия, подпись под обоими: подпись шире
+        // названия, и стоя рядом с ним, она отодвигала бы вкладки вправо.
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
+            <h1 className="text-[20px] font-bold leading-tight tracking-tight text-[var(--pane-text)]">{title}</h1>
+            {nav}
+          </div>
           {hint && <p className="truncate text-[11px] text-[var(--pane-muted)]">{hint}</p>}
         </div>
-        {nav}
-      </div>
+      ) : (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
+          <div className="flex min-w-0 items-baseline gap-2.5">
+            <h1 className="text-[20px] font-bold tracking-tight text-[var(--pane-text)]">{title}</h1>
+            {hint && <p className="truncate text-[11px] text-[var(--pane-muted)]">{hint}</p>}
+          </div>
+          {nav}
+        </div>
+      )}
 
       <div className="flex items-center gap-4">
         {children && (

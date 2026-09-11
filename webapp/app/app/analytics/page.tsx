@@ -648,6 +648,7 @@ export default function AnalyticsPage() {
       <PaneHead
         title={`${t.analytics.title} ${t.analytics.titleAnd} ${t.analytics.titleTail}`}
         hint={t.analytics.subtitle}
+        hintBelow
         nav={
           <div className="flex gap-1.5">
             {(
