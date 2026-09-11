@@ -26,6 +26,15 @@ export type Toast = {
   text: string;
   tone: "up" | "down" | "plain" | "gold";
   /**
+   * Текст - фраза, а не числа.
+   *
+   * Событие сделки коротко и цифрами: «в лонг по 104 320.5». Отказ биржи
+   * объясняет, что делать, и читается предложением на две строки. Моноширинный
+   * шрифт с выключенным переносом ему не идёт, поэтому такой текст набирается
+   * обычным шрифтом и переносится, а плашка получает предел ширины.
+   */
+  prose?: boolean;
+  /**
    * Что сделать по нажатию. Важнее монеты: уведомление о награде открывает
    * окно получения, а не график.
    */
@@ -34,6 +43,14 @@ export type Toast = {
 
 /** Сколько уведомление висит само, миллисекунды. */
 const LIFE = 9000;
+
+/**
+ * Сколько висит объяснение отказа.
+ *
+ * Событие читается взглядом - «взята цель 2». Отказ надо прочесть целиком и
+ * успеть поправить заявку по его числам, поэтому он держится дольше.
+ */
+const LIFE_PROSE = 20000;
 
 export default function Toasts({
   items,
@@ -59,7 +76,9 @@ export default function Toasts({
   // уведомление вместе со старым.
   useEffect(() => {
     if (items.length === 0) return;
-    const timers = items.map((item) => setTimeout(() => onClose(item.id), LIFE));
+    const timers = items.map((item) =>
+      setTimeout(() => onClose(item.id), item.prose ? LIFE_PROSE : LIFE),
+    );
     return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items.map((i) => i.id).join("|")]);
@@ -99,6 +118,10 @@ export default function Toasts({
               "pointer-events-auto flex max-w-full animate-fade-in items-center gap-3 rounded-xl " +
               "border px-4 py-2.5 backdrop-blur-sm transition-shadow duration-200 " +
               "motion-reduce:animate-none " +
+              // Фразе нужна ширина строки, за которой глаз не теряет начало
+              // следующей, и потолок: на широком мониторе плашка во весь
+              // график - это уже не уведомление, а перегородка.
+              (item.prose ? "w-[min(32rem,100%)] items-start " : "") +
               (item.symbol || item.action ? "cursor-pointer" : "")
             }
             style={{
@@ -117,11 +140,17 @@ export default function Toasts({
               className="h-6 w-1 shrink-0 rounded-full"
               style={{ background: tone }}
             />
-            <span className="flex flex-col leading-tight">
+            <span className="flex min-w-0 flex-col leading-tight">
               <span className="text-[12px] font-semibold" style={{ color: tone }}>
                 {item.title}
               </span>
-              <span className="font-mono text-[11px] tabular-nums text-[var(--pane-text-2)]">
+              <span
+                className={
+                  item.prose
+                    ? "mt-1 text-[12px] leading-snug text-[var(--pane-text-2)]"
+                    : "font-mono text-[11px] tabular-nums text-[var(--pane-text-2)]"
+                }
+              >
                 {item.text}
               </span>
             </span>

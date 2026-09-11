@@ -881,6 +881,26 @@ export default function ScalpingPage() {
     loadExchange();
   }, [loadExchange]);
 
+  /**
+   * Отказ биржи - плашкой над графиком, а не строкой под ним.
+   *
+   * Строка статуса годится для отчёта в три слова: «заявка на бирже». Отказ
+   * устроен иначе - это объяснение с числами, что именно сделать: «на плече
+   * ×100 биржа держит позицию не больше 49.74, уменьшите сумму или плечо».
+   * В строке он не помещался, расталкивал соседей по ряду и уходил сам через
+   * двадцать секунд - ровно то сообщение, которое надо дочитать до конца.
+   *
+   * Плашка встаёт там же, где уведомления о входе и целях, - вверху графика,
+   * куда трейдер и смотрит, - переносится по строкам и закрывается крестиком.
+   *
+   * Опознаватель - сам текст: два нажатия подряд с одним и тем же отказом
+   * поднимают одну плашку, а не стопку одинаковых.
+   */
+  const refuse = useCallback((text: string) => {
+    play("error");
+    pushToast({ id: `refusal:${text}`, title: t.terminal.notes.refusedTitle, text, tone: "down", prose: true });
+  }, [t]);
+
   // Сообщение об ордере живёт несколько секунд: это отчёт о действии, а не
   // состояние экрана.
   useEffect(() => {
@@ -1092,13 +1112,10 @@ export default function ScalpingPage() {
         setTrades((list) => list.filter((t) => t.id !== next.id));
         // Отказ мог назвать предел позиции на плече - сервер его запомнил.
         setLimitsAsked((n) => n + 1);
-        setOrderNote({
-          text: err instanceof Error ? err.message : t.terminal.notes.orderRejected,
-          bad: true,
-        });
+        refuse(err instanceof Error ? err.message : t.terminal.notes.orderRejected);
       }
     },
-    [copyAllowed, exchange?.connected, margin, symbol, selectSymbol, t],
+    [copyAllowed, exchange?.connected, margin, refuse, symbol, selectSymbol, t],
   );
 
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
@@ -1198,7 +1215,7 @@ export default function ScalpingPage() {
         if (text.includes("подключите") || text.includes("428")) return;
         // Заявки на бирже остались - значит и на графике им место.
         setTrades((list) => list.map((t) => (t.id === current.id ? current : t)));
-        setOrderNote({ text, bad: true });
+        refuse(text);
       }
       return;
     }
@@ -1228,7 +1245,7 @@ export default function ScalpingPage() {
         const text = err instanceof Error ? err.message : t.terminal.notes.closeFailed;
         // 428 — ключи не подключены: закрывать нечего, это не сбой.
         if (!text.includes("подключите") && !text.includes("428")) {
-          setOrderNote({ text, bad: true });
+          refuse(text);
           // Разметку не трогаем: позиция как стояла, так и стоит.
           return;
         }
@@ -1402,10 +1419,7 @@ export default function ScalpingPage() {
       // которой нет на бирже, хуже отсутствия лимитки.
       setTrades((list) => list.filter((t) => t.id !== next.id));
       setLimitsAsked((n) => n + 1);
-      setOrderNote({
-        text: err instanceof Error ? err.message : t.terminal.notes.limitRejected,
-        bad: true,
-      });
+      refuse(err instanceof Error ? err.message : t.terminal.notes.limitRejected);
     }
   }
 
@@ -1525,10 +1539,7 @@ export default function ScalpingPage() {
       });
     } catch (err) {
       dragTrade(trade, kind, index, was);
-      setOrderNote({
-        text: err instanceof Error ? err.message : t.terminal.notes.moveRejected,
-        bad: true,
-      });
+      refuse(err instanceof Error ? err.message : t.terminal.notes.moveRejected);
     }
   }
 
@@ -1637,10 +1648,7 @@ export default function ScalpingPage() {
       // Отказ мог назвать предел позиции на плече - сервер его запомнил, и
       // следующая заявка должна упереться в него ещё в окне, а не на бирже.
       setLimitsAsked((n) => n + 1);
-      setOrderNote({
-        text: err instanceof Error ? err.message : t.terminal.notes.orderRejected,
-        bad: true,
-      });
+      refuse(err instanceof Error ? err.message : t.terminal.notes.orderRejected);
     }
   }
 

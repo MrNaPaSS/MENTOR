@@ -97,6 +97,7 @@ export const terminal = {
   orderNumber: (id: string) => ` · #${id}`,
 
   notes: {
+    refusedTitle: "The exchange rejected the order",
     exchangeNote: (note: string) => `Exchange: ${note}`,
     closed: (qty: string, coin: string) => `Closed ${qty} ${coin}`,
     fee: (fee: string) => `, fee ${fee}`,

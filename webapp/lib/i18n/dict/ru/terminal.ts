@@ -105,6 +105,10 @@ export const terminal = {
 
   // ── Уведомления действий ──
   notes: {
+    // Заголовок плашки с отказом. Само объяснение приходит от биржи через
+    // сервер (backend/trading/refusals.py) и переводу не подлежит - в нём
+    // числа, по которым трейдер и правит заявку.
+    refusedTitle: "Биржа не приняла заявку",
     exchangeNote: (note: string) => `Биржа: ${note}`,
     closed: (qty: string, coin: string) => `Закрыто ${qty} ${coin}`,
     fee: (fee: string) => `, комиссия ${fee}`,
