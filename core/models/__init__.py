@@ -717,4 +717,59 @@ class Certificate(Base):
     seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "JournalExport", "LeverageCap", "Entitlement", "Certificate", "utcnow"]
+class CashbackProgram(Base):
+    """Условия кэшбэка на бирже - версиями.
+
+    Изменение условий - новая строка с датой начала, а не правка старой.
+    Прошлые сутки пересчитываются по тем условиям, что действовали тогда, и
+    кэшбэк, который трейдер уже видел, задним числом не меняется.
+    """
+
+    __tablename__ = "cashback_programs"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    exchange: Mapped[str] = mapped_column(String(16), default="weex", index=True)
+    # Доля трейдера от комиссии, которую он заплатил бирже (0.35 = 35%).
+    trader_share: Mapped[float] = mapped_column(Numeric(6, 4), default=0)
+    # Сколько от той же комиссии NMNH оставляет себе при любом раскладе.
+    min_margin: Mapped[float] = mapped_column(Numeric(6, 4), default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Сутки отчёта биржи (ГГГГ-ММ-ДД), с которых действуют условия.
+    valid_from: Mapped[str] = mapped_column(String(10), index=True)
+    note: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CashbackAccrual(Base):
+    """Кэшбэк трейдера за сутки - по партнёрскому отчёту биржи.
+
+    Строка на трейдера, биржу и сутки. Пока сутки идут, отчёт растёт, и строка
+    переписывается при каждом импорте. Выплаченная строка не переписывается
+    никогда: деньги ушли, и цифра под ними остаётся той, по которой платили.
+
+    Трейдер опознаётся по UID. Ученика с таким UID может ещё не быть - реферал
+    торгует, а кабинет не открыл, - и тогда student_id пуст: комиссия всё
+    равно наша, и в сводке наставника она видна.
+    """
+
+    __tablename__ = "cashback_accruals"
+    __table_args__ = (UniqueConstraint("exchange", "uid", "day", name="uq_cashback_accrual_day"),)
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    exchange: Mapped[str] = mapped_column(String(16), default="weex", index=True)
+    uid: Mapped[str] = mapped_column(String(32), index=True)
+    student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id"), nullable=True, index=True)
+    day: Mapped[str] = mapped_column(String(10), index=True)
+    # Комиссия, которую трейдер заплатил бирже, и доля NMNH из неё.
+    fee: Mapped[float] = mapped_column(Numeric(20, 8), default=0)
+    commission: Mapped[float] = mapped_column(Numeric(20, 8), default=0)
+    trader_share: Mapped[float] = mapped_column(Numeric(6, 4), default=0)
+    cashback: Mapped[float] = mapped_column(Numeric(20, 8), default=0)
+    nmnh: Mapped[float] = mapped_column(Numeric(20, 8), default=0)
+    # accrued - начислено, paid - выплачено.
+    status: Mapped[str] = mapped_column(String(8), default="accrued", index=True)
+    program_id: Mapped[int | None] = mapped_column(ForeignKey("cashback_programs.id"), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "JournalExport", "LeverageCap", "Entitlement", "Certificate", "CashbackProgram", "CashbackAccrual", "utcnow"]

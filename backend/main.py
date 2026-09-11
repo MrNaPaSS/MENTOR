@@ -29,10 +29,12 @@ from backend.api import scalping as scalping_api
 from backend.api import trading_move
 from backend.api import trading_nudge
 from backend.api import certificates as certificates_api
+from backend.api import cashback as cashback_api
 from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
 from backend.balance_collector import BalanceCollector
+from backend.cashback_collector import CashbackCollector
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.density_alerts import DensityWatcher, run_watcher as run_density_watcher
 from backend.ws.scalping_hub import ScalpingHub
@@ -55,6 +57,9 @@ def create_app(
     manager = ConnectionManager()
     collector = PriceCollector(weex, manager, interval=price_interval)
     balance_collector = BalanceCollector(weex)
+    # Кэшбэк трейдерам: раз в час раскладывает партнёрский отчёт биржи по
+    # трейдерам - сколько заплатил, сколько вернётся (docs/integrations/broker-program-plan.md).
+    cashback_collector = CashbackCollector(weex)
 
     # Скальпинг держит постоянное соединение с биржей и заметный поток данных,
     # поэтому включается флагом, а не сам собой.
@@ -84,6 +89,7 @@ def create_app(
     async def lifespan(app: FastAPI):
         collector.start()
         balance_collector.start()
+        cashback_collector.start()
         if scalping:
             scalping.start()
         density_task = None
@@ -125,6 +131,7 @@ def create_app(
                 await scalping.stop()
             await collector.stop()
             await balance_collector.stop()
+            await cashback_collector.stop()
             await weex.close()
             await notifier.close()
 
@@ -196,6 +203,8 @@ def create_app(
     app.include_router(coins.router)
     app.include_router(shop.router)
     app.include_router(shop.admin_router)
+    app.include_router(cashback_api.router)
+    app.include_router(cashback_api.admin_router)
     app.include_router(certificates_api.router)
     app.include_router(chat_api.router)
     app.include_router(chat_bridge_api.router)
