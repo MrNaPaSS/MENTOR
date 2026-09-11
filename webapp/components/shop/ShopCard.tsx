@@ -203,9 +203,15 @@ export default function ShopCard({
       <span className="text-[10px] text-[var(--pane-muted)]">{t.shop.soon}</span>
     );
   } else if (short > 0) {
+    // Кнопка на месте и когда не хватает: сколько накоплено, видно по полосе
+    // рядом, а сколько осталось - в подсказке.
     action = (
-      <span className={`${BTN} cursor-not-allowed border border-[var(--pane-border)] text-[var(--pane-muted)]`}>
-        {t.shop.notEnough(short.toLocaleString(numbers))}
+      <span
+        title={t.shop.notEnough(short.toLocaleString(numbers))}
+        className={`${BTN} cursor-not-allowed border border-[var(--pane-border)] text-[var(--pane-muted)]`}
+      >
+        <CoinIcon size={13} />
+        {t.shop.buy}
       </span>
     );
   } else {
@@ -226,7 +232,7 @@ export default function ShopCard({
       <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[9px] font-bold backdrop-blur-sm ${look.badge}`}>
         {badge}
       </span>
-      {owned ? (
+      {owned && (
         // Та же звезда, что у полученных достижений в аналитике.
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -234,13 +240,6 @@ export default function ShopCard({
           alt=""
           className="pointer-events-none absolute right-2 top-2 h-5 w-5"
         />
-      ) : (
-        item.price > 0 && (
-          <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 font-mono text-[11px] font-bold tabular-nums text-[var(--pane-gold)] backdrop-blur-sm">
-            <CoinIcon size={13} />
-            {item.price.toLocaleString(numbers)}
-          </span>
-        )
       )}
 
       <div className="flex flex-1 flex-col gap-1.5 p-3">
@@ -253,33 +252,43 @@ export default function ShopCard({
             {status}
           </span>
         )}
-        {!owned && !rank && item.price > 0 && short > 0 && (
-          <div className="mt-0.5">
-            <div className="h-1 overflow-hidden rounded-full bg-[var(--pane-hover)]">
-              <div
-                className="h-full origin-left rounded-full bg-[var(--pane-gold)] transition-transform duration-700 ease-out"
-                style={{ transform: `scaleX(${progress / 100})` }}
-              />
-            </div>
-            <p className="mt-1 text-[10px] text-[var(--pane-muted)]">{t.shop.saved(String(progress))}</p>
-          </div>
+        {item.link_url && item.price > 0 && (
+          <a
+            href={item.link_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-fit items-center gap-1 text-[10px] text-[var(--pane-accent)] hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" />
+            {t.shop.details}
+          </a>
         )}
 
-        <div className="mt-auto flex items-center justify-between gap-2 pt-1.5">
-          {item.link_url && item.price > 0 ? (
-            <a
-              href={item.link_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[10px] text-[var(--pane-accent)] hover:underline"
-            >
-              <ExternalLink className="h-3 w-3" />
-              {t.shop.details}
-            </a>
-          ) : (
-            <span />
+        {/* Низ карточки по макету: сколько накоплено, цена и кнопка - одной
+            строкой. Полоса стоит и у доступного товара: полная, она говорит
+            «хватает» раньше, чем прочитана цена. */}
+        <div className="mt-auto flex items-end gap-2 pt-2">
+          <div className="min-w-0 flex-1">
+            {!owned && !rank && item.price > 0 && (
+              <>
+                <p className="text-[10px] text-[var(--pane-muted)]">{t.shop.saved(String(progress))}</p>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-[var(--pane-hover)]">
+                  <div
+                    className="h-full origin-left rounded-full bg-[var(--pane-gold)] transition-transform duration-700 ease-out"
+                    style={{ transform: `scaleX(${progress / 100})` }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          {!owned && !rank && item.price > 0 && (
+            <span className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--pane-border)] px-2 py-1 font-mono text-[12px] font-bold tabular-nums text-[var(--pane-gold)]">
+              <CoinIcon size={13} />
+              {item.price.toLocaleString(numbers)}
+              <span className="text-[8px] font-bold opacity-60">NMNH</span>
+            </span>
           )}
-          {action}
+          <div className="shrink-0">{action}</div>
         </div>
       </div>
     </article>

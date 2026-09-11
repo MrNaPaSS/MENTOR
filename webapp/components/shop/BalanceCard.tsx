@@ -40,6 +40,14 @@ export default function BalanceCard({
         className="pointer-events-none absolute -right-12 -top-14 h-44 w-44 rounded-full"
         style={{ background: "radial-gradient(circle, rgba(240,185,11,0.22), transparent 70%)" }}
       />
+      {/* Корона NMNH в углу: баланс - это твоя казна. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/art/brand/crown.webp"
+        alt=""
+        aria-hidden
+        className="pointer-events-none absolute -right-2 -top-1 h-24 w-auto rotate-12 drop-shadow-[0_8px_18px_rgba(240,185,11,0.35)]"
+      />
 
       <div className="relative flex items-center gap-3">
         {/* Сама монета NMNH, крупно: баланс - это их количество. */}

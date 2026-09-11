@@ -11,6 +11,32 @@ export const shop = {
   },
   empty: "Nothing here yet.",
 
+  /** Search and order of the cards. */
+  search: "Search items…",
+  sort: {
+    label: "Order",
+    catalog: "Catalog order",
+    cheap: "Cheapest first",
+    expensive: "Most expensive first",
+  },
+  nothingFound: "Nothing found.",
+
+  /** Right column: community, our software and the brand line. */
+  community: {
+    lines: ["More", "than trading -", "a community"],
+    join: "Join",
+  },
+  soft: {
+    title: "Our software",
+    more: "Details",
+    links: {
+      features: "Exclusive features",
+      frames: "Profile styling",
+      merch: "Merch and accessories",
+      software: "Useful tools",
+    },
+  },
+
   balance: "Balance",
   waiting: (n: number) => `Waiting to be claimed: ${n}`,
   claim: "Claim",

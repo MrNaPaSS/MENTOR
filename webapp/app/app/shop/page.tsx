@@ -13,7 +13,7 @@
 // справка, её читают один раз.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Cpu, Crown, LayoutGrid, Shirt, X, Zap, type LucideIcon } from "lucide-react";
+import { Cpu, Crown, LayoutGrid, Search, Shirt, X, Zap, type LucideIcon } from "lucide-react";
 import { api, API_URL, type CoinTx, type Profile, type ShopItem, type ShopOrder } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
@@ -27,8 +27,12 @@ import ShopCard from "@/components/shop/ShopCard";
 import BalanceCard from "@/components/shop/BalanceCard";
 import ActivityPane from "@/components/shop/ActivityPane";
 import BuyDialog from "@/components/shop/BuyDialog";
+import CommunityBanner from "@/components/shop/CommunityBanner";
+import SoftPanel from "@/components/shop/SoftPanel";
+import BrandStrip from "@/components/app/BrandStrip";
 
 type Cat = "all" | "features" | "frames" | "merch" | "software";
+type Sort = "catalog" | "cheap" | "expensive";
 type Group = Exclude<Cat, "all">;
 
 const CATS: { id: Cat; icon: LucideIcon }[] = [
@@ -99,6 +103,8 @@ export default function ShopPage() {
   const [cat, setCat] = useState<Cat>("all");
   const [buying, setBuying] = useState<ShopItem | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<Sort>("catalog");
 
   const loadHistory = useCallback(() => {
     const token = getAccessToken();
@@ -146,10 +152,26 @@ export default function ShopPage() {
   }, [shown]);
 
   const visible = useMemo(() => {
-    const list = cat === "all" ? shown : shown.filter((item) => catOf(item) === cat);
-    // Внутри группы - порядок каталога, между группами - наш.
-    return [...list].sort((a, b) => ORDER[groupOf(a)] - ORDER[groupOf(b)] || a.sort_order - b.sort_order);
-  }, [shown, cat]);
+    const needle = query.trim().toLowerCase();
+    const list = (cat === "all" ? shown : shown.filter((item) => catOf(item) === cat)).filter(
+      (item) => !needle || `${item.title} ${item.description}`.toLowerCase().includes(needle),
+    );
+    // По каталогу: внутри группы - порядок каталога, между группами - наш.
+    // По цене - без групп: сравнивают именно цены.
+    return [...list].sort((a, b) =>
+      sort === "cheap"
+        ? a.price - b.price
+        : sort === "expensive"
+          ? b.price - a.price
+          : ORDER[groupOf(a)] - ORDER[groupOf(b)] || a.sort_order - b.sort_order,
+    );
+  }, [shown, cat, query, sort]);
+
+  // Главный продукт «Нашего софта» - самый дорогой из софта в каталоге.
+  const featured = useMemo(
+    () => shown.filter((item) => catOf(item) === "software" && item.price > 0).sort((a, b) => b.price - a.price)[0] ?? null,
+    [shown],
+  );
 
   // Ближайшая цель: самый дешёвый из видимых товаров, на который пока не
   // хватает. Спрятанный товар целью быть не может - к нему не дойти.
@@ -207,8 +229,10 @@ export default function ShopPage() {
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-3">
-          {/* Категории - как в достижениях аналитики: иконка, название, сколько. */}
-          <div className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5">
+          {/* Категории - как в достижениях аналитики: иконка, название,
+              сколько. Справа поиск и порядок. */}
+          <div className="flex flex-wrap items-center gap-2">
+          <div className="no-scrollbar flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5">
             {CATS.map(({ id, icon: Icon }) => {
               const on = cat === id;
               return (
@@ -231,6 +255,29 @@ export default function ShopPage() {
               );
             })}
           </div>
+            <label className="flex h-8 w-full items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] px-2.5 sm:w-48">
+              <Search className="h-3.5 w-3.5 shrink-0 text-[var(--pane-muted)]" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t.shop.search}
+                aria-label={t.shop.search}
+                className="min-w-0 flex-1 bg-transparent text-[11px] text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
+              />
+            </label>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as Sort)}
+              aria-label={t.shop.sort.label}
+              className="h-8 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] px-2 text-[11px] text-[var(--pane-text)] outline-none"
+            >
+              {(["catalog", "cheap", "expensive"] as const).map((id) => (
+                <option key={id} value={id}>
+                  {t.shop.sort[id]}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {!loaded ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -242,9 +289,9 @@ export default function ShopPage() {
                 />
               ))}
             </div>
-          ) : visible.length === 0 && cat !== "frames" ? (
+          ) : visible.length === 0 && (cat !== "frames" || query.trim()) ? (
             <p className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-3 py-10 text-center text-[11px] text-[var(--pane-muted)]">
-              {t.shop.empty}
+              {query.trim() ? t.shop.nothingFound : t.shop.empty}
             </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -260,7 +307,7 @@ export default function ShopPage() {
                   onEquip={equip}
                 />
               ))}
-              {cat === "frames" &&
+              {cat === "frames" && !query.trim() &&
                 RANK_FRAMES.map((_, i) => (
                   <ShopCard
                     key={`rank-${i + 1}`}
@@ -278,9 +325,21 @@ export default function ShopPage() {
           )}
         </div>
 
-        <aside className="space-y-3 lg:sticky lg:top-[108px] lg:self-start">
+        <aside className="space-y-3 lg:self-start">
           <BalanceCard balance={balance} pendingCount={pendingCount} pendingTotal={pendingTotal} goal={goal} />
           <ActivityPane owned={owned.list} history={history} orders={orders} />
+          <CommunityBanner />
+          <SoftPanel
+            featured={featured}
+            image="/art/brand/laptop.webp"
+            onOpen={setBuying}
+            onPick={(next) => {
+              setCat(next);
+              setQuery("");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
+          <BrandStrip />
         </aside>
       </div>
 

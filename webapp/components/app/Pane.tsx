@@ -89,7 +89,7 @@ export function PaneHead({
         <div aria-hidden className="hidden items-center gap-2 xl:flex">
           <Motto lines={BRAND_MOTTO} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/art/hero/crown.webp" alt="" className="h-11 w-auto drop-shadow-[0_4px_10px_rgba(240,185,11,0.35)]" />
+          <img src="/art/brand/crown.webp" alt="" className="h-11 w-auto drop-shadow-[0_4px_10px_rgba(240,185,11,0.35)]" />
         </div>
       </div>
     </div>
