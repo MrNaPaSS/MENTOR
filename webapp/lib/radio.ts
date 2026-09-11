@@ -42,7 +42,7 @@ const DEFAULT_VOLUME = 0.6;
  */
 const DEFAULT_STATION = Math.max(
   0,
-  STATIONS.findIndex((s) => s.url === "https://radio.promodj.com/mini-192"),
+  STATIONS.findIndex((s) => s.url === "https://radio.promodj.com/klubb-192"),
 );
 
 /**
