@@ -9,6 +9,7 @@ import { ChevronDown, Coins, Flame, Gift, Timer, TrendingDown, TrendingUp, Troph
 import { useIntlLocale, useT } from "@/lib/i18n";
 import { openRewards } from "@/lib/rewards";
 import { useRollingNumber } from "@/lib/useRollingNumber";
+import CoinIcon from "@/components/app/CoinIcon";
 
 /** Иконки к строкам «Как заработать» - в том же порядке, что строки словаря. */
 const EARN_ICONS = [TrendingUp, Flame, TrendingDown, Trophy, Timer];
@@ -41,9 +42,8 @@ export default function BalanceCard({
       />
 
       <div className="relative flex items-center gap-3">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-accent-gold/40 bg-accent-gold/10 shadow-[inset_0_0_14px_rgba(240,185,11,0.28)]">
-          <Coins className="h-6 w-6 text-[var(--pane-gold)]" />
-        </span>
+        {/* Сама монета NMNH, крупно: баланс - это их количество. */}
+        <CoinIcon size={54} className="drop-shadow-[0_6px_16px_rgba(0,0,0,0.45)]" />
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--pane-muted)]">
             {t.shop.balance}

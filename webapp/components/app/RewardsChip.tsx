@@ -12,7 +12,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Coins, Gift, Loader2, X } from "lucide-react";
+import { Gift, Loader2, X } from "lucide-react";
+import CoinIcon, { coinSrc } from "@/components/app/CoinIcon";
+import { readTerminalTheme } from "@/lib/terminalTheme";
 import { api, type CoinTx } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { useIntlLocale, useT } from "@/lib/i18n";
@@ -79,7 +81,7 @@ export default function RewardsChip({ coins, pending, pendingTotal, pendingCount
         title={title}
         className="coin-chip relative hidden items-center gap-1.5 rounded-xl border px-3 py-1.5 sm:flex"
       >
-        <Coins className="h-3.5 w-3.5" />
+        <CoinIcon size={15} />
         <span className="font-mono text-sm font-bold tabular">{shown.toLocaleString(numbers)}</span>
         <span className="text-[9px] font-bold opacity-60">NMNH</span>
         {waiting && <Badge count={pendingCount} />}
@@ -181,6 +183,8 @@ function RewardsPanel({
       onClose();
       play("claim");
       await flyCoins(from, result.claimed, {
+        // Летят настоящие монеты NMNH - той чеканки, что под текущую тему.
+        src: coinSrc(readTerminalTheme()),
         // Число бежит вверх, когда первая монета коснулась счётчика.
         onFirstLand: () => announce({ balance: result.balance }),
       });
@@ -254,7 +258,7 @@ function RewardsPanel({
                 className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold text-black transition-[transform,opacity] duration-150 ease-out active:scale-[0.97] disabled:opacity-60"
                 style={{ background: "var(--pane-gold)" }}
               >
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Coins className="h-3.5 w-3.5" />}
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CoinIcon size={15} />}
                 {busy ? t.rewards.claiming : `${t.rewards.claimAll} · +${total.toLocaleString(numbers)}`}
               </button>
               {error && <p className="text-[11px] text-[var(--pane-down)]">{error}</p>}

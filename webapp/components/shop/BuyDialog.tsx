@@ -7,7 +7,8 @@
 // и в админке, и отдельные поля ради этого заводить незачем.
 
 import { useEffect, useState } from "react";
-import { Coins, Loader2, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
+import CoinIcon from "@/components/app/CoinIcon";
 import type { ShopItem } from "@/lib/api";
 import { useIntlLocale, useT } from "@/lib/i18n";
 import { parseOptions } from "@/lib/shopOptions";
@@ -161,7 +162,7 @@ export default function BuyDialog({
             className="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-bold text-black transition-[transform,opacity] duration-150 ease-out active:scale-[0.97] disabled:opacity-50"
             style={{ background: "var(--pane-gold)" }}
           >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Coins className="h-3.5 w-3.5" />}
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CoinIcon size={15} />}
             {busy ? t.shop.buying : t.shop.buy}
           </button>
         </footer>

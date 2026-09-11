@@ -17,6 +17,7 @@ import { CHIP, CHIP_OFF, CHIP_ON, PaneHead, PaneScope } from "@/components/app/P
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
 import CertificatesPanel from "@/components/cert/CertificatesPanel";
+import CoinIcon from "@/components/app/CoinIcon";
 import { X, Trophy, Flame, Target, Star, CheckCircle2, Lock, Zap, TrendingUp, Gift, Calendar, ArrowRight, BarChart2, ArrowDownCircle, Coins, CalendarDays, Wallet, Sparkles, Share2 } from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
@@ -1159,7 +1160,7 @@ export default function AnalyticsPage() {
                     </div>
                     {coinsBalance !== null && (
                       <div className="flex items-center gap-1.5 rounded-full border border-[var(--pane-gold-soft)] bg-[var(--pane-gold)]/10 px-2.5 py-1">
-                        <Coins className="h-3.5 w-3.5 text-[var(--pane-gold)]" />
+                        <CoinIcon size={15} />
                         <span className="font-mono text-sm font-extrabold text-[var(--pane-gold)]">{coinsBalance.toLocaleString(numbers)}</span>
                         <span className="text-[9px] font-bold text-[var(--pane-gold)]/50">NMNH</span>
                       </div>
@@ -1306,7 +1307,7 @@ export default function AnalyticsPage() {
                       </div>
                       <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">{t.analytics.achievements.items[ach.id].desc}</p>
                       <div className="mt-1.5 flex items-center gap-1">
-                        <Coins className="h-3 w-3 text-[var(--pane-gold)]/70" />
+                        <CoinIcon size={13} />
                         <span className="font-mono text-[10px] font-bold text-[var(--pane-gold)]/80">
                           {ach.earned ? "" : "+"}{RARITY_COINS[ach.rarity]} NMNH
                         </span>

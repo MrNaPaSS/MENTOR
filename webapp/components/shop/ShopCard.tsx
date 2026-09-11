@@ -9,7 +9,8 @@
 // подсветке цветом карточки.
 
 import { useEffect, useState } from "react";
-import { Check, Coins, ExternalLink, Lock } from "lucide-react";
+import { Check, ExternalLink, Lock } from "lucide-react";
+import CoinIcon from "@/components/app/CoinIcon";
 import type { Entitlement, ShopItem } from "@/lib/api";
 import { useIntlLocale, useT } from "@/lib/i18n";
 import { cardImage } from "@/lib/tvImage";
@@ -210,7 +211,7 @@ export default function ShopCard({
   } else {
     action = (
       <button type="button" onClick={() => onBuy(item)} className={`${BTN} text-black`} style={{ background: "var(--pane-gold)" }}>
-        <Coins className="h-3 w-3" />
+        <CoinIcon size={13} />
         {access ? ((item.charges ?? 0) > 0 ? t.shop.buyMore : t.shop.extend) : t.shop.buy}
       </button>
     );
@@ -236,7 +237,7 @@ export default function ShopCard({
       ) : (
         item.price > 0 && (
           <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 font-mono text-[11px] font-bold tabular-nums text-[var(--pane-gold)] backdrop-blur-sm">
-            <Coins className="h-3 w-3" />
+            <CoinIcon size={13} />
             {item.price.toLocaleString(numbers)}
           </span>
         )

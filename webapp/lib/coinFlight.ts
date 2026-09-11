@@ -22,7 +22,19 @@ const EASE_IN_OUT = "cubic-bezier(0.77, 0, 0.175, 1)";
 const FLIGHT_MS = 720;
 /** Разбег между монетами: вместе они читаются горстью, а не одним пятном. */
 const STAGGER_MS = 45;
-const COIN_PX = 14;
+const COIN_PX = 18;
+
+/** Монета картинкой: та же, что в счётчике, чтобы в него летело то, что в нём лежит. */
+function imageCoin(src: string): string {
+  return [
+    `width:${COIN_PX}px`,
+    `height:${COIN_PX}px`,
+    "border-radius:9999px",
+    `background:url("${src}") center / contain no-repeat`,
+    "filter:drop-shadow(0 0 6px rgb(var(--coin) / 0.6))",
+    "will-change:transform,opacity",
+  ].join(";");
+}
 
 const COIN_STYLE = [
   `width:${COIN_PX}px`,
@@ -62,6 +74,8 @@ export function coinsFor(amount: number): number {
 type FlightOptions = {
   /** Первая монета долетела - пора крутить счётчик. */
   onFirstLand?: () => void;
+  /** Картинка монеты. Нет - рисуем золотой кружок. */
+  src?: string;
 };
 
 /**
@@ -73,7 +87,7 @@ type FlightOptions = {
 export async function flyCoins(
   from: DOMRect,
   amount: number,
-  { onFirstLand }: FlightOptions = {},
+  { onFirstLand, src }: FlightOptions = {},
 ): Promise<void> {
   const target = coinTarget();
   const canAnimate = typeof document !== "undefined" && typeof document.body.animate === "function";
@@ -109,7 +123,7 @@ export async function flyCoins(
     const outer = document.createElement("div");
     outer.style.cssText = "position:absolute;left:0;top:0;will-change:transform";
     const coin = document.createElement("div");
-    coin.style.cssText = COIN_STYLE;
+    coin.style.cssText = src ? imageCoin(src) : COIN_STYLE;
     outer.appendChild(coin);
     layer.appendChild(outer);
 
