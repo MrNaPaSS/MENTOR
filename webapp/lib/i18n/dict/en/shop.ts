@@ -4,6 +4,7 @@ export const shop = {
 
   cats: {
     all: "All",
+    tools: "Tools",
     features: "Features",
     frames: "Style",
     merch: "Merch",

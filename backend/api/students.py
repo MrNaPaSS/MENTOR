@@ -29,6 +29,7 @@ def _to_out(s: Student) -> StudentOut:
         is_active=s.is_active, is_approved=s.is_approved,
         copy_allowed=bool(s.copy_allowed),
         journal_delete_allowed=bool(s.journal_delete_allowed),
+        is_vip=bool(s.is_vip),
         coins=s.coins or 0,
         created_via=s.created_via or "bot",
         created_at=_iso(s.created_at),
@@ -45,6 +46,8 @@ class StudentPatch(BaseModel):
     is_approved: Optional[bool] = None
     copy_allowed: Optional[bool] = None
     journal_delete_allowed: Optional[bool] = None
+    # VIP - все инструменты терминала без покупки.
+    is_vip: Optional[bool] = None
 
 
 @router.get("", response_model=list[StudentOut])

@@ -15,6 +15,7 @@ from core.models import Student
 
 from backend.api.chat import MENTOR_NAME
 from backend.mentor import is_mentor
+from backend import tools
 from backend.security import decode_token, TokenError
 from backend.price_collector import active_symbols
 from backend.scalping.ladder import DEFAULT_ROWS, MAX_ROWS
@@ -126,7 +127,7 @@ async def ws_chat(websocket: WebSocket, token: str = Query(default="")):
 
 
 @router.websocket("/ws/scalping")
-async def ws_scalping(websocket: WebSocket):
+async def ws_scalping(websocket: WebSocket, token: str = Query(default="")):
     """Скринер и стакан. Клиент сам говорит, какой инструмент открыт.
 
     Команды приходят JSON-сообщениями:
@@ -149,7 +150,10 @@ async def ws_scalping(websocket: WebSocket):
         await websocket.send_json({"event": "hello", "payload": {"sorts": sorted(SORT_KEYS)}})
         while True:
             message = await websocket.receive_json()
-            await _handle_scalping_command(hub, websocket, message)
+            # Права перечитываются на каждую команду: их немного, а покупку в
+            # маркете терминал должен увидеть без переподключения.
+            rights = tools.rights_from_token(token, websocket.app.state.config.jwt_secret)
+            await _handle_scalping_command(hub, websocket, message, rights)
     except WebSocketDisconnect:
         pass
     except Exception:  # noqa: BLE001 — битый JSON или закрытое соединение
@@ -158,8 +162,15 @@ async def ws_scalping(websocket: WebSocket):
         await hub.disconnect(websocket)
 
 
-async def _handle_scalping_command(hub, websocket, message) -> None:
-    """Применить одну команду клиента. Мусор молча игнорируем."""
+async def _handle_scalping_command(
+    hub, websocket, message, rights: frozenset[str] = frozenset()
+) -> None:
+    """Применить одну команду клиента. Мусор молча игнорируем.
+
+    Платное урезается по правам: глубже тридцати строк, шаг ×25 и разбор свечи
+    - инструменты маркета. Без покупки сервер отдаёт бесплатный уровень, как
+    бы его ни попросили.
+    """
     if not isinstance(message, dict):
         return
     action = message.get("action")
@@ -168,8 +179,8 @@ async def _handle_scalping_command(hub, websocket, message) -> None:
         await hub.set_symbol(
             websocket,
             symbol if isinstance(symbol, str) and symbol else None,
-            rows=_clamp(message.get("rows"), DEFAULT_ROWS, 4, MAX_ROWS),
-            agg=_clamp(message.get("agg"), 1, 1, 100),
+            rows=tools.limit_rows(_clamp(message.get("rows"), DEFAULT_ROWS, 4, MAX_ROWS), rights),
+            agg=tools.limit_agg(_clamp(message.get("agg"), 1, 1, 100), rights),
             shelf=_clamp_float(
                 message.get("shelf"), SHELF_MIN_NOTIONAL, SHELF_MIN_LIMIT, SHELF_MAX_LIMIT
             ),
@@ -178,7 +189,8 @@ async def _handle_scalping_command(hub, websocket, message) -> None:
     elif action == "foot":
         # Разбор свечи открыт или закрыт. Ноль означает «закрыт»: профиль
         # тяжелее всего остального в кадре, и слать его без нужды нельзя.
-        await hub.set_foot(websocket, _clamp(message.get("time"), 0, 0, 2 ** 40))
+        at = _clamp(message.get("time"), 0, 0, 2 ** 40)
+        await hub.set_foot(websocket, at if tools.can_footprint(rights) else 0)
     elif action == "sort":
         sort = message.get("sort")
         if isinstance(sort, str) and sort in SORT_KEYS:

@@ -17,9 +17,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from core.models import iso, ScalpTrade, ScalpWorkspace, Student, utcnow
+from backend import entitlements
+from core.models import iso, JournalExport, ScalpTrade, ScalpWorkspace, Student, utcnow
 from backend.config import BackendConfig
 from backend.deps import get_config, get_current_student, get_session
 
@@ -107,6 +108,86 @@ def _row(trade: ScalpTrade) -> dict[str, Any]:
         "closed_at": _iso(trade.closed_at),
         "note": trade.note,
     }
+
+
+# Сколько выгрузок журнала в месяц даёт купленная функция. Выгрузка - это
+# отчёт с диаграммами по году сделок, и три в месяц хватает: в начале месяца,
+# в середине и на разбор после тяжёлой недели.
+EXPORTS_PER_MONTH = 3
+
+# Сколько дней истории уходит в отчёт: год, как и потолок журнала.
+EXPORT_DAYS = 365
+
+
+def _month_start(now: datetime) -> datetime:
+    """Начало календарного месяца по UTC: лимит обновляется первого числа."""
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _next_month(now: datetime) -> datetime:
+    start = _month_start(now)
+    return (start + timedelta(days=32)).replace(day=1)
+
+
+def _quota(session, student_id: int) -> dict[str, Any]:
+    now = utcnow()
+    used = session.execute(
+        select(func.count(JournalExport.id))
+        .where(JournalExport.student_id == student_id)
+        .where(JournalExport.created_at >= _month_start(now))
+    ).scalar_one()
+    return {
+        "owned": entitlements.has_feature(session, student_id, "journal_export"),
+        "limit": EXPORTS_PER_MONTH,
+        "used": int(used),
+        "left": max(0, EXPORTS_PER_MONTH - int(used)),
+        "resets_at": _iso(_next_month(now)),
+    }
+
+
+@router.get("/export")
+async def export_quota(
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Сколько выгрузок осталось в этом месяце. Для подписи у кнопки."""
+    return _quota(session, student.id)
+
+
+@router.post("/export")
+async def export_journal(
+    symbol: str | None = Query(None, max_length=32),
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Выгрузить журнал: сделки за год для отчёта - и засчитать выгрузку.
+
+    Счёт на сервере, а не в браузере: лимит, который держит сама страница,
+    обходится очисткой хранилища. Засчитывается только выгрузка, которая
+    состоялась: сделки собраны и отданы.
+    """
+    quota = _quota(session, student.id)
+    if not quota["owned"]:
+        raise HTTPException(403, "Выгрузка журнала продаётся в маркете, в разделе «Инструменты»")
+    if quota["left"] <= 0:
+        raise HTTPException(429, "Выгрузки этого месяца закончились - новые будут первого числа")
+
+    query = (
+        select(ScalpTrade)
+        .where(ScalpTrade.student_id == student.id)
+        .where(ScalpTrade.closed_at >= utcnow() - timedelta(days=EXPORT_DAYS))
+        .order_by(ScalpTrade.closed_at.desc())
+        # Потолок выше, чем у списка на экране: отчёт берут целиком, но
+        # безразмерным он быть не должен.
+        .limit(MAX_TRADES * 4)
+    )
+    if symbol:
+        query = query.where(ScalpTrade.symbol == symbol.upper())
+    trades = session.execute(query).scalars().all()
+
+    session.add(JournalExport(student_id=student.id, trades=len(trades)))
+    session.commit()
+    return {"trades": [_row(t) for t in trades], "quota": _quota(session, student.id)}
 
 
 @router.get("/trades")

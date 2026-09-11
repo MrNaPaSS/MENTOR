@@ -18,8 +18,11 @@ import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
 import { cardFromTrade } from "@/lib/pnl/data";
 import { useEntitlements } from "@/lib/entitlements";
-import { journalCsv, saveCsv } from "@/lib/journalCsv";
+import { journalReport, saveReport } from "@/lib/journalReport";
 import {
+  exportJournal,
+  exportQuota,
+  type ExportQuota,
   loadCalendar,
   loadTrades,
   canEditJournal,
@@ -194,23 +197,44 @@ export default function JournalPanel({
     setMonth(next.getUTCMonth() + 1);
   }
 
-  // Выгрузка в CSV - функция из маркета. Не куплена - на её месте замок,
-  // который ведёт туда, где её купить.
+  // Выгрузка журнала - инструмент маркета. Не куплена - на её месте замок,
+  // который ведёт в «Инструменты». Куплена - три выгрузки в месяц: счёт держит
+  // сервер, а здесь он виден рядом с кнопкой.
   const access = useEntitlements();
   const canExport = access.has("journal_export");
   const [exporting, setExporting] = useState(false);
+  const [quota, setQuota] = useState<ExportQuota | null>(null);
 
-  async function exportCsv() {
+  useEffect(() => {
+    if (!canExport) return;
+    exportQuota()
+      .then((body) => setQuota(body))
+      .catch(() => setQuota(null));
+  }, [canExport]);
+
+  const resetDay = quota
+    ? new Date(quota.resets_at).toLocaleDateString(numbers, { day: "numeric", month: "long" })
+    : "";
+  const spent = quota !== null && quota.left <= 0;
+
+  async function exportReport() {
     setExporting(true);
     try {
-      // За год, а не за те девяносто дней, что на экране: файл берут для
-      // разбора целиком. Сервер отдаёт не больше пятисот сделок за раз.
-      const list = await loadTrades(365, onlySymbol ? symbol : undefined);
-      if (!list) throw new Error();
+      // За год, а не за те девяносто дней, что на экране: отчёт берут для
+      // разбора целиком. Сделки приходят вместе с засчитанной выгрузкой.
+      const body = await exportJournal(onlySymbol ? symbol : undefined);
+      if (!body) throw new Error();
+      setQuota(body.quota);
       const stamp = new Date().toISOString().slice(0, 10);
-      saveCsv(`nmnh-journal-${stamp}.csv`, journalCsv(list.trades));
-    } catch {
-      setError(t.journal.exportFailed);
+      saveReport(
+        `nmnh-report-${stamp}.html`,
+        journalReport(body.trades, {
+          text: t.journal.report,
+          quota: { used: body.quota.used, limit: body.quota.limit },
+        }),
+      );
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : t.journal.exportFailed);
     } finally {
       setExporting(false);
     }
@@ -236,16 +260,27 @@ export default function JournalPanel({
           {access.loaded &&
             (canExport ? (
               <button
-                onClick={exportCsv}
-                disabled={exporting}
-                title={t.journal.exportCsv}
-                className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] disabled:opacity-50"
+                onClick={exportReport}
+                disabled={exporting || spent}
+                title={
+                  quota
+                    ? spent
+                      ? t.journal.exportSpent(resetDay)
+                      : `${t.journal.exportCsv}. ${t.journal.exportLeftTitle(quota.left, quota.limit, resetDay)}`
+                    : t.journal.exportCsv
+                }
+                className="flex items-center gap-1 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] disabled:opacity-50"
               >
                 <Download className="h-3.5 w-3.5" />
+                {quota && (
+                  <span className="font-mono text-[10px] tabular-nums">
+                    {t.journal.exportLeft(quota.left, quota.limit)}
+                  </span>
+                )}
               </button>
             ) : (
               <Link
-                href="/app/shop"
+                href="/app/shop?cat=tools"
                 title={t.journal.exportLocked}
                 className="flex items-center text-[var(--pane-muted)] opacity-60 transition-opacity duration-150 ease-out hover:opacity-100"
               >

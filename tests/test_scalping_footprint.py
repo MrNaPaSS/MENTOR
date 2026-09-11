@@ -151,6 +151,9 @@ def make_app(rest: StubRest) -> tuple[FastAPI, StubCollector]:
     app = FastAPI()
     app.include_router(scalping_api.router)
     app.state.scalping = collector
+    # Здесь проверяется сам профиль свечи, а не продажа инструмента: права
+    # на кластерную свечу у спрашивающего есть.
+    app.dependency_overrides[scalping_api.tool_rights] = lambda: frozenset({"tool_footprint"})
     return app, collector
 
 

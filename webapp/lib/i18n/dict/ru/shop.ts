@@ -7,6 +7,7 @@ export const shop = {
 
   cats: {
     all: "Все",
+    tools: "Инструменты",
     features: "Функции",
     frames: "Оформление",
     merch: "Мерч",

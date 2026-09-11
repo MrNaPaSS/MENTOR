@@ -83,6 +83,8 @@ class Student(Base):
     # умолчанию закрыт: нажатие «войти» ставит настоящую заявку на настоящие
     # деньги, и открывать такое всем разом нельзя.
     copy_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # VIP: все инструменты терминала без покупки. Включает наставник поимённо.
+    is_vip: Mapped[bool] = mapped_column(Boolean, default=False)
     # Право убирать записи из своего журнала. Выдаётся наставником поимённо и
     # по умолчанию закрыто: журнал - это статистика, по которой судят о
     # торговле, и возможность стереть из неё неудачную сделку обесценивает её
@@ -670,6 +672,18 @@ class Entitlement(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class JournalExport(Base):
+    """Одна выгрузка журнала. По ним считается месячный лимит - три в месяц."""
+
+    __tablename__ = "journal_exports"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    # Сколько сделок ушло в отчёт: по жалобе «выгрузка пустая» видно, что было.
+    trades: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
 class Certificate(Base):
     """Сертификат трейдера NMNH: уровень и снимок столпов на момент выдачи.
 
@@ -691,4 +705,4 @@ class Certificate(Base):
     seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "LeverageCap", "Entitlement", "Certificate", "utcnow"]
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "JournalExport", "LeverageCap", "Entitlement", "Certificate", "utcnow"]

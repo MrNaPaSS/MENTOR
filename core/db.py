@@ -60,6 +60,7 @@ def create_all() -> None:
     _apply_shop_catalog_v3(engine)
     _apply_shop_catalog_v4(engine)
     _apply_shop_catalog_v5(engine)
+    _apply_shop_catalog_v6(engine)
 
 
 def _migrate_add_columns(engine) -> None:
@@ -501,4 +502,92 @@ def _apply_shop_catalog_v5(engine) -> None:
             flag.value = "5"
         else:
             session.add(SettingRow(key="shop_catalog_version", value="5"))
+        session.commit()
+
+
+# Инструменты терминала: раздел маркета «Инструменты». Покупаются один раз,
+# навсегда, и работают сразу - без ментора. Цены выше, чем у прочих функций
+# платформы: это то, чем работают каждый день.
+# Кортеж: (title, description, price, icon, feature, sort_order)
+_SHOP_TOOLS_V6 = [
+    ("NMNH VISION",
+     "Вся разметка графика одной покупкой: тренд, структура рынка, ордер-блоки, FVG, "
+     "зоны и EMA. Полки ликвидности остаются бесплатными. Навсегда.",
+     3000, "Eye", "tool_vision", 1),
+    ("Кластерная свеча",
+     "Разбор любой свечи по уровням: сколько купили и продали на каждой цене, где "
+     "перевес и где объём встал стеной. Навсегда.",
+     2000, "ScanSearch", "tool_footprint", 2),
+    ("Объёмные свечи",
+     "Ширина свечи - её объём: крупные деньги видно сразу, без гистограммы под "
+     "графиком. Навсегда.",
+     1500, "BarChart3", "tool_volume_candles", 3),
+    ("Стакан 60 и 100 строк",
+     "Стакан глубже рабочих тридцати строк: видно плиты и полки далеко от цены, "
+     "до которых ещё не дошли. Навсегда.",
+     1200, "Rows3", "tool_dom_depth", 4),
+    ("Шаг стакана ×25",
+     "Самый крупный шаг сетки стакана: мелкие заявки складываются в уровни, и на "
+     "быстрых монетах видна настоящая стена, а не пыль. Навсегда.",
+     800, "Layers", "tool_dom_step25", 5),
+]
+
+# Выгрузка журнала переезжает в «Инструменты» и становится отчётом.
+_JOURNAL_EXPORT_V6 = (
+    "Выгрузка журнала: отчёт с диаграммами",
+    "Три выгрузки в месяц: оформленный отчёт по сделкам - кривая капитала, итог по "
+    "дням и монетам, винрейт, профит-фактор, просадка, комиссии - и таблица сделок "
+    "с кнопкой CSV для Excel. Покупается один раз, навсегда.",
+    2500,
+)
+
+
+def _apply_shop_catalog_v6(engine) -> None:
+    """Раздел «Инструменты»: функции терминала за монеты. Один раз, флагом.
+
+    Выгрузка журнала переезжает туда же - с новой ценой и описанием: теперь это
+    отчёт с диаграммами и три выгрузки в месяц. Купившие раньше её не теряют:
+    доступ записан у них, а не у товара.
+    """
+    from sqlalchemy import inspect, select, update
+    from sqlalchemy.orm import Session
+    from core.models import SettingRow, ShopItem
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names() or "settings" not in inspector.get_table_names():
+        return
+
+    with Session(engine) as session:
+        flag = session.get(SettingRow, "shop_catalog_version")
+        if flag and (flag.value or "").isdigit() and int(flag.value) >= 6:
+            return
+
+        known_features = set(
+            session.execute(select(ShopItem.feature).where(ShopItem.feature != "")).scalars().all()
+        )
+        for title, desc, price, icon, feature, order in _SHOP_TOOLS_V6:
+            if feature in known_features:
+                continue
+            session.add(ShopItem(
+                title=title, description=desc, price=price, category="tool", section="tools",
+                icon=icon, feature=feature, sort_order=order,
+            ))
+
+        title, desc, price = _JOURNAL_EXPORT_V6
+        session.execute(
+            update(ShopItem)
+            .where(ShopItem.feature == "journal_export")
+            .values(title=title, description=desc, price=price, category="tool",
+                    section="tools", sort_order=6)
+        )
+        if "journal_export" not in known_features:
+            session.add(ShopItem(
+                title=title, description=desc, price=price, category="tool", section="tools",
+                icon="LineChart", feature="journal_export", sort_order=6,
+            ))
+
+        if flag:
+            flag.value = "6"
+        else:
+            session.add(SettingRow(key="shop_catalog_version", value="6"))
         session.commit()

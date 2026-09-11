@@ -14,7 +14,9 @@ from collections import OrderedDict
 from dataclasses import asdict
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+
+from backend import tools
 
 from backend.scalping.clusters import fit_to_rows
 from backend.scalping.collector import ScalpingCollector
@@ -61,6 +63,16 @@ async def screener(
     }
 
 
+def tool_rights(
+    request: Request, authorization: str | None = Header(default=None)
+) -> frozenset[str]:
+    """Купленные инструменты того, кто спрашивает. Без токена - ничего."""
+    config = getattr(request.app.state, "config", None)
+    if config is None:
+        return frozenset()
+    return tools.rights_from_header(authorization, config.jwt_secret)
+
+
 @router.get("/dom/{symbol}")
 async def dom(
     request: Request,
@@ -74,8 +86,14 @@ async def dom(
         le=SHELF_MAX_LIMIT,
         description="Порог полки ликвидности в деньгах",
     ),
+    rights: frozenset[str] = Depends(tool_rights),
 ) -> dict[str, Any]:
-    """Лестница стакана с плитами и метриками по одному инструменту."""
+    """Лестница стакана с плитами и метриками по одному инструменту.
+
+    Глубина и шаг - по купленным инструментам: без них бесплатный уровень.
+    """
+    rows = tools.limit_rows(rows, rights)
+    agg = tools.limit_agg(agg, rights)
     collector = get_collector(request)
     sym = symbol.upper()
 
@@ -347,13 +365,18 @@ async def footprint(
     symbol: str,
     interval: str = Query("1m", pattern=r"^(1m|3m|5m|10m|15m|30m|1h)$"),
     at: int = Query(..., alias="time", ge=0, description="Начало свечи, секунды"),
+    rights: frozenset[str] = Depends(tool_rights),
 ) -> dict[str, Any]:
     """Объём внутри одной свечи: строки профиля и итоги.
+
+    Инструмент маркета «Кластерная свеча»: без покупки - отказ.
 
     Крупнее часа профиля не даём: за сутки сделок миллионы, выкачивать их ради
     картинки нечестно по отношению к лимиту биржи, а строки такой свечи всё
     равно схлопнулись бы в неразличимую кашу.
     """
+    if not tools.can_footprint(rights):
+        raise HTTPException(403, "Кластерная свеча продаётся в маркете, в разделе «Инструменты»")
     collector = get_collector(request)
     sym = symbol.upper()
     seconds = FOOTPRINT_INTERVALS[interval]

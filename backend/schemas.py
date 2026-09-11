@@ -180,6 +180,8 @@ class StudentOut(BaseModel):
     copy_allowed: bool = False
     # Может убирать записи из своего журнала. Тоже поимённо.
     journal_delete_allowed: bool = False
+    # VIP: все инструменты терминала без покупки.
+    is_vip: bool = False
     coins: int = 0
     # Откуда запись: bot | web | academy
     created_via: str = "bot"

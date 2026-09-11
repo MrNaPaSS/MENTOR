@@ -71,6 +71,31 @@ export function loadTrades(days = 90, symbol?: string) {
   );
 }
 
+/** Сколько выгрузок журнала осталось в этом месяце. */
+export type ExportQuota = {
+  owned: boolean;
+  limit: number;
+  used: number;
+  left: number;
+  /** Когда появятся новые: первое число следующего месяца. */
+  resets_at: string;
+};
+
+export function exportQuota() {
+  return request<ExportQuota>("/api/journal/export");
+}
+
+/**
+ * Выгрузить журнал: сделки за год для отчёта. Засчитывается сервером - три
+ * выгрузки в месяц.
+ */
+export function exportJournal(symbol?: string) {
+  const query = symbol ? `?symbol=${encodeURIComponent(symbol)}` : "";
+  return request<{ trades: JournalTrade[]; quota: ExportQuota }>(`/api/journal/export${query}`, {
+    method: "POST",
+  });
+}
+
 /**
  * Сделки одного календарного дня.
  *

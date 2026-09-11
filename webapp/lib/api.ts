@@ -439,6 +439,8 @@ export interface StudentOut {
   copy_allowed: boolean;
   /** Может убирать записи из своего журнала. Тоже поимённо. */
   journal_delete_allowed: boolean;
+  /** VIP: все инструменты терминала без покупки. Включает наставник. */
+  is_vip: boolean;
   coins: number;
   /** Откуда запись: bot | web | academy. */
   created_via: string;

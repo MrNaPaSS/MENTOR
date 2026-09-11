@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_URL } from "./api";
+import { getAccessToken } from "./auth";
 
 export type ScreenerRow = {
   symbol: string;
@@ -135,7 +136,12 @@ const RECONNECT_MAX = 10_000;
 
 function wsUrl(): string {
   const base = API_URL.replace(/^http/, "ws");
-  return `${base}/ws/scalping`;
+  // Токен - чтобы сервер знал купленные инструменты: глубину стакана, шаг ×25
+  // и разбор свечи он отдаёт только по ним. Без токена - бесплатный уровень.
+  // Берётся при каждом подключении: переподключение после обновления токена
+  // уходит уже со свежим.
+  const token = getAccessToken();
+  return `${base}/ws/scalping${token ? `?token=${encodeURIComponent(token)}` : ""}`;
 }
 
 type Options = {

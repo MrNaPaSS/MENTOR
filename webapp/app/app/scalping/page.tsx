@@ -13,10 +13,11 @@
 
 import { useT } from "@/lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   BookText,
   CandlestickChart,
+  Lock,
   ChevronLeft,
   ChevronRight,
   Maximize2,
@@ -64,6 +65,15 @@ import {
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
 import { hasFootprint } from "@/lib/indicator/footprint";
+import {
+  allowedAgg,
+  allowedRows,
+  FREE_MAX_AGG,
+  FREE_ROWS,
+  TOOLS_SHOP,
+  useTools,
+  VISION_LAYERS,
+} from "@/lib/tools";
 import { play } from "@/lib/sound";
 import { asText as logText, clear as clearLog, record } from "@/lib/log";
 import { setSoundOn, useSoundOn } from "@/lib/notifySound";
@@ -728,14 +738,30 @@ export default function ScalpingPage() {
   // крестиком в углу карточки.
   const [footOpen, setFootOpen] = useState(false);
   const footAvailable = hasFootprint(timeframe);
+
+  // Инструменты маркета. Сохранённые настройки не трогаем: выбранные когда-то
+  // сто строк или шаг ×25 вернутся сами, как только инструмент куплен. А пока
+  // он не куплен, на экран и на сервер идёт разрешённое - бесплатный уровень.
+  const tools = useTools();
+  const router = useRouter();
+  const openTools = useCallback(() => router.push(TOOLS_SHOP), [router]);
+  const shownRows = allowedRows(rows, tools.depth);
+  const shownAgg = allowedAgg(agg, tools.step25);
+  const shownIndicators = useMemo<Indicators>(() => {
+    const out = { ...indicators };
+    if (!tools.vision) for (const key of VISION_LAYERS) out[key] = false;
+    if (!tools.volumeCandles) out.heavy = false;
+    return out;
+  }, [indicators, tools.vision, tools.volumeCandles]);
+
   const { screener, dom, connected } = useScalpingFeed({
     symbol,
-    rows,
-    agg,
+    rows: shownRows,
+    agg: shownAgg,
     sort,
     shelf,
     interval: timeframe,
-    foot: footBar,
+    foot: tools.footprint ? footBar : 0,
   });
 
   // Цена для графика — три раза в секунду вместо восьми. Ярлык позиции и итог
@@ -3191,16 +3217,26 @@ export default function ScalpingPage() {
                     наведении. Рядом с множителем стоит получившийся шаг в
                     деньгах - по нему и ориентируются, а не по кратности. */}
                 <div className="flex min-w-0 flex-wrap items-center justify-end gap-0.5">
-                  {STEPS.map((step) => (
-                    <button
-                      key={step.agg}
-                      onClick={() => setAgg(step.agg)}
-                      title={t.terminal.aggTitle(step.agg)}
-                      className={`${CHIP} ${agg === step.agg ? CHIP_ON : CHIP_OFF}`}
-                    >
-                      {step.label}
-                    </button>
-                  ))}
+                  {STEPS.map((step) => {
+                    const locked = step.agg > FREE_MAX_AGG && !tools.step25;
+                    return (
+                      <button
+                        key={step.agg}
+                        onClick={() => (locked ? openTools() : setAgg(step.agg))}
+                        title={
+                          locked
+                            ? t.terminal.toolLocked(t.terminal.toolNames.step25)
+                            : t.terminal.aggTitle(step.agg)
+                        }
+                        className={`${CHIP} ${shownAgg === step.agg ? CHIP_ON : CHIP_OFF} ${
+                          locked ? "opacity-60" : ""
+                        }`}
+                      >
+                        {step.label}
+                        {locked && <Lock className="ml-0.5 inline h-2.5 w-2.5" />}
+                      </button>
+                    );
+                  })}
                   {dom && dom.tick > 0 && domW >= DOM_TICK_W && (
                     <span
                       className="ml-1 max-w-[7rem] truncate font-mono text-[10px] text-[var(--pane-text-2)]"
@@ -3211,16 +3247,26 @@ export default function ScalpingPage() {
                   )}
 
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
-                  {DEPTHS.map((depth) => (
-                    <button
-                      key={depth}
-                      onClick={() => setRows(depth)}
-                      title={t.terminal.depthTitle(depth)}
-                      className={`${CHIP} ${rows === depth ? CHIP_ON : CHIP_OFF}`}
-                    >
-                      {depth}
-                    </button>
-                  ))}
+                  {DEPTHS.map((depth) => {
+                    const locked = depth > FREE_ROWS && !tools.depth;
+                    return (
+                      <button
+                        key={depth}
+                        onClick={() => (locked ? openTools() : setRows(depth))}
+                        title={
+                          locked
+                            ? t.terminal.toolLocked(t.terminal.toolNames.depth)
+                            : t.terminal.depthTitle(depth)
+                        }
+                        className={`${CHIP} ${shownRows === depth ? CHIP_ON : CHIP_OFF} ${
+                          locked ? "opacity-60" : ""
+                        }`}
+                      >
+                        {depth}
+                        {locked && <Lock className="ml-0.5 inline h-2.5 w-2.5" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -3268,11 +3314,20 @@ export default function ScalpingPage() {
                       отвечает на «как смотреть», а не «что нарисовать поверх». */}
                   <span className="mx-1 h-3 w-px bg-[var(--pane-border)]" />
                   <button
-                    onClick={() => toggle("heavy")}
-                    title={t.terminal.volumeCandles}
-                    className={`${CHIP} ${indicators.heavy ? CHIP_ON : CHIP_OFF}`}
+                    onClick={() => (tools.volumeCandles ? toggle("heavy") : openTools())}
+                    title={
+                      tools.volumeCandles
+                        ? t.terminal.volumeCandles
+                        : t.terminal.toolLocked(t.terminal.toolNames.volumeCandles)
+                    }
+                    className={`${CHIP} ${shownIndicators.heavy ? CHIP_ON : CHIP_OFF} ${
+                      tools.volumeCandles ? "" : "opacity-60"
+                    }`}
                   >
+                    <span className="inline-flex items-center">
                     <CandlestickChart className="h-3.5 w-3.5" />
+                    {!tools.volumeCandles && <Lock className="ml-0.5 inline h-2.5 w-2.5" />}
+                    </span>
                   </button>
 
                   {/* Свеча с лупой: раскрыть текущую свечу её внутренним
@@ -3284,18 +3339,23 @@ export default function ScalpingPage() {
                       надо было заранее: ни кнопки, ни подписи у того движения
                       нет. */}
                   <button
-                    onClick={() => setFootOpen((open) => !open)}
-                    disabled={!footAvailable}
+                    onClick={() => (tools.footprint ? setFootOpen((open) => !open) : openTools())}
+                    disabled={tools.footprint && !footAvailable}
                     title={
-                      footAvailable
-                        ? t.terminal.candleVolume
-                        : t.terminal.candleVolumeOff
+                      !tools.footprint
+                        ? t.terminal.toolLocked(t.terminal.toolNames.footprint)
+                        : footAvailable
+                          ? t.terminal.candleVolume
+                          : t.terminal.candleVolumeOff
                     }
-                    className={`${CHIP} ${footOpen ? CHIP_ON : CHIP_OFF} ${
-                      footAvailable ? "" : "cursor-not-allowed opacity-40"
+                    className={`${CHIP} ${footOpen && tools.footprint ? CHIP_ON : CHIP_OFF} ${
+                      !tools.footprint ? "opacity-60" : footAvailable ? "" : "cursor-not-allowed opacity-40"
                     }`}
                   >
+                    <span className="inline-flex items-center">
                     <CandleLensIcon className="h-3.5 w-3.5" />
+                    {!tools.footprint && <Lock className="ml-0.5 inline h-2.5 w-2.5" />}
+                    </span>
                   </button>
                 </div>
 
@@ -3324,15 +3384,24 @@ export default function ScalpingPage() {
                   </button>
 
                   {layersOpen &&
-                    LAYER_ORDER.map((key) => (
-                    <button
-                      key={key}
-                      onClick={() => toggle(key)}
-                      className={`${CHIP} ${indicators[key] ? CHIP_ON : CHIP_OFF}`}
-                    >
-                      {UNTRANSLATED_LAYERS[key] ?? (layerLabels as Record<string, string>)[key]}
-                    </button>
-                  ))}
+                    LAYER_ORDER.map((key) => {
+                      // Разметка, кроме полок и объёма, - NMNH VISION.
+                      const locked =
+                        !tools.vision && (VISION_LAYERS as readonly string[]).includes(key);
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => (locked ? openTools() : toggle(key))}
+                          title={locked ? t.terminal.toolLocked(t.terminal.toolNames.vision) : undefined}
+                          className={`${CHIP} ${shownIndicators[key] ? CHIP_ON : CHIP_OFF} ${
+                            locked ? "opacity-60" : ""
+                          }`}
+                        >
+                          {UNTRANSLATED_LAYERS[key] ?? (layerLabels as Record<string, string>)[key]}
+                          {locked && <Lock className="ml-0.5 inline h-2.5 w-2.5" />}
+                        </button>
+                      );
+                    })}
                   {/* Порог полок стоит рядом с их переключателем: цифра без
                       контекста непонятна, а так видно, к чему она. */}
                   {layersOpen && indicators.shelves && (
@@ -3686,7 +3755,7 @@ export default function ScalpingPage() {
                   shelves={dom?.shelves ?? []}
                   paper={paper}
                   preset={palette}
-                  indicators={indicators}
+                  indicators={shownIndicators}
                   trades={mine}
                   preview={preview}
                   movingStops={movingStops}
@@ -3699,9 +3768,9 @@ export default function ScalpingPage() {
                   // это не трогает - ушли на часовик и вернулись, разбор
                   // снова на месте. Гасит его только сам трейдер: кнопкой или
                   // крестиком, как и объёмные свечи.
-                  footOpen={footOpen && footAvailable}
+                  footOpen={footOpen && footAvailable && tools.footprint}
                   onFootOpenChange={(open) => {
-                    if (footAvailable) setFootOpen(open);
+                    if (footAvailable && tools.footprint) setFootOpen(open);
                   }}
                   onCloseTrade={(t) => {
                     setClosing(t);
@@ -3717,7 +3786,7 @@ export default function ScalpingPage() {
                   shot={shotRef}
                   // Шаг сетки лестницы делим на укрупнение: биржевой шаг от
                   // него не зависит, а точность шкалы должна быть по бирже.
-                  tick={dom && dom.tick > 0 ? dom.tick / Math.max(1, agg) : undefined}
+                  tick={dom && dom.tick > 0 ? dom.tick / Math.max(1, shownAgg) : undefined}
                   alerts={myAlerts}
                   onRemoveAlert={(id) => setAlerts((list) => list.filter((a) => a.id !== id))}
                   onShelfClick={openTrade}

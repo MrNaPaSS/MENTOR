@@ -35,6 +35,23 @@ export default function AdminStudents() {
    * Поимённо и по умолчанию закрыт: нажатие «войти» под чужой заявкой ставит
    * настоящую заявку на настоящие деньги, и открывать такое всем разом нельзя.
    */
+  /**
+   * VIP или обычный.
+   *
+   * VIP получает все инструменты терминала без покупки: разметку NMNH VISION,
+   * объёмные и кластерные свечи, стакан глубже тридцати строк, шаг ×25 и
+   * выгрузку журнала. Обычный покупает их в маркете. Снятая отметка оставляет
+   * ученику только то, что он купил сам.
+   */
+  async function toggleVip(s: StudentOut) {
+    setBusy(s.id);
+    try {
+      replace(await api.studentPatch(token, s.id, { is_vip: !s.is_vip }));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function toggleCopy(s: StudentOut) {
     setBusy(s.id);
     try {
@@ -150,7 +167,7 @@ export default function AdminStudents() {
         ) : students.length === 0 ? (
           <p className="text-center text-text-muted">Учеников пока нет.</p>
         ) : (
-          <table className="w-full min-w-[680px] text-left text-sm">
+          <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="text-xs uppercase tracking-wider text-text-muted">
               <tr>
                 <th className="py-2">Ник</th>
@@ -160,6 +177,7 @@ export default function AdminStudents() {
                 <th className="text-center">Входов</th>
                 <th>Источник</th>
                 <th className="text-center">Активен</th>
+                <th className="text-center">Статус</th>
                 <th className="text-center">Копи</th>
                 <th className="text-center">Журнал</th>
                 <th className="text-right">Действия</th>
@@ -190,6 +208,20 @@ export default function AdminStudents() {
                       className={`badge-${s.is_active ? "success" : "muted"}`}
                     >
                       {s.is_active ? "вкл" : "выкл"}
+                    </button>
+                  </td>
+                  <td className="text-center">
+                    <button
+                      onClick={() => toggleVip(s)}
+                      disabled={busy === s.id}
+                      title={
+                        s.is_vip
+                          ? "VIP: все инструменты терминала открыты без покупки"
+                          : "Обычный: инструменты покупает в маркете"
+                      }
+                      className={`badge-${s.is_vip ? "success" : "muted"}`}
+                    >
+                      {s.is_vip ? "VIP" : "обычный"}
                     </button>
                   </td>
                   <td className="text-center">

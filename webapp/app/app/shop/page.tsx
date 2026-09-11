@@ -13,7 +13,7 @@
 // справка, её читают один раз.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Cpu, Crown, LayoutGrid, Search, Shirt, X, Zap, type LucideIcon } from "lucide-react";
+import { Cpu, Crown, LayoutGrid, Search, Shirt, Wrench, X, Zap, type LucideIcon } from "lucide-react";
 import { api, API_URL, type CoinTx, type Profile, type ShopItem, type ShopOrder } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
@@ -31,12 +31,13 @@ import CommunityBanner from "@/components/shop/CommunityBanner";
 import SoftPanel from "@/components/shop/SoftPanel";
 import BrandStrip from "@/components/app/BrandStrip";
 
-type Cat = "all" | "features" | "frames" | "merch" | "software";
+type Cat = "all" | "tools" | "features" | "frames" | "merch" | "software";
 type Sort = "catalog" | "cheap" | "expensive";
 type Group = Exclude<Cat, "all">;
 
 const CATS: { id: Cat; icon: LucideIcon }[] = [
   { id: "all", icon: LayoutGrid },
+  { id: "tools", icon: Wrench },
   { id: "features", icon: Zap },
   { id: "frames", icon: Crown },
   { id: "merch", icon: Shirt },
@@ -48,7 +49,7 @@ const CATS: { id: Cat; icon: LucideIcon }[] = [
  * - в самом низу: это оформление, а не инструмент, и пять карточек с
  * аватарами отодвигали мерч и софт за сгиб экрана.
  */
-const ORDER: Record<Group, number> = { features: 0, merch: 1, software: 2, frames: 3 };
+const ORDER: Record<Group, number> = { tools: 0, features: 1, merch: 2, software: 3, frames: 4 };
 
 /**
  * Группа товара в маркете. null - товар в маркете не показывается.
@@ -61,6 +62,9 @@ function catOf(item: ShopItem): Group | null {
   // Подписки на индикаторы TradingView - доступ к чужой площадке, а не наш
   // терминал: их место в «Нашем софте», рядом с остальными ссылками.
   if (item.section === "software" || item.category === "indicator") return "software";
+  // Инструменты терминала - своим разделом и первыми: ими работают каждый
+  // день, а не украшают профиль.
+  if (item.section === "tools" || item.category === "tool") return "tools";
   if (item.category === "merch") return "merch";
   if (frameOfFeature(item.feature)) return "frames";
   if (item.feature) return "features";
@@ -101,6 +105,13 @@ export default function ShopPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [cat, setCat] = useState<Cat>("all");
+  // Раздел можно открыть ссылкой: кнопка с замком в терминале ведёт прямо в
+  // «Инструменты», а не на общую витрину. Адрес читаем после монтирования -
+  // страница собирается статикой, и на сборке адреса нет.
+  useEffect(() => {
+    const asked = new URLSearchParams(window.location.search).get("cat");
+    if (CATS.some((one) => one.id === asked)) setCat(asked as Cat);
+  }, []);
   const [buying, setBuying] = useState<ShopItem | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -146,7 +157,9 @@ export default function ShopPage() {
   const shown = useMemo(() => items.filter((item) => catOf(item) !== null), [items]);
 
   const counts = useMemo(() => {
-    const out: Record<Cat, number> = { all: shown.length, features: 0, frames: 0, merch: 0, software: 0 };
+    const out: Record<Cat, number> = {
+      all: shown.length, tools: 0, features: 0, frames: 0, merch: 0, software: 0,
+    };
     for (const item of shown) out[groupOf(item)] += 1;
     return out;
   }, [shown]);

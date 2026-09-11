@@ -218,14 +218,14 @@ def _feature_item(title: str) -> int:
 
 def test_функции_есть_в_каталоге(client):
     titles = {it["title"]: it for it in client.get("/api/shop/items").json()}
-    assert titles["Выгрузка журнала в CSV"]["feature"] == "journal_export"
+    assert titles["Выгрузка журнала: отчёт с диаграммами"]["feature"] == "journal_export"
     assert titles["Заморозка серии"]["charges"] == 1
     assert titles["Удвоение бонуса за серию - 7 дней"]["duration_days"] == 7
 
 
 def test_функция_выдаётся_сразу(client):
-    auth = _rich_student(client, "700001", 1000)
-    item_id = _feature_item("Выгрузка журнала в CSV")
+    auth = _rich_student(client, "700001", 3000)
+    item_id = _feature_item("Выгрузка журнала: отчёт с диаграммами")
 
     order = client.post("/api/shop/orders", json={"item_id": item_id}, headers=auth)
     assert order.status_code == 200
@@ -233,17 +233,17 @@ def test_функция_выдаётся_сразу(client):
 
     owned = client.get("/api/shop/entitlements", headers=auth).json()
     assert [(e["feature"], e["permanent"]) for e in owned] == [("journal_export", True)]
-    assert client.get("/api/coins", headers=auth).json()["balance"] == 800
+    assert client.get("/api/coins", headers=auth).json()["balance"] == 500
 
 
 def test_навсегда_купленное_второй_раз_не_продаётся(client):
-    auth = _rich_student(client, "700002", 1000)
-    item_id = _feature_item("Выгрузка журнала в CSV")
+    auth = _rich_student(client, "700002", 3000)
+    item_id = _feature_item("Выгрузка журнала: отчёт с диаграммами")
 
     client.post("/api/shop/orders", json={"item_id": item_id}, headers=auth)
     again = client.post("/api/shop/orders", json={"item_id": item_id}, headers=auth)
     assert again.status_code == 400
-    assert client.get("/api/coins", headers=auth).json()["balance"] == 800
+    assert client.get("/api/coins", headers=auth).json()["balance"] == 500
 
 
 def _frame_of(uid: str) -> str | None:
@@ -319,3 +319,143 @@ def test_ручной_товар_по_прежнему_ждёт_ментора(c
     order = client.post("/api/shop/orders", json={"item_id": item_id, "contact": "@me"}, headers=auth)
     assert order.json()["status"] == "pending"
     assert client.get("/api/shop/entitlements", headers=auth).json() == []
+
+
+# ── Инструменты терминала ────────────────────────────────────────────────────
+
+
+TOOLS = {
+    "NMNH VISION": "tool_vision",
+    "Кластерная свеча": "tool_footprint",
+    "Объёмные свечи": "tool_volume_candles",
+    "Стакан 60 и 100 строк": "tool_dom_depth",
+    "Шаг стакана ×25": "tool_dom_step25",
+    "Выгрузка журнала: отчёт с диаграммами": "journal_export",
+}
+
+
+def test_инструменты_отдельным_разделом(client):
+    """Все шесть - в разделе «Инструменты», продаются навсегда."""
+    items = {it["title"]: it for it in client.get("/api/shop/items").json()}
+    for title, feature in TOOLS.items():
+        assert items[title]["feature"] == feature
+        assert items[title]["section"] == "tools"
+        assert items[title]["duration_days"] == 0 and items[title]["charges"] == 0
+    # Выгрузка подорожала вместе с тем, что она теперь даёт.
+    assert items["Выгрузка журнала: отчёт с диаграммами"]["price"] > 200
+
+
+def test_инструмент_открывается_сразу(client):
+    auth = _rich_student(client, "700050", 5000)
+    order = client.post(
+        "/api/shop/orders", json={"item_id": _feature_item("NMNH VISION")}, headers=auth
+    )
+    assert order.json()["status"] == "fulfilled"
+    owned = [e["feature"] for e in client.get("/api/shop/entitlements", headers=auth).json()]
+    assert owned == ["tool_vision"]
+
+
+# ── Выгрузка журнала: три в месяц ────────────────────────────────────────────
+
+
+def test_без_покупки_выгрузки_нет(client):
+    auth = _rich_student(client, "700060", 0)
+    assert client.get("/api/journal/export", headers=auth).json()["owned"] is False
+    assert client.post("/api/journal/export", headers=auth).status_code == 403
+
+
+def test_три_выгрузки_в_месяц(client):
+    auth = _rich_student(client, "700061", 3000)
+    client.post("/api/shop/orders", json={"item_id": _feature_item("Выгрузка журнала: отчёт с диаграммами")}, headers=auth)
+
+    quota = client.get("/api/journal/export", headers=auth).json()
+    assert (quota["owned"], quota["limit"], quota["left"]) == (True, 3, 3)
+
+    for left in (2, 1, 0):
+        answer = client.post("/api/journal/export", headers=auth)
+        assert answer.status_code == 200
+        assert "trades" in answer.json()
+        assert answer.json()["quota"]["left"] == left
+
+    # Четвёртая - отказ, и счёт не уходит в минус.
+    assert client.post("/api/journal/export", headers=auth).status_code == 429
+    assert client.get("/api/journal/export", headers=auth).json()["left"] == 0
+
+
+def test_выгрузки_прошлого_месяца_не_в_счёт(client):
+    from core.db import SessionLocal
+    from core.models import JournalExport
+
+    auth = _rich_student(client, "700062", 3000)
+    client.post("/api/shop/orders", json={"item_id": _feature_item("Выгрузка журнала: отчёт с диаграммами")}, headers=auth)
+    with SessionLocal() as s:
+        student = s.query(Student).filter_by(weex_uid="700062").one()
+        for _ in range(3):
+            s.add(JournalExport(student_id=student.id, created_at=utcnow() - timedelta(days=40)))
+        s.commit()
+
+    assert client.get("/api/journal/export", headers=auth).json()["left"] == 3
+
+
+# ── VIP ──────────────────────────────────────────────────────────────────────
+
+
+def _make_vip(uid: str, on: bool = True) -> None:
+    from core.db import SessionLocal
+
+    with SessionLocal() as s:
+        s.query(Student).filter_by(weex_uid=uid).one().is_vip = on
+        s.commit()
+
+
+def test_vip_открывает_все_инструменты_без_покупки(client):
+    auth = _rich_student(client, "700070", 0)
+    _make_vip("700070")
+    owned = {e["feature"] for e in client.get("/api/shop/entitlements", headers=auth).json()}
+    assert set(TOOLS.values()) <= owned
+    # И выгрузка журнала работает, хотя монет он не тратил.
+    assert client.post("/api/journal/export", headers=auth).status_code == 200
+
+
+def test_vip_не_платит_за_то_что_уже_открыто(client):
+    auth = _rich_student(client, "700071", 5000)
+    _make_vip("700071")
+    order = client.post(
+        "/api/shop/orders", json={"item_id": _feature_item("NMNH VISION")}, headers=auth
+    )
+    assert order.status_code == 400
+    assert client.get("/api/coins", headers=auth).json()["balance"] == 5000
+
+
+def test_снятый_vip_оставляет_только_купленное(client):
+    auth = _rich_student(client, "700072", 5000)
+    client.post("/api/shop/orders", json={"item_id": _feature_item("Объёмные свечи")}, headers=auth)
+    _make_vip("700072")
+    _make_vip("700072", on=False)
+    owned = [e["feature"] for e in client.get("/api/shop/entitlements", headers=auth).json()]
+    assert owned == ["tool_volume_candles"]
+
+
+def test_стакан_и_кластер_урезаются_без_прав():
+    from backend import tools
+
+    free = frozenset()
+    assert tools.limit_rows(100, free) == 30 and tools.limit_rows(30, free) == 30
+    assert tools.limit_agg(25, free) == 10 and tools.limit_agg(5, free) == 5
+    assert not tools.can_footprint(free)
+
+    paid = frozenset({"tool_dom_depth", "tool_dom_step25", "tool_footprint"})
+    assert tools.limit_rows(100, paid) == 100
+    assert tools.limit_agg(25, paid) == 25
+    assert tools.can_footprint(paid)
+
+
+def test_права_по_токену_учитывают_vip(client):
+    from backend import tools
+
+    auth = _rich_student(client, "700073", 0)
+    token = auth["Authorization"].split(" ", 1)[1]
+    assert tools.rights_from_token(token, "test-secret") == frozenset()
+    _make_vip("700073")
+    assert tools.rights_from_token(token, "test-secret") >= {"tool_dom_depth", "tool_footprint"}
+    assert tools.rights_from_token("мусор", "test-secret") == frozenset()

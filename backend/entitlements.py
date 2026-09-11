@@ -18,17 +18,41 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, update
 
 from backend import frames
-from core.models import Entitlement, ShopItem, utcnow
+from core.models import Entitlement, ShopItem, Student, utcnow
 
 # Функции, которые платформа умеет выдавать сама. Товар с ключом не из этого
 # списка не продаётся: списать монеты за то, чего нет, хуже, чем не продать.
+# Инструменты терминала. Раньше были бесплатны у всех; теперь - раздел маркета
+# «Инструменты». Ключи те же, что проверяет терминал (webapp/lib/tools.ts).
+TOOLS: dict[str, str] = {
+    # Разметка графика целиком, кроме полок: тренд, структура, блоки, FVG,
+    # зоны и EMA. Полки ликвидности остаются у всех - это язык терминала.
+    "tool_vision": "NMNH VISION",
+    "tool_volume_candles": "Объёмные свечи",
+    "tool_footprint": "Кластерная свеча",
+    "tool_dom_depth": "Стакан 60 и 100 строк",
+    "tool_dom_step25": "Шаг стакана ×25",
+}
+
 FEATURES: dict[str, str] = {
     "streak_freeze": "Заморозка серии",
     "streak_boost": "Удвоение бонуса за серию",
     "journal_export": "Выгрузка журнала",
+    **TOOLS,
     # Рамки аватара - по одной на ключ: купленная остаётся навсегда.
     **{frames.feature_of(key): f"Рамка «{name}»" for key, name in frames.FRAMES.items()},
 }
+
+
+# Что открывает VIP: все инструменты раздела и выгрузка журнала. Остальное -
+# заморозка серии, удвоение бонуса, рамки - покупается и у VIP: это не рабочий
+# инструмент, а награда за монеты.
+VIP_FEATURES: frozenset[str] = frozenset({*TOOLS, "journal_export"})
+
+
+def is_vip(session, student_id: int) -> bool:
+    student = session.get(Student, student_id)
+    return bool(student is not None and student.is_vip)
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -55,6 +79,8 @@ def _row(session, student_id: int, feature: str) -> Entitlement | None:
 
 
 def has_feature(session, student_id: int, feature: str) -> bool:
+    if feature in VIP_FEATURES and is_vip(session, student_id):
+        return True
     row = _row(session, student_id, feature)
     return row is not None and is_active(row)
 
@@ -64,8 +90,16 @@ def is_forever(item: ShopItem) -> bool:
 
 
 def already_owned(session, student_id: int, item: ShopItem) -> bool:
-    """Навсегда купленное второй раз не продаём: монеты ушли бы ни за что."""
-    if not item.feature or not is_forever(item):
+    """Навсегда купленное второй раз не продаём: монеты ушли бы ни за что.
+
+    VIP инструменты уже открыты - продать их ему значит взять монеты за то,
+    что у него и так есть.
+    """
+    if not item.feature:
+        return False
+    if item.feature in VIP_FEATURES and is_vip(session, student_id):
+        return True
+    if not is_forever(item):
         return False
     row = _row(session, student_id, item.feature)
     return row is not None and bool(row.permanent)
@@ -112,8 +146,21 @@ def use_charge(session, student_id: int, feature: str) -> bool:
 
 
 def active_for(session, student_id: int) -> list[Entitlement]:
+    """Действующие функции ученика. У VIP - ещё и все инструменты.
+
+    Записи VIP не сохраняются в базу: снял наставник отметку - инструменты
+    ушли вместе с ней, и чистить за ним нечего. Купленное самим учеником
+    остаётся купленным.
+    """
     rows = session.execute(
         select(Entitlement).where(Entitlement.student_id == student_id)
     ).scalars().all()
     now = utcnow()
-    return [row for row in rows if is_active(row, now)]
+    active = [row for row in rows if is_active(row, now)]
+    if is_vip(session, student_id):
+        have = {row.feature for row in active}
+        active += [
+            Entitlement(student_id=student_id, feature=feature, permanent=True, charges=0)
+            for feature in sorted(VIP_FEATURES - have)
+        ]
+    return active

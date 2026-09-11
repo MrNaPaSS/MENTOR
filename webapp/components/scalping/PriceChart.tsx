@@ -30,6 +30,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
+import { getAccessToken } from "@/lib/auth";
 import { visibleOn } from "@/lib/indicator/ink";
 import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
 import { readout, tenth, type ScoreReadout } from "@/lib/indicator/score";
@@ -2052,8 +2053,12 @@ function PriceChart({
 
     async function load() {
       try {
+        // С токеном: кластерная свеча - инструмент маркета, и сервер отдаёт
+        // её только тому, у кого он куплен.
+        const token = getAccessToken();
         const res = await fetch(
           `${API_URL}/api/scalping/footprint/${symbol}?interval=${interval}&time=${openBar}`,
+          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
         );
         if (!res.ok) {
           // Причину называем словами: пустая колонка молча - это то же самое,
