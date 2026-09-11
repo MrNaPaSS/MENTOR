@@ -1444,11 +1444,11 @@ function PanelArt({
     return (
       <div className="relative hidden w-[44%] max-w-[360px] shrink-0 sm:block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {/* Монеты чуть меньше панели и приподняты от её низа, девиз рядом с ними. */}
+        {/* Монеты чуть меньше панели и стоят по её середине, девиз рядом с ними. */}
         <img
           src={src}
           alt=""
-          className="pointer-events-none absolute bottom-[18%] left-2 h-[80%] w-[calc(100%-9rem)] object-contain object-bottom drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+          className="pointer-events-none absolute left-2 top-1/2 h-[80%] w-[calc(100%-9rem)] -translate-y-1/2 object-contain object-center drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
         />
         <Motto lines={motto} className="absolute right-3 top-[22%] text-right !tracking-[0.24em]" />
       </div>
