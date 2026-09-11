@@ -10,11 +10,10 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { CandlestickChart, ExternalLink, Eye, MessageCircle, ThumbsUp, TrendingUp } from "lucide-react";
 import { api, API_URL, type BroadcastItem } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { useInView } from "@/lib/useInView";
 import BroadcastComments from "@/components/analysis/BroadcastComments";
 import { directionOf } from "@/lib/analysisCard";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
@@ -49,31 +48,13 @@ export default function BroadcastCard({ item }: { item: BroadcastItem }) {
   const direction = directionOf(item.text);
   const [chartOpen, setChartOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [views, setViews] = useState(item.views ?? 0);
+  // Просмотры считает лента при заходе в раздел и приносит их в item.
+  const views = item.views ?? 0;
   const [likes, setLikes] = useState(item.likes ?? 0);
   const [liked, setLiked] = useState(Boolean(item.liked));
   const [comments, setComments] = useState(item.comments ?? 0);
   const [talkOpen, setTalkOpen] = useState(false);
   const [liking, setLiking] = useState(false);
-
-  // Просмотр отмечаем, когда карточку и правда увидели, - не при загрузке
-  // ленты. Сервер считает человека один раз; метка в сессии бережёт от
-  // повторного запроса при каждом возврате на страницу.
-  const root = useRef<HTMLElement>(null);
-  const seen = useInView(root, "0px");
-  useEffect(() => {
-    if (!seen) return;
-    const key = `nmnh:viewed:${item.id}`;
-    try {
-      if (sessionStorage.getItem(key)) return;
-      sessionStorage.setItem(key, "1");
-    } catch {
-      // Хранилище закрыто - отметим и так, сервер повтор не посчитает.
-    }
-    const token = getAccessToken();
-    if (!token) return;
-    api.broadcastView(token, item.id).then((r) => setViews(r.views)).catch(() => {});
-  }, [seen, item.id]);
 
   async function like() {
     const token = getAccessToken();
@@ -103,7 +84,7 @@ export default function BroadcastCard({ item }: { item: BroadcastItem }) {
     ) : null;
 
   return (
-    <article ref={root} className="flex flex-col overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] transition-[border-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--pane-gold-soft)] hover:shadow-[0_12px_30px_-16px_rgba(0,0,0,0.45)] motion-reduce:hover:translate-y-0">
+    <article className="flex flex-col overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] transition-[border-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--pane-gold-soft)] hover:shadow-[0_12px_30px_-16px_rgba(0,0,0,0.45)] motion-reduce:hover:translate-y-0">
       {img && (
         <a
           href={item.chart_url ?? "#"}

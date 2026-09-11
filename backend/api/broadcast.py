@@ -56,6 +56,10 @@ class CommentIn(BaseModel):
     text: str
 
 
+class ViewedIn(BaseModel):
+    ids: list[int]
+
+
 def _me(payload: dict) -> int | None:
     """Номер ученика из токена. У токена ментора номера нет - лайков тоже."""
     sub = str(payload.get("sub", ""))
@@ -111,6 +115,19 @@ async def list_broadcasts(
         )
         out.append(item)
     return out
+
+
+@router.post("/viewed")
+async def viewed_broadcasts(
+    body: ViewedIn,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Заход в «Анализы»: разборы ленты отмечаются просмотренными разом."""
+    if len(body.ids) > social.MAX_VIEWED:
+        raise HTTPException(400, f"Не больше {social.MAX_VIEWED} разборов за раз")
+    views = social.mark_viewed_many(session, body.ids, student.id)
+    return {"views": {str(k): v for k, v in views.items()}}
 
 
 @router.post("/{broadcast_id}/view")

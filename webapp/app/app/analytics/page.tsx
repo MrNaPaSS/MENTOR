@@ -958,19 +958,22 @@ export default function AnalyticsPage() {
 
           {/* Две панели цифр рядом с календарём: календарь отвечает «когда»,
               они - «как и почём». Столбиком справа, а не полосой под ним:
-              клетки месяца от лишней ширины растут, а цифры - нет. */}
-          <div className="space-y-3">
-          <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+              клетки месяца от лишней ширины растут, а цифры - нет.
+              Колонка ростом с календарь: месяц в шесть рядов вытягивает
+              календарь, и строки цифр расходятся следом - без пустого поля
+              под панелями. */}
+          <div className="flex flex-col gap-3">
+          <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
             <div className="flex items-baseline gap-2 border-b border-[var(--pane-border)] px-3 py-2">
               <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">
                 {t.analytics.month.title}
               </h2>
               <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.month.hint}</span>
             </div>
-            <div className="flex">
+            <div className="flex flex-1">
             {/* Строки есть и в пустом месяце - прочерками: панель держит
                 высоту, и колонка справа ровняется с календарём. */}
-            <dl className="min-w-0 flex-1 divide-y divide-[var(--pane-border)]">
+            <dl className="flex min-w-0 flex-1 flex-col divide-y divide-[var(--pane-border)]">
                 <Metric label={t.analytics.month.trades} value={fmtDot(monthTrades)} />
                 <Metric
                   label={t.analytics.month.profitDays}
@@ -998,7 +1001,7 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+          <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
             <div className="flex items-baseline gap-2 border-b border-[var(--pane-border)] px-3 py-2">
               <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">
                 {t.analytics.account.title}
@@ -1007,8 +1010,8 @@ export default function AnalyticsPage() {
                 {t.analytics.account.hint}
               </span>
             </div>
-            <div className="flex">
-            <dl className="min-w-0 flex-1 divide-y divide-[var(--pane-border)]">
+            <div className="flex flex-1">
+            <dl className="flex min-w-0 flex-1 flex-col divide-y divide-[var(--pane-border)]">
                 <Metric
                   label={t.analytics.account.futures}
                   value={tradeSummary ? `$${fmtVolShort(tradeSummary.futures_volume)}` : "-"}
@@ -1118,7 +1121,7 @@ export default function AnalyticsPage() {
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               <GoalsPanel goals={goals} />
-              <AchievementsPanel achievements={achievements} className="h-full" />
+              <AchievementsPanel achievements={achievements} className="lg:h-0 lg:min-h-full" />
             </div>
           </div>
         );
@@ -1335,7 +1338,7 @@ function Metric({
         ? "text-[var(--pane-down)]"
         : "text-[var(--pane-text)]";
   return (
-    <div className="flex items-baseline justify-between gap-3 px-3 py-2">
+    <div className="flex flex-1 items-center justify-between gap-3 px-3 py-2">
       <dt className="text-[11px] text-[var(--pane-text-2)]">{label}</dt>
       <dd className="text-right">
         <span className={`font-mono text-[12px] font-bold tabular-nums ${color}`}>{value}</span>
@@ -1406,9 +1409,9 @@ function Kpi({
 /**
  * Картинка сбоку панели цифр и девиз при ней.
  *
- * Два расклада. «side» - картинка слева, девиз справа посередине: у столбцов
- * месяца так и просторно. «top» - девиз сверху справа, над картинкой: у монет
- * счёта широкий девиз сбоку наезжал на них.
+ * Картинка слева в обоих раскладах. «side» - девиз справа посередине: у
+ * столбцов месяца так и просторно. «top» - девиз сверху справа, над
+ * монетами: широкий девиз счёта посередине наезжал на них.
  *
  * Только с ширины планшета: на телефоне колонка цифр и так узкая, и картинка
  * отняла бы у неё половину.
@@ -1424,14 +1427,14 @@ function PanelArt({
 }) {
   if (layout === "top") {
     return (
-      <div className="relative hidden w-[42%] max-w-[360px] shrink-0 sm:block">
-        <Motto lines={motto} className="absolute right-4 top-3 text-right !tracking-[0.24em]" />
+      <div className="relative hidden w-[44%] max-w-[360px] shrink-0 sm:block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt=""
-          className="pointer-events-none absolute bottom-1 right-2 top-12 h-[calc(100%-3.25rem)] w-[calc(100%-1rem)] object-contain object-right-bottom drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+          className="pointer-events-none absolute inset-y-1 left-0 h-[calc(100%-0.5rem)] w-[calc(100%-8.5rem)] object-contain object-center drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
         />
+        <Motto lines={motto} className="absolute right-3 top-3 text-right !tracking-[0.24em]" />
       </div>
     );
   }

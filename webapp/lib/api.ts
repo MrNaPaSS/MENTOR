@@ -611,6 +611,12 @@ export const api = {
   broadcasts: (token: string) => authReq<BroadcastItem[]>("/api/broadcast", token),
   broadcastView: (token: string, id: number) =>
     authReq<{ views: number }>(`/api/broadcast/${id}/view`, token, { method: "POST" }),
+  /** Отметить разборы просмотренными разом: так считается заход в раздел. */
+  broadcastViewed: (token: string, ids: number[]) =>
+    authReq<{ views: Record<string, number> }>("/api/broadcast/viewed", token, {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
   broadcastLike: (token: string, id: number) =>
     authReq<{ liked: boolean; likes: number }>(`/api/broadcast/${id}/like`, token, { method: "POST" }),
   broadcastComments: (token: string, id: number) =>

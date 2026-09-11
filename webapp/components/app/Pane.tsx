@@ -82,26 +82,12 @@ export function PaneHead({
             {children}
           </div>
         )}
-        {/* Горы, девиз и корона - одним блоком: место под горы занято в строке,
-            и кнопки раздела встают левее, а не поверх снега. Подножие гор
-            уходит под панели первого ряда. */}
+        {/* Место под горы, девиз и корона. Сами горы нарисованы в верхней
+            панели кабинета (HeadArt): вершиной они заходят на неё, а сюда
+            спускаются. Пустой блок держит им место, и кнопки раздела встают
+            левее, а не поверх снега. */}
         <div aria-hidden className="hidden items-center gap-2 xl:flex">
-          <span className="relative h-10 w-52 shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/art/brand/mountains.webp"
-              alt=""
-              className="head-ridge pointer-events-none absolute -top-12 right-0 -z-10 h-[170px] w-auto max-w-none opacity-45 saturate-[0.6]"
-              style={{
-                maskImage:
-                  "linear-gradient(to bottom, #000 30%, transparent 78%), linear-gradient(to right, transparent, #000 45%)",
-                maskComposite: "intersect",
-                WebkitMaskImage:
-                  "linear-gradient(to bottom, #000 30%, transparent 78%), linear-gradient(to right, transparent, #000 45%)",
-                WebkitMaskComposite: "source-in",
-              }}
-            />
-          </span>
+          <span className="h-10 w-56 shrink-0" />
           <Motto lines={BRAND_MOTTO} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/art/brand/crown.webp" alt="" className="h-11 w-auto drop-shadow-[0_4px_10px_rgba(240,185,11,0.35)]" />

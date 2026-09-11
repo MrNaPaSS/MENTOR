@@ -29,6 +29,7 @@ import { PROFILE_EVENT } from "@/lib/profileEvent";
 import { fmtUsd, modeLabel } from "@/lib/format";
 import { adoptLocale, useT } from "@/lib/i18n";
 import MarketTicker from "@/components/market/MarketTicker";
+import HeadArt from "@/components/app/HeadArt";
 import Toasts from "@/components/scalping/Toasts";
 import {
   dismissSymbol,
@@ -229,8 +230,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="fixed inset-x-0 top-0 z-50">
         <MarketTicker />
 
-        <header className="border-b border-border bg-bg-deep/80 backdrop-blur-2xl">
-        <div className="flex h-14 items-center justify-between px-4 md:px-6">
+        <header className="relative border-b border-border bg-bg-deep/80 backdrop-blur-2xl">
+        <HeadArt pathname={pathname} />
+        <div className="relative z-10 flex h-14 items-center justify-between px-4 md:px-6">
           {/* Лого и радио: музыку включают на весь рабочий день, и место ей
               рядом со знаком, а не среди кнопок сделки. */}
           <div className="flex items-center gap-2">

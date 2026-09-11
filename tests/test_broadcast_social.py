@@ -160,3 +160,23 @@ def test_список_читается_токеном_ментора(client):
     mentor = {"Authorization": f"Bearer {create_access_token('mentor', 'mentor', SECRET, 900)}"}
     row = _counts(client, mentor, bid)
     assert row["liked"] is False and row["views"] == 0
+
+
+def test_заход_в_раздел_отмечает_ленту_разом(client):
+    first, second = _broadcast(), _broadcast()
+    alex, maria = _login(client, "1001"), _login(client, "1002")
+
+    body = client.post("/api/broadcast/viewed", json={"ids": [first, second, 999]}, headers=alex).json()
+    assert body == {"views": {str(first): 1, str(second): 1}}
+
+    # Повторный заход число не накручивает, другой читатель - добавляет.
+    client.post("/api/broadcast/viewed", json={"ids": [first, second]}, headers=alex)
+    again = client.post("/api/broadcast/viewed", json={"ids": [first]}, headers=maria).json()
+    assert again == {"views": {str(first): 2}}
+    assert _counts(client, alex, second)["views"] == 1
+
+
+def test_слишком_много_разборов_за_раз(client):
+    alex = _login(client, "1001")
+    resp = client.post("/api/broadcast/viewed", json={"ids": list(range(1, 102))}, headers=alex)
+    assert resp.status_code == 400

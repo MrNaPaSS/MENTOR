@@ -12,7 +12,7 @@ from datetime import timedelta
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from core.models import BroadcastComment, BroadcastReaction, utcnow
+from core.models import Broadcast, BroadcastComment, BroadcastReaction, utcnow
 
 VIEW = "view"
 LIKE = "like"
@@ -23,6 +23,8 @@ MAX_COMMENT = 800
 # Пауза между комментариями одного ученика: от случайного двойного нажатия и
 # от того, кто решил залить ленту.
 COMMENT_COOLDOWN = timedelta(seconds=5)
+# Сколько разборов отмечается одним заходом: столько лента и отдаёт.
+MAX_VIEWED = 100
 
 
 @dataclass(frozen=True)
@@ -105,6 +107,49 @@ def mark_viewed(session, broadcast_id: int, student_id: int) -> int:
             # Две вкладки отметили одновременно - просмотр уже записан.
             session.rollback()
     return _count(session, broadcast_id, VIEW)
+
+
+def mark_viewed_many(session, ids: list[int], student_id: int) -> dict[int, int]:
+    """Отметить просмотренными все разборы ленты разом. Отдаёт число читателей каждого.
+
+    Так считается заход в раздел: человек открыл «Анализы» - он видел ленту.
+    Неизвестные номера пропускаются, повторный заход ничего не меняет.
+    """
+    unique = sorted({int(i) for i in ids})[:MAX_VIEWED]
+    if not unique:
+        return {}
+    known = set(session.execute(select(Broadcast.id).where(Broadcast.id.in_(unique))).scalars())
+    if not known:
+        return {}
+    seen = set(
+        session.execute(
+            select(BroadcastReaction.broadcast_id).where(
+                BroadcastReaction.broadcast_id.in_(known),
+                BroadcastReaction.student_id == student_id,
+                BroadcastReaction.kind == VIEW,
+            )
+        ).scalars()
+    )
+    fresh = sorted(known - seen)
+    if fresh:
+        session.add_all(
+            [BroadcastReaction(broadcast_id=b, student_id=student_id, kind=VIEW) for b in fresh]
+        )
+        try:
+            session.commit()
+        except IntegrityError:
+            # Вторая вкладка успела раньше - дописываем по одному, повторы отсеет база.
+            session.rollback()
+            for b in fresh:
+                mark_viewed(session, b, student_id)
+    counts = dict(
+        session.execute(
+            select(BroadcastReaction.broadcast_id, func.count())
+            .where(BroadcastReaction.broadcast_id.in_(known), BroadcastReaction.kind == VIEW)
+            .group_by(BroadcastReaction.broadcast_id)
+        ).all()
+    )
+    return {b: int(counts.get(b, 0)) for b in sorted(known)}
 
 
 def toggle_like(session, broadcast_id: int, student_id: int) -> tuple[bool, int]:

@@ -40,13 +40,14 @@ export default function BalanceCard({
         className="pointer-events-none absolute -right-12 -top-14 h-44 w-44 rounded-full"
         style={{ background: "radial-gradient(circle, rgba(240,185,11,0.22), transparent 70%)" }}
       />
-      {/* Корона NMNH в углу: баланс - это твоя казна. */}
+      {/* Граффити NMNH в углу - знак школы на её казне. Невысоко: полоса
+          цели под числом остаётся открытой. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/art/brand/crown.webp"
+        src="/art/brand/logo.webp"
         alt=""
         aria-hidden
-        className="pointer-events-none absolute -right-2 -top-1 h-24 w-auto rotate-12 drop-shadow-[0_8px_18px_rgba(240,185,11,0.35)]"
+        className="pointer-events-none absolute right-3 top-2 h-16 w-auto -rotate-6 drop-shadow-[0_6px_14px_rgba(0,0,0,0.35)]"
       />
 
       <div className="relative flex items-center gap-3">

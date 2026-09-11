@@ -6,14 +6,14 @@
 // за чем идёшь, а не безликий замок на каждой второй карточке. Полученные
 // стоят первыми - их и ищут глазами, открыв раздел.
 //
-// Страницами по восемь карточек, а не прокруткой: при прокрутке нижний ряд
-// всегда стоял обрезанным по краю коробки. Восемь - четыре ряда, это как раз
-// высота соседних целей месяца.
+// Список прокручивается, но окно его всегда высотой в целое число рядов:
+// карточки одной высоты, и окно подгоняется под место в коробке. При
+// открытии нижний ряд не стоит обрезанным по краю - дальше листают.
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useState } from "react";
-import { BarChart2, CalendarDays, ChevronLeft, ChevronRight, Lock, Sparkles, TrendingUp, Trophy, Wallet } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BarChart2, CalendarDays, Lock, Sparkles, TrendingUp, Trophy, Wallet } from "lucide-react";
 import CoinIcon from "@/components/app/CoinIcon";
 import { useT } from "@/lib/i18n";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -34,8 +34,11 @@ const CATEGORIES: { id: AchCategory; icon: React.ElementType }[] = [
   { id: "special", icon: Sparkles },
 ];
 
-/** Карточек на странице: четыре ряда по две. */
-const PAGE = 8;
+/** Высота карточки и зазор между рядами: окно списка считается из них. */
+const CARD_H = 80;
+const GAP = 8;
+/** Окно по умолчанию, пока место не измерено: четыре ряда. */
+const DEFAULT_H = 4 * (CARD_H + GAP) - GAP;
 
 const RARITY: Record<Rarity, { border: string; glow: string; badge: string }> = {
   common: {
@@ -70,7 +73,19 @@ export default function AchievementsPanel({
   const t = useT();
   const paper = useTerminalTheme();
   const [category, setCategory] = useState<AchCategory>("all");
-  const [page, setPage] = useState(0);
+  // Окно списка - целое число рядов в том месте, что осталось в коробке.
+  const holder = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<number | null>(null);
+  useEffect(() => {
+    const node = holder.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => {
+      const rows = Math.max(2, Math.floor((entry.contentRect.height + GAP) / (CARD_H + GAP)));
+      setFit(rows * (CARD_H + GAP) - GAP);
+    });
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, []);
   const earned = achievements.filter((a) => a.earned).length;
   const shown = achievements
     .filter((a) => category === "all" || a.category === category)
@@ -78,9 +93,6 @@ export default function AchievementsPanel({
     .map((a, i) => ({ a, i }))
     .sort((x, y) => Number(y.a.earned) - Number(x.a.earned) || x.i - y.i)
     .map(({ a }) => a);
-  const pages = Math.max(1, Math.ceil(shown.length / PAGE));
-  const at = Math.min(page, pages - 1);
-  const slice = shown.slice(at * PAGE, at * PAGE + PAGE);
 
   return (
     <section
@@ -112,10 +124,7 @@ export default function AchievementsPanel({
             <button
               key={cat.id}
               type="button"
-              onClick={() => {
-                setCategory(cat.id);
-                setPage(0);
-              }}
+              onClick={() => setCategory(cat.id)}
               className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors duration-150 ease-out ${
                 on
                   ? "border-accent-gold/50 bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] text-[var(--pane-gold)]"
@@ -132,48 +141,17 @@ export default function AchievementsPanel({
         })}
       </div>
 
-      <div key={`${category}-${at}`} className="grid animate-fade-in auto-rows-max content-start gap-2 motion-reduce:animate-none sm:grid-cols-2">
-        {slice.map((ach) => (
-          <Card key={ach.id} ach={ach} star={paper === "light" ? "/marks/star.png" : "/marks/star-green.png"} />
-        ))}
-      </div>
-
-      {pages > 1 && (
-        <div className="mt-auto flex items-center justify-center gap-3 pt-1">
-          <button
-            type="button"
-            onClick={() => setPage(Math.max(0, at - 1))}
-            disabled={at === 0}
-            aria-label="‹"
-            className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--pane-border)] text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)] disabled:opacity-30"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <div className="flex items-center gap-1.5">
-            {Array.from({ length: pages }, (_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setPage(i)}
-                aria-label={String(i + 1)}
-                aria-current={i === at}
-                className={`h-1.5 rounded-full transition-[width,background-color] duration-200 ease-out ${
-                  i === at ? "w-5 bg-[var(--pane-gold)]" : "w-1.5 bg-[var(--pane-border)] hover:bg-[var(--pane-muted)]"
-                }`}
-              />
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => setPage(Math.min(pages - 1, at + 1))}
-            disabled={at === pages - 1}
-            aria-label="›"
-            className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--pane-border)] text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)] disabled:opacity-30"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+      <div ref={holder} className="min-h-0 flex-1">
+        <div
+          key={category}
+          className="grid animate-fade-in auto-rows-[80px] content-start gap-2 overflow-y-auto pr-1 motion-reduce:animate-none sm:grid-cols-2"
+          style={{ height: fit ?? DEFAULT_H }}
+        >
+          {shown.map((ach) => (
+            <Card key={ach.id} ach={ach} star={paper === "light" ? "/marks/star.png" : "/marks/star-green.png"} />
+          ))}
         </div>
-      )}
+      </div>
     </section>
   );
 }
@@ -184,7 +162,7 @@ function Card({ ach, star }: { ach: Achievement; star: string }) {
   const copy = t.analytics.achievements.items[ach.id];
   return (
     <div
-      className={`group relative flex items-start gap-3 rounded-xl border p-3 transition-[transform,box-shadow] duration-200 ease-out ${r.border} ${
+      className={`group relative flex h-[80px] items-center gap-3 overflow-hidden rounded-xl border px-3 transition-[transform,box-shadow] duration-200 ease-out ${r.border} ${
         ach.earned ? `${r.glow} bg-[color:color-mix(in_srgb,var(--pane-hover)_50%,transparent)] hover:-translate-y-0.5` : ""
       }`}
     >
@@ -205,13 +183,15 @@ function Card({ ach, star }: { ach: Achievement; star: string }) {
       </div>
 
       <div className={`min-w-0 flex-1 ${ach.earned ? "" : "opacity-70"}`}>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pr-5">
-          <h3 className="text-[13px] font-bold leading-tight text-[var(--pane-text)]">{copy.title}</h3>
-          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${r.badge}`}>
+        <div className="flex min-w-0 items-center gap-2 pr-5">
+          <h3 className="min-w-0 truncate text-[13px] font-bold leading-tight text-[var(--pane-text)]">{copy.title}</h3>
+          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${r.badge}`}>
             {t.analytics.rarity[ach.rarity]}
           </span>
         </div>
-        <p className="mt-0.5 text-[11px] leading-snug text-[var(--pane-muted)]">{copy.desc}</p>
+        <p className="mt-0.5 truncate text-[11px] leading-snug text-[var(--pane-muted)]" title={copy.desc}>
+          {copy.desc}
+        </p>
         <div className="mt-1 flex items-center gap-1">
           <CoinIcon size={13} />
           <span className="font-mono text-[10px] font-bold text-[var(--pane-gold)]">

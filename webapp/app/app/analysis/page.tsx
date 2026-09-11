@@ -20,7 +20,19 @@ function AnalysisFeed() {
     const token = getAccessToken();
     if (!token) return;
     api.broadcasts(token)
-      .then(setItems)
+      .then((list) => {
+        setItems(list);
+        // Заход в раздел - это просмотр разборов в ленте: отмечаем их разом,
+        // одним запросом, и сразу показываем новые числа. Сервер считает
+        // человека один раз, повторный заход число не накручивает.
+        if (!list.length) return;
+        api
+          .broadcastViewed(token, list.map((item) => item.id))
+          .then((r) =>
+            setItems((prev) => prev.map((item) => ({ ...item, views: r.views[String(item.id)] ?? item.views }))),
+          )
+          .catch(() => {});
+      })
       .catch(() => setItems([]))
       .finally(() => setLoaded(true));
   }, []);
