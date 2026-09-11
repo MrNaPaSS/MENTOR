@@ -63,6 +63,7 @@ def create_all() -> None:
     _apply_shop_catalog_v6(engine)
     _apply_shop_catalog_v7(engine)
     _apply_shop_catalog_v8(engine)
+    _apply_shop_catalog_v9(engine)
 
 
 def _migrate_add_columns(engine) -> None:
@@ -217,9 +218,9 @@ def _seed_chat_threads(engine) -> None:
 # Цены: 1 NMNH = $0.10 (индикатор/мес = $100 = 1000 NMNH, менторство = $1000 = 10000 NMNH).
 _DEFAULT_SHOP_ITEMS = [
     # ── Покупка за NMNH (подписки на индикатор требуют ник TradingView) ──
-    ("Подписка на индикатор - 7 дней", "Доступ к приватному индикатору NMNH на TradingView на 7 дней.", 300, "indicator", "shop", "TrendingUp", "", True, 10),
-    ("Подписка на индикатор - 14 дней", "Доступ к приватному индикатору NMNH на 14 дней.", 550, "indicator", "shop", "TrendingUp", "", True, 20),
-    ("Подписка на индикатор - 1 месяц", "Доступ к приватному индикатору NMNH на 30 дней. Максимальная выгода.", 1000, "indicator", "shop", "TrendingUp", "", True, 30),
+    ("Подписка на индикатор - 7 дней", "Доступ к приватному индикатору NMNH на TradingView на 7 дней.", 450, "indicator", "shop", "TrendingUp", "", True, 10),
+    ("Подписка на индикатор - 14 дней", "Доступ к приватному индикатору NMNH на 14 дней.", 800, "indicator", "shop", "TrendingUp", "", True, 20),
+    ("Подписка на индикатор - 1 месяц", "Доступ к приватному индикатору NMNH на 30 дней. Максимальная выгода.", 1500, "indicator", "shop", "TrendingUp", "", True, 30),
     ("Индивидуальное менторство", "Персональный разбор, стратегия и сопровождение 1-на-1 с ментором.", 10000, "mentorship", "shop", "GraduationCap", "", False, 40),
 
     # ── Наш софт (витрина, ссылки добавляются из админки) ──
@@ -660,4 +661,42 @@ def _apply_shop_catalog_v8(engine) -> None:
             flag.value = "8"
         else:
             session.add(SettingRow(key="shop_catalog_version", value="8"))
+        session.commit()
+
+
+# Цены подписки на индикатор, поднятые в полтора раза 11 сентября 2026.
+INDICATOR_PRICES_V9 = {
+    "Подписка на индикатор - 7 дней": 450,
+    "Подписка на индикатор - 14 дней": 800,
+    "Подписка на индикатор - 1 месяц": 1500,
+}
+
+
+def _apply_shop_catalog_v9(engine) -> None:
+    """Подписка на индикатор дороже в полтора раза. Один раз, флагом.
+
+    Каталог уже лежит в базе со старыми ценами, и начальный список их не
+    поменяет: он заполняет только пустую таблицу. Цену, которую наставник
+    поменяет в админке после этого, повторный запуск не трогает.
+    """
+    from sqlalchemy import inspect, update
+    from sqlalchemy.orm import Session
+    from core.models import SettingRow, ShopItem
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names() or "settings" not in inspector.get_table_names():
+        return
+
+    with Session(engine) as session:
+        flag = session.get(SettingRow, "shop_catalog_version")
+        if flag and (flag.value or "").isdigit() and int(flag.value) >= 9:
+            return
+
+        for title, price in INDICATOR_PRICES_V9.items():
+            session.execute(update(ShopItem).where(ShopItem.title == title).values(price=price))
+
+        if flag:
+            flag.value = "9"
+        else:
+            session.add(SettingRow(key="shop_catalog_version", value="9"))
         session.commit()
