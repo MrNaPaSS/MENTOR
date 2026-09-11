@@ -227,9 +227,62 @@ export default function ShopPage() {
 
   const buyingFrame = buying ? frameOfFeature(buying.feature) : null;
 
+  // Разделы, поиск и порядок - в строке заголовка, правее описания. Отдельной
+  // строкой над витриной они сдвигали карточки вниз, и витрина начиналась
+  // ниже баланса справа; теперь обе колонки стоят от одной линии.
+  const toolbar = (
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className="no-scrollbar flex min-w-0 gap-1.5 overflow-x-auto">
+        {CATS.map(({ id, icon: Icon }) => {
+          const on = cat === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setCat(id)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors duration-150 ease-out ${
+                on
+                  ? "border-accent-gold/50 bg-accent-gold/10 text-[var(--pane-gold)]"
+                  : "border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+              }`}
+            >
+              <Icon className="h-3 w-3 shrink-0" />
+              {t.shop.cats[id]}
+              <span className="font-mono text-[9px] opacity-60">
+                {id === "frames" ? counts.frames + RANK_FRAMES.length : counts[id]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <label className="flex h-8 w-full items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] px-2.5 sm:w-44">
+        <Search className="h-3.5 w-3.5 shrink-0 text-[var(--pane-muted)]" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t.shop.search}
+          aria-label={t.shop.search}
+          className="min-w-0 flex-1 bg-transparent text-[11px] text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
+        />
+      </label>
+      <select
+        value={sort}
+        onChange={(e) => setSort(e.target.value as Sort)}
+        aria-label={t.shop.sort.label}
+        className="h-8 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] px-2 text-[11px] text-[var(--pane-text)] outline-none"
+      >
+        {(["catalog", "cheap", "expensive"] as const).map((id) => (
+          <option key={id} value={id}>
+            {t.shop.sort[id]}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
   return (
     <PaneScope className="space-y-3">
-      <PaneHead title={t.shop.title} hint={t.shop.hint} />
+      <PaneHead title={t.shop.title} hint={t.shop.hint} nav={toolbar} />
 
       {note && (
         <div className="flex animate-fade-in items-center justify-between gap-3 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-up-faint)] px-3 py-2 text-[12px] text-[var(--pane-up)] motion-reduce:animate-none">
@@ -242,56 +295,6 @@ export default function ShopPage() {
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-3">
-          {/* Категории - как в достижениях аналитики: иконка, название,
-              сколько. Справа поиск и порядок. */}
-          <div className="flex flex-wrap items-center gap-2">
-          <div className="no-scrollbar flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5">
-            {CATS.map(({ id, icon: Icon }) => {
-              const on = cat === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setCat(id)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors duration-150 ease-out ${
-                    on
-                      ? "border-accent-gold/50 bg-accent-gold/10 text-[var(--pane-gold)]"
-                      : "border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
-                  }`}
-                >
-                  <Icon className="h-3 w-3 shrink-0" />
-                  {t.shop.cats[id]}
-                  <span className="font-mono text-[9px] opacity-60">
-                    {id === "frames" ? counts.frames + RANK_FRAMES.length : counts[id]}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-            <label className="flex h-8 w-full items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] px-2.5 sm:w-48">
-              <Search className="h-3.5 w-3.5 shrink-0 text-[var(--pane-muted)]" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t.shop.search}
-                aria-label={t.shop.search}
-                className="min-w-0 flex-1 bg-transparent text-[11px] text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
-              />
-            </label>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as Sort)}
-              aria-label={t.shop.sort.label}
-              className="h-8 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] px-2 text-[11px] text-[var(--pane-text)] outline-none"
-            >
-              {(["catalog", "cheap", "expensive"] as const).map((id) => (
-                <option key={id} value={id}>
-                  {t.shop.sort[id]}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {!loaded ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {[0, 1, 2, 3, 4, 5].map((i) => (

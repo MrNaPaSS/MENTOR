@@ -59,6 +59,8 @@ export const shop = {
     history: "История",
     orders: "Заказы",
   },
+  /** Кнопка под тремя последними записями панели. */
+  showAll: (n: number) => `Все · ${n}`,
   historyEmpty: "Начислений пока не было.",
   accessEmpty: "Купленные функции и рамки появятся здесь.",
   ordersEmpty: "Заказов пока не было.",
@@ -126,7 +128,12 @@ export const shop = {
   features: {
     streak_freeze: "Заморозка серии",
     streak_boost: "Удвоение бонуса за серию",
-    journal_export: "Выгрузка журнала в CSV",
+    journal_export: "Выгрузка журнала: отчёт",
+    tool_vision: "NMNH VISION",
+    tool_footprint: "Кластерная свеча",
+    tool_volume_candles: "Объёмные свечи",
+    tool_dom_depth: "Стакан 60 и 100 строк",
+    tool_dom_step25: "Шаг стакана ×25",
     frame_neon: "Рамка «Неон»",
     frame_carbon: "Рамка «Карбон»",
     frame_pulse: "Рамка «Пульс»",
