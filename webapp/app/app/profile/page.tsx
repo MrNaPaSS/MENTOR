@@ -470,17 +470,6 @@ export default function ProfilePage() {
         <ChevronRight className="h-4 w-4 text-[var(--pane-muted)]" />
       </button>
 
-      {/* Знак платформы в самом низу страницы, во всю ширину. Прижат к низу:
-          страница вытянута на высоту окна, и на коротком профиле баннер стоит
-          у нижнего края, а не висит сразу под кнопкой выхода. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/art/brand/trade-banner.webp"
-        alt=""
-        aria-hidden
-        className="pointer-events-none mt-auto w-full select-none"
-      />
-
       {/* Окно ключей - то же самое, что в терминале. Оно красится палитрой
           панелей, а она живёт на классе: без обёртки переменные не подставятся
           и окно выйдет бесцветным. */}
