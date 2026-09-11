@@ -27,7 +27,7 @@ const PILLAR_ICONS = {
   growth: LineChart,
 } as const;
 
-export default function CertificatesPanel() {
+export default function CertificatesPanel({ className = "" }: { className?: string }) {
   const t = useT();
   const numbers = useIntlLocale();
   const [data, setData] = useState<CertificatesOut | null>(null);
@@ -54,7 +54,7 @@ export default function CertificatesPanel() {
   const done = data.pillars.filter((p) => p.done).length;
 
   return (
-    <div className="space-y-3 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
+    <div className={`space-y-3 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 ${className}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Award className="h-4 w-4 text-[var(--pane-gold)]" />

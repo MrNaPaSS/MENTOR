@@ -1121,9 +1121,11 @@ export default function AnalyticsPage() {
 
       {/* Награды: уровень, цели и достижения - одной группой. */}
       {tab === "rewards" && (
-        <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
-          {/* Уровень и цели месяца - одним столбцом. */}
-          <div className="space-y-3">
+        <div className="space-y-3">
+          {/* Два ровных ряда. Сверху - уровень и сертификаты, снизу - цели
+              месяца и достижения. Коробки ряда одной высоты: края совпадают,
+              и глаз не прыгает между столбцами разной длины. */}
+          <div className="grid gap-3 lg:grid-cols-2">
             {(() => {
               const volXp      = Math.floor(totalVolume / 50_000) * 25;
               const streakXp   = activityStreak * 30;
@@ -1146,7 +1148,7 @@ export default function AnalyticsPage() {
                 { icon: Target,       label: xpSources.goals,   val: goalXp,     color: "text-purple-400",  bg: "bg-purple-400/10" },
               ];
               return (
-                <div className="relative overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
+                <div className="relative h-full overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
                   {/* Заголовок */}
                   <div className="relative flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1207,7 +1209,12 @@ export default function AnalyticsPage() {
               );
             })()}
 
-            <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 space-y-3">
+            {/* Сертификаты трейдера - рядом с уровнем: это итог тех же усилий. */}
+            <CertificatesPanel className="h-full" />
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="h-full rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <Target className="h-4 w-4 text-[var(--pane-accent)]" />
                 <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.goalsTitle}</h2>
@@ -1236,13 +1243,13 @@ export default function AnalyticsPage() {
                 );
               })}
             </div>
-          </div>
-        {/* Сертификаты трейдера - над достижениями: это итог тех же усилий. */}
-        <CertificatesPanel />
 
-        {/* Достижения */}
-        <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 space-y-3">
-          <div className="flex items-center justify-between">
+        {/* Достижения - справа от целей и ровно их высоты. Высота ряда
+            задаётся целями: у коробки достижений нулевая собственная высота и
+            минимальная во весь ряд, а длинный список прокручивается внутри,
+            не растягивая ряд вниз. На узком экране - обычным столбцом. */}
+        <div className="flex flex-col gap-3 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 lg:h-0 lg:min-h-full">
+          <div className="flex shrink-0 items-center justify-between">
             <div className="flex items-center gap-2">
               <Trophy className="h-4 w-4 text-[var(--pane-gold)]" />
               <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.achievements.title}</h2>
@@ -1257,7 +1264,7 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Категории */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+          <div className="flex shrink-0 gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
             {ACH_CATEGORIES.map(cat => {
               const count = cat.id === "all" ? achievements.filter(a => a.earned).length : achievements.filter(a => a.category === cat.id && a.earned).length;
               const total = cat.id === "all" ? achievements.length : achievements.filter(a => a.category === cat.id).length;
@@ -1272,7 +1279,7 @@ export default function AnalyticsPage() {
             })}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
             {achievements.filter(a => achCategory === "all" || a.category === achCategory).map((ach) => {
               const Icon = ach.icon;
               const r = RARITY_STYLES[ach.rarity];
@@ -1323,7 +1330,7 @@ export default function AnalyticsPage() {
             })}
           </div>
         </div>
-
+          </div>
         </div>
       )}
 
