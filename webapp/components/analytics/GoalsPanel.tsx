@@ -76,7 +76,7 @@ export default function GoalsPanel({ goals }: { goals: Goal[] }) {
               <img
                 src={goalArt(goal.id)}
                 alt=""
-                className={`h-12 w-12 shrink-0 transition-[filter,opacity] duration-200 ease-out ${
+                className={`-my-3 h-16 w-16 shrink-0 drop-shadow-[0_6px_12px_rgba(0,0,0,0.25)] transition-[filter,opacity] duration-200 ease-out ${
                   goal.unlocked ? "" : "opacity-75 saturate-50"
                 }`}
               />

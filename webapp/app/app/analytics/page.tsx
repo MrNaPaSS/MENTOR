@@ -17,7 +17,7 @@ import { CHIP, CHIP_OFF, CHIP_ON, PaneHead, PaneScope } from "@/components/app/P
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
 import CertificatesPanel from "@/components/cert/CertificatesPanel";
-import Motto, { BRAND_MOTTO } from "@/components/analytics/Motto";
+import Motto from "@/components/app/Motto";
 import LevelPanel, { type XpPart } from "@/components/analytics/LevelPanel";
 import GoalsPanel from "@/components/analytics/GoalsPanel";
 import AchievementsPanel from "@/components/analytics/AchievementsPanel";
@@ -697,8 +697,8 @@ export default function AnalyticsPage() {
           const at = nextIdx === -1 ? 1 : (done + inLeg) / last;
 
           return (
-            <div className="flex overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
-              <div className="min-w-0 flex-1">
+            <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+              <div className="min-w-0">
               <div className="flex items-center gap-2 border-b border-[var(--pane-border)] px-3 pt-2.5 pb-2">
                 <BarChart2 className="h-4 w-4 text-[var(--pane-gold)]" />
                 <h2 className="text-[12px] font-semibold leading-none text-[var(--pane-text)]">
@@ -775,17 +775,6 @@ export default function AnalyticsPage() {
               </div>
               </div>
 
-              {/* Вершина с флагами - куда ведёт дорожка. Колонкой сбоку, а не
-                  подложкой под вехами: подписи на скалах не читаются. */}
-              <div className="relative hidden w-72 shrink-0 md:block">
-                <Motto lines={BRAND_MOTTO} className="absolute left-3 top-2.5 z-10" />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/art/analytics/summit-flags.webp"
-                  alt=""
-                  className="pointer-events-none absolute bottom-0 right-0 h-[92%] w-auto max-w-none object-contain"
-                />
-              </div>
             </div>
           );
         })()}
@@ -857,10 +846,10 @@ export default function AnalyticsPage() {
               )}
               </div>
 
-              <div className="hidden shrink-0 items-center gap-2 lg:flex">
+              <div className="-my-2.5 hidden shrink-0 items-center gap-3 self-stretch lg:flex">
                 <Motto lines={t.analytics.mottos.calendar} className="hidden text-right 2xl:block" />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/art/analytics/bull-bear.webp" alt="" className="pointer-events-none h-20 w-auto" />
+                <img src="/art/analytics/bull-bear.webp" alt="" className="pointer-events-none h-32 w-auto self-end" />
               </div>
 
                 <button
@@ -1432,10 +1421,14 @@ function Kpi({
  */
 function PanelArt({ src, motto }: { src: string; motto: readonly string[] }) {
   return (
-    <div className="hidden w-44 shrink-0 flex-col items-center justify-center gap-2 border-l border-[var(--pane-border)] px-3 py-3 sm:flex">
+    <div className="relative hidden w-[44%] max-w-[360px] shrink-0 sm:block">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="" className="pointer-events-none max-h-36 w-full object-contain" />
-      <Motto lines={motto} className="text-center" />
+      <img
+        src={src}
+        alt=""
+        className="pointer-events-none absolute inset-y-1 left-0 h-[calc(100%-0.5rem)] w-[calc(100%-6.5rem)] object-contain object-center drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+      />
+      <Motto lines={motto} className="absolute right-3 top-1/2 -translate-y-1/2 !tracking-[0.24em]" />
     </div>
   );
 }

@@ -701,3 +701,9 @@
   background-color: rgb(var(--accent-cyan) / 0.12);
   box-shadow: 0 0 0 2px rgb(var(--accent-cyan) / 0.35);
 }
+
+/* Горы шапки раздела на тёмном листе приглушены: белый снег иначе спорит с
+   цифрами первых панелей. */
+.pane-dark .head-ridge {
+  opacity: 0.7;
+}

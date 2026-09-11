@@ -11,6 +11,7 @@
 // переменными, что и в терминале, поэтому разделы светлеют вместе с ним.
 
 import { useTerminalTheme } from "@/lib/terminalTheme";
+import Motto, { BRAND_MOTTO } from "@/components/app/Motto";
 
 /**
  * Область, внутри которой живут цвета панелей.
@@ -28,7 +29,9 @@ export function PaneScope({
 }) {
   const theme = useTerminalTheme();
   return (
-    <div className={`${theme === "light" ? "pane-light" : "pane-dark"} ${className}`}>
+    // isolate - своя стопка слоёв: горы шапки раздела уходят под панели этой
+    // области, а не под фон всего кабинета, где их было бы не видно.
+    <div className={`${theme === "light" ? "pane-light" : "pane-dark"} isolate ${className}`}>
       {children}
     </div>
   );
@@ -40,6 +43,11 @@ export function PaneScope({
  * В одну строку с действиями, а не тремя этажами: заголовок в два сантиметра
  * высотой ничего не сообщает тому, кто и так нажал на этот раздел, а место
  * отнимает у самих данных.
+ *
+ * За шапкой - гряда гор с флагами во всю правую половину, у края девиз и
+ * корона: так начинается каждый раздел на макетах. Горы стоят под панелями
+ * первого ряда, поэтому над ними видны только вершины, а подножие уходит за
+ * карточки. На телефоне гряды нет: там шапка и так в две строки.
  */
 export function PaneHead({
   title,
@@ -52,12 +60,38 @@ export function PaneHead({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-      <div className="flex min-w-0 items-baseline gap-2">
-        <h1 className="text-[15px] font-semibold text-[var(--pane-text)]">{title}</h1>
+    <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-2 md:min-h-[64px]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-3 right-0 -z-10 hidden h-[150px] w-[min(74%,1040px)] md:block"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/hero/ridge.webp"
+          alt=""
+          className="head-ridge absolute inset-0 h-full w-full object-contain object-right-bottom"
+        />
+      </div>
+
+      <div className="flex min-w-0 items-baseline gap-2.5">
+        <h1 className="text-[20px] font-bold tracking-tight text-[var(--pane-text)]">{title}</h1>
         {hint && <p className="truncate text-[11px] text-[var(--pane-muted)]">{hint}</p>}
       </div>
-      {children && <div className="flex flex-wrap items-center gap-1">{children}</div>}
+
+      <div className="flex items-center gap-4">
+        {children && (
+          // Подложка под кнопками: они стоят поверх гор и без неё терялись бы
+          // на снегу.
+          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)]/90 p-0.5 backdrop-blur-sm">
+            {children}
+          </div>
+        )}
+        <div aria-hidden className="hidden items-center gap-2 xl:flex">
+          <Motto lines={BRAND_MOTTO} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/art/hero/crown.webp" alt="" className="h-11 w-auto drop-shadow-[0_4px_10px_rgba(240,185,11,0.35)]" />
+        </div>
+      </div>
     </div>
   );
 }

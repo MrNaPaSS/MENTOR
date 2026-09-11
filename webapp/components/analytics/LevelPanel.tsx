@@ -73,7 +73,7 @@ export default function LevelPanel({
         <img
           src="/art/level-summit.webp"
           alt=""
-          className="pointer-events-none hidden h-24 min-w-0 flex-1 object-contain sm:block"
+          className="pointer-events-none -my-6 hidden h-36 min-w-0 flex-1 object-contain sm:block"
         />
         <div className="ml-auto shrink-0 text-right">
           <span className="font-mono text-2xl font-extrabold leading-none tabular-nums text-[var(--pane-text)]">
