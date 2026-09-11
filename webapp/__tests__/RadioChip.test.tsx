@@ -110,13 +110,13 @@ describe("радио в шапке", () => {
     await mount();
     fireEvent.click(stationsButton());
     // Станция по умолчанию, а не первая попавшаяся из списка.
-    expect(screen.getByText("PromoDJ Klubb").className).toContain("text-accent-cyan");
+    expect(screen.getByText("PromoDJ Mini").className).toContain("text-accent-cyan");
   });
 
   it("впервые открывается станцией по умолчанию", async () => {
     await mount();
     fireEvent.click(stationsButton());
-    expect(screen.getByText("PromoDJ Klubb").className).toContain("text-accent-cyan");
+    expect(screen.getByText("PromoDJ Mini").className).toContain("text-accent-cyan");
   });
 });
 
@@ -164,12 +164,12 @@ describe("станция не отвечает", () => {
   }
 
   it("молчит станция по умолчанию - включается следующая", async () => {
-    const { asked, radio } = await playWith((url) => url.includes("klubb-192"));
+    const { asked, radio } = await playWith((url) => url.includes("mini-192"));
 
     // К мёртвой сходили дважды: с проверкой доступа и без неё.
-    expect(asked.filter((u) => u.includes("klubb-192"))).toHaveLength(2);
+    expect(asked.filter((u) => u.includes("mini-192"))).toHaveLength(2);
     // И ушли к соседней по списку.
-    expect(asked.at(-1)).not.toContain("klubb-192");
+    expect(asked.at(-1)).not.toContain("mini-192");
     expect(radio.snapshot().mode).not.toBe("off");
   });
 
@@ -182,7 +182,7 @@ describe("станция не отвечает", () => {
   });
 
   it("выбор станции руками отменяет прошлые неудачи", async () => {
-    const { radio } = await playWith((url) => url.includes("klubb-192"));
+    const { radio } = await playWith((url) => url.includes("mini-192"));
     // Мёртвую выбирают снова - к ней и идём, а не считаем её вычеркнутой.
     expect(() => radio.pick(0)).not.toThrow();
   });
