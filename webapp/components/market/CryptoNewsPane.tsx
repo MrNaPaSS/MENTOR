@@ -15,6 +15,7 @@ import { useIntlLocale, useT } from "@/lib/i18n";
 import { useLocale, type Locale } from "@/lib/i18n/locale";
 import { API_URL } from "@/lib/api";
 import { CHIP, CHIP_OFF, CHIP_ON, Pane } from "@/components/app/Pane";
+import { useFitHeight } from "@/lib/useFitHeight";
 
 /** Строка ленты - так её отдаёт `/api/market/news`. */
 interface NewsItem {
@@ -32,7 +33,7 @@ const NEWS_SOURCES: Record<Locale, string> = {
   en: "Cointelegraph · Decrypt · The Block",
 };
 
-function CryptoNewsFeed({ lang }: { lang: Locale }) {
+function CryptoNewsFeed({ lang, height }: { lang: Locale; height: number }) {
   const t = useT();
   const numbers = useIntlLocale();
   // null - ещё грузится; пустой массив - сервер ответил, но новостей нет.
@@ -56,7 +57,7 @@ function CryptoNewsFeed({ lang }: { lang: Locale }) {
 
   if (news === null) {
     return (
-      <div className="space-y-2 p-3">
+      <div className="space-y-2 p-3" style={{ height }}>
         {[...Array(6)].map((_, i) => (
           <div
             key={i}
@@ -69,11 +70,17 @@ function CryptoNewsFeed({ lang }: { lang: Locale }) {
   }
 
   if (!news.length) {
-    return <p className="py-10 text-center text-[12px] text-[var(--pane-muted)]">{t.market.news.loadFailed}</p>;
+    return (
+      <p className="py-10 text-center text-[12px] text-[var(--pane-muted)]" style={{ height }}>
+        {t.market.news.loadFailed}
+      </p>
+    );
   }
 
   return (
-    <ul className="max-h-[640px] divide-y divide-[var(--pane-border)] overflow-y-auto">
+    // Лента ровно до низа окна: заголовки читают подряд, и рамка, кончающаяся
+    // на середине экрана, оставляла бы под собой пустое поле.
+    <ul className="divide-y divide-[var(--pane-border)] overflow-y-auto" style={{ height }}>
       {news.map((n) => (
         <li key={n.url}>
           <a
@@ -109,6 +116,7 @@ function CryptoNewsFeed({ lang }: { lang: Locale }) {
 
 export default function CryptoNewsPane() {
   const t = useT();
+  const { ref, height, head, wide } = useFitHeight(420);
   // Язык ленты - по языку интерфейса, пока человек не выбрал другой сам:
   // англоязычные издания быстрее, русские - понятнее.
   const locale = useLocale();
@@ -116,6 +124,7 @@ export default function CryptoNewsPane() {
   const feedLang = newsLang ?? locale;
 
   return (
+    <div ref={ref}>
     <Pane
       title={t.market.news.title}
       hint={NEWS_SOURCES[feedLang]}
@@ -131,7 +140,8 @@ export default function CryptoNewsPane() {
         </button>
       ))}
     >
-      <CryptoNewsFeed lang={feedLang} />
+      <CryptoNewsFeed lang={feedLang} height={wide ? Math.max(320, height - (head || 44) - 2) : 640} />
     </Pane>
+    </div>
   );
 }
