@@ -89,6 +89,15 @@ export function PageRidge() {
   const anchor = useRef<HTMLSpanElement>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
+  // Считаем место не один раз при загрузке, а на каждое движение того, от чего
+  // оно зависит.
+  //
+  // Верхняя панель встаёт на своё место не сразу: над ней лента котировок, её
+  // высота приходит с первыми ценами, а ширину текста меняет загрузка шрифтов.
+  // Замер до этого давал верную цифру для той секунды и неверную для
+  // следующей: слои расходились, и гора в странице оказывалась ниже и левее
+  // своей вершины в панели. Со стороны это и есть «после перезагрузки горы
+  // сместились».
   useLayoutEffect(() => {
     const measure = () => {
       const header = document.querySelector("header");
@@ -99,11 +108,37 @@ export function PageRidge() {
       // Панель закреплена, страница - нет: считаем как при нулевой прокрутке.
       const top = Math.round(h.top + TOP_IN_HEADER - (b.top + window.scrollY));
       const right = Math.round(RIGHT - (document.documentElement.clientWidth - b.right));
-      setPos({ top, right });
+      setPos((was) => (was && was.top === top && was.right === right ? was : { top, right }));
     };
+
     measure();
+    // Ещё раз в следующем кадре: разметка после первого прохода часто ещё
+    // доезжает, а лишний замер стоит доли миллисекунды.
+    const frame = requestAnimationFrame(measure);
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    // Картинки ленты и шапки догружаются после первой отрисовки.
+    window.addEventListener("load", measure);
+    // Шрифт меняет высоту строк, а с ней и место панели.
+    document.fonts?.ready?.then(measure).catch(() => {});
+
+    // Лента котировок и сама шапка меняют высоту и без изменения размера окна:
+    // пришли новые цены, свернулось уведомление. Событие resize на это не
+    // приходит, поэтому смотрим за самими коробками.
+    const header = document.querySelector("header");
+    const box = anchor.current?.parentElement;
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    if (observer) {
+      if (header) observer.observe(header);
+      if (box) observer.observe(box);
+    }
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("load", measure);
+      observer?.disconnect();
+    };
   }, []);
 
   return (
