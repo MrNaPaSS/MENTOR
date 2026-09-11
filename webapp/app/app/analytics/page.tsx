@@ -1440,13 +1440,16 @@ function PanelArt({
     );
   }
   return (
-    <div className="relative hidden w-[48%] max-w-[420px] shrink-0 sm:block">
-      <Motto lines={motto} className="absolute left-3 top-[38%] -translate-y-1/2 !tracking-[0.24em]" />
+    <div className="hidden w-[44%] max-w-[400px] shrink-0 items-center justify-center gap-4 px-3 sm:flex">
+      {/* Девиз и картинка - одной группой по центру колонки: картинка стоит
+          вплотную за текстом и не уезжает к краю панели; девиз чуть выше
+          середины. */}
+      <Motto lines={motto} className="shrink-0 -translate-y-5 !tracking-[0.24em]" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
         alt=""
-        className="pointer-events-none absolute inset-y-1 right-1 h-[calc(100%-0.5rem)] w-[calc(100%-11.5rem)] object-contain object-right drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+        className="pointer-events-none h-[86%] w-auto min-w-0 max-w-[60%] object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
       />
     </div>
   );
