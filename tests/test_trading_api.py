@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.api import trading as trading_api
-from backend.deps import get_current_student, get_session
+from backend.deps import get_current_student, get_session, get_weex
 from core.db import Base
 from core.models import Student
 
@@ -126,6 +126,13 @@ class FakeExchange:
         return {"ok": True}
 
 
+class _NoAffiliate:
+    """Партнёрка, которая этого UID не знает."""
+
+    async def get_affiliate_balance(self, uid):
+        return None
+
+
 @pytest.fixture()
 def app_and_exchange(monkeypatch):
     monkeypatch.setenv("WEEX_KEYS_SECRET", "мастер-ключ-для-тестов")
@@ -144,6 +151,8 @@ def app_and_exchange(monkeypatch):
     app.include_router(trading_api.router)
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_current_student] = lambda: student
+    # Партнёрка при подключении ключей: этот ученик не реферал академии.
+    app.dependency_overrides[get_weex] = lambda: _NoAffiliate()
     # Доступ к разделу проверяется отдельно — здесь он не предмет теста.
 
     with TestClient(app) as client:

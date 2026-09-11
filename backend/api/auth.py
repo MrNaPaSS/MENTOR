@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from core import repo
+from core.referral import grant_referral_vip
 from core.weex.uid import clean_uid
 from backend.config import BackendConfig
 from backend.deps import get_config, get_session, get_weex, get_notifier
@@ -173,6 +174,9 @@ async def request_code(
     student = repo.get_student_by_weex_uid(session, uid)
     if student is None or not student.is_approved:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Обратитесь к ментору для получения доступа")
+    # Партнёрка ответила по этому UID - значит он наш реферал: VIP сразу.
+    if grant_referral_vip(student):
+        session.commit()
 
     code = f"{secrets.randbelow(10**6):06d}"
     repo.create_auth_code(session, uid, code, config.code_ttl_seconds)
@@ -272,6 +276,8 @@ async def login_by_uid(
         own = await balance_by_keys(session, student)
         student.balance_usdt = own if own is not None else balance
         student.balance_source = "api_keys" if own is not None else "affiliate_api"
+    # Партнёрка ответила по этому UID - он зарегистрирован через академию.
+    grant_referral_vip(student)
     session.flush()
     record_login(session, student)
     session.commit()
@@ -366,8 +372,9 @@ async def tg_code(
     # лишний поход на биржу заметен. Биржа не ответила - пароль всё равно
     # выдаём: связь с ней рвётся, а вход из-за этого падать не должен, и
     # отметки бота в этом случае достаточно.
+    referral = False
     try:
-        await weex.get_affiliate_balance(uid)
+        referral = await weex.get_affiliate_balance(uid) is not None
     except Exception as exc:  # noqa: BLE001 - причина в журнале, вход важнее
         logger.warning("UID %s при выдаче пароля не проверен: %s", uid, exc)
 
@@ -376,6 +383,9 @@ async def tg_code(
     # не зависит от того, дошёл ли ученик до формы.
     student = _link_student(session, body.tg_id, uid, body.username.strip())
     _save_avatar(student, body.avatar)
+    # Партнёрка ответила по этому UID - реферал академии: VIP сразу.
+    if referral:
+        grant_referral_vip(student)
     session.commit()
 
     # Пока пароль жив, повторный запрос отдаёт **тот же** и не продлевает срок.

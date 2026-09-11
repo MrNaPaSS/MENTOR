@@ -182,6 +182,8 @@ class StudentOut(BaseModel):
     journal_delete_allowed: bool = False
     # VIP: все инструменты терминала без покупки.
     is_vip: bool = False
+    # Откуда VIP: referral - рефералу академии сервером, manual - наставником.
+    vip_source: str = ""
     coins: int = 0
     # Откуда запись: bot | web | academy
     created_via: str = "bot"

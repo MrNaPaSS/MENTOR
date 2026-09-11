@@ -26,8 +26,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from backend.deps import get_current_student, get_session
+from backend.deps import get_current_student, get_session, get_weex
 from core.exchanges import KEYS_EXCHANGE
+from core.referral import grant_referral_vip
+from core.weex.uid import clean_uid, looks_like_uid
 from core.models import iso, LiveTrade, ScalpTrade, Student, WeexCredential, utcnow
 from core.trading.position import (
     Position,
@@ -584,6 +586,7 @@ async def save_keys(
     body: KeysIn,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
+    weex=Depends(get_weex),
 ):
     """Подключить ключи. Проверяем их сразу — иначе ошибка всплывёт на ордере."""
     if not keystore.enabled():
@@ -607,8 +610,23 @@ async def save_keys(
     row.key_tail = keystore.mask(body.api_key)
     row.is_active = True
     row.updated_at = utcnow()
+    # Счёт подключён - если он заведён через академию, VIP сразу. Партнёрка
+    # отвечает только по своим рефералам; не ответила - обычный уровень, а
+    # подключение от этого не падает.
+    await _check_referral(session, weex, student)
     session.commit()
-    return {"ok": True, "key_tail": row.key_tail}
+    return {"ok": True, "key_tail": row.key_tail, "vip": bool(student.is_vip)}
+
+
+async def _check_referral(session, weex, student: Student) -> None:
+    uid = clean_uid(student.weex_uid)
+    if student.is_vip or not looks_like_uid(uid):
+        return
+    try:
+        if await weex.get_affiliate_balance(uid) is not None:
+            grant_referral_vip(student)
+    except Exception as exc:  # noqa: BLE001 - VIP подождёт, ключи важнее
+        logger.warning("Реферальность ученика %s не проверена: %s", student.id, exc)
 
 
 @router.delete("/keys")

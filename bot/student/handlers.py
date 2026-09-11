@@ -112,6 +112,7 @@ def build_student_router(
         from sqlalchemy import select as sa_select
         from core.models import Student
         from core.weex.uid import clean_uid
+        from core.referral import grant_referral_vip
 
         # Цифрами: ученик копирует опознаватель из приложения биржи вместе с
         # тем, что стоит рядом, а биржа ждёт число.
@@ -162,6 +163,8 @@ def build_student_router(
             student.balance_usdt = balance
             student.balance_source = "affiliate_api"
             student.balance_updated_at = utcnow()
+            # Партнёрка знает этот UID - счёт заведён через академию: VIP.
+            grant_referral_vip(student)
             session.commit()
 
         await state.clear()

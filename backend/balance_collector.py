@@ -18,6 +18,7 @@ from core.db import SessionLocal
 from core.models import BalanceSnapshot, Student, WeexCredential
 from core.weex.base import WeexClient
 from core.weex.uid import clean_uid
+from core.referral import grant_referral_vip
 
 logger = logging.getLogger("nmnh.balance")
 
@@ -97,6 +98,8 @@ async def snapshot_all(weex: WeexClient) -> int:
                     except Exception as exc:
                         logger.warning("Не удалось получить баланс uid=%s: %s", uid, exc)
                         continue
+                    if balance is not None:
+                        grant_referral_vip(student)
 
                 if balance is None:
                     continue
@@ -125,6 +128,10 @@ async def snapshot_all(weex: WeexClient) -> int:
             # занижённым. Тогда предпочитаем партнёрскую цифру - она считает
             # день полностью.
             vol_row = volume_by_uid.get(uid)
+            # Строка в партнёрском отчёте есть только у реферала - значит
+            # счёт заведён через академию: VIP, если его ещё нет.
+            if vol_row is not None:
+                grant_referral_vip(student)
             if existing is not None:
                 # Спот виден только партнёрской ручке: ключи заведены под
                 # фьючерсы, и другого счёта этот клиент не видит.

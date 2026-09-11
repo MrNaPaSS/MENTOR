@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
 from core.weex.uid import clean_uid
+from core.referral import grant_referral_vip
 from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student
 from backend.trading.funds import trade_roi, trade_volume
 from backend.api.journal import is_admin
@@ -86,6 +87,8 @@ async def refresh_balance(
         if balance is not None:
             fresh.balance_usdt = balance
             fresh.balance_source = "affiliate_api"
+            # Партнёрка его знает - реферал академии.
+            grant_referral_vip(fresh)
             session.commit()
     return _profile(fresh)
 

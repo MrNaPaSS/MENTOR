@@ -216,12 +216,14 @@ export default function AdminStudents() {
                       disabled={busy === s.id}
                       title={
                         s.is_vip
-                          ? "VIP: все инструменты терминала открыты без покупки"
+                          ? s.vip_source === "referral"
+                            ? "VIP за регистрацию через академию: выдан сам. Снимете - обратно не вернётся"
+                            : "VIP: все инструменты терминала открыты без покупки"
                           : "Обычный: инструменты покупает в маркете"
                       }
                       className={`badge-${s.is_vip ? "success" : "muted"}`}
                     >
-                      {s.is_vip ? "VIP" : "обычный"}
+                      {s.is_vip ? (s.vip_source === "referral" ? "VIP · реф" : "VIP") : "обычный"}
                     </button>
                   </td>
                   <td className="text-center">

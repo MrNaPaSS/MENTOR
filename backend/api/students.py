@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete as sql_delete
 
 from core import repo
+from core.referral import MANUAL
 from core.models import iso, BalanceSnapshot, CoinTransaction, SignalDelivery, Student
 from backend.deps import get_session, get_current_mentor
 from backend.schemas import StudentOut
@@ -30,6 +31,7 @@ def _to_out(s: Student) -> StudentOut:
         copy_allowed=bool(s.copy_allowed),
         journal_delete_allowed=bool(s.journal_delete_allowed),
         is_vip=bool(s.is_vip),
+        vip_source=s.vip_source or "",
         coins=s.coins or 0,
         created_via=s.created_via or "bot",
         created_at=_iso(s.created_at),
@@ -68,8 +70,13 @@ def patch(student_id: int, body: StudentPatch, session=Depends(get_session)):
     s = session.get(Student, student_id)
     if s is None:
         raise HTTPException(404, "Ученик не найден")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changes = body.model_dump(exclude_unset=True)
+    for field, value in changes.items():
         setattr(s, field, value)
+    # VIP, переключённый наставником, - его решение: автоматика для
+    # рефералов академии его больше не трогает.
+    if "is_vip" in changes:
+        s.vip_source = MANUAL
     session.commit()
     return _to_out(s)
 

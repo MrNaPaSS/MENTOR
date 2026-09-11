@@ -205,6 +205,11 @@ def _rich_student(client, uid: str, coins: int) -> dict:
     with SessionLocal() as s:
         student = s.query(Student).filter_by(weex_uid=uid).one()
         student.coins = coins
+        # Мок партнёрки знает любой UID, и вход делал бы каждого рефералом
+        # академии - с VIP. Здесь нужен обычный ученик, который покупает сам:
+        # таким его делает решение наставника.
+        student.is_vip = False
+        student.vip_source = "manual"
         s.commit()
     return {"Authorization": f"Bearer {token}"}
 
@@ -501,3 +506,42 @@ def test_ментор_заводит_товар_сразу_с_английски
         assert patched["title_en"] == "NMNH coffee mug"
     finally:
         client.app.dependency_overrides.pop(get_current_mentor, None)
+
+
+# ── VIP рефералам академии ───────────────────────────────────────────────────
+
+
+def test_реферал_академии_получает_vip_при_входе(client):
+    """Партнёрка ответила по UID - счёт заведён через академию: VIP сразу."""
+    from core.db import SessionLocal
+
+    client.post("/api/auth/login-by-uid", json={"weex_uid": "700080"})
+    with SessionLocal() as s:
+        student = s.query(Student).filter_by(weex_uid="700080").one()
+        assert (student.is_vip, student.vip_source) == (True, "referral")
+
+
+def test_снятый_наставником_vip_не_возвращается(client):
+    from core.db import SessionLocal
+
+    client.post("/api/auth/login-by-uid", json={"weex_uid": "700081"})
+    with SessionLocal() as s:
+        s.query(Student).filter_by(weex_uid="700081").one().is_vip = False
+        s.query(Student).filter_by(weex_uid="700081").one().vip_source = "manual"
+        s.commit()
+    client.post("/api/auth/login-by-uid", json={"weex_uid": "700081"})
+    with SessionLocal() as s:
+        assert s.query(Student).filter_by(weex_uid="700081").one().is_vip is False
+
+
+def test_правило_vip_за_рефералку():
+    from core.referral import grant_referral_vip
+
+    fresh = Student(tg_id=1, is_vip=False, vip_source="")
+    assert grant_referral_vip(fresh) is True
+    assert (fresh.is_vip, fresh.vip_source) == (True, "referral")
+    # Уже VIP - ничего не меняем.
+    assert grant_referral_vip(fresh) is False
+    # Наставник решил сам - автоматика молчит.
+    held = Student(tg_id=2, is_vip=False, vip_source="manual")
+    assert grant_referral_vip(held) is False and held.is_vip is False
