@@ -13,7 +13,7 @@ import PnlCard from "@/components/scalping/PnlCard";
 import { price as fmtPrice, type CardData } from "@/lib/pnl/card";
 import { cardFromPeriod, cardFromTrade } from "@/lib/pnl/data";
 import { periodOf, type Span } from "@/lib/pnl/period";
-import { CHIP, CHIP_OFF, CHIP_ON, PaneHead, PaneScope } from "@/components/app/Pane";
+import { PaneHead, PaneScope } from "@/components/app/Pane";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
 import CertificatesPanel from "@/components/cert/CertificatesPanel";
@@ -635,39 +635,37 @@ export default function AnalyticsPage() {
 
   return (
     <PaneScope className="space-y-3">
-      {/* Шапка раздела: название, строка о нём и оборот - всё одной строкой.
-          Прежний заголовок в два сантиметра и подпись под ним занимали столько
-          же места, сколько первая панель с данными. */}
+      {/* Шапка раздела: название, строка о нём и вкладки сразу за ними - так
+          же, как в маркете. Оборот отсюда ушёл в «Путь трейдера»: там он и так
+          написан, и в шапке стоял вторым экземпляром. */}
       <PaneHead
         title={`${t.analytics.title} ${t.analytics.titleAnd} ${t.analytics.titleTail}`}
         hint={t.analytics.subtitle}
-      >
-        {(
-          [
-            ["results", t.analytics.tabs.results, BarChart2],
-            ["rewards", t.analytics.tabs.rewards, Trophy],
-          ] as const
-        ).map(([key, label, Icon]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex items-center gap-1.5 ${CHIP} ${tab === key ? CHIP_ON : CHIP_OFF}`}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-          </button>
-        ))}
-        {tradeSummary && (
-          <span className="flex items-baseline gap-1.5 rounded-lg border border-[var(--pane-gold-soft)] bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-2 py-1">
-            <span className="text-[10px] uppercase tracking-wider text-[var(--pane-muted)]">
-              {t.analytics.totalVolume}
-            </span>
-            <span className="font-mono text-[12px] font-bold tabular-nums text-[var(--pane-gold)]">
-              ${fmtDot(Math.round(totalVolume))}
-            </span>
-          </span>
-        )}
-      </PaneHead>
+        nav={
+          <div className="flex gap-1.5">
+            {(
+              [
+                ["results", t.analytics.tabs.results, BarChart2],
+                ["rewards", t.analytics.tabs.rewards, Trophy],
+              ] as const
+            ).map(([key, label, Icon]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors duration-150 ease-out ${
+                  tab === key
+                    ? "border-accent-gold/50 bg-accent-gold/10 text-[var(--pane-gold)]"
+                    : "border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+                }`}
+              >
+                <Icon className="h-3 w-3 shrink-0" />
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {/* Итоги: чем закончились дни и куда идёт оборот. */}
       {tab === "results" && (
@@ -707,8 +705,13 @@ export default function AnalyticsPage() {
                 <span className="text-[10px] text-[var(--pane-muted)]">
                   {t.analytics.path.subtitle}
                 </span>
-                <span className="ml-auto font-mono text-[13px] font-bold tabular-nums text-[var(--pane-gold)]">
-                  ${fmtDot(Math.round(totalVolume))}
+                <span className="ml-auto flex items-baseline gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-[var(--pane-muted)]">
+                    {t.analytics.totalVolume}
+                  </span>
+                  <span className="font-mono text-[13px] font-bold tabular-nums text-[var(--pane-gold)]">
+                    ${fmtDot(Math.round(totalVolume))}
+                  </span>
                 </span>
               </div>
 
@@ -1430,11 +1433,11 @@ function PanelArt({
     return (
       <div className="relative hidden w-[44%] max-w-[360px] shrink-0 sm:block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {/* Монеты чуть меньше панели и прижаты книзу, девиз опущен к ним. */}
+        {/* Монеты чуть меньше панели и приподняты от её низа, девиз рядом с ними. */}
         <img
           src={src}
           alt=""
-          className="pointer-events-none absolute bottom-1 left-2 h-[80%] w-[calc(100%-9rem)] object-contain object-bottom drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+          className="pointer-events-none absolute bottom-[18%] left-2 h-[80%] w-[calc(100%-9rem)] object-contain object-bottom drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
         />
         <Motto lines={motto} className="absolute right-3 top-[22%] text-right !tracking-[0.24em]" />
       </div>
