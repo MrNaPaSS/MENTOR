@@ -29,5 +29,7 @@ export const profile = {
   cardNameHint: "Leave empty - the name comes from Telegram",
 
   adminPanel: "Admin panel",
+  /** Word column on the right of the profile bottom banner. */
+  bannerWords: ["Community", "Analytics", "Tools", "Growth", "Freedom"],
   logoutAccount: "Log out of the account",
 };

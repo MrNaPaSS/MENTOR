@@ -3,7 +3,7 @@
 // Что уже куплено, откуда пришли монеты и что с заказами - одной панелью с
 // вкладками. Три отдельные панели столбиком уводили баланс под сгиб экрана.
 //
-// В панели - три последние записи, не больше. Список рос вместе с покупками
+// В панели - две последние записи, не больше. Список рос вместе с покупками
 // и отодвигал всё, что стоит под ним; целиком он открывается окном по кнопке.
 
 import { useEffect, useState } from "react";
@@ -17,7 +17,7 @@ type Tab = "access" | "history" | "orders";
 const TABS: Tab[] = ["access", "history", "orders"];
 
 /** Сколько записей видно в самой панели. Остальное - в окне. */
-const SHOWN = 3;
+const SHOWN = 2;
 
 const STATUS: Record<string, { key: "pending" | "fulfilled" | "rejected"; color: string; icon: typeof Check }> = {
   pending: { key: "pending", color: "var(--pane-gold)", icon: Clock },
@@ -128,7 +128,7 @@ export default function ActivityPane({
     </ul>
   );
 
-  /** Список вкладки: в панели - первые три, в окне - весь. */
+  /** Список вкладки: в панели - первые две, в окне - весь. */
   function body(which: Tab, limit?: number) {
     if (which === "access") {
       return count.access === 0 ? empty(t.shop.accessEmpty) : accessRows(lists.access.slice(0, limit));

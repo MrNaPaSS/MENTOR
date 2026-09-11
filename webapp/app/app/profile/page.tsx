@@ -464,18 +464,27 @@ export default function ProfilePage() {
         <ChevronRight className="h-4 w-4 text-[var(--pane-muted)]" />
       </button>
 
-      {/* Нижний баннер бренда: горы, планета, терминал и корона на ночном
-          поле. Девиз, слова сообщества и строка внизу впечатаны в саму
-          картинку - поверх ничего не набираем, иначе они встали бы дважды.
-          Баннер тёмный и в светлой теме: это витрина, а не панель. */}
-      <div className="mx-auto mt-auto hidden w-full max-w-[1280px] overflow-hidden rounded-xl sm:block">
+      {/* Нижний баннер бренда: горы, планета, терминал и корона - вырезаны из
+          ночного поля на прозрачный фон и стоят во всю ширину, без рамки: к
+          краям и книзу тают в фон страницы. Девиз и слова сообщества набраны
+          текстом, а не впечатаны: белые буквы картинки на светлой теме не
+          читались бы. */}
+      <div className="relative mt-auto hidden w-full sm:block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/art/profile/bottom-nmnh.webp"
           alt=""
           aria-hidden
           loading="lazy"
-          className="block aspect-[1800/596] w-full object-cover"
+          className="profile-art block aspect-[2000/609] w-full"
+        />
+        <Motto
+          lines={BRAND_MOTTO}
+          className="absolute left-[1.5%] top-[10%] !text-[12px] !tracking-[0.42em] !text-[var(--pane-text-2)]"
+        />
+        <Motto
+          lines={t.profile.bannerWords}
+          className="absolute right-[1.5%] top-[10%] !text-[10px] !tracking-[0.3em] !text-[var(--pane-text-2)]"
         />
       </div>
 
