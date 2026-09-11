@@ -60,6 +60,17 @@ export const market = {
     retargetProgress: (pct: string) => `${pct}% of the period done`,
   },
 
+  /** Decoration column in Pulse: banners, a quote and a step to the terminal. */
+  promo: {
+    quote: "The best traders don't predict the market - they're ready for any scenario.",
+    author: "NMNH",
+    cta: ["Trade", "with knowledge"],
+    ctaHint: "Open the terminal",
+    bitcoinAlt: "Bitcoin leads the market",
+    globalAlt: "The global market always moves",
+    smartAlt: "Smart Money: follow the big players. Open the maps",
+  },
+
   fearGreed: {
     title: "Fear and greed",
     hint: "Market sentiment from 0 to 100",

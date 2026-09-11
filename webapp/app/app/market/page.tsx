@@ -35,6 +35,8 @@ import GlobalStrip from "@/components/market/GlobalStrip";
 import MarketScreener from "@/components/market/MarketScreener";
 import BitcoinPane from "@/components/market/BitcoinPane";
 import TrendingPane from "@/components/market/TrendingPane";
+import PulsePromo from "@/components/market/PulsePromo";
+import { MARKET_SECTION_EVENT, sectionFromHash } from "@/lib/marketSection";
 
 const SmartMoney = dynamic(() => import("@/app/app/smartmoney/page"), {
   ssr: false,
@@ -163,13 +165,17 @@ const TABS: { key: Section; icon: React.ReactNode }[] = [
 
 // ── Пульс ─────────────────────────────────────────────────────────────────────
 
+// Раскладка по макету: сверху настроение, деньги за позиции и то, о чём
+// говорят; снизу биткоин и колонка оформления. На среднем экране - по две
+// панели в ряд, на узком - столбиком.
 function PulseSection() {
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
-      <FearGreedPane />
-      <FundingPane />
-      <BitcoinPane />
-      <TrendingPane />
+    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-12">
+      <FearGreedPane className="xl:col-span-5" />
+      <FundingPane className="xl:col-span-4" />
+      <TrendingPane className="xl:col-span-3" />
+      <BitcoinPane className="xl:col-span-6" />
+      <PulsePromo className="xl:col-span-6" />
     </div>
   );
 }
@@ -239,6 +245,23 @@ function CalendarSection() {
 export default function MarketPage() {
   const t = useT();
   const [section, setSection] = useState<Section>("pulse");
+
+  // Вкладку открывают и извне: якорем адреса со страницы Smart Money и
+  // событием с баннера внутри самого «Рынка».
+  useEffect(() => {
+    const keys = TABS.map((tab) => tab.key);
+    const fromHash = sectionFromHash(window.location.hash, keys);
+    if (fromHash) setSection(fromHash);
+    const onSection = (e: Event) => {
+      const next = sectionFromHash(String((e as CustomEvent<string>).detail ?? ""), keys);
+      if (next) {
+        setSection(next);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    };
+    window.addEventListener(MARKET_SECTION_EVENT, onSection);
+    return () => window.removeEventListener(MARKET_SECTION_EVENT, onSection);
+  }, []);
   const active = t.market.tabs[section];
 
   return (

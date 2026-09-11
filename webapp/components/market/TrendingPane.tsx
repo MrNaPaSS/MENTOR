@@ -9,6 +9,7 @@
 // Цена показана в биткоинах, а не в долларах: источник считает её так, и
 // переводить самим значило бы выдавать свой пересчёт за его число.
 
+import { Flame } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type TrendingCoin } from "@/lib/api";
@@ -46,6 +47,7 @@ export default function TrendingPane({ className = "" }: { className?: string })
 
   return (
     <Pane
+      icon={<Flame className="h-3.5 w-3.5" />}
       title={t.market.trending.title}
       hint={t.market.trending.hint}
       state={state}

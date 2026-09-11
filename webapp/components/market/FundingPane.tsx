@@ -11,6 +11,7 @@
 // назвала. Выдавать «0.0000%» за настоящую ставку нельзя - такие строки
 // показаны прочерком и уходят вниз списка.
 
+import { Percent } from "lucide-react";
 import { useT, type Dict } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type FundingRate } from "@/lib/api";
@@ -93,6 +94,7 @@ export default function FundingPane({ className = "" }: { className?: string }) 
 
   return (
     <Pane
+      icon={<Percent className="h-3.5 w-3.5" />}
       title={t.market.funding.title}
       hint={
         named > 0

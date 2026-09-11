@@ -15,6 +15,7 @@
 // расхождение в полпроцента между «ценой на карточке» и ценой в терминале -
 // это вопрос, которого быть не должно.
 
+import { Bitcoin } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type Derivatives, type OnChainStats } from "@/lib/api";
@@ -128,6 +129,7 @@ export default function BitcoinPane({ className = "" }: { className?: string }) 
 
   return (
     <Pane
+      icon={<Bitcoin className="h-3.5 w-3.5" />}
       title={t.market.bitcoin.title}
       hint={t.market.bitcoin.hint}
       badge={<LiveBadge live={!!deriv} label={deriv ? t.market.bitcoin.live30s : t.market.bitcoin.noPrice} />}

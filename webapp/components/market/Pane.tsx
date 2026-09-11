@@ -96,6 +96,7 @@ export function PaneBar({
 export default function Pane({
   title,
   hint,
+  icon,
   badge,
   state = "ready",
   /** Чем объяснить пустоту: у каждого показателя своя причина молчать. */
@@ -105,6 +106,8 @@ export default function Pane({
 }: {
   title: string;
   hint?: string;
+  /** Значок перед названием: панели рынка различаются им раньше, чем прочитаны. */
+  icon?: ReactNode;
   badge?: ReactNode;
   state?: PaneState;
   emptyNote?: string;
@@ -118,7 +121,8 @@ export default function Pane({
     >
       <header className={HEAD}>
         <div className="min-w-0">
-          <h2 className="truncate text-[12px] font-semibold text-[var(--pane-text)]">
+          <h2 className="flex items-center gap-1.5 truncate text-[12px] font-semibold text-[var(--pane-text)]">
+            {icon && <span className="shrink-0 text-[var(--pane-gold)]">{icon}</span>}
             {title}
           </h2>
           {hint && (

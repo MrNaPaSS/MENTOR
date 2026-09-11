@@ -3,6 +3,7 @@
 import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/lib/api";
+import { openMarketSection } from "@/lib/marketSection";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import {
   Activity, AlertTriangle, BarChart3, Building2,
@@ -799,6 +800,30 @@ function DerivativesSection() {
   );
 }
 
+// ── Баннер ────────────────────────────────────────────────────────────────────
+
+/**
+ * Баннер раздела. Кнопка «Открыть карты» нарисована на самой картинке,
+ * поэтому нажимается весь баннер: искать на нём настоящую кнопку незачем.
+ */
+function SmartBanner() {
+  const t = useT();
+  return (
+    <button
+      type="button"
+      onClick={() => openMarketSection("maps")}
+      className="group block overflow-hidden rounded-xl border border-[var(--pane-border)] transition-[transform,box-shadow] duration-200 ease-out hover:shadow-[0_8px_28px_-10px_rgba(240,185,11,0.55)] active:scale-[0.99]"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/art/market/smart-money.webp"
+        alt={t.market.promo.smartAlt}
+        className="block w-full transition-transform duration-300 ease-out group-hover:scale-[1.01]"
+      />
+    </button>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SmartMoneyPage() {
@@ -822,7 +847,10 @@ export default function SmartMoneyPage() {
 
         <div className="grid gap-3 xl:grid-cols-2">
           <CotSection />
-          <MacroSection />
+          <div className="flex flex-col gap-3">
+            <MacroSection />
+            <SmartBanner />
+          </div>
         </div>
 
         <DerivativesSection />

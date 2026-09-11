@@ -13,16 +13,20 @@ import { useIntlLocale, useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type GlobalMarket } from "@/lib/api";
 import { money } from "@/lib/scalping";
+import { Activity, BarChart3, Bitcoin, Coins, Globe, type LucideIcon } from "lucide-react";
 import { LiveBadge, PaneLabel } from "./Pane";
 
 function Cell({
   label,
   value,
+  icon: Icon,
   tone = "plain",
   hint,
 }: {
   label: string;
   value: string;
+  /** Значок показателя: пять чисел в ряд различаются им быстрее, чем подписью. */
+  icon: LucideIcon;
   tone?: "plain" | "up" | "down" | "gold";
   hint?: string;
 }) {
@@ -33,10 +37,13 @@ function Cell({
     gold: "text-[var(--pane-gold)]",
   }[tone];
   return (
-    <div className="min-w-0 px-3 py-2" title={hint}>
-      <PaneLabel>{label}</PaneLabel>
-      <div className={`truncate font-mono text-[15px] font-semibold tabular-nums ${color}`}>
-        {value}
+    <div className="flex min-w-0 items-center gap-3 px-3 py-2.5" title={hint}>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)]">
+        <Icon className={`h-5 w-5 ${tone === "plain" ? "text-[var(--pane-gold)]" : color}`} />
+      </span>
+      <div className="min-w-0">
+        <PaneLabel>{label}</PaneLabel>
+        <div className={`truncate font-mono text-[17px] font-bold tabular-nums ${color}`}>{value}</div>
       </div>
     </div>
   );
@@ -84,28 +91,33 @@ export default function GlobalStrip() {
       {data ? (
         <div className="grid grid-cols-2 divide-x divide-y divide-[var(--pane-border)] sm:grid-cols-3 lg:grid-cols-5 lg:divide-y-0">
           <Cell
+            icon={Globe}
             label={t.market.global.marketCap.label}
             value={`$${money(data.total_market_cap_usd)}`}
             hint={t.market.global.marketCap.hint}
           />
           <Cell
+            icon={BarChart3}
             label={t.market.global.volume24h.label}
             value={`$${money(data.total_volume_usd)}`}
             hint={t.market.global.volume24h.hint}
           />
           <Cell
+            icon={Activity}
             label={t.market.global.change24h.label}
             value={`${change > 0 ? "+" : ""}${change.toFixed(2)}%`}
             tone={change > 0 ? "up" : change < 0 ? "down" : "plain"}
             hint={t.market.global.change24h.hint}
           />
           <Cell
+            icon={Bitcoin}
             label={t.market.global.btcDominance.label}
             value={`${data.btc_dominance.toFixed(1)}%`}
             tone="gold"
             hint={t.market.global.btcDominance.hint}
           />
           <Cell
+            icon={Coins}
             label={t.market.global.coins.label}
             value={data.active_cryptos.toLocaleString(numbers)}
             hint={t.market.global.coins.hint}

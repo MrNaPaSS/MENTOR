@@ -11,6 +11,7 @@
 // именно ими о нём говорят вслух. Плавный градиент выглядел бы наряднее, но
 // по нему нельзя сказать, кончился страх или ещё нет.
 
+import { Gauge as GaugeIcon } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type FearGreedPoint } from "@/lib/api";
@@ -179,6 +180,7 @@ export default function FearGreedPane({ className = "" }: { className?: string }
 
   return (
     <Pane
+      icon={<GaugeIcon className="h-3.5 w-3.5" />}
       title={t.market.fearGreed.title}
       hint={t.market.fearGreed.hint}
       state={now === null && state !== "loading" ? "error" : state}
@@ -187,22 +189,51 @@ export default function FearGreedPane({ className = "" }: { className?: string }
     >
       {now !== null && zone && (
         <div className="space-y-4">
+          {/* Шкала с числом, рядом - все пять зон с границами, справа бык.
+              Легенда нужна не для красоты: без неё «56» на шкале не говорит,
+              далеко ли до жадности. */}
           <div className="flex items-center gap-4">
-            <Gauge value={now} />
-            <div className="min-w-0">
+            <div className="flex w-[168px] shrink-0 flex-col items-center">
+              <Gauge value={now} />
               <div
-                className="font-mono text-[34px] font-bold leading-none tabular-nums"
+                className="-mt-1 font-mono text-[34px] font-bold leading-none tabular-nums"
                 style={{ color: zone.color }}
               >
                 {now}
               </div>
-              <div
-                className="mt-1 truncate text-[12px] font-semibold"
-                style={{ color: zone.color }}
-              >
+              <div className="mt-1 truncate text-[12px] font-semibold" style={{ color: zone.color }}>
                 {t.market.fearGreed.levels[zone.key]}
               </div>
             </div>
+
+            <ul className="min-w-0 flex-1 space-y-1.5">
+              {ZONES.map((z, i) => {
+                const from = i === 0 ? 0 : ZONES[i - 1].upto + 1;
+                const on = z === zone;
+                return (
+                  <li key={z.key} className="flex items-center gap-2 text-[11px]">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: z.color }} />
+                    <span
+                      className={`min-w-0 flex-1 truncate ${
+                        on ? "font-semibold text-[var(--pane-text)]" : "text-[var(--pane-text-2)]"
+                      }`}
+                    >
+                      {t.market.fearGreed.levels[z.key]}
+                    </span>
+                    <span className="shrink-0 font-mono tabular-nums text-[var(--pane-muted)]">
+                      {from} - {z.upto}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/art/market/bull-geo.webp"
+              alt=""
+              className="pointer-events-none -my-4 hidden h-40 w-auto shrink-0 drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)] min-[1500px]:block"
+            />
           </div>
 
           <div className="grid grid-cols-3 gap-2 border-t border-[var(--pane-border)] pt-3">
