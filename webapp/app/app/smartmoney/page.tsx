@@ -206,6 +206,7 @@ function Section({
   badge,
   accent = "cyan",
   delay = 0,
+  className = "",
   children,
 }: {
   icon: React.ReactNode;
@@ -214,6 +215,8 @@ function Section({
   badge?: React.ReactNode;
   accent?: "cyan" | "gold" | "green";
   delay?: number;
+  /** Место панели в колонке: например, растянуться на её остаток. */
+  className?: string;
   children: React.ReactNode;
 }) {
   const ac =
@@ -224,7 +227,7 @@ function Section({
         : "var(--pane-accent)";
   return (
     <section
-      className="sm-fade-up flex flex-col overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)]"
+      className={`sm-fade-up flex flex-col overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] ${className}`}
       style={{ animationDelay: `${delay}s` }}
     >
       <header className="flex items-center gap-2.5 border-b border-[var(--pane-border)] px-3 py-2">
@@ -467,7 +470,7 @@ const MACRO_ICONS: Record<string, string> = {
   DXY: "💵", US10Y: "📈", SPX: "📊", GOLD: "🥇", OIL: "🛢", VIX: "⚡",
 };
 
-function MacroSection() {
+function MacroSection({ className = "" }: { className?: string }) {
   const t = useT();
   const [items,setItems]   = useState<MacroItem[]|null>(null);
   const [isDemo,setIsDemo] = useState(false);
@@ -485,7 +488,7 @@ function MacroSection() {
 
   return (
     <Section icon={<BarChart3 className="h-4 w-4 text-[var(--pane-accent)]"/>}
-      title={t.smart.macro.title} accent="cyan" delay={0.05}
+      title={t.smart.macro.title} accent="cyan" delay={0.05} className={className}
       badge={isDemo ? <DemoBadge/> : undefined}
       sub={isDemo ? t.smart.sourceSilent : t.smart.macro.sub}>
 
@@ -498,7 +501,9 @@ function MacroSection() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {/* Карточки тянутся на всю высоту панели: она растянута до низа
+            соседней, и без этого под ними оставалось бы пустое поле. */}
+        <div className="grid h-full auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-3">
           {items.map((item,i)=>{
             const pos = item.changePct>=0;
             const dec = item.key==="US10Y"||item.key==="VIX" ? 2 : item.price>1000 ? 1 : 2;
@@ -849,8 +854,11 @@ export default function SmartMoneyPage() {
 
         <div className="grid gap-3 xl:grid-cols-2">
           <CotSection />
+          {/* Правый столбец ровняется по левому: макро занимает остаток
+              высоты, баннер стоит у нижнего края. Иначе под баннером
+              оставалось пустое место до низа секции. */}
           <div className="flex flex-col gap-3">
-            <MacroSection />
+            <MacroSection className="flex-1" />
             <SmartBanner />
           </div>
         </div>
