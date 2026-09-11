@@ -126,15 +126,18 @@ function TvWidget({
 function WidgetPane({
   title,
   hint,
+  className = "",
   children,
 }: {
   title: string;
   hint: string;
+  /** Место панели в сетке раздела. */
+  className?: string;
   children: React.ReactNode;
 }) {
   const t = useT();
   return (
-    <section className="overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+    <section className={`overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] ${className}`}>
       <header className="flex items-baseline justify-between gap-3 border-b border-[var(--pane-border)] px-3 py-2">
         <div className="min-w-0">
           <h2 className="truncate text-[12px] font-semibold text-[var(--pane-text)]">{title}</h2>
@@ -195,13 +198,71 @@ function PulseSection() {
 
 // ── Карты ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Высота, на которой раздел кончается ровно внизу окна.
+ *
+ * Виджету TradingView высота нужна числом: он собирается один раз и меряет
+ * себя сам. Поэтому считаем её от того места, где стоит секция, а не задаём
+ * долей экрана. Пересчитываем на изменение окна: иначе после разворота окна
+ * половина карты оказалась бы за краем.
+ */
+function useFitHeight(min: number): {
+  ref: React.RefObject<HTMLDivElement>;
+  height: number;
+  head: number;
+  wide: boolean;
+} {
+  const ref = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(min);
+  // Шапка панели меряется по факту: числом наугад страница получала хвост
+  // прокрутки ровно в разницу.
+  const [head, setHead] = useState(PANE_HEAD);
+  const [wide, setWide] = useState(true);
+
+  useEffect(() => {
+    const measure = () => {
+      const el = ref.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      // Под секцией ещё нижнее поле кабинета - его видно только в стилях, а в
+      // замере нет. Без него страница получала хвост прокрутки ровно в это поле.
+      const main = el.closest("main");
+      const pad = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+      setHeight(Math.max(min, Math.round(window.innerHeight - top - pad)));
+      setHead(el.querySelector("header")?.getBoundingClientRect().height ?? PANE_HEAD);
+      setWide(window.innerWidth >= 1280);
+    };
+
+    measure();
+    const frame = requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+    };
+  }, [min]);
+
+  return { ref, height, head, wide };
+}
+
+/** Высота шапки панели, пока её не измерили: две строки текста и отступы. */
+const PANE_HEAD = 46;
+
 function MapsSection() {
   const t = useT();
+  // Карты - последняя секция раздела, и она должна кончаться внизу окна:
+  // тепловая карта с прокруткой страницы читается плохо, её смотрят целиком.
+  const { ref, height, head, wide } = useFitHeight(420);
+  // Минус два: столько чужой виджет добавляет к заданной высоте своей рамкой,
+  // и без этого запаса страница получала два пикселя прокрутки.
+  const widget = Math.max(260, Math.round(height - head) - 2);
+
   return (
-    <div className="space-y-3">
+    <div ref={ref} className="grid gap-3 xl:grid-cols-3">
       <WidgetPane
         title={t.market.widgets.heatmap.title}
         hint={t.market.widgets.heatmap.hint}
+        className="xl:col-span-2"
       >
         <TvWidget
           scriptName="embed-widget-crypto-coins-heatmap.js"
@@ -214,27 +275,17 @@ function MapsSection() {
             isZoomEnabled: true,
             hasSymbolTooltip: true,
           }}
-          height={520}
+          height={wide ? widget : 520}
         />
       </WidgetPane>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <WidgetPane title={t.market.widgets.forex.title} hint={t.market.widgets.forex.hint}>
-          <TvWidget
-            scriptName="embed-widget-forex-cross-rates.js"
-            config={{ currencies: ["EUR", "USD", "JPY", "GBP", "CHF", "AUD", "CAD", "NZD"] }}
-            height={400}
-          />
-        </WidgetPane>
-
-        <WidgetPane title={t.market.widgets.etf.title} hint={t.market.widgets.etf.hint}>
-          <TvWidget
-            scriptName="embed-widget-etf-heatmap.js"
-            config={{ dataSource: "AllUSEtf", blockSize: "aum", blockColor: "change", hasTopBar: false }}
-            height={400}
-          />
-        </WidgetPane>
-      </div>
+      <WidgetPane title={t.market.widgets.etf.title} hint={t.market.widgets.etf.hint}>
+        <TvWidget
+          scriptName="embed-widget-etf-heatmap.js"
+          config={{ dataSource: "AllUSEtf", blockSize: "aum", blockColor: "change", hasTopBar: false }}
+          height={wide ? widget : 400}
+        />
+      </WidgetPane>
     </div>
   );
 }
