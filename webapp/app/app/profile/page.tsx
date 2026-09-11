@@ -230,12 +230,12 @@ export default function ProfilePage() {
         <div className={`${CARD} relative overflow-hidden`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/art/brand/weex-app.webp"
+            src="/art/brand/weex-mark.webp"
             alt=""
             aria-hidden
-            // Иконка WEEX в золотой рамке, справа по середине карточки. Квадрат
-            // в 112 точек укладывается в поле справа от текста (pr-40).
-            className="pointer-events-none absolute right-4 top-1/2 hidden h-28 w-28 -translate-y-1/2 sm:block"
+            // Знак WEEX справа по середине карточки. В ширину 128 точек - он
+            // укладывается в поле справа от текста (pr-40).
+            className="pointer-events-none absolute right-4 top-1/2 hidden h-auto w-32 -translate-y-1/2 sm:block"
           />
           <div className="relative mb-3 flex items-center justify-between gap-3 sm:pr-40">
             <span className="text-[14px] font-bold text-[var(--pane-text)]">
