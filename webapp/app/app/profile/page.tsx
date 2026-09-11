@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Key, LogOut, MonitorDown, Moon, RefreshCw, ShieldCheck, Sun, Volume2, VolumeX } from "lucide-react";
+import { ChevronRight, Key, LogOut, MonitorDown, Moon, RefreshCw, ShieldCheck, Sun, Volume2, VolumeX } from "lucide-react";
 import { api, API_URL, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { profileChanged } from "@/lib/profileEvent";
@@ -16,12 +16,24 @@ import { setSoundOn, useSoundOn } from "@/lib/notifySound";
 import { intlLocale, setLocale, useLocale, useT, type Locale } from "@/lib/i18n";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import FramedAvatar from "@/components/avatar/FramedAvatar";
+import Motto, { BRAND_MOTTO } from "@/components/app/Motto";
 
 const ADMIN_WEEX_UID = "6613031308";
 
 // Карточки красятся палитрой темы: страница светлеет вместе с терминалом, а
 // неоновая бирюза, вписанная числом, на белом листе слепит.
 const CARD = "rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3";
+
+// Кнопки действий - золотой обводкой, как на макете: «Обновить», «Изменить».
+const GOLD_BTN =
+  "flex items-center gap-1.5 rounded-lg border border-accent-gold/60 bg-[color:color-mix(in_srgb,var(--pane-gold)_8%,transparent)] " +
+  "px-3 py-2 text-[12px] font-semibold text-[var(--pane-gold)] transition-colors duration-150 " +
+  "hover:bg-[color:color-mix(in_srgb,var(--pane-gold)_15%,transparent)]";
+
+// Выбранный вариант переключателя - золотом, остальные приглушены.
+const SEG_ON =
+  "border border-accent-gold/60 bg-[color:color-mix(in_srgb,var(--pane-gold)_12%,transparent)] text-[var(--pane-text)]";
+const SEG_OFF = "border border-transparent text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -124,22 +136,38 @@ export default function ProfilePage() {
         {/* Кто я и сколько у меня. Без градиента и свечения: терминал рядом
             собран из ровных панелей, и цветное пятно здесь читалось бы куском
             другого приложения. */}
-        <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
-          <div className="flex items-center gap-3">
+        <div className="relative overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-4">
+          {/* Горы с короной и NMNH - за правой половиной карточки, к левому
+              краю тают: имя и баланс стоят на чистом поле. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/art/brand/banner-nmnh.webp"
+            alt=""
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 hidden h-full w-[64%] object-cover object-left sm:block"
+            style={{
+              maskImage: "linear-gradient(90deg, transparent 0%, #000 38%)",
+              WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 38%)",
+            }}
+          />
+          <div className="relative flex items-center gap-4">
             {/* Аватарка из Telegram, если она есть. Файл отдаёт бэкенд, поэтому
                 к пути добавляем API_URL: сайт живёт на другом домене. Нет
                 аватарки - остаётся буква, как было. */}
             {/* В рамке, купленной в маркете: квадрат со скруглением 8 точек,
                 как в наборе рамок. Рамка выходит наружу и места не занимает. */}
             <div className="relative shrink-0">
-              <FramedAvatar
-                src={p.avatar_url ? `${API_URL}${p.avatar_url}` : null}
-                name={p.username || initial || t.profile.avatarAlt}
-                size={44}
-                shape="square"
-                radius={8}
-                frame={p.avatar_frame}
-              />
+              <div
+                className={`rounded-full ${p.avatar_frame ? "" : "p-[3px] shadow-[0_6px_20px_-6px_rgba(240,185,11,0.6)]"}`}
+                style={p.avatar_frame ? undefined : { background: "linear-gradient(135deg, #f5d27a, #b8860b 55%, #f0b90b)" }}
+              >
+                <FramedAvatar
+                  src={p.avatar_url ? `${API_URL}${p.avatar_url}` : null}
+                  name={p.username || initial || t.profile.avatarAlt}
+                  size={80}
+                  frame={p.avatar_frame}
+                />
+              </div>
               {isAdmin && (
                 <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--pane-gold)]">
                   <ShieldCheck className="h-3 w-3 text-[var(--pane-bg)]" />
@@ -147,16 +175,16 @@ export default function ProfilePage() {
               )}
             </div>
             <div className="min-w-0">
-              <div className="truncate text-[13px] font-semibold text-[var(--pane-text)]">@{p.username || "-"}</div>
-              <div className="font-mono text-[11px] text-[var(--pane-muted)]">WEEX UID: {maskUid(p.weex_uid)}</div>
+              <div className="truncate text-[20px] font-bold text-[var(--pane-text)]">@{p.username || "-"}</div>
+              <div className="mt-0.5 font-mono text-[12px] text-[var(--pane-muted)]">WEEX UID: {maskUid(p.weex_uid)}</div>
             </div>
           </div>
 
           {/* Balance */}
-          <div className="mt-3 flex items-end justify-between border-t border-[var(--pane-border)] pt-3">
+          <div className="relative mt-4 flex items-end justify-between gap-3">
             <div>
-              <div className="text-[10px] font-medium uppercase tracking-wider text-[var(--pane-muted)]">{t.profile.balance}</div>
-              <div className="font-mono text-xl font-bold tabular-nums text-[var(--pane-text)]">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--pane-muted)]">{t.profile.balance}</div>
+              <div className="font-mono text-[28px] font-bold leading-tight tabular-nums text-[var(--pane-text)]">
                 {fmtUsd(p.balance_usdt)}
                 <span className="ml-1 text-[11px] font-semibold text-[var(--pane-muted)]">USDT</span>
               </div>
@@ -174,7 +202,7 @@ export default function ProfilePage() {
             <button
               onClick={refreshBalance}
               disabled={refreshing}
-              className="flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-accent)] transition-colors hover:border-[var(--pane-accent-soft)] disabled:opacity-50"
+              className={`${GOLD_BTN} disabled:opacity-50`}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               {t.common.refresh}
@@ -184,9 +212,16 @@ export default function ProfilePage() {
         {/* ── Биржевой счёт ──
             Ключи вводятся в терминале, но вопрос «подключено ли» человек задаёт
             себе здесь - и ответа тут не было вовсе. */}
-        <div className={CARD}>
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-[12px] font-semibold text-[var(--pane-text)]">
+        <div className={`${CARD} relative overflow-hidden`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/art/brand/weex.webp"
+            alt=""
+            aria-hidden
+            className="pointer-events-none absolute -bottom-2 -right-2 hidden h-32 w-auto sm:block"
+          />
+          <div className="relative mb-3 flex items-center justify-between gap-3 sm:pr-40">
+            <span className="text-[14px] font-bold text-[var(--pane-text)]">
               {t.profile.exchangeTitle}
             </span>
             <span
@@ -198,8 +233,8 @@ export default function ProfilePage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-text-2)]">
+          <div className="relative flex items-center gap-3 sm:pr-40">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-accent-gold/40 bg-black text-[var(--pane-gold)]">
               <Key className="h-4 w-4" />
             </div>
             <div className="min-w-0 text-[12px]">
@@ -225,13 +260,13 @@ export default function ProfilePage() {
             </div>
             <button
               onClick={() => setKeysOpen(true)}
-              className="ml-auto shrink-0 rounded-xl border border-[var(--pane-border)] px-3 py-2 text-xs font-semibold text-[var(--pane-text-2)] transition-colors hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
+              className={`ml-auto shrink-0 ${GOLD_BTN}`}
             >
               {exchange?.connected ? t.common.change : t.common.connect}
             </button>
           </div>
 
-          <p className="mt-4 text-[11px] leading-relaxed text-[var(--pane-muted)]">
+          <p className="relative mt-4 text-[11px] leading-relaxed text-[var(--pane-muted)] sm:pr-40">
             {t.profile.keysNote}
           </p>
         </div>
@@ -249,7 +284,7 @@ export default function ProfilePage() {
             мне турбо» и ставились наугад. Данные никуда не делись - ими
             по-прежнему пользуются рассылка сигналов и калькулятор. */}
         <div className={CARD}>
-          <div className="mb-3 text-[12px] font-semibold text-[var(--pane-text)]">{t.profile.settings}</div>
+          <div className="mb-3 text-[14px] font-bold text-[var(--pane-text)]">{t.profile.settings}</div>
 
           <div className="space-y-3">
 
@@ -271,13 +306,13 @@ export default function ProfilePage() {
                       key={value}
                       onClick={() => setTerminalTheme(value)}
                       className={`relative flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
-                        active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
+                        active ? SEG_ON : SEG_OFF
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
                       {label}
                       {active && (
-                        <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
+                        <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-gold)]" />
                       )}
                     </button>
                   );
@@ -299,12 +334,12 @@ export default function ProfilePage() {
                       onClick={() => changeLocale(l)}
                       disabled={saving}
                       className={`relative flex-1 rounded py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors duration-150 disabled:opacity-60 ${
-                        active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
+                        active ? SEG_ON : SEG_OFF
                       }`}
                     >
                       {l}
                       {active && (
-                        <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
+                        <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-gold)]" />
                       )}
                     </button>
                   );
@@ -330,13 +365,13 @@ export default function ProfilePage() {
                       key={label}
                       onClick={() => setSoundOn(value)}
                       className={`relative flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-[11px] font-semibold transition-colors duration-150 ${
-                        active ? "bg-[var(--pane-hover)] text-[var(--pane-accent)]" : "text-[var(--pane-muted)] hover:text-[var(--pane-text-2)]"
+                        active ? SEG_ON : SEG_OFF
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
                       {label}
                       {active && (
-                        <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-accent)]" />
+                        <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[var(--pane-gold)]" />
                       )}
                     </button>
                   );
@@ -398,17 +433,30 @@ export default function ProfilePage() {
             </div>
             <span className="text-[12px] font-semibold text-[var(--pane-text)]">{t.profile.adminPanel}</span>
           </div>
-          <span className="text-[var(--pane-gold)]">→</span>
+          <ChevronRight className="h-4 w-4 text-[var(--pane-gold)]" />
         </Link>
       )}
 
       {/* ── LOGOUT ── */}
       <button
         onClick={() => { logout(); router.push("/"); }}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-[color:color-mix(in_srgb,var(--pane-down)_25%,transparent)] bg-[color:color-mix(in_srgb,var(--pane-down)_10%,transparent)] py-2.5 text-[12px] font-semibold text-[var(--pane-down)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--pane-down)_15%,transparent)]"
+        className="flex w-full items-center gap-3 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-3 py-2.5 text-[12px] font-semibold text-[var(--pane-down)] transition-colors duration-150 hover:bg-[color:color-mix(in_srgb,var(--pane-down)_8%,transparent)]"
       >
-        <LogOut className="h-4 w-4" /> {t.profile.logoutAccount}
+        <span className="grid h-8 w-8 place-items-center rounded-lg border border-[color:color-mix(in_srgb,var(--pane-down)_30%,transparent)]">
+          <LogOut className="h-4 w-4" />
+        </span>
+        <span className="flex-1 text-left">{t.profile.logoutAccount}</span>
+        <ChevronRight className="h-4 w-4 text-[var(--pane-muted)]" />
       </button>
+
+      {/* Нижний баннер бренда: горы, терминал и корона. Запечённый девиз из
+          угла картинки стёрт - он набран поверх текстом и читается в обеих
+          темах. */}
+      <div className="relative hidden overflow-hidden sm:block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/art/brand/banner-bottom.webp" alt="" aria-hidden className="w-full" />
+        <Motto lines={BRAND_MOTTO} className="absolute left-[2%] top-[14%] !text-[11px] !tracking-[0.4em]" />
+      </div>
 
       {/* Окно ключей - то же самое, что в терминале. Оно красится палитрой
           панелей, а она живёт на классе: без обёртки переменные не подставятся
