@@ -609,6 +609,19 @@ export const api = {
       body: JSON.stringify({ text, audience, chart_url: chart_url || null }),
     }),
   broadcasts: (token: string) => authReq<BroadcastItem[]>("/api/broadcast", token),
+  broadcastView: (token: string, id: number) =>
+    authReq<{ views: number }>(`/api/broadcast/${id}/view`, token, { method: "POST" }),
+  broadcastLike: (token: string, id: number) =>
+    authReq<{ liked: boolean; likes: number }>(`/api/broadcast/${id}/like`, token, { method: "POST" }),
+  broadcastComments: (token: string, id: number) =>
+    authReq<BroadcastComment[]>(`/api/broadcast/${id}/comments`, token),
+  broadcastComment: (token: string, id: number, text: string) =>
+    authReq<BroadcastComment>(`/api/broadcast/${id}/comments`, token, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  broadcastCommentDelete: (token: string, id: number, commentId: number) =>
+    authReq<{ ok: boolean }>(`/api/broadcast/${id}/comments/${commentId}`, token, { method: "DELETE" }),
   broadcast: (token: string, body: { text: string; chart_url?: string | null; symbol?: string | null; audience: string }) =>
     authReq<{ sent: number; total: number }>("/api/broadcast", token, {
       method: "POST",
@@ -748,6 +761,20 @@ export interface BroadcastItem {
   audience: string;
   sent_count: number;
   created_at: string;
+  /** Сколько учеников прочло разбор: человек считается один раз. */
+  views: number;
+  likes: number;
+  comments: number;
+  /** Стоит ли лайк того, кто спрашивает. */
+  liked: boolean;
+}
+
+export interface BroadcastComment {
+  id: number;
+  text: string;
+  created_at: string;
+  author: { id: number; name: string; avatar: string; frame: string; mentor: boolean };
+  mine: boolean;
 }
 
 export interface MentorBalance {

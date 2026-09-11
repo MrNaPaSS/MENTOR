@@ -10,9 +10,12 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useState } from "react";
-import { CandlestickChart, ExternalLink, TrendingUp } from "lucide-react";
-import { API_URL, type BroadcastItem } from "@/lib/api";
+import { useEffect, useRef, useState } from "react";
+import { CandlestickChart, ExternalLink, Eye, MessageCircle, ThumbsUp, TrendingUp } from "lucide-react";
+import { api, API_URL, type BroadcastItem } from "@/lib/api";
+import { getAccessToken } from "@/lib/auth";
+import { useInView } from "@/lib/useInView";
+import BroadcastComments from "@/components/analysis/BroadcastComments";
 import { directionOf } from "@/lib/analysisCard";
 import { intlLocale, useLocale, useT } from "@/lib/i18n";
 import ChartOverlay from "@/components/market/ChartOverlay";
@@ -46,6 +49,50 @@ export default function BroadcastCard({ item }: { item: BroadcastItem }) {
   const direction = directionOf(item.text);
   const [chartOpen, setChartOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [views, setViews] = useState(item.views ?? 0);
+  const [likes, setLikes] = useState(item.likes ?? 0);
+  const [liked, setLiked] = useState(Boolean(item.liked));
+  const [comments, setComments] = useState(item.comments ?? 0);
+  const [talkOpen, setTalkOpen] = useState(false);
+  const [liking, setLiking] = useState(false);
+
+  // Просмотр отмечаем, когда карточку и правда увидели, - не при загрузке
+  // ленты. Сервер считает человека один раз; метка в сессии бережёт от
+  // повторного запроса при каждом возврате на страницу.
+  const root = useRef<HTMLElement>(null);
+  const seen = useInView(root, "0px");
+  useEffect(() => {
+    if (!seen) return;
+    const key = `nmnh:viewed:${item.id}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // Хранилище закрыто - отметим и так, сервер повтор не посчитает.
+    }
+    const token = getAccessToken();
+    if (!token) return;
+    api.broadcastView(token, item.id).then((r) => setViews(r.views)).catch(() => {});
+  }, [seen, item.id]);
+
+  async function like() {
+    const token = getAccessToken();
+    if (!token || liking) return;
+    // Отклик сразу, ответ сервера поправит число, если кто-то лайкнул вместе.
+    setLiking(true);
+    setLiked((v) => !v);
+    setLikes((n) => n + (liked ? -1 : 1));
+    try {
+      const r = await api.broadcastLike(token, item.id);
+      setLiked(r.liked);
+      setLikes(r.likes);
+    } catch {
+      setLiked(liked);
+      setLikes((n) => n + (liked ? 1 : -1));
+    } finally {
+      setLiking(false);
+    }
+  }
   const long = item.text.length > CLAMP_CHARS || item.text.split("\n").length > CLAMP_LINES;
 
   const audienceBadge =
@@ -56,7 +103,7 @@ export default function BroadcastCard({ item }: { item: BroadcastItem }) {
     ) : null;
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] transition-[border-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--pane-gold-soft)] hover:shadow-[0_12px_30px_-16px_rgba(0,0,0,0.45)] motion-reduce:hover:translate-y-0">
+    <article ref={root} className="flex flex-col overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] transition-[border-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--pane-gold-soft)] hover:shadow-[0_12px_30px_-16px_rgba(0,0,0,0.45)] motion-reduce:hover:translate-y-0">
       {img && (
         <a
           href={item.chart_url ?? "#"}
@@ -132,16 +179,50 @@ export default function BroadcastCard({ item }: { item: BroadcastItem }) {
           </div>
         )}
 
-        {item.symbol && (
+        {/* Просмотры, обсуждение и лайк - как под постом; справа график. */}
+        <div className="mt-auto flex items-center gap-3 pt-1 text-[11px] text-[var(--pane-muted)]">
+          <span className="flex items-center gap-1" title={t.signals.social.views}>
+            <Eye className="h-3.5 w-3.5" />
+            <span className="tabular-nums">{views.toLocaleString(numbers)}</span>
+          </span>
           <button
             type="button"
-            onClick={() => setChartOpen(true)}
-            className="mt-auto flex items-center justify-center gap-1.5 self-end rounded-lg bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-accent)] ring-1 ring-inset ring-[var(--pane-accent-soft)] transition-colors duration-150 ease-out hover:bg-[var(--pane-accent-faint)]"
+            onClick={() => setTalkOpen((v) => !v)}
+            aria-expanded={talkOpen}
+            title={t.signals.social.comments}
+            className={`flex items-center gap-1 transition-colors duration-150 hover:text-[var(--pane-text)] ${
+              talkOpen ? "text-[var(--pane-text)]" : ""
+            }`}
           >
-            <CandlestickChart className="h-3.5 w-3.5" />
-            {t.signals.openChart}
+            <MessageCircle className="h-3.5 w-3.5" />
+            <span className="tabular-nums">{comments.toLocaleString(numbers)}</span>
           </button>
-        )}
+          <button
+            type="button"
+            onClick={() => void like()}
+            aria-pressed={liked}
+            title={t.signals.social.likes}
+            className={`flex items-center gap-1 transition-[color,transform] duration-150 ease-out active:scale-[0.92] ${
+              liked ? "text-[var(--pane-gold)]" : "hover:text-[var(--pane-text)]"
+            }`}
+          >
+            <ThumbsUp className={`h-3.5 w-3.5 ${liked ? "fill-current" : ""}`} />
+            <span className="tabular-nums">{likes.toLocaleString(numbers)}</span>
+          </button>
+
+          {item.symbol && (
+            <button
+              type="button"
+              onClick={() => setChartOpen(true)}
+              className="ml-auto flex items-center justify-center gap-1.5 rounded-lg bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-accent)] ring-1 ring-inset ring-[var(--pane-accent-soft)] transition-colors duration-150 ease-out hover:bg-[var(--pane-accent-faint)]"
+            >
+              <CandlestickChart className="h-3.5 w-3.5" />
+              {t.signals.openChart}
+            </button>
+          )}
+        </div>
+
+        {talkOpen && <BroadcastComments broadcastId={item.id} onCount={setComments} />}
       </div>
 
       {chartOpen && item.symbol && <ChartOverlay symbol={item.symbol} onClose={() => setChartOpen(false)} />}

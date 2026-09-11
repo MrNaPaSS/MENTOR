@@ -10,8 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from core.models import Student, Broadcast
+from core.models import Student, Broadcast, BroadcastComment
+from backend import broadcast_social as social
+from backend.api.chat import _who
 from backend.deps import get_current_mentor, get_current_student, get_session, get_notifier, get_token_payload
+from backend.mentor import is_mentor
 
 router = APIRouter(prefix="/api/broadcast", tags=["broadcast"])
 
@@ -39,9 +42,41 @@ class BroadcastOut(BaseModel):
     audience: str
     sent_count: int
     created_at: datetime
+    # Сколько читателей, лайков и комментариев, и стоит ли лайк спрашивающего.
+    views: int = 0
+    likes: int = 0
+    comments: int = 0
+    liked: bool = False
 
     class Config:
         from_attributes = True
+
+
+class CommentIn(BaseModel):
+    text: str
+
+
+def _me(payload: dict) -> int | None:
+    """Номер ученика из токена. У токена ментора номера нет - лайков тоже."""
+    sub = str(payload.get("sub", ""))
+    return int(sub) if sub.isdigit() else None
+
+
+def _broadcast(session, broadcast_id: int) -> Broadcast:
+    row = session.get(Broadcast, broadcast_id)
+    if row is None:
+        raise HTTPException(404, "Разбор не найден")
+    return row
+
+
+def _comment_out(row: BroadcastComment, author: Student, me: int) -> dict:
+    return {
+        "id": row.id,
+        "text": row.text,
+        "created_at": row.created_at,
+        "author": _who(author),
+        "mine": author.id == me,
+    }
 
 
 @router.get("/preview")
@@ -67,7 +102,86 @@ async def list_broadcasts(
     rows = session.execute(
         select(Broadcast).order_by(Broadcast.created_at.desc()).limit(100)
     ).scalars().all()
-    return rows
+    counts = social.counts_for(session, [r.id for r in rows], _me(payload))
+    out = []
+    for r in rows:
+        c = counts.get(r.id, social.Counts())
+        item = BroadcastOut.model_validate(r).model_copy(
+            update={"views": c.views, "likes": c.likes, "comments": c.comments, "liked": c.liked}
+        )
+        out.append(item)
+    return out
+
+
+@router.post("/{broadcast_id}/view")
+async def view_broadcast(
+    broadcast_id: int,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    _broadcast(session, broadcast_id)
+    return {"views": social.mark_viewed(session, broadcast_id, student.id)}
+
+
+@router.post("/{broadcast_id}/like")
+async def like_broadcast(
+    broadcast_id: int,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    _broadcast(session, broadcast_id)
+    liked, likes = social.toggle_like(session, broadcast_id, student.id)
+    return {"liked": liked, "likes": likes}
+
+
+@router.get("/{broadcast_id}/comments")
+async def list_comments(
+    broadcast_id: int,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    _broadcast(session, broadcast_id)
+    rows = session.execute(
+        select(BroadcastComment, Student)
+        .join(Student, Student.id == BroadcastComment.student_id)
+        .where(BroadcastComment.broadcast_id == broadcast_id)
+        .order_by(BroadcastComment.created_at.asc())
+        .limit(200)
+    ).all()
+    return [_comment_out(c, author, student.id) for c, author in rows]
+
+
+@router.post("/{broadcast_id}/comments")
+async def add_comment(
+    broadcast_id: int,
+    body: CommentIn,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    _broadcast(session, broadcast_id)
+    try:
+        row = social.add_comment(session, broadcast_id, student.id, body.text)
+    except social.CommentError as exc:
+        raise HTTPException(400, str(exc))
+    return _comment_out(row, student, student.id)
+
+
+@router.delete("/{broadcast_id}/comments/{comment_id}")
+async def delete_comment(
+    broadcast_id: int,
+    comment_id: int,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    row = session.get(BroadcastComment, comment_id)
+    if row is None or row.broadcast_id != broadcast_id:
+        raise HTTPException(404, "Комментарий не найден")
+    # Убрать может автор или наставник: он отвечает за порядок под разбором.
+    if row.student_id != student.id and not is_mentor(student):
+        raise HTTPException(403, "Чужой комментарий")
+    session.delete(row)
+    session.commit()
+    return {"ok": True}
 
 
 @router.delete("/{broadcast_id}", dependencies=[Depends(get_current_mentor)])
@@ -75,6 +189,7 @@ async def delete_broadcast(broadcast_id: int, session=Depends(get_session)):
     row = session.get(Broadcast, broadcast_id)
     if not row:
         raise HTTPException(404, "Не найден")
+    social.purge(session, broadcast_id)
     session.delete(row)
     session.commit()
     return {"ok": True}

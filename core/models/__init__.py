@@ -171,6 +171,41 @@ class Broadcast(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class BroadcastReaction(Base):
+    """Просмотр или лайк разбора: по одному на ученика каждого вида.
+
+    Просмотр считается человеком, а не открытием: десять заходов одного
+    ученика - это один читатель, и счётчик должен говорить именно это.
+    """
+
+    __tablename__ = "broadcast_reactions"
+    __table_args__ = (
+        UniqueConstraint("broadcast_id", "student_id", "kind", name="uq_broadcast_reaction"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    broadcast_id: Mapped[int] = mapped_column(
+        ForeignKey("broadcasts.id", ondelete="CASCADE"), index=True
+    )
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(8))  # view | like
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BroadcastComment(Base):
+    """Комментарий ученика под разбором ментора."""
+
+    __tablename__ = "broadcast_comments"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    broadcast_id: Mapped[int] = mapped_column(
+        ForeignKey("broadcasts.id", ondelete="CASCADE"), index=True
+    )
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class BalanceSnapshot(Base):
     """Дневной снимок баланса ученика для расчёта PnL по дням."""
 
