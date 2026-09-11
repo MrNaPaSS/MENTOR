@@ -16,7 +16,6 @@ import { setSoundOn, useSoundOn } from "@/lib/notifySound";
 import { intlLocale, setLocale, useLocale, useT, type Locale } from "@/lib/i18n";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import FramedAvatar from "@/components/avatar/FramedAvatar";
-import Motto, { BRAND_MOTTO } from "@/components/app/Motto";
 
 const ADMIN_WEEX_UID = "6613031308";
 
@@ -131,7 +130,7 @@ export default function ProfilePage() {
       {/* Два столбца на широком экране: слева про счёт, справа про
           обустройство кабинета. Одной колонкой всё это выстраивалось в
           лестницу, где до настроек надо было доскроллить. */}
-      <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+      <div className="grid gap-3 lg:grid-cols-2">
         <div className="space-y-3">
         {/* Кто я и сколько у меня. Без градиента и свечения: терминал рядом
             собран из ровных панелей, и цветное пятно здесь читалось бы куском
@@ -141,13 +140,13 @@ export default function ProfilePage() {
               краю тают: имя и баланс стоят на чистом поле. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/art/brand/banner-nmnh.webp"
+            src="/art/profile/card-banner.webp"
             alt=""
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 hidden h-full w-[64%] object-cover object-left sm:block"
+            className="profile-art pointer-events-none absolute inset-y-0 right-0 hidden h-full w-[62%] object-cover object-[78%_50%] sm:block"
             style={{
-              maskImage: "linear-gradient(90deg, transparent 0%, #000 38%)",
-              WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 38%)",
+              maskImage: "linear-gradient(90deg, transparent 0%, #000 30%)",
+              WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 30%)",
             }}
           />
           <div className="relative flex items-center gap-4">
@@ -202,7 +201,7 @@ export default function ProfilePage() {
             <button
               onClick={refreshBalance}
               disabled={refreshing}
-              className={`${GOLD_BTN} disabled:opacity-50`}
+              className={`${GOLD_BTN} relative !bg-[var(--pane-bg)] disabled:opacity-50`}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               {t.common.refresh}
@@ -273,7 +272,7 @@ export default function ProfilePage() {
 
         </div>
 
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
         {/* ── НАСТРОЙКИ ──
             Здесь только то, что человек меняет про себя: как выглядит кабинет,
             на каком языке, что звучит и как он подписан на карточках.
@@ -283,7 +282,8 @@ export default function ProfilePage() {
             расчётом, а в списке личных предпочтений они читались как «сделай
             мне турбо» и ставились наугад. Данные никуда не делись - ими
             по-прежнему пользуются рассылка сигналов и калькулятор. */}
-        <div className={CARD}>
+        {/* Коробка тянется до низа «Биржевого счёта»: края колонок совпадают. */}
+        <div className={`${CARD} flex-1`}>
           <div className="mb-3 text-[14px] font-bold text-[var(--pane-text)]">{t.profile.settings}</div>
 
           <div className="space-y-3">
@@ -449,14 +449,15 @@ export default function ProfilePage() {
         <ChevronRight className="h-4 w-4 text-[var(--pane-muted)]" />
       </button>
 
-      {/* Нижний баннер бренда: горы, терминал и корона. Запечённый девиз из
-          угла картинки стёрт - он набран поверх текстом и читается в обеих
-          темах. */}
-      <div className="relative hidden overflow-hidden sm:block">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/art/brand/banner-bottom.webp" alt="" aria-hidden className="w-full" />
-        <Motto lines={BRAND_MOTTO} className="absolute left-[2%] top-[14%] !text-[11px] !tracking-[0.4em]" />
-      </div>
+      {/* Нижний баннер бренда: горы, терминал и корона - без рамки, тает в
+          фон страницы. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/art/profile/bottom-banner.webp"
+        alt=""
+        aria-hidden
+        className="profile-art mx-auto hidden w-full max-w-[1280px] sm:block"
+      />
 
       {/* Окно ключей - то же самое, что в терминале. Оно красится палитрой
           панелей, а она живёт на классе: без обёртки переменные не подставятся

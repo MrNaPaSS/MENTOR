@@ -44,10 +44,10 @@ export function PaneScope({
  * высотой ничего не сообщает тому, кто и так нажал на этот раздел, а место
  * отнимает у самих данных.
  *
- * За шапкой - гряда гор с флагами во всю правую половину, у края девиз и
- * корона: так начинается каждый раздел на макетах. Горы стоят под панелями
- * первого ряда, поэтому над ними видны только вершины, а подножие уходит за
- * карточки. На телефоне гряды нет: там шапка и так в две строки.
+ * У правого края - светлые горы со свечами, перед ними девиз и корона: так
+ * начинается каждый раздел на макетах. Горы стоят под панелями первого ряда,
+ * поэтому видны только вершины, а подножие уходит за карточки. На телефоне
+ * гор нет: там шапка и так в две строки.
  */
 export function PaneHead({
   title,
@@ -61,17 +61,13 @@ export function PaneHead({
 }) {
   return (
     <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-2 md:min-h-[64px]">
-      <div
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/art/profile/head-bg.webp"
+        alt=""
         aria-hidden
-        className="pointer-events-none absolute -top-3 right-0 -z-10 hidden h-[150px] w-[min(74%,1040px)] md:block"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/art/hero/ridge.webp"
-          alt=""
-          className="head-ridge absolute inset-0 h-full w-full object-contain object-right-bottom"
-        />
-      </div>
+        className="head-ridge pointer-events-none absolute -top-4 right-24 -z-10 hidden h-[150px] w-auto md:block"
+      />
 
       <div className="flex min-w-0 items-baseline gap-2.5">
         <h1 className="text-[20px] font-bold tracking-tight text-[var(--pane-text)]">{title}</h1>
