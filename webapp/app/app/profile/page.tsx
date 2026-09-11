@@ -139,23 +139,24 @@ export default function ProfilePage() {
             собран из ровных панелей, и цветное пятно здесь читалось бы куском
             другого приложения. */}
         <div className="relative overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-4">
-          {/* Горы с короной, свечами и граффити NMNH - на прозрачном фоне, во
-              всю высоту карточки. Стоят между именем с балансом и правой
-              колонкой, где девиз и кнопка «Обновить»: на картинку они не
-              ложатся. Левый край гор растворяется, чтобы под именем и
-              балансом оставалось чистое поле. */}
+          {/* Горы с короной, свечами и граффити NMNH - на прозрачном фоне, по
+              середине карточки и растянуты вширь. Края растворяются, чтобы
+              под балансом и у кнопки «Обновить» оставалось чистое поле. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/art/profile/card-crown.webp"
             alt=""
             aria-hidden
-            // Место картинки - рамка от трети ширины почти до правого края: её
-            // правый склон уходит под девиз и кнопку, они стоят поверх. На
-            // узкой карточке она уменьшается, а не наезжает на баланс.
-            className="profile-art pointer-events-none absolute bottom-0 left-[34%] right-[72px] top-1 hidden h-[calc(100%-0.25rem)] w-[calc(66%-72px)] object-contain object-bottom sm:block"
+            // Рамка 3:1 при картинке 2.6:1 - это и есть растяжение вширь, не
+            // больше 18%. Высота рамки упирается в карточку, ширина в 42rem:
+            // так растяжение не растёт на очень широкой карточке, а на узкой
+            // картинка просто уменьшается, никогда не сжимаясь. В половине
+            // экрана (lg) карточка узкая, и центр съезжает вправо: иначе левый
+            // склон ложится под баланс.
+            className="profile-art pointer-events-none absolute bottom-0 left-1/2 hidden aspect-[3/1] lg:left-[58%] 2xl:left-1/2 max-h-full w-[64%] max-w-[42rem] -translate-x-1/2 object-fill sm:block"
             style={{
-              maskImage: "linear-gradient(90deg, transparent 0%, #000 14%)",
-              WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 14%)",
+              maskImage: "linear-gradient(90deg, transparent 0%, #000 18%, #000 90%, transparent 100%)",
+              WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 18%, #000 90%, transparent 100%)",
             }}
           />
           {/* Девиз набран текстом, а не впечатан в картинку: так он читается и
@@ -232,7 +233,9 @@ export default function ProfilePage() {
             src="/art/brand/weex.webp"
             alt=""
             aria-hidden
-            className="pointer-events-none absolute -bottom-2 -right-2 hidden h-32 w-auto sm:block"
+            // Меньше и выше: логотип стоит справа по середине карточки, а не
+            // упирается в её низ.
+            className="pointer-events-none absolute right-3 top-1/2 hidden h-24 w-auto -translate-y-1/2 sm:block"
           />
           <div className="relative mb-3 flex items-center justify-between gap-3 sm:pr-40">
             <span className="text-[14px] font-bold text-[var(--pane-text)]">
