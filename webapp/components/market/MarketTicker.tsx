@@ -26,7 +26,7 @@ import { authReq } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import type { ScreenerRow } from "@/lib/scalping";
 import { keepOrder, sameRow, sameRows } from "@/lib/tickerRows";
-import { marqueeSpan, marqueeSpeed, travelled } from "@/lib/marquee";
+import { marqueeSpan, marqueeSpeed, needsRebuild, travelled } from "@/lib/marquee";
 
 /** Как часто спрашиваем цены. */
 const POLL_MS = 15_000;
@@ -152,20 +152,20 @@ export default function MarketTicker() {
     const dpr = window.devicePixelRatio || 1;
     const speed = marqueeSpeed(dpr);
     let span = 0;
-    let steps = 0;
     let motions: Animation[] = [];
 
     function build() {
       const next = marqueeSpan(half!.getBoundingClientRect().width, dpr);
       const nodes = Array.from(track!.querySelectorAll<HTMLElement>("[data-tick]"));
       if (!nodes.length || !next.steps) return;
-      // Пересобираем, только когда поменялся круг или сами пары: пара,
-      // сменившая соседа, - новый элемент, и своей анимации у неё ещё нет.
-      const same =
-        next.steps === steps &&
+      // Пересобираем, только когда заметно поменялся круг или сами пары:
+      // пара, сменившая соседа, - новый элемент, и своей анимации у неё ещё
+      // нет. Круг, разошедшийся на пиксель от новой цены, не трогаем: сама
+      // пересборка видна рывком, а пиксель на стыке половин - нет.
+      const sameNodes =
         nodes.length === motions.length &&
         motions.every((m, i) => (m.effect as KeyframeEffect | null)?.target === nodes[i]);
-      if (same) return;
+      if (sameNodes && !needsRebuild(span, next.css)) return;
 
       // Лента продолжает с того места, где стояла: половины одинаковые, и место
       // на новом круге - остаток от деления.
@@ -192,10 +192,20 @@ export default function MarketTicker() {
       });
       motionsRef.current = motions;
       span = next.css;
-      steps = next.steps;
     }
 
-    build();
+    // Первый круг - по ширине, которую даёт настоящий шрифт. Пока грузится
+    // запасной, буквы уже, круг короче, и лента, поехав сразу, спотыкалась на
+    // первой же секунде: шрифт доезжал, ширина менялась, круг пересобирался.
+    let dropped = false;
+    const begin = () => {
+      if (!dropped) build();
+    };
+    if (document.fonts && document.fonts.status !== "loaded") {
+      document.fonts.ready.then(begin).catch(begin);
+    } else {
+      build();
+    }
     // Ширина половины - по цифрам цен; наблюдатель срабатывает после раскладки
     // и до отрисовки, поэтому новый круг встаёт в том же кадре. Состав пар -
     // вторым наблюдателем: новичок ширину может и не поменять.
@@ -204,6 +214,7 @@ export default function MarketTicker() {
     const members = new MutationObserver(build);
     members.observe(track, { childList: true, subtree: true });
     return () => {
+      dropped = true;
       sizes.disconnect();
       members.disconnect();
       for (const m of motions) m.cancel();
@@ -386,8 +397,10 @@ const Pair = memo(function Pair({
       >
         ${formatPrice(row.price)}
       </span>
+      {/* Ширина под «12.34%»: у процента растёт целая часть, и без запаса
+          каждая такая цена сдвигала бы всю ленту следом за собой. */}
       <span
-        className="font-mono text-[11px] font-semibold tabular-nums"
+        className="inline-block min-w-[6.5ch] font-mono text-[11px] font-semibold tabular-nums"
         style={{ color: pos ? "var(--tick-up)" : "var(--tick-down)" }}
       >
         {pos ? "▲" : "▼"} {Math.abs(row.change_pct).toFixed(2)}%
@@ -395,7 +408,7 @@ const Pair = memo(function Pair({
       {/* Размер плиты - только когда она крупная: у остальных это шум. */}
       {heavy && (
         <span
-          className="font-mono text-[10px] font-bold tabular-nums"
+          className="inline-block min-w-[4ch] text-right font-mono text-[10px] font-bold tabular-nums"
           style={{ color: "var(--tick-heavy-ink)" }}
         >
           {money(row.wall_notional)}

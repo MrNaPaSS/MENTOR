@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { marqueeSpan, marqueeSpeed, travelled } from "@/lib/marquee";
+import { marqueeSpan, marqueeSpeed, needsRebuild, travelled } from "@/lib/marquee";
 
 // Бегущая строка дёргалась: 28 пикселей в секунду на экране 60 Гц - это 0.47
 // пикселя за кадр, сдвиг выпадал то через два кадра, то через три. Скорость
@@ -53,5 +53,23 @@ describe("пройденный путь", () => {
   it("без круга - ноль, а не NaN", () => {
     expect(travelled(5000, 30, 0)).toBe(0);
     expect(travelled(Number.NaN, 30, 1000)).toBe(0);
+  });
+});
+
+describe("пересборка круга", () => {
+  it("доли пикселя от новой цены не трогают ленту", () => {
+    // Пересборка видна рывком, а круг, разошедшийся на пиксель, - нет:
+    // он сдвигает стык половин раз в несколько минут.
+    expect(needsRebuild(3600, 3600.4)).toBe(false);
+    expect(needsRebuild(3600, 3601)).toBe(false);
+  });
+
+  it("заметная перемена ширины - пересобираем", () => {
+    expect(needsRebuild(3600, 3640)).toBe(true);
+    expect(needsRebuild(3600, 3560)).toBe(true);
+  });
+
+  it("первого круга ещё нет - собираем", () => {
+    expect(needsRebuild(0, 3600)).toBe(true);
   });
 });

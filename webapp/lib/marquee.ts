@@ -52,3 +52,16 @@ export function travelled(ms: number, speed: number, span: number): number {
   const path = ((ms / 1000) * speed) % span;
   return path < 0 ? path + span : path;
 }
+
+/**
+ * Стоит ли пересобирать круг из-за новой ширины.
+ *
+ * Ширина половины гуляет на доли пикселя от каждой новой цены, и пересборка на
+ * каждое такое колебание видна глазом как рывок. Круг, разошедшийся на пиксель,
+ * не виден вовсе: он сдвигает стык половин на пиксель раз в несколько минут.
+ */
+export const REBUILD_AT = 2;
+
+export function needsRebuild(current: number, next: number): boolean {
+  return !(current > 0) || Math.abs(next - current) >= REBUILD_AT;
+}
