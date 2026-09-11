@@ -47,12 +47,16 @@ const NAV = [
   // Терминал первым: это рабочий стол трейдера, с него начинается день,
   // и с него же открывается кабинет.
   // Дальше рынок и анализы, остальное — как было.
-  { href: "/app/scalping", key: "scalping", icon: Waves, mobile: false },
-  { href: "/app/market", key: "market", icon: Globe, mobile: true },
-  { href: "/app/analysis", key: "analysis", icon: ImageIcon, mobile: true },
-  { href: "/app/analytics", key: "analytics", icon: BarChart3, mobile: false },
-  { href: "/app/shop", key: "shop", icon: ShoppingBag, mobile: true },
-  { href: "/app/profile", key: "profile", icon: User, mobile: true },
+  //
+  // top - в верхней панели, mobile - в нижнем меню телефона. «Анализы» из
+  // верхней панели убраны (11.09.2026), но раздел живёт: на телефоне терминала
+  // нет, и вход с телефона ведёт именно туда.
+  { href: "/app/scalping", key: "scalping", icon: Waves, top: true, mobile: false },
+  { href: "/app/market", key: "market", icon: Globe, top: true, mobile: true },
+  { href: "/app/analysis", key: "analysis", icon: ImageIcon, top: false, mobile: true },
+  { href: "/app/analytics", key: "analytics", icon: BarChart3, top: true, mobile: false },
+  { href: "/app/shop", key: "shop", icon: ShoppingBag, top: true, mobile: true },
+  { href: "/app/profile", key: "profile", icon: User, top: true, mobile: true },
 ] as const;
 
 // Кнопка справа от монет: в ней либо баланс биржи, либо приглашение
@@ -243,7 +247,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Навигация - десктоп */}
           <nav className="hidden items-center gap-0.5 lg:flex">
-            {NAV.map((n) => {
+            {NAV.filter((n) => n.top).map((n) => {
               const Icon = n.icon;
               const active = isActive(n.href);
               return (
