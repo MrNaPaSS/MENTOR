@@ -13,7 +13,7 @@
 // заведено в ту же рамку, что и остальное.
 //
 // Порядок вкладок отвечает на вопросы по мере их появления: что происходит
-// вообще, где сегодня работать, что об этом пишут, что делают крупные, как
+// вообще, что делают крупные, где сегодня работать, что об этом пишут, как
 // выглядит рынок целиком и чего ждать по календарю.
 
 import { useT } from "@/lib/i18n";
@@ -30,6 +30,7 @@ import {
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import { useInView } from "@/lib/useInView";
+import { useFitHeight } from "@/lib/useFitHeight";
 import FearGreedPane from "@/components/market/FearGreedPane";
 import FundingPane from "@/components/market/FundingPane";
 import GlobalStrip from "@/components/market/GlobalStrip";
@@ -162,9 +163,9 @@ type Section = "pulse" | "screener" | "news" | "smart" | "maps" | "calendar";
 // Подписи и подсказки вкладок - в словаре, здесь порядок и картинки.
 const TABS: { key: Section; icon: React.ReactNode }[] = [
   { key: "pulse", icon: <Activity className="h-3.5 w-3.5" /> },
+  { key: "smart", icon: <Building2 className="h-3.5 w-3.5" /> },
   { key: "screener", icon: <Search className="h-3.5 w-3.5" /> },
   { key: "news", icon: <Newspaper className="h-3.5 w-3.5" /> },
-  { key: "smart", icon: <Building2 className="h-3.5 w-3.5" /> },
   { key: "maps", icon: <MapIcon className="h-3.5 w-3.5" /> },
   { key: "calendar", icon: <CalendarDays className="h-3.5 w-3.5" /> },
 ];
@@ -198,53 +199,6 @@ function PulseSection() {
 
 // ── Карты ─────────────────────────────────────────────────────────────────────
 
-/**
- * Высота, на которой раздел кончается ровно внизу окна.
- *
- * Виджету TradingView высота нужна числом: он собирается один раз и меряет
- * себя сам. Поэтому считаем её от того места, где стоит секция, а не задаём
- * долей экрана. Пересчитываем на изменение окна: иначе после разворота окна
- * половина карты оказалась бы за краем.
- */
-function useFitHeight(min: number): {
-  ref: React.RefObject<HTMLDivElement>;
-  height: number;
-  head: number;
-  wide: boolean;
-} {
-  const ref = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState(min);
-  // Шапка панели меряется по факту: числом наугад страница получала хвост
-  // прокрутки ровно в разницу.
-  const [head, setHead] = useState(PANE_HEAD);
-  const [wide, setWide] = useState(true);
-
-  useEffect(() => {
-    const measure = () => {
-      const el = ref.current;
-      if (!el) return;
-      const top = el.getBoundingClientRect().top + window.scrollY;
-      // Под секцией ещё нижнее поле кабинета - его видно только в стилях, а в
-      // замере нет. Без него страница получала хвост прокрутки ровно в это поле.
-      const main = el.closest("main");
-      const pad = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
-      setHeight(Math.max(min, Math.round(window.innerHeight - top - pad)));
-      setHead(el.querySelector("header")?.getBoundingClientRect().height ?? PANE_HEAD);
-      setWide(window.innerWidth >= 1280);
-    };
-
-    measure();
-    const frame = requestAnimationFrame(measure);
-    window.addEventListener("resize", measure);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("resize", measure);
-    };
-  }, [min]);
-
-  return { ref, height, head, wide };
-}
-
 /** Высота шапки панели, пока её не измерили: две строки текста и отступы. */
 const PANE_HEAD = 46;
 
@@ -253,9 +207,11 @@ function MapsSection() {
   // Карты - последняя секция раздела, и она должна кончаться внизу окна:
   // тепловая карта с прокруткой страницы читается плохо, её смотрят целиком.
   const { ref, height, head, wide } = useFitHeight(420);
+  // Пока шапку не измерили, берём ожидаемую: две строки текста и отступы.
+  const headSize = head || PANE_HEAD;
   // Минус два: столько чужой виджет добавляет к заданной высоте своей рамкой,
   // и без этого запаса страница получала два пикселя прокрутки.
-  const widget = Math.max(260, Math.round(height - head) - 2);
+  const widget = Math.max(260, Math.round(height - headSize) - 2);
 
   return (
     <div ref={ref} className="grid gap-3 xl:grid-cols-3">

@@ -2,6 +2,7 @@
 
 import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
+import { useFitHeight } from "@/lib/useFitHeight";
 import { useRouter } from "next/navigation";
 import { API_URL } from "@/lib/api";
 import { openMarketSection } from "@/lib/marketSection";
@@ -242,7 +243,9 @@ function Section({
         </div>
         <div className="flex shrink-0 items-center gap-2">{badge}</div>
       </header>
-      <div className="flex-1 p-3">{children}</div>
+      {/* Своя прокрутка: раздел умещается в экран, а длинная таблица
+          листается внутри панели, а не тянет за собой всю страницу. */}
+      <div className="min-h-0 flex-1 overflow-auto p-3">{children}</div>
     </section>
   );
 }
@@ -316,7 +319,7 @@ function AnimBar({
 
 // ── COT Section ───────────────────────────────────────────────────────────────
 
-function CotSection() {
+function CotSection({ className = "" }: { className?: string }) {
   const t = useT();
   const [asset,setAsset]   = useState<"BTC"|"ETH">("BTC");
   const [cot,setCot]       = useState<CotRow[]|null>(null);
@@ -341,7 +344,7 @@ function CotSection() {
 
   return (
     <Section icon={<Building2 className="h-4 w-4 text-[var(--pane-gold)]"/>}
-      title={t.smart.cot.title} accent="gold" delay={0}
+      title={t.smart.cot.title} accent="gold" delay={0} className={className}
       badge={isDemo ? <DemoBadge/> : undefined}
       sub={isDemo ? t.smart.cot.subDemo : t.smart.cot.subLive}>
 
@@ -501,9 +504,7 @@ function MacroSection({ className = "" }: { className?: string }) {
           </div>
         )}
 
-        {/* Карточки тянутся на всю высоту панели: она растянута до низа
-            соседней, и без этого под ними оставалось бы пустое поле. */}
-        <div className="grid h-full auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {items.map((item,i)=>{
             const pos = item.changePct>=0;
             const dec = item.key==="US10Y"||item.key==="VIX" ? 2 : item.price>1000 ? 1 : 2;
@@ -555,7 +556,7 @@ function MacroSection({ className = "" }: { className?: string }) {
 
 // ── ETF Section ───────────────────────────────────────────────────────────────
 
-function EtfSection() {
+function EtfSection({ className = "" }: { className?: string }) {
   const t = useT();
   const [data,setData]         = useState<typeof DEMO_ETF|null>(null);
   const [isDemo,setIsDemo]     = useState(false);
@@ -573,7 +574,7 @@ function EtfSection() {
 
   return (
     <Section icon={<DollarSign className="h-4 w-4 text-[var(--pane-up)]"/>}
-      title={t.smart.etf.title} accent="green" delay={0.3}
+      title={t.smart.etf.title} accent="green" delay={0.3} className={className}
       badge={isDemo ? <DemoBadge/> : <LiveBadge/>}
       sub={isDemo ? t.smart.sourceSilent : t.smart.etf.sub}>
 
@@ -687,7 +688,7 @@ function EtfSection() {
 
 // ── Derivatives Section ───────────────────────────────────────────────────────
 
-function DerivativesSection() {
+function DerivativesSection({ className = "" }: { className?: string }) {
   const t = useT();
   const [rows,setRows]         = useState<DerivRow[]>([]);
   const [loading,setLoading]   = useState(true);
@@ -724,7 +725,7 @@ function DerivativesSection() {
 
   return (
     <Section icon={<Activity className="h-4 w-4 text-[var(--pane-accent)]"/>}
-      title={t.smart.oi.title} accent="cyan" delay={0.2}
+      title={t.smart.oi.title} accent="cyan" delay={0.2} className={className}
       badge={<LiveBadge/>}
       sub={updatedAt ? t.smart.oi.subLive(updatedAt) : t.smart.oi.subAsking}>
 
@@ -836,6 +837,7 @@ function SmartBanner() {
 export default function SmartMoneyPage() {
   const t = useT();
   const pane = useTerminalTheme() === "light" ? "pane-light" : "pane-dark";
+  const fit = useFitHeight(560);
 
   return (
     <>
@@ -852,20 +854,25 @@ export default function SmartMoneyPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 xl:grid-cols-2">
-          <CotSection />
-          {/* Правый столбец ровняется по левому: макро занимает остаток
-              высоты, баннер стоит у нижнего края. Иначе под баннером
-              оставалось пустое место до низа секции. */}
-          <div className="flex flex-col gap-3">
-            <MacroSection className="flex-1" />
+        {/* Весь раздел - в один экран: четыре панели по две в ряд на высоту
+            окна. Длинная таблица листается внутри своей панели, а не тянет за
+            собой страницу. На узком экране раздел живёт своей высотой: панель
+            в четверть экрана там нечитаема. */}
+        <div
+          ref={fit.ref}
+          className="grid gap-3 xl:grid-cols-2 xl:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]"
+          style={fit.wide ? { height: fit.height } : undefined}
+        >
+          <CotSection className="min-h-0" />
+          {/* Правый столбец: макро занимает остаток высоты, баннер стоит у
+              нижнего края. */}
+          <div className="flex min-h-0 flex-col gap-3">
+            <MacroSection className="min-h-0 flex-1" />
             <SmartBanner />
           </div>
+          <DerivativesSection className="min-h-0" />
+          <EtfSection className="min-h-0" />
         </div>
-
-        <DerivativesSection />
-
-        <EtfSection />
       </div>
     </>
   );
