@@ -25,6 +25,7 @@ from typing import Any, Iterable
 from sqlalchemy import select
 
 from backend.trading.rewards import award_trade_coins
+from core.exchanges import KEYS_EXCHANGE
 from core.models import LiveTrade, ScalpTrade, WeexCredential, utcnow
 from core.trading.position import (
     DEFAULT_TAKER_FEE,
@@ -851,6 +852,9 @@ class PositionWatcher:
         record.note = "биржа"
         # Отметка для журнала: эту запись оценкой с экрана не переписывают.
         record.from_exchange = True
+        # Где открыта: по этому подписывается карточка итога. Сделку ведёт
+        # ключ ученика, а ключи сейчас от одной биржи.
+        record.exchange = KEYS_EXCHANGE
         if exists is None:
             session.add(record)
         # Монеты за результат: сделка закрылась на бирже, пока трейдер спал, и

@@ -99,6 +99,8 @@ export async function share(
         seal: sealFrame(variant),
         glow: variant.ink,
         paper: variant.paper,
+        // Биржа сделки: страница ставит её под печатью, как холст.
+        venue: data.venue ?? "",
       },
     }),
   });

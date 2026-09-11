@@ -152,6 +152,9 @@ class CardLook(BaseModel):
     seal: CardFrame | None = None
     glow: str = Field(default="#22E07A", pattern="^#[0-9A-Fa-f]{6}$")
     paper: str = Field(default="light", pattern="^(light|dark)$")
+    # Биржа сделки под печатью: «WEEX Futures». Только буквы, цифры, пробел и
+    # точка - строка уходит на страницу, и лишнего в ней быть не должно.
+    venue: str = Field(default="", max_length=32, pattern=r"^[A-Za-z0-9 .\-]*$")
 
 
 class CardIn(BaseModel):
@@ -322,6 +325,8 @@ class _Look:
     seal: dict[str, float] | None
     glow: str
     paper: str
+    # Биржа сделки под печатью. Пусто у карточек без неё и выложенных раньше.
+    venue: str = ""
 
 
 def _frame(value: object) -> dict[str, float] | None:
@@ -360,7 +365,15 @@ def _card_look(shot: ChartShot) -> _Look:
         seal=_frame(saved.get("seal")),
         glow=_hex(saved.get("glow"), ink),
         paper="dark" if saved.get("paper") == "dark" else "light",
+        venue=_venue(saved.get("venue")),
     )
+
+
+def _venue(value: object) -> str:
+    """Подпись биржи из записи. Уходит на страницу - поэтому по тому же узкому
+    набору знаков, что при приёме, и экранируется при выводе."""
+    text = str(value or "")[:32]
+    return text if re.fullmatch(r"[A-Za-z0-9 .\-]*", text) else ""
 
 
 def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
@@ -432,6 +445,13 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
             '<span class="creed"><small>ПОДТВЕРЖДЕНО ТЕРМИНАЛОМ</small>'
             'TRADE · DISCIPLINE · PROFIT</span>'
         )
+    # Биржа сделки - под печатью, с тем же наклоном: это часть оттиска, а не
+    # подпись к картинке. Тот же знак холст ставит на скачиваемую картинку.
+    venue = (
+        f'<span class="venue">{escape(look.venue)}</span>'
+        if look.venue and shot.kind != "signal"
+        else ""
+    )
 
     return HTMLResponse(
         f"""<!doctype html>
@@ -526,6 +546,13 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
     line-height: 1; text-align: right;
   }}
   .creed small {{ font-size: .82em; font-weight: 600; opacity: .85; letter-spacing: .02em; }}
+  /* Биржа сделки под рамкой печати - часть оттиска. Доли те же, что у
+     холста (drawStamp в webapp/lib/pnl/card.ts). */
+  .venue {{
+    position: absolute; left: 0; right: 0; top: 100%; margin-top: .6cqw;
+    text-align: center; font-size: 2.3cqw; font-weight: 800; letter-spacing: .16em;
+    color: var(--accent); opacity: .9; line-height: 1; white-space: nowrap;
+  }}
 
   @keyframes slam {{
     0%   {{ transform: scale(2.4) rotate(-24deg); opacity: 0; }}
@@ -674,6 +701,7 @@ def _card_page(shot: ChartShot, base: str = "") -> HTMLResponse:
       {watermark}
       <div class="stamp">
         <div class="ink">{ink}</div>
+        {venue}
       </div>
     </div>
   </div>

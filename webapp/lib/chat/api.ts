@@ -52,6 +52,8 @@ export type SharedTrade = {
    * подписывает время сообщения.
    */
   closedAt?: string;
+  /** Биржа сделки: по ней подписывается карточка («WEEX Futures»). */
+  exchange?: string;
 };
 
 export type ChatAttach =

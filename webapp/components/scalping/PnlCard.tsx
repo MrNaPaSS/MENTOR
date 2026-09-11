@@ -247,6 +247,8 @@ export default function PnlCard({
                   </span>
                   <span className="pnl-creed">TRADE · DISCIPLINE · PROFIT</span>
                 </div>
+                {/* Биржа сделки - часть оттиска, падает вместе с печатью. */}
+                {data.venue && <span className="pnl-venue">{data.venue}</span>}
               </div>
               <div
                 aria-hidden

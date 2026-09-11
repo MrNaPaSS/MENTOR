@@ -25,6 +25,8 @@ export type TradingStatus = {
    * Пусто - сделок с комиссией ещё нет, и терминал считает по справочной.
    */
   taker_fee?: number | null;
+  /** Биржа подключённого ключа: ею подписываются карточки идущих сделок. */
+  exchange?: string;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T | null> {

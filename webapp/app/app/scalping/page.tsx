@@ -2760,8 +2760,13 @@ export default function ScalpingPage() {
    * закроется, а в ленте должно остаться то, что человек показал.
    */
   const myShares = useMemo(
-    () => trades.filter((t) => t.status !== "closed").map(fromActive),
-    [trades],
+    () =>
+      trades
+        .filter((t) => t.status !== "closed")
+        // Биржа - от ключа счёта: идущая сделка открыта там, где стоит ключ.
+        // Без ключа сделка учебная, и подписывать карточку биржей нечем.
+        .map((t) => ({ ...fromActive(t), exchange: live ? exchange?.exchange : undefined })),
+    [trades, live, exchange?.exchange],
   );
 
 

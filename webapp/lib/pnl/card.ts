@@ -247,6 +247,8 @@ export type CardData = {
   at: string;
   /** Имя владельца. Пусто - подписи не будет. */
   owner?: string;
+  /** Биржа сделки под печатью: «WEEX Futures». Пусто - подписи нет. */
+  venue?: string;
 };
 
 /** Чернила заготовки: на светлой они тёмные, на тёмной светлые. */
@@ -350,6 +352,8 @@ export function drawStamp(
   variant: Variant,
   /** Цвет оттиска. Приходит снаружи: он зависит от результата, а не от бланка. */
   ink: string,
+  /** Биржа сделки под рамкой печати. Пусто - без подписи. */
+  venue = "",
 ): void {
   const box = {
     x: variant.stamp.x * w,
@@ -412,6 +416,18 @@ export function drawStamp(
   ctx.globalAlpha = 0.85;
   ctx.font = face(px, 700);
   ctx.fillText(creed, right, px * 0.62);
+
+  // Биржа сделки - под рамкой, по её центру и с тем же наклоном: это часть
+  // оттиска, а не подпись к картинке. Разрядкой, как девиз печати.
+  if (venue) {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.globalAlpha = 0.9;
+    ctx.font = face(w * 0.023, 800);
+    ctx.letterSpacing = `${w * 0.0036}px`;
+    ctx.fillText(venue.toUpperCase(), 0, ih / 2 + w * 0.006);
+    ctx.letterSpacing = "0px";
+  }
   ctx.restore();
 }
 
@@ -548,7 +564,7 @@ export function paint(
     panel.y + panel.h * 0.904,
   );
 
-  if (stamp) drawStamp(ctx, w, h, variant, resultInk(variant.paper, data.pnl));
+  if (stamp) drawStamp(ctx, w, h, variant, resultInk(variant.paper, data.pnl), data.venue);
 }
 
 /** Загрузить заготовку. Отдельно от рисования: это единственная сеть здесь. */

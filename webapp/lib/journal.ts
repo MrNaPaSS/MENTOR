@@ -29,6 +29,8 @@ export type JournalTrade = {
   opened_at: string | null;
   closed_at: string;
   note: string;
+  /** Биржа сделки: код из lib/exchanges.ts. Пусто - сделка без биржи. */
+  exchange?: string;
 };
 
 export type JournalSummary = {

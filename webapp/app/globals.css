@@ -583,6 +583,24 @@
   color: var(--pnl-accent);
   opacity: 0.85;
 }
+/* Биржа сделки под рамкой печати, с её наклоном. Те же доли рисует холст
+   (drawStamp) и страница по ссылке (backend/api/shots.py). */
+.pnl-venue {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 0.6cqw;
+  text-align: center;
+  font-size: 2.3cqw;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--pnl-accent);
+  opacity: 0.9;
+  line-height: 1;
+  white-space: nowrap;
+}
 @keyframes pnl-slam {
   0% { transform: scale(2.4) rotate(-24deg); opacity: 0; }
   60% { opacity: 1; }

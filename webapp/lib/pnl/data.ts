@@ -6,6 +6,7 @@
 // и переводить одно в другое лучше в одном месте - иначе доход посчитают
 // по-разному в окне и в ссылке.
 
+import { venueTitle } from "@/lib/exchanges";
 import { dict } from "@/lib/i18n";
 import type { SharedTrade } from "@/lib/chat/api";
 import type { JournalTrade } from "@/lib/journal";
@@ -45,6 +46,7 @@ export function cardFromTrade(trade: JournalTrade, owner?: string): CardData {
     footer: [t.stamped, stamped(trade.closed_at)],
     at: trade.closed_at,
     owner: owner || undefined,
+    venue: venueTitle(trade.exchange) || undefined,
   };
 }
 
@@ -80,6 +82,7 @@ export function cardFromShared(trade: SharedTrade, at: string, owner?: string): 
     footer: [t.stamped, stamped(at)],
     at,
     owner: owner || undefined,
+    venue: venueTitle(trade.exchange) || undefined,
   };
 }
 

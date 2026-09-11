@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from backend import entitlements
+from core.exchanges import KEYS_EXCHANGE
 from core.models import iso, JournalExport, ScalpTrade, ScalpWorkspace, Student, utcnow
 from backend.config import BackendConfig
 from backend.deps import get_config, get_current_student, get_session
@@ -107,6 +108,9 @@ def _row(trade: ScalpTrade) -> dict[str, Any]:
         "opened_at": _iso(trade.opened_at),
         "closed_at": _iso(trade.closed_at),
         "note": trade.note,
+        # Где открыта. У записей с биржи, сделанных до этого поля, - биржа
+        # ключей: других тогда не было.
+        "exchange": trade.exchange or (KEYS_EXCHANGE if trade.from_exchange else ""),
     }
 
 

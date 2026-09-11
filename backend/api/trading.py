@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.deps import get_current_student, get_session
+from core.exchanges import KEYS_EXCHANGE
 from core.models import iso, LiveTrade, ScalpTrade, Student, WeexCredential, utcnow
 from core.trading.position import (
     Position,
@@ -523,6 +524,8 @@ async def status(
         "key_tail": row.key_tail if row else "",
         "updated_at": iso(row.updated_at) if row else None,
         "taker_fee": taker_fee(session, student),
+        # Биржа ключа: по ней терминал подписывает карточки идущих сделок.
+        "exchange": KEYS_EXCHANGE if row else "",
     }
 
 

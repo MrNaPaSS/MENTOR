@@ -392,6 +392,9 @@ class ScalpTrade(Base):
     # следом с сервера. Без этой отметки поздняя оценка затирала правду, и в
     # журнале стояли цифры, которых на счёте не было.
     from_exchange: Mapped[bool] = mapped_column(Boolean, default=False)
+    # На какой бирже открыта: код из core/exchanges.py. Пусто - сделка без
+    # биржи (учебная, по стакану) или записана до того, как это поле появилось.
+    exchange: Mapped[str] = mapped_column(String(16), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     student: Mapped["Student"] = relationship()

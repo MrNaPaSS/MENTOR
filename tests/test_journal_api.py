@@ -470,3 +470,34 @@ def test_day_ignores_the_window(client):
 def test_bad_date_is_refused_not_guessed(client):
     """Дата приходит из адреса: чужую строку не подставляем в запрос."""
     assert client.get("/api/journal/trades?date=вчера").status_code == 422
+
+
+def test_exchange_of_a_trade_comes_with_the_journal():
+    """Запись с биржи несёт её код: им подписывается карточка итога.
+
+    У записей, сделанных сопровождением до появления поля, биржа - та, чьи
+    ключи тогда подключали: других не было.
+    """
+    from backend.api.journal import _row
+    from core.models import ScalpTrade, utcnow
+
+    def trade(**over) -> ScalpTrade:
+        base = dict(
+            id=1, client_id="c", symbol="ETHUSDT", side="long", entry=1, stop=1,
+            exit_price=1, qty=1, margin=1, leverage=1, takes_hit=0, targets_json="[]",
+            outcome="take", pnl=1, fee=0, closed_at=utcnow(), note="",
+        )
+        base.update(over)
+        return ScalpTrade(**base)
+
+    assert _row(trade(exchange="okx"))["exchange"] == "okx"
+    assert _row(trade(exchange="", from_exchange=True))["exchange"] == "weex"
+    assert _row(trade(exchange="", from_exchange=False))["exchange"] == ""
+
+
+def test_card_page_signs_the_exchange_safely():
+    from backend.api.shots import _venue
+
+    assert _venue("WEEX Futures") == "WEEX Futures"
+    assert _venue('<script>alert(1)</script>') == ""
+    assert _venue(None) == ""
