@@ -466,3 +466,38 @@ def test_ema_бесплатна_и_vision_её_не_обещает(client):
     items = {it["title"]: it for it in client.get("/api/shop/items").json()}
     desc = items["NMNH VISION"]["description"]
     assert "EMA остаются бесплатными" in desc
+
+
+def test_у_товаров_каталога_есть_английский_текст(client):
+    """Английский кабинет показывал русские карточки маркета.
+
+    Каталог, заведённый платформой, получает английский текст при запуске;
+    у каждого товара витрины он есть.
+    """
+    from core.shop_catalog_en import CATALOG_EN
+
+    items = client.get("/api/shop/items").json()
+    known = [it for it in items if it["title"] in CATALOG_EN]
+    assert known, "каталог пуст"
+    for it in known:
+        assert it["title_en"] and it["description_en"], it["title"]
+    vision = next(it for it in items if it["title"] == "NMNH VISION")
+    assert "EMA stay free" in vision["description_en"]
+
+
+def test_ментор_заводит_товар_сразу_с_английским(client):
+    from backend.deps import get_current_mentor
+
+    client.app.dependency_overrides[get_current_mentor] = lambda: {"role": "mentor"}
+    try:
+        made = client.post(
+            "/api/shop/admin/items",
+            json={"title": "Кружка NMNH", "title_en": "NMNH mug", "description_en": "A mug.", "price": 900},
+        ).json()
+        assert (made["title_en"], made["description_en"]) == ("NMNH mug", "A mug.")
+        patched = client.patch(
+            f"/api/shop/admin/items/{made['id']}", json={"title_en": "NMNH coffee mug"}
+        ).json()
+        assert patched["title_en"] == "NMNH coffee mug"
+    finally:
+        client.app.dependency_overrides.pop(get_current_mentor, None)

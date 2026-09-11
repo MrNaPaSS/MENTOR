@@ -62,6 +62,7 @@ def create_all() -> None:
     _apply_shop_catalog_v5(engine)
     _apply_shop_catalog_v6(engine)
     _apply_shop_catalog_v7(engine)
+    _apply_shop_catalog_v8(engine)
 
 
 def _migrate_add_columns(engine) -> None:
@@ -622,4 +623,41 @@ def _apply_shop_catalog_v7(engine) -> None:
             flag.value = "7"
         else:
             session.add(SettingRow(key="shop_catalog_version", value="7"))
+        session.commit()
+
+
+def _apply_shop_catalog_v8(engine) -> None:
+    """Английский текст карточек маркета. Один раз, флагом.
+
+    Заполняется только пустое: товар, которому ментор уже написал английский
+    текст сам, не трогаем. Товары, которых нет в словаре (заведённые
+    ментором), остаются как есть - их английский он допишет в админке.
+    """
+    from sqlalchemy import inspect, select
+    from sqlalchemy.orm import Session
+    from core.models import SettingRow, ShopItem
+    from core.shop_catalog_en import CATALOG_EN
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names() or "settings" not in inspector.get_table_names():
+        return
+
+    with Session(engine) as session:
+        flag = session.get(SettingRow, "shop_catalog_version")
+        if flag and (flag.value or "").isdigit() and int(flag.value) >= 8:
+            return
+
+        for item in session.execute(select(ShopItem)).scalars():
+            pair = CATALOG_EN.get(item.title)
+            if pair is None:
+                continue
+            if not item.title_en:
+                item.title_en = pair[0]
+            if not item.description_en:
+                item.description_en = pair[1]
+
+        if flag:
+            flag.value = "8"
+        else:
+            session.add(SettingRow(key="shop_catalog_version", value="8"))
         session.commit()

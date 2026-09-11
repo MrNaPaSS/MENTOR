@@ -132,7 +132,8 @@ async def _autofill_image(item: ShopItem) -> None:
 
 def _item_out(it: ShopItem) -> ShopItemOut:
     return ShopItemOut(
-        id=it.id, title=it.title, description=it.description, price=it.price,
+        id=it.id, title=it.title, description=it.description,
+        title_en=it.title_en or "", description_en=it.description_en or "", price=it.price,
         category=it.category, section=it.section, icon=it.icon, link_url=it.link_url,
         image_url=it.image_url, requires_tv=it.requires_tv, is_active=it.is_active, sort_order=it.sort_order,
         feature=it.feature or "", duration_days=it.duration_days or 0, charges=it.charges or 0,
@@ -351,8 +352,9 @@ def admin_list_items(session=Depends(get_session)):
 @admin_router.post("/items", response_model=ShopItemOut)
 async def admin_create_item(body: ShopItemIn, session=Depends(get_session)):
     item = ShopItem(
-        title=body.title, description=body.description, price=body.price,
-        category=body.category, section=body.section, icon=body.icon,
+        title=body.title, description=body.description,
+        title_en=body.title_en.strip(), description_en=body.description_en.strip(),
+        price=body.price, category=body.category, section=body.section, icon=body.icon,
         link_url=body.link_url, image_url=body.image_url, requires_tv=body.requires_tv,
         is_active=body.is_active, sort_order=body.sort_order,
         feature=body.feature.strip(), duration_days=body.duration_days, charges=body.charges,

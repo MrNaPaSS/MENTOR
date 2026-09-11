@@ -12,7 +12,8 @@
 import { ChevronRight, Cpu, Palette, Shirt, Star, type LucideIcon } from "lucide-react";
 import CoinIcon from "@/components/app/CoinIcon";
 import type { ShopItem } from "@/lib/api";
-import { useIntlLocale, useT } from "@/lib/i18n";
+import { useIntlLocale, useT, useLocale } from "@/lib/i18n";
+import { itemDescription, itemTitle } from "@/lib/shopText";
 
 export type SoftLink = "features" | "frames" | "merch" | "software";
 
@@ -37,6 +38,7 @@ export default function SoftPanel({
   onPick: (cat: SoftLink) => void;
 }) {
   const t = useT();
+  const locale = useLocale();
   const numbers = useIntlLocale();
   return (
     <section className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
@@ -50,9 +52,11 @@ export default function SoftPanel({
             <img src={image} alt="" className="h-20 w-20 shrink-0 rounded-lg object-cover" />
           )}
           <div className="flex min-w-0 flex-1 flex-col">
-            <p className="line-clamp-2 text-[12px] font-bold leading-snug text-[var(--pane-text)]">{featured.title}</p>
+            <p className="line-clamp-2 text-[12px] font-bold leading-snug text-[var(--pane-text)]">{itemTitle(featured, locale)}</p>
             {featured.description && (
-              <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-[var(--pane-muted)]">{featured.description}</p>
+              <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-[var(--pane-muted)]">
+                {itemDescription(featured, locale)}
+              </p>
             )}
             <div className="mt-auto flex items-center justify-between gap-2 pt-1.5">
               <span className="flex items-center gap-1 font-mono text-[12px] font-bold tabular-nums text-[var(--pane-gold)]">

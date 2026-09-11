@@ -12,12 +12,13 @@ import { useEffect, useState } from "react";
 import { Check, ExternalLink, Lock } from "lucide-react";
 import CoinIcon from "@/components/app/CoinIcon";
 import type { Entitlement, ShopItem } from "@/lib/api";
-import { useIntlLocale, useT } from "@/lib/i18n";
+import { useIntlLocale, useT, useLocale } from "@/lib/i18n";
 import { cardImage } from "@/lib/tvImage";
 import { frameOfFeature, rankFrame, type FrameId } from "@/lib/frames";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import FramedAvatar from "@/components/avatar/FramedAvatar";
 import ShopIcon from "./ShopIcon";
+import { itemDescription, itemTitle } from "@/lib/shopText";
 
 /** Как продаётся товар - от этого цвет карточки, как редкость у достижений. */
 export type Tier = "forever" | "days" | "charges" | "manual" | "merch" | "free" | "rank";
@@ -121,6 +122,7 @@ export default function ShopCard({
   onEquip: (frame: string) => void;
 }) {
   const t = useT();
+  const locale = useLocale();
   const numbers = useIntlLocale();
   const theme = useTerminalTheme();
   const tier: Tier = rank ? "rank" : tierOf(item);
@@ -156,8 +158,8 @@ export default function ShopCard({
       );
   }
 
-  const title = rank && frame ? t.shop.rankFrames[frame] ?? item.title : item.title;
-  const description = rank ? t.shop.rankOnly(rank) : item.description;
+  const title = rank && frame ? t.shop.rankFrames[frame] ?? item.title : itemTitle(item, locale);
+  const description = rank ? t.shop.rankOnly(rank) : itemDescription(item, locale);
 
   let action: React.ReactNode;
   if (rank) {

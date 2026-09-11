@@ -266,6 +266,10 @@ class ShopItem(Base):
     id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text, default="")
+    # Английская версия карточки. Пусто - в английском кабинете показывается
+    # русский текст: лучше он, чем пустая карточка.
+    title_en: Mapped[str] = mapped_column(String(120), default="")
+    description_en: Mapped[str] = mapped_column(Text, default="")
     price: Mapped[int] = mapped_column(Integer)               # цена в монетах NMNH (0 = не покупается, витрина)
     category: Mapped[str] = mapped_column(String(32), default="other")  # indicator|mentorship|vip|academy|...
     section: Mapped[str] = mapped_column(String(16), default="shop")     # shop (покупка) | software (витрина)

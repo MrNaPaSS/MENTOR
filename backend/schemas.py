@@ -384,6 +384,9 @@ class ShopItemOut(BaseModel):
     id: int
     title: str
     description: str
+    # Английская версия карточки. Пусто - показывается русский текст.
+    title_en: str = ""
+    description_en: str = ""
     price: int
     category: str
     section: str
@@ -416,6 +419,8 @@ class FrameIn(BaseModel):
 class ShopItemIn(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     description: str = ""
+    title_en: str = Field(default="", max_length=120)
+    description_en: str = ""
     price: int = Field(ge=0)
     category: str = "other"
     section: str = "shop"
@@ -434,6 +439,8 @@ class ShopItemIn(BaseModel):
 class ShopItemPatch(BaseModel):
     title: Optional[str] = Field(default=None, max_length=120)
     description: Optional[str] = None
+    title_en: Optional[str] = Field(default=None, max_length=120)
+    description_en: Optional[str] = None
     price: Optional[int] = Field(default=None, ge=0)
     category: Optional[str] = None
     section: Optional[str] = None

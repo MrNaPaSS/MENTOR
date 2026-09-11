@@ -10,8 +10,9 @@ import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import CoinIcon from "@/components/app/CoinIcon";
 import type { ShopItem } from "@/lib/api";
-import { useIntlLocale, useT } from "@/lib/i18n";
+import { useIntlLocale, useT, useLocale } from "@/lib/i18n";
 import { parseOptions } from "@/lib/shopOptions";
+import { itemTitle, optionLabel } from "@/lib/shopText";
 import { CHIP, CHIP_OFF, CHIP_ON, NUM, PaneScope } from "@/components/app/Pane";
 
 export default function BuyDialog({
@@ -30,6 +31,7 @@ export default function BuyDialog({
   onClose: () => void;
 }) {
   const t = useT();
+  const locale = useLocale();
   const numbers = useIntlLocale();
   const options = parseOptions(item.options);
   const [color, setColor] = useState(options.color[0] ?? "");
@@ -97,7 +99,7 @@ export default function BuyDialog({
             </div>
           )}
           <p className="text-[12px] text-[var(--pane-text)]">
-            <span className="font-semibold">{item.title}</span> {t.shop.confirmFor}{" "}
+            <span className="font-semibold">{itemTitle(item, locale)}</span> {t.shop.confirmFor}{" "}
             <span className={`${NUM} font-semibold`} style={{ color: "var(--pane-gold)" }}>
               {item.price.toLocaleString(numbers)} NMNH
             </span>
@@ -110,7 +112,13 @@ export default function BuyDialog({
           </p>
 
           {options.color.length > 0 && (
-            <Choice label={t.shop.pick.colorLabel} values={options.color} value={color} onPick={setColor} />
+            <Choice
+              label={t.shop.pick.colorLabel}
+              values={options.color}
+              value={color}
+              onPick={setColor}
+              show={(one) => optionLabel(one, locale)}
+            />
           )}
           {options.size.length > 0 && (
             <Choice label={t.shop.pick.sizeLabel} values={options.size} value={size} onPick={setSize} />
@@ -176,11 +184,14 @@ function Choice({
   values,
   value,
   onPick,
+  show = (one) => one,
 }: {
   label: string;
   values: string[];
   value: string;
   onPick: (value: string) => void;
+  /** Как подписать вариант. Значение уходит в заказ как есть - ментору. */
+  show?: (value: string) => string;
 }) {
   return (
     <div>
@@ -193,7 +204,7 @@ function Choice({
             onClick={() => onPick(one)}
             className={`${CHIP} border border-[var(--pane-border)] ${value === one ? CHIP_ON : CHIP_OFF}`}
           >
-            {one}
+            {show(one)}
           </button>
         ))}
       </div>

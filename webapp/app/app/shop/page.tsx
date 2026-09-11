@@ -16,9 +16,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Cpu, Crown, LayoutGrid, Search, Shirt, Wrench, X, Zap, type LucideIcon } from "lucide-react";
 import { api, API_URL, type CoinTx, type Profile, type ShopItem, type ShopOrder } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { useT } from "@/lib/i18n";
+import { useT, useLocale } from "@/lib/i18n";
 import { useCoins, COINS_EVENT } from "@/lib/useCoins";
 import { announceEntitlements, useEntitlements } from "@/lib/entitlements";
+import { itemTitle } from "@/lib/shopText";
 import { frameOfFeature, RANK_FRAMES } from "@/lib/frames";
 import { PROFILE_EVENT } from "@/lib/profileEvent";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
@@ -95,6 +96,7 @@ function rankItem(rank: number): ShopItem {
 
 export default function ShopPage() {
   const t = useT();
+  const locale = useLocale();
   const { coins, pendingTotal, pendingCount } = useCoins();
   const owned = useEntitlements();
   const balance = coins ?? 0;
@@ -167,7 +169,12 @@ export default function ShopPage() {
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const list = (cat === "all" ? shown : shown.filter((item) => catOf(item) === cat)).filter(
-      (item) => !needle || `${item.title} ${item.description}`.toLowerCase().includes(needle),
+      // Ищем по обоим языкам: название могли запомнить на любом.
+      (item) =>
+        !needle ||
+        `${item.title} ${item.description} ${item.title_en ?? ""} ${item.description_en ?? ""}`
+          .toLowerCase()
+          .includes(needle),
     );
     // По каталогу: внутри группы - порядок каталога, между группами - наш.
     // По цене - без групп: сравнивают именно цены.
@@ -193,7 +200,7 @@ export default function ShopPage() {
       .filter((item) => item.price > balance)
       .filter((item) => !(item.feature && owned.find(item.feature)?.permanent))
       .sort((a, b) => a.price - b.price)[0];
-    return next ? { title: next.title, price: next.price } : null;
+    return next ? { title: itemTitle(next, locale), price: next.price } : null;
   }, [shown, balance, owned]);
 
   async function buy(item: ShopItem, contact: string) {
@@ -209,7 +216,8 @@ export default function ShopPage() {
       loadProfile();
       window.dispatchEvent(new Event(PROFILE_EVENT));
     }
-    setNote(item.feature ? t.shop.done(item.title) : t.shop.doneManual(item.title));
+    const name = itemTitle(item, locale);
+    setNote(item.feature ? t.shop.done(name) : t.shop.doneManual(name));
     setBuying(null);
   }
 
@@ -343,7 +351,16 @@ export default function ShopPage() {
 
         <aside className="space-y-3 lg:self-start">
           <BalanceCard balance={balance} pendingCount={pendingCount} pendingTotal={pendingTotal} goal={goal} />
-          <ActivityPane owned={owned.list} history={history} orders={orders} />
+          <ActivityPane
+            owned={owned.list}
+            history={history}
+            // Заказ хранит название на момент покупки, по-русски. Если товар
+            // ещё в каталоге - называем его на языке кабинета.
+            orders={orders.map((o) => {
+              const item = items.find((one) => one.id === o.item_id);
+              return item ? { ...o, item_title: itemTitle(item, locale) } : o;
+            })}
+          />
           <CommunityBanner />
           <SoftPanel
             featured={featured}

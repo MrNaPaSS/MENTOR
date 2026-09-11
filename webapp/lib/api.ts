@@ -838,6 +838,9 @@ export interface ShopItem {
   id: number;
   title: string;
   description: string;
+  /** Английская версия карточки. Пусто - показывается русский текст. */
+  title_en?: string;
+  description_en?: string;
   price: number;
   category: string;
   section: string;   // "shop" | "software"
@@ -894,6 +897,8 @@ export interface Entitlement {
 export interface ShopItemInput {
   title: string;
   description?: string;
+  title_en?: string;
+  description_en?: string;
   price: number;
   category?: string;
   section?: string;

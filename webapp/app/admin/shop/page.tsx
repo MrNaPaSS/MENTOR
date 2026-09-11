@@ -11,7 +11,7 @@ import { parseOptions, splitList, stringifyOptions } from "@/lib/shopOptions";
 type Tab = "items" | "orders";
 
 const EMPTY: ShopItemInput = {
-  title: "", description: "", price: 0, category: "indicator",
+  title: "", description: "", title_en: "", description_en: "", price: 0, category: "indicator",
   section: "shop", icon: "Gift", link_url: "", image_url: "", requires_tv: false, is_active: true, sort_order: 0,
   feature: "", duration_days: 0, charges: 0, options: "",
 };
@@ -281,7 +281,9 @@ function ItemEditor({ token, item, onClose, onSaved }: {
   token: string; item: ShopItem | null; onClose: () => void; onSaved: () => void;
 }) {
   const [form, setForm] = useState<ShopItemInput>(item ? {
-    title: item.title, description: item.description, price: item.price, category: item.category,
+    title: item.title, description: item.description,
+    title_en: item.title_en ?? "", description_en: item.description_en ?? "",
+    price: item.price, category: item.category,
     section: item.section, icon: item.icon, link_url: item.link_url, image_url: item.image_url,
     requires_tv: item.requires_tv, is_active: item.is_active, sort_order: item.sort_order,
     feature: item.feature ?? "", duration_days: item.duration_days ?? 0, charges: item.charges ?? 0,
@@ -344,6 +346,14 @@ function ItemEditor({ token, item, onClose, onSaved }: {
           </Field>
           <Field label="Описание">
             <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} className="input resize-none" placeholder="Что входит" />
+          </Field>
+          {/* Английская карточка - для тех, кто открыл кабинет на английском.
+              Пусто - там покажется русский текст. */}
+          <Field label="Название (EN)">
+            <input value={form.title_en ?? ""} onChange={(e) => set("title_en", e.target.value)} className="input" placeholder="Indicator subscription - 1 month" />
+          </Field>
+          <Field label="Описание (EN)">
+            <textarea value={form.description_en ?? ""} onChange={(e) => set("description_en", e.target.value)} rows={2} className="input resize-none" placeholder="What's included" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Цена (NMNH, 0 = витрина)">
