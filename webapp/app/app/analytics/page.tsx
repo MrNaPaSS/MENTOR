@@ -4,7 +4,7 @@ import { intlLocale, useIntlLocale, useLocale, useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import Link from "next/link";
-import { api, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
+import { api, API_URL, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
 import { loadDay, type JournalTrade } from "@/lib/journal";
 import PnlCard from "@/components/scalping/PnlCard";
 // Цены показываем тем же форматом, что и на самой карточке: цена выхода -
@@ -316,6 +316,8 @@ export default function AnalyticsPage() {
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
   const [currentBalance, setCurrentBalance] = useState<number | null>(null);
   const [coinsBalance, setCoinsBalance] = useState<number | null>(null);
+  // Кто владелец: аватар и рамка - для панели уровня.
+  const [me, setMe] = useState<{ avatar: string | null; frame: string | null; name: string } | null>(null);
   const [coinsSynced, setCoinsSynced] = useState(false);
 
   useEffect(() => {
@@ -328,6 +330,11 @@ export default function AnalyticsPage() {
       // чью-то сделку, а не ничью. Своя подпись важнее ника Telegram: её
       // ученик выбрал сам, а ник переписывается при каждом входе.
       setOwner(p.card_name || p.username || null);
+      setMe({
+        avatar: p.avatar_url ? `${API_URL}${p.avatar_url}` : null,
+        frame: p.avatar_frame ?? null,
+        name: p.card_name || p.username || "",
+      });
     }).catch(() => {});
     api.tradesMe(token, 90).then(r => {
       setRecentDeposits((r.deposits || []).slice(0, 5));
@@ -1120,6 +1127,9 @@ export default function AnalyticsPage() {
                 xpNeeded={xpNeeded}
                 coins={coinsBalance}
                 parts={parts}
+                avatar={me?.avatar ?? null}
+                frame={me?.frame ?? null}
+                name={me?.name ?? ""}
               />
               <CertificatesPanel className="h-full" />
             </div>
