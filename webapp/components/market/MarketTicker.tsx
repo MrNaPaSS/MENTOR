@@ -352,12 +352,16 @@ const Pair = memo(function Pair({
       ]
         .filter(Boolean)
         .join(" · ")}
-      className="flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs transition-[background-color,transform] duration-150 ease-out hover:scale-[1.06] hover:bg-[var(--tick-hover)] motion-reduce:hover:scale-100"
+      // По базовой линии, а не по центру: название набрано обычным шрифтом, а
+      // цена и проценты - моноширинным, и у них разные верх и низ. По центру
+      // рамок название вставало ниже цифр. Точка и звезда - значки, их место
+      // по центру строки.
+      className="flex items-baseline gap-1.5 rounded-md px-2 py-0.5 text-xs transition-[background-color,transform] duration-150 ease-out hover:scale-[1.06] hover:bg-[var(--tick-hover)] motion-reduce:hover:scale-100"
       style={heavy ? { background: "var(--tick-heavy)" } : undefined}
     >
       {/* Цветная точка = индикатор направления */}
       <span
-        className="inline-block h-1.5 w-1.5 rounded-full"
+        className="inline-block h-1.5 w-1.5 self-center rounded-full"
         style={{ backgroundColor: pos ? "var(--tick-up)" : "var(--tick-down)" }}
       />
       {/* Звезда - у самой крупной плиты дня. Значком, а не цветом: цвет плиты
@@ -366,7 +370,7 @@ const Pair = memo(function Pair({
           календаря и на полученных наградах. */}
       {crowned && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={star} alt="" className="h-3.5 w-3.5 shrink-0" />
+        <img src={star} alt="" className="h-3.5 w-3.5 shrink-0 self-center" />
       )}
       <span
         className="font-semibold"
