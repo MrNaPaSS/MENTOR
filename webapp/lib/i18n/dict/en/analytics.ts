@@ -45,6 +45,13 @@ export const analytics = {
     empty: "The exchange has not returned account numbers yet",
   },
 
+  /** Mottos next to the section art: two lines, letter-spaced. */
+  mottos: {
+    calendar: ["Small steps", "big results"],
+    month: ["Analysis today", "profit tomorrow"],
+    account: ["More data", "more opportunities"],
+  },
+
   path: {
     title: "Trader's path",
     subtitle: "Total volume on WEEX",

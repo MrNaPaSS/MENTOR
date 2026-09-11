@@ -17,11 +17,12 @@ import { CHIP, CHIP_OFF, CHIP_ON, PaneHead, PaneScope } from "@/components/app/P
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
 import CertificatesPanel from "@/components/cert/CertificatesPanel";
+import Motto, { BRAND_MOTTO } from "@/components/analytics/Motto";
 import LevelPanel, { type XpPart } from "@/components/analytics/LevelPanel";
 import GoalsPanel from "@/components/analytics/GoalsPanel";
 import AchievementsPanel from "@/components/analytics/AchievementsPanel";
 import type { Achievement, Goal } from "@/lib/analytics/rewards";
-import { X, Trophy, Flame, Calendar, BarChart2, Share2 } from "lucide-react";
+import { X, Trophy, Calendar, BarChart2, Share2 } from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
 function fmtDot(n: number, dec = 0): string {
@@ -696,7 +697,8 @@ export default function AnalyticsPage() {
           const at = nextIdx === -1 ? 1 : (done + inLeg) / last;
 
           return (
-            <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+            <div className="flex overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
+              <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 border-b border-[var(--pane-border)] px-3 pt-2.5 pb-2">
                 <BarChart2 className="h-4 w-4 text-[var(--pane-gold)]" />
                 <h2 className="text-[12px] font-semibold leading-none text-[var(--pane-text)]">
@@ -771,6 +773,19 @@ export default function AnalyticsPage() {
                   </p>
                 )}
               </div>
+              </div>
+
+              {/* Вершина с флагами - куда ведёт дорожка. Колонкой сбоку, а не
+                  подложкой под вехами: подписи на скалах не читаются. */}
+              <div className="relative hidden w-72 shrink-0 md:block">
+                <Motto lines={BRAND_MOTTO} className="absolute left-3 top-2.5 z-10" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/art/analytics/summit-flags.webp"
+                  alt=""
+                  className="pointer-events-none absolute bottom-0 right-0 h-[92%] w-auto max-w-none object-contain"
+                />
+              </div>
             </div>
           );
         })()}
@@ -794,29 +809,25 @@ export default function AnalyticsPage() {
           <div className="flex w-full flex-col overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
 
             {/* Шапка */}
+            {/* Название и итоги дней слева, бык с медведем и девиз справа.
+                Картинка только на широком экране: на узком она отнимала бы
+                место у итогов. */}
             <div
-              className="border-b border-[var(--pane-border)] px-3 pt-3 pb-2"
+              className="flex items-center gap-3 border-b border-[var(--pane-border)] px-3 py-2.5"
               style={{ background: "linear-gradient(135deg, var(--pane-accent-faint) 0%, transparent 55%)" }}
             >
-              <div className="flex items-center justify-between">
                 <button
                   onClick={prevMonth}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--pane-border)] text-[13px] text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)]"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--pane-border)] text-[13px] text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)]"
                 >‹</button>
-                <div className="text-center">
-                  <h2 className="text-[13px] font-semibold text-[var(--pane-text)]">
-                    {t.analytics.calendar.months[month]} <span className="text-[var(--pane-muted)] font-medium">{year}</span>
-                  </h2>
-                </div>
-                <button
-                  onClick={nextMonth}
-                  disabled={year === today.getFullYear() && month === today.getMonth()}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--pane-border)] text-[13px] text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)] disabled:opacity-25"
-                >›</button>
-              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="flex items-center gap-1.5 text-[14px] font-semibold text-[var(--pane-text)]">
+                  <Calendar className="h-4 w-4 text-[var(--pane-muted)]" />
+                  {t.analytics.calendar.months[month]} <span className="text-[var(--pane-muted)] font-medium">{year}</span>
+                </h2>
 
               {/* Статспиллы */}
-              <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 <span className="flex items-center gap-1 rounded-full bg-[var(--pane-up)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
                   {t.analytics.calendar.profitDays(profitDays)}
                 </span>
@@ -837,13 +848,26 @@ export default function AnalyticsPage() {
 
               {/* Мини-полоса прогресса профит/лосс */}
               {(profitDays + lossDays) > 0 && (
-                <div className="mt-3 overflow-hidden rounded-full bg-[var(--pane-hover)]" style={{ height: 4 }}>
+                <div className="mt-2 overflow-hidden rounded-full bg-[var(--pane-hover)]" style={{ height: 4 }}>
                   <div className="flex h-full">
                     <div className="bg-[var(--pane-up)]/60 transition-all duration-700" style={{ width: `${(profitDays / (profitDays + lossDays)) * 100}%` }} />
                     <div className="bg-[var(--pane-down)]/50 transition-all duration-700" style={{ width: `${(lossDays / (profitDays + lossDays)) * 100}%` }} />
                   </div>
                 </div>
               )}
+              </div>
+
+              <div className="hidden shrink-0 items-center gap-2 lg:flex">
+                <Motto lines={t.analytics.mottos.calendar} className="hidden text-right 2xl:block" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/art/analytics/bull-bear.webp" alt="" className="pointer-events-none h-20 w-auto" />
+              </div>
+
+                <button
+                  onClick={nextMonth}
+                  disabled={year === today.getFullYear() && month === today.getMonth()}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--pane-border)] text-[13px] text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)] disabled:opacity-25"
+                >›</button>
             </div>
 
             {/* Тело календаря */}
@@ -954,8 +978,9 @@ export default function AnalyticsPage() {
               </h2>
               <span className="text-[10px] text-[var(--pane-muted)]">{t.analytics.month.hint}</span>
             </div>
+            <div className="flex">
             {monthTrades > 0 || tradingDays > 0 ? (
-              <dl className="divide-y divide-[var(--pane-border)]">
+              <dl className="min-w-0 flex-1 divide-y divide-[var(--pane-border)]">
                 <Metric label={t.analytics.month.trades} value={fmtDot(monthTrades)} />
                 <Metric
                   label={t.analytics.month.profitDays}
@@ -980,10 +1005,12 @@ export default function AnalyticsPage() {
                 <Metric label={t.analytics.month.perDay} value={`$${fmtVolShort(volumePerDay)}`} />
               </dl>
             ) : (
-              <p className="px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
+              <p className="min-w-0 flex-1 px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
                 {t.analytics.month.empty}
               </p>
             )}
+            <PanelArt src="/art/analytics/growth-bars.webp" motto={t.analytics.mottos.month} />
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
@@ -995,8 +1022,9 @@ export default function AnalyticsPage() {
                 {t.analytics.account.hint}
               </span>
             </div>
+            <div className="flex">
             {tradeSummary ? (
-              <dl className="divide-y divide-[var(--pane-border)]">
+              <dl className="min-w-0 flex-1 divide-y divide-[var(--pane-border)]">
                 <Metric
                   label={t.analytics.account.futures}
                   value={`$${fmtVolShort(tradeSummary.futures_volume)}`}
@@ -1025,10 +1053,12 @@ export default function AnalyticsPage() {
                 />
               </dl>
             ) : (
-              <p className="px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
+              <p className="min-w-0 flex-1 px-3 py-6 text-center text-[11px] text-[var(--pane-muted)]">
                 {t.analytics.account.empty}
               </p>
             )}
+            <PanelArt src="/art/analytics/coin-stacks.webp" motto={t.analytics.mottos.account} />
+            </div>
           </div>
 
           </div>
@@ -1044,32 +1074,34 @@ export default function AnalyticsPage() {
             label={t.analytics.kpi.monthVolume}
             value={fmtVolShort(monthVolume > 0 ? monthVolume : totalVolume / 3)}
             note={t.analytics.kpi.monthVolumeGoal}
-            pct={Math.min(((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100, 100)}
+            pct={((monthVolume > 0 ? monthVolume : totalVolume / 3) / 250_000) * 100}
             color="var(--pane-accent)"
+            art="/art/goals/volume.webp"
           />
           <Kpi
             label={t.analytics.kpi.streak}
             value={String(activityStreak)}
             note={t.analytics.kpi.streakGoal}
-            pct={Math.min((activityStreak / 7) * 100, 100)}
+            pct={(activityStreak / 7) * 100}
             color="var(--c-warn)"
-            icon={<Flame className="h-3.5 w-3.5 text-orange-400" />}
+            art="/art/goals/streak.webp"
           />
           <Kpi
             label={t.analytics.kpi.avgDaily}
             value={`${avgProfit >= 0 ? "+" : ""}${avgProfit.toFixed(2)}%`}
             note={t.analytics.kpi.overDays(validPnl.length)}
-            pct={Math.min((Math.abs(avgProfit) / 5) * 100, 100)}
+            pct={(Math.abs(avgProfit) / 5) * 100}
             color={avgProfit >= 0 ? "var(--pane-up)" : "var(--pane-down)"}
             tone={avgProfit >= 0 ? "up" : "down"}
+            art="/art/goals/profit.webp"
           />
           <Kpi
             label={t.analytics.kpi.tradingDays}
             value={String(tradingDays)}
             note={t.analytics.kpi.tradingDaysGoal}
-            pct={Math.min((tradingDays / 15) * 100, 100)}
+            pct={(tradingDays / 15) * 100}
             color="var(--pane-gold)"
-            icon={<Calendar className="h-3.5 w-3.5 text-[var(--pane-gold)]" />}
+            art="/art/goals/trading_days.webp"
           />
         </div>
 
@@ -1339,7 +1371,8 @@ function Metric({
  *
  * Полоска вместо кольца. Кольцо в семьдесят точек занимало высоту целой
  * панели ради одного числа внутри себя, а сказать ему нужно ровно то же:
- * сколько набрано и сколько до цели.
+ * сколько набрано и сколько до цели. Процент справа в сотню не упирается:
+ * перевыполненная цель так и видна - полоса полная, а число честное.
  */
 function Kpi({
   label,
@@ -1347,7 +1380,7 @@ function Kpi({
   note,
   pct,
   color,
-  icon,
+  art,
   tone,
 }: {
   label: string;
@@ -1356,7 +1389,8 @@ function Kpi({
   note: string;
   pct: number;
   color: string;
-  icon?: React.ReactNode;
+  /** Объёмная картинка показателя - та же, что у одноимённой цели месяца. */
+  art: string;
   tone?: "up" | "down";
 }) {
   const ink =
@@ -1365,20 +1399,43 @@ function Kpi({
       : tone === "down"
         ? "text-[var(--pane-down)]"
         : "text-[var(--pane-text)]";
+  const share = Number.isFinite(pct) ? Math.max(0, pct) : 0;
   return (
-    <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-3 py-2">
-      <div className="flex items-baseline gap-1.5">
-        {icon}
-        <span className={`font-mono text-[15px] font-bold tabular-nums ${ink}`}>{value}</span>
+    <div className="rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-3 py-2.5">
+      <div className="flex items-center gap-2.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={art} alt="" className="h-10 w-10 shrink-0" />
+        <div className="min-w-0">
+          <span className={`font-mono text-[16px] font-bold leading-none tabular-nums ${ink}`}>{value}</span>
+          <div className="mt-1 truncate text-[11px] text-[var(--pane-text-2)]">{label}</div>
+        </div>
       </div>
-      <div className="mt-0.5 truncate text-[11px] text-[var(--pane-text-2)]">{label}</div>
-      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--pane-hover)]">
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--pane-hover)]">
         <div
-          className="h-full rounded-full transition-[width] duration-700"
-          style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }}
+          className="h-full origin-left rounded-full transition-transform duration-700 ease-out"
+          style={{ transform: `scaleX(${Math.min(100, share) / 100})`, background: color }}
         />
       </div>
-      <div className="mt-1 truncate text-[10px] text-[var(--pane-muted)]">{note}</div>
+      <div className="mt-1 flex items-baseline justify-between gap-2 text-[10px] text-[var(--pane-muted)]">
+        <span className="truncate">{note}</span>
+        <span className="shrink-0 font-mono tabular-nums">{Math.round(share)}%</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Картинка сбоку панели цифр и девиз под ней.
+ *
+ * Только с ширины планшета: на телефоне колонка цифр и так узкая, и картинка
+ * отняла бы у неё половину.
+ */
+function PanelArt({ src, motto }: { src: string; motto: readonly string[] }) {
+  return (
+    <div className="hidden w-44 shrink-0 flex-col items-center justify-center gap-2 border-l border-[var(--pane-border)] px-3 py-3 sm:flex">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" className="pointer-events-none max-h-36 w-full object-contain" />
+      <Motto lines={motto} className="text-center" />
     </div>
   );
 }
