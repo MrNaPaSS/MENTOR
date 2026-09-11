@@ -12,7 +12,7 @@
 import CoinIcon from "@/components/app/CoinIcon";
 import FramedAvatar from "@/components/avatar/FramedAvatar";
 import { useIntlLocale, useT } from "@/lib/i18n";
-import { LEVEL_ART, XP_ART, type XpSource } from "@/lib/analytics/rewards";
+import { XP_ART, type XpSource } from "@/lib/analytics/rewards";
 
 export interface XpPart {
   key: XpSource;
@@ -52,21 +52,29 @@ export default function LevelPanel({
 
   return (
     <section className="relative flex h-full flex-col overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3">
-      {/* Верх панели. Картинка занимает всю его высоту и чуть заходит на
-          внутренний отступ, чтобы флаг встал у самой кромки. Всё остальное
-          здесь поднято над ней: у картинки абсолютное место, и без этого она
-          легла бы поверх текста и полосы. */}
+      {/* Верх панели. Картинка занимает всю его высоту: сверху заходит на
+          внутренний отступ, чтобы флаг встал у самой кромки, снизу - под край
+          плиток опыта. Растянута вширь на 20% трансформацией: так растяжение
+          одно на любой ширине панели и никогда не сжимает картинку. Всё
+          остальное поднято над ней: у картинки абсолютное место, и без этого
+          она легла бы поверх текста, полосы и плиток. */}
       <div className="relative flex flex-1 flex-col">
         <img
           src="/art/level-summit.webp"
           alt=""
-          className="pointer-events-none absolute -top-2 left-1/2 hidden h-[calc(100%+0.5rem)] w-auto max-w-[46%] -translate-x-1/2 object-contain object-bottom sm:block"
+          className="pointer-events-none absolute -top-2 left-1/2 hidden h-[calc(100%+0.5rem+18px)] w-auto max-w-[44%] -translate-x-1/2 scale-x-[1.2] object-contain object-bottom sm:block"
         />
 
         <header className="relative flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <img src={LEVEL_ART} alt="" className="h-7 w-7" />
             <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.level.title}</h2>
+            {/* Номер уровня - кружком сразу за названием панели. */}
+            <span
+              title={levelLabel}
+              className="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-[var(--pane-gold)] px-1 font-mono text-[11px] font-black leading-none text-[#171204]"
+            >
+              {level}
+            </span>
           </div>
           {coins !== null && (
             <div className="flex items-center gap-1.5 rounded-full border border-[var(--pane-gold-soft)] bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-2.5 py-1">
@@ -80,8 +88,8 @@ export default function LevelPanel({
         </header>
 
         <div className="relative mb-3 mt-3 flex items-center gap-3">
-          {/* Кто это: аватар владельца, уровень - кружком в углу. Без
-              купленной рамки - золотая обводка, как в профиле. */}
+          {/* Кто это: аватар владельца. Без купленной рамки - золотая
+              обводка, как в профиле. */}
           <div className="relative shrink-0" title={levelLabel}>
             <div
               className={`rounded-full ${frame ? "" : "p-[2px]"}`}
@@ -89,12 +97,6 @@ export default function LevelPanel({
             >
               <FramedAvatar src={avatar} name={name || title} size={52} frame={frame} />
             </div>
-            <span
-              aria-label={levelLabel}
-              className="absolute -bottom-1 -right-1 grid h-6 min-w-[1.5rem] place-items-center rounded-full border-2 border-[var(--pane-bg)] bg-[var(--pane-gold)] px-1 font-mono text-[11px] font-black leading-none text-[#171204]"
-            >
-              {level}
-            </span>
           </div>
           <div className="min-w-0 shrink-0">
             <p className="text-sm font-bold text-[var(--pane-text)]">{title}</p>
@@ -128,7 +130,7 @@ export default function LevelPanel({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 pt-3">
+      <div className="relative grid grid-cols-2 gap-2 pt-3">
         {parts.map(({ key, val }) => (
           <div
             key={key}
