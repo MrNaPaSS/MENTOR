@@ -12,6 +12,7 @@
 
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import Motto, { BRAND_MOTTO } from "@/components/app/Motto";
+import { PageRidge } from "@/components/app/HeadArt";
 
 /**
  * Область, внутри которой живут цвета панелей.
@@ -65,6 +66,7 @@ export function PaneHead({
 }) {
   return (
     <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-2 md:min-h-[46px]">
+      <PageRidge />
 
       <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
         <div className="flex min-w-0 items-baseline gap-2.5">
