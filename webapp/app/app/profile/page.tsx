@@ -139,17 +139,22 @@ export default function ProfilePage() {
             собран из ровных панелей, и цветное пятно здесь читалось бы куском
             другого приложения. */}
         <div className="relative overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-4">
-          {/* Горы с короной и NMNH - за правой половиной карточки, к левому
-              краю тают: имя и баланс стоят на чистом поле. */}
+          {/* Горы с короной, свечами и граффити NMNH - на прозрачном фоне, во
+              всю высоту карточки. Стоят между именем с балансом и правой
+              колонкой, где девиз и кнопка «Обновить»: на картинку они не
+              ложатся. Левый край гор растворяется, чтобы под именем и
+              балансом оставалось чистое поле. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/art/profile/card-banner.webp"
+            src="/art/profile/card-crown.webp"
             alt=""
             aria-hidden
-            className="profile-art pointer-events-none absolute inset-0 hidden h-full w-full object-cover object-right sm:block"
+            // Место картинки - рамка от 40% ширины до колонки с кнопкой: на
+            // узкой карточке она уменьшается, а не наезжает на баланс.
+            className="profile-art pointer-events-none absolute bottom-0 left-[40%] right-[140px] top-2 hidden h-[calc(100%-0.5rem)] w-[calc(60%-140px)] object-contain object-bottom sm:block"
             style={{
-              maskImage: "linear-gradient(90deg, transparent 30%, #000 55%)",
-              WebkitMaskImage: "linear-gradient(90deg, transparent 30%, #000 55%)",
+              maskImage: "linear-gradient(90deg, transparent 0%, #000 14%)",
+              WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 14%)",
             }}
           />
           {/* Девиз набран текстом, а не впечатан в картинку: так он читается и
