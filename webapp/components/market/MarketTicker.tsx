@@ -372,11 +372,10 @@ const Pair = memo(function Pair({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={star} alt="" className="h-3.5 w-3.5 shrink-0 self-center" />
       )}
-      {/* На пиксель выше базовой линии. По ней название и цена совпадают,
-          но прописные обычного шрифта ниже цифр моноширинного, и глазу
-          название казалось опущенным. */}
+      {/* Ровно по базовой линии, без сдвига. Подъём на пиксель, сделанный,
+          когда название казалось опущенным, на деле ставил его выше цены. */}
       <span
-        className="relative -top-px font-semibold"
+        className="font-semibold"
         style={{ color: heavy ? "var(--tick-heavy-ink)" : "var(--tick-symbol)" }}
       >
         {sym}
