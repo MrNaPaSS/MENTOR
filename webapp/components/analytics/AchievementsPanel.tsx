@@ -98,48 +98,58 @@ export default function AchievementsPanel({
     <section
       className={`flex flex-col gap-3 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3 ${className}`}
     >
-      <header className="flex shrink-0 items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      {/* Заголовок и вкладки - одной строкой. Отдельный ряд вкладок съедал
+          высоту, и пятый ряд наград уходил под прокрутку; теперь это место
+          отдано списку. Счёт полученных - под названием, чтобы строке
+          хватило ширины на все шесть вкладок. Где не хватает и так - на
+          узком экране, - вкладки переносятся на свою строку целиком, а не
+          обрезаются. */}
+      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex shrink-0 items-center gap-2">
           <img src="/art/ach/vol_25m.webp" alt="" className="h-7 w-7" />
-          <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{t.analytics.achievements.title}</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs font-bold tabular-nums text-[var(--pane-gold)]">
-            {earned}/{achievements.length}
-          </span>
-          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--pane-hover)]">
-            <div
-              className="h-full origin-left rounded-full bg-[var(--pane-gold)] transition-transform duration-700 ease-out"
-              style={{ transform: `scaleX(${achievements.length ? earned / achievements.length : 0})` }}
-            />
+          <div className="flex flex-col gap-1">
+            <h2 className="text-[12px] font-semibold leading-none text-[var(--pane-text)]">
+              {t.analytics.achievements.title}
+            </h2>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-[10px] font-bold leading-none tabular-nums text-[var(--pane-gold)]">
+                {earned}/{achievements.length}
+              </span>
+              <div className="h-1 w-14 overflow-hidden rounded-full bg-[var(--pane-hover)]">
+                <div
+                  className="h-full origin-left rounded-full bg-[var(--pane-gold)] transition-transform duration-700 ease-out"
+                  style={{ transform: `scaleX(${achievements.length ? earned / achievements.length : 0})` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
-      </header>
 
-      <div className="flex shrink-0 gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-        {CATEGORIES.map((cat) => {
-          const inCat = cat.id === "all" ? achievements : achievements.filter((a) => a.category === cat.id);
-          const on = category === cat.id;
-          return (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setCategory(cat.id)}
-              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors duration-150 ease-out ${
-                on
-                  ? "border-accent-gold/50 bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] text-[var(--pane-gold)]"
-                  : "border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
-              }`}
-            >
-              <cat.icon className="h-3 w-3 shrink-0" />
-              <span>{t.analytics.achievements.categories[cat.id]}</span>
-              <span className={`font-mono text-[9px] ${on ? "text-[color:color-mix(in_srgb,var(--pane-gold)_70%,transparent)]" : "opacity-60"}`}>
-                {inCat.filter((a) => a.earned).length}/{inCat.length}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+        <div className="flex max-w-full gap-1 overflow-x-auto scrollbar-hide sm:ml-auto">
+          {CATEGORIES.map((cat) => {
+            const inCat = cat.id === "all" ? achievements : achievements.filter((a) => a.category === cat.id);
+            const on = category === cat.id;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setCategory(cat.id)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors duration-150 ease-out ${
+                  on
+                    ? "border-accent-gold/50 bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] text-[var(--pane-gold)]"
+                    : "border-[var(--pane-border)] bg-[var(--pane-hover)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+                }`}
+              >
+                <cat.icon className="h-3 w-3 shrink-0" />
+                <span>{t.analytics.achievements.categories[cat.id]}</span>
+                <span className={`font-mono text-[9px] ${on ? "text-[color:color-mix(in_srgb,var(--pane-gold)_70%,transparent)]" : "opacity-60"}`}>
+                  {inCat.filter((a) => a.earned).length}/{inCat.length}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </header>
 
       <div ref={holder} className="min-h-0 flex-1">
         <div

@@ -823,9 +823,10 @@ export default function AnalyticsPage() {
                 <span className="flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--pane-down)_10%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--pane-down)]">
                   {t.analytics.calendar.lossDays(lossDays)}
                 </span>
-                {tradingDays > 0 && (
+                {/* Сделки месяца - закрытые по журналу, а не дни с торговлей. */}
+                {monthTrades > 0 && (
                   <span className="flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
-                    {t.analytics.calendar.tradeDays(tradingDays)}
+                    {t.analytics.calendar.monthTrades(monthTrades)}
                   </span>
                 )}
                 {activeDays > 0 && (

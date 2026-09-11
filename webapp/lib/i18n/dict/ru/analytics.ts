@@ -1,5 +1,14 @@
 // Аналитика и прогресс: календарь, цели месяца, уровень и достижения.
 
+/** Число и склонение: 1 день, 2 дня, 5 дней; 11-14 - всегда «дней». */
+function plural(n: number, one: string, few: string, many: string): string {
+  const tail = n % 100 >= 11 && n % 100 <= 14 ? 0 : n % 10;
+  return tail === 1 ? one : tail >= 2 && tail <= 4 ? few : many;
+}
+
+const days = (n: number) => plural(n, "день", "дня", "дней");
+const trades = (n: number) => plural(n, "сделка", "сделки", "сделок");
+
 export const analytics = {
 
   /** Вкладки раздела: торговля отдельно, игра вокруг неё отдельно. */
@@ -86,9 +95,13 @@ export const analytics = {
     dayCard: "Карточка за день",
     deposit: "Депозит",
     volume: (amount: string) => `Объём $${amount}`,
-    profitDays: (n: number) => `↑ ${n} в плюс`,
-    lossDays: (n: number) => `↓ ${n} в минус`,
-    tradeDays: (n: number) => `↕ ${n} сделок`,
+    // Дни, а не сделки: рядом стоит число сделок месяца, и без слова «дня»
+    // «4 в плюс, 1 в минус, 7 сделок» читалось как арифметическая ошибка.
+    profitDays: (n: number) => `↑ ${n} ${days(n)} в плюс`,
+    lossDays: (n: number) => `↓ ${n} ${days(n)} в минус`,
+    // Закрытые сделки месяца по журналу. Раньше здесь стояло число дней с
+    // торговлей под подписью «сделок»: пять дней выдавались за пять сделок.
+    monthTrades: (n: number) => `↕ ${n} ${trades(n)}`,
     signalDays: (n: number) => `⚡ ${n} сигналов`,
     legendSignal: "Сигнал",
     legendTrade: "Сделка",
