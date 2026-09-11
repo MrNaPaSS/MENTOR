@@ -75,6 +75,12 @@ const FEATURE_ART: Record<string, string> = {
   streak_freeze: "/shop/streak-freeze.webp",
   streak_boost: "/shop/streak-boost.webp",
   journal_export: "/shop/journal-export.webp",
+  // Инструменты терминала - из листа «магазин / инструменты».
+  tool_vision: "/shop/tool-vision.webp",
+  tool_footprint: "/shop/tool-footprint.webp",
+  tool_volume_candles: "/shop/tool-volume-candles.webp",
+  tool_dom_depth: "/shop/tool-depth.webp",
+  tool_dom_step25: "/shop/tool-step25.webp",
 };
 
 export function tierOf(item: ShopItem): Tier {
