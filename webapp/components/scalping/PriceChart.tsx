@@ -2620,6 +2620,17 @@ function PriceChart({
     };
   }, [showJournal, journalKey, symbol, interval]);
 
+  // Стоит ли уровень разметки на той же цене, что и плита.
+  //
+  // Тогда цена на шкале подписана дважды: библиотека разводит метки по высоте,
+  // и одна цена читается как две соседние. Считаем отдельно от самой линии -
+  // иначе она пересоздавалась бы на каждый кадр перетаскивания.
+  const wallTaken = useMemo(() => {
+    if (!wall) return false;
+    const half = (tick || 0) / 2;
+    return (dragLevels ?? []).some((level) => Math.abs(level.price - wall.price) <= half);
+  }, [dragLevels, wall?.price, tick]);
+
   // Линия плиты из стакана: видно, подходила ли цена к этому уровню раньше.
   // Пересоздаём только при смене уровня — иначе моргала бы на каждом кадре.
   useEffect(() => {
@@ -2635,10 +2646,12 @@ function PriceChart({
       color: "#F0B90B",
       lineWidth: 1,
       lineStyle: 2,
-      axisLabelVisible: true,
+      // Цену на шкале подписывает уровень: жёлтая линия с подписью «плита»
+      // остаётся, а вторая та же цена рядом - нет.
+      axisLabelVisible: !wallTaken,
       title: t.terminal.levels.wall,
     });
-  }, [wall?.price, wall?.side]);
+  }, [wall?.price, wall?.side, wallTaken]);
 
   // Полоски захвата у ждущей заявки: пока её не закрепили - только на лимитке.
   //
