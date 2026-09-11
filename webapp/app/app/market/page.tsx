@@ -13,8 +13,8 @@
 // заведено в ту же рамку, что и остальное.
 //
 // Порядок вкладок отвечает на вопросы по мере их появления: что происходит
-// вообще, где сегодня работать, что делают крупные, как выглядит рынок целиком
-// и чего ждать по календарю.
+// вообще, где сегодня работать, что об этом пишут, что делают крупные, как
+// выглядит рынок целиком и чего ждать по календарю.
 
 import { useT } from "@/lib/i18n";
 import dynamic from "next/dynamic";
@@ -24,6 +24,7 @@ import {
   Building2,
   CalendarDays,
   Map as MapIcon,
+  Newspaper,
   Search,
 } from "lucide-react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -33,6 +34,7 @@ import FearGreedPane from "@/components/market/FearGreedPane";
 import FundingPane from "@/components/market/FundingPane";
 import GlobalStrip from "@/components/market/GlobalStrip";
 import MarketScreener from "@/components/market/MarketScreener";
+import CryptoNewsPane from "@/components/market/CryptoNewsPane";
 import BitcoinPane from "@/components/market/BitcoinPane";
 import TrendingPane from "@/components/market/TrendingPane";
 import PulsePromo from "@/components/market/PulsePromo";
@@ -152,12 +154,13 @@ function WidgetPane({
 
 // ── Вкладки ───────────────────────────────────────────────────────────────────
 
-type Section = "pulse" | "screener" | "smart" | "maps" | "calendar";
+type Section = "pulse" | "screener" | "news" | "smart" | "maps" | "calendar";
 
 // Подписи и подсказки вкладок - в словаре, здесь порядок и картинки.
 const TABS: { key: Section; icon: React.ReactNode }[] = [
   { key: "pulse", icon: <Activity className="h-3.5 w-3.5" /> },
   { key: "screener", icon: <Search className="h-3.5 w-3.5" /> },
+  { key: "news", icon: <Newspaper className="h-3.5 w-3.5" /> },
   { key: "smart", icon: <Building2 className="h-3.5 w-3.5" /> },
   { key: "maps", icon: <MapIcon className="h-3.5 w-3.5" /> },
   { key: "calendar", icon: <CalendarDays className="h-3.5 w-3.5" /> },
@@ -312,6 +315,7 @@ export default function MarketPage() {
 
       {section === "pulse" && <PulseSection />}
       {section === "screener" && <MarketScreener />}
+      {section === "news" && <CryptoNewsPane />}
       {section === "smart" && <SmartMoney />}
       {section === "maps" && <MapsSection />}
       {section === "calendar" && <CalendarSection />}

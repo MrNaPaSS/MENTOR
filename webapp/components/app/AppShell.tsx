@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
   Globe,
-  Tv,
   Trophy,
   User,
   LogOut,
@@ -51,7 +50,6 @@ const NAV = [
   { href: "/app/scalping", key: "scalping", icon: Waves, mobile: false },
   { href: "/app/market", key: "market", icon: Globe, mobile: true },
   { href: "/app/analysis", key: "analysis", icon: ImageIcon, mobile: true },
-  { href: "/app/news", key: "news", icon: Tv, mobile: false },
   { href: "/app/analytics", key: "analytics", icon: BarChart3, mobile: false },
   { href: "/app/shop", key: "shop", icon: ShoppingBag, mobile: true },
   { href: "/app/profile", key: "profile", icon: User, mobile: true },

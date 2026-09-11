@@ -3,11 +3,16 @@ export const market = {
   tabs: {
     pulse: { label: "Pulse", hint: "Market sentiment and the money behind positions" },
     screener: { label: "Screener", hint: "Where to work today" },
+    news: { label: "Crypto news", hint: "Latest headlines from crypto outlets" },
     smart: { label: "Smart Money", hint: "What the big players are doing" },
     maps: { label: "Maps", hint: "The whole market in one picture" },
     calendar: { label: "Calendar", hint: "Events that move the market" },
   },
   tvNote: "Data and drawing - TradingView",
+  news: {
+    title: "Crypto news",
+    loadFailed: "Couldn't load the news",
+  },
   widgets: {
     heatmap: { title: "Crypto heat map", hint: "Size - market cap, colour - price change" },
     forex: { title: "Currency pairs", hint: "Cross rates of the eight major currencies" },

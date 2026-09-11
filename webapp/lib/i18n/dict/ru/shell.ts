@@ -5,7 +5,6 @@ export const shell = {
     scalping: "Терминал",
     market: "Рынок",
     analysis: "Анализы",
-    news: "ТВ",
     analytics: "Аналитика",
     shop: "Маркет",
     profile: "Профиль",

@@ -3,7 +3,6 @@ export const shell = {
     scalping: "Terminal",
     market: "Market",
     analysis: "Analysis",
-    news: "TV",
     analytics: "Analytics",
     shop: "Store",
     profile: "Profile",

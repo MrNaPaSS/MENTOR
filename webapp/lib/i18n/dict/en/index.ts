@@ -11,7 +11,6 @@ import { common } from "./common";
 import { format } from "./format";
 import { landing } from "./landing";
 import { market } from "./market";
-import { news } from "./news";
 import { profile } from "./profile";
 import { rewards } from "./rewards";
 import { shell } from "./shell";
@@ -31,7 +30,6 @@ export const en: Dict = {
   format,
   landing,
   market,
-  news,
   profile,
   rewards,
   shell,
