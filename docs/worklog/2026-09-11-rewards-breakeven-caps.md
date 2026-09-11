@@ -387,3 +387,84 @@ Select-String -Path backend\trading\watcher.py -Pattern "held: float" | Select-O
 - Ссылка на сертификат, как у карточки сделки: страница с подписью и печатью.
 - Личные алерты плотностей по своим монетам и порогу - после отдельного сбора
   стаканов.
+
+## 11. Оформление по макетам разделов
+
+Разделы переделаны по шаблонам из папки «разделы и их елементы».
+
+- **Шапка раздела** (`PaneHead`): светлые горы со свечами за девизом
+  Discipline creates freedom и короной NMNH. Горы уходят под панели первого
+  ряда.
+- **Аналитика**: у 36 достижений, 12 целей и источников опыта свои объёмные
+  картинки (`public/art/ach`, `art/goals`, `art/xp`). Достижения больше не
+  наезжают друг на друга. Бык на вершине в уровне, медали сертификатов в
+  цвете. В итогах - бык с медведем у календаря, столбцы и монеты у панелей
+  цифр, картинки в показателях.
+- **Рынок**: Пульс раскладкой макета - легенда страха и жадности с быком,
+  значки показателей, баннеры Bitcoin leads market и Global market, цитата и
+  «Торгуй со знанием». Баннер Smart Money ведёт на «Карты».
+- **Анализы**: карточки с LONG/SHORT из текста, свёрнутым текстом,
+  просмотрами, лайками и обсуждением (новые таблицы `broadcast_reactions`,
+  `broadcast_comments`, ручки в `backend/api/broadcast.py`).
+- **Маркет**: баннер сообщества, «Наш софт», полоса NMNH.TRADE, поиск и
+  порядок по цене, цена и кнопка внизу карточки.
+- **Профиль**: баннер карточки, WEEX, золотые переключатели, нижний баннер;
+  настройки вровень с биржевым счётом. Картинки листа профиля переведены из
+  нарисованной клетки в настоящую прозрачность.
+- **Цвета**: классы вида `bg-[var(--pane-gold)]/10` Tailwind 3 не собирал -
+  сто с лишним подложек не рисовались. Переписаны на `color-mix`.
+
+## 12. Обновление сервера (вместо раздела 4)
+
+Все бэкенд-файлы, изменённые с `2a08eae`, - двадцать два. Таблицы реакций и
+комментариев создадутся сами при старте.
+
+```powershell
+$ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
+$base = "https://raw.githubusercontent.com/MrNaPaSS/MENTOR/main"
+$tmp = Join-Path $env:TEMP "mentor-update"
+$files = @(
+  "backend/api/broadcast.py",
+  "backend/api/certificates.py",
+  "backend/api/chat.py",
+  "backend/api/coins.py",
+  "backend/api/profile.py",
+  "backend/api/shop.py",
+  "backend/api/stats.py",
+  "backend/api/trading.py",
+  "backend/broadcast_social.py",
+  "backend/certificates.py",
+  "backend/coin_ledger.py",
+  "backend/entitlements.py",
+  "backend/frames.py",
+  "backend/main.py",
+  "backend/schemas.py",
+  "backend/trading/leverage_caps.py",
+  "backend/trading/refusals.py",
+  "backend/trading/rewards.py",
+  "backend/trading/watcher.py",
+  "backend/ws/routes.py",
+  "core/db.py",
+  "core/models/__init__.py"
+)
+Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+foreach ($f in $files) {
+  $dst = Join-Path $tmp $f
+  New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
+  Invoke-WebRequest "$base/$f" -OutFile $dst -UseBasicParsing
+}
+cd "C:\Users\Администратор\Desktop\WEEX\MENTOR"
+foreach ($f in $files) {
+  $dst = Join-Path (Get-Location) $f
+  New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
+  Copy-Item (Join-Path $tmp $f) $dst -Force
+}
+```
+
+Проверка:
+
+```powershell
+Select-String -Path backend\broadcast_social.py -Pattern "def toggle_like" | Select-Object -First 1
+Select-String -Path backend\coin_ledger.py -Pattern "def claim_all" | Select-Object -First 1
+```
