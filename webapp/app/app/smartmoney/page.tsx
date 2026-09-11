@@ -44,7 +44,7 @@ const ANIM_CSS = `
   .sm-shimmer   { background:linear-gradient(90deg,transparent 0%,var(--pane-hover) 50%,transparent 100%);
                   background-size:200% 100%; animation:shimmer 1.8s ease-in-out infinite; }
   .sm-hover     { transition:border-color 0.2s,background 0.2s,transform 0.15s; }
-  .sm-hover:hover { transform:translateY(-1px); border-color:rgba(255,255,255,0.15) !important; }
+  .sm-hover:hover { transform:translateY(-1px); border-color:var(--pane-border) !important; }
 `;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -348,7 +348,7 @@ function CotSection() {
             className="relative rounded px-5 py-1.5 text-[12px] font-bold transition-all"
             style={{
               background: asset===a ? "var(--pane-gold-soft)" : "var(--pane-hover)",
-              color: asset===a ? "var(--pane-gold)" : "rgba(255,255,255,0.35)",
+              color: asset===a ? "var(--pane-gold)" : "var(--pane-muted)",
               border: asset===a ? "1px solid var(--pane-gold)" : "1px solid var(--pane-hover)",
               boxShadow: "none",
             }}>
@@ -518,7 +518,7 @@ function MacroSection() {
 
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--pane-muted)]">{labels[item.key] ?? item.label}</span>
-                  <span className="font-mono text-[9px] font-bold" style={{color:"rgba(255,255,255,0.2)"}}>{item.key}</span>
+                  <span className="font-mono text-[9px] font-bold" style={{color:"var(--pane-muted)"}}>{item.key}</span>
                 </div>
 
                 <div className="font-mono text-[20px] font-extrabold leading-none text-[var(--pane-text)]">
