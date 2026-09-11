@@ -43,12 +43,14 @@ beforeEach(() => {
   play.mockClear();
   load.mockClear();
   localStorage.clear();
+  sessionStorage.clear();
   // Свежий плеер на каждый тест: он общий и состояние переживает размонтирование.
   vi.resetModules();
 });
 
 afterEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 /** Кнопку берём заново после сброса модулей - прежняя ссылка уже чужая. */
@@ -245,6 +247,32 @@ describe("поток оборвался посреди песни", () => {
     }
   });
 
+  it("поток встал без ошибки - станцию возвращают, а не молчат с кнопкой «играет»", async () => {
+    // В тяжёлом разделе кончается буфер, браузер ждёт данных, и ни error, ни
+    // ended не приходят. Время песни при этом стоит - по нему сторож и видит.
+    vi.useFakeTimers();
+    const tape = trackAudio();
+    try {
+      const radio = await import("@/lib/radio");
+      const { default: RadioChip } = await import("@/components/app/RadioChip");
+      render(<RadioChip />);
+      fireEvent.click(playButton());
+
+      const first = tape.asked[0];
+      tape.current().onplaying?.(new Event("playing"));
+
+      await vi.advanceTimersByTimeAsync(9500);
+      expect(radio.snapshot().mode).toBe("loading");
+
+      await vi.advanceTimersByTimeAsync(900);
+      expect(tape.asked).toHaveLength(2);
+      expect(tape.asked.at(-1)).toBe(first);
+    } finally {
+      tape.restore();
+      vi.useRealTimers();
+    }
+  });
+
   it("не вернулась за все попытки - уходим к соседней, а не молчим", async () => {
     // Возвраты не бесконечны: станция может замолчать на неделю, и держать
     // человека на ней всё это время значит подменить радио тишиной.
@@ -314,5 +342,46 @@ describe("уведомление и музыка", () => {
       vi.useRealTimers();
       window.Audio = Real;
     }
+  });
+});
+
+describe("страница перезагрузилась", () => {
+  // Плеер переживает переходы между разделами, но не перезагрузку: после неё
+  // он собирается с нуля. Сюда - то, что человек слышал бы после неё.
+
+  it("играло до перезагрузки - возвращается само", async () => {
+    sessionStorage.setItem("nmnh.radio.on", "1");
+    await mount();
+    await waitFor(() => expect(play).toHaveBeenCalled());
+  });
+
+  it("браузер не дал играть без касания - включается по первому касанию страницы", async () => {
+    sessionStorage.setItem("nmnh.radio.on", "1");
+    play.mockImplementationOnce(() => Promise.reject(new DOMException("blocked", "NotAllowedError")));
+    const radio = await import("@/lib/radio");
+    await mount();
+    await waitFor(() => expect(radio.snapshot().mode).toBe("off"));
+    expect(play).toHaveBeenCalledTimes(1);
+
+    // Касание самой кнопки радио не в счёт: следом тот же клик выключил бы
+    // только что включённое.
+    fireEvent.pointerDown(playButton());
+    expect(play).toHaveBeenCalledTimes(1);
+
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => expect(play).toHaveBeenCalledTimes(2));
+  });
+
+  it("выключили руками - после перезагрузки молчит", async () => {
+    const first = await mount();
+    fireEvent.click(playButton());
+    await waitFor(() => expect(play).toHaveBeenCalledTimes(1));
+    fireEvent.click(playButton());
+    first.unmount();
+
+    vi.resetModules();
+    await mount();
+    await new Promise((done) => setTimeout(done, 20));
+    expect(play).toHaveBeenCalledTimes(1);
   });
 });

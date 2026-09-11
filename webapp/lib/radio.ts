@@ -59,6 +59,30 @@ const DEFAULT_STATION = Math.max(
  */
 const REVIVE_WAITS = [800, 2000, 5000, 12000];
 
+/**
+ * Сторож замершего потока.
+ *
+ * Поток может встать без ошибки: в тяжёлом разделе кончается буфер, браузер
+ * ждёт данных, и тишина висит бесконечно, а кнопка при этом показывает, что
+ * играет. Ни `error`, ни `ended` не приходят, и возврат станции не срабатывал.
+ * Поэтому раз в несколько секунд смотрим, идёт ли время песни; стоит дольше
+ * порога - это тот же обрыв, и станцию возвращают тем же путём.
+ */
+const STALL_CHECK = 3000;
+/** Сколько тишины при игре считаем обрывом. */
+const STALL_PLAYING = 8000;
+/** Сколько ждём первого звука, прежде чем признать, что поток не пошёл. */
+const STALL_LOADING = 20000;
+
+/**
+ * Играло ли радио в этой вкладке - на случай перезагрузки страницы.
+ *
+ * Плеер живёт в модуле и переживает переходы между разделами, но не
+ * перезагрузку: после неё он собирается заново, выключенным. В сессионном
+ * хранилище остаётся отметка, и радио возвращается само.
+ */
+const ON_KEY = "nmnh.radio.on";
+
 /** До какой доли громкости приглушаем музыку под уведомление. */
 const DUCK_TO = 0.25;
 /** За сколько секунд громкость доезжает до цели: рывок слышен щелчком. */
@@ -86,6 +110,12 @@ let wasPlaying = false;
 /** Сколько раз подряд её уже возвращали, не дождавшись звука. */
 let revives = 0;
 let reviveTimer: number | null = null;
+let watchTimer: number | null = null;
+/** Где было время песни при прошлой проверке и когда оно двигалось. */
+let lastTime = 0;
+let lastMove = 0;
+/** Снять ожидание касания страницы, если оно заведено. */
+let disarmGesture: (() => void) | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -147,9 +177,88 @@ export function restore(): void {
   } catch {
     // Не прочиталось - остаёмся на станции по умолчанию.
   }
+  // Играло до перезагрузки страницы - возвращаем. Это не самовольное
+  // включение: человек его не выключал, страница перезагрузилась под ним.
+  if (wantsOn()) start(state.station, true);
+}
+
+/** Отметить в сессии, играет ли радио по воле человека. */
+function remember(on: boolean): void {
+  try {
+    if (on) sessionStorage.setItem(ON_KEY, "1");
+    else sessionStorage.removeItem(ON_KEY);
+  } catch {
+    // Без хранилища радио просто не вернётся после перезагрузки.
+  }
+}
+
+function wantsOn(): boolean {
+  try {
+    return sessionStorage.getItem(ON_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function unwatch(): void {
+  if (watchTimer !== null) {
+    window.clearInterval(watchTimer);
+    watchTimer = null;
+  }
+}
+
+/** Следить, идёт ли время песни. Встало дольше порога - `onStall`. */
+function watch(element: HTMLAudioElement, onStall: () => void): void {
+  unwatch();
+  lastTime = element.currentTime;
+  lastMove = Date.now();
+  watchTimer = window.setInterval(() => {
+    if (element !== audio) {
+      unwatch();
+      return;
+    }
+    // Звук идёт через разбор, и уснувший контекст - это тишина при живом
+    // потоке. Будим его, пока не поздно.
+    if (ctx && ctx.state === "suspended") void ctx.resume();
+
+    if (element.currentTime !== lastTime) {
+      lastTime = element.currentTime;
+      lastMove = Date.now();
+      return;
+    }
+    const limit = state.mode === "playing" ? STALL_PLAYING : STALL_LOADING;
+    if (Date.now() - lastMove >= limit) {
+      unwatch();
+      onStall();
+    }
+  }, STALL_CHECK);
+}
+
+/** Браузер не дал включить звук без касания: включим по первому касанию страницы. */
+function waitForGesture(): void {
+  teardown();
+  emit({ mode: "off", live: false });
+  if (disarmGesture) return;
+
+  function onGesture(event: Event) {
+    // Кнопки самого радио сами решают, что делать: касание пуска включило бы
+    // радио здесь, а следом тот же клик его выключил бы.
+    const target = event.target as Element | null;
+    if (target?.closest?.("[data-radio]")) return;
+    disarmGesture?.();
+    if (state.mode === "off" && wantsOn()) start(state.station, true);
+  }
+  document.addEventListener("pointerdown", onGesture, true);
+  document.addEventListener("keydown", onGesture, true);
+  disarmGesture = () => {
+    document.removeEventListener("pointerdown", onGesture, true);
+    document.removeEventListener("keydown", onGesture, true);
+    disarmGesture = null;
+  };
 }
 
 function teardown(): void {
+  unwatch();
   if (reviveTimer !== null) {
     window.clearTimeout(reviveTimer);
     reviveTimer = null;
@@ -273,6 +382,7 @@ function start(index: number, cors: boolean, tried: Set<number> = new Set()): vo
       }
     }
     // Не отвечает ни одна - дело не в станции, а в связи.
+    remember(false);
     emit({ mode: "off", live: false });
   }
 
@@ -283,15 +393,25 @@ function start(index: number, cors: boolean, tried: Set<number> = new Set()): vo
 
   const live = cors ? graph(element) : false;
   emit({ live });
-  element.play().catch(failed);
+  watch(element, failed);
+  element.play().catch((error: unknown) => {
+    // Отказ браузера играть без касания - не отказ станции: перебирать
+    // список бессмысленно, он весь упрётся в то же правило.
+    if ((error as { name?: string } | null)?.name === "NotAllowedError") waitForGesture();
+    else failed();
+  });
 }
 
 export function toggle(): void {
   // Нажали руками - прошлые обрывы забываются: и при пуске, и при остановке.
   wasPlaying = false;
   revives = 0;
-  if (state.mode === "off") start(state.station, true);
-  else {
+  disarmGesture?.();
+  if (state.mode === "off") {
+    remember(true);
+    start(state.station, true);
+  } else {
+    remember(false);
     teardown();
     emit({ mode: "off", live: false });
   }

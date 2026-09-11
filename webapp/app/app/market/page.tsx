@@ -38,7 +38,7 @@ import CryptoNewsPane from "@/components/market/CryptoNewsPane";
 import BitcoinPane from "@/components/market/BitcoinPane";
 import TrendingPane from "@/components/market/TrendingPane";
 import PulsePromo from "@/components/market/PulsePromo";
-import { MARKET_SECTION_EVENT, sectionFromHash } from "@/lib/marketSection";
+import { MARKET_SECTION_EVENT, sectionFromHash, takePendingSection } from "@/lib/marketSection";
 
 const SmartMoney = dynamic(() => import("@/app/app/smartmoney/page"), {
   ssr: false,
@@ -263,7 +263,8 @@ export default function MarketPage() {
   // событием с баннера внутри самого «Рынка».
   useEffect(() => {
     const keys = TABS.map((tab) => tab.key);
-    const fromHash = sectionFromHash(window.location.hash, keys);
+    const fromHash =
+      sectionFromHash(window.location.hash, keys) ?? sectionFromHash(takePendingSection(), keys);
     if (fromHash) setSection(fromHash);
     const onSection = (e: Event) => {
       const next = sectionFromHash(String((e as CustomEvent<string>).detail ?? ""), keys);

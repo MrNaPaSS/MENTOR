@@ -2689,11 +2689,13 @@ export default function ScalpingPage() {
    * терминал первым, и вход с телефона вёл ровно туда - в то, чем нельзя
    * пользоваться. Уводим в раздел, который на телефоне живёт.
    */
+  // Переходом внутри приложения, а не перезагрузкой: перезагрузка обрывает
+  // радио и всё, что держит открытый кабинет.
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.innerWidth >= 1024) return;
-    window.location.replace("/app/analysis");
-  }, []);
+    router.replace("/app/analysis");
+  }, [router]);
 
   // Отметки открытой монеты: их рисует график и подсвечивает стакан.
   const myAlerts = alerts.filter((a) => a.symbol === symbol);

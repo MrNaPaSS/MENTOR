@@ -2,6 +2,7 @@
 
 import { useT } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { API_URL } from "@/lib/api";
 import { openMarketSection } from "@/lib/marketSection";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -808,10 +809,11 @@ function DerivativesSection() {
  */
 function SmartBanner() {
   const t = useT();
+  const router = useRouter();
   return (
     <button
       type="button"
-      onClick={() => openMarketSection("maps")}
+      onClick={() => openMarketSection("maps", router.push)}
       className="group block overflow-hidden rounded-xl border border-[var(--pane-border)] transition-[transform,box-shadow] duration-200 ease-out hover:shadow-[0_8px_28px_-10px_rgba(240,185,11,0.55)] active:scale-[0.99]"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}

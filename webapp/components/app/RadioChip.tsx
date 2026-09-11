@@ -196,7 +196,9 @@ export default function RadioChip({ tone }: { tone?: "site" | "pane" }) {
     radio.mode === "off" ? t.shell.radio.play(now.name) : t.shell.radio.stop(now.name);
 
   return (
-    <div ref={boxRef} className="relative hidden items-center md:flex">
+    // data-radio: касание здесь - решение о самом радио, и ожидание касания
+    // страницы после перезагрузки его не перехватывает (lib/radio).
+    <div ref={boxRef} data-radio className="relative hidden items-center md:flex">
       <button
         onClick={toggle}
         title={label}
