@@ -62,3 +62,9 @@ webapp/public/uploads/avatars/
 # Набор доверенных корней, собранный make_ca_bundle.py. Он свой у каждой
 # машины - в нём лежит корень того, кто перехватывает HTTPS именно там.
 ca-bundle.pem
+
+# Артефакты Playwright: снимки раздела, отчёты и следы падений. Снимки нужны
+# для сверки глазами при работе, в репозитории им делать нечего.
+webapp/e2e/shots/
+webapp/test-results/
+webapp/playwright-report/

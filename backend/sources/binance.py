@@ -122,6 +122,43 @@ def price(symbol: str):
     return builder
 
 
+def tickers(wanted: list[str]):
+    """Цена, изменение за сутки и оборот по нашим парам - одним запросом.
+
+    Для тепловой карты и бегущей строки. Суточная сводка отдаёт всё сразу,
+    поэтому сорок пар стоят столько же, сколько одна.
+    """
+
+    async def builder():
+        if _blocked():
+            return None
+        rows = await _tickers()
+        if not rows:
+            return None
+        known = {str(r.get("symbol", "")).upper(): r for r in rows}
+        out: list[dict] = []
+        for sym in wanted:
+            pair = symbols.to_binance(sym, known.keys())
+            if pair is None:
+                continue
+            row = known.get(pair.symbol)
+            if row is None:
+                continue
+            price_value = symbols.divide(row.get("lastPrice"), pair.divisor)
+            if price_value is None:
+                continue
+            out.append({
+                "symbol": sym,
+                "price": price_value,
+                "priceChangePercent": str(row.get("priceChangePercent") or "0"),
+                "quoteVolume": str(row.get("quoteVolume") or "0"),
+                "time": row.get("closeTime"),
+            })
+        return out or None
+
+    return builder
+
+
 def depth(symbol: str, limit: int = 100):
     """Стакан в форме ответа WEEX `depth`."""
 

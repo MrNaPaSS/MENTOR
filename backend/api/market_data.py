@@ -34,9 +34,17 @@ router = APIRouter(prefix="/api/market", tags=["market-data"])
 WEEX_BASE = "https://api-contract.weex.com"
 FNG_URL = "https://api.alternative.me/fng/?limit=30&format=json"
 
+# Пары бегущей строки и тепловой карты: сорок штук, чтобы плитки читались на
+# телефоне (ТЗ §7.2). Порядок в ответе - по обороту за сутки, а не этот.
 TICKER_SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT",
     "DOGEUSDT", "AVAXUSDT", "ADAUSDT", "MATICUSDT", "LTCUSDT",
+    "LINKUSDT", "DOTUSDT", "TRXUSDT", "TONUSDT", "SUIUSDT",
+    "NEARUSDT", "APTUSDT", "ARBUSDT", "OPUSDT", "ATOMUSDT",
+    "FILUSDT", "INJUSDT", "SEIUSDT", "TIAUSDT", "RUNEUSDT",
+    "AAVEUSDT", "UNIUSDT", "ETCUSDT", "BCHUSDT", "XLMUSDT",
+    "HBARUSDT", "ICPUSDT", "RENDERUSDT", "IMXUSDT", "GRTUSDT",
+    "PEPEUSDT", "SHIBUSDT", "WIFUSDT", "ORDIUSDT", "JUPUSDT",
 ]
 
 FUNDING_SYMBOLS = [
@@ -51,6 +59,10 @@ FUNDING_SYMBOLS = [
 # годится, когда источник упал. У стакана второе нулевое: по устаревшему
 # стакану нельзя ставить заявку, пустота честнее.
 TTL_BOOK,    STALE_BOOK    = 1,   0
+# Бегущая строка и тепловая карта - информационные панели, им хватает
+# получаса жизни и пяти минут устаревания. Терминальная цена живёт отдельно
+# и коротко (TTL_PRICE).
+TTL_TICKERS, STALE_TICKERS = 30,  5 * 60
 TTL_PRICE,   STALE_PRICE   = 2,   30
 TTL_KLINES,  STALE_KLINES  = 5,   5 * 60
 TTL_FUNDING, STALE_FUNDING = 60,  15 * 60
@@ -116,42 +128,101 @@ async def orderbook(symbol: str, limit: int = 20):
     }
 
 
-# ── Тикеры (несколько пар параллельно) ─────────────────────────────────────
+# ── Тикеры: цена, изменение за сутки и оборот ──────────────────────────────
+#
+# Раньше здесь стоял `symbolPrice` и жёстко зашитый `priceChangePercent: "0"`:
+# у бегущей строки все проценты были нулевыми, а тепловую карту на таких
+# данных рисовать нечем. Теперь берётся расширенный тикер, у которого есть и
+# изменение, и оборот за сутки.
 
-@router.get("/tickers")
-async def tickers():
-    """Лайв-цены для нескольких пар (параллельные запросы к symbolPrice)."""
 
-    async def fetch_one(sym: str) -> tuple[dict | None, str | None, bool]:
-        data, source, stale = await feed.fetch(
-            f"price:{sym}", TTL_PRICE,
-            [
-                ("weex", _weex("/capi/v3/market/symbolPrice", {"symbol": sym})),
-                ("binance", binance.price(sym)),
-            ],
-            stale_ttl=STALE_PRICE,
-        )
-        if not data:
-            return None, None, False
-        return (
-            {
-                "symbol": sym,
-                "price": data.get("price", "0"),
-                "priceChangePercent": "0",  # WEEX symbolPrice не возвращает %
-                "time": data.get("time"),
-            },
-            source,
-            stale,
-        )
+def _num(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None  # NaN - тоже «нет числа»
 
-    results = await asyncio.gather(*[fetch_one(s) for s in TICKER_SYMBOLS])
-    rows = [(row, source, stale) for row, source, stale in results if row]
-    origin = feed.origin({row["symbol"]: source for row, source, _ in rows})
+
+def _first(payload: dict, *keys: str) -> Any:
+    for key in keys:
+        if key in payload and payload[key] not in (None, ""):
+            return payload[key]
+    return None
+
+
+def _ticker_row(sym: str, raw: Any) -> dict | None:
+    """Строка тикера из ответа WEEX.
+
+    Имена полей у расширенного тикера разнятся от версии к версии ручки,
+    поэтому ищем по нескольким написаниям, а процент считаем сами из цены
+    открытия суток: так он не зависит от того, отдаёт биржа долю или проценты.
+    """
+    payload = raw.get("data") if isinstance(raw, dict) and "data" in raw else raw
+    if isinstance(payload, list) and payload:
+        payload = payload[0]
+    if not isinstance(payload, dict):
+        return None
+
+    last = _num(_first(payload, "last", "lastPrice", "close", "price"))
+    if last is None:
+        return None
+
+    open_price = _num(_first(payload, "open", "open_24h", "openPrice", "open24h"))
+    change_pct = None
+    if open_price:
+        change_pct = (last - open_price) / open_price * 100
+    else:
+        given = _num(_first(payload, "priceChangePercent", "changePercent", "chgPct"))
+        if given is not None:
+            # Доля вместо процентов: биржи пишут и так, и так.
+            change_pct = given * 100 if abs(given) <= 1 else given
+
+    quote_volume = _num(_first(payload, "quoteVolume", "usdtVolume", "turnover", "volValue"))
+    if quote_volume is None:
+        base_volume = _num(_first(payload, "volume_24h", "baseVolume", "volume", "vol"))
+        quote_volume = (base_volume or 0) * last
 
     return {
-        "tickers": [row for row, _, _ in rows],
-        **origin,
-        "stale": any(stale for _, _, stale in rows),
+        "symbol": sym,
+        "price": str(last),
+        "priceChangePercent": f"{change_pct:.2f}" if change_pct is not None else "0",
+        "quoteVolume": f"{quote_volume:.2f}",
+        "time": _num(_first(payload, "time", "timestamp", "ts")) or None,
+    }
+
+
+async def _weex_tickers() -> list[dict] | None:
+    """Расширенный тикер по каждой паре. Пусто - отказ, цепочка идёт дальше."""
+
+    async def one(sym: str) -> dict | None:
+        try:
+            return _ticker_row(sym, await _weex_raw("/capi/v3/market/ticker", {"symbol": sym}))
+        except Exception:
+            return None
+
+    rows = await asyncio.gather(*[one(s) for s in TICKER_SYMBOLS])
+    live = [row for row in rows if row]
+    # Половина списка - уже не список: лучше отдать всё из одного места.
+    return live if len(live) >= len(TICKER_SYMBOLS) // 2 else None
+
+
+@router.get("/tickers")
+async def tickers(limit: int = 40):
+    """Цена, изменение за сутки и оборот. По обороту, самые торгуемые первыми."""
+    rows, source, stale = await feed.fetch(
+        "tickers", TTL_TICKERS,
+        [("weex", _weex_tickers), ("binance", binance.tickers(TICKER_SYMBOLS))],
+        stale_ttl=STALE_TICKERS,
+    )
+    if not rows:
+        return {"tickers": [], "source": None, "stale": False}
+
+    ordered = sorted(rows, key=lambda r: float(r.get("quoteVolume") or 0), reverse=True)
+    return {
+        "tickers": ordered[: max(1, min(limit, len(ordered)))],
+        "source": source,
+        "stale": stale,
     }
 
 

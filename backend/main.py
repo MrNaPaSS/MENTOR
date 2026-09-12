@@ -31,6 +31,7 @@ from backend.api import trading_nudge
 from backend.api import certificates as certificates_api
 from backend.api import cashback as cashback_api
 from backend.api import market_status as market_status_api
+from backend.api import market_calendar as market_calendar_api
 from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
@@ -203,6 +204,7 @@ def create_app(
     app.include_router(market.router)
     app.include_router(market_data.router)
     app.include_router(market_status_api.router)
+    app.include_router(market_calendar_api.router)
     app.include_router(market_extra.router)
     app.include_router(signals.router)
     app.include_router(stats.router)

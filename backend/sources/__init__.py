@@ -15,6 +15,6 @@
 
 from __future__ import annotations
 
-from backend.sources import binance, cache, feed, registry, session, symbols
+from backend.sources import binance, cache, econcalendar, feed, registry, session, symbols
 
-__all__ = ["binance", "cache", "feed", "registry", "session", "symbols"]
+__all__ = ["binance", "cache", "econcalendar", "feed", "registry", "session", "symbols"]

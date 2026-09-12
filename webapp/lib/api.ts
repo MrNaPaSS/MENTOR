@@ -488,6 +488,12 @@ export const api = {
 
   // ── Рыночные данные биржи (WEEX через наш сервер) ──
   marketFearGreed: () => req<FearGreed>("/api/market/fear-greed"),
+  /** Цена, изменение за сутки и оборот. Для тепловой карты и бегущей строки. */
+  marketTickers: (limit = 40) => req<MarketTickers>(`/api/market/tickers?limit=${limit}`),
+  /** События недели: важные и средние, по доллару и евро. */
+  marketCalendar: () => req<MarketCalendar>("/api/market/calendar"),
+  /** Потоки биткоин-ETF: активы фондов и цена их бумаг. */
+  etfFlows: () => req<EtfFlows>("/api/institutional/etf-flows"),
   /** Здоровье источников и кэша. Открыта без токена, только чтение. */
   marketStatus: () => req<MarketStatus>("/api/market/status"),
   marketFunding: () =>
@@ -720,6 +726,52 @@ export interface TrendingCoin {
   rank: number | null;
   thumb: string;
   price_btc: number;
+}
+
+export interface MarketTicker {
+  symbol: string;
+  price: string;
+  priceChangePercent: string;
+  quoteVolume?: string;
+  time?: number | null;
+}
+
+export interface MarketTickers {
+  tickers: MarketTicker[];
+  source?: string | null;
+  stale?: boolean;
+}
+
+export interface CalendarEventDto {
+  time: string;
+  currency: string;
+  title: string;
+  importance: "high" | "medium";
+  forecast: string;
+  previous: string;
+  actual: string;
+}
+
+export interface MarketCalendar {
+  events: CalendarEventDto[];
+  source?: string | null;
+  stale?: boolean;
+}
+
+export interface EtfFund {
+  name: string;
+  ticker: string;
+  btc: number;
+  price: number;
+  change: number;
+  changePct: number;
+  sharePct: number;
+}
+
+export interface EtfFlows {
+  etfs: EtfFund[];
+  total_btc: number;
+  btc_price?: number;
 }
 
 /** Строка состояния одного источника в /api/market/status. */

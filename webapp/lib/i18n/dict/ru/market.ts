@@ -26,10 +26,28 @@ export const market = {
     loadFailed: "Не удалось загрузить новости",
   },
   widgets: {
-    heatmap: { title: "Тепловая карта криптовалют", hint: "Размер - капитализация, цвет - изменение цены" },
+    heatmap: { title: "Тепловая карта рынка", hint: "Размер - оборот за сутки, цвет - изменение цены" },
     forex: { title: "Валютные пары", hint: "Кросс-курсы восьми основных валют" },
-    etf: { title: "Фонды ETF", hint: "Размер - активы под управлением, цвет - день" },
-    calendar: { title: "Экономический календарь", hint: "Макроэкономические события: ставки, инфляция, занятость" },
+    etf: { title: "Биткоин-ETF", hint: "Сколько биткоина держат фонды и как ходит их бумага" },
+    calendar: { title: "Календарь событий", hint: "Что двигает рынок на этой неделе: ставки, инфляция, занятость" },
+  },
+
+  calendar: {
+    emptyNote: "Источник календаря не ответил",
+    today: "сегодня",
+    previousTitle: "Прошлое значение",
+    day: (key: string) => {
+      const [y, m, d] = key.split("-").map(Number);
+      const date = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+      return new Intl.DateTimeFormat("ru-RU", {
+        weekday: "short", day: "numeric", month: "long", timeZone: "UTC",
+      }).format(date);
+    },
+  },
+
+  etf: {
+    totalLabel: "Всего у фондов",
+    share: (pct: number) => `${pct.toFixed(1)}% рынка`,
   },
 
   pane: {

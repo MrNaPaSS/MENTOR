@@ -23,10 +23,28 @@ export const market = {
     loadFailed: "Couldn't load the news",
   },
   widgets: {
-    heatmap: { title: "Crypto heat map", hint: "Size - market cap, colour - price change" },
+    heatmap: { title: "Market heat map", hint: "Size - 24h turnover, colour - price change" },
     forex: { title: "Currency pairs", hint: "Cross rates of the eight major currencies" },
-    etf: { title: "ETFs", hint: "Size - assets under management, colour - the day" },
-    calendar: { title: "Economic calendar", hint: "Macro events: rates, inflation, employment" },
+    etf: { title: "Bitcoin ETFs", hint: "How much bitcoin the funds hold and how their shares move" },
+    calendar: { title: "Event calendar", hint: "What moves the market this week: rates, inflation, employment" },
+  },
+
+  calendar: {
+    emptyNote: "The calendar source did not answer",
+    today: "today",
+    previousTitle: "Previous value",
+    day: (key: string) => {
+      const [y, m, d] = key.split("-").map(Number);
+      const date = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+      return new Intl.DateTimeFormat("en-GB", {
+        weekday: "short", day: "numeric", month: "long", timeZone: "UTC",
+      }).format(date);
+    },
+  },
+
+  etf: {
+    totalLabel: "Held by the funds",
+    share: (pct: number) => `${pct.toFixed(1)}% of the market`,
   },
 
   pane: {

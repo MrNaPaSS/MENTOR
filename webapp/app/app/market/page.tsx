@@ -17,8 +17,11 @@
 // выглядит рынок целиком и чего ждать по календарю.
 
 import { useT } from "@/lib/i18n";
+import CalendarPane from "@/components/market/CalendarPane";
+import EtfFlowsPane from "@/components/market/EtfFlowsPane";
+import HeatmapPane from "@/components/market/HeatmapPane";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   Building2,
@@ -27,9 +30,7 @@ import {
   Newspaper,
   Search,
 } from "lucide-react";
-import { useTerminalTheme } from "@/lib/terminalTheme";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
-import { useInView } from "@/lib/useInView";
 import { useFitHeight } from "@/lib/useFitHeight";
 import FearGreedPane from "@/components/market/FearGreedPane";
 import FundingPane from "@/components/market/FundingPane";
@@ -57,104 +58,6 @@ const SmartMoney = dynamic(() => import("@/app/app/smartmoney/page"), {
 });
 
 // ── Чужой виджет в нашей рамке ───────────────────────────────────────────────
-
-/**
- * Обёртка над встраиваемым скриптом TradingView.
- *
- * Тему он берёт один раз - из настроек, с которыми его завели, - поэтому при
- * смене темы виджет пересобирается целиком. Фон задаём цветом панели: своей
- * рамки чужой скрипт не рисует, и любое расхождение читается швом.
- */
-function TvWidget({
-  scriptName,
-  config,
-  height = 600,
-}: {
-  scriptName: string;
-  config: Record<string, unknown>;
-  height?: number;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const configKey = JSON.stringify(config);
-  const theme = useTerminalTheme();
-  // Виджет собирается, когда до него долистали. Четыре чужих виджета на одной
-  // странице тянули свои скрипты и кадры разом - и все вместе отнимали канал у
-  // того единственного, на который человек смотрел.
-  const seen = useInView(ref);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !seen) return;
-    el.innerHTML = "";
-
-    const widgetDiv = document.createElement("div");
-    widgetDiv.className = "tradingview-widget-container__widget";
-    el.appendChild(widgetDiv);
-
-    const script = document.createElement("script");
-    script.src = `https://s3.tradingview.com/external-embedding/${scriptName}`;
-    script.async = true;
-    script.innerHTML = JSON.stringify({
-      ...config,
-      width: "100%",
-      height,
-      colorTheme: theme,
-      locale: "ru",
-      isTransparent: false,
-      // Тот же цвет, что у панели вокруг: #181a20 тёмная, белая светлая.
-      backgroundColor: theme === "light" ? "#ffffff" : "#181a20",
-    });
-    el.appendChild(script);
-
-    return () => {
-      if (el) el.innerHTML = "";
-    };
-    // Тема в зависимостях: сменили её - виджет пересобирается. Своего способа
-    // перекраситься на лету у него нет.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scriptName, configKey, height, theme, seen]);
-
-  return (
-    <div
-      ref={ref}
-      className="tradingview-widget-container"
-      style={{ height, overflow: "hidden", scrollbarWidth: "none" }}
-    />
-  );
-}
-
-/** Панель под чужой виджет: та же рамка и шапка, что у своих показателей. */
-function WidgetPane({
-  title,
-  hint,
-  className = "",
-  children,
-}: {
-  title: string;
-  hint: string;
-  /** Место панели в сетке раздела. */
-  className?: string;
-  children: React.ReactNode;
-}) {
-  const t = useT();
-  return (
-    <section className={`overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] ${className}`}>
-      <header className="flex items-baseline justify-between gap-3 border-b border-[var(--pane-border)] px-3 py-2">
-        <div className="min-w-0">
-          <h2 className="truncate text-[12px] font-semibold text-[var(--pane-text)]">{title}</h2>
-          <p className="mt-0.5 truncate text-[10px] text-[var(--pane-muted)]">{hint}</p>
-        </div>
-        <span
-          className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-[var(--pane-muted)]"
-          title={t.market.tvNote}
-        >
-          TradingView
-        </span>
-      </header>
-      {children}
-    </section>
-  );
-}
 
 // ── Вкладки ───────────────────────────────────────────────────────────────────
 
@@ -198,6 +101,12 @@ function PulseSection() {
 }
 
 // ── Карты ─────────────────────────────────────────────────────────────────────
+//
+// Раньше здесь стояли два встроенных скрипта TradingView: тепловая карта
+// криптовалют и карта американских ETF. Первая носила чужой бренд и не слушала
+// нашу тему, вторая показывала фондовый рынок США - для академии
+// крипто-фьючерсов чужую тему. Теперь обе панели свои, и внешних скриптов на
+// странице ученика не осталось.
 
 /** Высота шапки панели, пока её не измерили: две строки текста и отступы. */
 const PANE_HEAD = 46;
@@ -215,33 +124,8 @@ function MapsSection() {
 
   return (
     <div ref={ref} className="grid gap-3 xl:grid-cols-3">
-      <WidgetPane
-        title={t.market.widgets.heatmap.title}
-        hint={t.market.widgets.heatmap.hint}
-        className="xl:col-span-2"
-      >
-        <TvWidget
-          scriptName="embed-widget-crypto-coins-heatmap.js"
-          config={{
-            dataSource: "Crypto",
-            blockSize: "market_cap_calc",
-            blockColor: "change",
-            hasTopBar: false,
-            isDataSetEnabled: false,
-            isZoomEnabled: true,
-            hasSymbolTooltip: true,
-          }}
-          height={wide ? widget : 520}
-        />
-      </WidgetPane>
-
-      <WidgetPane title={t.market.widgets.etf.title} hint={t.market.widgets.etf.hint}>
-        <TvWidget
-          scriptName="embed-widget-etf-heatmap.js"
-          config={{ dataSource: "AllUSEtf", blockSize: "aum", blockColor: "change", hasTopBar: false }}
-          height={wide ? widget : 400}
-        />
-      </WidgetPane>
+      <HeatmapPane className="xl:col-span-2" height={wide ? widget : 520} />
+      <EtfFlowsPane />
     </div>
   );
 }
@@ -249,15 +133,7 @@ function MapsSection() {
 // ── Календарь ─────────────────────────────────────────────────────────────────
 
 function CalendarSection() {
-  const t = useT();
-  return (
-    <WidgetPane
-      title={t.market.widgets.calendar.title}
-      hint={t.market.widgets.calendar.hint}
-    >
-      <TvWidget scriptName="embed-widget-events.js" config={{}} height={760} />
-    </WidgetPane>
-  );
+  return <CalendarPane />;
 }
 
 // ── Страница ──────────────────────────────────────────────────────────────────

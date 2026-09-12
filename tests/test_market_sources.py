@@ -43,6 +43,7 @@ def client(tmp_path, monkeypatch) -> TestClient:
     # значение из кэша и падение источника останется незамеченным.
     monkeypatch.setattr(market_data, "TTL_PRICE", 0)
     monkeypatch.setattr(market_data, "TTL_BOOK", 0)
+    monkeypatch.setattr(market_data, "TTL_TICKERS", 0)
     config = BackendConfig(
         jwt_secret="test-secret", access_ttl_seconds=900, refresh_ttl_seconds=86400,
         weex_use_mock=True, code_ttl_seconds=300, max_code_attempts=5, expose_codes=True,
@@ -66,19 +67,23 @@ def _weex_отвечает(monkeypatch, answers: dict[str, object]):
 
 
 DEPTH = {"bids": [["100", "1"]], "asks": [["101", "2"]]}
-PRICE = {"price": "100.5", "time": 1789000000}
+# Расширенный тикер: цена, цена открытия суток и оборот. Процент считается из
+# открытия, а не берётся у биржи, - см. `_ticker_row`.
+TICKER = {"last": "100.5", "open": "100", "quoteVolume": "1000000", "time": 1789000000}
 
 
 # ── Происхождение в ответе ───────────────────────────────────────────────────
 
 
 def test_цена_подписана_источником(client, monkeypatch):
-    _weex_отвечает(monkeypatch, {"/capi/v3/market/symbolPrice": PRICE})
+    _weex_отвечает(monkeypatch, {"/capi/v3/market/ticker": TICKER})
 
     answer = client.get("/api/market/tickers").json()
     assert answer["source"] == "weex"
     assert answer["stale"] is False
     assert answer["tickers"][0]["price"] == "100.5"
+    # Процент больше не ноль: без него тепловую карту рисовать нечем.
+    assert answer["tickers"][0]["priceChangePercent"] == "0.50"
 
 
 def test_стакан_подписан_источником(client, monkeypatch):
@@ -93,7 +98,7 @@ def test_стакан_подписан_источником(client, monkeypatch)
 
 
 def test_упавший_источник_не_обнуляет_цены_но_помечает_их(client, monkeypatch):
-    _weex_отвечает(monkeypatch, {"/capi/v3/market/symbolPrice": PRICE})
+    _weex_отвечает(monkeypatch, {"/capi/v3/market/ticker": TICKER})
     client.get("/api/market/tickers")
 
     _weex_отвечает(monkeypatch, {})  # WEEX выключен целиком
@@ -140,7 +145,7 @@ def test_состояние_показывает_удачи_и_отказы(clie
 
 
 def test_состояние_считает_отданное_устаревшее(client, monkeypatch):
-    _weex_отвечает(monkeypatch, {"/capi/v3/market/symbolPrice": PRICE})
+    _weex_отвечает(monkeypatch, {"/capi/v3/market/ticker": TICKER})
     client.get("/api/market/tickers")
 
     _weex_отвечает(monkeypatch, {})

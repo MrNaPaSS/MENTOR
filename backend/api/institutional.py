@@ -143,6 +143,11 @@ async def _fetch_cftc(asset: str, weeks: int) -> list[dict] | None:
 
     aiohttp URL-encodes '$' in param keys to '%24', breaking OData — so we build
     the query string manually and pass a pre-formed URL string.
+
+    Отката по датам здесь не нужно, в отличие от источников с ежедневным
+    файлом: запрос идёт с сортировкой по убыванию даты отчёта, и свежий
+    доступный отчёт приходит первым сам. За какое он число - видно в поле
+    `as_of` ответа (ТЗ §7.4).
     """
     name = CFTC_NAMES.get(asset)
     if not name:
@@ -176,8 +181,13 @@ async def cot_positions(asset: str, weeks: int = 10, demo: bool = False):
 
     if items is None:
         is_demo = True
-        items_demo = DEMO_COT[asset]
-        return {"asset": asset, "cot": items_demo[:weeks], "demo": True}
+        items_demo = DEMO_COT[asset][:weeks]
+        return {
+            "asset": asset,
+            "cot": items_demo,
+            "demo": True,
+            "as_of": items_demo[0]["date"] if items_demo else None,
+        }
 
     rows = []
     for item in items:
@@ -215,7 +225,14 @@ async def cot_positions(asset: str, weeks: int = 10, demo: bool = False):
             "nr_net":       nr_long - nr_short,
         })
 
-    return {"asset": asset, "cot": rows, "demo": False}
+    # За какое число цифры. Отчёт выходит в пятницу за вторник, и без этой
+    # подписи ученик принимает позиции недельной давности за сегодняшние.
+    return {
+        "asset": asset,
+        "cot": rows,
+        "demo": False,
+        "as_of": rows[0]["date"] if rows else None,
+    }
 
 
 # ── Macro Indicators ──────────────────────────────────────────────────────────
