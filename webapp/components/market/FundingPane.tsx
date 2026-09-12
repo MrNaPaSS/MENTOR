@@ -19,6 +19,9 @@ import { api, type FundingRate } from "@/lib/api";
 import { base } from "@/lib/scalping";
 import Pane, { LiveBadge, PaneLabel, type PaneState } from "./Pane";
 
+/** Сколько инструментов показываем: остальные считаются в подписи. */
+const SHOWN = 10;
+
 type Row = {
   symbol: string;
   /** Ставка в процентах. `null` - биржа её не назвала. */
@@ -106,12 +109,10 @@ export default function FundingPane({ className = "" }: { className?: string }) 
       state={state}
       emptyNote={t.market.funding.emptyNote}
       className={className}
-      bodyClass="flex min-h-0 flex-col"
     >
-      {/* Список до низа панели: высоту ей задаёт соседний показатель в
-          ряду, и рамка, кончавшаяся на середине, оставляла под собой пустое
-          поле. */}
-      <div className="-mx-1 min-h-0 flex-1 overflow-y-auto">
+      {/* Десять инструментов без прокрутки: ставку смотрят по верхушке
+          списка, а колесо внутри панели мешает листать саму страницу. */}
+      <div className="-mx-1">
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-[var(--pane-bg)]">
             <tr>
@@ -130,7 +131,7 @@ export default function FundingPane({ className = "" }: { className?: string }) 
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {rows.slice(0, SHOWN).map((r) => {
               const unknown = r.pct === null;
               const up = (r.pct ?? 0) > 0;
               const color = unknown
