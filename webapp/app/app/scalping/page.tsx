@@ -87,6 +87,7 @@ import {
 import { crossedAlerts, type PriceAlert } from "@/lib/trade/alerts";
 import { setTerminalTheme } from "@/lib/terminalTheme";
 import { onSymbolAsked, symbolFromUrl } from "@/lib/openSymbol";
+import { setActiveSymbol } from "@/lib/symbolLink";
 import { readTrades, writeTrades } from "@/lib/tradeStore";
 import {
   announceClose,
@@ -1158,6 +1159,9 @@ export default function ScalpingPage() {
    */
   function selectSymbol(next: string) {
     setSymbol(next);
+    // Символ терминала - он же активный символ приложения: панели за его
+    // пределами и палитра по Ctrl+K смотрят на одно значение.
+    setActiveSymbol(next);
     setScreenerOpen(false);
     // Расчёт привязан к цене прошлой монеты — на новой он врёт. Идущие сделки
     // при этом остаются: они живут на бирже, а не на экране, и вернувшись к
@@ -3608,8 +3612,12 @@ export default function ScalpingPage() {
                     середина её свободна. Из-за него знак когда-то и уезжал
                     вниз - на широком экране кнопки слоёв доходили до самого
                     центра и знак ложился поверх них. */}
+                {/* Центруется по экрану, а не по колонке графика: слева стоит
+                    стакан со скринером, и `absolute` внутри колонки уводил знак
+                    правее середины монитора. `fixed` считает от окна, а в
+                    полном экране окно и есть экран. */}
                 {full && (
-                  <div className="pointer-events-auto absolute left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
+                  <div className="pointer-events-auto fixed left-1/2 top-[7px] z-20 flex -translate-x-1/2 items-center gap-2">
                     <Logo
                       href="/app/analysis"
                       tone={paper === "light" ? "text-[var(--pane-text)]" : "text-text-primary"}

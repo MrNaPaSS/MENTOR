@@ -60,6 +60,13 @@ export const terminal = {
   chartPaper: "Chart paper: light or dark",
   chartPalette: "Candle palette",
   paletteDefault: "Default",
+  // Symbol palette on Ctrl+K: in fullscreen there is no other way to switch.
+  palette: {
+    title: "Find a pair",
+    placeholder: "Coin, for example SOL",
+    current: "current",
+    empty: "Nothing found",
+  },
   shotTitle: "Chart snapshot",
   shotDownload: "Download as an image",
   shotCopy: "Copy",

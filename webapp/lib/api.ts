@@ -490,6 +490,8 @@ export const api = {
   marketFearGreed: () => req<FearGreed>("/api/market/fear-greed"),
   /** Цена, изменение за сутки и оборот. Для тепловой карты и бегущей строки. */
   marketTickers: (limit = 40) => req<MarketTickers>(`/api/market/tickers?limit=${limit}`),
+  /** Все фьючерсные пары биржи. Для палитры символов по Ctrl+K. */
+  marketSymbols: () => req<{ symbols: string[]; source?: string | null; stale?: boolean }>("/api/market/symbols"),
   /** События недели: важные и средние, по доллару и евро. */
   marketCalendar: () => req<MarketCalendar>("/api/market/calendar"),
   /** Потоки биткоин-ETF: активы фондов и цена их бумаг. */

@@ -65,6 +65,13 @@ export const terminal = {
   chartPaper: "Лист графика: белый или тёмный",
   chartPalette: "Палитра свечей",
   paletteDefault: "Стандартная",
+  // Палитра символов по Ctrl+K: в полном экране пару иначе не сменить.
+  palette: {
+    title: "Поиск пары",
+    placeholder: "Монета, например SOL",
+    current: "сейчас",
+    empty: "Ничего не нашлось",
+  },
   shotTitle: "Снимок графика",
   shotDownload: "Скачать картинкой",
   shotCopy: "Скопировать",

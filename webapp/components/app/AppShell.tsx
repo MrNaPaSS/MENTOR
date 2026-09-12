@@ -17,6 +17,7 @@ import {
 import Logo from "@/components/ui/Logo";
 import Ambient from "@/components/ui/Ambient";
 import RadioChip from "@/components/app/RadioChip";
+import CommandPalette from "@/components/app/CommandPalette";
 import { api, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { attend } from "@/lib/chat/store";
@@ -361,6 +362,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Сертификаты трейдера: уведомление о новом и окно с подписью и печатью. */}
       <CertificateHost pathKey={pathname} />
+
+      {/* Палитра символов по Ctrl+K. В оболочке, а не в терминале: сочетание
+          должно работать и на «Рынке», и в полном экране, где шапки нет. */}
+      <CommandPalette />
 
       {/* ─── Контент (отступ под header + ticker = 14px + 38px ≈ 96px) ─── */}
       <main className="px-4 pb-24 pt-[96px] md:px-6 lg:pb-8">
