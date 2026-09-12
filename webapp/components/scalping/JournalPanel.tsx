@@ -17,12 +17,8 @@ import Link from "next/link";
 import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
 import { cardFromTrade } from "@/lib/pnl/data";
-import { useEntitlements } from "@/lib/entitlements";
-import { journalReport, saveReport } from "@/lib/journalReport";
+import { useJournalExport } from "@/lib/journalExport";
 import {
-  exportJournal,
-  exportQuota,
-  type ExportQuota,
   loadCalendar,
   loadTrades,
   canEditJournal,
@@ -200,45 +196,14 @@ export default function JournalPanel({
   // Выгрузка журнала - инструмент маркета. Не куплена - на её месте замок,
   // который ведёт в «Инструменты». Куплена - три выгрузки в месяц: счёт держит
   // сервер, а здесь он виден рядом с кнопкой.
-  const access = useEntitlements();
-  const canExport = access.has("journal_export");
-  const [exporting, setExporting] = useState(false);
-  const [quota, setQuota] = useState<ExportQuota | null>(null);
+  //
+  // Сама выгрузка живёт в общем хуке: та же кнопка стоит в расширенной
+  // аналитике, и отчёт должен быть один и тот же.
+  const report = useJournalExport();
 
   useEffect(() => {
-    if (!canExport) return;
-    exportQuota()
-      .then((body) => setQuota(body))
-      .catch(() => setQuota(null));
-  }, [canExport]);
-
-  const resetDay = quota
-    ? new Date(quota.resets_at).toLocaleDateString(numbers, { day: "numeric", month: "long" })
-    : "";
-  const spent = quota !== null && quota.left <= 0;
-
-  async function exportReport() {
-    setExporting(true);
-    try {
-      // За год, а не за те девяносто дней, что на экране: отчёт берут для
-      // разбора целиком. Сделки приходят вместе с засчитанной выгрузкой.
-      const body = await exportJournal(onlySymbol ? symbol : undefined);
-      if (!body) throw new Error();
-      setQuota(body.quota);
-      const stamp = new Date().toISOString().slice(0, 10);
-      saveReport(
-        `nmnh-report-${stamp}.html`,
-        journalReport(body.trades, {
-          text: t.journal.report,
-          quota: { used: body.quota.used, limit: body.quota.limit },
-        }),
-      );
-    } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : t.journal.exportFailed);
-    } finally {
-      setExporting(false);
-    }
-  }
+    if (report.error) setError(report.error);
+  }, [report.error]);
 
   return (
     <div className="flex h-full flex-col text-[12px]">
@@ -257,24 +222,24 @@ export default function JournalPanel({
               {t.journal.onlyCoin(symbol.replace(/USDT$/, ""))}
             </button>
           )}
-          {access.loaded &&
-            (canExport ? (
+          {report.loaded &&
+            (report.owned ? (
               <button
-                onClick={exportReport}
-                disabled={exporting || spent}
+                onClick={() => report.run(onlySymbol ? symbol : undefined)}
+                disabled={report.busy || report.spent}
                 title={
-                  quota
-                    ? spent
-                      ? t.journal.exportSpent(resetDay)
-                      : `${t.journal.exportCsv}. ${t.journal.exportLeftTitle(quota.left, quota.limit, resetDay)}`
+                  report.quota
+                    ? report.spent
+                      ? t.journal.exportSpent(report.resetDay)
+                      : `${t.journal.exportCsv}. ${t.journal.exportLeftTitle(report.quota.left, report.quota.limit, report.resetDay)}`
                     : t.journal.exportCsv
                 }
                 className="flex items-center gap-1 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] disabled:opacity-50"
               >
                 <Download className="h-3.5 w-3.5" />
-                {quota && (
+                {report.quota && (
                   <span className="font-mono text-[10px] tabular-nums">
-                    {t.journal.exportLeft(quota.left, quota.limit)}
+                    {t.journal.exportLeft(report.quota.left, report.quota.limit)}
                   </span>
                 )}
               </button>

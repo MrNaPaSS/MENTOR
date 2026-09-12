@@ -655,8 +655,8 @@ export default function AnalyticsPage() {
             {(
               [
                 ["results", t.analytics.tabs.results, BarChart2],
-                ["advanced", t.analytics.tabs.advanced, Gauge],
                 ["rewards", t.analytics.tabs.rewards, Trophy],
+                ["advanced", t.analytics.tabs.advanced, Gauge],
               ] as const
             ).map(([key, label, Icon]) => (
               <button

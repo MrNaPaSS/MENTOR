@@ -244,6 +244,7 @@ export const analytics = {
     reset: "сбросить",
     loading: "считаем...",
     empty: "Сделок за этот период нет",
+    export: "Выгрузка",
     days: (n: number) => (n >= 365 ? "год" : `${n} дней`),
     tradesCount: (n: number) => {
       const last = n % 10;
@@ -255,18 +256,44 @@ export const analytics = {
     },
     minutes: (n: number) => (n >= 60 ? `${Math.floor(n / 60)} ч ${n % 60} мин` : `${n} мин`),
     sides: { all: "все", long: "лонг", short: "шорт" },
+
+    /** Кольцо итога: из чего он сложился. */
+    total: {
+      title: "Итог",
+      hint: "из чего сложился",
+      label: "итог",
+      wins: "Прибыльные",
+      losses: "Убыточные",
+      fees: "Комиссии",
+      all: "Всего сделок",
+    },
+
     kpi: {
       net: "Итог",
       winRate: "Винрейт",
       profitFactor: "Профит-фактор",
       avgR: "Средний R",
-      avgRHint: "результат в риске сделки",
+      avgRHint: "результат в риске",
       drawdown: "Просадка",
       fees: "Комиссии",
       feesHint: "обе ноги",
       avgWin: "Средний плюс",
       hold: "В сделке",
     },
+
+    /** Панель чисел рядом с кривой. */
+    metrics: {
+      title: "Показатели",
+      hint: "по отобранным сделкам",
+      profitFactorNote: "плюсы к минусам",
+      expectancy: "На сделку",
+      expectancyNote: "в среднем",
+      avgLoss: (amount: string) => `средний минус ${amount}`,
+      ofGross: "от плюсов",
+      holdNote: "среднее время",
+      none: "нет",
+    },
+
     equity: {
       title: "Кривая капитала",
       hint: "накопленный итог по закрытым сделкам",
@@ -274,11 +301,11 @@ export const analytics = {
       result: "сделка",
     },
     risk: {
-      title: "Размер результата",
-      hint: "сколько сделок какого размера в риске (R)",
+      title: "Распределение по R",
+      hint: "доля сделок по размеру результата",
     },
     symbols: { title: "Монеты", hint: "нажмите, чтобы оставить одну" },
-    week: { title: "Дни недели", hint: "итог по дню закрытия" },
+    week: { title: "Дни недели", hint: "доля сделок по дню" },
     hours: { title: "Часы", hint: "итог по часу входа" },
     outcomes: {
       title: "Чем кончались",
@@ -287,8 +314,19 @@ export const analytics = {
       stop: "по стопу",
       manual: "руками",
     },
-    streaks: { best: "лучшая серия", worst: "худшая серия", current: "сейчас" },
-    extremes: { title: "Края", hint: "с чего начинать разбор", best: "лучшие", worst: "худшие" },
+    streaks: {
+      title: "Серии",
+      hint: "подряд и во что обошлись",
+      best: "лучшая серия",
+      worst: "худшая серия",
+      current: "сейчас",
+    },
+    extremes: {
+      best: "Лучшие сделки",
+      worst: "Худшие сделки",
+      hint: "что сработало",
+      hintWorst: "с чего начинать разбор",
+    },
     weekdays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
   },
 };

@@ -135,23 +135,55 @@ export function drawdown(points: readonly EquityPoint[]): { value: number; pct: 
   return { value: worst, pct: worstPct };
 }
 
-/** Серии подряд: лучшая победная, худшая убыточная и та, что идёт сейчас. */
+/** Серии подряд: длина и сколько денег принесла. */
+export interface Streak {
+  length: number;
+  pnl: number;
+}
+
+/**
+ * Серии подряд: лучшая победная, худшая убыточная и та, что идёт сейчас.
+ *
+ * Вместе с длиной считаем и деньги серии: шесть побед подряд на четыре тысячи
+ * и шесть побед на сорок долларов - это разные истории, а по одной длине они
+ * неразличимы.
+ */
 export function streaks(trades: readonly JournalTrade[]): {
   bestWins: number;
   worstLosses: number;
   current: number;
+  best: Streak;
+  worst: Streak;
+  /** Та, что идёт сейчас: длина со знаком, деньги как есть. */
+  now: Streak;
 } {
-  let bestWins = 0;
-  let worstLosses = 0;
-  let current = 0;
+  let best: Streak = { length: 0, pnl: 0 };
+  let worst: Streak = { length: 0, pnl: 0 };
+  let run: Streak = { length: 0, pnl: 0 };
+
   for (const trade of inOrder(trades)) {
-    if (trade.pnl > 0) current = current > 0 ? current + 1 : 1;
-    else if (trade.pnl < 0) current = current < 0 ? current - 1 : -1;
-    else continue;
-    bestWins = Math.max(bestWins, current);
-    worstLosses = Math.min(worstLosses, current);
+    if (trade.pnl > 0) {
+      run = run.length > 0 ? { length: run.length + 1, pnl: run.pnl + trade.pnl } : { length: 1, pnl: trade.pnl };
+    } else if (trade.pnl < 0) {
+      run = run.length < 0 ? { length: run.length - 1, pnl: run.pnl + trade.pnl } : { length: -1, pnl: trade.pnl };
+    } else {
+      // Сделка в ноль серию не продолжает и не рвёт: считать её победой или
+      // поражением нельзя, а обрывать ею серию - значит наказывать за выход
+      // в безубыток.
+      continue;
+    }
+    if (run.length > best.length) best = run;
+    if (run.length < worst.length) worst = run;
   }
-  return { bestWins, worstLosses: Math.abs(worstLosses), current };
+
+  return {
+    bestWins: best.length,
+    worstLosses: Math.abs(worst.length),
+    current: run.length,
+    best,
+    worst: { length: Math.abs(worst.length), pnl: worst.pnl },
+    now: run,
+  };
 }
 
 function group(

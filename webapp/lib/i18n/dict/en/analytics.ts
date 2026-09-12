@@ -224,10 +224,23 @@ export const analytics = {
     reset: "reset",
     loading: "crunching...",
     empty: "No trades in this period",
+    export: "Export",
     days: (n: number) => (n >= 365 ? "year" : `${n} days`),
     tradesCount: (n: number) => `${n} ${n === 1 ? "trade" : "trades"}`,
     minutes: (n: number) => (n >= 60 ? `${Math.floor(n / 60)}h ${n % 60}m` : `${n} min`),
     sides: { all: "all", long: "long", short: "short" },
+
+    /** Net ring: what the result is made of. */
+    total: {
+      title: "Net",
+      hint: "what it is made of",
+      label: "net",
+      wins: "Winners",
+      losses: "Losers",
+      fees: "Fees",
+      all: "Trades total",
+    },
+
     kpi: {
       net: "Net",
       winRate: "Win rate",
@@ -240,6 +253,20 @@ export const analytics = {
       avgWin: "Average win",
       hold: "In trade",
     },
+
+    /** Numbers next to the curve. */
+    metrics: {
+      title: "Metrics",
+      hint: "over the selected trades",
+      profitFactorNote: "wins over losses",
+      expectancy: "Per trade",
+      expectancyNote: "on average",
+      avgLoss: (amount: string) => `average loss ${amount}`,
+      ofGross: "of wins",
+      holdNote: "average time",
+      none: "none",
+    },
+
     equity: {
       title: "Equity curve",
       hint: "running total of closed trades",
@@ -247,11 +274,11 @@ export const analytics = {
       result: "trade",
     },
     risk: {
-      title: "Result size",
-      hint: "how many trades of each size in risk (R)",
+      title: "R distribution",
+      hint: "share of trades by result size",
     },
     symbols: { title: "Coins", hint: "click to keep just one" },
-    week: { title: "Weekdays", hint: "result by day of close" },
+    week: { title: "Weekdays", hint: "share of trades by day" },
     hours: { title: "Hours", hint: "result by hour of entry" },
     outcomes: {
       title: "How they ended",
@@ -260,8 +287,19 @@ export const analytics = {
       stop: "by stop",
       manual: "by hand",
     },
-    streaks: { best: "best streak", worst: "worst streak", current: "now" },
-    extremes: { title: "Edges", hint: "where a review starts", best: "best", worst: "worst" },
+    streaks: {
+      title: "Streaks",
+      hint: "in a row and what they cost",
+      best: "best streak",
+      worst: "worst streak",
+      current: "now",
+    },
+    extremes: {
+      best: "Best trades",
+      worst: "Worst trades",
+      hint: "what worked",
+      hintWorst: "where a review starts",
+    },
     weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
   },
 };

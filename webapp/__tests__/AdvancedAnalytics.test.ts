@@ -132,7 +132,26 @@ describe("серии", () => {
       trade({ pnl: -5, closed_at: "2026-09-04T10:00:00Z" }),
       trade({ pnl: -5, closed_at: "2026-09-05T10:00:00Z" }),
     ];
-    expect(streaks(trades)).toEqual({ bestWins: 3, worstLosses: 2, current: -2 });
+    expect(streaks(trades)).toEqual({
+      bestWins: 3,
+      worstLosses: 2,
+      current: -2,
+      best: { length: 3, pnl: 15 },
+      worst: { length: 2, pnl: -10 },
+      now: { length: -2, pnl: -10 },
+    });
+  });
+
+  it("считает деньги серии, а не только длину", () => {
+    const trades = [
+      trade({ pnl: 100, closed_at: "2026-09-01T10:00:00Z" }),
+      trade({ pnl: 50, closed_at: "2026-09-02T10:00:00Z" }),
+      trade({ pnl: -20, closed_at: "2026-09-03T10:00:00Z" }),
+    ];
+    const out = streaks(trades);
+    expect(out.best).toEqual({ length: 2, pnl: 150 });
+    expect(out.worst).toEqual({ length: 1, pnl: -20 });
+    expect(out.now).toEqual({ length: -1, pnl: -20 });
   });
 
   it("ноль серию не обрывает и не продолжает", () => {
