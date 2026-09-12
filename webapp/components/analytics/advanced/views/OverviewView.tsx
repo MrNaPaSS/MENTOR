@@ -55,8 +55,8 @@ const WEEK_COLORS = [
 type Measure = "pnl" | "trades";
 /** Как показать распределение по R: формой или числами. */
 type RShape = "bars" | "list";
-/** Что показывает кольцо: дни недели, стороны или из чего сложился итог. */
-type Ring = "week" | "sides" | "total";
+/** Что показывает кольцо разрезов: дни недели или стороны. */
+type Ring = "week" | "sides";
 
 export default function OverviewView({
   trades,
@@ -85,7 +85,7 @@ export default function OverviewView({
   const series = useMemo(() => streaks(trades), [trades]);
 
   // Три ряда панелей под полосой показателей. Средний - главный, ему больше.
-  const rows = Math.max(430, height - 124);
+  const rows = Math.max(430, height - 150);
   const big = Math.round(rows * 0.43) - 48;
   const mid = Math.round(rows * 0.31) - 48;
   const low = rows - Math.round(rows * 0.43) - Math.round(rows * 0.31) - 48;
@@ -185,23 +185,6 @@ export default function OverviewView({
           </div>
           <div className="mt-1 text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
             {a.total.short}
-          </div>
-        </div>
-      ),
-    },
-    total: {
-      slices: totalSlices,
-      center: (
-        <div className="px-2">
-          <div
-            className={`font-mono text-[18px] font-extrabold leading-none ${
-              totals.net >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
-            }`}
-          >
-            {signed(totals.net)}
-          </div>
-          <div className="mt-1 text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
-            {a.total.label}
           </div>
         </div>
       ),
@@ -355,7 +338,6 @@ export default function OverviewView({
               options={[
                 { key: "week" as const, label: a.rings.week.tab },
                 { key: "sides" as const, label: a.rings.sides.tab },
-                { key: "total" as const, label: a.rings.total.tab },
               ]}
               onPick={setRing}
             />
@@ -450,9 +432,9 @@ export default function OverviewView({
           title={a.streaks.title}
           hint={a.streaks.hint}
           icon={<Flame className="h-3.5 w-3.5" />}
-          className="xl:col-span-6"
+          className="xl:col-span-3"
         >
-          <div className="grid gap-1.5 sm:grid-cols-3" style={{ minHeight: low }}>
+          <div className="grid gap-1.5" style={{ minHeight: low }}>
             <StreakTile
               label={a.streaks.best}
               value={String(series.best.length)}
@@ -471,6 +453,38 @@ export default function OverviewView({
               note={signed(series.now.pnl)}
               tone={series.now.length >= 0 ? "up" : "down"}
             />
+          </div>
+        </Card>
+
+        {/* Итог кольцом: из чего он сложился. Комиссии отдельным куском - это
+            единственная его часть, которую задаёт не вход, а объём и тариф. */}
+        <Card
+          title={a.total.title}
+          hint={a.total.hint}
+          icon={<PieChart className="h-3.5 w-3.5" />}
+          className="xl:col-span-3"
+        >
+          <div className="flex items-center gap-3" style={{ height: low }}>
+            <Donut
+              slices={totalSlices}
+              size={Math.min(150, Math.max(96, low - 16))}
+              thickness={Math.round(Math.min(150, Math.max(96, low - 16)) / 9)}
+              center={
+                <div className="px-2">
+                  <div
+                    className={`font-mono text-[16px] font-extrabold leading-none ${
+                      totals.net >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
+                    }`}
+                  >
+                    {signed(totals.net)}
+                  </div>
+                  <div className="mt-0.5 text-[8px] uppercase tracking-wider text-[var(--pane-muted)]">
+                    {a.total.label}
+                  </div>
+                </div>
+              }
+            />
+            <DonutLegend slices={totalSlices} showShare={false} stacked className="flex-1" />
           </div>
         </Card>
       </div>
@@ -492,12 +506,12 @@ function StreakTile({
 }) {
   const color = tone === "up" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]";
   return (
-    <div className="flex flex-col justify-center rounded-lg bg-[var(--pane-hover)] px-3 py-2">
-      <div className="truncate text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+    <div className="flex flex-col justify-center rounded-lg bg-[var(--pane-hover)] px-3 py-1.5">
+      <div className="truncate text-[9px] uppercase leading-tight tracking-wider text-[var(--pane-muted)]">
         {label}
       </div>
       <div className="flex items-baseline gap-2">
-        <span className={`font-mono text-[22px] font-extrabold leading-tight ${color}`}>{value}</span>
+        <span className={`font-mono text-[19px] font-extrabold leading-tight ${color}`}>{value}</span>
         <span className={`font-mono text-[12px] font-bold ${color}`}>{note}</span>
       </div>
     </div>
