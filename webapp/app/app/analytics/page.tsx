@@ -21,8 +21,9 @@ import Motto from "@/components/app/Motto";
 import LevelPanel, { type XpPart } from "@/components/analytics/LevelPanel";
 import GoalsPanel from "@/components/analytics/GoalsPanel";
 import AchievementsPanel from "@/components/analytics/AchievementsPanel";
+import AdvancedPanel from "@/components/analytics/advanced/AdvancedPanel";
 import type { Achievement, Goal } from "@/lib/analytics/rewards";
-import { X, Trophy, Calendar, BarChart2, Share2 } from "lucide-react";
+import { X, Trophy, Calendar, BarChart2, Gauge, Share2 } from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
 function fmtDot(n: number, dec = 0): string {
@@ -310,7 +311,7 @@ export default function AnalyticsPage() {
    * про игру вокруг неё, - и листалось вперемешку. Две вкладки разводят их и
    * убирают из-под глаз то, чего сейчас не спрашивают.
    */
-  const [tab, setTab] = useState<"results" | "rewards">("results");
+  const [tab, setTab] = useState<"results" | "advanced" | "rewards">("results");
   const [owner, setOwner] = useState<string | null>(null);
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
@@ -654,6 +655,7 @@ export default function AnalyticsPage() {
             {(
               [
                 ["results", t.analytics.tabs.results, BarChart2],
+                ["advanced", t.analytics.tabs.advanced, Gauge],
                 ["rewards", t.analytics.tabs.rewards, Trophy],
               ] as const
             ).map(([key, label, Icon]) => (
@@ -1107,6 +1109,9 @@ export default function AnalyticsPage() {
           и достижения. Коробки ряда одной высоты: края совпадают, и глаз не
           прыгает между столбцами разной длины. Достижения высотой в цели:
           собственной высоты у коробки нет, длинный список прокручивается. */}
+      {/* Расширенная: разбор журнала - кривая капитала, риск, разрезы. */}
+      {tab === "advanced" && <AdvancedPanel />}
+
       {tab === "rewards" && (() => {
         const parts: XpPart[] = [
           { key: "volume",  val: Math.floor(totalVolume / 50_000) * 25 },

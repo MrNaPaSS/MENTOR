@@ -12,7 +12,7 @@ const trades = (n: number) => plural(n, "сделка", "сделки", "сде�
 export const analytics = {
 
   /** Вкладки раздела: торговля отдельно, игра вокруг неё отдельно. */
-  tabs: { results: "Итоги", rewards: "Награды" },
+  tabs: { results: "Итоги", advanced: "Расширенная", rewards: "Награды" },
   title: "Аналитика",
   titleAnd: "&",
   titleTail: "Прогресс",
@@ -236,5 +236,59 @@ export const analytics = {
       all_goals: { title: "Перфекционист", desc: "Выполни все цели месяца" },
       vol_250k_mo: { title: "Месячный рекорд", desc: "Объём за месяц 250K USDT" },
     },
+  },
+
+  /** Расширенная аналитика: разбор торговли по журналу. */
+  advanced: {
+    filters: "Разрез",
+    reset: "сбросить",
+    loading: "считаем...",
+    empty: "Сделок за этот период нет",
+    days: (n: number) => (n >= 365 ? "год" : `${n} дней`),
+    tradesCount: (n: number) => {
+      const last = n % 10;
+      const tens = n % 100;
+      if (tens >= 11 && tens <= 14) return `${n} сделок`;
+      if (last === 1) return `${n} сделка`;
+      if (last >= 2 && last <= 4) return `${n} сделки`;
+      return `${n} сделок`;
+    },
+    minutes: (n: number) => (n >= 60 ? `${Math.floor(n / 60)} ч ${n % 60} мин` : `${n} мин`),
+    sides: { all: "все", long: "лонг", short: "шорт" },
+    kpi: {
+      net: "Итог",
+      winRate: "Винрейт",
+      profitFactor: "Профит-фактор",
+      avgR: "Средний R",
+      avgRHint: "результат в риске сделки",
+      drawdown: "Просадка",
+      fees: "Комиссии",
+      feesHint: "обе ноги",
+      avgWin: "Средний плюс",
+      hold: "В сделке",
+    },
+    equity: {
+      title: "Кривая капитала",
+      hint: "накопленный итог по закрытым сделкам",
+      account: "счёт",
+      result: "сделка",
+    },
+    risk: {
+      title: "Размер результата",
+      hint: "сколько сделок какого размера в риске (R)",
+    },
+    symbols: { title: "Монеты", hint: "нажмите, чтобы оставить одну" },
+    week: { title: "Дни недели", hint: "итог по дню закрытия" },
+    hours: { title: "Часы", hint: "итог по часу входа" },
+    outcomes: {
+      title: "Чем кончались",
+      hint: "и серии подряд",
+      take: "по цели",
+      stop: "по стопу",
+      manual: "руками",
+    },
+    streaks: { best: "лучшая серия", worst: "худшая серия", current: "сейчас" },
+    extremes: { title: "Края", hint: "с чего начинать разбор", best: "лучшие", worst: "худшие" },
+    weekdays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
   },
 };

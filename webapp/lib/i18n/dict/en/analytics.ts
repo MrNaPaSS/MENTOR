@@ -1,7 +1,7 @@
 export const analytics = {
 
   /** Вкладки раздела: торговля отдельно, игра вокруг неё отдельно. */
-  tabs: { results: "Results", rewards: "Rewards" },
+  tabs: { results: "Results", advanced: "Advanced", rewards: "Rewards" },
   title: "Analytics",
   titleAnd: "&",
   titleTail: "Progress",
@@ -216,5 +216,52 @@ export const analytics = {
       all_goals: { title: "Perfectionist", desc: "Complete every goal of the month" },
       vol_250k_mo: { title: "Monthly record", desc: "250K USDT volume in a month" },
     },
+  },
+
+  /** Advanced analytics: the trading journal, broken down. */
+  advanced: {
+    filters: "Slice",
+    reset: "reset",
+    loading: "crunching...",
+    empty: "No trades in this period",
+    days: (n: number) => (n >= 365 ? "year" : `${n} days`),
+    tradesCount: (n: number) => `${n} ${n === 1 ? "trade" : "trades"}`,
+    minutes: (n: number) => (n >= 60 ? `${Math.floor(n / 60)}h ${n % 60}m` : `${n} min`),
+    sides: { all: "all", long: "long", short: "short" },
+    kpi: {
+      net: "Net",
+      winRate: "Win rate",
+      profitFactor: "Profit factor",
+      avgR: "Average R",
+      avgRHint: "result in units of risk",
+      drawdown: "Drawdown",
+      fees: "Fees",
+      feesHint: "both legs",
+      avgWin: "Average win",
+      hold: "In trade",
+    },
+    equity: {
+      title: "Equity curve",
+      hint: "running total of closed trades",
+      account: "account",
+      result: "trade",
+    },
+    risk: {
+      title: "Result size",
+      hint: "how many trades of each size in risk (R)",
+    },
+    symbols: { title: "Coins", hint: "click to keep just one" },
+    week: { title: "Weekdays", hint: "result by day of close" },
+    hours: { title: "Hours", hint: "result by hour of entry" },
+    outcomes: {
+      title: "How they ended",
+      hint: "and streaks in a row",
+      take: "by target",
+      stop: "by stop",
+      manual: "by hand",
+    },
+    streaks: { best: "best streak", worst: "worst streak", current: "now" },
+    extremes: { title: "Edges", hint: "where a review starts", best: "best", worst: "worst" },
+    weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
   },
 };
