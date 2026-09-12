@@ -3,12 +3,18 @@ import Header from "@/components/landing/Header";
 import PageBackdrop from "@/components/ui/PageBackdrop";
 import Footer from "@/components/landing/Footer";
 import LeaderboardIntro from "@/components/landing/LeaderboardIntro";
+import SeoToolText from "@/components/seo/SeoToolText";
+import { leaderboardPage } from "@/lib/seo/pages/leaderboard";
 
 export const metadata: Metadata = {
-  title: "Лидерборд",
-  description:
-    "Лучшие трейдеры платформы NMNH - реальные результаты учеников, торгующих по сигналам. Топ по балансу, винрейту и сделкам.",
-  alternates: { canonical: "/leaderboard" },
+  title: leaderboardPage.title,
+  description: leaderboardPage.description,
+  alternates: { canonical: leaderboardPage.path },
+  openGraph: {
+    title: leaderboardPage.title,
+    description: leaderboardPage.description,
+    url: leaderboardPage.path,
+  },
 };
 
 export default function LeaderboardPage() {
@@ -16,7 +22,9 @@ export default function LeaderboardPage() {
     <>
       <PageBackdrop />
       <Header />
-      <LeaderboardIntro />
+      <LeaderboardIntro>
+        <SeoToolText page={leaderboardPage} />
+      </LeaderboardIntro>
       <Footer />
     </>
   );

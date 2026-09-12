@@ -40,3 +40,22 @@ export interface SeoPage {
   /** Соседние страницы: обход сайта идёт по ссылкам, а не по угадыванию. */
   related: readonly SeoLink[];
 }
+
+/**
+ * Текст под открытым инструментом - калькулятором или лидербордом.
+ *
+ * Сам инструмент рисуется в браузере, и в исходном HTML от него остаётся
+ * пустая рамка. Этот текст - то, что поисковик на такой странице прочтёт.
+ */
+export interface SeoToolPage {
+  path: string;
+  /** Строка в выдаче, до 60 знаков. */
+  title: string;
+  /** Описание под строкой выдачи, до 160 знаков. */
+  description: string;
+  /** Имя страницы в разметке и хлебных крошках. */
+  name: string;
+  sections: readonly SeoSection[];
+  faq: readonly FaqItem[];
+  related: readonly SeoLink[];
+}

@@ -2,7 +2,7 @@ export const tools = {
   calculator: {
     badge: "Free tool",
     eyebrow: "Calculator",
-    title: "Size the position before you enter",
+    title: "Crypto futures position calculator",
     subtitle: "Margin, size, risk and profit at every take-profit - instantly, for your deposit.",
     info: [
       { title: "Moderate mode", text: "Leverage up to 25x, 1-5% risk per trade. Fixed stop, the goal is steady deposit growth." },
@@ -32,7 +32,7 @@ export const tools = {
   leaderboard: {
     badge: "Updated in real time",
     eyebrow: "Leaderboard",
-    title: "The platform's best traders",
+    title: "NMNH traders leaderboard",
     subtitle: "Real results from students trading the signals. The top 3 are marked with medals.",
     disclaimer: "These results reflect the trading of specific students and do not guarantee future returns.",
     heading: "Leaderboard",

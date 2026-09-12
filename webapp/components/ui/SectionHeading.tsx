@@ -7,6 +7,8 @@ interface SectionHeadingProps {
   subtitle?: ReactNode;
   align?: "left" | "center";
   className?: string;
+  /** Уровень заголовка. H1 - только когда секция открывает страницу: он у неё один. */
+  as?: "h1" | "h2";
 }
 
 export default function SectionHeading({
@@ -15,6 +17,7 @@ export default function SectionHeading({
   subtitle,
   align = "center",
   className = "",
+  as: Tag = "h2",
 }: SectionHeadingProps) {
   const alignment = align === "center" ? "items-center text-center" : "items-start text-left";
   return (
@@ -25,7 +28,7 @@ export default function SectionHeading({
           {eyebrow}
         </span>
       )}
-      <h2 className="text-h2 text-text-primary">{title}</h2>
+      <Tag className="text-h2 text-text-primary">{title}</Tag>
       {subtitle && (
         <p className="max-w-2xl text-text-secondary">{subtitle}</p>
       )}

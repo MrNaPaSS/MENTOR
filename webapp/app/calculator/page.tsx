@@ -3,12 +3,18 @@ import Header from "@/components/landing/Header";
 import PageBackdrop from "@/components/ui/PageBackdrop";
 import Footer from "@/components/landing/Footer";
 import CalculatorIntro from "@/components/landing/CalculatorIntro";
+import SeoToolText from "@/components/seo/SeoToolText";
+import { calculatorPage } from "@/lib/seo/pages/calculator";
 
 export const metadata: Metadata = {
-  title: "Калькулятор позиции",
-  description:
-    "Рассчитай маржу, объём, риск и профит по каждому тейк-профиту под свой депозит - бесплатно. Умеренный и турбо режимы.",
-  alternates: { canonical: "/calculator" },
+  title: calculatorPage.title,
+  description: calculatorPage.description,
+  alternates: { canonical: calculatorPage.path },
+  openGraph: {
+    title: calculatorPage.title,
+    description: calculatorPage.description,
+    url: calculatorPage.path,
+  },
 };
 
 export default function CalculatorPage() {
@@ -16,7 +22,9 @@ export default function CalculatorPage() {
     <>
       <PageBackdrop />
       <Header />
-      <CalculatorIntro />
+      <CalculatorIntro>
+        <SeoToolText page={calculatorPage} />
+      </CalculatorIntro>
       <Footer />
     </>
   );

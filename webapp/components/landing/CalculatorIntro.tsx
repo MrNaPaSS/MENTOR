@@ -6,6 +6,7 @@
 // `metadata` для поисковиков, а язык интерфейса живёт в браузере. Разметку,
 // которая переводится, приходится отделить от той, которую читает робот.
 
+import type { ReactNode } from "react";
 import { Gauge, Zap, ShieldCheck, type LucideIcon } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
@@ -15,7 +16,8 @@ import { useT } from "@/lib/i18n";
 
 const ICONS: LucideIcon[] = [Gauge, Zap, ShieldCheck];
 
-export default function CalculatorIntro() {
+/** children - серверный текст для поисковика, он встаёт под калькулятором. */
+export default function CalculatorIntro({ children }: { children?: ReactNode }) {
   const t = useT();
   const c = t.tools.calculator;
 
@@ -25,6 +27,7 @@ export default function CalculatorIntro() {
         <Badge variant="cyan">{c.badge}</Badge>
       </div>
       <SectionHeading
+        as="h1"
         className="mt-4"
         eyebrow={c.eyebrow}
         title={c.title}
@@ -51,6 +54,8 @@ export default function CalculatorIntro() {
       </div>
 
       <p className="mt-10 text-center text-xs text-text-muted">{c.disclaimer}</p>
+
+      {children}
     </main>
   );
 }
