@@ -19,7 +19,7 @@ from backend import coin_ledger
 from backend.ai_quota import AnalyzeQuota
 from backend.config import BackendConfig
 from backend.deps import get_ai_quota, get_config, get_current_student, get_session
-from backend.sources import session
+from backend.sources import cache, session
 from core.models import Student
 
 log = logging.getLogger(__name__)
@@ -164,6 +164,21 @@ async def _fetch_cftc(asset: str, weeks: int) -> list[dict] | None:
     return None
 
 
+# ── Сроки жизни (серверный кэш) ────────────────────────────────────────────
+#
+# Эти ручки ходят в чужие медленные источники: CFTC, Yahoo, Nasdaq. Раньше -
+# на каждый запрос каждого ученика, и страница Smart Money грузилась секундами:
+# одни потоки ETF это цена биткоина, семь запросов в Nasdaq и до четырнадцати
+# в Yahoo. Теперь ответ живёт на сервере, а фоновый прогрев (`warm`) держит
+# его свежим до того, как кто-то придёт.
+#
+# Устаревшее отдаём дольше свежего: вчерашние позиции фондов лучше демо-цифр.
+COT_TTL, COT_STALE = 3600, 24 * 3600          # отчёт недельный
+MACRO_TTL, MACRO_STALE = 300, 6 * 3600
+ETF_TTL, ETF_STALE = 600, 6 * 3600
+WARM_EVERY = 240                               # чуть чаще самого короткого срока
+
+
 @router.get("/cot/{asset}")
 async def cot_positions(asset: str, weeks: int = 10, demo: bool = False):
     """CFTC COT — позиции хедж-фондов (NC) и коммерческих игроков на фьючерсах CME."""
@@ -173,11 +188,16 @@ async def cot_positions(asset: str, weeks: int = 10, demo: bool = False):
 
     items = None
     is_demo = demo
+    stale = False
 
     if not demo:
-        raw = await _fetch_cftc(asset, weeks)
-        if raw:
-            items = raw
+        # Пустой ответ источника - не значение: в кэш не кладём, отдаём прежнее.
+        async def live():
+            return await _fetch_cftc(asset, weeks) or None
+
+        items, stale = await cache.cached(
+            f"institutional:cot:{asset}:{weeks}", COT_TTL, live, stale_ttl=COT_STALE,
+        )
 
     if items is None:
         is_demo = True
@@ -232,6 +252,7 @@ async def cot_positions(asset: str, weeks: int = 10, demo: bool = False):
         "cot": rows,
         "demo": False,
         "as_of": rows[0]["date"] if rows else None,
+        "stale": stale,
     }
 
 
@@ -264,18 +285,39 @@ async def macro_indicators(demo: bool = False):
                         "changePct": round(chg_p, 2)}
             except Exception:
                 continue
-        return DEMO_MACRO.get(key, {"key": key, "label": label, "price": 0, "change": 0, "changePct": 0})
+        # Не ответил - так и говорим. Раньше здесь возвращалась демо-строка, и
+        # её ненулевая цена считалась живой: при молчащем Yahoo весь блок
+        # уходил с `demo: false` на выдуманных цифрах.
+        return None
 
-    tasks = [fetch_one(k, sym, label) for k, (sym, label) in MACRO_SYMBOLS.items()]
-    results = await asyncio.gather(*tasks)
-    indicators = {r["key"]: r for r in results}
+    async def live():
+        tasks = [fetch_one(k, sym, label) for k, (sym, label) in MACRO_SYMBOLS.items()]
+        results = await asyncio.gather(*tasks)
+        real = {r["key"]: r for r in results if r and r["price"] > 0}
+        # Меньше двух живых цен - источник молчит; в кэш такое не кладём.
+        if len(real) < 2:
+            return None
+        # Недостающие строки добираем демо-значениями, но с пометкой на самой
+        # строке: блок в целом живой, а про эту цифру честно сказано, что она
+        # не из источника.
+        indicators = {}
+        for key, (_, label) in MACRO_SYMBOLS.items():
+            if key in real:
+                indicators[key] = real[key]
+            else:
+                fallback = DEMO_MACRO.get(
+                    key, {"key": key, "label": label, "price": 0, "change": 0, "changePct": 0}
+                )
+                indicators[key] = {**fallback, "demo": True}
+        return indicators
 
-    # If all zeros — return demo
-    non_zero = sum(1 for v in indicators.values() if v["price"] > 0)
-    if non_zero < 2:
+    indicators, stale = await cache.cached(
+        "institutional:macro", MACRO_TTL, live, stale_ttl=MACRO_STALE,
+    )
+    if indicators is None:
         return {"indicators": DEMO_MACRO, "demo": True}
 
-    return {"indicators": indicators, "demo": False}
+    return {"indicators": indicators, "demo": False, "stale": stale}
 
 
 # ── ETF Holdings ──────────────────────────────────────────────────────────────
@@ -313,7 +355,17 @@ async def _fetch_etf_aum(ticker: str) -> float:
 @router.get("/etf-flows")
 async def etf_flows():
     """Bitcoin spot ETF — AUM live (Nasdaq) + BTC holdings derived from AUM/BTC price."""
+    payload, stale = await cache.cached(
+        "institutional:etf-flows", ETF_TTL, _etf_flows_live, stale_ttl=ETF_STALE,
+    )
+    if payload is None:
+        # Источники молчат и помнить нечего: страница покажет демо-цифры.
+        return {"etfs": [], "total_btc": 0, "btc_price": 0, "stale": False}
+    return {**payload, "stale": stale}
 
+
+async def _etf_flows_live() -> dict | None:
+    """Сборка потоков ETF из живых источников. `None` - Nasdaq не ответил."""
     btc_price, *aum_values = await asyncio.gather(
         _fetch_btc_price(),
         *[_fetch_etf_aum(e["ticker"]) for e in ETF_LIST],
@@ -348,7 +400,31 @@ async def etf_flows():
                 "sharePct": round(etf["btc"] / total_btc * 100, 1)}
 
     enriched = await asyncio.gather(*[add_price(e) for e in enriched_base])
+    if not any(e["btc"] > 0 for e in enriched):
+        return None
     return {"etfs": list(enriched), "total_btc": total_btc, "btc_price": btc_price}
+
+
+async def warm() -> None:
+    """Держать ответы свежими до того, как за ними придут.
+
+    Кэш сам по себе спасает только второго ученика: первый после истечения
+    срока всё равно ждёт Yahoo и Nasdaq. Фоновый прогрев обновляет ответы чуть
+    раньше срока, и ждать не приходится никому. Упавший источник прогрев не
+    роняет - просто остаётся прежний ответ.
+    """
+    while True:
+        for job in (
+            etf_flows(),
+            macro_indicators(),
+            cot_positions("BTC"),
+            cot_positions("ETH"),
+        ):
+            try:
+                await job
+            except Exception:
+                log.warning("Прогрев институционалов: источник не ответил", exc_info=True)
+        await asyncio.sleep(WARM_EVERY)
 
 
 # ── AI Analysis ───────────────────────────────────────────────────────────────

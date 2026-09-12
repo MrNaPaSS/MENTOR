@@ -101,6 +101,13 @@ def create_app(
         # раз при запуске: не ответил - реестр закроет источник на час, и
         # запросы учеников не будут ждать его впустую.
         binance_probe = asyncio.create_task(sources_binance.probe(), name="binance-probe")
+        # Smart Money и потоки ETF собираются из медленных чужих источников:
+        # прогрев в фоне держит ответы готовыми, чтобы страница открывалась сразу.
+        institutional_warm = (
+            asyncio.create_task(institutional.warm(), name="institutional-warm")
+            if config.institutional_warm
+            else None
+        )
         collector.start()
         balance_collector.start()
         cashback_collector.start()
@@ -139,6 +146,8 @@ def create_app(
             await watcher.stop()
             await forum.stop()
             binance_probe.cancel()
+            if institutional_warm:
+                institutional_warm.cancel()
             await trading_api.close_session()
             # Общая сессия рыночных источников: одна на процесс, закрываем тут же.
             await sources_session.close()

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFitHeight } from "@/lib/useFitHeight";
 import { useRouter } from "next/navigation";
 import { API_URL } from "@/lib/api";
+import { useCached } from "@/lib/paneCache";
 import { openMarketSection } from "@/lib/marketSection";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import {
@@ -322,21 +323,17 @@ function AnimBar({
 function CotSection({ className = "" }: { className?: string }) {
   const t = useT();
   const [asset,setAsset]   = useState<"BTC"|"ETH">("BTC");
-  const [cot,setCot]       = useState<CotRow[]|null>(null);
-  const [isDemo,setIsDemo] = useState(false);
-  const [loading,setLoading] = useState(true);
-
-  useEffect(()=>{
-    let cancelled=false; setLoading(true);
-    fetchJson<{cot:CotRow[];demo?:boolean}>(`${API_URL}/api/institutional/cot/${asset}`)
-      .then(d=>{
-        if(cancelled) return;
-        if(d?.cot?.length){ setCot(d.cot); setIsDemo(!!d.demo); }
-        else { setCot(DEMO_COT[asset]); setIsDemo(true); }
-      })
-      .finally(()=>{ if(!cancelled) setLoading(false); });
-    return ()=>{ cancelled=true; };
-  },[asset]);
+  // Отчёт CFTC недельный: час жизни в памяти с запасом. Переключение BTC и
+  // ETH туда-обратно и возврат на страницу берут таблицу сразу.
+  const answer = useCached<{cot:CotRow[];demo?:boolean}|null>(
+    `smart:cot:${asset}`,
+    ()=>fetchJson<{cot:CotRow[];demo?:boolean}>(`${API_URL}/api/institutional/cot/${asset}`),
+    { ttl: 60 * 60_000 },
+  );
+  const loading = answer.loading;
+  const live = answer.data?.cot?.length ? answer.data : null;
+  const cot: CotRow[]|null = live ? live.cot : (answer.loading ? null : DEMO_COT[asset]);
+  const isDemo = live ? !!live.demo : !answer.loading;
 
   const cur  = cot?.[0] as CotRow;
   const prev = cot?.[1] as CotRow|undefined;
@@ -472,19 +469,16 @@ const MACRO_ICONS: Record<string, string> = {
 
 function MacroSection({ className = "" }: { className?: string }) {
   const t = useT();
-  const [items,setItems]   = useState<MacroItem[]|null>(null);
-  const [isDemo,setIsDemo] = useState(false);
-
-  useEffect(()=>{
-    fetchJson<{indicators:Record<string,MacroItem>;demo?:boolean}>(`${API_URL}/api/institutional/macro`)
-      .then(d=>{
-        if(d?.indicators){
-          const list=Object.values(d.indicators);
-          if(list.some(v=>v.price>0)){ setItems(list); setIsDemo(!!d.demo); }
-          else { setItems(DEMO_MACRO); setIsDemo(true); }
-        } else { setItems(DEMO_MACRO); setIsDemo(true); }
-      });
-  },[]);
+  // Пять минут, как и на сервере: при возврате на страницу цифры стоят сразу.
+  const answer = useCached<{indicators:Record<string,MacroItem>;demo?:boolean}|null>(
+    "smart:macro",
+    ()=>fetchJson<{indicators:Record<string,MacroItem>;demo?:boolean}>(`${API_URL}/api/institutional/macro`),
+    { ttl: 5 * 60_000 },
+  );
+  const liveList = answer.data?.indicators ? Object.values(answer.data.indicators) : [];
+  const hasLive = liveList.some(v=>v.price>0);
+  const items: MacroItem[]|null = hasLive ? liveList : (answer.loading ? null : DEMO_MACRO);
+  const isDemo = hasLive ? !!answer.data?.demo : !answer.loading;
 
   return (
     <Section icon={<BarChart3 className="h-4 w-4 text-[var(--pane-accent)]"/>}
@@ -555,17 +549,17 @@ function MacroSection({ className = "" }: { className?: string }) {
 
 function EtfSection({ className = "" }: { className?: string }) {
   const t = useT();
-  const [data,setData]         = useState<typeof DEMO_ETF|null>(null);
-  const [isDemo,setIsDemo]     = useState(false);
-  const [btcPrice,setBtcPrice] = useState(0);
-
-  useEffect(()=>{
-    fetchJson<{etfs:EtfItem[];total_btc:number;btc_price?:number}>(`${API_URL}/api/institutional/etf-flows`)
-      .then(d=>{
-        if(d?.etfs?.length){ setData(d); if(d.btc_price) setBtcPrice(d.btc_price); setIsDemo(!d.etfs.some(e=>e.btc>0)); }
-        else { setData(DEMO_ETF); setIsDemo(true); }
-      });
-  },[]);
+  // Ключ общий с панелью «Биткоин-ETF» на «Рынке»: открыл одну - вторая уже
+  // знает цифры, и за ними не ходят дважды.
+  const answer = useCached<{etfs:EtfItem[];total_btc:number;btc_price?:number}|null>(
+    "market:etf-flows",
+    ()=>fetchJson<{etfs:EtfItem[];total_btc:number;btc_price?:number}>(`${API_URL}/api/institutional/etf-flows`),
+    { ttl: 10 * 60_000 },
+  );
+  const liveEtf = answer.data?.etfs?.some(e=>e.btc>0) ? answer.data : null;
+  const data: typeof DEMO_ETF|null = liveEtf ?? (answer.loading ? null : DEMO_ETF);
+  const isDemo = !liveEtf && !answer.loading;
+  const btcPrice = liveEtf?.btc_price ?? 0;
 
   const topEtf = data?.etfs[0];
 

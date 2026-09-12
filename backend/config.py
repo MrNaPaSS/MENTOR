@@ -93,6 +93,11 @@ class BackendConfig:
     # Монеты ограничивают расход надёжнее любого предела по времени: у
     # списания есть своя книга, и вернуть его при сбое можно той же книгой.
     ai_analyze_price: int = 50
+    # Фоновый прогрев Smart Money и потоков ETF: держит ответы CFTC, Yahoo и
+    # Nasdaq готовыми, чтобы страница открывалась сразу. В бою включён (см.
+    # from_env), а в тестах, где конфиг собирают руками, выключен: иначе каждое
+    # поднятое приложение ходило бы в настоящие чужие источники.
+    institutional_warm: bool = False
 
 
     @staticmethod
@@ -144,6 +149,7 @@ class BackendConfig:
             ai_analyze_window=int(os.getenv("AI_ANALYZE_WINDOW", "900") or "900"),
             ai_analyze_daily=int(os.getenv("AI_ANALYZE_DAILY", "30") or "30"),
             ai_analyze_price=int(os.getenv("AI_ANALYZE_PRICE", "50") or "50"),
+            institutional_warm=os.getenv("INSTITUTIONAL_WARM", "true").lower() != "false",
             allowed_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
             # dev-вход включён, если явно DEV_LOGIN=true, либо мы на моках WEEX (=dev),
             # и НЕ отключён явно DEV_LOGIN=false.
