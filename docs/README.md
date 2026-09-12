@@ -14,6 +14,7 @@
 | [tz/signal-bot-tz.md](tz/signal-bot-tz.md) | ТЗ NMNH Signal Bot (доработанное, v1.1) |
 | [tz/webapp-tz.md](tz/webapp-tz.md) | ТЗ NMNH Platform WebApp (доработанное, v2.1) |
 | [tz/telegram-login-tz.md](tz/telegram-login-tz.md) | ТЗ: вход на сайт одноразовым паролем от бота академии |
+| [tz/chat-signals-tz.md](tz/chat-signals-tz.md) | ТЗ: заявка из чата становится сигналом, и ответы в чате |
 | [tz/market-sources-tz.md](tz/market-sources-tz.md) | ТЗ: источники рыночных данных, платные ручки и свои панели вместо чужих |
 | [tz/voice-layer-tz.md](tz/voice-layer-tz.md) | ТЗ: голосовой слой терминала на GPT-Live-1 (разбор журнала голосом) |
 | [features/scalping.md](features/scalping.md) | Скринер и стакан заявок: источник данных, метрики, лимиты биржи |
