@@ -194,7 +194,9 @@ def test_december_calendar_does_not_break_on_year_edge(client):
 
 
 def test_trade_can_be_deleted_by_mentor(client):
+    """Наставнику право тоже выдаётся флажком, а не званием."""
     as_mentor(client)
+    client.app.dependency_overrides[get_current_student]().journal_delete_allowed = True
     created = client.post("/api/journal/trades", json=trade()).json()
     assert client.delete(f"/api/journal/trades/{created['id']}").status_code == 200
     assert client.get("/api/journal/trades").json()["summary"]["count"] == 0
@@ -225,6 +227,21 @@ def test_allowed_student_deletes_his_own_record(client):
     created = client.post("/api/journal/trades", json=trade()).json()
     assert client.delete(f"/api/journal/trades/{created['id']}").status_code == 200
     assert client.get("/api/journal/trades").json()["summary"]["count"] == 0
+
+
+def test_mentor_without_the_flag_cannot_delete(client):
+    """Снятый себе флажок выключает удаление и наставнику.
+
+    Раньше право полагалось наставнику самим званием: панель показывала
+    выключенный флажок, а кнопка оставалась и записи стирались. Выключить его
+    себе было нельзя вовсе.
+    """
+    as_mentor(client)
+    client.app.dependency_overrides[get_current_student]().journal_delete_allowed = False
+
+    created = client.post("/api/journal/trades", json=trade()).json()
+    assert client.delete(f"/api/journal/trades/{created['id']}").status_code == 403
+    assert client.get("/api/journal/trades").json()["summary"]["count"] == 1
 
 
 def test_allowed_student_does_not_reach_a_stranger_record(client):
