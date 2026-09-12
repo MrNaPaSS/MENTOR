@@ -16,6 +16,7 @@
 | [tz/telegram-login-tz.md](tz/telegram-login-tz.md) | ТЗ: вход на сайт одноразовым паролем от бота академии |
 | [tz/chat-signals-tz.md](tz/chat-signals-tz.md) | ТЗ: заявка из чата становится сигналом, и ответы в чате |
 | [tz/market-sources-tz.md](tz/market-sources-tz.md) | ТЗ: источники рыночных данных, платные ручки и свои панели вместо чужих |
+| [tz/multi-exchange-tz.md](tz/multi-exchange-tz.md) | ТЗ: мультибиржа в терминале - выбор биржи, подключение счёта, стакан своей биржи |
 | [tz/voice-layer-tz.md](tz/voice-layer-tz.md) | ТЗ: голосовой слой терминала на GPT-Live-1 (разбор журнала голосом) |
 | [features/scalping.md](features/scalping.md) | Скринер и стакан заявок: источник данных, метрики, лимиты биржи |
 | [integrations/broker-program-plan.md](integrations/broker-program-plan.md) | **План брокерской программы**: ребейт бирж, кэшбэк трейдерам, все биржи, этапы |
