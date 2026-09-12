@@ -35,12 +35,28 @@ import Bars, { type BarItem } from "../Bars";
 import Donut, { DonutLegend, type Slice } from "../Donut";
 import EquityCurve from "../EquityCurve";
 import RBars from "../RBars";
+import RList from "../RList";
 import Spark, { SparkRing } from "../Spark";
 import { Card, KpiCard, Pick, SymbolList } from "../parts";
 import type { ViewProps } from "./types";
 
+/** Цвета дней недели: семь различимых оттенков на одном кольце. */
+const WEEK_COLORS = [
+  "#0ecb81",
+  "#22c3a6",
+  "#38bdf8",
+  "#7c8cf8",
+  "#a97cf0",
+  "#f0b90b",
+  "#f6746a",
+] as const;
+
 /** Чем меряем разрезы по времени: деньгами или числом сделок. */
 type Measure = "pnl" | "trades";
+/** Как показать распределение по R: формой или числами. */
+type RShape = "bars" | "list";
+/** Что показывает кольцо: стороны, из чего сложился итог или дни недели. */
+type Ring = "sides" | "total" | "week";
 
 export default function OverviewView({
   trades,
@@ -55,6 +71,8 @@ export default function OverviewView({
   a,
 }: ViewProps) {
   const [measure, setMeasure] = useState<Measure>("pnl");
+  const [shape, setShape] = useState<RShape>("bars");
+  const [ring, setRing] = useState<Ring>("sides");
 
   const curve = useMemo(() => equityCurve(trades), [trades]);
   const days = useMemo(() => daily(trades), [trades]);
@@ -67,7 +85,7 @@ export default function OverviewView({
   const series = useMemo(() => streaks(trades), [trades]);
 
   // Три ряда панелей под полосой показателей. Средний - главный, ему больше.
-  const rows = Math.max(430, height - 120);
+  const rows = Math.max(430, height - 124);
   const big = Math.round(rows * 0.43) - 48;
   const mid = Math.round(rows * 0.31) - 48;
   const low = rows - Math.round(rows * 0.43) - Math.round(rows * 0.31) - 48;
@@ -84,6 +102,45 @@ export default function OverviewView({
 
   const long = sides.find((one) => one.key === "long");
   const short = sides.find((one) => one.key === "short");
+
+  // Из чего сложился итог: плюсы, минусы и комиссии. Комиссии отдельным
+  // куском - это единственная его часть, которую задаёт не вход, а объём.
+  const totalSlices: Slice[] = [
+    {
+      key: "wins",
+      label: a.total.wins,
+      value: totals.gross,
+      color: "var(--pane-up)",
+      note: signed(totals.gross),
+      tone: "up",
+    },
+    {
+      key: "losses",
+      label: a.total.losses,
+      value: totals.drawn,
+      color: "var(--pane-down)",
+      note: money(-totals.drawn),
+      tone: "down",
+    },
+    {
+      key: "fees",
+      label: a.total.fees,
+      value: totals.fees,
+      color: "var(--pane-gold)",
+      note: money(-totals.fees),
+      tone: "down",
+    },
+  ];
+
+  const weekSlices: Slice[] = week.map((bucket, i) => ({
+    key: bucket.key,
+    label: a.weekdays[i],
+    value: bucket.trades,
+    color: WEEK_COLORS[i],
+    note: bucket.trades > 0 ? signed(bucket.pnl) : "",
+    tone: bucket.pnl >= 0 ? "up" : "down",
+  }));
+
   const sideSlices: Slice[] = [
     {
       key: "long",
@@ -102,6 +159,45 @@ export default function OverviewView({
       tone: (short?.pnl ?? 0) >= 0 ? "up" : "down",
     },
   ];
+
+  const size = Math.min(190, Math.max(110, big - 40));
+
+  const rings: Record<Ring, { slices: Slice[]; center: React.ReactNode }> = {
+    sides: {
+      slices: sideSlices,
+      center: (
+        <div>
+          <div className="font-mono text-[20px] font-extrabold leading-none text-[var(--pane-text)]">
+            {totals.trades}
+          </div>
+          <div className="mt-1 text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+            {a.total.short}
+          </div>
+        </div>
+      ),
+    },
+    total: {
+      slices: totalSlices,
+      center: (
+        <div className="px-2">
+          <div
+            className={`font-mono text-[18px] font-extrabold leading-none ${
+              totals.net >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
+            }`}
+          >
+            {signed(totals.net)}
+          </div>
+          <div className="mt-1 text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+            {a.total.label}
+          </div>
+        </div>
+      ),
+    },
+    week: {
+      slices: weekSlices,
+      center: null,
+    },
+  };
 
   return (
     <div className="space-y-2.5">
@@ -215,34 +311,61 @@ export default function OverviewView({
           hint={a.risk.hint}
           icon={<BarChart3 className="h-3.5 w-3.5" />}
           className="xl:col-span-3"
+          right={
+            <Pick
+              value={shape}
+              options={[
+                { key: "bars" as const, label: a.risk.shapeBars },
+                { key: "list" as const, label: a.risk.shapeList },
+              ]}
+              onPick={setShape}
+            />
+          }
         >
-          <RBars buckets={risks} height={big} money={money} count={a.tradesCount} />
+          {shape === "bars" ? (
+            <RBars buckets={risks} height={big} money={money} count={a.tradesCount} />
+          ) : (
+            <RList
+              buckets={risks}
+              name={(key) => a.rBuckets[key] ?? key}
+              money={money}
+              height={big}
+            />
+          )}
         </Card>
 
         {/* Типы сделок: чего в периоде было больше и что из этого вышло. */}
         <Card
-          title={a.sidesTitle.title}
-          hint={a.sidesTitle.hint}
+          title={a.rings[ring].title}
+          hint={a.rings[ring].hint}
           icon={<PieChart className="h-3.5 w-3.5" />}
           className="xl:col-span-3"
+          right={
+            <Pick
+              value={ring}
+              options={[
+                { key: "sides" as const, label: a.rings.sides.tab },
+                { key: "total" as const, label: a.rings.total.tab },
+                { key: "week" as const, label: a.rings.week.tab },
+              ]}
+              onPick={setRing}
+            />
+          }
         >
           <div className="flex items-center gap-3" style={{ height: big }}>
             <Donut
-              slices={sideSlices}
-              size={Math.min(190, Math.max(110, big - 40))}
-              thickness={Math.round(Math.min(190, Math.max(110, big - 40)) / 9)}
-              center={
-                <div>
-                  <div className="font-mono text-[20px] font-extrabold leading-none text-[var(--pane-text)]">
-                    {totals.trades}
-                  </div>
-                  <div className="mt-1 text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
-                    {a.total.short}
-                  </div>
-                </div>
-              }
+              slices={rings[ring].slices}
+              size={size}
+              thickness={Math.round(size / 9)}
+              center={rings[ring].center}
             />
-            <DonutLegend slices={sideSlices} className="flex-1" stacked />
+            <DonutLegend
+              slices={rings[ring].slices}
+              className="flex-1"
+              stacked={ring !== "week"}
+              compact={ring === "week"}
+              showShare={ring === "week"}
+            />
           </div>
         </Card>
 

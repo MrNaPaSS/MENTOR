@@ -294,6 +294,15 @@ export const analytics = {
       title: "Result distribution (R)",
       titleTotals: "Totals by result (R)",
       hint: "share of trades by result size",
+      shapeBars: "Shape",
+      shapeList: "Numbers",
+    },
+
+    /** One ring, three slices to show in it. */
+    rings: {
+      sides: { tab: "Sides", title: "Trade types", hint: "long against short" },
+      total: { tab: "Net", title: "Net", hint: "what it is made of" },
+      week: { tab: "Days", title: "Weekdays", hint: "share of trades by day" },
     },
 
     rBuckets: {
@@ -367,6 +376,8 @@ export const analytics = {
       worst: "Max loss",
       prevNet: "Previous period",
       prevWinRate: "Previous win rate",
+      numbers: "Numbers",
+      gauges: "Gauges",
       rate: (pct: number) => `win rate ${pct}%`,
     },
 
