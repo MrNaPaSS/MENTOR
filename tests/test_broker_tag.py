@@ -146,6 +146,91 @@ def test_order_without_broker_id_keeps_the_plain_identifier():
     assert sent["data"]["newClientOrderId"] == "BTCUSDT-1757500000000"
 
 
+# ── Условные заявки: стопы и цели ────────────────────────────────────────────
+
+
+def test_protection_leaves_with_the_broker_mark():
+    """Стопы и цели засчитываются - WEEX подтвердила это 12 сентября 2026.
+
+    Метка идёт в `clientAlgoId`, и это половина оборота терминала: защиту
+    терминал ставит сразу после входа.
+    """
+    from backend.trading.watcher import take_label
+
+    client = _client(BROKER)
+    sent = _capture(client, {"orderId": "1"})
+    label = take_label("BTCUSDT-1757500000000", 0)
+
+    asyncio.run(
+        client.place_tp_sl(
+            symbol="cmt_btcusdt",
+            plan_type="TAKE_PROFIT",
+            trigger_price="70000",
+            quantity="0.01",
+            position_side="LONG",
+            client_algo_id=label,
+        )
+    )
+
+    assert sent["data"]["clientAlgoId"] == f"{PREFIX}{label}"
+    # Предел биржи - тридцать два знака вместе с меткой.
+    assert len(sent["data"]["clientAlgoId"]) <= 32
+
+
+def test_long_protection_label_goes_without_the_mark_but_the_order_stands():
+    """Не влезло - уходит без метки. Защита позиции дороже ребейта с заявки."""
+    client = _client(BROKER)
+    sent = _capture(client, {"orderId": "1"})
+    long_label = "tp1_BTCUSDT-1757500000000"  # прежнее длинное написание
+
+    asyncio.run(
+        client.place_tp_sl(
+            symbol="cmt_btcusdt",
+            plan_type="STOP_LOSS",
+            trigger_price="60000",
+            quantity="0.01",
+            position_side="LONG",
+            client_algo_id=long_label,
+        )
+    )
+
+    assert sent["data"]["clientAlgoId"] == long_label
+
+
+def test_protection_without_broker_id_keeps_the_plain_label():
+    from backend.trading.watcher import stop_label
+
+    client = _client("")
+    sent = _capture(client, {"orderId": "1"})
+    label = stop_label("BTCUSDT-1757500000000", 1)
+
+    asyncio.run(
+        client.place_tp_sl(
+            symbol="cmt_btcusdt",
+            plan_type="STOP_LOSS",
+            trigger_price="60000",
+            quantity="0.01",
+            position_side="LONG",
+            client_algo_id=label,
+        )
+    )
+
+    assert sent["data"]["clientAlgoId"] == label
+
+
+def test_protection_comes_back_without_the_mark():
+    """Сопровождение ищет свой стоп по ярлыку - префикс биржи ему помешает."""
+    from backend.trading.watcher import take_label
+
+    client = _client(BROKER)
+    label = take_label("BTCUSDT-1757500000000", 0)
+    _capture(client, [{"clientAlgoId": f"{PREFIX}{label}", "orderId": "7"}])
+
+    rows = asyncio.run(client.algo_orders("cmt_btcusdt"))
+
+    assert rows[0]["clientAlgoId"] == label
+
+
 def test_open_orders_come_back_without_the_mark():
     """Сопровождение сравнивает начало строки — префикс биржи ему помешает."""
     client = _client(BROKER)

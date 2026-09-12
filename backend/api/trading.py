@@ -47,7 +47,9 @@ from backend.trading.watcher import (
     settle,
     split_ladder,
     stop_label,
+    stop_labels,
     take_label,
+    take_labels,
 )
 from core.weex.futures import (
     public_filters,
@@ -306,9 +308,12 @@ async def plans(
     # сами при постановке - по ней заявку узнать можно в любом случае.
     for row in live:
         count = len(json.loads(row.tp_orders_json or "[]")) or 3
-        mine_takes |= {take_label(row.client_id, i) for i in range(count)}
+        for i in range(count):
+            mine_takes |= take_labels(row.client_id, i)
     mine_stops = {str(row.sl_order_id or "") for row in live}
-    mine_stops |= {stop_label(row.client_id, hit) for row in live for hit in range(4)}
+    for row in live:
+        for hit in range(4):
+            mine_stops |= stop_labels(row.client_id, hit)
     mine_takes.discard("")
     mine_stops.discard("")
 
@@ -826,7 +831,7 @@ async def open_position(
                     trigger_price=_num(round_to_tick(price, filters["tick"])),
                     quantity=_num(size),
                     position_side=position_side,
-                    client_algo_id=f"tp{i + 1}_{body.client_order_id or ''}"[:32],
+                    client_algo_id=take_label(body.client_order_id or "", i),
                 )
             except WeexTradeError as exc:
                 # Дальше по лестнице, а не наружу: отказ по одной цели не повод
@@ -1201,8 +1206,10 @@ def _owned(rows: Iterable[LiveTrade]) -> tuple[set[str], list[str]]:
         recorded = json.loads(row.tp_orders_json or "[]")
         for take in recorded:
             marks.add(str(take.get("order_id") or ""))
-        marks |= {take_label(row.client_id, i) for i in range(max(len(recorded), 3))}
-        marks |= {stop_label(row.client_id, hit) for hit in range(4)}
+        for i in range(max(len(recorded), 3)):
+            marks |= take_labels(row.client_id, i)
+        for hit in range(4):
+            marks |= stop_labels(row.client_id, hit)
     marks.discard("")
     return marks, [p for p in prefixes if p]
 

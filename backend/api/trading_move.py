@@ -39,6 +39,8 @@ from backend.trading.watcher import (
     order_marks,
     plan_alive,
     position_for,
+    moved_stop_label,
+    moved_take_label,
     set_stop,
     stop_label,
     take_label,
@@ -356,7 +358,7 @@ async def _move_open(
             live,
             stop,
             market,
-            label=f"slm{live.replaces}_{live.client_id}",
+            label=moved_stop_label(live.client_id, live.replaces),
         )
         if not moved:
             raise HTTPException(409, "Биржа не приняла новый стоп - прежний остался на месте")
@@ -477,7 +479,7 @@ async def _move_open(
                 trigger_price=_num(take),
                 quantity=_num(size),
                 position_side="LONG" if live.side == "long" else "SHORT",
-                client_algo_id=f"tpm{live.replaces}_{live.client_id}"[:32],
+                client_algo_id=moved_take_label(live.client_id, live.replaces),
             )
         except WeexTradeError as exc:
             # Старой цели уже нет, новая не встала - сказать надо прямо: трейдер

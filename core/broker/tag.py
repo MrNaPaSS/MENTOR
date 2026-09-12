@@ -25,6 +25,12 @@ logger = logging.getLogger("nmnh.broker.tag")
 # Столько символов WEEX отводит под newClientOrderId вместе с меткой.
 WEEX_LIMIT = 64
 
+# А столько - под clientAlgoId условной заявки: вдвое меньше. Брокерская
+# команда WEEX подтвердила 12 сентября 2026, что стопы и цели засчитываются и
+# метку надо класть именно сюда. До этого ответа условные заявки уходили без
+# метки, и это была половина оборота терминала мимо ребейта.
+WEEX_ALGO_LIMIT = 32
+
 # Поля, в которых биржа возвращает наш же идентификатор. Имена разные в разных
 # ручках: у обычных заявок одно, у условных другое, в исполнениях третье.
 MARK_FIELDS = ("clientOid", "clientOrderId", "newClientOrderId", "clientAlgoId")
@@ -90,6 +96,19 @@ class BrokerMark:
 
 
 NO_MARK = BrokerMark(prefix="", limit=WEEX_LIMIT)
+
+
+def weex_algo_mark(broker_id: str | None) -> BrokerMark:
+    """Метка для условной заявки: тот же префикс, но предел вдвое короче.
+
+    Из-за предела ярлык нашей защиты обязан быть коротким: `b-WEEX123456-`
+    занимает тринадцать знаков из тридцати двух. Длинный ярлык уйдёт без метки
+    (см. `tag`) - заявка встанет, ребейта за неё не будет.
+    """
+    broker = (broker_id or "").strip()
+    if not broker:
+        return NO_MARK
+    return BrokerMark(prefix=f"b-{broker}-", limit=WEEX_ALGO_LIMIT)
 
 
 def weex_mark(broker_id: str | None) -> BrokerMark:

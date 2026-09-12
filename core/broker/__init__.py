@@ -5,6 +5,6 @@
 возвращается трейдеру.
 """
 
-from core.broker.tag import NO_MARK, BrokerMark, weex_mark
+from core.broker.tag import NO_MARK, BrokerMark, weex_algo_mark, weex_mark
 
-__all__ = ["BrokerMark", "NO_MARK", "weex_mark"]
+__all__ = ["BrokerMark", "NO_MARK", "weex_algo_mark", "weex_mark"]

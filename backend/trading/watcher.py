@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from datetime import timezone
@@ -187,7 +188,7 @@ def decide(
             t
             for i, t in enumerate(takes)
             if str(t.get("order_id") or "") not in open_plans
-            and take_label(trade.client_id, i) not in open_plans
+            and not (take_labels(trade.client_id, i) & open_plans)
         ]
         fresh = [
             str(t.get("order_id") or "")
@@ -274,7 +275,7 @@ def decide(
         if not order_id:
             continue
         # Ни по идентификатору, ни по нашей метке заявки нет - значит сработала.
-        if order_id not in open_plans and take_label(trade.client_id, i) not in open_plans:
+        if order_id not in open_plans and not (take_labels(trade.client_id, i) & open_plans):
             filled.append(order_id)
 
     prices = [float(t.get('price') or 0) for t in takes]
@@ -623,7 +624,7 @@ class PositionWatcher:
                     trigger_price=num(round_to_tick(price, filters["tick"])),
                     quantity=num(size),
                     position_side="LONG" if long else "SHORT",
-                    client_algo_id=f"tp{i + 1}_{trade.client_id}"[:32],
+                    client_algo_id=take_label(trade.client_id, i),
                 )
             except WeexTradeError as exc:
                 # Дальше по лестнице, а не наружу: отказ по одной цели не повод
@@ -942,7 +943,7 @@ async def set_stop(
             trigger_price=num(trigger),
             quantity=num(quantity),
             position_side="LONG" if long else "SHORT",
-            client_algo_id=(label or f"sl{trade.takes_hit}_{trade.client_id}")[:32],
+            client_algo_id=label or stop_label(trade.client_id, trade.takes_hit),
         )
     except WeexTradeError as exc:
         # Не встал — старый остаётся на месте. Это хуже, чем хотелось, но
@@ -1050,7 +1051,8 @@ async def drop_old_stops(
     """
     recorded = json.loads(trade.tp_orders_json or "[]")
     takes = {str(t.get("order_id") or "") for t in recorded}
-    takes |= {take_label(trade.client_id, i) for i in range(len(recorded))}
+    for i in range(len(recorded)):
+        takes |= take_labels(trade.client_id, i)
     takes.discard("")
     try:
         orders = await client.algo_orders(trade.symbol)
@@ -1364,6 +1366,29 @@ def split_ladder(
     return plan
 
 
+# Ярлык условной заявки: биржа отводит под `clientAlgoId` тридцать два знака
+# **вместе с меткой брокера**, а метка занимает тринадцать (`b-WEEX123456-`).
+# Прежний ярлык `tp1_BTCUSDT-1789248000000` съедал их все, и метка не влезала:
+# заявка уходила без неё, а это половина оборота терминала мимо ребейта.
+#
+# Поэтому от сделки берётся короткий след - восемь знаков хеша. Он не читается
+# глазами, зато оставляет место метке, а узнавать свои заявки мы всё равно
+# умеем только сравнением с тем же ярлыком, а не чтением.
+SHORT_ID_CHARS = 8
+_BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+
+def short_id(client_id: str) -> str:
+    """Короткий след сделки: восемь знаков, всегда одни и те же для неё."""
+    digest = hashlib.blake2s(str(client_id or "").encode("utf-8"), digest_size=5).digest()
+    number = int.from_bytes(digest, "big")
+    out = ""
+    while number and len(out) < SHORT_ID_CHARS:
+        number, rest = divmod(number, 36)
+        out = _BASE36[rest] + out
+    return out.rjust(SHORT_ID_CHARS, "0")
+
+
 def take_label(client_id: str, index: int) -> str:
     """Метка нашей заявки на цель: она уходит на биржу вместе с ордером.
 
@@ -1371,12 +1396,47 @@ def take_label(client_id: str, index: int) -> str:
     в одном и том же поле - на этом мы уже теряли связь со своими заявками.
     Метку же мы задаём сами, и по ней сделку узнать можно всегда.
     """
-    return f"tp{index + 1}_{client_id}"[:32]
+    return f"t{index + 1}{short_id(client_id)}"
 
 
 def stop_label(client_id: str, takes_hit: int) -> str:
     """Метка нашего стопа. Номер меняется с каждой взятой целью."""
+    return f"s{takes_hit}{short_id(client_id)}"
+
+
+def moved_take_label(client_id: str, replaces: int) -> str:
+    """Метка цели, переставленной руками: номер переноса отличает её от прежней."""
+    return f"tm{replaces}{short_id(client_id)}"
+
+
+def moved_stop_label(client_id: str, replaces: int) -> str:
+    """Метка стопа, переставленного руками."""
+    return f"sm{replaces}{short_id(client_id)}"
+
+
+def legacy_take_label(client_id: str, index: int) -> str:
+    """Прежний длинный ярлык цели."""
+    return f"tp{index + 1}_{client_id}"[:32]
+
+
+def legacy_stop_label(client_id: str, takes_hit: int) -> str:
+    """Прежний длинный ярлык стопа."""
     return f"sl{takes_hit}_{client_id}"[:32]
+
+
+def take_labels(client_id: str, index: int) -> set[str]:
+    """Все написания ярлыка цели: нынешнее и прежнее.
+
+    Сравнивать надо с обоими. На бирже прямо сейчас висят заявки, поставленные
+    старым кодом, и сделка с ними не должна потерять свою защиту из-за того,
+    что мы сменили написание ярлыка.
+    """
+    return {take_label(client_id, index), legacy_take_label(client_id, index)}
+
+
+def stop_labels(client_id: str, takes_hit: int) -> set[str]:
+    """Все написания ярлыка стопа: нынешнее и прежнее."""
+    return {stop_label(client_id, takes_hit), legacy_stop_label(client_id, takes_hit)}
 
 
 def order_marks(order: dict[str, Any]) -> set[str]:

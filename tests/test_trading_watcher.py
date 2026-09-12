@@ -976,10 +976,26 @@ def test_our_orders_are_recognized_by_our_own_label():
     взятой, потому что «не нашлась», стоп снимался как чужой, а сверка защиты
     писала «целей нет» при живых целях.
     """
-    from backend.trading.watcher import order_marks, stop_label, take_label
+    from backend.trading.watcher import (
+        legacy_take_label,
+        order_marks,
+        short_id,
+        stop_label,
+        take_label,
+        take_labels,
+    )
 
-    assert take_label("BTCUSDT-1", 0) == "tp1_BTCUSDT-1"
-    assert stop_label("BTCUSDT-1", 2) == "sl2_BTCUSDT-1"
+    # Ярлык короткий: в `clientAlgoId` тридцать два знака вместе с меткой
+    # брокера, и прежний длинный не оставлял ей места.
+    assert take_label("BTCUSDT-1", 0) == f"t1{short_id('BTCUSDT-1')}"
+    assert stop_label("BTCUSDT-1", 2) == f"s2{short_id('BTCUSDT-1')}"
+    assert len(take_label("BTCUSDT-1", 0)) <= 19
+
+    # Прежнее написание всё ещё узнаётся: на бирже висят заявки, поставленные
+    # старым кодом, и защиту у них отнимать нельзя.
+    assert legacy_take_label("BTCUSDT-1", 0) == "tp1_BTCUSDT-1"
+    assert take_labels("BTCUSDT-1", 0) == {take_label("BTCUSDT-1", 0), "tp1_BTCUSDT-1"}
+
     assert order_marks({"clientAlgoId": "tp1_BTCUSDT-1", "orderId": ""}) == {"tp1_BTCUSDT-1"}
 
 

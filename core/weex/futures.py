@@ -34,7 +34,7 @@ from typing import Any, Callable, Awaitable
 
 import aiohttp
 
-from core.broker import BrokerMark, weex_mark
+from core.broker import BrokerMark, weex_algo_mark, weex_mark
 
 logger = logging.getLogger("nmnh.weex.futures")
 
@@ -310,6 +310,9 @@ class WeexFutures:
         # перевод средств), а не только те, куда не забыли её передать.
         # Пустая переменная значит «мы ещё не брокер»: заявки уходят как
         # раньше, ни одно поведение не меняется.
+        self.algo_mark: BrokerMark = weex_algo_mark(
+            broker_id if broker_id is not None else os.getenv("WEEX_BROKER_ID", "")
+        )
         self.mark: BrokerMark = weex_mark(
             broker_id if broker_id is not None else os.getenv("WEEX_BROKER_ID", "")
         )
@@ -505,11 +508,12 @@ class WeexFutures:
 
         `execute_price = "0"` значит исполнение по рынку после срабатывания.
 
-        Метку брокера сюда не ставим. Документация WEEX описывает её только для
-        `newClientOrderId`, а `clientAlgoId` короче вдвое и по нему сопровождение
-        ищет свои стопы и цели. Ставить метку вслепую значит рискнуть защитой
-        позиции ради ребейта, в котором никто не уверен: засчитывает ли биржа
-        условные заявки — вопрос к менеджеру WEEX (см. план брокерской программы).
+        Метка брокера ставится и сюда. Брокерская команда WEEX ответила 12
+        сентября 2026: условные заявки засчитываются, метку класть в
+        `clientAlgoId`. Предел там тридцать два знака вместе с префиксом,
+        поэтому ярлык защиты короткий (`backend/trading/watcher.py`,
+        `take_label`). Не влез - заявка уйдёт без метки, но встанет: защита
+        позиции дороже ребейта с одной заявки.
         """
         data: dict[str, Any] = {
             "symbol": symbol,
@@ -521,7 +525,7 @@ class WeexFutures:
             "triggerPriceType": trigger_price_type,
         }
         if client_algo_id:
-            data["clientAlgoId"] = client_algo_id
+            data["clientAlgoId"] = self.algo_mark.tag(client_algo_id)
         return await self._request("POST", ENDPOINTS["tp_sl"], data=data)
 
     async def modify_tp_sl(

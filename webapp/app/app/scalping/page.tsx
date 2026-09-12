@@ -521,6 +521,8 @@ export default function ScalpingPage() {
   // на скальпе это две трети стакана. В этом режиме их нет, а баланс и монеты
   // переезжают в строку с ценой: они нужны и там, но места занимают строку.
   const [full, setFull] = useState(false);
+
+
   const { coins } = useCoins(full ? "full" : "windowed");
   const [balance, setBalance] = useState<string | null>(null);
   // Высота шкалы времени графика. Её сообщает сам график - считает её
@@ -686,6 +688,61 @@ export default function ScalpingPage() {
   // список на старте — это лишний клик перед каждой сессией. Свернётся сам,
   // как только монета выбрана, и сохранять это состояние незачем.
   const [screenerOpen, setScreenerOpen] = useState(true);
+
+  // Знак NMNH с плеером в полном экране.
+  //
+  // Стоит в своей строке и по середине **экрана**: слева от графика стакан, а
+  // при открытом скринере ещё и список, и середина колонки уходит правее
+  // середины монитора.
+  //
+  // Но середина экрана - это пожелание, а не закон. Открылся скринер - ряд
+  // таймфреймов уехал вправо, и знак по середине экрана лёг бы поверх него.
+  // Поэтому отступ зажат между соседями: знак смещается вместе с графиком и
+  // ни на кнопки слева, ни на кнопки справа не наезжает.
+  const brandRef = useRef<HTMLDivElement>(null);
+  const [brandLeft, setBrandLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!full) {
+      setBrandLeft(null);
+      return;
+    }
+
+    const measure = () => {
+      const el = brandRef.current;
+      const row = el?.offsetParent as HTMLElement | null;
+      if (!el || !row) return;
+
+      const kids = [...row.children].filter((node) => node !== el) as HTMLElement[];
+      const leftGroup = kids[0];
+      const rightGroup = kids.length > 1 ? kids[kids.length - 1] : undefined;
+      const gap = 16;
+
+      const want = window.innerWidth / 2 - row.getBoundingClientRect().left - el.offsetWidth / 2;
+      const min = leftGroup ? leftGroup.offsetLeft + leftGroup.offsetWidth + gap : 0;
+      const max = rightGroup
+        ? rightGroup.offsetLeft - el.offsetWidth - gap
+        : row.offsetWidth - el.offsetWidth;
+
+      setBrandLeft(Math.round(Math.min(Math.max(want, min), Math.max(min, max))));
+    };
+
+    // Первый замер - после того, как строка встала на место.
+    const first = requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    // Соседи меняют ширину и без изменения окна: свернули скринер, раскрыли
+    // ряд разметки, сменили инструмент на длинное имя.
+    const watch = new ResizeObserver(measure);
+    const row = brandRef.current?.offsetParent as HTMLElement | null;
+    if (row) watch.observe(row);
+    for (const node of row ? [...row.children] : []) watch.observe(node);
+
+    return () => {
+      cancelAnimationFrame(first);
+      window.removeEventListener("resize", measure);
+      watch.disconnect();
+    };
+  }, [full, screenerOpen]);
   // Ряд разметки свёрнут по умолчанию: кнопки слоёв трогают редко, а места они
   // занимают половину строки.
   const [layersOpen, setLayersOpen] = useState(false);
@@ -3613,11 +3670,20 @@ export default function ScalpingPage() {
                     вниз - на широком экране кнопки слоёв доходили до самого
                     центра и знак ложился поверх них. */}
                 {/* Центруется по экрану, а не по колонке графика: слева стоит
-                    стакан со скринером, и `absolute` внутри колонки уводил знак
-                    правее середины монитора. `fixed` считает от окна, а в
-                    полном экране окно и есть экран. */}
+                    стакан со скринером, и середина колонки уходит правее
+                    середины монитора. Высота при этом прежняя - знак стоит в
+                    своей строке, а не всплывает к верхнему краю, - поэтому
+                    двигаем только по горизонтали и считаем отступ от окна. */}
                 {full && (
-                  <div className="pointer-events-auto fixed left-1/2 top-[7px] z-20 flex -translate-x-1/2 items-center gap-2">
+                  <div
+                    ref={brandRef}
+                    className="pointer-events-auto absolute z-20 flex items-center gap-2"
+                    style={
+                      brandLeft === null
+                        ? { left: "50%", transform: "translateX(-50%)" }
+                        : { left: brandLeft }
+                    }
+                  >
                     <Logo
                       href="/app/analysis"
                       tone={paper === "light" ? "text-[var(--pane-text)]" : "text-text-primary"}
