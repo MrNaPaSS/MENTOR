@@ -245,7 +245,7 @@ function Section({
       </header>
       {/* Своя прокрутка: раздел умещается в экран, а длинная таблица
           листается внутри панели, а не тянет за собой всю страницу. */}
-      <div className="min-h-0 flex-1 overflow-auto p-3">{children}</div>
+      <div className="min-h-0 flex-1 overflow-auto p-2">{children}</div>
     </section>
   );
 }
@@ -270,7 +270,7 @@ function KpiCard({
 }) {
   return (
     <div
-      className="sm-fade-up rounded border border-[var(--pane-border)] bg-[var(--pane-deep)] px-3 py-2"
+      className="sm-fade-up rounded border border-[var(--pane-border)] bg-[var(--pane-deep)] px-2.5 py-1.5"
       style={{ animationDelay: `${delay}s`, background: bg, borderColor: border }}
     >
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--pane-muted)]">
@@ -349,10 +349,10 @@ function CotSection({ className = "" }: { className?: string }) {
       sub={isDemo ? t.smart.cot.subDemo : t.smart.cot.subLive}>
 
       {/* Asset toggle */}
-      <div className="mb-5 flex items-center gap-1.5">
+      <div className="mb-2 flex items-center gap-1.5">
         {(["BTC","ETH"] as const).map(a=>(
           <button key={a} onClick={()=>setAsset(a)}
-            className="relative rounded px-5 py-1.5 text-[12px] font-bold transition-all"
+            className="relative rounded px-4 py-1 text-[12px] font-bold transition-all"
             style={{
               background: asset===a ? "var(--pane-gold-soft)" : "var(--pane-hover)",
               color: asset===a ? "var(--pane-gold)" : "var(--pane-muted)",
@@ -374,10 +374,10 @@ function CotSection({ className = "" }: { className?: string }) {
           </div>
         )}
 
-        <div className="space-y-5">
+        <div className="space-y-2">
 
           {/* KPI row */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             <KpiCard label={t.smart.cot.hedgeFundsNet} value={`${cur.nc_net>0?"+":""}${fmtK(cur.nc_net)}`}
               sub={`${cur.nc_net_chg>0?"+":""}${fmtK(cur.nc_net_chg)} ${t.smart.cot.weekShort}`}
               color={cur.nc_net>0?"var(--pane-up)":"var(--pane-down)"}
@@ -393,7 +393,7 @@ function CotSection({ className = "" }: { className?: string }) {
           </div>
 
           {/* Position structure */}
-          <div className="rounded-lg border border-[var(--pane-border)] bg-[var(--pane-deep)] p-4 space-y-3">
+          <div className="rounded-lg border border-[var(--pane-border)] bg-[var(--pane-deep)] p-2.5 space-y-2">
             <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">{t.smart.cot.structure}</div>
 
             {[
@@ -401,14 +401,14 @@ function CotSection({ className = "" }: { className?: string }) {
               {label:t.smart.cot.assetManager, long:cur.c_long_pct,  short:cur.c_short_pct,  lc:"var(--pane-up)", sc:"var(--pane-down)"},
             ].map((row,ri)=>(
               <div key={ri}>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] text-[var(--pane-muted)]">{row.label}</span>
                   <div className="flex gap-3 text-[10px] font-mono">
                     <span style={{color:row.lc}}>L {row.long.toFixed(1)}%</span>
                     <span style={{color:row.sc}}>S {row.short.toFixed(1)}%</span>
                   </div>
                 </div>
-                <div className="flex h-2 overflow-hidden rounded-full bg-[var(--pane-deep)]">
+                <div className="flex h-1.5 overflow-hidden rounded-full bg-[var(--pane-deep)]">
                   <div className="h-full rounded-l-full transition-all duration-700"
                     style={{width:`${row.long}%`,background:`linear-gradient(90deg,${row.lc}50,${row.lc}90)`}} />
                   <div className="mx-[1px] h-full w-[2px] flex-shrink-0 bg-[var(--pane-deep)] rounded-full" />
@@ -421,7 +421,7 @@ function CotSection({ className = "" }: { className?: string }) {
 
           {/* History mini-chart */}
           <div>
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between">
               <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)]">
                 {t.smart.cot.historyTitle(cot.length)}
               </div>
@@ -430,13 +430,13 @@ function CotSection({ className = "" }: { className?: string }) {
                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{background:"var(--pane-down)"}}/>{t.smart.cot.bearish}</span>
               </div>
             </div>
-            <div className="flex items-end gap-1.5 rounded bg-[var(--pane-deep)] px-3 pb-2 pt-3" style={{height:80}}>
+            <div className="flex items-end gap-1.5 rounded bg-[var(--pane-deep)] px-3 pb-2 pt-3" style={{height:38}}>
               {[...cot].reverse().map((row,i)=>{
-                const h = Math.max((Math.abs(row.nc_net)/maxNet)*62,4);
+                const h = Math.max((Math.abs(row.nc_net)/maxNet)*26,4);
                 const color = row.nc_net>=0 ? "var(--pane-up)" : "var(--pane-down)";
                 return (
                   <div key={i} title={`${row.date}: ${row.nc_net>0?"+":""}${fmt(row.nc_net)}`}
-                    className="group relative flex flex-1 flex-col items-center justify-end cursor-default" style={{height:68}}>
+                    className="group relative flex flex-1 flex-col items-center justify-end cursor-default" style={{height:30}}>
                     <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-bg-deep/80 px-1.5 py-0.5 text-[8px] text-[var(--pane-text)] opacity-0 transition-opacity group-hover:opacity-100 z-10">
                       {fmtK(row.nc_net)}
                     </div>
@@ -447,13 +447,10 @@ function CotSection({ className = "" }: { className?: string }) {
                 );
               })}
             </div>
-            <div className="mt-1.5 flex justify-between text-[8px] text-[color:color-mix(in_srgb,var(--pane-text)_15%,transparent)]">
-              <span>{t.smart.cot.older}</span><span>{t.smart.cot.newer}</span>
-            </div>
           </div>
 
           {/* Insight box */}
-          <div className="rounded border border-[var(--pane-gold-soft)] bg-[var(--pane-deep)] p-3.5 text-[10px] leading-relaxed text-[var(--pane-muted)]">
+          <div className="rounded border border-[var(--pane-gold-soft)] bg-[var(--pane-deep)] px-2 py-1.5 text-[8px] leading-tight text-[var(--pane-muted)]">
             <span className="font-semibold text-[var(--pane-gold)]">{t.smart.cot.insightBold}</span>{t.smart.cot.insightRest}
             <span className="font-semibold text-[var(--pane-gold)]">{t.smart.cot.hedgersBold}</span>{t.smart.cot.hedgersRest}
             {prev && (<>{" "}{t.smart.cot.weekChange} <span className={signColor(cur.nc_net-prev.nc_net)}>{cur.nc_net>=prev.nc_net?"▲":"▼"} {Math.abs(cur.nc_net-prev.nc_net).toLocaleString()}</span>.</>)}
@@ -504,7 +501,7 @@ function MacroSection({ className = "" }: { className?: string }) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
           {items.map((item,i)=>{
             const pos = item.changePct>=0;
             const dec = item.key==="US10Y"||item.key==="VIX" ? 2 : item.price>1000 ? 1 : 2;
@@ -514,7 +511,7 @@ function MacroSection({ className = "" }: { className?: string }) {
             const icon = MACRO_ICONS[item.key] ?? "•";
             return (
               <div key={item.key}
-                className="sm-fade-up sm-hover group relative overflow-hidden rounded-lg p-4 cursor-default"
+                className="sm-fade-up sm-hover group relative overflow-hidden rounded-lg p-2 cursor-default"
                 style={{
                   animationDelay:`${i*0.04}s`,
                   background: pos ? "var(--pane-up-faint)" : "var(--pane-down-faint)",
@@ -523,16 +520,16 @@ function MacroSection({ className = "" }: { className?: string }) {
                 {/* dim corner bg */}
                 <div className="pointer-events-none absolute right-2 bottom-2 text-[28px] opacity-[0.06] select-none">{icon}</div>
 
-                <div className="mb-1.5 flex items-center justify-between">
+                <div className="mb-0.5 flex items-center justify-between">
                   <span className="text-[8px] font-bold uppercase tracking-widest text-[var(--pane-muted)]">{labels[item.key] ?? item.label}</span>
                   <span className="font-mono text-[9px] font-bold" style={{color:"var(--pane-muted)"}}>{item.key}</span>
                 </div>
 
-                <div className="font-mono text-[20px] font-extrabold leading-none text-[var(--pane-text)]">
+                <div className="font-mono text-[15px] font-extrabold leading-none text-[var(--pane-text)]">
                   {fmt(item.price,dec)}
                 </div>
 
-                <div className="mt-2 flex items-center gap-1.5">
+                <div className="mt-1 flex items-center gap-1.5">
                   <div className="flex h-4 w-4 items-center justify-center rounded-md"
                     style={{background:`${color}20`,border:`1px solid ${color}40`}}>
                     {pos
@@ -544,7 +541,7 @@ function MacroSection({ className = "" }: { className?: string }) {
                   </span>
                 </div>
 
-                <div className="mt-2 text-[9px] text-[var(--pane-muted)]">{contexts[item.key] ?? ""}</div>
+                <div className="mt-0.5 truncate text-[8.5px] leading-tight text-[var(--pane-muted)]" title={contexts[item.key] ?? ""}>{contexts[item.key] ?? ""}</div>
               </div>
             );
           })}
@@ -578,40 +575,40 @@ function EtfSection({ className = "" }: { className?: string }) {
       badge={isDemo ? <DemoBadge/> : <LiveBadge/>}
       sub={isDemo ? t.smart.sourceSilent : t.smart.etf.sub}>
 
-      {!data ? <Skeleton rows={5}/> : <div className="space-y-4">
+      {!data ? <Skeleton rows={5}/> : <div className="space-y-2">
 
         {/* Banner */}
-        <div className="relative overflow-hidden rounded-lg border border-[var(--pane-gold-soft)] p-5"
+        <div className="relative overflow-hidden rounded-lg border border-[var(--pane-gold-soft)] p-2"
           style={{background:"linear-gradient(135deg,var(--pane-accent-faint),var(--pane-accent-faint))"}}>
           <div className="pointer-events-none absolute inset-0"
             style={{background:"radial-gradient(ellipse at 80% 50%,var(--pane-accent-faint),transparent 70%)"}} />
-          <div className="relative flex flex-wrap items-center gap-6">
+          <div className="relative flex flex-wrap items-center gap-3">
             <div>
-              <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">{t.smart.etf.totalBtc}</div>
-              <div className="font-mono text-[32px] font-black leading-none text-[var(--pane-gold)]">
-                ~{(data.total_btc/1000).toFixed(0)}<span className="text-[16px] font-semibold ml-1">K BTC</span>
+              <div className="text-[8px] uppercase tracking-widest text-[var(--pane-muted)] mb-0.5">{t.smart.etf.totalBtc}</div>
+              <div className="font-mono text-[18px] font-black leading-none text-[var(--pane-gold)]">
+                ~{(data.total_btc/1000).toFixed(0)}<span className="text-[12px] font-semibold ml-1">K BTC</span>
               </div>
-              <div className="mt-1 text-[10px] text-[var(--pane-muted)]">
+              <div className="mt-0.5 text-[9px] text-[var(--pane-muted)]">
                 {t.smart.etf.ofMaxSupply(((data.total_btc/21_000_000)*100).toFixed(2))}
               </div>
             </div>
-            <div className="h-12 w-px bg-[var(--pane-deep)]"/>
+            <div className="h-8 w-px bg-[var(--pane-deep)]"/>
             <div>
-              <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">{t.smart.etf.funds}</div>
-              <div className="font-mono text-[28px] font-black leading-none text-[var(--pane-text)]">{data.etfs.length}</div>
+              <div className="text-[8px] uppercase tracking-widest text-[var(--pane-muted)] mb-0.5">{t.smart.etf.funds}</div>
+              <div className="font-mono text-[16px] font-black leading-none text-[var(--pane-text)]">{data.etfs.length}</div>
             </div>
             {btcPrice>0 && <>
-              <div className="h-12 w-px bg-[var(--pane-deep)]"/>
+              <div className="h-8 w-px bg-[var(--pane-deep)]"/>
               <div>
-                <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">BTC/USD</div>
-                <div className="font-mono text-[24px] font-black leading-none text-[var(--pane-accent)]">${btcPrice.toLocaleString("en-US")}</div>
+                <div className="text-[8px] uppercase tracking-widest text-[var(--pane-muted)] mb-0.5">BTC/USD</div>
+                <div className="font-mono text-[15px] font-black leading-none text-[var(--pane-accent)]">${btcPrice.toLocaleString("en-US")}</div>
               </div>
             </>}
             {topEtf && <>
-              <div className="h-12 w-px bg-[var(--pane-deep)]"/>
+              <div className="h-8 w-px bg-[var(--pane-deep)]"/>
               <div>
-                <div className="text-[9px] uppercase tracking-widest text-[var(--pane-muted)] mb-1">{t.smart.etf.leader}</div>
-                <div className="font-mono text-[18px] font-black leading-none text-[var(--pane-text)]">{topEtf.ticker}</div>
+                <div className="text-[8px] uppercase tracking-widest text-[var(--pane-muted)] mb-0.5">{t.smart.etf.leader}</div>
+                <div className="font-mono text-[14px] font-black leading-none text-[var(--pane-text)]">{topEtf.ticker}</div>
                 <div className="text-[9px] text-[var(--pane-muted)]">{t.smart.etf.sharePct(topEtf.sharePct)}</div>
               </div>
             </>}
@@ -619,7 +616,7 @@ function EtfSection({ className = "" }: { className?: string }) {
         </div>
 
         {/* ETF list */}
-        <div className="space-y-2">
+        <div className="space-y-1">
           {/* header */}
           <div className="grid px-3 text-[8px] uppercase tracking-widest text-[var(--pane-muted)]"
             style={{gridTemplateColumns:"28px 1fr 70px 60px 55px 80px"}}>
@@ -633,7 +630,7 @@ function EtfSection({ className = "" }: { className?: string }) {
           {data.etfs.map((etf,i)=>{
             const pos = etf.changePct>=0;
             return (
-              <div key={i} className="sm-fade-up sm-hover group relative overflow-hidden rounded p-3"
+              <div key={i} className="sm-fade-up sm-hover group relative overflow-hidden rounded px-2 py-1"
                 style={{
                   animationDelay:`${i*0.04+0.1}s`,
                   background:"rgba(255,255,255,0.025)",
@@ -647,9 +644,11 @@ function EtfSection({ className = "" }: { className?: string }) {
                   style={{gridTemplateColumns:"28px 1fr 70px 60px 55px 80px"}}>
                   <div className="text-[11px] font-bold text-[var(--pane-muted)]">{i+1}</div>
 
-                  <div>
-                    <div className="text-[12px] font-bold text-[var(--pane-text)]">{etf.ticker}</div>
-                    <div className="text-[9px] text-[var(--pane-muted)] truncate">{etf.name}</div>
+                  {/* Имя рядом с тикером, а не под ним: строка в один этаж,
+                      и весь список фондов помещается в панель. */}
+                  <div className="flex min-w-0 items-baseline gap-1.5">
+                    <span className="text-[12px] font-bold text-[var(--pane-text)]">{etf.ticker}</span>
+                    <span className="truncate text-[9px] text-[var(--pane-muted)]">{etf.name}</span>
                   </div>
 
                   <div className="text-right font-mono text-[11px] text-[var(--pane-text-2)]">
@@ -661,26 +660,22 @@ function EtfSection({ className = "" }: { className?: string }) {
                   <div className="text-right font-mono text-[12px] font-bold text-[var(--pane-up)]">
                     {etf.sharePct}%
                   </div>
-                  <div className="text-right">
-                    <div className="font-mono text-[11px] text-[var(--pane-text)]">{etf.price>0?`$${etf.price}`:"-"}</div>
+                  <div className="flex items-baseline justify-end gap-1.5 text-right">
+                    <span className="font-mono text-[11px] text-[var(--pane-text)]">{etf.price>0?`$${etf.price}`:"-"}</span>
                     {etf.price>0 && (
-                      <div className="font-mono text-[9px]" style={{color:pos?"var(--pane-up)":"var(--pane-down)"}}>
+                      <span className="font-mono text-[9px]" style={{color:pos?"var(--pane-up)":"var(--pane-down)"}}>
                         {pos?"+":""}{etf.changePct.toFixed(2)}%
-                      </div>
+                      </span>
                     )}
                   </div>
                 </div>
 
-                {/* animated share bar */}
-                <div className="mt-2.5">
-                  <AnimBar pct={etf.sharePct} color="var(--pane-up)" height={3} delay={i*0.05+0.1}/>
-                </div>
+
               </div>
             );
           })}
         </div>
 
-        <p className="text-[9px] text-[color:color-mix(in_srgb,var(--pane-text)_15%,transparent)]">{t.smart.etf.sources}</p>
       </div>}
     </Section>
   );
@@ -732,7 +727,7 @@ function DerivativesSection({ className = "" }: { className?: string }) {
       {loading ? <Skeleton rows={5}/> : <>
 
         {/* KPI row */}
-        <div className="mb-5 grid grid-cols-3 gap-3">
+        <div className="mb-3 grid grid-cols-3 gap-2">
           <KpiCard label={t.smart.oi.totalOi} value={fmtB(totalOI)} color="var(--pane-text)"
             bg="var(--pane-hover)" border="var(--pane-hover)" delay={0}/>
           <KpiCard label={t.smart.oi.coinsListed} value={String(rows.length)}
@@ -745,7 +740,7 @@ function DerivativesSection({ className = "" }: { className?: string }) {
         </div>
 
         {/* Rows */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="grid px-3 text-[8px] uppercase tracking-widest text-[var(--pane-muted)]"
             style={{gridTemplateColumns:"48px 1fr 90px 80px 80px"}}>
             <span>{t.smart.oi.colPair}</span><span>{t.smart.oi.colShare}</span>
@@ -761,7 +756,7 @@ function DerivativesSection({ className = "" }: { className?: string }) {
             const oiPct = r.oi/maxOI*100;
 
             return (
-              <div key={r.sym} className="sm-fade-up sm-hover group rounded-lg p-3.5"
+              <div key={r.sym} className="sm-fade-up sm-hover group rounded-lg px-2 py-1.5"
                 style={{
                   animationDelay:`${i*0.05}s`,
                   background:"rgba(255,255,255,0.025)",
@@ -769,22 +764,26 @@ function DerivativesSection({ className = "" }: { className?: string }) {
                 }}>
                 <div className="grid items-center gap-3" style={{gridTemplateColumns:"48px 1fr 90px 80px 80px"}}>
 
-                  <div className="font-bold text-[14px] text-[var(--pane-text)]">{r.sym}</div>
+                  <div className="font-bold text-[13px] text-[var(--pane-text)]">{r.sym}</div>
 
-                  <div>
-                    <AnimBar pct={oiPct} color="var(--pane-accent)" height={5} delay={i*0.04}/>
-                    <div className="mt-1 text-[8px] text-[var(--pane-muted)]">{t.smart.oi.ofMax(oiPct.toFixed(0))}</div>
+                  {/* Доля - рядом с полосой, а не под ней: строка ниже, и
+                      все пары помещаются в панель. */}
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <AnimBar pct={oiPct} color="var(--pane-accent)" height={5} delay={i*0.04}/>
+                    </div>
+                    <span className="shrink-0 text-[8px] text-[var(--pane-muted)]">{t.smart.oi.ofMax(oiPct.toFixed(0))}</span>
                   </div>
 
                   <div className="text-right font-mono text-[12px] text-[var(--pane-text-2)]">
                     {r.oi>0 ? fmtB(r.oi) : "-"}
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right leading-tight">
                     <div className="font-mono text-[12px] font-bold" style={{color:frColor}}>
                       {fr>=0?"+":""}{frPct.toFixed(4)}%
                     </div>
-                    <div className="mt-0.5 text-[8px] font-semibold text-[var(--pane-muted)]">
+                    <div className="text-[8px] font-semibold text-[var(--pane-muted)]">
                       {fr>0.01?t.smart.oi.overheated:fr>0.001?t.smart.oi.longs:fr<-0.001?t.smart.oi.shorts:t.smart.oi.neutral}
                     </div>
                   </div>
@@ -799,9 +798,6 @@ function DerivativesSection({ className = "" }: { className?: string }) {
           })}
         </div>
 
-        <p className="mt-3 text-[8.5px] text-[color:color-mix(in_srgb,var(--pane-text)_15%,transparent)]">
-          {t.smart.oi.footnote}
-        </p>
       </>}
     </Section>
   );
@@ -820,13 +816,15 @@ function SmartBanner() {
     <button
       type="button"
       onClick={() => openMarketSection("maps", router.push)}
-      className="group block overflow-hidden rounded-xl border border-[var(--pane-border)] transition-[transform,box-shadow] duration-200 ease-out hover:shadow-[0_8px_28px_-10px_rgba(240,185,11,0.55)] active:scale-[0.99]"
+      className="group block shrink-0 overflow-hidden rounded-xl border border-[var(--pane-border)] transition-[transform,box-shadow] duration-200 ease-out hover:shadow-[0_8px_28px_-10px_rgba(240,185,11,0.55)] active:scale-[0.99]"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
+      {/* Ниже, чем сама картинка: место в столбце нужнее панели «Макро», а
+          баннер узнают и по полосе. */}
       <img
         src="/art/market/smart-money.webp"
         alt={t.market.promo.smartAlt}
-        className="block w-full transition-transform duration-300 ease-out group-hover:scale-[1.01]"
+        className="block h-[86px] w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.01]"
       />
     </button>
   );
@@ -846,7 +844,7 @@ export default function SmartMoneyPage() {
           вкладкой «Рынка», и без него панели остались бы без палитры. */}
       <div className={`${pane} space-y-3`}>
         <div className="flex items-baseline justify-between gap-3">
-          <h1 className="text-[15px] font-semibold uppercase tracking-[0.16em] text-[var(--pane-text)]">
+          <h1 className="text-[13px] font-semibold uppercase tracking-[0.16em] text-[var(--pane-text)]">
             {t.smart.title}
           </h1>
           <p className="truncate text-[11px] text-[var(--pane-muted)]">
