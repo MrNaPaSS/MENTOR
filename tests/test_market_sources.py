@@ -13,8 +13,23 @@ from fastapi.testclient import TestClient
 from backend.api import market_data
 from backend.config import BackendConfig
 from backend.main import create_app
-from backend.sources import cache, registry
+from backend.sources import binance, cache, registry
 from core.weex import get_weex_client
+
+
+class БезBinance:
+    """Второго источника в этих тестах нет: здесь проверяется кэш, а не подмена.
+
+    Пустая сводка означает, что список пар биржи неизвестен, и карта
+    соответствия подменять отказывается - ровно так же, как в бою, когда
+    Binance недоступен из нашей сети.
+    """
+
+    blocked = False
+    blocked_for = 0.0
+
+    async def tickers_24h(self) -> list[dict]:
+        return []
 
 
 @pytest.fixture
@@ -22,6 +37,8 @@ def client(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/market.sqlite3")
     cache.reset()
     registry.reset()
+    binance.reset()
+    monkeypatch.setattr(binance, "rest", lambda: БезBinance())
     # Нулевой срок жизни: иначе второй запрос в том же тесте отдаст первое
     # значение из кэша и падение источника останется незамеченным.
     monkeypatch.setattr(market_data, "TTL_PRICE", 0)
@@ -34,6 +51,7 @@ def client(tmp_path, monkeypatch) -> TestClient:
         yield c
     cache.reset()
     registry.reset()
+    binance.reset()
 
 
 def _weex_отвечает(monkeypatch, answers: dict[str, object]):

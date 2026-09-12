@@ -8,6 +8,11 @@
   /capi/v3/market/openInterest?symbol=X       → открытый интерес
   /capi/v3/market/ticker?symbol=X             → расширенный тикер (прирост, объём)
 
+Цена, стакан, свечи и лента при отказе WEEX берутся у Binance - истина там
+общая для рынка, а расхождение в копейках. Финансирование и открытый интерес
+второго источника не получают никогда: ученик платит фандинг WEEX, и чужое
+число здесь было бы враньём о его расходах (ТЗ §5.2).
+
 Все запросы идут через общий слой источников ([backend/sources](../sources)):
 своей сессии и своего кэша здесь больше нет. Каждый ответ несёт два поля -
 `source` (имя сработавшего источника) и `stale` (это последнее известное
@@ -22,7 +27,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from backend.sources import feed, session
+from backend.sources import binance, feed, session
 
 router = APIRouter(prefix="/api/market", tags=["market-data"])
 
@@ -87,7 +92,10 @@ async def orderbook(symbol: str, limit: int = 20):
     sym = symbol.upper()
     data, source, stale = await feed.fetch(
         f"depth:{sym}", TTL_BOOK,
-        [("weex", _weex("/capi/v3/market/depth", {"symbol": sym}))],
+        [
+            ("weex", _weex("/capi/v3/market/depth", {"symbol": sym})),
+            ("binance", binance.depth(sym, limit=max(limit, 20))),
+        ],
         stale_ttl=STALE_BOOK,
     )
     if data is None:
@@ -117,7 +125,10 @@ async def tickers():
     async def fetch_one(sym: str) -> tuple[dict | None, str | None, bool]:
         data, source, stale = await feed.fetch(
             f"price:{sym}", TTL_PRICE,
-            [("weex", _weex("/capi/v3/market/symbolPrice", {"symbol": sym}))],
+            [
+                ("weex", _weex("/capi/v3/market/symbolPrice", {"symbol": sym})),
+                ("binance", binance.price(sym)),
+            ],
             stale_ttl=STALE_PRICE,
         )
         if not data:
@@ -250,12 +261,18 @@ async def ticker_24h(symbol: str):
     (price_data, price_src, price_stale), (klines_data, klines_src, klines_stale), funding = await asyncio.gather(
         feed.fetch(
             f"price:{sym}", TTL_PRICE,
-            [("weex", _weex("/capi/v3/market/symbolPrice", {"symbol": sym}))],
+            [
+                ("weex", _weex("/capi/v3/market/symbolPrice", {"symbol": sym})),
+                ("binance", binance.price(sym)),
+            ],
             stale_ttl=STALE_PRICE,
         ),
         feed.fetch(
             f"klines:{sym}:1d:14", TTL_KLINES,
-            [("weex", _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "14"}))],
+            [
+                ("weex", _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "14"})),
+                ("binance", binance.klines(sym, interval="1d", limit=14)),
+            ],
             stale_ttl=STALE_KLINES,
         ),
         _funding_raw(sym),
@@ -363,12 +380,18 @@ async def derivatives(symbol: str):
         _funding_raw(sym),
         feed.fetch(
             f"price:{sym}", TTL_PRICE,
-            [("weex", _weex("/capi/v3/market/symbolPrice", {"symbol": sym}))],
+            [
+                ("weex", _weex("/capi/v3/market/symbolPrice", {"symbol": sym})),
+                ("binance", binance.price(sym)),
+            ],
             stale_ttl=STALE_PRICE,
         ),
         feed.fetch(
             f"klines:{sym}:1d:1", TTL_KLINES,
-            [("weex", _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "1"}))],
+            [
+                ("weex", _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "1"})),
+                ("binance", binance.klines(sym, interval="1d", limit=1)),
+            ],
             stale_ttl=STALE_KLINES,
         ),
     )
@@ -425,7 +448,10 @@ async def recent_trades(symbol: str, limit: int = 40):
     sym = symbol.upper()
     data, source, stale = await feed.fetch(
         f"trades:{sym}", TTL_BOOK,
-        [("weex", _weex("/capi/v3/market/trades", {"symbol": sym, "limit": min(limit, 100)}))],
+        [
+            ("weex", _weex("/capi/v3/market/trades", {"symbol": sym, "limit": min(limit, 100)})),
+            ("binance", binance.trades(sym, limit=limit)),
+        ],
         stale_ttl=STALE_BOOK,
     )
     if data and isinstance(data, list):

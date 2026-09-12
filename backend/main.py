@@ -41,7 +41,7 @@ from backend.scalping.density_alerts import DensityWatcher, run_watcher as run_d
 from backend.ws.scalping_hub import ScalpingHub
 from backend.notify import get_notifier
 from backend.ai_quota import AnalyzeQuota
-from backend.sources import session as sources_session
+from backend.sources import binance as sources_binance, session as sources_session
 from backend.ratelimit import RateLimiter, AuthRateLimitMiddleware
 
 
@@ -90,6 +90,11 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # Binance отвечает не из любой сети: часть регионов получает 451, а наш
+        # бэкенд приходит на фронт туннелем с рабочего стола. Спрашиваем один
+        # раз при запуске: не ответил - реестр закроет источник на час, и
+        # запросы учеников не будут ждать его впустую.
+        binance_probe = asyncio.create_task(sources_binance.probe(), name="binance-probe")
         collector.start()
         balance_collector.start()
         cashback_collector.start()
@@ -127,6 +132,7 @@ def create_app(
                     pass
             await watcher.stop()
             await forum.stop()
+            binance_probe.cancel()
             await trading_api.close_session()
             # Общая сессия рыночных источников: одна на процесс, закрываем тут же.
             await sources_session.close()
