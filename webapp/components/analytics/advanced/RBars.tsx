@@ -21,9 +21,17 @@ export interface RBarsProps {
   money: (value: number) => string;
   /** Число сделок словами - для подсказки. */
   count: (n: number) => string;
+  /**
+   * Все корзины одного цвета.
+   *
+   * Знак корзины читается по её названию только у R: «-1R..0» это убыток, а
+   * «5-15 мин» - просто пятнадцать минут, и красить их в красное значило бы
+   * назвать быстрые сделки плохими.
+   */
+  positive?: boolean;
 }
 
-export default function RBars({ buckets, height, money, count }: RBarsProps) {
+export default function RBars({ buckets, height, money, count, positive = false }: RBarsProps) {
   const total = buckets.reduce((sum, bucket) => sum + bucket.trades, 0);
   const peak = Math.max(1, ...buckets.map((bucket) => bucket.trades));
   // Место под процент сверху и подпись корзины снизу: столбик живёт между.
@@ -40,7 +48,7 @@ export default function RBars({ buckets, height, money, count }: RBarsProps) {
       <div className="flex h-full items-end gap-1.5">
       {buckets.map((bucket) => {
         const share = total > 0 ? bucket.trades / total : 0;
-        const loss = bucket.key.startsWith("<") || bucket.key.startsWith("-");
+        const loss = !positive && (bucket.key.startsWith("<") || bucket.key.startsWith("-"));
         const color = loss ? "var(--pane-down)" : "var(--pane-up)";
         const bar = bucket.trades === 0 ? 2 : Math.max(4, (bucket.trades / peak) * field);
 

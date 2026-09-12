@@ -72,6 +72,74 @@ export function Delta({ value, suffix = "%" }: { value: number | null; suffix?: 
   );
 }
 
+/**
+ * Цена сделки словами.
+ *
+ * Журнал хранит её как есть, с биржи: 76635.4899483668. В таблице такой хвост
+ * не значит ничего, зато ломает колонку и мешает сравнить вход с выходом.
+ * Знаков после точки берём столько, сколько нужно самой цене: у биткойна их
+ * два, у монеты за десятую цента - шесть.
+ */
+export function price(value: number): string {
+  const size = Math.abs(value);
+  const digits = size >= 1000 ? 1 : size >= 10 ? 2 : size >= 1 ? 3 : size >= 0.01 ? 5 : 7;
+  return value.toFixed(digits).replace(/\.?0+$/, "");
+}
+
+/** Значок монеты: кружок с тикером. Настоящих логотипов у нас нет. */
+export function CoinDot({ symbol, size = 22 }: { symbol: string; size?: number }) {
+  const name = symbol.replace(/USDT$/, "");
+  // Цвет из самого тикера: он должен быть одним и тем же в каждом списке, а
+  // таблицы соответствий на все монеты рынка не напасёшься.
+  let hash = 0;
+  for (const letter of name) hash = (hash * 31 + letter.charCodeAt(0)) % 360;
+
+  return (
+    <span
+      className="grid shrink-0 place-items-center rounded-full font-bold"
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.round(size * 0.4),
+        background: `hsl(${hash} 70% 50% / 0.18)`,
+        color: `hsl(${hash} 70% 42%)`,
+      }}
+    >
+      {name.slice(0, 3)}
+    </span>
+  );
+}
+
+/** Переключатель внутри шапки панели: чем мерить разрез. */
+export function Pick<T extends string>({
+  value,
+  options,
+  onPick,
+}: {
+  value: T;
+  options: readonly { key: T; label: string }[];
+  onPick: (key: T) => void;
+}) {
+  return (
+    <div className="flex gap-0.5 rounded-lg bg-[var(--pane-hover)] p-0.5">
+      {options.map((one) => (
+        <button
+          key={one.key}
+          type="button"
+          onClick={() => onPick(one.key)}
+          className={`rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+            value === one.key
+              ? "bg-[var(--pane-bg)] text-[var(--pane-text)] shadow-sm"
+              : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+          }`}
+        >
+          {one.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Плитка показателя в рамке: «Классика» и «Профессиональный». */
 export function Kpi({
   label,
@@ -101,6 +169,49 @@ export function Kpi({
         <Delta value={delta ?? null} />
         {note && <span className="truncate text-[9px] text-[var(--pane-muted)]">{note}</span>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Плитка показателя с мини-графиком справа.
+ *
+ * Форма рядом с числом отвечает на вопрос, который иначе требует открыть
+ * большой график: месяц копилось или свалилось за день.
+ */
+export function KpiCard({
+  label,
+  value,
+  tone = "plain",
+  delta,
+  note,
+  chart,
+}: {
+  label: string;
+  value: string;
+  tone?: Tone;
+  delta?: number | null;
+  note?: string;
+  /** Мини-график, кольцо или значок: что угодно ростом в строку. */
+  chart?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[9px] uppercase leading-tight tracking-wider text-[var(--pane-muted)]">
+          {label}
+        </div>
+        <div
+          className={`font-mono text-[20px] font-extrabold leading-tight tabular-nums ${toneClass(tone)}`}
+        >
+          {value}
+        </div>
+        <div className="flex items-baseline gap-1.5 leading-tight">
+          <Delta value={delta ?? null} />
+          {note && <span className="truncate text-[9px] text-[var(--pane-muted)]">{note}</span>}
+        </div>
+      </div>
+      {chart}
     </div>
   );
 }
@@ -197,7 +308,8 @@ export function SymbolList({
               picked === row.key ? "bg-[var(--pane-hover)]" : "hover:bg-[var(--pane-hover)]"
             }`}
           >
-            <span className="w-12 shrink-0 truncate text-[11px] font-bold text-[var(--pane-text)]">
+            <CoinDot symbol={row.key} size={20} />
+            <span className="w-11 shrink-0 truncate text-[11px] font-bold text-[var(--pane-text)]">
               {row.key.replace(/USDT$/, "")}
             </span>
             <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--pane-hover)]">

@@ -2,10 +2,10 @@
 
 // Расширенная аналитика: разбор торговли по журналу сделок.
 //
-// Одни и те же данные в пяти раскладках: классика, минимализм, датчики,
-// таблица, инфографика. Вид - дело вкуса и задачи: перед сессией смотрят на
-// кривую, в конце месяца считают по таблице, а показать результат проще
-// кольцами. Выбор запоминается, чтобы раздел открывался привычным.
+// Два экрана. Первый отвечает на вопрос «как прошёл период»: показатели,
+// кривая, разрезы долями. Второй - на вопрос «почему»: крупный график, полный
+// список чисел, последние сделки строками и разрезы до монеты и часа. Выбор
+// запоминается, чтобы раздел открывался тем экраном, которым его закрыли.
 //
 // Считаем в браузере из тех же сделок, что показывает журнал: своей ручки на
 // сервере для этого не нужно, а запрос на каждое движение фильтра стоил бы
@@ -21,25 +21,19 @@ import { useIntlLocale, useT } from "@/lib/i18n";
 import { loadTrades, type JournalTrade } from "@/lib/journal";
 import { useFitHeight } from "@/lib/useFitHeight";
 import { useJournalExport } from "@/lib/journalExport";
-import ClassicView from "./views/ClassicView";
-import MinimalView from "./views/MinimalView";
-import ProView from "./views/ProView";
-import TableView from "./views/TableView";
-import VisualView from "./views/VisualView";
+import DetailView from "./views/DetailView";
+import OverviewView from "./views/OverviewView";
 import type { ViewProps } from "./views/types";
 
 type Side = "all" | "long" | "short";
-type View = "classic" | "minimal" | "pro" | "table" | "visual";
+type View = "overview" | "detail";
 
 const PERIODS = [30, 90, 365] as const;
-const VIEWS: View[] = ["classic", "minimal", "pro", "table", "visual"];
+const VIEWS: View[] = ["overview", "detail"];
 
 const RENDER: Record<View, (props: ViewProps) => JSX.Element> = {
-  classic: ClassicView,
-  minimal: MinimalView,
-  pro: ProView,
-  table: TableView,
-  visual: VisualView,
+  overview: OverviewView,
+  detail: DetailView,
 };
 
 /** Где запоминается выбранный вид. */
@@ -57,7 +51,7 @@ export default function AdvancedPanel() {
   const a = t.analytics.advanced;
   const exporting = useJournalExport();
 
-  const [view, setView] = useState<View>("classic");
+  const [view, setView] = useState<View>("overview");
   const [days, setDays] = useState<(typeof PERIODS)[number]>(90);
   const [side, setSide] = useState<Side>("all");
   const [symbol, setSymbol] = useState<string | null>(null);

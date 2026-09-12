@@ -229,31 +229,26 @@ export const analytics = {
     tradesCount: (n: number) => `${n} ${n === 1 ? "trade" : "trades"}`,
     minutes: (n: number) => (n >= 60 ? `${Math.floor(n / 60)}h ${n % 60}m` : `${n} min`),
     sides: { all: "all", long: "long", short: "short" },
+    measures: { pnl: "Profit", trades: "Trades" },
 
-    /** Layouts: same numbers, different reading. */
+    /** Two screens of the section. */
     views: {
-      title: "View",
+      title: "Screen",
       name: {
-        classic: "Classic",
-        minimal: "Minimal",
-        pro: "Professional",
-        table: "Table",
-        visual: "Visual",
+        overview: "Analytics",
+        detail: "Detailed analytics",
       },
       hint: {
-        classic: "clean and informative",
-        minimal: "maximum space",
-        pro: "analysis first",
-        table: "for a deep dive",
-        visual: "infographics",
+        overview: "the whole period at a glance",
+        detail: "down to a single trade",
       },
     },
 
-    /** Net ring: what the result is made of. */
     total: {
       title: "Net",
       hint: "what it is made of",
       label: "net",
+      short: "trades",
       wins: "Winners",
       losses: "Losers",
       fees: "Fees",
@@ -273,7 +268,6 @@ export const analytics = {
       hold: "In trade",
     },
 
-    /** Numbers next to the curve. */
     metrics: {
       title: "Metrics",
       hint: "over the selected trades",
@@ -297,7 +291,7 @@ export const analytics = {
       pace: "even pace",
     },
     risk: {
-      title: "R distribution",
+      title: "Result distribution (R)",
       titleTotals: "Totals by result (R)",
       hint: "share of trades by result size",
     },
@@ -312,7 +306,32 @@ export const analytics = {
       ">3R": "+3R and above",
     } as Record<string, string>,
 
-    symbols: { title: "Coins", hint: "click to keep just one" },
+    hold: {
+      title: "Time in trade",
+      hint: "how long trades were held",
+    },
+    holdBuckets: {
+      "<5m": "< 5 min",
+      "5-15m": "5-15",
+      "15-30m": "15-30",
+      "30-60m": "30-60",
+      "1-2h": "1-2 h",
+      "2-4h": "2-4 h",
+      ">4h": "> 4 h",
+    } as Record<string, string>,
+
+    sidesTitle: {
+      title: "Trade types",
+      hint: "long against short",
+      long: "Long",
+      short: "Short",
+    },
+
+    symbols: {
+      title: "Coins",
+      titleProfit: "Profit by coin",
+      hint: "click to keep just one",
+    },
     week: {
       title: "Weekdays",
       hint: "share of trades by day",
@@ -321,6 +340,14 @@ export const analytics = {
     },
     hours: { title: "Hours", hint: "result by hour of entry" },
 
+    timing: {
+      title: "Result over time",
+      hint: "when trading goes better",
+      weekday: "Days",
+      hour: "Hours",
+      session: "Sessions",
+    },
+
     sessions: {
       asia: "Asia",
       europe: "Europe",
@@ -328,11 +355,37 @@ export const analytics = {
       night: "Evening",
     } as Record<string, string>,
 
+    stats: {
+      title: "Detailed statistics",
+      hint: "over the selected trades",
+      trades: "Trades total",
+      wins: "Winners",
+      losses: "Losers",
+      net: "Total result",
+      expectancy: "Average result",
+      best: "Max win",
+      worst: "Max loss",
+      prevNet: "Previous period",
+      prevWinRate: "Previous win rate",
+      rate: (pct: number) => `win rate ${pct}%`,
+    },
+
+    recent: {
+      title: "Recent trades",
+      hint: "history of closed trades",
+      coin: "Coin",
+      side: "Side",
+      entry: "Entry",
+      exit: "Exit",
+      size: "Size",
+      when: "Date",
+    },
+
     table: {
       title: "Breakdown",
       hint: "click a coin to keep just one",
       cuts: {
-        symbol: "Coins",
+        symbol: "Coin",
         side: "Sides",
         session: "Sessions",
         weekday: "Weekdays",
@@ -351,21 +404,23 @@ export const analytics = {
     outcomes: {
       title: "How they ended",
       hint: "and streaks in a row",
-      take: "by target",
-      stop: "by stop",
-      manual: "by hand",
+      take: "By target",
+      stop: "By stop",
+      manual: "By hand",
     },
     streaks: {
       title: "Streaks",
+      titleFull: "Streaks and how trades ended",
       hint: "in a row and what they cost",
       best: "best streak",
       worst: "worst streak",
       current: "now",
     },
     extremes: {
+      title: "Best and worst",
       best: "Best trades",
       worst: "Worst trades",
-      hint: "what worked",
+      hint: "where a review starts",
       hintWorst: "where a review starts",
     },
     weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],

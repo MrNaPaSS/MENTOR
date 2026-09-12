@@ -445,6 +445,26 @@ export function sessionOf(trade: JournalTrade): string | null {
   return SESSIONS.find((one) => hour >= one.from && hour < one.to)?.key ?? null;
 }
 
+/** По сессиям: азия, европа, америка, вечер. Пустые сессии в списке тоже есть. */
+export function bySession(trades: readonly JournalTrade[]): Bucket[] {
+  const base = new Map<string, Bucket>(
+    SESSIONS.map((one) => [one.key, { key: one.key, trades: 0, pnl: 0, wins: 0 }]),
+  );
+  for (const trade of trades) {
+    const key = sessionOf(trade);
+    if (key === null) continue;
+    const bucket = base.get(key);
+    if (!bucket) continue;
+    base.set(key, {
+      key,
+      trades: bucket.trades + 1,
+      pnl: bucket.pnl + trade.pnl,
+      wins: bucket.wins + (trade.pnl > 0 ? 1 : 0),
+    });
+  }
+  return [...base.values()];
+}
+
 /**
  * Ровный темп: та же прибыль, но по чуть-чуть каждую сделку.
  *
@@ -465,4 +485,105 @@ export function change(now: number, before: number): number | null {
   if (!Number.isFinite(now) || !Number.isFinite(before)) return null;
   if (before === 0) return null;
   return (now - before) / Math.abs(before);
+}
+
+/** День торговли: то, из чего складываются мини-графики у показателей. */
+export interface DayPoint {
+  /** Полночь этого дня по местному времени, миллисекунды. */
+  at: number;
+  pnl: number;
+  fees: number;
+  trades: number;
+  wins: number;
+  /** Накопленный итог на конец дня. */
+  cum: number;
+  /** Просадка от пика на конец дня. */
+  fall: number;
+}
+
+/**
+ * Сделки по дням закрытия.
+ *
+ * Нужны мини-графикам в плитках показателей: число без формы читается как
+ * приговор, а с линией рядом видно, одним ли скачком оно набралось. Дни без
+ * сделок пропускаем: пустые промежутки растянули бы линию в горизонталь, а
+ * плитка шириной в сто точек и так показывает форму, а не даты.
+ */
+export function daily(trades: readonly JournalTrade[]): DayPoint[] {
+  const out = new Map<number, DayPoint>();
+
+  for (const trade of inOrder(trades)) {
+    const ms = time(trade.closed_at);
+    if (ms === null) continue;
+    const date = new Date(ms);
+    const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const day = out.get(key) ?? { at: key, pnl: 0, fees: 0, trades: 0, wins: 0, cum: 0, fall: 0 };
+    out.set(key, {
+      ...day,
+      pnl: day.pnl + trade.pnl,
+      fees: day.fees + (trade.fee || 0),
+      trades: day.trades + 1,
+      wins: day.wins + (trade.pnl > 0 ? 1 : 0),
+    });
+  }
+
+  let running = 0;
+  let peak = 0;
+  return [...out.values()]
+    .sort((a, b) => a.at - b.at)
+    .map((day) => {
+      running += day.pnl;
+      if (running > peak) peak = running;
+      return { ...day, cum: running, fall: peak - running };
+    });
+}
+
+/** Корзины времени в сделке: от «пары минут» до «за полдня». */
+export const HOLD_BUCKETS: { key: string; to: number }[] = [
+  { key: "<5m", to: 5 },
+  { key: "5-15m", to: 15 },
+  { key: "15-30m", to: 30 },
+  { key: "30-60m", to: 60 },
+  { key: "1-2h", to: 120 },
+  { key: "2-4h", to: 240 },
+  { key: ">4h", to: Infinity },
+];
+
+/**
+ * Сколько сделок сколько держали.
+ *
+ * Скальпер, у которого половина сделок живёт дольше часа, торгует не то, что
+ * собирался: по одному среднему времени это не видно - его вытягивают
+ * несколько забытых позиций.
+ */
+export function byHoldTime(trades: readonly JournalTrade[]): Bucket[] {
+  const out: Bucket[] = HOLD_BUCKETS.map((bucket) => ({
+    key: bucket.key,
+    trades: 0,
+    pnl: 0,
+    wins: 0,
+  }));
+
+  for (const trade of trades) {
+    const from = time(trade.opened_at);
+    const to = time(trade.closed_at);
+    if (from === null || to === null || to < from) continue;
+    const minutes = (to - from) / MINUTE;
+    const index = HOLD_BUCKETS.findIndex((bucket) => minutes < bucket.to);
+    if (index < 0) continue;
+    const bucket = out[index];
+    out[index] = {
+      key: bucket.key,
+      trades: bucket.trades + 1,
+      pnl: bucket.pnl + trade.pnl,
+      wins: bucket.wins + (trade.pnl > 0 ? 1 : 0),
+    };
+  }
+
+  return out;
+}
+
+/** Последние сделки: сверху те, что закрылись только что. */
+export function latest(trades: readonly JournalTrade[], count: number): JournalTrade[] {
+  return inOrder(trades).slice(-count).reverse();
 }
