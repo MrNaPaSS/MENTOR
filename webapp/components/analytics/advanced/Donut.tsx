@@ -5,6 +5,14 @@
 // Кольцо, а не круг: середина занята главным числом, и человек читает сперва
 // его, а доли - потом. Доли берём по модулю: минус на круговой диаграмме
 // нарисовать нельзя, зато видно, какую часть оборота он занял.
+//
+// Дуги разделены зазором и скруглены с концов, а цвет каждой уходит в
+// прозрачность к низу: сплошные плоские сектора встык читаются как заливка
+// одного пятна, и граница между «убыточными» и «комиссиями» терялась на
+// тёмном фоне. Наведение приподнимает дугу и подсвечивает её - так видно, на
+// какую долю смотришь.
+
+import { useId, useState } from "react";
 
 export interface Slice {
   key: string;
@@ -25,28 +33,59 @@ export interface DonutProps {
   thickness?: number;
   /** Что стоит в середине: главное число и подпись под ним. */
   center?: React.ReactNode;
+  /** Зазор между дугами в точках дуги. Ноль - сектора встык. */
+  gap?: number;
 }
 
 /** Минимальный кусок дуги, чтобы доля в доли процента была видна. */
 const MIN_SHARE = 0.006;
 
-export default function Donut({ slices, size, thickness = 14, center }: DonutProps) {
+export default function Donut({
+  slices,
+  size,
+  thickness = 14,
+  center,
+  gap = 4,
+}: DonutProps) {
+  const uid = useId().replace(/:/g, "");
+  const [hover, setHover] = useState<string | null>(null);
+
   const radius = (size - thickness) / 2;
   const circle = 2 * Math.PI * radius;
   const total = slices.reduce((sum, slice) => sum + Math.abs(slice.value), 0);
+  const shown = slices.filter((slice) => Math.abs(slice.value) > 0);
+  // Зазор съедает длину дуги, и на одной доле он не нужен вовсе: кольцо из
+  // одного сектора превращалось в кольцо с зарубкой.
+  const cut = shown.length > 1 ? gap : 0;
 
   let offset = 0;
-  const arcs = slices.map((slice) => {
+  const arcs = shown.map((slice) => {
     const share = total > 0 ? Math.abs(slice.value) / total : 0;
-    const drawn = share > 0 && share < MIN_SHARE ? MIN_SHARE : share;
-    const arc = { ...slice, share, length: drawn * circle, offset };
-    offset += drawn * circle;
+    const drawn = share < MIN_SHARE ? MIN_SHARE : share;
+    const full = drawn * circle;
+    const arc = {
+      ...slice,
+      share,
+      length: Math.max(1, full - cut),
+      offset,
+    };
+    offset += full;
     return arc;
   });
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90 overflow-visible">
+        <defs>
+          {arcs.map((arc) => (
+            <linearGradient key={arc.key} id={`${uid}-${arc.key}`} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor={arc.color} stopOpacity="1" />
+              <stop offset="100%" stopColor={arc.color} stopOpacity="0.62" />
+            </linearGradient>
+          ))}
+        </defs>
+
+        {/* Дорожка: по ней видно, что кольцо целое, даже когда доля одна. */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -55,27 +94,37 @@ export default function Donut({ slices, size, thickness = 14, center }: DonutPro
           stroke="var(--pane-hover)"
           strokeWidth={thickness}
         />
-        {arcs.map((arc) =>
-          arc.length > 0 ? (
+
+        {arcs.map((arc) => {
+          const lit = hover === arc.key;
+          return (
             <circle
               key={arc.key}
               cx={size / 2}
               cy={size / 2}
               r={radius}
               fill="none"
-              stroke={arc.color}
-              strokeWidth={thickness}
+              stroke={`url(#${uid}-${arc.key})`}
+              strokeWidth={lit ? thickness + 3 : thickness}
               strokeDasharray={`${arc.length} ${circle - arc.length}`}
               strokeDashoffset={-arc.offset}
-              strokeLinecap="butt"
-              className="transition-[stroke-dasharray,stroke-dashoffset] duration-700"
+              strokeLinecap={cut > 0 ? "round" : "butt"}
+              onMouseEnter={() => setHover(arc.key)}
+              onMouseLeave={() => setHover(null)}
+              className="cursor-default transition-[stroke-width,filter] duration-200"
+              style={{ filter: lit ? `drop-shadow(0 0 6px ${arc.color})` : undefined }}
             >
               <title>{`${arc.label} · ${Math.round(arc.share * 100)}%`}</title>
             </circle>
-          ) : null,
-        )}
+          );
+        })}
       </svg>
-      {center && <div className="absolute inset-0 grid place-items-center text-center">{center}</div>}
+
+      {center && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+          {center}
+        </div>
+      )}
     </div>
   );
 }
@@ -86,6 +135,7 @@ export function DonutLegend({
   showShare = true,
   stacked = false,
   compact = false,
+  bars = false,
   className = "",
 }: {
   slices: readonly Slice[];
@@ -101,6 +151,8 @@ export function DonutLegend({
   stacked?: boolean;
   /** Тесный ряд: строки в один уровень, для колонки в три клетки сетки. */
   compact?: boolean;
+  /** Полоса доли под строкой: ту же долю, что на кольце, видно и в списке. */
+  bars?: boolean;
   className?: string;
 }) {
   const total = slices.reduce((sum, slice) => sum + Math.abs(slice.value), 0);
@@ -115,30 +167,43 @@ export function DonutLegend({
 
   if (stacked) {
     return (
-      <ul className={`min-w-0 space-y-1.5 ${className}`}>
-        {slices.map((slice) => (
-          <li key={slice.key} className="flex items-start gap-2">
-            <span
-              className="mt-1 h-2 w-2 shrink-0 rounded-full"
-              style={{ background: slice.color }}
-            />
-            <span className="min-w-0">
-              <span className="block truncate text-[11px] leading-tight text-[var(--pane-text-2)]">
-                {slice.label}
-              </span>
-              {slice.note && (
-                <span className={`block font-mono text-[12px] font-bold leading-tight ${tone(slice)}`}>
-                  {slice.note}
-                  {showShare && total > 0 && (
-                    <span className="ml-1.5 text-[10px] font-medium text-[var(--pane-muted)]">
-                      {Math.round((Math.abs(slice.value) / total) * 100)}%
-                    </span>
-                  )}
+      <ul className={`min-w-0 ${bars ? "space-y-2" : "space-y-1.5"} ${className}`}>
+        {slices.map((slice) => {
+          const share = total > 0 ? Math.abs(slice.value) / total : 0;
+          return (
+            <li key={slice.key} className="min-w-0">
+              <div className="flex items-baseline gap-2">
+                <span
+                  className="h-2 w-2 shrink-0 translate-y-[-1px] rounded-full"
+                  style={{ background: slice.color }}
+                />
+                <span className="min-w-0 flex-1 truncate text-[11px] leading-tight text-[var(--pane-text-2)]">
+                  {slice.label}
                 </span>
+                {showShare && (
+                  <span className="shrink-0 font-mono text-[10px] text-[var(--pane-muted)]">
+                    {Math.round(share * 100)}%
+                  </span>
+                )}
+              </div>
+              {slice.note && (
+                <div
+                  className={`pl-4 font-mono text-[13px] font-bold leading-tight ${tone(slice)}`}
+                >
+                  {slice.note}
+                </div>
               )}
-            </span>
-          </li>
-        ))}
+              {bars && (
+                <div className="ml-4 mt-1 h-1 overflow-hidden rounded-full bg-[var(--pane-hover)]">
+                  <span
+                    className="block h-full rounded-full transition-[width] duration-700"
+                    style={{ width: `${share * 100}%`, background: slice.color }}
+                  />
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     );
   }

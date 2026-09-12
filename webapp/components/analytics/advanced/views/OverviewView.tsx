@@ -161,6 +161,8 @@ export default function OverviewView({
   ];
 
   const size = Math.min(190, Math.max(110, big - 40));
+  // Кольцо итога занимает высоту своей панели целиком.
+  const totalRing = Math.max(96, low - 4);
 
   const rings: Record<Ring, { slices: Slice[]; center: React.ReactNode }> = {
     week: {
@@ -464,27 +466,31 @@ export default function OverviewView({
           icon={<PieChart className="h-3.5 w-3.5" />}
           className="xl:col-span-3"
         >
-          <div className="flex items-center gap-3" style={{ height: low }}>
+          {/* Кольцо во всю высоту панели, легенда - во всю её ширину: иначе
+              треть карточки оставалась пустым полем. */}
+          <div className="flex items-stretch gap-4" style={{ height: low }}>
             <Donut
               slices={totalSlices}
-              size={Math.min(150, Math.max(96, low - 16))}
-              thickness={Math.round(Math.min(150, Math.max(96, low - 16)) / 9)}
+              size={totalRing}
+              thickness={Math.round(totalRing / 7)}
               center={
                 <div className="px-2">
                   <div
-                    className={`font-mono text-[16px] font-extrabold leading-none ${
+                    className={`font-mono text-[17px] font-extrabold leading-none ${
                       totals.net >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
                     }`}
                   >
                     {signed(totals.net)}
                   </div>
-                  <div className="mt-0.5 text-[8px] uppercase tracking-wider text-[var(--pane-muted)]">
+                  <div className="mt-1 text-[8px] uppercase tracking-wider text-[var(--pane-muted)]">
                     {a.total.label}
                   </div>
                 </div>
               }
             />
-            <DonutLegend slices={totalSlices} showShare={false} stacked className="flex-1" />
+            <div className="flex min-w-0 flex-1 flex-col justify-center">
+              <DonutLegend slices={totalSlices} stacked bars />
+            </div>
           </div>
         </Card>
       </div>
