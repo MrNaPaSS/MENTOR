@@ -30,6 +30,7 @@ from backend.api import trading_move
 from backend.api import trading_nudge
 from backend.api import certificates as certificates_api
 from backend.api import cashback as cashback_api
+from backend.api import market_status as market_status_api
 from backend.ws import ConnectionManager
 from backend.ws import routes as ws_routes
 from backend.price_collector import PriceCollector
@@ -40,6 +41,7 @@ from backend.scalping.density_alerts import DensityWatcher, run_watcher as run_d
 from backend.ws.scalping_hub import ScalpingHub
 from backend.notify import get_notifier
 from backend.ai_quota import AnalyzeQuota
+from backend.sources import session as sources_session
 from backend.ratelimit import RateLimiter, AuthRateLimitMiddleware
 
 
@@ -126,6 +128,8 @@ def create_app(
             await watcher.stop()
             await forum.stop()
             await trading_api.close_session()
+            # Общая сессия рыночных источников: одна на процесс, закрываем тут же.
+            await sources_session.close()
             if scalping_hub:
                 await scalping_hub.stop()
             if scalping:
@@ -192,6 +196,7 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(market.router)
     app.include_router(market_data.router)
+    app.include_router(market_status_api.router)
     app.include_router(market_extra.router)
     app.include_router(signals.router)
     app.include_router(stats.router)

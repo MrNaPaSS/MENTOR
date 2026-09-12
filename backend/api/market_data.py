@@ -7,6 +7,12 @@
   /capi/v3/market/fundingRate?symbol=X        → ставка финансирования
   /capi/v3/market/openInterest?symbol=X       → открытый интерес
   /capi/v3/market/ticker?symbol=X             → расширенный тикер (прирост, объём)
+
+Все запросы идут через общий слой источников ([backend/sources](../sources)):
+своей сессии и своего кэша здесь больше нет. Каждый ответ несёт два поля -
+`source` (имя сработавшего источника) и `stale` (это последнее известное
+значение, а не живое). Молча подменять или показывать старую цифру в
+терминале, где считают деньги, нельзя - её подписывают (ТЗ этап 1, §4.4).
 """
 
 from __future__ import annotations
@@ -14,8 +20,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import aiohttp
 from fastapi import APIRouter, HTTPException
+
+from backend.sources import feed, session
 
 router = APIRouter(prefix="/api/market", tags=["market-data"])
 
@@ -33,29 +40,41 @@ FUNDING_SYMBOLS = [
     "LTCUSDT", "TRXUSDT", "TONUSDT", "SUIUSDT", "NEARUSDT",
 ]
 
-_session: aiohttp.ClientSession | None = None
+# ── Сроки жизни данных (ТЗ §4.2) ─────────────────────────────────────────────
+#
+# Первое число - сколько значение считается живым, второе - сколько оно ещё
+# годится, когда источник упал. У стакана второе нулевое: по устаревшему
+# стакану нельзя ставить заявку, пустота честнее.
+TTL_BOOK,    STALE_BOOK    = 1,   0
+TTL_PRICE,   STALE_PRICE   = 2,   30
+TTL_KLINES,  STALE_KLINES  = 5,   5 * 60
+TTL_FUNDING, STALE_FUNDING = 60,  15 * 60
+TTL_SYMBOLS, STALE_SYMBOLS = 300, 24 * 3600
+TTL_FNG,     STALE_FNG     = 300, 6 * 3600
 
 
-async def _get_session() -> aiohttp.ClientSession:
-    global _session
-    if _session is None or _session.closed:
-        _session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=8),
-            connector=aiohttp.TCPConnector(ssl=False),
-        )
-    return _session
+async def _weex_raw(path: str, params: dict | None = None) -> Any:
+    """Один запрос к публичному API WEEX.
+
+    Сессия без проверки сертификата: на рабочем столе, откуда ходит бэкенд,
+    HTTPS перехватывается, и проверка по корням certifi обрывает запрос. Здесь
+    это допустимо - в публичных котировках нет ни ключей, ни данных ученика.
+    Запросы со счётом ученика идут другим клиентом, там проверка включена.
+    """
+    s = await session.insecure()
+    async with s.get(f"{WEEX_BASE}{path}", params=params) as r:
+        if r.status != 200:
+            raise RuntimeError(f"WEEX HTTP {r.status}")
+        return await r.json(content_type=None)
 
 
-async def _weex(path: str, params: dict | None = None) -> Any:
-    session = await _get_session()
-    url = f"{WEEX_BASE}{path}"
-    try:
-        async with session.get(url, params=params) as r:
-            if r.status != 200:
-                return None
-            return await r.json(content_type=None)
-    except Exception:
-        return None
+def _weex(path: str, params: dict | None = None):
+    """Источник для цепочки. Время и отказы считает реестр, не мы."""
+
+    async def builder() -> Any:
+        return await _weex_raw(path, params)
+
+    return builder
 
 
 # ── Order Book ──────────────────────────────────────────────────────────────
@@ -65,18 +84,27 @@ async def orderbook(symbol: str, limit: int = 20):
     """Стакан цен (биды/аски) через WEEX Futures API.
     Важно: WEEX возвращает 400, если передать param `limit` — посылаем без него.
     """
-    data = await _weex("/capi/v3/market/depth", {"symbol": symbol.upper()})
-    if not data:
-        raise HTTPException(502, f"WEEX depth недоступен для {symbol}")
+    sym = symbol.upper()
+    data, source, stale = await feed.fetch(
+        f"depth:{sym}", TTL_BOOK,
+        [("weex", _weex("/capi/v3/market/depth", {"symbol": sym}))],
+        stale_ttl=STALE_BOOK,
+    )
+    if data is None:
+        # Пустой стакан вместо 502. Ученик видит, что данных нет, а не
+        # сломанную страницу; старый стакан не показываем никогда.
+        return {"symbol": sym, "bids": [], "asks": [], "source": None, "stale": False}
 
     payload = data.get("data") or data
     bids = payload.get("bids") or payload.get("bid") or []
     asks = payload.get("asks") or payload.get("ask") or []
 
     return {
-        "symbol": symbol.upper(),
+        "symbol": sym,
         "bids": bids[:limit],
         "asks": asks[:limit],
+        "source": source,
+        "stale": stale,
     }
 
 
@@ -86,19 +114,34 @@ async def orderbook(symbol: str, limit: int = 20):
 async def tickers():
     """Лайв-цены для нескольких пар (параллельные запросы к symbolPrice)."""
 
-    async def fetch_one(sym: str) -> dict | None:
-        data = await _weex("/capi/v3/market/symbolPrice", {"symbol": sym})
+    async def fetch_one(sym: str) -> tuple[dict | None, str | None, bool]:
+        data, source, stale = await feed.fetch(
+            f"price:{sym}", TTL_PRICE,
+            [("weex", _weex("/capi/v3/market/symbolPrice", {"symbol": sym}))],
+            stale_ttl=STALE_PRICE,
+        )
         if not data:
-            return None
-        return {
-            "symbol": sym,
-            "price": data.get("price", "0"),
-            "priceChangePercent": "0",  # WEEX symbolPrice не возвращает %
-            "time": data.get("time"),
-        }
+            return None, None, False
+        return (
+            {
+                "symbol": sym,
+                "price": data.get("price", "0"),
+                "priceChangePercent": "0",  # WEEX symbolPrice не возвращает %
+                "time": data.get("time"),
+            },
+            source,
+            stale,
+        )
 
     results = await asyncio.gather(*[fetch_one(s) for s in TICKER_SYMBOLS])
-    return {"tickers": [r for r in results if r]}
+    rows = [(row, source, stale) for row, source, stale in results if row]
+    origin = feed.origin({row["symbol"]: source for row, source, _ in rows})
+
+    return {
+        "tickers": [row for row, _, _ in rows],
+        **origin,
+        "stale": any(stale for _, _, stale in rows),
+    }
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -136,27 +179,65 @@ def _extract_next_funding(raw: Any) -> int | None:
     return None
 
 
-async def _fetch_funding_one(sym: str) -> dict:
-    for path in ["/capi/v3/market/fundingRate", "/capi/v1/market/fundingRate",
-                 "/capi/v3/market/ticker"]:
-        raw = await _weex(path, {"symbol": sym})
-        fr = _extract_funding(raw)
-        if fr and fr != "0":
-            return {
-                "symbol":          sym,
-                "fundingRate":     fr,
-                "nextFundingTime": _extract_next_funding(raw),
-            }
-    return {"symbol": sym, "fundingRate": "0", "nextFundingTime": None}
+def _weex_funding(path: str, sym: str):
+    """Путь WEEX, у которого ставка бывает пустой.
+
+    Пустая или нулевая ставка здесь - не ответ, а отказ: у пары, которая
+    торгуется, фандинг есть, просто этот путь его не отдал. Реестр считает
+    такой ответ отказом и идёт к следующему пути, как было до общего слоя.
+    """
+
+    async def builder() -> Any:
+        raw = await _weex_raw(path, {"symbol": sym})
+        rate = _extract_funding(raw)
+        return raw if rate and rate != "0" else None
+
+    return builder
+
+
+async def _funding_raw(sym: str) -> tuple[Any, str | None, bool]:
+    """Сырой ответ по финансированию: три пути WEEX, один кэш."""
+    return await feed.fetch(
+        f"funding:{sym}", TTL_FUNDING,
+        [
+            ("weex", _weex_funding("/capi/v3/market/fundingRate", sym)),
+            ("weex", _weex_funding("/capi/v1/market/fundingRate", sym)),
+            ("weex", _weex_funding("/capi/v3/market/ticker", sym)),
+        ],
+        stale_ttl=STALE_FUNDING,
+    )
+
+
+async def _fetch_funding_one(sym: str) -> tuple[dict, str | None, bool]:
+    raw, source, stale = await _funding_raw(sym)
+    rate = _extract_funding(raw)
+    return (
+        {
+            "symbol":          sym,
+            "fundingRate":     rate if rate and rate != "0" else "0",
+            "nextFundingTime": _extract_next_funding(raw),
+        },
+        source,
+        stale,
+    )
 
 
 # ── Funding Rates ────────────────────────────────────────────────────────────
 
 @router.get("/funding-rates")
 async def funding_rates():
-    """Ставки финансирования для всех основных пар из WEEX."""
+    """Ставки финансирования для всех основных пар из WEEX.
+
+    Второго источника здесь не будет никогда: ученик платит фандинг WEEX, и
+    показать вместо него чужой значит соврать о его расходах (ТЗ §5.2).
+    """
     results = await asyncio.gather(*[_fetch_funding_one(s) for s in FUNDING_SYMBOLS])
-    return {"rates": list(results)}
+    origin = feed.origin({row["symbol"]: source for row, source, _ in results})
+    return {
+        "rates": [row for row, _, _ in results],
+        **origin,
+        "stale": any(stale for _, _, stale in results),
+    }
 
 
 # ── 24h Ticker ───────────────────────────────────────────────────────────────
@@ -166,11 +247,20 @@ async def ticker_24h(symbol: str):
     """24-часовая статистика пары из WEEX: symbolPrice + klines(1d) + fundingRate."""
     sym = symbol.upper()
 
-    price_data, klines_data, funding_raw = await asyncio.gather(
-        _weex("/capi/v3/market/symbolPrice", {"symbol": sym}),
-        _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "14"}),
-        _weex("/capi/v3/market/fundingRate", {"symbol": sym}),
+    (price_data, price_src, price_stale), (klines_data, klines_src, klines_stale), funding = await asyncio.gather(
+        feed.fetch(
+            f"price:{sym}", TTL_PRICE,
+            [("weex", _weex("/capi/v3/market/symbolPrice", {"symbol": sym}))],
+            stale_ttl=STALE_PRICE,
+        ),
+        feed.fetch(
+            f"klines:{sym}:1d:14", TTL_KLINES,
+            [("weex", _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "14"}))],
+            stale_ttl=STALE_KLINES,
+        ),
+        _funding_raw(sym),
     )
+    funding_raw, funding_src, funding_stale = funding
 
     if price_data and klines_data and isinstance(klines_data, list) and klines_data:
         # Текущая свеча — с наибольшим таймстемпом (порядок ответа API не гарантирован)
@@ -217,6 +307,8 @@ async def ticker_24h(symbol: str):
             "markPrice":          None,
             "fundingRate":        _extract_funding(funding_raw),
             "nextFundingTime":    _extract_next_funding(funding_raw),
+            **feed.origin({"price": price_src, "klines": klines_src, "funding": funding_src}),
+            "stale": price_stale or klines_stale or funding_stale,
         }
 
     raise HTTPException(502, f"WEEX ticker недоступен для {sym}")
@@ -226,9 +318,17 @@ async def ticker_24h(symbol: str):
 
 @router.get("/open-interest/{symbol}")
 async def open_interest(symbol: str):
-    """Открытый интерес по паре из WEEX."""
+    """Открытый интерес по паре из WEEX.
+
+    Второго источника не будет: открытый интерес - величина по бирже, а не по
+    рынку (ТЗ §5.2).
+    """
     sym = symbol.upper()
-    data = await _weex("/capi/v3/market/openInterest", {"symbol": sym})
+    data, source, stale = await feed.fetch(
+        f"oi:{sym}", TTL_FUNDING,
+        [("weex", _weex("/capi/v3/market/openInterest", {"symbol": sym}))],
+        stale_ttl=STALE_FUNDING,
+    )
     payload = (data.get("data") or data) if data else None
     oi_value = None
     if isinstance(payload, dict):
@@ -238,7 +338,13 @@ async def open_interest(symbol: str):
                 break
     elif isinstance(payload, (int, float, str)):
         oi_value = str(payload)
-    return {"symbol": sym, "open_interest": oi_value, "raw": payload}
+    return {
+        "symbol": sym,
+        "open_interest": oi_value,
+        "raw": payload,
+        "source": source,
+        "stale": stale,
+    }
 
 
 # ── Derivatives (OI + Funding) ────────────────────────────────────────────────
@@ -248,12 +354,25 @@ async def derivatives(symbol: str):
     """OI + ставка финансирования + 24ч изменение из WEEX для одной пары."""
     sym = symbol.upper()
 
-    oi_raw, funding_raw, price_raw, klines_raw = await asyncio.gather(
-        _weex("/capi/v3/market/openInterest", {"symbol": sym}),
-        _weex("/capi/v3/market/fundingRate",  {"symbol": sym}),
-        _weex("/capi/v3/market/symbolPrice",  {"symbol": sym}),
-        _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "1"}),
+    (oi_raw, oi_src, oi_stale), funding, (price_raw, price_src, price_stale), (klines_raw, klines_src, klines_stale) = await asyncio.gather(
+        feed.fetch(
+            f"oi:{sym}", TTL_FUNDING,
+            [("weex", _weex("/capi/v3/market/openInterest", {"symbol": sym}))],
+            stale_ttl=STALE_FUNDING,
+        ),
+        _funding_raw(sym),
+        feed.fetch(
+            f"price:{sym}", TTL_PRICE,
+            [("weex", _weex("/capi/v3/market/symbolPrice", {"symbol": sym}))],
+            stale_ttl=STALE_PRICE,
+        ),
+        feed.fetch(
+            f"klines:{sym}:1d:1", TTL_KLINES,
+            [("weex", _weex("/capi/v3/market/klines", {"symbol": sym, "interval": "1d", "limit": "1"}))],
+            stale_ttl=STALE_KLINES,
+        ),
     )
+    funding_raw, funding_src, funding_stale = funding
 
     last_price = float(price_raw.get("price", 0)) if price_raw else 0
 
@@ -287,6 +406,11 @@ async def derivatives(symbol: str):
         "nextFundingTime": _extract_next_funding(funding_raw),
         "lastPrice":       last_price,
         "priceChangePct":  round(change_pct, 2),
+        **feed.origin({
+            "oi": oi_src, "funding": funding_src,
+            "price": price_src, "klines": klines_src,
+        }),
+        "stale": oi_stale or funding_stale or price_stale or klines_stale,
     }
 
 
@@ -294,9 +418,16 @@ async def derivatives(symbol: str):
 
 @router.get("/trades/{symbol}")
 async def recent_trades(symbol: str, limit: int = 40):
-    """Последние сделки — WEEX Futures API /capi/v3/market/trades."""
+    """Последние сделки — WEEX Futures API /capi/v3/market/trades.
+
+    Лента, как и стакан, устаревшей не бывает: `stale_ttl` нулевой.
+    """
     sym = symbol.upper()
-    data = await _weex("/capi/v3/market/trades", {"symbol": sym, "limit": min(limit, 100)})
+    data, source, stale = await feed.fetch(
+        f"trades:{sym}", TTL_BOOK,
+        [("weex", _weex("/capi/v3/market/trades", {"symbol": sym, "limit": min(limit, 100)}))],
+        stale_ttl=STALE_BOOK,
+    )
     if data and isinstance(data, list):
         return {
             "trades": [
@@ -308,7 +439,9 @@ async def recent_trades(symbol: str, limit: int = 40):
                     "isBuy":    not t.get("isBuyerMaker", True),
                 }
                 for t in data
-            ]
+            ],
+            "source": source,
+            "stale": stale,
         }
     raise HTTPException(502, "Trades недоступны")
 
@@ -318,7 +451,11 @@ async def recent_trades(symbol: str, limit: int = 40):
 @router.get("/symbols")
 async def symbols():
     """Список всех фьючерсных пар WEEX."""
-    data = await _weex("/capi/v3/market/contracts")
+    data, source, stale = await feed.fetch(
+        "symbols", TTL_SYMBOLS,
+        [("weex", _weex("/capi/v3/market/contracts"))],
+        stale_ttl=STALE_SYMBOLS,
+    )
     items: list[dict] = []
     if isinstance(data, dict):
         payload = data.get("data") or data
@@ -345,25 +482,33 @@ async def symbols():
             "DOGEUSDT", "AVAXUSDT", "ADAUSDT", "LINKUSDT", "DOTUSDT",
             "MATICUSDT", "LTCUSDT", "ATOMUSDT", "NEARUSDT", "FTMUSDT",
         ]
+        source, stale = None, False
 
-    return {"symbols": sorted(result)}
+    return {"symbols": sorted(result), "source": source, "stale": stale}
 
 
 # ── Fear & Greed ──────────────────────────────────────────────────────────────
 
+async def _fng_raw() -> Any:
+    s = await session.get()
+    async with s.get(FNG_URL) as r:
+        if r.status != 200:
+            raise RuntimeError(f"FNG HTTP {r.status}")
+        return await r.json(content_type=None)
+
+
 @router.get("/fear-greed")
 async def fear_greed():
     """Fear & Greed Index из alternative.me (последние 30 дней)."""
-    session = await _get_session()
-    try:
-        async with session.get(FNG_URL) as r:
-            if r.status != 200:
-                raise HTTPException(502, f"FNG API HTTP {r.status}")
-            data = await r.json(content_type=None)
-            items = data.get("data", [])
-            return {
-                "current": items[0] if items else None,
-                "history": items[:30],
-            }
-    except aiohttp.ClientError as e:
-        raise HTTPException(502, f"FNG error: {e}") from e
+    data, source, stale = await feed.fetch(
+        "fng", TTL_FNG, [("alternative.me", _fng_raw)], stale_ttl=STALE_FNG,
+    )
+    if not data:
+        raise HTTPException(502, "FNG API недоступен")
+    items = data.get("data", [])
+    return {
+        "current": items[0] if items else None,
+        "history": items[:30],
+        "source": source,
+        "stale": stale,
+    }

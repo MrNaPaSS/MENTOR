@@ -12,7 +12,6 @@ from typing import Any
 from urllib.parse import quote
 
 import aiohttp
-import certifi
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
@@ -20,6 +19,7 @@ from backend import coin_ledger
 from backend.ai_quota import AnalyzeQuota
 from backend.config import BackendConfig
 from backend.deps import get_ai_quota, get_config, get_current_student, get_session
+from backend.sources import session
 from core.models import Student
 
 log = logging.getLogger(__name__)
@@ -115,17 +115,14 @@ DEMO_MACRO = {
 
 # ── HTTP client ───────────────────────────────────────────────────────────────
 
-_session: aiohttp.ClientSession | None = None
-
-
 async def _sess() -> aiohttp.ClientSession:
-    global _session
-    if _session is None or _session.closed:
-        _session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=15),
-            connector=aiohttp.TCPConnector(limit=20),
-        )
-    return _session
+    """Сессия для публичных источников этого модуля (CFTC, Yahoo, Nasdaq).
+
+    Без проверки сертификата: на рабочем столе HTTPS перехватывается, и
+    проверка обрывает запрос. Здесь это допустимо - в этих обращениях нет ни
+    ключей, ни данных ученика. Запрос к Anthropic идёт иначе, см. `_call_claude`.
+    """
+    return await session.insecure()
 
 
 async def _get(url: str, params: dict | None = None, headers: dict | None = None) -> Any:
@@ -443,11 +440,12 @@ def _anthropic_ssl() -> ssl.SSLContext:
     Соседние публичные источники этого модуля ходят с `ssl=False` - там нет
     ни ключей, ни данных ученика. Здесь в заголовке уходит `x-api-key`, и
     отключённая проверка означает, что подменивший сертификат по дороге
-    прочитает ключ. Корни берём из certifi, а не из хранилища Windows: до
-    системного Python не достаёт, и запрос падает с «unable to get local
-    issuer certificate» (тот же приём, что в backend/api/trading.py).
+    прочитает ключ. Корни берём тем же способом, что и общая сессия: набор
+    этой машины из `SSL_CERT_FILE`, если он собран, иначе `certifi`. До
+    хранилища Windows Python не достаёт, и запрос падает с «unable to get
+    local issuer certificate».
     """
-    return ssl.create_default_context(cafile=certifi.where())
+    return ssl.create_default_context(cafile=session.roots())
 
 
 async def _call_claude(api_key: str, prompt: str) -> str:

@@ -16,54 +16,37 @@ from __future__ import annotations
 import asyncio
 import html
 import re
-import time
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 from typing import Any
 
-import aiohttp
 from fastapi import APIRouter, Query
+
+from backend.sources import feed, session
 
 router = APIRouter(prefix="/api/market", tags=["market-extra"])
 
-_session: aiohttp.ClientSession | None = None
-_cache: dict[str, tuple[float, Any]] = {}
-
-
-async def _get_session() -> aiohttp.ClientSession:
-    global _session
-    if _session is None or _session.closed:
-        _session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10),
-            connector=aiohttp.TCPConnector(ssl=False),
-            headers={"User-Agent": "nmnh-platform/1.0"},
-        )
-    return _session
+# Сколько живёт устаревшее, когда источник молчит (ТЗ §4.2). Это
+# информационные панели: сутки старых новостей лучше пустой вкладки, а
+# шестичасовая давность глобальных метрик ничего не решает.
+STALE_PANEL = 6 * 3600
+STALE_NEWS = 24 * 3600
 
 
 async def _get_json(url: str) -> Any:
+    """Мягкий запрос: источник молчит - возвращаем пустоту, а не исключение.
+
+    Сессия без проверки сертификата: на рабочем столе HTTPS перехватывается, и
+    проверка по корням certifi обрывает запрос. Секретов в этих обращениях нет.
+    """
     try:
-        session = await _get_session()
-        async with session.get(url) as r:
+        s = await session.insecure()
+        async with s.get(url) as r:
             if r.status != 200:
                 return None
             return await r.json(content_type=None)
     except Exception:
         return None
-
-
-async def _cached(key: str, ttl: float, builder) -> Any:
-    """Вернуть значение из кэша или построить новое (с фолбэком на устаревший кэш)."""
-    now = time.time()
-    hit = _cache.get(key)
-    if hit and now - hit[0] < ttl:
-        return hit[1]
-    value = await builder()
-    if value is not None:
-        _cache[key] = (now, value)
-        return value
-    # внешний источник упал — отдаём устаревшие данные, если есть
-    return hit[1] if hit else None
 
 
 def _num(v: Any, default: float = 0.0) -> float:
@@ -75,7 +58,7 @@ def _num(v: Any, default: float = 0.0) -> float:
 
 # ── Глобальные метрики рынка ──────────────────────────────────────────────────
 
-async def _build_global() -> dict | None:
+async def _global_coingecko() -> dict | None:
     cg = await _get_json("https://api.coingecko.com/api/v3/global")
     if cg and isinstance(cg.get("data"), dict):
         d = cg["data"]
@@ -85,9 +68,11 @@ async def _build_global() -> dict | None:
             "btc_dominance":        _num(d.get("market_cap_percentage", {}).get("btc")),
             "market_cap_change_24h": _num(d.get("market_cap_change_percentage_24h_usd")),
             "active_cryptos":       int(_num(d.get("active_cryptocurrencies"))),
-            "source": "coingecko",
         }
-    # Фолбэк: Coinpaprika
+    return None
+
+
+async def _global_coinpaprika() -> dict | None:
     cp = await _get_json("https://api.coinpaprika.com/v1/global")
     if cp and isinstance(cp, dict):
         return {
@@ -96,14 +81,21 @@ async def _build_global() -> dict | None:
             "btc_dominance":         _num(cp.get("bitcoin_dominance_percentage")),
             "market_cap_change_24h": _num(cp.get("market_cap_change_24h")),
             "active_cryptos":        int(_num(cp.get("cryptocurrencies_number"))),
-            "source": "coinpaprika",
         }
     return None
 
 
 @router.get("/global")
 async def market_global():
-    return await _cached("global", 60, _build_global)
+    """Цепочка: CoinGecko, за ним Coinpaprika. Имя сработавшего - в ответе."""
+    data, source, stale = await feed.fetch(
+        "global", 60,
+        [("coingecko", _global_coingecko), ("coinpaprika", _global_coinpaprika)],
+        stale_ttl=STALE_PANEL,
+    )
+    if data is None:
+        return None
+    return {**data, "source": source, "stale": stale}
 
 
 # ── Трендовые монеты ──────────────────────────────────────────────────────────
@@ -128,7 +120,12 @@ async def _build_trending() -> dict | None:
 
 @router.get("/trending")
 async def market_trending():
-    return await _cached("trending", 120, _build_trending)
+    data, source, stale = await feed.fetch(
+        "trending", 120, [("coingecko", _build_trending)], stale_ttl=STALE_PANEL,
+    )
+    if data is None:
+        return None
+    return {**data, "source": source, "stale": stale}
 
 
 # ── On-chain BTC (mempool.space + blockchain.info) ────────────────────────────
@@ -161,7 +158,12 @@ async def _build_onchain() -> dict | None:
 
 @router.get("/onchain")
 async def market_onchain():
-    return await _cached("onchain", 60, _build_onchain)
+    data, source, stale = await feed.fetch(
+        "onchain", 60, [("mempool.space", _build_onchain)], stale_ttl=STALE_PANEL,
+    )
+    if data is None:
+        return None
+    return {**data, "source": source, "stale": stale}
 
 
 # ── Форекс-курсы (Frankfurter) ────────────────────────────────────────────────
@@ -181,7 +183,14 @@ async def market_forex(
 ):
     base = base.upper()
     symbols = symbols.upper()
-    return await _cached(f"forex:{base}:{symbols}", 600, lambda: _build_forex(base, symbols))
+    data, source, stale = await feed.fetch(
+        f"forex:{base}:{symbols}", 600,
+        [("frankfurter", lambda: _build_forex(base, symbols))],
+        stale_ttl=STALE_PANEL,
+    )
+    if data is None:
+        return None
+    return {**data, "source": source, "stale": stale}
 
 
 # ── Крипто-новости (RSS изданий) ──────────────────────────────────────────────
@@ -212,8 +221,8 @@ _SPACE = re.compile(r"\s+")
 
 async def _get_text(url: str) -> str | None:
     try:
-        session = await _get_session()
-        async with session.get(url, headers={"User-Agent": "Mozilla/5.0 (nmnh-platform)"}) as r:
+        s = await session.insecure()
+        async with s.get(url, headers={"User-Agent": "Mozilla/5.0 (nmnh-platform)"}) as r:
             if r.status != 200:
                 return None
             # Кусками до конца: read(n) отдаёт то, что уже пришло, а не n
@@ -282,4 +291,9 @@ async def _build_news(lang: str) -> dict | None:
 @router.get("/news")
 async def market_news(lang: str = Query("ru")):
     lang = lang if lang in NEWS_FEEDS else "ru"
-    return await _cached(f"news:{lang}", 300, lambda: _build_news(lang)) or {"lang": lang, "items": []}
+    data, source, stale = await feed.fetch(
+        f"news:{lang}", 300, [("rss", lambda: _build_news(lang))], stale_ttl=STALE_NEWS,
+    )
+    if data is None:
+        return {"lang": lang, "items": [], "source": None, "stale": False}
+    return {**data, "source": source, "stale": stale}
