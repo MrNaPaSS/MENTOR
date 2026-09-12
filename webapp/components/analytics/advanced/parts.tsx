@@ -7,7 +7,7 @@
 // её в каждый вид своим экземпляром значило бы править цвет плюса в пяти
 // местах и на шестой раз забыть.
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 export type Tone = "plain" | "up" | "down";
 
@@ -86,13 +86,39 @@ export function price(value: number): string {
   return value.toFixed(digits).replace(/\.?0+$/, "");
 }
 
-/** Значок монеты: кружок с тикером. Настоящих логотипов у нас нет. */
+/**
+ * Значок монеты: её логотип, а при отсутствии - кружок с тикером.
+ *
+ * Логотипы лежат у нас в public, а не тянутся с чужого CDN: картинка с
+ * постороннего домена в каждой строке журнала рассказывает этому домену, что
+ * человек смотрит, и гаснет вместе с ним. Набор покрывает ходовые монеты,
+ * остальным достаётся кружок - он и так узнаваем по цвету и буквам.
+ */
 export function CoinDot({ symbol, size = 22 }: { symbol: string; size?: number }) {
   const name = symbol.replace(/USDT$/, "");
+  const [broken, setBroken] = useState(false);
+
   // Цвет из самого тикера: он должен быть одним и тем же в каждом списке, а
   // таблицы соответствий на все монеты рынка не напасёшься.
   let hash = 0;
   for (const letter of name) hash = (hash * 31 + letter.charCodeAt(0)) % 360;
+
+  if (!broken) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={`/coins/${name.toLowerCase()}.png`}
+        alt=""
+        aria-hidden
+        draggable={false}
+        width={size}
+        height={size}
+        onError={() => setBroken(true)}
+        className="shrink-0 select-none rounded-full"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
 
   return (
     <span

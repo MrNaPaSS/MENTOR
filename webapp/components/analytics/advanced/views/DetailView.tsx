@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Coins,
   Flame,
+  Gauge as GaugeIcon,
   ListOrdered,
   Scale,
   TrendingUp,
@@ -40,8 +41,6 @@ import type { ViewProps } from "./types";
 
 /** По какому времени разложен результат. */
 type TimeCut = "weekday" | "hour" | "session";
-/** Как показать итоги: числами или дугами. */
-type Shape = "numbers" | "gauges";
 /** Профит-фактор выше этого уже ничего не добавляет к «хорошо». */
 const PF_GOOD = 3;
 /** Просадка глубже этой доли пика - «плохо» на всю дугу. */
@@ -64,7 +63,6 @@ export default function DetailView({
   a,
 }: ViewProps) {
   const [cut, setCut] = useState<TimeCut>("weekday");
-  const [shape, setShape] = useState<Shape>("numbers");
   const [table, setTable] = useState<Cut>("symbol");
 
   const curve = useMemo(() => equityCurve(trades), [trades]);
@@ -92,7 +90,7 @@ export default function DetailView({
   const mid = Math.min(180, Math.max(132, Math.round(free * 0.15)));
   const low = Math.min(180, Math.max(130, Math.round(free * 0.17)));
   // Таблица разрезов прокручивается внутри себя, а не тянет за собой страницу.
-  const deep = Math.min(195, Math.max(136, Math.round(free * 0.16)));
+  const deep = Math.min(150, Math.max(112, Math.round(free * 0.13)));
 
   const time: Record<TimeCut, BarItem[]> = {
     weekday: week.map((bucket, i) => ({
@@ -159,74 +157,7 @@ export default function DetailView({
         hint={a.stats.hint}
         icon={<BarChart3 className="h-3.5 w-3.5" />}
         className="xl:col-span-4"
-        right={
-          <Pick
-            value={shape}
-            options={[
-              { key: "numbers" as const, label: a.stats.numbers },
-              { key: "gauges" as const, label: a.stats.gauges },
-            ]}
-            onPick={setShape}
-          />
-        }
       >
-        {shape === "gauges" ? (
-          // Дуги отвечают на вопрос «это хорошо?» раньше, чем человек успеет
-          // вспомнить, какой профит-фактор считается приличным.
-          <div
-            className="flex flex-col justify-around gap-3"
-            style={{ height: big }}
-          >
-            <div className="flex items-center justify-around gap-2">
-              <Gauge
-                fill={totals.winRate}
-                value={`${Math.round(totals.winRate * 100)}%`}
-                label={a.kpi.winRate}
-                color="var(--pane-up)"
-                size={Math.min(130, Math.max(84, big / 2 - 40))}
-              />
-              <Gauge
-                fill={Math.min(1, (totals.profitFactor ?? 0) / PF_GOOD)}
-                value={totals.profitFactor === null ? "-" : totals.profitFactor.toFixed(2)}
-                label={a.kpi.profitFactor}
-                color="var(--pane-up)"
-                size={Math.min(130, Math.max(84, big / 2 - 40))}
-              />
-              <Gauge
-                fill={Math.min(1, totals.drawdownPct / DD_BAD)}
-                value={`${Math.round(totals.drawdownPct * 100)}%`}
-                label={a.kpi.drawdown}
-                color="var(--pane-down)"
-                size={Math.min(130, Math.max(84, big / 2 - 40))}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <Metric
-                label={a.kpi.net}
-                value={signed(totals.net)}
-                tone={totals.net >= 0 ? "up" : "down"}
-                note={a.tradesCount(totals.trades)}
-              />
-              <Metric
-                label={a.metrics.expectancy}
-                value={signed(totals.expectancy)}
-                tone={totals.expectancy >= 0 ? "up" : "down"}
-                note={a.metrics.expectancyNote}
-              />
-              <Metric
-                label={a.kpi.avgWin}
-                value={money(totals.avgWin)}
-                tone="up"
-                note={a.metrics.avgLoss(money(-totals.avgLoss))}
-              />
-              <Metric
-                label={a.kpi.hold}
-                value={totals.holdMinutes === null ? "-" : a.minutes(Math.round(totals.holdMinutes))}
-                note={a.metrics.holdNote}
-              />
-            </div>
-          </div>
-        ) : (
         <div className="grid grid-cols-2 gap-x-4">
           <Line label={a.stats.trades} value={String(totals.trades)} />
           <Line
@@ -289,7 +220,6 @@ export default function DetailView({
             </>
           )}
         </div>
-        )}
       </Card>
 
       {/* Последние сделки: с них начинается любой разбор «что это было». */}
@@ -404,12 +334,47 @@ export default function DetailView({
         </div>
       </Card>
 
+      {/* Дуги качества отдельной панелью: они отвечают на вопрос «это
+          хорошо?» раньше, чем человек вспомнит, какой профит-фактор приличный,
+          и прятать их за переключателем в таблице чисел значит не показывать
+          вовсе. */}
+      <Card
+        title={a.gauges.title}
+        hint={a.gauges.hint}
+        icon={<GaugeIcon className="h-3.5 w-3.5" />}
+        className="xl:col-span-3"
+      >
+        <div className="flex items-center justify-around gap-1" style={{ height: low }}>
+          <Gauge
+            fill={totals.winRate}
+            value={`${Math.round(totals.winRate * 100)}%`}
+            label={a.kpi.winRate}
+            color="var(--pane-up)"
+            size={Math.min(120, Math.max(78, low - 34))}
+          />
+          <Gauge
+            fill={Math.min(1, (totals.profitFactor ?? 0) / PF_GOOD)}
+            value={totals.profitFactor === null ? "-" : totals.profitFactor.toFixed(2)}
+            label={a.kpi.profitFactor}
+            color="var(--pane-up)"
+            size={Math.min(120, Math.max(78, low - 34))}
+          />
+          <Gauge
+            fill={Math.min(1, totals.drawdownPct / DD_BAD)}
+            value={`${Math.round(totals.drawdownPct * 100)}%`}
+            label={a.kpi.drawdown}
+            color="var(--pane-down)"
+            size={Math.min(120, Math.max(78, low - 34))}
+          />
+        </div>
+      </Card>
+
       {/* Лонг против шорта: две строки, по которым видно перекос. */}
       <Card
         title={a.sidesTitle.title}
         hint={a.sidesTitle.hint}
         icon={<Scale className="h-3.5 w-3.5" />}
-        className="xl:col-span-3"
+        className="xl:col-span-2"
       >
         <div className="space-y-1.5" style={{ minHeight: low }}>
           {(["long", "short"] as const).map((key) => {
@@ -462,7 +427,7 @@ export default function DetailView({
         title={a.timing.title}
         hint={a.timing.hint}
         icon={<CalendarDays className="h-3.5 w-3.5" />}
-        className="xl:col-span-5"
+        className="xl:col-span-4"
         right={
           <Pick
             value={cut}
@@ -483,7 +448,7 @@ export default function DetailView({
         title={a.streaks.titleFull}
         hint={a.streaks.hint}
         icon={<Flame className="h-3.5 w-3.5" />}
-        className="xl:col-span-4"
+        className="xl:col-span-3"
       >
         <div className="grid grid-cols-2 gap-1.5">
           <Tile

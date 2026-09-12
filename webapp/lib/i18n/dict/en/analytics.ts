@@ -283,6 +283,9 @@ export const analytics = {
         `Previous period of the same length: net ${net}, win rate ${winRate}, profit factor ${pf}`,
     },
 
+    /** Quality dials: win rate, profit factor, drawdown. */
+    gauges: { title: "Quality", hint: "how good it is" },
+
     equity: {
       title: "Equity curve",
       hint: "running total of closed trades",

@@ -55,8 +55,8 @@ const WEEK_COLORS = [
 type Measure = "pnl" | "trades";
 /** Как показать распределение по R: формой или числами. */
 type RShape = "bars" | "list";
-/** Что показывает кольцо: стороны, из чего сложился итог или дни недели. */
-type Ring = "sides" | "total" | "week";
+/** Что показывает кольцо: дни недели, стороны или из чего сложился итог. */
+type Ring = "week" | "sides" | "total";
 
 export default function OverviewView({
   trades,
@@ -72,7 +72,7 @@ export default function OverviewView({
 }: ViewProps) {
   const [measure, setMeasure] = useState<Measure>("pnl");
   const [shape, setShape] = useState<RShape>("bars");
-  const [ring, setRing] = useState<Ring>("sides");
+  const [ring, setRing] = useState<Ring>("week");
 
   const curve = useMemo(() => equityCurve(trades), [trades]);
   const days = useMemo(() => daily(trades), [trades]);
@@ -163,6 +163,19 @@ export default function OverviewView({
   const size = Math.min(190, Math.max(110, big - 40));
 
   const rings: Record<Ring, { slices: Slice[]; center: React.ReactNode }> = {
+    week: {
+      slices: weekSlices,
+      center: (
+        <div>
+          <div className="font-mono text-[20px] font-extrabold leading-none text-[var(--pane-text)]">
+            {totals.trades}
+          </div>
+          <div className="mt-1 text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+            {a.total.short}
+          </div>
+        </div>
+      ),
+    },
     sides: {
       slices: sideSlices,
       center: (
@@ -192,10 +205,6 @@ export default function OverviewView({
           </div>
         </div>
       ),
-    },
-    week: {
-      slices: weekSlices,
-      center: null,
     },
   };
 
@@ -344,9 +353,9 @@ export default function OverviewView({
             <Pick
               value={ring}
               options={[
+                { key: "week" as const, label: a.rings.week.tab },
                 { key: "sides" as const, label: a.rings.sides.tab },
                 { key: "total" as const, label: a.rings.total.tab },
-                { key: "week" as const, label: a.rings.week.tab },
               ]}
               onPick={setRing}
             />
