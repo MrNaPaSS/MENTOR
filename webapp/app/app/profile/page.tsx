@@ -156,7 +156,7 @@ export default function ProfilePage() {
             // росло на очень широкой карточке. В половине экрана (lg) карточка
             // узкая, и центр съезжает вправо: иначе левый склон ложится под
             // баланс.
-            className="profile-art pointer-events-none absolute bottom-0 left-1/2 hidden aspect-[3/1] w-[72%] max-w-[46rem] -translate-x-1/2 object-fill sm:block lg:left-[58%] 2xl:left-1/2"
+            className="profile-art art-glow pointer-events-none absolute bottom-0 left-1/2 hidden aspect-[3/1] w-[72%] max-w-[46rem] -translate-x-1/2 object-fill sm:block lg:left-[58%] 2xl:left-1/2"
             style={{
               maskImage: "linear-gradient(90deg, transparent 0%, #000 18%, #000 90%, transparent 100%)",
               WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 18%, #000 90%, transparent 100%)",
@@ -238,7 +238,7 @@ export default function ProfilePage() {
             aria-hidden
             // Знак WEEX справа по середине карточки. В ширину 128 точек - он
             // укладывается в поле справа от текста (pr-40).
-            className="pointer-events-none absolute right-4 top-1/2 hidden h-auto w-32 -translate-y-1/2 sm:block"
+            className="art-glow pointer-events-none absolute right-4 top-1/2 hidden h-auto w-32 -translate-y-1/2 sm:block"
           />
           <div className="relative mb-3 flex items-center justify-between gap-3 sm:pr-40">
             <span className="text-[14px] font-bold text-[var(--pane-text)]">

@@ -62,7 +62,7 @@ export default function LevelPanel({
         <img
           src="/art/level-summit.webp"
           alt=""
-          className="pointer-events-none absolute -top-2 left-1/2 hidden h-[calc(100%+0.5rem+18px)] w-auto max-w-[44%] -translate-x-1/2 scale-x-[1.2] object-contain object-bottom sm:block"
+          className="art-glow pointer-events-none absolute -top-2 left-1/2 hidden h-[calc(100%+0.5rem+18px)] w-auto max-w-[44%] -translate-x-1/2 scale-x-[1.2] object-contain object-bottom sm:block"
         />
 
         <header className="relative flex items-center justify-between gap-2">

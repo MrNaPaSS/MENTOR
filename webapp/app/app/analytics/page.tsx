@@ -861,7 +861,7 @@ export default function AnalyticsPage() {
               <div className="-my-2.5 hidden shrink-0 items-center gap-3 self-stretch lg:flex">
                 <Motto lines={t.analytics.mottos.calendar} className="hidden text-right 2xl:block" />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/art/analytics/bull-bear.webp" alt="" className="pointer-events-none h-32 w-auto self-end" />
+                <img src="/art/analytics/bull-bear.webp" alt="" className="art-glow pointer-events-none h-32 w-auto self-end" />
               </div>
 
                 <button
@@ -1448,7 +1448,7 @@ function PanelArt({
         <img
           src={src}
           alt=""
-          className="pointer-events-none absolute left-2 top-1/2 h-[80%] w-[calc(100%-9rem)] -translate-y-1/2 object-contain object-center drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+          className="art-glow pointer-events-none absolute left-2 top-1/2 h-[80%] w-[calc(100%-9rem)] -translate-y-1/2 object-contain object-center"
         />
         <Motto lines={motto} className="absolute right-3 top-[22%] text-right !tracking-[0.24em]" />
       </div>
@@ -1464,7 +1464,7 @@ function PanelArt({
       <img
         src={src}
         alt=""
-        className="pointer-events-none h-[86%] w-auto min-w-0 max-w-[60%] object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]"
+        className="art-glow pointer-events-none h-[86%] w-auto min-w-0 max-w-[60%] object-contain"
       />
     </div>
   );

@@ -231,7 +231,7 @@ export default function FearGreedPane({ className = "" }: { className?: string }
             <img
               src="/art/market/bull-geo.webp"
               alt=""
-              className="pointer-events-none -my-4 hidden h-40 w-auto shrink-0 drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)] min-[1400px]:block"
+              className="art-glow pointer-events-none -my-4 hidden h-40 w-auto shrink-0 min-[1400px]:block"
             />
           </div>
 
