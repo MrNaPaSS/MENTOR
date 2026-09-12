@@ -165,6 +165,27 @@ export default function AdvancedPanel() {
           ))}
         </div>
 
+        <span className="h-4 w-px bg-[var(--pane-border)]" />
+
+        {/* Экран раздела - здесь же, в строке разреза: это такой же выбор
+            одним нажатием, и отдельная строка под него занимала полосу
+            высотой в панель ради двух кнопок. */}
+        <span className="text-[11px] font-semibold text-[var(--pane-text)]">{a.views.title}</span>
+        <div className="flex gap-1.5">
+          {VIEWS.map((key, i) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => pickView(key)}
+              title={a.views.hint[key]}
+              className={`${CHIP} ${view === key ? CHIP_ON : CHIP_OFF} flex items-center gap-1.5`}
+            >
+              <span className="font-mono text-[10px] opacity-60">{`0${i + 1}`}</span>
+              {a.views.name[key]}
+            </button>
+          ))}
+        </div>
+
         {symbol && (
           <button type="button" onClick={() => setSymbol(null)} className={`${CHIP} ${CHIP_ON}`}>
             {symbol.replace(/USDT$/, "")} ✕
@@ -235,26 +256,6 @@ export default function AdvancedPanel() {
           <span className="w-full text-[10px] text-[var(--pane-down)]">{exporting.error}</span>
         )}
 
-        {/* Вид раздела: те же данные другой раскладкой. Отдельной строкой -
-            это выбор надолго, а не часть разреза. */}
-        <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-[var(--pane-border)] pt-2">
-          <span className="text-[11px] font-semibold text-[var(--pane-text)]">{a.views.title}</span>
-          {VIEWS.map((key, i) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => pickView(key)}
-              title={a.views.hint[key]}
-              className={`${CHIP} ${view === key ? CHIP_ON : CHIP_OFF} flex items-center gap-1.5`}
-            >
-              <span className="font-mono text-[10px] opacity-60">{`0${i + 1}`}</span>
-              {a.views.name[key]}
-            </button>
-          ))}
-          <span className="ml-auto truncate text-[10px] text-[var(--pane-muted)]">
-            {a.views.hint[view]}
-          </span>
-        </div>
       </div>
 
       <div ref={fit.ref}>
