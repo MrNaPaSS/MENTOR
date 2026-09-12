@@ -28,6 +28,7 @@ import {
   evenPace,
   equityCurve,
   latest,
+  SESSIONS,
   rMultiple,
   streaks,
 } from "@/lib/analytics/advanced";
@@ -40,7 +41,7 @@ import { Card, CoinDot, Metric, Pick, price } from "../parts";
 import type { ViewProps } from "./types";
 
 /** По какому времени разложен результат. */
-type TimeCut = "weekday" | "hour" | "session";
+type TimeCut = "hour" | "weekday" | "session";
 /** Профит-фактор выше этого уже ничего не добавляет к «хорошо». */
 const PF_GOOD = 3;
 /** Просадка глубже этой доли пика - «плохо» на всю дугу. */
@@ -62,7 +63,7 @@ export default function DetailView({
   height,
   a,
 }: ViewProps) {
-  const [cut, setCut] = useState<TimeCut>("weekday");
+  const [cut, setCut] = useState<TimeCut>("hour");
   const [table, setTable] = useState<Cut>("symbol");
 
   const curve = useMemo(() => equityCurve(trades), [trades]);
@@ -109,7 +110,7 @@ export default function DetailView({
     })),
     hour: hours.map((bucket, i) => ({
       key: bucket.key,
-      label: i % 3 === 0 ? String(i) : "",
+      label: i % 2 === 0 ? String(i) : "",
       value: bucket.pnl,
       note: `${i}:00 · ${a.tradesCount(bucket.trades)}`,
     })),
@@ -440,15 +441,29 @@ export default function DetailView({
           <Pick
             value={cut}
             options={[
-              { key: "weekday" as const, label: a.timing.weekday },
               { key: "hour" as const, label: a.timing.hour },
+              { key: "weekday" as const, label: a.timing.weekday },
               { key: "session" as const, label: a.timing.session },
             ]}
             onPick={setCut}
           />
         }
       >
-        <Bars items={time[cut]} height={low} format={signed} />
+        <Bars
+          items={time[cut]}
+          height={low}
+          format={signed}
+          back={cut === "hour" ? hours.map((bucket) => bucket.trades) : undefined}
+          bands={
+            cut === "hour"
+              ? SESSIONS.map((one) => ({
+                  from: one.from,
+                  to: one.to,
+                  label: a.sessions[one.key] ?? one.key,
+                }))
+              : undefined
+          }
+        />
       </Card>
 
       {/* Серии и то, чем сделки кончались: дисциплина в трёх числах. */}

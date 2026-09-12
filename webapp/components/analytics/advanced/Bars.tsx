@@ -10,6 +10,10 @@
 //
 // Координаты считаем в точках, а не в долях: столбик в две точки высотой и
 // подпись под ним должны попадать в одни и те же места при любой ширине.
+//
+// У часов к этому добавляются полосы торговых сессий за спиной столбиков и
+// тонкая полоса активности под осью: деньги и число сделок - разные вещи, и
+// час с одной удачной сделкой не должен выглядеть как час, в который торгуют.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -24,9 +28,27 @@ export interface BarItem {
   active?: boolean;
 }
 
+/** Полоса за столбиками: сутки, разбитые на торговые сессии. */
+export interface Band {
+  /** Индексы столбиков, которые полоса накрывает: от и до, не включая. */
+  from: number;
+  to: number;
+  label: string;
+}
+
 export interface BarsProps {
   items: readonly BarItem[];
   height: number;
+  /**
+   * Второй ряд за основным: сколько сделок было.
+   *
+   * Деньги и активность - разные вещи: час с одной удачной сделкой даёт
+   * столбик выше, чем час с десятью ровными, и по одному ряду не отличить
+   * «здесь повезло» от «здесь торгуют». Фоновый ряд ставит их рядом.
+   */
+  back?: readonly number[];
+  /** Полосы сессий за столбиками: по ним видно, где азия, а где америка. */
+  bands?: readonly Band[];
   /** Значение словами - для подсказки и подписей. */
   format: (value: number) => string;
   /** Нажатие по столбику: им фильтруют раздел. Нет - столбики не нажимаются. */
@@ -40,7 +62,7 @@ const PAD = { top: 14, right: 4, bottom: 16, left: 40 };
 /** Сколько линий сетки рисуем по каждую сторону от нуля. */
 const LINES = 2;
 
-export default function Bars({ items, height, format, onPick, short }: BarsProps) {
+export default function Bars({ items, height, format, onPick, short, back, bands }: BarsProps) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<string | null>(null);
@@ -79,8 +101,31 @@ export default function Bars({ items, height, format, onPick, short }: BarsProps
 
   const label = short ?? format;
 
+  const backPeak = back && back.length > 0 ? Math.max(1, ...back) : 0;
+
   return (
     <div ref={box} className="relative select-none" style={{ height }}>
+      {/* Полосы сессий: подпись сверху и своя подложка, чтобы «утро» и
+          «вечер» читались без счёта часов по подписям снизу. */}
+      {bands?.map((band, i) => (
+        <div
+          key={band.label}
+          className="pointer-events-none absolute"
+          style={{
+            left: `calc(${PAD.left}px + (100% - ${PAD.left + PAD.right}px) * ${band.from / items.length})`,
+            width: `calc((100% - ${PAD.left + PAD.right}px) * ${(band.to - band.from) / items.length})`,
+            top: 0,
+            bottom: PAD.bottom,
+            background: i % 2 === 0 ? "var(--pane-hover)" : "transparent",
+            opacity: 0.7,
+          }}
+        >
+          <span className="absolute left-1 top-0 text-[8px] uppercase tracking-wider text-[var(--pane-muted)]">
+            {band.label}
+          </span>
+        </div>
+      ))}
+
       {/* Сетка с подписями сумм: без них высота столбика ничего не значит. */}
       {width > 0 &&
         view.grid.map((line) => (
@@ -117,8 +162,25 @@ export default function Bars({ items, height, format, onPick, short }: BarsProps
           const lit = hover === item.key || item.active || peakOne || worstOne;
           const color = up ? "var(--pane-up)" : "var(--pane-down)";
 
+          const load = backPeak > 0 && back ? (back[items.indexOf(item)] ?? 0) / backPeak : 0;
+
           const body = (
             <>
+              {/* Активность полосой под осью, а не столбиком за спиной: второй
+                  ряд столбиков пересекал нулевую линию и читался как убыток. */}
+              {backPeak > 0 && (
+                <span
+                  className="absolute rounded-[2px] transition-[opacity] duration-300"
+                  style={{
+                    left: 1,
+                    right: 1,
+                    top: height - PAD.bottom - 4,
+                    height: 3,
+                    background: "var(--pane-text-2)",
+                    opacity: 0.12 + load * 0.6,
+                  }}
+                />
+              )}
               <span
                 className="absolute rounded-[3px] transition-[height,opacity] duration-300"
                 style={{

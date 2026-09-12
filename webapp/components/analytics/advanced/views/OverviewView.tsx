@@ -29,6 +29,7 @@ import {
   daily,
   equityCurve,
   rDistribution,
+  SESSIONS,
   streaks,
 } from "@/lib/analytics/advanced";
 import Bars, { type BarItem } from "../Bars";
@@ -407,12 +408,18 @@ export default function OverviewView({
           <Bars
             items={hours.map<BarItem>((bucket, i) => ({
               key: bucket.key,
-              label: i % 3 === 0 ? String(i) : "",
+              label: i % 2 === 0 ? String(i) : "",
               value: byMeasure(bucket),
               note: `${i}:00 · ${a.tradesCount(bucket.trades)} · ${signed(bucket.pnl)}`,
             }))}
             height={mid}
             format={measure === "pnl" ? signed : a.tradesCount}
+            back={measure === "pnl" ? hours.map((bucket) => bucket.trades) : undefined}
+            bands={SESSIONS.map((one) => ({
+              from: one.from,
+              to: one.to,
+              label: a.sessions[one.key] ?? one.key,
+            }))}
           />
         </Card>
 
