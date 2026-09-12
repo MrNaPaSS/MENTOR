@@ -6,7 +6,12 @@
   /capi/v3/market/klines?symbol=X&interval=15m&limit=N → свечи
   /capi/v3/market/fundingRate?symbol=X        → ставка финансирования
   /capi/v3/market/openInterest?symbol=X       → открытый интерес
-  /capi/v3/market/ticker?symbol=X             → расширенный тикер (прирост, объём)
+  /capi/v2/market/tickers                     → все пары разом: цена, изменение, оборот
+
+Проверено вживую 12 сентября 2026. Ручки `/capi/v3/market/ticker` и
+`/capi/v1/market/fundingRate`, которые раньше были записаны здесь и в коде,
+отвечают 404: первой не существует вовсе, вторая переехала в v3. Пары в v2
+называются иначе - `cmt_btcusdt` вместо `BTCUSDT`.
 
 Цена, стакан, свечи и лента при отказе WEEX берутся у Binance - истина там
 общая для рынка, а расхождение в копейках. Финансирование и открытый интерес
@@ -136,6 +141,11 @@ async def orderbook(symbol: str, limit: int = 20):
 # изменение, и оборот за сутки.
 
 
+# Все тикеры одним запросом. Пары здесь зовут `cmt_btcusdt`, а изменение цены
+# приходит долей (`-0.002605` это -0.26%), а не процентами.
+WEEX_TICKERS_PATH = "/capi/v2/market/tickers"
+
+
 def _num(value: Any) -> float | None:
     try:
         number = float(value)
@@ -144,67 +154,46 @@ def _num(value: Any) -> float | None:
     return number if number == number else None  # NaN - тоже «нет числа»
 
 
-def _first(payload: dict, *keys: str) -> Any:
-    for key in keys:
-        if key in payload and payload[key] not in (None, ""):
-            return payload[key]
-    return None
+def _weex_pair(raw: Any) -> str:
+    """`cmt_btcusdt` -> `BTCUSDT`. Так пары зовут в ручке v2."""
+    name = str(raw or "").strip().lower()
+    if name.startswith("cmt_"):
+        name = name[4:]
+    return name.upper()
 
 
-def _ticker_row(sym: str, raw: Any) -> dict | None:
-    """Строка тикера из ответа WEEX.
-
-    Имена полей у расширенного тикера разнятся от версии к версии ручки,
-    поэтому ищем по нескольким написаниям, а процент считаем сами из цены
-    открытия суток: так он не зависит от того, отдаёт биржа долю или проценты.
-    """
-    payload = raw.get("data") if isinstance(raw, dict) and "data" in raw else raw
-    if isinstance(payload, list) and payload:
-        payload = payload[0]
-    if not isinstance(payload, dict):
+def _ticker_row(row: dict) -> dict | None:
+    """Строка тикера из ответа `/capi/v2/market/tickers`."""
+    if not isinstance(row, dict):
         return None
-
-    last = _num(_first(payload, "last", "lastPrice", "close", "price"))
+    symbol = _weex_pair(row.get("symbol"))
+    if not symbol.endswith("USDT"):
+        return None
+    last = _num(row.get("last"))
     if last is None:
         return None
 
-    open_price = _num(_first(payload, "open", "open_24h", "openPrice", "open24h"))
-    change_pct = None
-    if open_price:
-        change_pct = (last - open_price) / open_price * 100
-    else:
-        given = _num(_first(payload, "priceChangePercent", "changePercent", "chgPct"))
-        if given is not None:
-            # Доля вместо процентов: биржи пишут и так, и так.
-            change_pct = given * 100 if abs(given) <= 1 else given
-
-    quote_volume = _num(_first(payload, "quoteVolume", "usdtVolume", "turnover", "volValue"))
-    if quote_volume is None:
-        base_volume = _num(_first(payload, "volume_24h", "baseVolume", "volume", "vol"))
-        quote_volume = (base_volume or 0) * last
+    # Изменение приходит долей, а не процентами: -0.002605 это -0.26%.
+    ratio = _num(row.get("priceChangePercent"))
+    # `volume_24h` здесь в долларах: base_volume * цена сходится с ним.
+    quote_volume = _num(row.get("volume_24h")) or 0.0
 
     return {
-        "symbol": sym,
+        "symbol": symbol,
         "price": str(last),
-        "priceChangePercent": f"{change_pct:.2f}" if change_pct is not None else "0",
+        "priceChangePercent": f"{ratio * 100:.2f}" if ratio is not None else "0",
         "quoteVolume": f"{quote_volume:.2f}",
-        "time": _num(_first(payload, "time", "timestamp", "ts")) or None,
+        "time": _num(row.get("timestamp")),
     }
 
 
 async def _weex_tickers() -> list[dict] | None:
-    """Расширенный тикер по каждой паре. Пусто - отказ, цепочка идёт дальше."""
-
-    async def one(sym: str) -> dict | None:
-        try:
-            return _ticker_row(sym, await _weex_raw("/capi/v3/market/ticker", {"symbol": sym}))
-        except Exception:
-            return None
-
-    rows = await asyncio.gather(*[one(s) for s in TICKER_SYMBOLS])
-    live = [row for row in rows if row]
-    # Половина списка - уже не список: лучше отдать всё из одного места.
-    return live if len(live) >= len(TICKER_SYMBOLS) // 2 else None
+    """Все пары разом. Один запрос вместо сорока: ручка отдаёт биржу целиком."""
+    rows = await _weex_raw(WEEX_TICKERS_PATH)
+    if not isinstance(rows, list):
+        return None
+    live = [row for row in (_ticker_row(r) for r in rows) if row]
+    return live or None
 
 
 @router.get("/tickers")
@@ -282,9 +271,10 @@ async def _funding_raw(sym: str) -> tuple[Any, str | None, bool]:
     return await feed.fetch(
         f"funding:{sym}", TTL_FUNDING,
         [
+            # Вторым путём тут когда-то стоял `/capi/v1/market/fundingRate`, а
+            # третьим `/capi/v3/market/ticker`. Обе ручки отвечают 404 и
+            # работать не могли: ставка живёт только в v3.
             ("weex", _weex_funding("/capi/v3/market/fundingRate", sym)),
-            ("weex", _weex_funding("/capi/v1/market/fundingRate", sym)),
-            ("weex", _weex_funding("/capi/v3/market/ticker", sym)),
         ],
         stale_ttl=STALE_FUNDING,
     )

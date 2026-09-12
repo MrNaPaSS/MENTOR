@@ -67,16 +67,21 @@ def _weex_отвечает(monkeypatch, answers: dict[str, object]):
 
 
 DEPTH = {"bids": [["100", "1"]], "asks": [["101", "2"]]}
-# Расширенный тикер: цена, цена открытия суток и оборот. Процент считается из
-# открытия, а не берётся у биржи, - см. `_ticker_row`.
-TICKER = {"last": "100.5", "open": "100", "quoteVolume": "1000000", "time": 1789000000}
+# Ответ `/capi/v2/market/tickers`: биржа отдаёт все пары разом, зовёт их
+# `cmt_btcusdt`, а изменение цены даёт долей - 0.005 это полпроцента.
+TICKERS = [
+    {"symbol": "cmt_btcusdt", "last": "100.5", "priceChangePercent": "0.005",
+     "volume_24h": "1000000", "timestamp": "1789000000"},
+    {"symbol": "cmt_ethusdt", "last": "4000", "priceChangePercent": "-0.012",
+     "volume_24h": "500000", "timestamp": "1789000000"},
+]
 
 
 # ── Происхождение в ответе ───────────────────────────────────────────────────
 
 
 def test_цена_подписана_источником(client, monkeypatch):
-    _weex_отвечает(monkeypatch, {"/capi/v3/market/ticker": TICKER})
+    _weex_отвечает(monkeypatch, {"/capi/v2/market/tickers": TICKERS})
 
     answer = client.get("/api/market/tickers").json()
     assert answer["source"] == "weex"
@@ -98,7 +103,7 @@ def test_стакан_подписан_источником(client, monkeypatch)
 
 
 def test_упавший_источник_не_обнуляет_цены_но_помечает_их(client, monkeypatch):
-    _weex_отвечает(monkeypatch, {"/capi/v3/market/ticker": TICKER})
+    _weex_отвечает(monkeypatch, {"/capi/v2/market/tickers": TICKERS})
     client.get("/api/market/tickers")
 
     _weex_отвечает(monkeypatch, {})  # WEEX выключен целиком
@@ -145,7 +150,7 @@ def test_состояние_показывает_удачи_и_отказы(clie
 
 
 def test_состояние_считает_отданное_устаревшее(client, monkeypatch):
-    _weex_отвечает(monkeypatch, {"/capi/v3/market/ticker": TICKER})
+    _weex_отвечает(monkeypatch, {"/capi/v2/market/tickers": TICKERS})
     client.get("/api/market/tickers")
 
     _weex_отвечает(monkeypatch, {})

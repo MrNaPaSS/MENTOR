@@ -24,10 +24,29 @@ function btc(value: number): string {
 function usd(value: number): string {
   if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
   if (value >= 1e6) return `$${(value / 1e6).toFixed(0)}M`;
-  return `$${Math.round(value)}`;
+  return `$${Math.round(value).toLocaleString("ru-RU")}`;
 }
 
-export default function EtfFlowsPane({ className = "" }: { className?: string }) {
+/** Всего биткоина будет 21 миллион: доля фондов считается от этого числа. */
+const BTC_SUPPLY = 21_000_000;
+
+function supplyShare(total: number): string {
+  return `${((total / BTC_SUPPLY) * 100).toFixed(1)}%`;
+}
+
+/** Имя фонда без тикера: «BlackRock IBIT» на экране это IBIT и BlackRock. */
+function shortName(name: string, ticker: string): string {
+  return name.replace(ticker, "").trim() || name;
+}
+
+export default function EtfFlowsPane({
+  className = "",
+  height,
+}: {
+  className?: string;
+  /** Высота тела панели: список растягивается на неё, а не жмётся кверху. */
+  height?: number;
+}) {
   const t = useT();
   const [data, setData] = useState<EtfFlows | null>(null);
   const [state, setState] = useState<PaneState>("loading");
@@ -66,9 +85,10 @@ export default function EtfFlowsPane({ className = "" }: { className?: string })
       state={state}
       emptyNote={t.market.pane.emptyNote}
       className={className}
+      bodyClass="flex flex-col"
     >
-      <div className="space-y-3">
-        <div className="flex items-baseline justify-between gap-2">
+      <div className="flex flex-col gap-3" style={height ? { height } : undefined}>
+        <div className="flex items-baseline justify-between gap-2 border-b border-[var(--pane-border)] pb-2">
           <PaneLabel>{t.market.etf.totalLabel}</PaneLabel>
           <span className="flex items-baseline gap-2">
             <PaneValue size="lg" tone="gold">{btc(data?.total_btc ?? 0)} BTC</PaneValue>
@@ -78,31 +98,52 @@ export default function EtfFlowsPane({ className = "" }: { className?: string })
           </span>
         </div>
 
-        <ul className="space-y-2">
+        {/* Строки идут подряд и плотно. Растягивать их по высоте нельзя: между
+            четырьмя фондами появлялись дыры в полпанели, и это читалось хуже
+            пустоты внизу. Пустоту снизу забирает итог. */}
+        <ul className="space-y-2.5">
           {funds.map((fund) => (
             <li key={fund.ticker} className="space-y-1">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate text-[12px] text-[var(--pane-text)]" title={fund.name}>
-                  <span className="font-semibold">{fund.ticker}</span>
-                  <span className="ml-1.5 text-[10px] text-[var(--pane-muted)]">
-                    {t.market.etf.share(fund.sharePct)}
+                <span className="min-w-0 truncate" title={fund.name}>
+                  <span className="text-[13px] font-semibold text-[var(--pane-text)]">
+                    {fund.ticker}
+                  </span>
+                  <span className="ml-2 text-[11px] text-[var(--pane-muted)]">
+                    {shortName(fund.name, fund.ticker)}
                   </span>
                 </span>
-                <span className="flex shrink-0 items-baseline gap-2">
-                  <PaneValue size="sm">{btc(fund.btc)} BTC</PaneValue>
-                  <PaneValue
-                    size="sm"
-                    tone={fund.changePct > 0 ? "up" : fund.changePct < 0 ? "down" : "muted"}
-                  >
-                    {fund.changePct > 0 ? "+" : ""}
-                    {fund.changePct.toFixed(2)}%
-                  </PaneValue>
-                </span>
+                <PaneValue
+                  size="sm"
+                  tone={fund.changePct > 0 ? "up" : fund.changePct < 0 ? "down" : "muted"}
+                >
+                  {fund.changePct > 0 ? "+" : ""}
+                  {fund.changePct.toFixed(2)}%
+                </PaneValue>
               </div>
               <PaneBar fill={fund.btc / peak} tone={fund.changePct >= 0 ? "up" : "down"} />
+              <div className="flex items-baseline justify-between gap-2 text-[11px] text-[var(--pane-muted)]">
+                <span className="font-mono tabular-nums">{btc(fund.btc)} BTC</span>
+                <span className="font-mono tabular-nums">{t.market.etf.share(fund.sharePct)}</span>
+              </div>
             </li>
           ))}
         </ul>
+
+        {/* Итог у нижнего края: он же забирает остаток высоты панели. */}
+        <div className="mt-auto space-y-1 border-t border-[var(--pane-border)] pt-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <PaneLabel>{t.market.etf.btcPrice}</PaneLabel>
+            <PaneValue size="sm">{usd(data?.btc_price ?? 0)}</PaneValue>
+          </div>
+          <div className="flex items-baseline justify-between gap-2">
+            <PaneLabel>{t.market.etf.supplyLabel}</PaneLabel>
+            <PaneValue size="sm" tone="gold">
+              {supplyShare(data?.total_btc ?? 0)}
+            </PaneValue>
+          </div>
+          <PaneBar fill={(data?.total_btc ?? 0) / BTC_SUPPLY} tone="gold" />
+        </div>
       </div>
     </Pane>
   );

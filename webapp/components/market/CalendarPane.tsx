@@ -58,40 +58,69 @@ function Impact({ importance }: { importance: CalendarEvent["importance"] }) {
   );
 }
 
+// Сетка строки: три числовые колонки справа стоят друг под другом, а не
+// разъезжаются по ширине. Раньше между названием события и цифрами оставалась
+// пустая половина панели - на широком экране это читалось как обрыв строки.
+const GRID =
+  "grid grid-cols-[3rem_1.5rem_2rem_1fr_4.5rem] items-baseline gap-x-3 " +
+  "sm:grid-cols-[3.5rem_1.75rem_2.5rem_1fr_5.5rem_5.5rem_5.5rem]";
+
 function Row({ event, zone }: { event: CalendarEvent; zone: string | undefined }) {
-  const t = useT();
   const tone = factTone(event.actual, event.forecast);
 
   return (
-    <li className="flex items-baseline gap-2 py-1.5">
-      <span className="w-11 shrink-0 font-mono text-[11px] tabular-nums text-[var(--pane-muted)]">
+    <li className={`${GRID} py-2`}>
+      <span className="font-mono text-[12px] tabular-nums text-[var(--pane-muted)]">
         {clock(event.time, zone)}
       </span>
       <Impact importance={event.importance} />
-      <span className="w-8 shrink-0 text-[10px] font-semibold text-[var(--pane-muted)]">
-        {event.currency}
-      </span>
-      <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--pane-text)]" title={event.title}>
+      <span className="text-[11px] font-semibold text-[var(--pane-muted)]">{event.currency}</span>
+      <span className="min-w-0 truncate text-[13px] text-[var(--pane-text)]" title={event.title}>
         {event.title}
       </span>
-      <span className="shrink-0 text-right font-mono text-[11px] tabular-nums">
-        {event.actual ? (
-          <span className={tone ? TONE_CLASS[tone] : "text-[var(--pane-text)]"}>{event.actual}</span>
-        ) : (
-          <span className="text-[var(--pane-muted)]">{event.forecast || "—"}</span>
-        )}
+      <span className={`text-right font-mono text-[12px] tabular-nums ${tone ? TONE_CLASS[tone] : "text-[var(--pane-text)]"}`}>
+        {event.actual || "—"}
       </span>
-      <span
-        className="hidden w-16 shrink-0 text-right font-mono text-[10px] tabular-nums text-[var(--pane-muted)] sm:inline"
-        title={t.market.calendar.previousTitle}
-      >
-        {event.previous || ""}
+      <span className="hidden text-right font-mono text-[12px] tabular-nums text-[var(--pane-muted)] sm:block">
+        {event.forecast || "—"}
+      </span>
+      <span className="hidden text-right font-mono text-[12px] tabular-nums text-[var(--pane-muted)] sm:block">
+        {event.previous || "—"}
       </span>
     </li>
   );
 }
 
-export default function CalendarPane({ className = "" }: { className?: string }) {
+/** Шапка колонок: без неё три числа справа - три числа неизвестно о чём. */
+function Head() {
+  const t = useT();
+  return (
+    <div className={`${GRID} border-b border-[var(--pane-border)] pb-1`}>
+      <PaneLabel>{t.market.calendar.colTime}</PaneLabel>
+      <span />
+      <span />
+      <PaneLabel>{t.market.calendar.colEvent}</PaneLabel>
+      <span className="text-right">
+        <PaneLabel>{t.market.calendar.colActual}</PaneLabel>
+      </span>
+      <span className="hidden text-right sm:block">
+        <PaneLabel>{t.market.calendar.colForecast}</PaneLabel>
+      </span>
+      <span className="hidden text-right sm:block">
+        <PaneLabel>{t.market.calendar.colPrevious}</PaneLabel>
+      </span>
+    </div>
+  );
+}
+
+export default function CalendarPane({
+  className = "",
+  height,
+}: {
+  className?: string;
+  /** Высота тела панели: раздел кончается ровно внизу окна. */
+  height?: number;
+}) {
   const t = useT();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [origin, setOrigin] = useState<Origin | null>(null);
@@ -143,24 +172,30 @@ export default function CalendarPane({ className = "" }: { className?: string })
       emptyNote={t.market.calendar.emptyNote}
       className={className}
     >
-      <div className="space-y-3">
-        {days.map((day) => (
-          <section key={day.key}>
-            <header className="flex items-baseline gap-2 border-b border-[var(--pane-border)] pb-1">
-              <PaneLabel>{t.market.calendar.day(day.key)}</PaneLabel>
-              {day.key === today && (
-                <span className="text-[10px] font-semibold text-[var(--pane-gold)]">
-                  {t.market.calendar.today}
-                </span>
-              )}
-            </header>
-            <ul className="divide-y divide-[var(--pane-border)]">
-              {day.events.map((event) => (
-                <Row key={`${event.time}-${event.title}`} event={event} zone={zone} />
-              ))}
-            </ul>
-          </section>
-        ))}
+      <div
+        className="overflow-y-auto pr-1"
+        style={height ? { height } : undefined}
+      >
+        <Head />
+        <div className="space-y-4 pt-2">
+          {days.map((day) => (
+            <section key={day.key}>
+              <header className="flex items-baseline gap-2 pb-0.5">
+                <PaneLabel>{t.market.calendar.day(day.key)}</PaneLabel>
+                {day.key === today && (
+                  <span className="text-[10px] font-semibold text-[var(--pane-gold)]">
+                    {t.market.calendar.today}
+                  </span>
+                )}
+              </header>
+              <ul className="divide-y divide-[var(--pane-border)]">
+                {day.events.map((event) => (
+                  <Row key={`${event.time}-${event.title}`} event={event} zone={zone} />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       </div>
     </Pane>
   );

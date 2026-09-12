@@ -125,7 +125,7 @@ function MapsSection() {
   return (
     <div ref={ref} className="grid gap-3 xl:grid-cols-3">
       <HeatmapPane className="xl:col-span-2" height={wide ? widget : 520} />
-      <EtfFlowsPane />
+      <EtfFlowsPane height={wide ? widget : undefined} />
     </div>
   );
 }
@@ -133,7 +133,16 @@ function MapsSection() {
 // ── Календарь ─────────────────────────────────────────────────────────────────
 
 function CalendarSection() {
-  return <CalendarPane />;
+  // Календарь - последняя секция раздела, и она должна кончаться внизу окна:
+  // события за неделю читают целиком, а не листая страницу.
+  const { ref, height, head, wide } = useFitHeight(420);
+  const body = Math.max(320, Math.round(height - (head || PANE_HEAD)) - 26);
+
+  return (
+    <div ref={ref}>
+      <CalendarPane height={wide ? body : undefined} />
+    </div>
+  );
 }
 
 // ── Страница ──────────────────────────────────────────────────────────────────

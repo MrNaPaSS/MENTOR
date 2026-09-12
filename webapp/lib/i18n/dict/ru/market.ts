@@ -36,6 +36,11 @@ export const market = {
     emptyNote: "Источник календаря не ответил",
     today: "сегодня",
     previousTitle: "Прошлое значение",
+    colTime: "Время",
+    colEvent: "Событие",
+    colActual: "Факт",
+    colForecast: "Прогноз",
+    colPrevious: "Было",
     day: (key: string) => {
       const [y, m, d] = key.split("-").map(Number);
       const date = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
@@ -48,6 +53,8 @@ export const market = {
   etf: {
     totalLabel: "Всего у фондов",
     share: (pct: number) => `${pct.toFixed(1)}% рынка`,
+    btcPrice: "Биткоин",
+    supplyLabel: "Доля всего выпуска",
   },
 
   pane: {

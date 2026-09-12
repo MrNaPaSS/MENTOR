@@ -33,6 +33,11 @@ export const market = {
     emptyNote: "The calendar source did not answer",
     today: "today",
     previousTitle: "Previous value",
+    colTime: "Time",
+    colEvent: "Event",
+    colActual: "Actual",
+    colForecast: "Forecast",
+    colPrevious: "Previous",
     day: (key: string) => {
       const [y, m, d] = key.split("-").map(Number);
       const date = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
@@ -45,6 +50,8 @@ export const market = {
   etf: {
     totalLabel: "Held by the funds",
     share: (pct: number) => `${pct.toFixed(1)}% of the market`,
+    btcPrice: "Bitcoin",
+    supplyLabel: "Share of total supply",
   },
 
   pane: {
