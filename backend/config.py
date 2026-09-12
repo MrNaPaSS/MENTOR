@@ -81,6 +81,18 @@ class BackendConfig:
     # Адрес сайта для ссылок наружу: кнопка «перейти к терминалу» под
     # сообщением в форуме ведёт по нему.
     site_url: str = "https://www.nmnh.trade"
+    # ── ИИ-разбор институциональных данных ─────────────────────────────────
+    #
+    # Ручка платная: каждый вызов идёт к Anthropic по нашему ключу. Счёт
+    # ведётся по ученику, а не по адресу - ученики сидят за мобильным NAT и
+    # делят адреса, и предел по адресу наказал бы случайных людей.
+    ai_analyze_max: int = 5          # разборов за окно на ученика
+    ai_analyze_window: int = 900     # окно, сек (15 мин)
+    ai_analyze_daily: int = 30       # разборов в сутки на ученика
+    # Цена разбора в монетах. Ноль - бесплатно (для локальной разработки).
+    # Монеты ограничивают расход надёжнее любого предела по времени: у
+    # списания есть своя книга, и вернуть его при сбое можно той же книгой.
+    ai_analyze_price: int = 50
 
 
     @staticmethod
@@ -128,6 +140,10 @@ class BackendConfig:
             tg_verify_max=int(os.getenv("TG_VERIFY_MAX", "5") or "5"),
             tg_verify_window=int(os.getenv("TG_VERIFY_WINDOW", "60") or "60"),
             uid_login_enabled=os.getenv("UID_LOGIN_ENABLED", "false").lower() == "true",
+            ai_analyze_max=int(os.getenv("AI_ANALYZE_MAX", "5") or "5"),
+            ai_analyze_window=int(os.getenv("AI_ANALYZE_WINDOW", "900") or "900"),
+            ai_analyze_daily=int(os.getenv("AI_ANALYZE_DAILY", "30") or "30"),
+            ai_analyze_price=int(os.getenv("AI_ANALYZE_PRICE", "50") or "50"),
             allowed_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
             # dev-вход включён, если явно DEV_LOGIN=true, либо мы на моках WEEX (=dev),
             # и НЕ отключён явно DEV_LOGIN=false.

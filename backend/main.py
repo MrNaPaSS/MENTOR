@@ -39,6 +39,7 @@ from backend.scalping.collector import ScalpingCollector
 from backend.scalping.density_alerts import DensityWatcher, run_watcher as run_density_watcher
 from backend.ws.scalping_hub import ScalpingHub
 from backend.notify import get_notifier
+from backend.ai_quota import AnalyzeQuota
 from backend.ratelimit import RateLimiter, AuthRateLimitMiddleware
 
 
@@ -162,6 +163,12 @@ def create_app(
     # пароль. Держим его здесь на время жизни - память переживает пять минут,
     # дамп базы живёт годами.
     app.state.tg_code_cache = {}
+    # Платная ручка ИИ-разбора: свой счёт по ученику, оконный и суточный.
+    # Здесь же, у приложения, а не в модуле: тесты поднимают своё приложение,
+    # и счёт одного не должен доставаться другому.
+    app.state.ai_quota = AnalyzeQuota(
+        config.ai_analyze_max, config.ai_analyze_window, config.ai_analyze_daily
+    )
     # Проверка одноразового пароля - отдельным, узким счётом: он проверяется
     # сам по себе, и перебор бьёт именно сюда.
     app.add_middleware(

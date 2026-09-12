@@ -29,6 +29,11 @@ def get_notifier(request: Request):
     return request.app.state.notifier
 
 
+def get_ai_quota(request: Request):
+    """Счёт ИИ-разборов на ученика. Живёт у приложения: у каждого свой."""
+    return request.app.state.ai_quota
+
+
 def get_session():
     session = SessionLocal()
     try:

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -18,15 +19,53 @@ class RateLimiter:
         self.window = window_seconds
         self._hits: dict[str, list[float]] = {}
 
+    def _fresh(self, key: str, now: float) -> list[float]:
+        """Попытки в окне: просроченные забываем сразу, чтобы счёт не рос вечно.
+
+        Опустевший ключ убираем совсем. Ключом бывает ученик, а учеников со
+        временем становится больше, чем помещается в память процесса, если
+        каждый оставляет по пустому списку навсегда.
+        """
+        bucket = [t for t in self._hits.get(key, []) if now - t < self.window]
+        if bucket:
+            self._hits[key] = bucket
+        else:
+            self._hits.pop(key, None)
+        return bucket
+
+    def check(self, key: str, now: float | None = None) -> bool:
+        """Пройдёт ли запрос - **не засчитывая** попытку.
+
+        Отдельно от ``allow`` ради нескольких пределов на одну ручку: у
+        ИИ-разбора их два, оконный и суточный, и отказ второго не должен
+        съедать попытку у первого.
+        """
+        now = time.time() if now is None else now
+        return len(self._fresh(key, now)) < self.max
+
+    def record(self, key: str, now: float | None = None) -> None:
+        """Засчитать попытку. Проверку делает вызывающий."""
+        now = time.time() if now is None else now
+        bucket = self._fresh(key, now)
+        bucket.append(now)
+        # Пустой ключ `_fresh` убрал из словаря - кладём обратно.
+        self._hits[key] = bucket
+
+    def retry_after(self, key: str, now: float | None = None) -> int:
+        """Через сколько секунд освободится место. Ноль - место есть сейчас."""
+        now = time.time() if now is None else now
+        bucket = self._fresh(key, now)
+        if len(bucket) < self.max:
+            return 0
+        # Место освободит самая старая попытка, когда выпадет из окна.
+        return max(1, math.ceil(self.window - (now - bucket[0])))
+
     def allow(self, key: str, now: float | None = None) -> bool:
         """True, если запрос в пределах лимита; иначе False (и не засчитывает попытку)."""
         now = time.time() if now is None else now
-        bucket = [t for t in self._hits.get(key, []) if now - t < self.window]
-        if len(bucket) >= self.max:
-            self._hits[key] = bucket
+        if not self.check(key, now):
             return False
-        bucket.append(now)
-        self._hits[key] = bucket
+        self.record(key, now)
         return True
 
     def reset(self) -> None:

@@ -9,6 +9,11 @@
 забрана, поэтому баланс (`Student.coins`) по-прежнему значит одно: сколько
 можно потратить прямо сейчас.
 
+Мимо ожидания идут платные услуги платформы: ИИ-разбор списывается сразу
+(`spend`), и, если услуга не состоялась, возвращается той же книгой
+(`refund`). Ждать получения там нечего - монеты уходят за дело, а не за
+достижение.
+
 Отдельный случай - убыток на пустом балансе. Списание, которому не хватило
 баланса, не пропадает, а встаёт в ожидание долгом и вычитается при следующем
 получении. Без этого ученик мог бы копить награды не забирая и сливать без
@@ -83,6 +88,69 @@ def add_debt(session, student_id: int, amount: int, reason: str, ref: str) -> Co
     )
     session.add(tx)
     return tx
+
+
+def spend(session, student_id: int, amount: int, reason: str, ref: str) -> bool:
+    """Списать монеты сразу, мимо ожидания. False - баланса не хватило.
+
+    Списание за платную услугу не награда и не долг: услуга либо оказывается
+    за монеты прямо сейчас, либо не оказывается вовсе. Поэтому баланс
+    двигается здесь же, а не при получении.
+
+    Одним запросом с условием «баланса хватает»: два одновременных нажатия
+    (две вкладки, двойной клик) не уведут баланс в минус - второй запрос
+    увидит, что монеты уже ушли, и вернёт False. Коммит за вызывающим.
+    """
+    if amount <= 0:
+        raise ValueError("Списание должно быть больше нуля")
+    result = session.execute(
+        update(Student)
+        .where(Student.id == student_id)
+        .where(Student.coins >= amount)
+        .values(coins=Student.coins - amount)
+        .execution_options(synchronize_session="fetch")
+    )
+    if not (result.rowcount or 0):
+        return False
+    session.add(CoinTransaction(
+        student_id=student_id,
+        amount=-amount,
+        reason=reason[:32],
+        ref=ref[:64],
+        pending=False,
+    ))
+    session.flush()
+    # Ученик, загруженный в эту сессию раньше, помнит прежний баланс.
+    session.expire_all()
+    return True
+
+
+def refund(session, student_id: int, amount: int, reason: str, ref: str) -> int:
+    """Вернуть списанное той же книгой. Возвращает баланс после возврата.
+
+    Возврат идёт отдельной строкой, а не удалением списания: в истории должно
+    остаться видно, что услугу пытались оказать и не смогли. Ссылка (``ref``)
+    у возврата своя - на пару «ученик и ссылка» в книге стоит ограничение
+    уникальности. Коммит за вызывающим.
+    """
+    if amount <= 0:
+        raise ValueError("Возврат должен быть больше нуля")
+    session.execute(
+        update(Student)
+        .where(Student.id == student_id)
+        .values(coins=Student.coins + amount)
+        .execution_options(synchronize_session="fetch")
+    )
+    session.add(CoinTransaction(
+        student_id=student_id,
+        amount=amount,
+        reason=reason[:32],
+        ref=ref[:64],
+        pending=False,
+    ))
+    session.flush()
+    session.expire_all()
+    return _balance(session, student_id)
 
 
 def pending_of(session, student_id: int) -> list[CoinTransaction]:

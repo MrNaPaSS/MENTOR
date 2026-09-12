@@ -3,13 +3,26 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import os
+import ssl
+import uuid
 from typing import Any
 from urllib.parse import quote
 
 import aiohttp
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+import certifi
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field, field_validator
+
+from backend import coin_ledger
+from backend.ai_quota import AnalyzeQuota
+from backend.config import BackendConfig
+from backend.deps import get_ai_quota, get_config, get_current_student, get_session
+from core.models import Student
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/institutional", tags=["institutional"])
 
@@ -325,21 +338,59 @@ async def etf_flows():
 
 
 # ── AI Analysis ───────────────────────────────────────────────────────────────
+#
+# Ручка платная: каждый вызов идёт к Anthropic по нашему ключу. Поэтому на ней
+# три замка сразу (ТЗ «источники рыночных данных», этап 3):
+#
+#   токен  - разбор доступен ученику кабинета, а не всему интернету;
+#   счёт   - несколько разборов за окно и за сутки, ключом ученик, не адрес;
+#   монеты - списываются до вызова и возвращаются той же книгой, если вызов
+#            не удался.
+#
+# Монеты здесь надёжнее предела по времени: счёт попыток живёт в памяти
+# процесса и обнуляется перезапуском, а списание записано в базе.
+
+
+# Пределы на присланное. Цена разбора в монетах постоянная, а счёт Anthropic
+# считается по входным токенам: без предела на размер тела один оплаченный
+# разбор превращается в сколь угодно дорогой вызов. Значения с запасом - на
+# экране аналитики в запрос уходит десяток недель COT и шесть макро-строк.
+MAX_EXTRA_CTX = 2_000
+MAX_BLOCK_CHARS = 16_384
+
 
 class AnalyzeRequest(BaseModel):
     cot_btc:   dict | None = None
     cot_eth:   dict | None = None
     macro:     dict | None = None
-    extra_ctx: str = ""
+    extra_ctx: str = Field(default="", max_length=MAX_EXTRA_CTX)
+
+    @field_validator("cot_btc", "cot_eth", "macro")
+    @classmethod
+    def _не_больше_предела(cls, value: dict | None) -> dict | None:
+        if value is None:
+            return value
+        size = len(json.dumps(value, ensure_ascii=False, default=str))
+        if size > MAX_BLOCK_CHARS:
+            raise ValueError(f"Блок данных больше {MAX_BLOCK_CHARS} знаков")
+        return value
 
 
-@router.post("/analyze")
-async def ai_analysis(req: AnalyzeRequest):
-    """AI-анализ через Claude API. Требует ANTHROPIC_API_KEY в .env."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise HTTPException(503, "ANTHROPIC_API_KEY не настроен в .env")
+class ClaudeError(RuntimeError):
+    """Anthropic не ответил разбором. Текст - для лога, а не для ответа."""
 
+
+def _human_wait(seconds: int) -> str:
+    """Ожидание словами: «45 с», «12 мин», «3 ч»."""
+    if seconds < 60:
+        return f"{seconds} с"
+    if seconds < 3600:
+        return f"{-(-seconds // 60)} мин"
+    return f"{-(-seconds // 3600)} ч"
+
+
+def _analyze_prompt(req: AnalyzeRequest) -> str:
+    """Собрать запрос к модели из присланных данных."""
     parts: list[str] = [
         "Ты старший аналитик институциональных рынков. "
         "Проанализируй данные ниже и дай торговый инсайт НА РУССКОМ."
@@ -383,29 +434,118 @@ async def ai_analysis(req: AnalyzeRequest):
         "(1-2 главных риска на горизонте 2 недели)\n"
         "Стиль: сжато, без воды, как брифинг для трейдера."
     )
+    return "\n".join(parts)
 
+
+def _anthropic_ssl() -> ssl.SSLContext:
+    """Проверка сертификата для запроса, который несёт наш ключ.
+
+    Соседние публичные источники этого модуля ходят с `ssl=False` - там нет
+    ни ключей, ни данных ученика. Здесь в заголовке уходит `x-api-key`, и
+    отключённая проверка означает, что подменивший сертификат по дороге
+    прочитает ключ. Корни берём из certifi, а не из хранилища Windows: до
+    системного Python не достаёт, и запрос падает с «unable to get local
+    issuer certificate» (тот же приём, что в backend/api/trading.py).
+    """
+    return ssl.create_default_context(cafile=certifi.where())
+
+
+async def _call_claude(api_key: str, prompt: str) -> str:
+    """Один запрос к Anthropic. Отдельной функцией: её подменяют тесты."""
     s = await _sess()
+    async with s.post(
+        "https://api.anthropic.com/v1/messages",
+        json={
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 1500,
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        ssl=_anthropic_ssl(),
+    ) as r:
+        if r.status != 200:
+            raise ClaudeError(f"HTTP {r.status}: {(await r.text())[:300]}")
+        resp = await r.json(content_type=None)
     try:
-        async with s.post(
-            "https://api.anthropic.com/v1/messages",
-            json={
-                "model": "claude-sonnet-4-6",
-                "max_tokens": 1500,
-                "messages": [{"role": "user", "content": "\n".join(parts)}],
-            },
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            ssl=False,
-        ) as r:
-            if r.status != 200:
-                err = await r.text()
-                raise HTTPException(502, f"Claude API: {err[:300]}")
-            resp = await r.json(content_type=None)
-            return {"analysis": resp["content"][0]["text"]}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(502, f"AI error: {e}") from e
+        return resp["content"][0]["text"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ClaudeError(f"неожиданный ответ: {str(resp)[:300]}") from exc
+
+
+def _refund_quietly(session, student_id: int, price: int, ref: str) -> bool:
+    """Вернуть монеты за несостоявшийся разбор. False - вернуть не вышло.
+
+    Возврат и сам может не удаться: обрыв базы, занятый SQLite. Молчать об
+    этом нельзя - монеты уже списаны и закоммичены, и ученик остался и без
+    разбора, и без монет. Поэтому громко в лог со ссылкой списания, по ней
+    наставник вернёт руками, и честное сообщение на экран вместо обещания
+    возврата, которого не было.
+    """
+    if not price:
+        return True
+    try:
+        coin_ledger.refund(session, student_id, price, "ai_refund", f"{ref}_back")
+        session.commit()
+        return True
+    except Exception:
+        session.rollback()
+        log.error(
+            "Монеты за ИИ-разбор списаны, но не возвращены: ученик %s, списание %s, %s монет",
+            student_id, ref, price, exc_info=True,
+        )
+        return False
+
+
+@router.post("/analyze")
+async def ai_analysis(
+    req: AnalyzeRequest,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+    config: BackendConfig = Depends(get_config),
+    quota: AnalyzeQuota = Depends(get_ai_quota),
+):
+    """ИИ-анализ через Claude API. Требует токен, укладывается в лимит и стоит монет."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(503, "ANTHROPIC_API_KEY не настроен в .env")
+
+    wait = quota.retry_after(student.id)
+    if wait:
+        raise HTTPException(
+            429,
+            f"Разборов пока достаточно. Следующий - через {_human_wait(wait)}",
+            headers={"Retry-After": str(wait)},
+        )
+
+    price = int(config.ai_analyze_price or 0)
+    ref = f"ai_{uuid.uuid4().hex[:16]}"
+    if price and not coin_ledger.spend(session, student.id, price, "ai_analyze", ref):
+        raise HTTPException(400, f"Разбор стоит {price} NMNH, на балансе меньше")
+    session.commit()
+    # Попытка засчитывается после списания: отказ по балансу не должен стоить
+    # ученику места в окне.
+    quota.record(student.id)
+
+    try:
+        analysis = await _call_claude(api_key, _analyze_prompt(req))
+    except Exception as exc:
+        # В тексте ошибки Anthropic бывают куски запроса и подсказки о ключе.
+        # Наружу - общее сообщение, подробность - в лог сервера.
+        log.warning("ИИ-разбор не удался (ученик %s, %s): %s", student.id, ref, exc)
+        returned = _refund_quietly(session, student.id, price, ref)
+        raise HTTPException(
+            502,
+            "ИИ-разбор сейчас недоступен, монеты возвращены. Попробуйте позже"
+            if returned
+            else "ИИ-разбор сейчас недоступен. Монеты вернёт наставник, разбор не состоялся",
+        ) from exc
+
+    return {
+        "analysis": analysis,
+        "price": price,
+        "balance": int(session.get(Student, student.id).coins or 0),
+    }
