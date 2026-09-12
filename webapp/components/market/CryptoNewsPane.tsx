@@ -10,10 +10,12 @@
 // шла от CryptoCompare прямо из браузера; тот закрыл бесплатный доступ ключом,
 // и раздел молча опустел.
 
-import { useEffect, useState } from "react";
+
+import { useState } from "react";
 import { useIntlLocale, useT } from "@/lib/i18n";
 import { useLocale, type Locale } from "@/lib/i18n/locale";
 import { API_URL } from "@/lib/api";
+import { useCached } from "@/lib/paneCache";
 import { CHIP, CHIP_OFF, CHIP_ON, Pane } from "@/components/app/Pane";
 import { useFitHeight } from "@/lib/useFitHeight";
 
@@ -36,24 +38,25 @@ const NEWS_SOURCES: Record<Locale, string> = {
 function CryptoNewsFeed({ lang, height }: { lang: Locale; height: number }) {
   const t = useT();
   const numbers = useIntlLocale();
-  // null - ещё грузится; пустой массив - сервер ответил, но новостей нет.
-  const [news, setNews] = useState<NewsItem[] | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    setNews(null);
-    fetch(`${API_URL}/api/market/news?lang=${lang}`, {
-      headers: { "ngrok-skip-browser-warning": "1" },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { items?: NewsItem[] } | null) => {
-        if (alive) setNews(Array.isArray(data?.items) ? data.items : []);
+  // Пять минут: столько же лента живёт и на сервере. Своя память нужна не
+  // ради сети, а ради глаз - вкладку новостей открывают и закрывают часто, и
+  // каждый раз собирать её заново незачем.
+  const { data, loading } = useCached<{ items?: NewsItem[] }>(
+    `market:news:${lang}`,
+    () =>
+      fetch(`${API_URL}/api/market/news?lang=${lang}`, {
+        headers: { "ngrok-skip-browser-warning": "1" },
       })
-      .catch(() => alive && setNews([]));
-    return () => {
-      alive = false;
-    };
-  }, [lang]);
+        .then((r) => (r.ok ? r.json() : { items: [] }))
+        .catch(() => ({ items: [] })),
+    { ttl: 5 * 60_000 },
+  );
+  // null - ещё грузится; пустой массив - сервер ответил, но новостей нет.
+  const news: NewsItem[] | null = loading
+    ? null
+    : Array.isArray(data?.items)
+      ? data.items
+      : [];
 
   if (news === null) {
     return (

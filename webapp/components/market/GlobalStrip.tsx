@@ -10,8 +10,9 @@
 // раздел рынка обязан начинаться так же, иначе он выглядит другим приложением.
 
 import { useIntlLocale, useT } from "@/lib/i18n";
-import { useEffect, useState } from "react";
+
 import { api, type GlobalMarket } from "@/lib/api";
+import { useCached } from "@/lib/paneCache";
 import { money } from "@/lib/scalping";
 import { Activity, ArrowDown, ArrowUp, BarChart3, Bitcoin, Coins, Globe } from "lucide-react";
 
@@ -70,32 +71,14 @@ function Cell({
 export default function GlobalStrip() {
   const t = useT();
   const numbers = useIntlLocale();
-  const [data, setData] = useState<GlobalMarket | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let dropped = false;
-    // Раз в минуту: сервер и сам держит ответ минуту в кэше, чаще спрашивать
-    // значит получать ту же строку и греть сеть.
-    function load() {
-      api
-        .marketGlobal()
-        .then((r) => {
-          if (dropped) return;
-          setData(r);
-          setFailed(false);
-        })
-        .catch(() => {
-          if (!dropped) setFailed(true);
-        });
-    }
-    load();
-    const timer = setInterval(load, 60_000);
-    return () => {
-      dropped = true;
-      clearInterval(timer);
-    };
-  }, []);
+  // Раз в минуту: сервер и сам держит ответ минуту в кэше, чаще спрашивать
+  // значит получать ту же строку и греть сеть. Значение общее для всех
+  // разделов, поэтому при возврате строка уже стоит на месте.
+  const { data, failed } = useCached<GlobalMarket>(
+    "market:global",
+    () => api.marketGlobal(),
+    { ttl: 60_000 },
+  );
 
   const change = data?.market_cap_change_24h ?? 0;
 

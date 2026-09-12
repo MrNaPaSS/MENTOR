@@ -13,8 +13,9 @@
 
 import { Gauge as GaugeIcon } from "lucide-react";
 import { useT } from "@/lib/i18n";
-import { useEffect, useId, useState } from "react";
+import { useId } from "react";
 import { api, type FearGreedPoint } from "@/lib/api";
+import { useCached } from "@/lib/paneCache";
 import Pane, { PaneLabel, type PaneState } from "./Pane";
 import SourceMark from "./SourceMark";
 import type { Origin } from "@/lib/marketOrigin";
@@ -166,28 +167,22 @@ function Then({ label, now, then }: { label: string; now: number; then: number |
 
 export default function FearGreedPane({ className = "" }: { className?: string }) {
   const t = useT();
-  const [data, setData] = useState<FearGreedPoint[]>([]);
-  const [origin, setOrigin] = useState<Origin | null>(null);
-  const [state, setState] = useState<PaneState>("loading");
-
-  useEffect(() => {
-    let dropped = false;
-    api
-      .marketFearGreed()
-      .then((r) => {
-        if (dropped) return;
-        const history = r.history?.length ? r.history : r.current ? [r.current] : [];
-        setData(history);
-        setOrigin({ source: r.source ?? null, stale: r.stale });
-        setState(history.length ? "ready" : "error");
-      })
-      .catch(() => {
-        if (!dropped) setState("error");
-      });
-    return () => {
-      dropped = true;
-    };
-  }, []);
+  // Индекс считается раз в сутки: пять минут жизни здесь - запас, а не
+  // экономия. Главное, что при возврате на «Рынок» стрелка уже на месте.
+  const { data: answer, loading, failed } = useCached(
+    "market:fear-greed",
+    () => api.marketFearGreed(),
+    { ttl: 5 * 60_000 },
+  );
+  const data = answer?.history?.length
+    ? answer.history
+    : answer?.current
+      ? [answer.current]
+      : [];
+  const origin: Origin | null = answer
+    ? { source: answer.source ?? null, stale: answer.stale }
+    : null;
+  const state: PaneState = loading ? "loading" : failed || !data.length ? "error" : "ready";
 
   const now = valueOf(data[0]);
   const zone = now === null ? null : zoneOf(now);

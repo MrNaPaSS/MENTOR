@@ -10,10 +10,11 @@
 // не значит тому, кто сидит в Киеве или в Алматы.
 
 import { useT } from "@/lib/i18n";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { CalendarDays } from "lucide-react";
 
 import { api } from "@/lib/api";
+import { useCached } from "@/lib/paneCache";
 import {
   clock,
   dayKey,
@@ -122,9 +123,14 @@ export default function CalendarPane({
   height?: number;
 }) {
   const t = useT();
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [origin, setOrigin] = useState<Origin | null>(null);
-  const [state, setState] = useState<PaneState>("loading");
+  const { data, loading, failed } = useCached("market:calendar", () => api.marketCalendar(), {
+    ttl: POLL_MS,
+  });
+  const events = (data?.events ?? []) as CalendarEvent[];
+  const origin: Origin | null = data
+    ? { source: data.source ?? null, stale: data.stale }
+    : null;
+  const state: PaneState = loading ? "loading" : failed || !events.length ? "error" : "ready";
 
   // Пояс ученика: берём у браузера один раз, руками его никто не задаёт.
   const zone = useMemo(() => {
@@ -133,30 +139,6 @@ export default function CalendarPane({
     } catch {
       return undefined;
     }
-  }, []);
-
-  useEffect(() => {
-    let dropped = false;
-    function load() {
-      api
-        .marketCalendar()
-        .then((r) => {
-          if (dropped) return;
-          const list = (r.events ?? []) as CalendarEvent[];
-          setEvents(list);
-          setOrigin({ source: r.source ?? null, stale: r.stale });
-          setState(list.length ? "ready" : "error");
-        })
-        .catch(() => {
-          if (!dropped) setState("error");
-        });
-    }
-    load();
-    const timer = setInterval(load, POLL_MS);
-    return () => {
-      dropped = true;
-      clearInterval(timer);
-    };
   }, []);
 
   const days = useMemo(() => groupByDay(events, zone), [events, zone]);

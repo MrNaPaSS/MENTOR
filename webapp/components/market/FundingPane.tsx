@@ -14,8 +14,9 @@
 import { Percent } from "lucide-react";
 import CoinLogo from "./CoinLogo";
 import { useT, type Dict } from "@/lib/i18n";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, type FundingRate } from "@/lib/api";
+import { useCached } from "@/lib/paneCache";
 import { base } from "@/lib/scalping";
 import Pane, { LiveBadge, PaneLabel, type PaneState } from "./Pane";
 import SourceMark from "./SourceMark";
@@ -59,37 +60,24 @@ function parse(rates: FundingRate[]): Row[] {
 
 export default function FundingPane({ className = "" }: { className?: string }) {
   const t = useT();
-  const [rows, setRows] = useState<Row[]>([]);
-  const [origin, setOrigin] = useState<Origin | null>(null);
-  const [state, setState] = useState<PaneState>("loading");
   const [now, setNow] = useState(() => Date.now());
+  // Ставка меняется раз в восемь часов - пяти минут жизни хватает с запасом.
+  const { data: answer, loading, failed } = useCached(
+    "market:funding",
+    () => api.marketFunding(),
+    { ttl: 5 * 60_000 },
+  );
+  const rows = useMemo(() => parse(answer?.rates ?? []), [answer]);
+  const origin: Origin | null = answer
+    ? { source: answer.source ?? null, stale: answer.stale }
+    : null;
+  const state: PaneState = loading ? "loading" : failed || !rows.length ? "error" : "ready";
 
+  // Обратный счёт до расчёта идёт всё время, и минутного шага хватает: сама
+  // ставка приезжает из общей памяти, а тикать надо только цифрам «через».
   useEffect(() => {
-    let dropped = false;
-    function load() {
-      api
-        .marketFunding()
-        .then((r) => {
-          if (dropped) return;
-          const parsed = parse(r.rates ?? []);
-          setRows(parsed);
-          setOrigin({ source: r.source ?? null, stale: r.stale });
-          setState(parsed.length ? "ready" : "error");
-        })
-        .catch(() => {
-          if (!dropped) setState("error");
-        });
-    }
-    load();
-    // Ставка меняется раз в восемь часов, но обратный счёт до расчёта идёт
-    // всё время - минутного шага хватает и тому, и другому.
     const tick = setInterval(() => setNow(Date.now()), 60_000);
-    const reload = setInterval(load, 5 * 60_000);
-    return () => {
-      dropped = true;
-      clearInterval(tick);
-      clearInterval(reload);
-    };
+    return () => clearInterval(tick);
   }, []);
 
   // Масштаб полос - по самой большой ставке в списке, а не по абсолютной

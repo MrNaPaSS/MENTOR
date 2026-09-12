@@ -19,6 +19,7 @@ import { Bitcoin } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { api, type Derivatives, type OnChainStats } from "@/lib/api";
+import { useCached } from "@/lib/paneCache";
 import { money } from "@/lib/scalping";
 import Pane, { LiveBadge, PaneBar, PaneLabel, type PaneState } from "./Pane";
 import MiniCandles from "./MiniCandles";
@@ -91,54 +92,28 @@ export default function BitcoinPane({ className = "", part = "all" }: { classNam
   const t = useT();
   const showPrice = part !== "network";
   const showNet = part !== "price";
-  const [chain, setChain] = useState<OnChainStats | null>(null);
-  const [chainState, setChainState] = useState<PaneState>("loading");
-  const [deriv, setDeriv] = useState<Derivatives | null>(null);
-  const [derivFailed, setDerivFailed] = useState(false);
+  // Сеть меняется медленно: комиссии и сложность живут минуту.
+  const chainAnswer = useCached<OnChainStats>(
+    "market:onchain",
+    () => api.marketOnchain(),
+    { ttl: 60_000, enabled: showNet },
+  );
+  const chain = chainAnswer.data;
+  const chainState: PaneState = chainAnswer.loading
+    ? "loading"
+    : chainAnswer.failed || !chain
+      ? "error"
+      : "ready";
 
-  useEffect(() => {
-    let dropped = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
-
-    // Сеть спрашиваем один раз: комиссии и сложность меняются медленнее, чем
-    // человек успевает уйти со страницы.
-    if (showNet) {
-      api
-        .marketOnchain()
-        .then((r) => {
-          if (dropped) return;
-          setChain(r);
-          setChainState(r ? "ready" : "error");
-        })
-        .catch(() => {
-          if (!dropped) setChainState("error");
-        });
-    }
-
-    // Цена и позиции - каждые полминуты. Реже - и цена на панели начинает
-    // спорить с ценой в терминале.
-    if (showPrice) {
-      const loadDeriv = () => {
-        api
-          .marketDerivatives("BTCUSDT")
-          .then((r) => {
-            if (dropped) return;
-            setDeriv(r);
-            setDerivFailed(false);
-          })
-          .catch(() => {
-            if (!dropped) setDerivFailed(true);
-          });
-      };
-      loadDeriv();
-      timer = setInterval(loadDeriv, 30_000);
-    }
-
-    return () => {
-      dropped = true;
-      if (timer) clearInterval(timer);
-    };
-  }, [showNet, showPrice]);
+  // Цена и позиции - каждые полминуты. Реже - и цена на панели начинает
+  // спорить с ценой в терминале.
+  const derivAnswer = useCached<Derivatives>(
+    "market:derivatives:BTCUSDT",
+    () => api.marketDerivatives("BTCUSDT"),
+    { ttl: 30_000, enabled: showPrice },
+  );
+  const deriv = derivAnswer.data;
+  const derivFailed = derivAnswer.failed;
 
   const diff = chain?.difficulty_change_pct ?? 0;
   const change = deriv?.priceChangePct ?? 0;

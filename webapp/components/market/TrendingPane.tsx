@@ -12,8 +12,9 @@
 import { Flame } from "lucide-react";
 import CoinLogo from "./CoinLogo";
 import { useT } from "@/lib/i18n";
-import { useEffect, useState } from "react";
+
 import { api, type TrendingCoin } from "@/lib/api";
+import { useCached } from "@/lib/paneCache";
 import Pane, { type PaneState } from "./Pane";
 
 /** Цена в биткоинах: у трендовых монет она уходит в восьмой знак. */
@@ -25,26 +26,15 @@ function btc(value: number): string {
 
 export default function TrendingPane({ className = "" }: { className?: string }) {
   const t = useT();
-  const [coins, setCoins] = useState<TrendingCoin[]>([]);
-  const [state, setState] = useState<PaneState>("loading");
-
-  useEffect(() => {
-    let dropped = false;
-    api
-      .marketTrending()
-      .then((r) => {
-        if (dropped) return;
-        const list = r.coins ?? [];
-        setCoins(list);
-        setState(list.length ? "ready" : "error");
-      })
-      .catch(() => {
-        if (!dropped) setState("error");
-      });
-    return () => {
-      dropped = true;
-    };
-  }, []);
+  // Две минуты: список самых искомых монет меняется медленно, а при возврате
+  // на «Рынок» он должен стоять на месте, а не собираться заново.
+  const { data, loading, failed } = useCached<{ coins: TrendingCoin[] }>(
+    "market:trending",
+    () => api.marketTrending(),
+    { ttl: 120_000 },
+  );
+  const coins = data?.coins ?? [];
+  const state: PaneState = loading ? "loading" : failed || !coins.length ? "error" : "ready";
 
   return (
     <Pane

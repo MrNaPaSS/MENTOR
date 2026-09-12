@@ -8,10 +8,11 @@
 // биткоина держит каждый фонд и как сегодня ходит его бумага.
 
 import { useT } from "@/lib/i18n";
-import { useEffect, useState } from "react";
+
 import { Landmark } from "lucide-react";
 
 import { api, type EtfFlows } from "@/lib/api";
+import { useCached } from "@/lib/paneCache";
 import Pane, { PaneBar, PaneLabel, PaneValue, type PaneState } from "./Pane";
 
 /** Как часто спрашиваем. Активы фондов меняются раз в сутки. */
@@ -48,30 +49,16 @@ export default function EtfFlowsPane({
   height?: number;
 }) {
   const t = useT();
-  const [data, setData] = useState<EtfFlows | null>(null);
-  const [state, setState] = useState<PaneState>("loading");
-
-  useEffect(() => {
-    let dropped = false;
-    function load() {
-      api
-        .etfFlows()
-        .then((r) => {
-          if (dropped) return;
-          setData(r);
-          setState(r.etfs?.length ? "ready" : "error");
-        })
-        .catch(() => {
-          if (!dropped) setState("error");
-        });
-    }
-    load();
-    const timer = setInterval(load, POLL_MS);
-    return () => {
-      dropped = true;
-      clearInterval(timer);
-    };
-  }, []);
+  const { data, loading, failed } = useCached<EtfFlows>(
+    "market:etf-flows",
+    () => api.etfFlows(),
+    { ttl: POLL_MS },
+  );
+  const state: PaneState = loading
+    ? "loading"
+    : failed || !data?.etfs?.length
+      ? "error"
+      : "ready";
 
   const funds = [...(data?.etfs ?? [])].sort((a, b) => b.btc - a.btc);
   const peak = funds.reduce((max, f) => Math.max(max, f.btc), 0) || 1;

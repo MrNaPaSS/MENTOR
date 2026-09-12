@@ -10,13 +10,14 @@
 // карты `d3` незачем.
 
 import { useT } from "@/lib/i18n";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { LayoutGrid } from "lucide-react";
 import { ResponsiveContainer, Treemap } from "recharts";
 
 import { useRouter } from "next/navigation";
 
 import { api } from "@/lib/api";
+import { useCached } from "@/lib/paneCache";
 import { buildTiles, formatChange, tileColor, type Tile } from "@/lib/heatmap";
 import { askSymbol } from "@/lib/openSymbol";
 import Pane, { type PaneState } from "./Pane";
@@ -106,33 +107,20 @@ export default function HeatmapPane({
 }) {
   const t = useT();
   const router = useRouter();
-  const [tiles, setTiles] = useState<TileNode[]>([]);
-  const [origin, setOrigin] = useState<Origin | null>(null);
-  const [state, setState] = useState<PaneState>("loading");
+  // Тикеры общие с бегущей строкой и живут в общей памяти: возврат на «Рынок»
+  // показывает карту сразу, а свежие цифры догоняют.
+  const { data, loading, failed } = useCached("market:tickers", () => api.marketTickers(), {
+    ttl: POLL_MS,
+  });
 
-  useEffect(() => {
-    let dropped = false;
-    function load() {
-      api
-        .marketTickers()
-        .then((r) => {
-          if (dropped) return;
-          const built = buildTiles(r.tickers ?? []).map((tile) => ({ ...tile, value: tile.size }));
-          setTiles(built);
-          setOrigin({ source: r.source ?? null, stale: r.stale });
-          setState(built.length ? "ready" : "error");
-        })
-        .catch(() => {
-          if (!dropped) setState("error");
-        });
-    }
-    load();
-    const timer = setInterval(load, POLL_MS);
-    return () => {
-      dropped = true;
-      clearInterval(timer);
-    };
-  }, []);
+  const tiles: TileNode[] = useMemo(
+    () => buildTiles(data?.tickers ?? []).map((tile) => ({ ...tile, value: tile.size })),
+    [data],
+  );
+  const origin: Origin | null = data
+    ? { source: data.source ?? null, stale: data.stale }
+    : null;
+  const state: PaneState = loading ? "loading" : failed || !tiles.length ? "error" : "ready";
 
   return (
     <Pane
