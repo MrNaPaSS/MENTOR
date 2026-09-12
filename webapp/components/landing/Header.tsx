@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Menu, X, ArrowRight } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 import LocaleSwitch from "@/components/ui/LocaleSwitch";
+import ThemeSwitch from "@/components/ui/ThemeSwitch";
 import { NAV_ANCHORS } from "@/lib/content";
 import { useT } from "@/lib/i18n";
 import { getAccessToken } from "@/lib/auth";
@@ -78,6 +79,7 @@ export default function Header({ links }: HeaderProps = {}) {
 
         {/* Действия справа */}
         <div className="hidden items-center gap-2 md:flex">
+          <ThemeSwitch />
           <LocaleSwitch />
           {authed ? (
             // С компьютера кабинет открывается терминалом: это рабочий стол
@@ -140,7 +142,10 @@ export default function Header({ links }: HeaderProps = {}) {
               {l.label}
             </a>
           ))}
-          <LocaleSwitch className="mt-4 self-start" />
+          <div className="mt-4 flex items-center gap-2 self-start">
+            <ThemeSwitch />
+            <LocaleSwitch />
+          </div>
 
           <div className="mt-auto">
             {authed ? (

@@ -41,6 +41,7 @@ import {
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import { tradingStatus, type TradingStatus } from "@/lib/trading";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
+import ThemeSwitch from "@/components/ui/ThemeSwitch";
 
 // Названия разделов живут в словаре: здесь только порядок, адрес и картинка.
 const NAV = [
@@ -275,6 +276,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Правая часть - баланс + профиль */}
           <div className="flex items-center gap-3">
+            {/* Тема - слева от монет. В терминале её не показываем: там своё
+                рабочее место со своими настройками, и вторая кнопка рядом с
+                графиком только мешает. */}
+            {!pathname.startsWith("/app/scalping") && <ThemeSwitch className="hidden md:flex" />}
             {/* Монеты NMNH и награды, ждущие получения. Нажатие открывает
                 окно наград; из него же - история в аналитике и маркет. */}
             {coins !== null && (
