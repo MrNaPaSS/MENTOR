@@ -471,7 +471,68 @@ Hyperliquid, Aster, dYdX: подключение кошелька, подпис�
 Осталось к BD-менеджеру WEEX: точная ставка и уровни, привязка трейдеров с чужим реф-кодом,
 лимиты внутренних переводов по UID, частота выплат.
 
-## 9. Вне рамок
+## 9. Заявка брокера WEEX: что подать и откуда взять цифры
+
+Письмо WEEX от 12 сентября 2026 заканчивается приглашением подать заявку. Broker ID выдаётся
+только после неё, поэтому это ближайший шаг, и он не про код.
+
+### Что просят
+
+1. Заполнить форму брокера на сайте WEEX (инструкция на [странице брокера](https://www.weex.com/api-doc/broker/intro)).
+2. Указать **UID нашей партнёрки** (в открытый документ его не пишем, он у наставника и в
+   окружении сервера).
+3. Дать данные NMNH.TRADE: что за платформа, чем торгуют ученики, сколько их.
+4. Приложить **цифры доступного торгового оборота**.
+
+### Откуда берутся цифры оборота
+
+Всё уже считается в партнёрской админке ([admin_affiliate.py](../../backend/api/admin_affiliate.py)),
+брать руками ничего не нужно:
+
+| Что | Где | Ручка |
+|---|---|---|
+| Оборот рефералов за 30 дней, спот и фьючерсы отдельно | `overview` | `GET /api/admin/affiliate/overview?days=30` |
+| Разбивка по ученикам, отсортированная по обороту | `referrals` | `GET /api/admin/affiliate/referrals?days=30` |
+| Комиссия по дням за две недели | `commission_series` | `GET /api/admin/affiliate/commission-series?days=14` |
+
+Для заявки достаточно трёх чисел: фьючерсный оборот рефералов за 30 дней, число учеников с
+торговой активностью и число подключённых к терминалу счетов (строки в `weex_credentials`).
+Последнее важнее всего: это и есть оборот, который пойдёт через брокерскую метку, а не через
+партнёрскую ссылку.
+
+### Черновик письма
+
+> We run NMNH.TRADE, a futures trading terminal for students of our trading academy. Our users
+> trade WEEX futures through our interface: chart, order book, cluster analysis, position and
+> risk management, trade journal. Orders are placed by our backend with the user's own API keys,
+> so every order can carry the broker tag and users cannot bypass it.
+>
+> We are already a WEEX affiliate (affiliate UID: указать). Over the last 30 days our referred
+> users traded ... USDT in futures; ... of them have connected their accounts to the terminal
+> and trade through it daily.
+>
+> We would like to join the API Broker Program. Please advise on the starting rebate rate and
+> tier requirements for our volume, and confirm the following:
+>
+> 1. the exact rebate rate and the volume thresholds for higher tiers;
+> 2. attribution for traders who registered with another partner's referral code;
+> 3. limits on internal UID transfers, since we plan to share part of the rebate with traders;
+> 4. payout frequency;
+> 5. requirements for OAuth Fast Connect, so users can link accounts without pasting API keys.
+
+Пункты 1-4 - это то, что поддержка отправила к BD-менеджеру; пятый нашёлся в публичных
+материалах и в документе не описан.
+
+### Что делать, когда Broker ID придёт
+
+1. `WEEX_BROKER_ID` в окружение; пусто - метки нет, и всё работает как сейчас (§4.2).
+2. Отдельные брокерские ключи рядом с партнёрскими: это разные пары, и партнёрские остаются
+   для оборотов и балансов рефералов.
+3. Метка в адаптере: `newClientOrderId` с `b-{brokerId}` и `clientAlgoId` у условных заявок.
+4. `checkUserEligibility` на каждом подключённом счёте, причина отказа - в `exchange_accounts`.
+5. Сверка начислений по `GET /api/v3/apiReferral/rebate/recentRecord` по парам ученика.
+
+## 10. Вне рамок
 
 - NMNH не держит деньги трейдеров: без субаккаунтов под мастер-счётом (ND-брокер) и без
   собственных депозитов и выводов.
