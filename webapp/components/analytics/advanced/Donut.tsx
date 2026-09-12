@@ -6,11 +6,13 @@
 // его, а доли - потом. Доли берём по модулю: минус на круговой диаграмме
 // нарисовать нельзя, зато видно, какую часть оборота он занял.
 //
-// Дуги разделены зазором и скруглены с концов, а цвет каждой уходит в
-// прозрачность к низу: сплошные плоские сектора встык читаются как заливка
-// одного пятна, и граница между «убыточными» и «комиссиями» терялась на
-// тёмном фоне. Наведение приподнимает дугу и подсвечивает её - так видно, на
-// какую долю смотришь.
+// Дуги разделены зазором, но не скруглены: капли на концах сектора выглядят
+// игрушкой, а разговор здесь про деньги. Объём даёт не толщина, а тень под
+// кольцом и тонкая внутренняя обводка - кольцо получается плоским и чётким,
+// как на приборной панели, а не надутым.
+//
+// Наведение приподнимает дугу и подсвечивает её - так видно, на какую долю
+// смотришь.
 
 import { useId, useState } from "react";
 
@@ -45,7 +47,7 @@ export default function Donut({
   size,
   thickness = 14,
   center,
-  gap = 4,
+  gap = 9,
 }: DonutProps) {
   const uid = useId().replace(/:/g, "");
   const [hover, setHover] = useState<string | null>(null);
@@ -80,9 +82,12 @@ export default function Donut({
           {arcs.map((arc) => (
             <linearGradient key={arc.key} id={`${uid}-${arc.key}`} x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor={arc.color} stopOpacity="1" />
-              <stop offset="100%" stopColor={arc.color} stopOpacity="0.62" />
+              <stop offset="100%" stopColor={arc.color} stopOpacity="0.78" />
             </linearGradient>
           ))}
+          <filter id={`${uid}-lift`} x="-25%" y="-25%" width="150%" height="150%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodOpacity="0.18" />
+          </filter>
         </defs>
 
         {/* Дорожка: по ней видно, что кольцо целое, даже когда доля одна. */}
@@ -93,6 +98,27 @@ export default function Donut({
           fill="none"
           stroke="var(--pane-hover)"
           strokeWidth={thickness}
+        />
+
+        {/* Волосяные обводки по краям кольца: они держат форму и отделяют
+            середину с числом от самих долей. */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius - thickness / 2}
+          fill="none"
+          stroke="var(--pane-border)"
+          strokeWidth="1"
+          opacity="0.7"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius + thickness / 2}
+          fill="none"
+          stroke="var(--pane-border)"
+          strokeWidth="1"
+          opacity="0.5"
         />
 
         {arcs.map((arc) => {
@@ -108,11 +134,12 @@ export default function Donut({
               strokeWidth={lit ? thickness + 3 : thickness}
               strokeDasharray={`${arc.length} ${circle - arc.length}`}
               strokeDashoffset={-arc.offset}
-              strokeLinecap={cut > 0 ? "round" : "butt"}
+              strokeLinecap="butt"
               onMouseEnter={() => setHover(arc.key)}
               onMouseLeave={() => setHover(null)}
-              className="cursor-default transition-[stroke-width,filter] duration-200"
-              style={{ filter: lit ? `drop-shadow(0 0 6px ${arc.color})` : undefined }}
+              className="cursor-default transition-[stroke-width] duration-200"
+              filter={`url(#${uid}-lift)`}
+              style={{ opacity: hover === null || lit ? 1 : 0.55 }}
             >
               <title>{`${arc.label} · ${Math.round(arc.share * 100)}%`}</title>
             </circle>

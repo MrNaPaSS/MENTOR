@@ -124,9 +124,11 @@ export default function OverviewView({
     },
     {
       key: "fees",
+      // Комиссии своим цветом, а не золотом раздела: тёмное золото светлой
+      // темы на кольце выглядит грязным пятном между зелёным и красным.
       label: a.total.fees,
       value: totals.fees,
-      color: "var(--pane-gold)",
+      color: "#e0932f",
       note: money(-totals.fees),
       tone: "down",
     },
@@ -472,18 +474,21 @@ export default function OverviewView({
             <Donut
               slices={totalSlices}
               size={totalRing}
-              thickness={Math.round(totalRing / 7)}
+              thickness={Math.round(totalRing / 9)}
               center={
-                <div className="px-2">
+                <div className="px-3">
                   <div
-                    className={`font-mono text-[17px] font-extrabold leading-none ${
+                    className={`font-mono text-[19px] font-extrabold leading-none tracking-tight ${
                       totals.net >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
                     }`}
                   >
                     {signed(totals.net)}
                   </div>
-                  <div className="mt-1 text-[8px] uppercase tracking-wider text-[var(--pane-muted)]">
+                  <div className="mt-1.5 text-[8px] uppercase tracking-[0.18em] text-[var(--pane-muted)]">
                     {a.total.label}
+                  </div>
+                  <div className="mt-1 text-[9px] font-semibold text-[var(--pane-text-2)]">
+                    {totals.trades}
                   </div>
                 </div>
               }
