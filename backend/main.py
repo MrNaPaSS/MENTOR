@@ -69,6 +69,11 @@ def create_app(
     # поэтому включается флагом, а не сам собой.
     scalping = ScalpingCollector(top_n=config.scalping_top_n) if config.scalping_enabled else None
     scalping_hub = ScalpingHub(scalping) if scalping else None
+    if scalping:
+        # Рыночные ручки ходят на Binance тем же клиентом, что и скальпинг:
+        # бюджет запросов биржа считает по адресу, и два счёта в одном
+        # процессе выбирали бы его молча (см. backend/sources/binance.py).
+        sources_binance.use_client(scalping.rest)
 
     # Оповещения о плотности берут книгу у сборщика: без скальпинга стакана
     # нет, и включать их отдельно нечего
