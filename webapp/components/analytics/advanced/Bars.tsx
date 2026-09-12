@@ -37,7 +37,13 @@ export default function Bars({
   const zero = hasLoss ? 0.5 : 1;
 
   return (
-    <div className="flex items-end gap-1" style={{ height }}>
+    // Нулевая линия: без неё столбики висят, и не видно, где плюс сменился
+    // минусом - а это единственное, ради чего на такой график смотрят.
+    <div className="relative flex items-end gap-1" style={{ height }}>
+      <span
+        className="pointer-events-none absolute inset-x-0 border-t border-[var(--pane-border)]"
+        style={{ top: (height - 16) * zero }}
+      />
       {items.map((item) => {
         const share = Math.abs(item.value) / peak;
         const up = item.value >= 0;

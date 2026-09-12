@@ -347,3 +347,122 @@ export function summarize(trades: readonly JournalTrade[]): Totals {
     holdMinutes: held.length > 0 ? held.reduce((sum, m) => sum + m, 0) / held.length : null,
   };
 }
+
+/** Разрез: строка таблицы со всем, что о группе сделок стоит знать. */
+export interface Row {
+  key: string;
+  trades: number;
+  wins: number;
+  pnl: number;
+  fees: number;
+  /** Лучшая и худшая сделка группы. */
+  best: number;
+  worst: number;
+  /** Средний R по тем, у кого был стоп. Null - таких нет. */
+  avgR: number | null;
+  /** Среднее время в сделке, минуты. Null - время открытия неизвестно. */
+  holdMinutes: number | null;
+}
+
+/**
+ * Разрез по любому признаку: монета, сторона, сессия, день, час, исход.
+ *
+ * Отдельно от `group`: тому хватает трёх чисел на подпись под столбиком, а
+ * таблице нужны крайние сделки, средний R и время удержания. Считать их
+ * вторым проходом по каждой группе значило бы пробежать журнал шесть раз
+ * вместо одного.
+ */
+export function breakdown(
+  trades: readonly JournalTrade[],
+  key: (trade: JournalTrade) => string | null,
+): Row[] {
+  const out = new Map<string, { row: Row; rs: number[]; held: number[] }>();
+
+  for (const trade of trades) {
+    const name = key(trade);
+    if (name === null) continue;
+    const found = out.get(name) ?? {
+      row: {
+        key: name,
+        trades: 0,
+        wins: 0,
+        pnl: 0,
+        fees: 0,
+        best: 0,
+        worst: 0,
+        avgR: null,
+        holdMinutes: null,
+      },
+      rs: [],
+      held: [],
+    };
+
+    const r = rMultiple(trade);
+    if (r !== null) found.rs.push(r);
+
+    const from = time(trade.opened_at);
+    const to = time(trade.closed_at);
+    if (from !== null && to !== null && to >= from) found.held.push((to - from) / MINUTE);
+
+    found.row = {
+      ...found.row,
+      trades: found.row.trades + 1,
+      wins: found.row.wins + (trade.pnl > 0 ? 1 : 0),
+      pnl: found.row.pnl + trade.pnl,
+      fees: found.row.fees + (trade.fee || 0),
+      best: Math.max(found.row.best, trade.pnl),
+      worst: Math.min(found.row.worst, trade.pnl),
+    };
+    out.set(name, found);
+  }
+
+  return [...out.values()].map(({ row, rs, held }) => ({
+    ...row,
+    avgR: rs.length > 0 ? rs.reduce((sum, r) => sum + r, 0) / rs.length : null,
+    holdMinutes: held.length > 0 ? held.reduce((sum, m) => sum + m, 0) / held.length : null,
+  }));
+}
+
+/**
+ * Торговые сессии по часу входа.
+ *
+ * Границы местные, а не биржевые: журнал показывают тому, кто торговал, и
+ * «утро» для него - это утро на его часах. Рынок круглосуточный, и точные
+ * часы открытия площадок тут ничего не решают.
+ */
+export const SESSIONS: { key: string; from: number; to: number }[] = [
+  { key: "asia", from: 0, to: 8 },
+  { key: "europe", from: 8, to: 14 },
+  { key: "usa", from: 14, to: 21 },
+  { key: "night", from: 21, to: 24 },
+];
+
+/** В какую сессию попал вход. */
+export function sessionOf(trade: JournalTrade): string | null {
+  const ms = time(trade.opened_at) ?? time(trade.closed_at);
+  if (ms === null) return null;
+  const hour = new Date(ms).getHours();
+  return SESSIONS.find((one) => hour >= one.from && hour < one.to)?.key ?? null;
+}
+
+/**
+ * Ровный темп: та же прибыль, но по чуть-чуть каждую сделку.
+ *
+ * Нужна как линия сравнения под кривой капитала. Своего смысла у неё нет -
+ * она показывает ровно одно: шёл счёт ступенями или рос равномерно. Кривая,
+ * которая держится выше ровной линии, а потом падает под неё, говорит о
+ * серии, вытянувшей период, - и это видно только рядом с прямой.
+ */
+export function evenPace(points: readonly EquityPoint[]): number[] {
+  if (points.length === 0) return [];
+  const last = points[points.length - 1].value;
+  const step = last / points.length;
+  return points.map((_, i) => step * (i + 1));
+}
+
+/** Изменение к прошлому периоду: в долях. Null - сравнивать не с чем. */
+export function change(now: number, before: number): number | null {
+  if (!Number.isFinite(now) || !Number.isFinite(before)) return null;
+  if (before === 0) return null;
+  return (now - before) / Math.abs(before);
+}

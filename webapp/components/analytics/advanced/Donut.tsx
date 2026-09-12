@@ -84,36 +84,80 @@ export default function Donut({ slices, size, thickness = 14, center }: DonutPro
 export function DonutLegend({
   slices,
   showShare = true,
+  stacked = false,
+  compact = false,
   className = "",
 }: {
   slices: readonly Slice[];
   /** Показывать процент доли: у денег он лишний, у дней - главный. */
   showShare?: boolean;
+  /**
+   * Значение под подписью, а не за ней.
+   *
+   * В одну строку «Прибыльные +$4 120» помещается только на широкой панели, а
+   * на узкой подпись обрезалась до «Прибыльн...». Две строки занимают ту же
+   * ширину при любом числе знаков в сумме.
+   */
+  stacked?: boolean;
+  /** Тесный ряд: строки в один уровень, для колонки в три клетки сетки. */
+  compact?: boolean;
   className?: string;
 }) {
   const total = slices.reduce((sum, slice) => sum + Math.abs(slice.value), 0);
 
-  return (
-    <ul className={`min-w-0 space-y-1 ${className}`}>
-      {slices.map((slice) => (
-        <li key={slice.key} className="flex items-center gap-2 text-[11px]">
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: slice.color }} />
-          <span className="min-w-0 flex-1 truncate text-[var(--pane-text-2)]">{slice.label}</span>
-          {slice.note && (
+  function tone(slice: Slice): string {
+    return slice.tone === "up"
+      ? "text-[var(--pane-up)]"
+      : slice.tone === "down"
+        ? "text-[var(--pane-down)]"
+        : "text-[var(--pane-text)]";
+  }
+
+  if (stacked) {
+    return (
+      <ul className={`min-w-0 space-y-1.5 ${className}`}>
+        {slices.map((slice) => (
+          <li key={slice.key} className="flex items-start gap-2">
             <span
-              className={`shrink-0 font-mono text-[11px] font-bold ${
-                slice.tone === "up"
-                  ? "text-[var(--pane-up)]"
-                  : slice.tone === "down"
-                    ? "text-[var(--pane-down)]"
-                    : "text-[var(--pane-text)]"
-              }`}
-            >
+              className="mt-1 h-2 w-2 shrink-0 rounded-full"
+              style={{ background: slice.color }}
+            />
+            <span className="min-w-0">
+              <span className="block truncate text-[11px] leading-tight text-[var(--pane-text-2)]">
+                {slice.label}
+              </span>
+              {slice.note && (
+                <span className={`block font-mono text-[12px] font-bold leading-tight ${tone(slice)}`}>
+                  {slice.note}
+                  {showShare && total > 0 && (
+                    <span className="ml-1.5 text-[10px] font-medium text-[var(--pane-muted)]">
+                      {Math.round((Math.abs(slice.value) / total) * 100)}%
+                    </span>
+                  )}
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <ul className={`min-w-0 ${compact ? "space-y-px" : "space-y-1"} ${className}`}>
+      {slices.map((slice) => (
+        <li key={slice.key} className="flex items-center gap-1.5 text-[11px]">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: slice.color }} />
+          <span className="shrink-0 text-[var(--pane-text-2)]">{slice.label}</span>
+          {slice.note && (
+            <span className={`ml-auto shrink-0 font-mono text-[11px] font-bold ${tone(slice)}`}>
               {slice.note}
             </span>
           )}
           {showShare && (
-            <span className="w-9 shrink-0 text-right font-mono text-[10px] text-[var(--pane-muted)]">
+            <span
+              className={`${slice.note ? "" : "ml-auto"} w-8 shrink-0 text-right font-mono text-[10px] text-[var(--pane-muted)]`}
+            >
               {total > 0 ? Math.round((Math.abs(slice.value) / total) * 100) : 0}%
             </span>
           )}

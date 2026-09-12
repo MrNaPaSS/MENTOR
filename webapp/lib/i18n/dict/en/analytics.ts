@@ -230,6 +230,25 @@ export const analytics = {
     minutes: (n: number) => (n >= 60 ? `${Math.floor(n / 60)}h ${n % 60}m` : `${n} min`),
     sides: { all: "all", long: "long", short: "short" },
 
+    /** Layouts: same numbers, different reading. */
+    views: {
+      title: "View",
+      name: {
+        classic: "Classic",
+        minimal: "Minimal",
+        pro: "Professional",
+        table: "Table",
+        visual: "Visual",
+      },
+      hint: {
+        classic: "clean and informative",
+        minimal: "maximum space",
+        pro: "analysis first",
+        table: "for a deep dive",
+        visual: "infographics",
+      },
+    },
+
     /** Net ring: what the result is made of. */
     total: {
       title: "Net",
@@ -262,9 +281,12 @@ export const analytics = {
       expectancy: "Per trade",
       expectancyNote: "on average",
       avgLoss: (amount: string) => `average loss ${amount}`,
+      avgLossLabel: "Average loss",
       ofGross: "of wins",
       holdNote: "average time",
       none: "none",
+      versus: (net: string, winRate: string, pf: string) =>
+        `Previous period of the same length: net ${net}, win rate ${winRate}, profit factor ${pf}`,
     },
 
     equity: {
@@ -272,14 +294,60 @@ export const analytics = {
       hint: "running total of closed trades",
       account: "account",
       result: "trade",
+      pace: "even pace",
     },
     risk: {
       title: "R distribution",
+      titleTotals: "Totals by result (R)",
       hint: "share of trades by result size",
     },
+
+    rBuckets: {
+      "<-2R": "below -2R",
+      "-2R..-1R": "-2R … -1R",
+      "-1R..0": "-1R … 0",
+      "0..1R": "0 … +1R",
+      "1R..2R": "+1R … +2R",
+      "2R..3R": "+2R … +3R",
+      ">3R": "+3R and above",
+    } as Record<string, string>,
+
     symbols: { title: "Coins", hint: "click to keep just one" },
-    week: { title: "Weekdays", hint: "share of trades by day" },
+    week: {
+      title: "Weekdays",
+      hint: "share of trades by day",
+      titleResult: "Weekdays",
+      hintResult: "result by day of close",
+    },
     hours: { title: "Hours", hint: "result by hour of entry" },
+
+    sessions: {
+      asia: "Asia",
+      europe: "Europe",
+      usa: "US",
+      night: "Evening",
+    } as Record<string, string>,
+
+    table: {
+      title: "Breakdown",
+      hint: "click a coin to keep just one",
+      cuts: {
+        symbol: "Coins",
+        side: "Sides",
+        session: "Sessions",
+        weekday: "Weekdays",
+        hour: "Hours",
+        outcome: "Trade types",
+      },
+      trades: "Trades",
+      pnl: "P&L",
+      avgR: "Average R",
+      best: "Max win",
+      worst: "Max loss",
+      hold: "Time in trade",
+      sessionsNote: (bounds: string) => `Hours are local, by your device clock: ${bounds}`,
+    },
+
     outcomes: {
       title: "How they ended",
       hint: "and streaks in a row",

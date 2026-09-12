@@ -24,6 +24,13 @@ const LINES = 4;
 export interface EquityCurveProps {
   points: readonly EquityPoint[];
   height: number;
+  /**
+   * Линия сравнения: та же прибыль ровным темпом.
+   *
+   * Своего смысла у неё нет - она показывает одно: шёл счёт ступенями или рос
+   * равномерно. Нужна не всякому виду, поэтому необязательна.
+   */
+  pace?: readonly number[];
   /** Деньги словами: форматирование живёт в разделе, а не здесь. */
   money: (value: number) => string;
   /** Дата словами. */
@@ -36,6 +43,7 @@ export interface EquityCurveProps {
 export default function EquityCurve({
   points,
   height,
+  pace,
   money,
   day,
   labelTrade,
@@ -82,8 +90,13 @@ export default function EquityCurve({
       return { value, y: y(value) };
     });
 
-    return { xy, grid, zeroY: y(0), innerW };
-  }, [points, width, height]);
+    const paceXy =
+      pace && pace.length === points.length
+        ? pace.map((value, i) => ({ x: PAD.left + stepX * i, y: y(value) }))
+        : null;
+
+    return { xy, paceXy, grid, zeroY: y(0), innerW };
+  }, [points, pace, width, height]);
 
   if (points.length === 0) {
     return (
@@ -159,6 +172,17 @@ export default function EquityCurve({
             } ${view.zeroY} L${view.xy[0].x} ${view.zeroY} Z`}
             fill="url(#equity-fill)"
           />
+          {view.paceXy && (
+            <path
+              d={view.paceXy.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ")}
+              fill="none"
+              stroke="var(--pane-muted)"
+              strokeWidth="1.5"
+              strokeDasharray="5 4"
+              opacity="0.7"
+            />
+          )}
+
           <path
             d={view.xy.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ")}
             fill="none"
