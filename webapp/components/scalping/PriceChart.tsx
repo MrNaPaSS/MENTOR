@@ -11,6 +11,12 @@
 // единственное на графике, что берётся не из истории цены, а из живой книги.
 
 import { useT } from "@/lib/i18n";
+import {
+  RETURN_TO_LIVE_MS,
+  inHistory,
+  rangeMoved,
+  type LogicalRange,
+} from "@/lib/chartFollow";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Plus, X } from "lucide-react";
 import {
@@ -1093,6 +1099,10 @@ function PriceChart({
   }, [footShown]);
   const followRef = useRef(false);
   followRef.current = followBar;
+  // Закреплённая свеча - повод не увозить экран к цене: человек смотрит именно
+  // её (см. возврат к цене в эффекте графика).
+  const pickedRef = useRef<number | null>(null);
+  pickedRef.current = pickedBar;
   // Профиль с сервера по запросу: история и те свечи, которых своя лента не
   // застала. Живая свеча приезжает кадром стакана и идёт впереди этого.
   const [restFoot, setRestFoot] = useState<FootprintData | null>(null);
@@ -1365,6 +1375,42 @@ function PriceChart({
       if (price !== null && price > 0) emptyClickRef.current?.(price, atr);
     });
 
+    // ── Возврат к цене ──────────────────────────────────────────────────
+    //
+    // Библиотека перестаёт следовать за ценой, как только диапазон сдвинули
+    // руками, и правильно делает: пока человек смотрит историю, дёргать экран
+    // нельзя. Но он отвлекается, а цена уходит - и на экране остаются
+    // позавчерашние свечи, по которым он же потом и считает вход.
+    //
+    // Поэтому отсчёт: график сам вернётся к цене через полминуты покоя.
+    // Каждое движение диапазона начинает отсчёт заново, так что листать
+    // историю можно сколько угодно - возврат случится, только когда руки от
+    // графика убрали. Масштаб при этом остаётся тот, который выставили.
+    const scale = chart.timeScale();
+    let lastRange: LogicalRange | null = null;
+    let backTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const stopReturn = () => {
+      if (backTimer) clearTimeout(backTimer);
+      backTimer = null;
+    };
+
+    const onRange = (range: LogicalRange | null) => {
+      if (!rangeMoved(lastRange, range)) return;
+      lastRange = range ? { from: range.from, to: range.to } : null;
+      stopReturn();
+      if (!inHistory(range, dataRef.current.length)) return;
+
+      backTimer = setTimeout(() => {
+        // Разобранная свеча закреплена - значит человек смотрит именно её, и
+        // увозить экран к цене нельзя.
+        if (pickedRef.current !== null) return;
+        chartRef.current?.timeScale().scrollToRealTime();
+      }, RETURN_TO_LIVE_MS);
+    };
+
+    scale.subscribeVisibleLogicalRangeChange(onRange);
+
     chartRef.current = chart;
     if (shotRef.current) {
       // Снимок различает лишь цвет листа: пресеты живут на тёмном.
@@ -1372,6 +1418,8 @@ function PriceChart({
         snapshot(chart, box, lookRef.current.paper);
     }
     return () => {
+      stopReturn();
+      scale.unsubscribeVisibleLogicalRangeChange(onRange);
       chart.remove();
       chartRef.current = null;
       candleRef.current = null;
