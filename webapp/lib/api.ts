@@ -488,7 +488,12 @@ export const api = {
 
   // ── Рыночные данные биржи (WEEX через наш сервер) ──
   marketFearGreed: () => req<FearGreed>("/api/market/fear-greed"),
-  marketFunding: () => req<{ rates: FundingRate[] }>("/api/market/funding-rates"),
+  /** Здоровье источников и кэша. Открыта без токена, только чтение. */
+  marketStatus: () => req<MarketStatus>("/api/market/status"),
+  marketFunding: () =>
+    req<{ rates: FundingRate[]; source?: string | null; stale?: boolean }>(
+      "/api/market/funding-rates",
+    ),
   marketDerivatives: (symbol: string) =>
     req<Derivatives>(`/api/market/derivatives/${symbol.toUpperCase()}`),
 
@@ -702,7 +707,10 @@ export interface GlobalMarket {
   btc_dominance: number;
   market_cap_change_24h: number;
   active_cryptos: number;
+  /** Имя сработавшего источника: цепочка CoinGecko → Coinpaprika. */
   source: string;
+  /** Последнее известное значение вместо живого. */
+  stale?: boolean;
 }
 
 export interface TrendingCoin {
@@ -712,6 +720,23 @@ export interface TrendingCoin {
   rank: number | null;
   thumb: string;
   price_btc: number;
+}
+
+/** Строка состояния одного источника в /api/market/status. */
+export interface SourceHealth {
+  name: string;
+  ok: number;
+  failed: number;
+  last_latency_ms: number | null;
+  avg_latency_ms: number | null;
+  last_error: string | null;
+  last_success: string | null;
+  blocked_until: string | null;
+}
+
+export interface MarketStatus {
+  sources: SourceHealth[];
+  cache: { keys: number; stale_served_last_hour: number };
 }
 
 export interface OnChainStats {
@@ -739,6 +764,8 @@ export interface FearGreedPoint {
 export interface FearGreed {
   current: FearGreedPoint | null;
   history: FearGreedPoint[];
+  source?: string | null;
+  stale?: boolean;
 }
 
 /**

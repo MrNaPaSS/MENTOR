@@ -18,6 +18,8 @@ import { useEffect, useState } from "react";
 import { api, type FundingRate } from "@/lib/api";
 import { base } from "@/lib/scalping";
 import Pane, { LiveBadge, PaneLabel, type PaneState } from "./Pane";
+import SourceMark from "./SourceMark";
+import type { Origin } from "@/lib/marketOrigin";
 
 /** Сколько инструментов показываем: остальные считаются в подписи. */
 const SHOWN = 10;
@@ -58,6 +60,7 @@ function parse(rates: FundingRate[]): Row[] {
 export default function FundingPane({ className = "" }: { className?: string }) {
   const t = useT();
   const [rows, setRows] = useState<Row[]>([]);
+  const [origin, setOrigin] = useState<Origin | null>(null);
   const [state, setState] = useState<PaneState>("loading");
   const [now, setNow] = useState(() => Date.now());
 
@@ -70,6 +73,7 @@ export default function FundingPane({ className = "" }: { className?: string }) 
           if (dropped) return;
           const parsed = parse(r.rates ?? []);
           setRows(parsed);
+          setOrigin({ source: r.source ?? null, stale: r.stale });
           setState(parsed.length ? "ready" : "error");
         })
         .catch(() => {
@@ -105,7 +109,12 @@ export default function FundingPane({ className = "" }: { className?: string }) 
           ? t.market.funding.hintLongsPay(longsPay, named)
           : t.market.funding.hintDefault
       }
-      badge={<LiveBadge live={state === "ready"} label={t.market.funding.live5m} />}
+      badge={
+        <span className="flex items-center gap-2">
+          <SourceMark origin={origin} />
+          <LiveBadge live={state === "ready"} label={t.market.funding.live5m} />
+        </span>
+      }
       state={state}
       emptyNote={t.market.funding.emptyNote}
       className={className}

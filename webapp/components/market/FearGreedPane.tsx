@@ -16,6 +16,8 @@ import { useT } from "@/lib/i18n";
 import { useEffect, useId, useState } from "react";
 import { api, type FearGreedPoint } from "@/lib/api";
 import Pane, { PaneLabel, type PaneState } from "./Pane";
+import SourceMark from "./SourceMark";
+import type { Origin } from "@/lib/marketOrigin";
 
 /** Пять зон индекса: границы и названия те же, что публикует источник. */
 const ZONES = [
@@ -165,6 +167,7 @@ function Then({ label, now, then }: { label: string; now: number; then: number |
 export default function FearGreedPane({ className = "" }: { className?: string }) {
   const t = useT();
   const [data, setData] = useState<FearGreedPoint[]>([]);
+  const [origin, setOrigin] = useState<Origin | null>(null);
   const [state, setState] = useState<PaneState>("loading");
 
   useEffect(() => {
@@ -175,6 +178,7 @@ export default function FearGreedPane({ className = "" }: { className?: string }
         if (dropped) return;
         const history = r.history?.length ? r.history : r.current ? [r.current] : [];
         setData(history);
+        setOrigin({ source: r.source ?? null, stale: r.stale });
         setState(history.length ? "ready" : "error");
       })
       .catch(() => {
@@ -193,6 +197,7 @@ export default function FearGreedPane({ className = "" }: { className?: string }
       icon={<GaugeIcon className="h-3.5 w-3.5" />}
       title={t.market.fearGreed.title}
       hint={t.market.fearGreed.hint}
+      badge={<SourceMark origin={origin} home="alternative.me" />}
       state={now === null && state !== "loading" ? "error" : state}
       emptyNote={t.market.fearGreed.emptyNote}
       className={className}

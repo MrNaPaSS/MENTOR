@@ -9,6 +9,15 @@ export const market = {
     calendar: { label: "Calendar", hint: "Events that move the market" },
   },
   tvNote: "Data and drawing - TradingView",
+  // A quiet footnote in the panel corner: where the number came from and how
+  // fresh it is. Shown only when there is something to say.
+  origin: {
+    stale: "not fresh",
+    staleFrom: (source: string) => `${source}, not fresh`,
+    from: (source: string) => `${source} data`,
+    mixed: "several sources",
+    title: "Where this data comes from",
+  },
   news: {
     title: "Crypto news",
     loadFailed: "Couldn't load the news",

@@ -73,5 +73,10 @@ export const tools = {
     asStudent: "Как ученик → /app",
     entering: "Вход…",
     note: "Только для разработки. В проде отключено.",
+    sources: "Источники данных",
+    sourcesEmpty: "Ещё ни одного запроса",
+    sourcesFailed: "Состояние недоступно",
+    cache: (keys: number, stale: number) => `кэш: ${keys} ключей, устаревшего отдано ${stale}`,
+    blocked: "заблокирован",
   },
 };

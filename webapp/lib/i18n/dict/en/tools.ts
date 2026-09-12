@@ -71,5 +71,10 @@ export const tools = {
     asStudent: "As student → /app",
     entering: "Signing in…",
     note: "Development only. Disabled in production.",
+    sources: "Data sources",
+    sourcesEmpty: "No requests yet",
+    sourcesFailed: "Status unavailable",
+    cache: (keys: number, stale: number) => `cache: ${keys} keys, stale served ${stale}`,
+    blocked: "blocked",
   },
 };
