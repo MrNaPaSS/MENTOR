@@ -103,6 +103,7 @@ export default function Pane({
   emptyNote,
   children,
   className = "",
+  bodyClass = "",
 }: {
   title: string;
   hint?: string;
@@ -113,6 +114,8 @@ export default function Pane({
   emptyNote?: string;
   children: ReactNode;
   className?: string;
+  /** Как ведёт себя содержимое: например, тянется на всю высоту панели. */
+  bodyClass?: string;
 }) {
   const t = useT();
   return (
@@ -132,7 +135,7 @@ export default function Pane({
         {badge && <div className="shrink-0">{badge}</div>}
       </header>
 
-      <div className="flex-1 p-3">
+      <div className={`flex-1 p-3 ${bodyClass}`}>
         {state === "loading" && <PaneSkeleton />}
         {state === "error" && (
           <p className="py-6 text-center text-[11px] text-[var(--pane-muted)]">

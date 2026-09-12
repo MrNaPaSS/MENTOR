@@ -106,8 +106,12 @@ export default function FundingPane({ className = "" }: { className?: string }) 
       state={state}
       emptyNote={t.market.funding.emptyNote}
       className={className}
+      bodyClass="flex min-h-0 flex-col"
     >
-      <div className="-mx-1 max-h-[244px] overflow-y-auto">
+      {/* Список до низа панели: высоту ей задаёт соседний показатель в
+          ряду, и рамка, кончавшаяся на середине, оставляла под собой пустое
+          поле. */}
+      <div className="-mx-1 min-h-0 flex-1 overflow-y-auto">
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-[var(--pane-bg)]">
             <tr>
