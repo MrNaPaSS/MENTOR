@@ -57,8 +57,6 @@ export const terminal = {
   bookOwn: (venue: string) => `Book, tape and candles come from ${venue.toUpperCase()}`,
   bookNoSymbol: (asked: string) =>
     `${asked.toUpperCase()} does not list this pair - book and tape are from Binance`,
-  bookNoFeed: (asked: string) =>
-    `We do not collect the ${asked.toUpperCase()} book yet - book and tape are from Binance`,
   journalTitle: "Trade journal",
   chatWidth: "Chat width · double click resets",
   expandChat: "Open chat",

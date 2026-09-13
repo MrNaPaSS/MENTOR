@@ -3770,22 +3770,18 @@ export default function ScalpingPage() {
                     {exchange.exchange}
                   </span>
                 )}
-                {/* Чья книга на экране. Подпись появляется только при подмене:
-                    на бирже ученика монеты может не быть, и стакан тогда
-                    общий - молчать об этом нельзя, заявка исполнится не по
-                    этим ценам. */}
-                {dom?.fallback && (
+                {/* Чья книга на экране. Подпись - только когда монеты нет на
+                    бирже ученика: это заметная перемена, и молчать о ней
+                    нельзя - заявка исполнится не по этим ценам.
+
+                    Про биржи, чей поток мы не собираем вовсе (WEEX), подписи
+                    нет: там книга общая всегда, и постоянная отметка у каждой
+                    пары была бы шумом, а не предупреждением. Вернуть её - одно
+                    условие, когда поток появится. */}
+                {dom?.fallback === "no_symbol" && (
                   <span
-                    title={
-                      dom.fallback === "no_symbol"
-                        ? t.terminal.bookNoSymbol(dom.asked || venue)
-                        : t.terminal.bookNoFeed(dom.asked || venue)
-                    }
-                    className={`rounded px-1 text-[10px] uppercase tracking-wide ${
-                      dom.fallback === "no_symbol"
-                        ? "bg-[var(--pane-down-faint)] text-[var(--pane-down)]"
-                        : "bg-[var(--pane-hover)] text-[var(--pane-muted)]"
-                    }`}
+                    title={t.terminal.bookNoSymbol(dom.asked || venue)}
+                    className="rounded bg-[var(--pane-down-faint)] px-1 text-[10px] uppercase tracking-wide text-[var(--pane-down)]"
                   >
                     {t.terminal.book(dom.exchange)}
                   </span>

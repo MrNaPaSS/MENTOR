@@ -65,8 +65,6 @@ export const terminal = {
   bookOwn: (venue: string) => `Стакан, лента и свечи идут с ${venue.toUpperCase()}`,
   bookNoSymbol: (asked: string) =>
     `На ${asked.toUpperCase()} этой монеты нет - стакан и лента показаны с Binance`,
-  bookNoFeed: (asked: string) =>
-    `Стакан ${asked.toUpperCase()} мы пока не собираем - книга и лента с Binance`,
   journalTitle: "Журнал сделок",
   chatWidth: "Ширина чата · двойной клик сбрасывает",
   expandChat: "Открыть чат",
