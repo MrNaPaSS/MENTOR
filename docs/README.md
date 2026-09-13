@@ -17,6 +17,7 @@
 | [tz/chat-signals-tz.md](tz/chat-signals-tz.md) | ТЗ: заявка из чата становится сигналом, и ответы в чате |
 | [tz/market-sources-tz.md](tz/market-sources-tz.md) | ТЗ: источники рыночных данных, платные ручки и свои панели вместо чужих |
 | [tz/multi-exchange-tz.md](tz/multi-exchange-tz.md) | ТЗ: мультибиржа в терминале - выбор биржи, подключение счёта, стакан своей биржи |
+| [tz/bingx-tz.md](tz/bingx-tz.md) | ТЗ: BingX третьей биржей - адаптер, книга потоком, опознание своих заявок без метки |
 | [tz/voice-layer-tz.md](tz/voice-layer-tz.md) | ТЗ: голосовой слой терминала на GPT-Live-1 - **отложено** |
 | [tz/video-manual-tz.md](tz/video-manual-tz.md) | ТЗ (отложено): видеомануал и промо-ролики терминала на Recordly |
 | [features/scalping.md](features/scalping.md) | Скринер и стакан заявок: источник данных, метрики, лимиты биржи |
