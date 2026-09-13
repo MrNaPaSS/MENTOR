@@ -18,6 +18,7 @@ from core.db import SessionLocal
 from core.models import BalanceSnapshot, Student, WeexCredential
 from core.weex.base import WeexClient
 from core.weex.uid import clean_uid
+from core.own_accounts import is_own_account
 from core.referral import grant_referral_vip
 
 logger = logging.getLogger("nmnh.balance")
@@ -76,6 +77,9 @@ async def snapshot_all(weex: WeexClient) -> int:
             # без UID, str(None) превращался в строку и уходил на биржу как
             # настоящий идентификатор.
             uid = clean_uid(student.weex_uid)
+            # Счёт без партнёрки (core/own_accounts.py): его данные только по
+            # ключам, партнёрская ручка о нём не знает и спрашивать её незачем.
+            own = is_own_account(uid)
             existing = session.execute(
                 select(BalanceSnapshot).where(
                     BalanceSnapshot.student_id == student.id,
@@ -91,7 +95,7 @@ async def snapshot_all(weex: WeexClient) -> int:
                 source = "api_keys"
                 balance = await balance_by_keys(session, student)
 
-                if balance is None and uid:
+                if balance is None and uid and not own:
                     source = "affiliate_api"
                     try:
                         balance = await weex.get_affiliate_balance(uid)
@@ -160,6 +164,11 @@ async def snapshot_all(weex: WeexClient) -> int:
                         student.id,
                         futures,
                     )
+                elif own:
+                    # Счёт без партнёрки: строки в отчёте у него нет по
+                    # замыслу, а причину пустой ленты (например, отказ ключей)
+                    # сборщик ключей уже назвал сам.
+                    logger.debug("Оборот счёта без партнёрки %s сегодня не собран", student.id)
                 else:
                     # Оба пути молчали: ключей нет или биржа не ответила, а
                     # партнёрской строки по UID не пришло. Оборот дня остаётся
