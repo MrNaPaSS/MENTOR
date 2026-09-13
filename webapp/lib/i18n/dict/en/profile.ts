@@ -24,7 +24,8 @@ export const profile = {
   installAction: "Install",
   installHint: "The cabinet opens in its own window, without tabs or an address bar",
   installApple: "In Safari tap Share, then Add to Home Screen",
-  installManual: "Open the browser menu and choose Install app or Add to Home screen",
+  installManual:
+    "The browser is not offering installation: the app is already there or you declined recently. The browser menu still has Install app",
   sound: "Event sounds",
   cardName: "Name on the card",
   cardNamePlaceholder: "as in Telegram",

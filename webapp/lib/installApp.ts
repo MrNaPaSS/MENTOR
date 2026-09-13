@@ -60,6 +60,32 @@ if (typeof window !== "undefined") {
   });
 }
 
+/**
+ * Кабинет уже стоит на этом устройстве, хотя открыт сейчас во вкладке.
+ *
+ * Это вторая половина ответа на вопрос «почему кнопка не работает». Браузер
+ * присылает предложение установки ровно один раз и только тому, у кого
+ * приложения ещё нет: поставил человек кабинет раньше - и во вкладке кнопка
+ * висит, а нажатие ничего не делает, потому что предлагать нечего.
+ *
+ * Спрашиваем у браузера напрямую. Умеют это не все (Safari и Firefox о таком
+ * не знают), поэтому ответ «нет» означает «не знаем», а не «не установлено».
+ */
+export async function installedNearby(): Promise<boolean> {
+  const ask = (
+    navigator as Navigator & {
+      getInstalledRelatedApps?: () => Promise<unknown[]>;
+    }
+  ).getInstalledRelatedApps;
+  if (typeof ask !== "function") return false;
+  try {
+    const apps = await ask.call(navigator);
+    return apps.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Кабинет уже открыт как приложение: устанавливать нечего. */
 export function isInstalled(): boolean {
   if (typeof window === "undefined") return false;

@@ -5,7 +5,7 @@ import { ChevronRight, Key, LogOut, MonitorDown, Moon, RefreshCw, ShieldCheck, S
 import { api, API_URL, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { profileChanged } from "@/lib/profileEvent";
-import { installApp, isInstalled, useCanInstall } from "@/lib/installApp";
+import { installApp, installedNearby, isInstalled, useCanInstall } from "@/lib/installApp";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fmtUsd, maskUid } from "@/lib/format";
@@ -79,7 +79,15 @@ export default function ProfilePage() {
   const canInstall = useCanInstall();
   const [installed, setInstalled] = useState(false);
   const [installNote, setInstallNote] = useState<string | null>(null);
-  useEffect(() => setInstalled(isInstalled()), []);
+  useEffect(() => {
+    if (isInstalled()) {
+      setInstalled(true);
+      return;
+    }
+    // Кабинет может уже стоять на устройстве, а открыт быть во вкладке: тогда
+    // браузер предложения не пришлёт, и кнопка висела бы впустую.
+    void installedNearby().then((yes) => yes && setInstalled(true));
+  }, []);
 
   async function install() {
     if (canInstall) {
@@ -342,7 +350,7 @@ export default function ProfilePage() {
             {/* Знак биржи и кнопка под ним. Колонка растянута по высоте
                 карточки, поэтому кнопка всегда стоит в нижнем правом углу, где
                 её и ищут. На узком экране знака нет - там дорога каждая точка. */}
-            <div className="flex shrink-0 flex-col items-end justify-between gap-3 pt-5">
+            <div className="flex shrink-0 flex-col items-center justify-between gap-3 pt-5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={VENUE_MARKS[venueCode] ?? VENUE_MARKS.weex}
@@ -479,7 +487,9 @@ export default function ProfilePage() {
                 <button
                   onClick={() => void install()}
                   title={t.profile.installHint}
-                  className="flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-text-2)] transition-colors duration-150 hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-accent)]"
+                  // Тот же вид, что у «Обновить» и «Изменить»: это действие
+                  // такого же веса, а серой кнопкой оно выглядело служебным.
+                  className={GOLD_BTN}
                 >
                   <MonitorDown className="h-4 w-4" />
                   {t.profile.installAction}
