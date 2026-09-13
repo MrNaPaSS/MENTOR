@@ -141,7 +141,8 @@ def app_and_exchange(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine, expire_on_commit=False)()
-    student = Student(tg_id=1)
+    # Ученик академии: WEEX открыт ему самим фактом регистрации по UID.
+    student = Student(tg_id=1, weex_uid="6067083524")
     session.add(student)
     session.commit()
 

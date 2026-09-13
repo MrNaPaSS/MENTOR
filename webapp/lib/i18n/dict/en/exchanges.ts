@@ -5,7 +5,7 @@ export const exchanges = {
   title: "Exchanges",
   hint: "Where the terminal trades and what an academy account gives",
   lead:
-    "You can connect an account on any exchange below. Through the academy - lower fees and cashback; your own account works in the terminal too, but without the academy terms.",
+    "An exchange opens once the academy confirms it: send the UID of your account there to the academy bot, and it shows up here with a connect button. Going through the academy means lower fees and cashback.",
 
   state: {
     active: "active",
@@ -39,6 +39,9 @@ export const exchanges = {
     academy: "Opened through the academy: part of the fee comes back to it.",
     own: "Your own account: the terminal works, academy terms do not apply.",
     uid: (uid: string) => `Account ${uid}`,
+    needsAcademy:
+      "The exchange opens once the academy confirms it: send the UID of your account there " +
+      "to the academy bot. Once confirmed, you can connect it here.",
     confirmed: (uids: string) => `Confirmed by the academy: ${uids}`,
   },
 
@@ -46,6 +49,7 @@ export const exchanges = {
     login: "Sign in with the exchange",
     loginSoon: "Exchange sign-in arrives with the broker ID",
     keys: "Connect with API keys",
+    needsAcademy: "Confirm the account in the academy bot first",
     replace: "Replace keys",
     makeActive: "Place orders from here",
     disconnect: "Disconnect",

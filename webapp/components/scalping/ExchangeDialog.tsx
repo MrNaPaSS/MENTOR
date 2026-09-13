@@ -108,6 +108,9 @@ export default function ExchangeDialog({
   const [replacing, setReplacing] = useState(false);
   const [funds, setFunds] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
+  // Биржа закрыта, пока академия не подтвердила счёт ученика на ней. Сервер,
+  // собранный до этого правила, поля не присылает - тогда как раньше.
+  const locked = account?.may_connect === false && !account?.connected;
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -241,7 +244,11 @@ export default function ExchangeDialog({
                 >
                   <span
                     className={`h-1.5 w-1.5 rounded-full ${
-                      one.connected ? "bg-[var(--pane-up)]" : "bg-[var(--pane-border)]"
+                      one.connected
+                        ? "bg-[var(--pane-up)]"
+                        : one.may_connect === false
+                          ? "bg-[var(--pane-border)] opacity-50"
+                          : "bg-[var(--pane-border)]"
                     }`}
                   />
                   {one.title || one.exchange.toUpperCase()}
@@ -263,6 +270,13 @@ export default function ExchangeDialog({
         ) : !status.enabled ? (
           <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
             {d.vaultOff}
+          </p>
+        ) : locked ? (
+          // Биржа открывается подтверждением академии. Поля ключей здесь были
+          // бы обманом: сервер такую заявку всё равно отклонит, а человек
+          // решил бы, что ошибся в ключах.
+          <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
+            {d.needsAcademy}
           </p>
         ) : connected && !replacing ? (
           <div className="space-y-3 px-5 py-5">

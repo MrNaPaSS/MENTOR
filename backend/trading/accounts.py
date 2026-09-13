@@ -116,6 +116,42 @@ def confirmed_uids(session, student_id: int, exchange: str) -> set[str]:
     return {clean_uid(uid) for uid in rows if clean_uid(uid)}
 
 
+def academy_confirmed(session, student: Student, exchange: str) -> bool:
+    """Подтвердила ли академия счёт этого ученика на этой бирже.
+
+    По этому признаку биржа вообще появляется в настройках. Правило простое:
+    человек называет UID своего счёта в боте академии, владелец подтверждает -
+    и только тогда биржу можно подключить. Без подтверждения мы не знаем, чей
+    это счёт, а от ответа зависят деньги: сниженная ставка и кешбэк считаются
+    по паре «биржа и UID».
+
+    Одно исключение - WEEX у тех, кто через неё и пришёл. Их номер лежит в
+    записи ученика (`weex_uid`) с тех пор, когда отдельной таблицы
+    подтверждений ещё не было: академия проверила его руками при выдаче
+    доступа в кабинет. Требовать подтверждение заново значило бы отобрать
+    торговлю у всех, кто уже торгует.
+    """
+    code = trade_exchange(exchange)
+    if confirmed_uids(session, student.id, code):
+        return True
+    return code == KEYS_EXCHANGE and bool(clean_uid(student.weex_uid))
+
+
+def may_connect(session, student: Student, exchange: str) -> bool:
+    """Можно ли подключить ключи этой биржи.
+
+    Уже подключённый счёт остаётся подключаемым и без подтверждения: ключи
+    биржи протухают, их меняют, и запертая кнопка означала бы позицию, которую
+    нечем вести. Отбирать доступ у того, кто уже торгует, это правило не
+    должно - оно закрывает новые биржи, а не открытые сделки.
+    """
+    code = trade_exchange(exchange)
+    if academy_confirmed(session, student, code):
+        return True
+    row = account_for(session, student.id, code)
+    return bool(row and row.is_active)
+
+
 def access_kind(uid: str | None, confirmed: set[str]) -> str:
     """Как подключён счёт: `academy` или `own`.
 

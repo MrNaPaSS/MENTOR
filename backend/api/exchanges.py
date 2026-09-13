@@ -37,7 +37,7 @@ from core.weex.futures import Credentials
 from backend.api.trading import _get_session
 from backend.deps import get_current_student, get_session
 from backend.security import TokenError, decode_token, encode_token
-from backend.trading.accounts import account_for, accounts_of
+from backend.trading.accounts import account_for, accounts_of, may_connect
 from backend.trading.connect import ConnectRefused, connect
 
 logger = logging.getLogger("nmnh.api.exchanges")
@@ -93,6 +93,11 @@ async def listing(
                 **venues.as_dict(one),
                 # Ключи этой биржи терминал принимает уже сегодня.
                 "keys_supported": one.code in KEY_EXCHANGES,
+                # А вот открыта ли она этому ученику - решает подтверждение
+                # академии: пока счёт не назван в боте и не подтверждён,
+                # подключать нечего (backend/trading/accounts.py, may_connect).
+                "may_connect": one.code in KEY_EXCHANGES
+                and may_connect(session, student, one.code),
                 # Вход биржей включён на этом сервере: без брокерского ID и
                 # адресов входа кнопка бессмысленна.
                 "oauth_ready": one.oauth and oauth.enabled(one.code),

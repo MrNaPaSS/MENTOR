@@ -23,7 +23,7 @@ from backend.deps import get_current_student, get_session
 from backend.security import encode_token
 from backend.trading import connect as connect_mod
 from core import oauth
-from core.models import Base, ExchangeAccount, LiveTrade, Student
+from core.models import AcademyUid, Base, ExchangeAccount, LiveTrade, Student
 
 SECRET = "секрет-для-тестов"
 
@@ -61,8 +61,14 @@ def api(monkeypatch):
     )
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine, expire_on_commit=False)()
-    student = Student(tg_id=42)
+    # Пришёл через академию на WEEX, счёт на OKX подтверждён отдельно: без
+    # подтверждения биржа в настройках не открывается (may_connect).
+    student = Student(tg_id=42, weex_uid="6067083524")
     session.add(student)
+    session.flush()
+    # Номер тот же, что назовёт пробник биржи: иначе подключение отклонится
+    # как счёт, подтверждённый на другой UID.
+    session.add(AcademyUid(student_id=student.id, exchange="okx", uid="551122"))
     session.commit()
 
     monkeypatch.setattr(
@@ -93,6 +99,23 @@ def test_showcase_lists_venues_and_their_state(api):
     assert okx["trading"] is True
     assert okx["book"] is True            # своя книга, backend/scalping/okx_collector.py
     assert okx["connected"] is False
+
+
+def test_showcase_opens_only_confirmed_exchanges(api):
+    """Биржа открывается подтверждением академии, а не списком адаптеров.
+
+    У этого ученика подтверждён OKX и есть WEEX по регистрации; BingX
+    подтверждения не имеет - и подключать её нечем, хотя адаптер у неё есть.
+    """
+    client, *_ = api
+    rows = {v["exchange"]: v for v in client.get("/api/exchanges").json()["venues"]}
+
+    assert rows["weex"]["may_connect"] is True
+    assert rows["okx"]["may_connect"] is True
+    assert rows["bingx"]["keys_supported"] is True
+    assert rows["bingx"]["may_connect"] is False
+    # Биржа без адаптера закрыта в любом случае - подключать нечем.
+    assert rows["bybit"]["may_connect"] is False
 
 
 def test_showcase_does_not_promise_a_rate_nobody_confirmed(api):

@@ -35,6 +35,7 @@ from backend.trading.accounts import (
     active_account,
     client_for,
     confirmed_uids,
+    may_connect,
     trade_exchange,
 )
 from core.exchanges import KEY_EXCHANGES, KEYS_EXCHANGE, exchange_code, title_of
@@ -612,6 +613,10 @@ async def status(
                 "key_tail": rows[code].key_tail if code in rows else "",
                 "updated_at": iso(rows[code].updated_at) if code in rows else None,
                 "access": rows[code].access if code in rows else "",
+                # Открыта ли биржа этому ученику: подключить её можно только
+                # после того, как академия подтвердила его счёт
+                # (backend/trading/accounts.py, may_connect).
+                "may_connect": may_connect(session, student, code),
             }
             for code in KEY_EXCHANGES
         ],

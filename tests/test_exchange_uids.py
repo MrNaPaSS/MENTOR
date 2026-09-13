@@ -156,15 +156,41 @@ def test_another_account_of_the_same_exchange_is_refused(api):
     assert session.query(ExchangeAccount).count() == 0
 
 
-def test_without_confirmation_the_account_is_his_own(api):
+def test_without_confirmation_the_exchange_stays_closed(api):
+    """Биржа без подтверждения академии не подключается вовсе.
+
+    Раньше такой счёт подключался как свой, с ограничениями. Теперь правило
+    другое: сниженная ставка и кешбэк считаются по паре «биржа и UID», и счёт,
+    чьего номера академия не подтверждала, в эту пару не попадает - значит и
+    подключать его некуда. Человек называет UID в боте академии, владелец
+    подтверждает, и биржа появляется в настройках.
+    """
     client, session, _, monkeypatch = api
     okx(monkeypatch, "777000")
 
-    body = client.put("/api/trading/keys", json={**KEYS, "exchange": "okx"}).json()
-    assert body["access"] == "own"
+    res = client.put("/api/trading/keys", json={**KEYS, "exchange": "okx"})
+    assert res.status_code == 403
+    assert "бот академии" in res.json()["detail"]
+
     status = client.get("/api/trading/status").json()
-    assert status["access"] == "own"
-    assert [a["access"] for a in status["accounts"] if a["exchange"] == "okx"] == ["own"]
+    okx_row = next(a for a in status["accounts"] if a["exchange"] == "okx")
+    assert okx_row["may_connect"] is False
+    assert okx_row["connected"] is False
+
+
+def test_confirmation_opens_the_exchange(api):
+    """Подтвердили счёт - биржа открылась, и подключение проходит."""
+    client, session, _, monkeypatch = api
+    okx(monkeypatch, "777000")
+    confirm(client, [{"exchange": "okx", "uid": "777000"}])
+
+    assert next(
+        a for a in client.get("/api/trading/status").json()["accounts"]
+        if a["exchange"] == "okx"
+    )["may_connect"] is True
+
+    body = client.put("/api/trading/keys", json={**KEYS, "exchange": "okx"}).json()
+    assert body["access"] == "academy"
 
 
 def test_weex_account_is_matched_by_the_student_uid(api, monkeypatch):

@@ -213,6 +213,9 @@ function VenueCard({
   const maker = ratePct(venue.maker);
   const academy = ratePct(venue.academy_taker);
   const cashback = venue.cashback ? `${Math.round(venue.cashback * 100)}%` : null;
+  // Биржа закрыта, пока академия не подтвердила счёт. Сервер, собранный до
+  // этого правила, поля не присылает - тогда ведём себя как раньше.
+  const locked = venue.keys_supported && venue.may_connect === false;
 
   return (
     <div className={CARD}>
@@ -287,6 +290,12 @@ function VenueCard({
         )}
       </div>
 
+      {locked && (
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--pane-muted)]">
+          {d.access.needsAcademy}
+        </p>
+      )}
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {venue.connect.includes("oauth") && (
           <button
@@ -302,7 +311,11 @@ function VenueCard({
         {venue.keys_supported && (
           <button
             onClick={onKeys}
-            disabled={busy}
+            // Биржа открывается подтверждением академии: пока счёт не назван в
+            // боте и не подтверждён, подключать нечего. Кнопку не прячем -
+            // человек должен видеть, что биржа есть и что для неё сделать.
+            disabled={busy || locked}
+            title={locked ? d.actions.needsAcademy : undefined}
             className={`${ACTION} flex items-center gap-1.5 border-[var(--pane-border)] text-[var(--pane-text-2)]`}
           >
             <KeyRound className="h-3.5 w-3.5" />

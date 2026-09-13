@@ -23,7 +23,7 @@ from backend.trading import accounts
 from backend.trading.accounts import active_account, client_for, trade_exchange
 from backend.trading.watcher import client_matches
 from core.db import Base
-from core.models import ExchangeAccount, LiveTrade, Student, WeexCredential
+from core.models import AcademyUid, ExchangeAccount, LiveTrade, Student, WeexCredential
 from core.okx.futures import OkxFutures
 from core.weex.futures import WeexFutures
 from backend.trading import connect as connect_mod
@@ -190,8 +190,13 @@ class _NoAffiliate:
 def api(monkeypatch):
     monkeypatch.setenv("WEEX_KEYS_SECRET", "мастер-ключ-для-тестов")
     _, session = _session()
-    student = Student(tg_id=1)
+    # Ученик пришёл через академию на WEEX, а счёт на OKX ему подтвердили
+    # отдельно: без подтверждения биржа в настройках не появляется вовсе
+    # (backend/trading/accounts.py, may_connect).
+    student = Student(tg_id=1, weex_uid="6067083524")
     session.add(student)
+    session.flush()
+    session.add(AcademyUid(student_id=student.id, exchange="okx", uid="777000"))
     session.commit()
 
     # Проверка ключей живёт в общем месте подключения: её используют и ручка

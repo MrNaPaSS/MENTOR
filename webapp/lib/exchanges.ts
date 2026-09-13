@@ -48,6 +48,8 @@ export type VenueRow = {
   academy_taker: number | null;
   cashback: number | null;
   keys_supported: boolean;
+  /** Академия подтвердила счёт ученика на этой бирже - её можно подключать. */
+  may_connect?: boolean;
   /** Вход биржей включён на сервере: без брокерского ID кнопка бессмысленна. */
   oauth_ready: boolean;
   connected: boolean;

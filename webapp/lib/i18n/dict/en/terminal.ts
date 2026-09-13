@@ -272,6 +272,9 @@ export const dialogs = {
       "Couldn't read the account state. Sign in - the trading section belongs to a student; if you already are signed in, the server is unavailable right now.",
     vaultOff:
       "No encryption key is configured on the server, so trading is switched off entirely. We won't store your keys in plain text.",
+    /** An exchange the academy has not confirmed yet. */
+    needsAcademy:
+      "This exchange opens once the academy confirms it: send the UID of your account there to the academy bot. After that, come back and connect the keys.",
     connected: "Account connected",
     key: "Key",
     available: "Available",
