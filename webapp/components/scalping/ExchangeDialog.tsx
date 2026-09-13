@@ -299,6 +299,16 @@ export default function ExchangeDialog({
               )}
             </div>
 
+            {/* Через академию счёт или свой: от этого зависят комиссия и
+                кешбэк, и ученик должен видеть это там же, где ключ. */}
+            <p
+              className={`text-[11px] leading-snug ${
+                account.access === "academy" ? "text-[var(--pane-accent)]" : "text-[var(--pane-muted)]"
+              }`}
+            >
+              {account.access === "academy" ? d.viaAcademy : d.ownAccount}
+            </p>
+
             <p className="text-[11px] leading-snug text-[var(--pane-muted)]">
               {isActive ? d.activeNote : d.liveNote}
             </p>

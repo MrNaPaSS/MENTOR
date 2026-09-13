@@ -20,6 +20,8 @@ export type ExchangeAccount = {
   connected: boolean;
   key_tail: string;
   updated_at: string | null;
+  /** Как подключён: academy - через академию, own - свой счёт. */
+  access?: string;
 };
 
 export type TradingStatus = {
@@ -31,6 +33,8 @@ export type TradingStatus = {
   updated_at: string | null;
   /** Биржа, на которую уходят новые сделки. Пусто - счетов нет. */
   active?: string;
+  /** Как подключён активный счёт: academy или own. */
+  access?: string;
   /** Все биржи, к которым можно подключиться, с состоянием каждой. */
   accounts?: ExchangeAccount[];
   /**

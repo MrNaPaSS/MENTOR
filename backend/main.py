@@ -28,6 +28,7 @@ from backend.api import chat_bridge as chat_bridge_api
 from backend.api import scalping as scalping_api
 from backend.api import trading_move
 from backend.api import trading_nudge
+from backend.api import exchange_uids
 from backend.api import certificates as certificates_api
 from backend.api import cashback as cashback_api
 from backend.api import market_status as market_status_api
@@ -235,6 +236,7 @@ def create_app(
     app.include_router(trading_move.router)
     app.include_router(trading_nudge.router)
     app.include_router(coins.router)
+    app.include_router(exchange_uids.router)
     app.include_router(shop.router)
     app.include_router(shop.admin_router)
     app.include_router(cashback_api.router)

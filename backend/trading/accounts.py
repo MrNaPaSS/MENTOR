@@ -23,8 +23,9 @@ import aiohttp
 from sqlalchemy import select
 
 from core.exchanges import KEY_EXCHANGES, KEYS_EXCHANGE
-from core.models import ExchangeAccount, Student
+from core.models import AcademyUid, ExchangeAccount, Student
 from core.okx.futures import OkxFutures
+from core.weex.uid import clean_uid
 from core.weex import keys as keystore
 from core.weex.futures import Credentials, WeexFutures
 
@@ -95,3 +96,30 @@ def client_for(row: ExchangeAccount, session_factory: SessionFactory) -> Any:
 def keyed_students():
     """Подзапрос: ученики, у которых подключён хоть один счёт."""
     return select(ExchangeAccount.student_id).where(ExchangeAccount.is_active.is_(True))
+
+
+# ── подтверждение академией ──────────────────────────────────────────────────
+
+
+def confirmed_uids(session, student_id: int, exchange: str) -> set[str]:
+    """Счета ученика на этой бирже, подтверждённые академией. Только цифры.
+
+    Пустое множество значит не «нет доступа», а «академия про эту биржу ничего
+    не говорила»: такой счёт подключается как свой, с ограничениями.
+    """
+    rows = session.execute(
+        select(AcademyUid.uid)
+        .where(AcademyUid.student_id == student_id)
+        .where(AcademyUid.exchange == trade_exchange(exchange))
+    ).scalars()
+    return {clean_uid(uid) for uid in rows if clean_uid(uid)}
+
+
+def access_kind(uid: str | None, confirmed: set[str]) -> str:
+    """Как подключён счёт: `academy` или `own`.
+
+    Номер счёта неизвестен - считаем своим: обещать скидку и кешбэк тому, чей
+    счёт мы не опознали, нельзя.
+    """
+    clean = clean_uid(uid)
+    return "academy" if clean and clean in confirmed else "own"

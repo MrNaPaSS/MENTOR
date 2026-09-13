@@ -252,6 +252,8 @@ export const dialogs = {
     connectFailed: "Couldn't connect",
     disconnectFailed: "Couldn't disconnect",
     activeFailed: "Couldn't switch the exchange",
+    viaAcademy: "Academy account: lower exchange fee and cashback from it",
+    ownAccount: "Your own account, outside the academy: standard fees, some features are closed",
     title: "Exchange accounts",
     keyTail: (tail: string) => `Key ${tail}`,
     canPlace: "Connect your API key to trade through the terminal",

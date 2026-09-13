@@ -122,6 +122,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
     from sqlalchemy import text
 
     from core.models import (
+        AcademyUid,
         ChartShot,
         ChatBridge,
         ChatMessage,
@@ -145,6 +146,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
         ScalpWorkspace,
         WeexCredential,
         ExchangeAccount,
+        AcademyUid,
         LiveTrade,
         ChartShot,
         ChatBridge,

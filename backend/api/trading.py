@@ -29,10 +29,12 @@ from sqlalchemy import select
 from backend.deps import get_current_student, get_session, get_weex
 from backend.trading.live_state import cached
 from backend.trading.accounts import (
+    access_kind,
     account_for,
     accounts_of,
     active_account,
     client_for,
+    confirmed_uids,
     trade_exchange,
 )
 from core.exchanges import KEY_EXCHANGES, KEYS_EXCHANGE, exchange_code, title_of
@@ -587,6 +589,8 @@ async def status(
         # Биржа активного счёта: по ней терминал подписывает карточки сделок.
         "exchange": row.exchange if row else "",
         "active": row.exchange if row else "",
+        # Как подключён активный счёт: academy - через академию, own - свой.
+        "access": row.access if row else "",
         "accounts": [
             {
                 "exchange": code,
@@ -594,6 +598,7 @@ async def status(
                 "connected": bool(rows.get(code) and rows[code].is_active),
                 "key_tail": rows[code].key_tail if code in rows else "",
                 "updated_at": iso(rows[code].updated_at) if code in rows else None,
+                "access": rows[code].access if code in rows else "",
             }
             for code in KEY_EXCHANGES
         ],
@@ -678,10 +683,36 @@ async def save_keys(
     except WeexTradeError as exc:
         raise HTTPException(400, f"Ключи не подошли: {exc}") from exc
 
+    # Чей это счёт. Номер спрашиваем у самой биржи: названный учеником может
+    # быть чужим по ошибке, а ребейт с него уйдёт другому человеку. У WEEX
+    # номер счёта - это UID ученика, он уже проверен при входе.
+    confirmed = confirmed_uids(session, student.id, code)
+    uid = ""
+    ask_uid = getattr(probe, "account_uid", None)
+    if ask_uid is not None:
+        try:
+            uid = clean_uid(await ask_uid())
+        except WeexTradeError as exc:
+            logger.warning("Номер счёта на %s не получен: %s", code, exc)
+    if not uid and code == "weex":
+        uid = clean_uid(student.weex_uid)
+
+    # Академия подтвердила другой счёт этой биржи - подключать этот нельзя:
+    # скидка и кешбэк считаются по подтверждённому номеру.
+    if confirmed and uid and uid not in confirmed:
+        raise HTTPException(
+            409,
+            f"Академия подтвердила на {code.upper()} другой счёт. "
+            "Подключите тот, чей UID вы называли, или пришлите новый UID в бот академии.",
+        )
+    access = access_kind(uid, confirmed)
+
     row = account_for(session, student.id, code)
     if row is None:
         row = ExchangeAccount(student_id=student.id, exchange=code)
         session.add(row)
+    row.exchange_uid = uid
+    row.access = access
     row.api_key_enc = keystore.encrypt(body.api_key)
     row.secret_enc = keystore.encrypt(body.secret_key)
     row.passphrase_enc = keystore.encrypt(body.passphrase)
@@ -698,7 +729,13 @@ async def save_keys(
     if code == "weex":
         await _check_referral(session, weex, student)
     session.commit()
-    return {"ok": True, "key_tail": row.key_tail, "vip": bool(student.is_vip), "exchange": code}
+    return {
+        "ok": True,
+        "key_tail": row.key_tail,
+        "vip": bool(student.is_vip),
+        "exchange": code,
+        "access": access,
+    }
 
 
 @router.put("/active")

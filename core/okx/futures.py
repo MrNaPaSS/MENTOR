@@ -440,6 +440,16 @@ class OkxFutures:
     async def _hedge(self) -> bool:
         return (await self.position_mode()) == "long_short_mode"
 
+    async def account_uid(self) -> str:
+        """Номер счёта на бирже. По нему счёт сверяется с подтверждёнными академией.
+
+        Спрашиваем саму биржу, а не ученика: назвать чужой номер ученик может и
+        по ошибке, а ребейт с него уйдёт другому человеку.
+        """
+        rows = await self._request("GET", ENDPOINTS["config"])
+        row = (rows or [{}])[0] if isinstance(rows, list) and rows else {}
+        return str(row.get("uid") or "")
+
     async def taker_fee(self) -> float:
         """Ставка тейкера этого счёта. OKX отдаёт её со знаком минус - это удержание."""
         if self._fee is not None:
