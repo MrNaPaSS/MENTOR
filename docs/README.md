@@ -20,6 +20,7 @@
 | [tz/voice-layer-tz.md](tz/voice-layer-tz.md) | ТЗ: голосовой слой терминала на GPT-Live-1 - **отложено** |
 | [tz/video-manual-tz.md](tz/video-manual-tz.md) | ТЗ (отложено): видеомануал и промо-ролики терминала на Recordly |
 | [features/scalping.md](features/scalping.md) | Скринер и стакан заявок: источник данных, метрики, лимиты биржи |
+| [integrations/okx-api-map.md](integrations/okx-api-map.md) | **Карта API OKX v5**: разделы целиком, что из них наше, находки в нашем коде |
 | [integrations/broker-program-plan.md](integrations/broker-program-plan.md) | **План брокерской программы**: ребейт бирж, кэшбэк трейдерам, все биржи, этапы |
 | [worklog/2026-09-08-terminal.md](worklog/2026-09-08-terminal.md) | Журнал, комиссия, радио и разметка: что чинилось и почему |
 | [worklog/2026-09-08-journal-duplicates.md](worklog/2026-09-08-journal-duplicates.md) | Двойная запись в журнале, комиссия на три четверти, боксы на графике |

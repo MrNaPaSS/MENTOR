@@ -14,10 +14,15 @@ BTC-USDT-SWAP контракт равен 0.01 BTC. Метрики стакан�
 и отписывается, когда ушёл последний (ТЗ мультибиржи, §10.3): девять бирж на
 пятьдесят монет - это девятьсот потоков, и так делать нельзя.
 
-Целостность книги проверяется контрольной суммой биржи. Она считается по тем
-строкам, которые биржа прислала, поэтому рядом с книгой в монетах живёт её
-теневая копия в исходных строках (`RawBook`): перевод в монеты и обратно
-чисел не сохраняет, и сумма не сошлась бы никогда.
+**Целостность книги - по номерам сообщений биржи.** У каждого сообщения есть
+свой номер и номер предыдущего (`seqId` и `prevSeqId`): цепочка цела, пока
+второй совпадает с номером, на котором мы стоим. Разрыв чинится переподпиской -
+снимок придёт с ней.
+
+Контрольную сумму биржа объявила устаревшей: поле в сообщении осталось, но её
+значение теперь всегда ноль, и проверять ею нечего. Сверка по ней здесь была, и
+именно она ломала книгу - расчётная сумма с нулём не сходилась никогда, книга
+пересобиралась на каждом сообщении и не собиралась вовсе.
 """
 
 from __future__ import annotations
@@ -32,13 +37,7 @@ import aiohttp
 from backend.scalping.candles import LiveCandles
 from backend.scalping.clusters import ClusterHistory
 from backend.scalping.ladder import detect_tick
-from backend.scalping.okx import (
-    BOOKS_CHANNEL,
-    TRADES_CHANNEL,
-    OkxPublicRest,
-    OkxStreamClient,
-    checksum,
-)
+from backend.scalping.okx import BOOKS_CHANNEL, TRADES_CHANNEL, OkxPublicRest, OkxStreamClient
 from backend.scalping.state import BAND_BP, MarketState
 from core.okx.futures import Instrument, inst_id, load_instruments, symbol_of
 
@@ -55,59 +54,11 @@ TICKER_INTERVAL = 10.0
 KEEP_BAND_BP = 60.0
 PRUNE_INTERVAL = 30.0
 
-# Сколько уровней участвует в контрольной сумме по правилам биржи.
-CHECKSUM_DEPTH = 25
-
-
 def _f(value, default: float = 0.0) -> float:
     try:
         return float(value)
     except (TypeError, ValueError):
         return default
-
-
-@dataclass
-class RawBook:
-    """Книга в том виде, в каком её прислала биржа: строки, не числа.
-
-    Нужна ровно для одного - проверить контрольную сумму. Биржа считает её по
-    своим строкам, а наша рабочая книга хранит монеты (контракты, умноженные
-    на размер контракта), и обратного перевода, совпадающего до знака, не
-    существует.
-    """
-
-    bids: dict[float, tuple[str, str]] = field(default_factory=dict)
-    asks: dict[float, tuple[str, str]] = field(default_factory=dict)
-
-    def reset(self) -> None:
-        self.bids.clear()
-        self.asks.clear()
-
-    def apply(self, bids: list, asks: list) -> None:
-        _merge_raw(self.bids, bids)
-        _merge_raw(self.asks, asks)
-
-    def top(self, side: str, depth: int = CHECKSUM_DEPTH) -> list[tuple[str, str]]:
-        source = self.bids if side == "bid" else self.asks
-        prices = sorted(source, reverse=(side == "bid"))[:depth]
-        return [source[price] for price in prices]
-
-    def matches(self, expected: int) -> bool:
-        return checksum(self.top("bid"), self.top("ask")) == expected
-
-
-def _merge_raw(target: dict[float, tuple[str, str]], rows: list) -> None:
-    """Применить изменения к теневой книге. Нулевой объём - снятие уровня."""
-    for row in rows or []:
-        try:
-            price_text, size_text = str(row[0]), str(row[1])
-            price, size = float(price_text), float(size_text)
-        except (TypeError, ValueError, IndexError):
-            continue
-        if size <= 0:
-            target.pop(price, None)
-        else:
-            target[price] = (price_text, size_text)
 
 
 def top_symbols(tickers: list[dict], limit: int) -> list[str]:
@@ -142,7 +93,6 @@ class OkxCollector:
         self.stream.on_reset = self._forget_books
 
         self._pinned: dict[str, int] = {}          # символ -> сколько клиентов смотрят
-        self._raw: dict[str, RawBook] = {}         # символ -> книга строками биржи
         self._specs: dict[str, Instrument] = {}    # instId -> свойства свопа
         self._specs_at = 0.0
         self._task: asyncio.Task | None = None
@@ -259,7 +209,6 @@ class OkxCollector:
             state.candles = LiveCandles()
         if state.clusters is None:
             state.clusters = ClusterHistory(tick=detect_tick(state.book))
-        self._raw[sym] = RawBook()
         self.start()
         await self.stream.subscribe(self._args(sym))
 
@@ -272,7 +221,6 @@ class OkxCollector:
             return
         self._pinned.pop(sym, None)
         await self.stream.unsubscribe(self._args(sym))
-        self._raw.pop(sym, None)
         self.state.drop(sym)
 
     @staticmethod
@@ -289,8 +237,6 @@ class OkxCollector:
         """
         for state in self.state.values():
             state.book.reset()
-        for raw in self._raw.values():
-            raw.reset()
 
     # ── приём событий потока ────────────────────────────────────────────────
 
@@ -327,16 +273,11 @@ class OkxCollector:
             state.clusters.add(ts, price, qty, is_buy)
 
     def _on_book(self, state, spec: Instrument, symbol: str, action: str, row: dict) -> None:
-        raw = self._raw.get(symbol)
-        if raw is None:
-            return
         bids, asks = row.get("bids") or [], row.get("asks") or []
         seq = int(_f(row.get("seqId"), -1))
         prev = int(_f(row.get("prevSeqId"), -1))
 
         if action == "snapshot" or not state.book.ready:
-            raw.reset()
-            raw.apply(bids, asks)
             state.book.apply_snapshot(_coins(bids, spec), _coins(asks, spec), seq)
             # У Binance снимок берётся отдельным запросом и в цепочке событий
             # не участвует, поэтому первое событие после него книга проверяет
@@ -353,17 +294,10 @@ class OkxCollector:
             self._resubscribe(symbol)
             return
 
-        raw.apply(bids, asks)
         applied = state.book.apply_diff(
             {"U": prev, "u": seq, "pu": prev, "b": _coins(bids, spec), "a": _coins(asks, spec)}
         )
         if not applied:
-            self._resubscribe(symbol)
-            return
-
-        expected = row.get("checksum")
-        if expected is not None and not raw.matches(int(_f(expected))):
-            logger.info("Контрольная сумма книги OKX %s не сошлась - переподписка", symbol)
             self._resubscribe(symbol)
             return
 
@@ -374,9 +308,6 @@ class OkxCollector:
         state = self.state.get(symbol)
         if state is not None:
             state.book.reset()
-        raw = self._raw.get(symbol)
-        if raw is not None:
-            raw.reset()
         args = self._args(symbol)
 
         async def again() -> None:

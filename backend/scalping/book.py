@@ -58,23 +58,31 @@ class OrderBook:
             return False
 
         first, final = int(event.get("U", 0)), int(event.get("u", 0))
-
-        # Событие целиком старше снимка — уже учтено в нём.
-        if final < self.last_update_id:
-            return True
+        prev = event.get("pu")
 
         if not self.synced:
+            # Событие целиком старше снимка — уже учтено в нём.
+            if final < self.last_update_id:
+                return True
             # Первое событие после снимка обязано его накрывать. Проверять его
             # по `pu` нельзя: снимок берётся отдельным запросом и в цепочке
             # событий потока не участвует.
             if not (first <= self.last_update_id <= final):
                 return False
             self.synced = True
-        else:
-            prev = event.get("pu")
-            if prev is not None and int(prev) != self.last_update_id:
+        elif prev is not None:
+            if int(prev) != self.last_update_id:
                 # Между этим и прошлым событием потерялось ещё одно.
                 return False
+            # Номер, уехавший назад при целой цепочке, - это перенумерация на
+            # стороне биржи после её обслуживания, а не старое событие. OKX
+            # присылает такое прямо: `prevSeqId` от прошлого сообщения, а
+            # `seqId` меньше него. Отбросить его как «уже учтённое» значило бы
+            # застрять на старом номере и уйти в переподписку на следующем же
+            # сообщении.
+        elif final < self.last_update_id:
+            # Без цепочки судим по номеру: событие старше снимка уже учтено.
+            return True
 
         _merge(self.bids, event.get("b") or [])
         _merge(self.asks, event.get("a") or [])

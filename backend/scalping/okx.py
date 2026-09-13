@@ -32,7 +32,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import zlib
 from typing import Any, Awaitable, Callable
 
 import aiohttp
@@ -57,28 +56,6 @@ CONTROL_RATE_DELAY = 0.2
 # Каналы книги: полная книга (400 уровней) с обновлениями каждые 100 мс.
 BOOKS_CHANNEL = "books"
 TRADES_CHANNEL = "trades"
-
-
-def checksum(bids: list, asks: list) -> int:
-    """Контрольная сумма книги по правилам OKX.
-
-    Берутся двадцать пять лучших уровней каждой стороны, чередуясь - бид, аск,
-    бид, аск, - и склеиваются как ``цена:объём`` через двоеточие. Если с одной
-    стороны уровней меньше, оставшиеся второй стороны идут подряд. Считается
-    crc32 и приводится к знаковому 32-битному числу: именно в таком виде его
-    присылает биржа.
-
-    Считается по строкам биржи, а не по нашим числам: "1.0" и "1" дают разную
-    сумму, и перевод через float сломал бы проверку.
-    """
-    parts: list[str] = []
-    for i in range(25):
-        if i < len(bids):
-            parts.append(f"{bids[i][0]}:{bids[i][1]}")
-        if i < len(asks):
-            parts.append(f"{asks[i][0]}:{asks[i][1]}")
-    value = zlib.crc32(":".join(parts).encode("utf-8"))
-    return value - (1 << 32) if value >= (1 << 31) else value
 
 
 class OkxPublicRest:
