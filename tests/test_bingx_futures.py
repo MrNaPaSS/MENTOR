@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import time
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -166,6 +167,85 @@ def test_request_is_signed_and_carries_the_key():
     assert call["headers"]["X-BX-APIKEY"] == "key"
     # Метки брокера нет - значит и заголовка нет вовсе.
     assert "X-SOURCE-KEY" not in call["headers"]
+
+
+def test_request_carries_the_window_and_corrected_time():
+    """Метка времени идёт с поправкой на часы биржи, и с окном годности.
+
+    Часы машины расходятся с биржей сами по себе: на живом счёте поймано 4.6
+    секунды при пятисекундном окне - запросы проходили через раз.
+    """
+    session = FakeSession({"/openApi/swap/v2/user/positions": {"code": 0, "data": []}})
+    bingx_market._SKEW_MS = 4600.0
+    try:
+        before = int(time.time() * 1000)
+        run(client(session).positions())
+    finally:
+        bingx_market._SKEW_MS = 0.0
+
+    query = sent_to(session, "/openApi/swap/v2/user/positions")["query"]
+    assert query["recvWindow"] == str(bingx.RECV_WINDOW)
+    # Время ушло вперёд на поправку, а не осталось местным.
+    assert int(query["timestamp"]) - before >= 4000
+
+
+def test_refusal_by_timestamp_is_retried_with_a_fresh_clock():
+    """Отказ по времени лечится сверкой часов и повтором - один раз.
+
+    Заявка при таком отказе на биржу не попала, значит повтор ничего не
+    задваивает; а вторая попытка уже со сверенными часами.
+    """
+    answers = [
+        {"code": 100421, "msg": "timestamp is invalid"},
+        {"code": 0, "data": []},
+    ]
+    session = FakeSession(
+        {
+            "/openApi/swap/v2/user/positions": lambda call: answers.pop(0),
+            "/openApi/swap/v2/server/time": {
+                "code": 0,
+                "data": {"serverTime": int(time.time() * 1000) + 4600},
+            },
+        }
+    )
+    bingx_market._SKEW_AT = 0.0
+    try:
+        assert run(client(session).positions()) == []
+    finally:
+        bingx_market._SKEW_MS = 0.0
+        bingx_market._SKEW_AT = 0.0
+
+    paths = [s["path"] for s in session.sent]
+    assert paths.count("/openApi/swap/v2/user/positions") == 2
+    assert "/openApi/swap/v2/server/time" in paths
+
+
+def test_demo_account_is_kept_in_vst():
+    """На демо-контуре биржа ведёт счёт в VST: строки с USDT там нет вовсе."""
+    session = FakeSession(
+        {
+            "/openApi/swap/v3/user/balance": {
+                "code": 0,
+                "data": [
+                    {
+                        "asset": "VST",
+                        "balance": "99601.7448",
+                        "equity": "99601.7448",
+                        "availableMargin": "99601.7448",
+                    }
+                ],
+            }
+        }
+    )
+    rows = run(client(session, demo=True).balance())
+    assert rows == [
+        {"marginCoin": "VST", "availableBalance": "99601.7448", "equity": "99601.7448"}
+    ]
+
+    from backend.trading.funds import usdt_from
+
+    # Для остального кода это те же деньги счёта: учебные, но свои.
+    assert float(usdt_from(rows)) == pytest.approx(99601.7448)
 
 
 def test_demo_contour_lives_on_its_own_address():
@@ -680,6 +760,25 @@ def test_refusal_names_the_reason():
     assert str(caught.value) == "position limit exceeded"
     assert caught.value.code == "101209"
     assert caught.value.retryable is False
+
+
+def test_unknown_position_mode_stops_the_order():
+    """Режим позиций не угадывается: не спросили - заявка не уходит.
+
+    В двустороннем режиме сторона позиции обязательна, в одностороннем -
+    запрещена вместе с reduceOnly. Угадав неверно, мы поставили бы заявку не в
+    ту сторону.
+    """
+    session = FakeSession(
+        {"/openApi/swap/v1/positionSide/dual": {"code": 100400, "msg": "service busy"}}
+    )
+    with pytest.raises(WeexTradeError):
+        run(
+            client(session).place_order(
+                symbol="BTCUSDT", side="BUY", position_side="LONG", quantity="1"
+            )
+        )
+    assert not any(s["path"] == "/openApi/swap/v2/trade/order" for s in session.sent)
 
 
 def test_rate_limit_is_retryable():

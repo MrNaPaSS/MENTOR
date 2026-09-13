@@ -36,8 +36,14 @@ _AMOUNT_FIELDS = (
 )
 
 
+# Монеты, которые для нас одно и то же - деньги счёта. VST это USDT
+# демо-контура BingX: на учебном счёте строки с USDT нет вовсе, и без этой
+# строки счёт со ста тысячами выглядел пустым.
+ACCOUNT_COINS = ("USDT", "VST")
+
+
 def usdt_from(payload: Any) -> Decimal | None:
-    """Остаток в USDT из ответа биржи. `None` - разобрать не вышло.
+    """Остаток в деньгах счёта из ответа биржи. `None` - разобрать не вышло.
 
     Приходит то списком монет, то одним объектом: разбираем так же, как это
     делает окно подключения ключей в терминале.
@@ -49,7 +55,7 @@ def usdt_from(payload: Any) -> Decimal | None:
         coin = str(
             row.get("marginCoin") or row.get("asset") or row.get("coin") or "USDT"
         ).upper()
-        if coin != "USDT":
+        if coin not in ACCOUNT_COINS:
             continue
         for name in _AMOUNT_FIELDS:
             if name not in row:

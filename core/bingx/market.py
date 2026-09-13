@@ -56,7 +56,30 @@ ENDPOINTS = {
     "open_orders": "/openApi/swap/v2/trade/openOrders",
     "fills": "/openApi/swap/v2/trade/allFillOrders",
     "listen_key": "/openApi/user/auth/userDataStream",
+    "time": "/openApi/swap/v2/server/time",
 }
+
+# Окно годности запроса. Биржа по умолчанию даёт пять секунд, и этого мало:
+# столько набегает от неточных часов машины и медленной сети вместе. Просим
+# больше - в пределах того, что биржа допускает.
+RECV_WINDOW = 20000
+
+# Насколько часы этой машины расходятся с часами биржи, миллисекунды.
+#
+# Это не мелочь и не забота администратора. BingX отклоняет запрос, если метка
+# времени разошлась с её часами больше чем на окно годности, и отвечает
+# «timestamp is invalid» - а расхождение в несколько секунд набегает на любой
+# машине само. Поймано на живом счёте: часы отставали на 4.6 секунды, и запросы
+# проходили через раз.
+#
+# Поэтому время для подписи берём не прямо с часов, а со смещением, которое
+# считается по ответу самой биржи.
+_SKEW_MS = 0.0
+_SKEW_AT = 0.0
+
+# Как часто пересчитываем смещение. Часы плывут медленно, но пересинхронизация
+# после отказа по времени идёт сразу, без оглядки на этот срок.
+SKEW_TTL = 300.0
 
 # Идентификатор заявки: 1-40 знаков, и биржа переводит его в нижний регистр.
 # Приводим сами - иначе сверка не сойдётся, и сделка окажется без сопровождения.
@@ -86,6 +109,12 @@ SAME_ORDER_GUARD = 1.2
 # Исполнения биржа отдаёт окном, и окно обязательно. Неделя - столько живёт
 # самая долгая сделка терминала.
 FILLS_WINDOW_MS = 7 * 24 * 3600 * 1000
+
+# Монета счёта. На демо-контуре BingX ведёт его в VST - учебных деньгах, - и
+# строка с USDT там не приходит вовсе: счёт выглядел пустым, хотя на нём сто
+# тысяч.
+MARGIN_COIN = "USDT"
+DEMO_MARGIN_COIN = "VST"
 
 # Состояние пары, при котором на ней торгуют: 1 работает, 25 нельзя открывать,
 # 5 до листинга, 0 снята.
@@ -152,6 +181,50 @@ def sign(secret: str, query: str) -> str:
 def query_string(params: dict[str, Any]) -> str:
     """Строка параметров в том виде, в каком она уйдёт в адресе."""
     return urlencode({k: v for k, v in params.items() if v not in (None, "")})
+
+
+def stamp() -> str:
+    """Метка времени для подписи - с поправкой на часы биржи."""
+    return str(int(time.time() * 1000 + _SKEW_MS))
+
+
+async def sync_clock(session, base_url: str = BASE_URL, force: bool = False) -> float:
+    """Узнать, на сколько наши часы расходятся с биржей. Возвращает смещение, мс.
+
+    Считаем по середине запроса: половина времени ответа приходится на дорогу
+    туда, половина обратно, и середина - самая честная точка сравнения.
+    """
+    global _SKEW_MS, _SKEW_AT
+    if not force and _SKEW_AT and time.monotonic() - _SKEW_AT < SKEW_TTL:
+        return _SKEW_MS
+    before = time.time() * 1000
+    try:
+        data = await _public_get(session, ENDPOINTS["time"], {}, base_url)
+    except (WeexTradeError, aiohttp.ClientError, asyncio.TimeoutError) as exc:
+        logger.debug("Время BingX не получено: %s", exc)
+        return _SKEW_MS
+    after = time.time() * 1000
+    row = data if isinstance(data, dict) else {}
+    server = _f(row.get("serverTime"))
+    if server <= 0:
+        return _SKEW_MS
+    _SKEW_MS = server - (before + after) / 2
+    _SKEW_AT = time.monotonic()
+    if abs(_SKEW_MS) > 1000:
+        logger.info(
+            "Часы разошлись с BingX на %.0f мс - подписываем запросы с поправкой", _SKEW_MS
+        )
+    return _SKEW_MS
+
+
+def clock_skew() -> float:
+    """Последнее известное расхождение часов, миллисекунды. Нужно пробнику."""
+    return _SKEW_MS
+
+
+def is_clock_error(exc: WeexTradeError) -> bool:
+    """Отказ по метке времени: часы разошлись с биржей."""
+    return str(exc.code) == "100421" or "timestamp" in str(exc).lower()
 
 
 def _f(value: Any) -> float:

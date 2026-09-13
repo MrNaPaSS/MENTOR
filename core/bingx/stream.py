@@ -58,11 +58,12 @@ from core.weex.futures import Credentials
 
 logger = logging.getLogger("nmnh.bingx.stream")
 
-# Адрес приватного потока. Биржа называет два написания - с ключом в пути и с
-# ключом параметром, - и какое из них ответит, зависит от контура. Пробуем по
-# очереди и запоминаем то, что сработало: молчащий поток означает возврат к
-# опросу, и гадать тут нечем.
-WS_PRIVATE = "wss://open-api-ws.bingx.com/market"
+# Адрес приватного потока. Ключ идёт **параметром**: с ключом в пути биржа
+# отвечает 403 на обоих контурах (проверено на живом демо-счёте 14 сентября
+# 2026). Второе написание оставлено запасным - на случай, если биржа однажды
+# передумает; лишняя попытка стоит доли секунды, а молчащий поток означает
+# возврат к опросу.
+WS_PRIVATE = "wss://open-api-swap.bingx.com/swap-market"
 WS_PRIVATE_DEMO = "wss://vst-open-api-ws.bingx.com/swap-market"
 
 # Ключ живёт час. Продлеваем вдвое чаще: сетевой сбой не должен стоить
@@ -90,7 +91,7 @@ def urls(demo: bool, listen_key: str, base: str | None = None) -> tuple[str, ...
         WS_PRIVATE_DEMO if demo else WS_PRIVATE
     )
     root = root.rstrip("/")
-    return (f"{root}/{listen_key}", f"{root}?listenKey={listen_key}")
+    return (f"{root}?listenKey={listen_key}", f"{root}/{listen_key}")
 
 
 def account_positions(event: dict[str, Any]) -> list[dict[str, Any]]:

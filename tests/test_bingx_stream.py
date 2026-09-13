@@ -49,11 +49,15 @@ def make_stream(rows: list[dict] | None = None, **kw) -> BingxPrivateStream:
 # ── ключ и адрес ─────────────────────────────────────────────────────────────
 
 
-def test_key_goes_into_the_address_both_ways():
-    """Биржа называет два написания - пробуем оба, прежде чем сдаться."""
-    boevoy, zapasnoy = urls(False, "abc123")
-    assert boevoy.endswith("/abc123")
-    assert zapasnoy.endswith("?listenKey=abc123")
+def test_key_goes_into_the_address_as_a_parameter():
+    """Ключ идёт параметром: с ключом в пути биржа отвечает 403.
+
+    Проверено на живом демо-счёте. Второе написание оставлено запасным - на
+    случай, если биржа передумает, - но первым пробуем рабочее.
+    """
+    first, spare = urls(False, "abc123")
+    assert first.endswith("?listenKey=abc123")
+    assert spare.endswith("/abc123")
     assert urls(True, "abc123")[0].startswith("wss://vst-")
 
 

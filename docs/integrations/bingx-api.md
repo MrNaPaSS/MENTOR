@@ -196,7 +196,10 @@ USDT-фьючерсов обе пары полей совпадают до зн�
 
 1. `POST /openApi/user/auth/userDataStream` с заголовком `X-BX-APIKEY` -
    возвращает `listenKey`, **живёт один час**;
-2. подключение: `wss://open-api-ws.bingx.com/market/<listenKey>`;
+2. подключение: `wss://open-api-swap.bingx.com/swap-market?listenKey=<listenKey>`
+   (демо - `wss://vst-open-api-ws.bingx.com/swap-market?listenKey=...`). Ключ
+   идёт **параметром**: с ключом в пути биржа отвечает 403 - проверено на живом
+   демо-счёте 14 сентября 2026;
 3. продление: `PUT` на ту же ручку; закрытие: `DELETE`.
 
 **События:**

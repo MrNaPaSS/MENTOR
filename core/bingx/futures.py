@@ -99,11 +99,18 @@ from core.bingx.market import (  # noqa: F401 - часть имён здесь �
     parse_instrument,
     plan_row,
     position_row,
+    DEMO_MARGIN_COIN,
+    MARGIN_COIN,
+    RECV_WINDOW,
+    clock_skew,
+    is_clock_error,
     public_filters,
     public_price,
     query_string,
     sign,
     signed_url,
+    stamp,
+    sync_clock,
     source_key,
     step_of,
     symbol_id,
@@ -158,6 +165,8 @@ class BingxFutures:
             else os.getenv("BINGX_DEMO", "").strip().lower() in ("1", "true", "yes")
         )
         self.base_url = base_url or (DEMO_URL if self.demo else BASE_URL)
+        # Монета счёта: на демо-контуре биржа ведёт его в учебных VST.
+        self.margin_coin = DEMO_MARGIN_COIN if self.demo else MARGIN_COIN
         # Метка брокера - из окружения по умолчанию, как у WEEX и OKX: её
         # получат все места, где создаётся клиент. Пусто - заголовка нет вовсе,
         # и поведение не отличается от нынешнего.
@@ -176,11 +185,15 @@ class BingxFutures:
         *,
         params: dict[str, Any] | None = None,
         signed: bool = True,
+        retried: bool = False,
     ) -> Any:
         """Подписанный запрос. Параметры BingX ждёт в адресе, а не в теле."""
         data = dict(params or {})
         if signed:
-            data["timestamp"] = str(int(time.time() * 1000))
+            # Время - с поправкой на часы биржи: расхождение в несколько секунд
+            # набегает на любой машине, а биржа отклоняет такие запросы.
+            data["timestamp"] = stamp()
+            data["recvWindow"] = str(RECV_WINDOW)
         query = query_string(data)
         if signed:
             query = f"{query}&signature={sign(self.creds.secret_key, query)}"
@@ -221,7 +234,21 @@ class BingxFutures:
             raise WeexTradeError(
                 f"BingX ответила не JSON ({status})", retryable=status >= 500
             ) from exc
-        return _unwrap(payload, status)
+
+        try:
+            return _unwrap(payload, status)
+        except WeexTradeError as exc:
+            # Отказ по метке времени лечится сам: спрашиваем часы биржи и
+            # повторяем - заявка при таком отказе на биржу не попала, значит
+            # повтор ничего не задваивает. Один раз: если и со свежими часами
+            # не вышло, дело не в них.
+            if retried or not is_clock_error(exc):
+                raise
+            await sync_clock(await self._session_factory(), self.base_url, force=True)
+            logger.info("BingX отклонила метку времени - повторяем со сверенными часами")
+            return await self._request(
+                method, path, params=params, signed=signed, retried=True
+            )
 
     def _check_source(self, path: str, headers: Any) -> None:
         """Засчитала ли биржа метку брокера. Проверяется раз на счёт.
@@ -268,13 +295,11 @@ class BingxFutures:
         cached = _MODES.get(self.creds.api_key)
         if cached and time.monotonic() - cached[1] < MODE_TTL:
             return cached[0]
-        try:
-            data = await self._request("GET", ENDPOINTS["dual"])
-        except WeexTradeError as exc:
-            # Не спросили - считаем режим односторонним: в нём закрытие обязано
-            # быть сокращающим, и это осторожная сторона ошибки.
-            logger.warning("Режим позиций BingX не получен: %s", exc)
-            return False
+        # Ошибку не глушим. От режима зависит, как уходит заявка: в
+        # двустороннем сторона позиции обязательна, в одностороннем - запрещена
+        # вместе с `reduceOnly`. Угадав неверно, мы поставили бы заявку не в ту
+        # сторону; отказ с понятным текстом честнее.
+        data = await self._request("GET", ENDPOINTS["dual"])
         row = data if isinstance(data, dict) else {}
         hedge = _bool(row.get("dualSidePosition"), False)
         _MODES[self.creds.api_key] = (hedge, time.monotonic())
@@ -318,29 +343,41 @@ class BingxFutures:
 
     # ── аккаунт ─────────────────────────────────────────────────────────────
 
-    async def balance(self, margin_coin: str = "USDT") -> list[dict[str, Any]]:
-        """Средства счёта в полях WEEX: сколько доступно и сколько всего."""
+    async def balance(self, margin_coin: str = "") -> list[dict[str, Any]]:
+        """Средства счёта в полях WEEX: сколько доступно и сколько всего.
+
+        Монету по умолчанию выбирает контур: на демо BingX ведёт счёт в VST, и
+        строки с USDT там нет вовсе. Раньше такой счёт выглядел пустым при ста
+        тысячах на нём - и это первое, что видит человек при подключении.
+        """
+        want = (margin_coin or self.margin_coin).upper()
         data = await self._request("GET", ENDPOINTS["balance"])
         rows = _rows(data, "balance")
         if not rows and isinstance(data, dict):
             inner = data.get("balance")
             rows = [inner] if isinstance(inner, dict) else []
-        out: list[dict[str, Any]] = []
-        for row in rows:
-            coin = str(row.get("asset") or row.get("currency") or margin_coin).upper()
-            if coin != margin_coin.upper():
-                continue
-            out.append(
-                {
-                    "marginCoin": coin,
-                    "availableBalance": row.get("availableMargin")
-                    or row.get("availableBalance")
-                    or row.get("balance")
-                    or "0",
-                    "equity": row.get("equity") or row.get("balance") or "0",
-                }
-            )
-        return out
+
+        def as_weex(row: dict[str, Any]) -> dict[str, Any]:
+            return {
+                "marginCoin": str(row.get("asset") or row.get("currency") or want).upper(),
+                "availableBalance": row.get("availableMargin")
+                or row.get("availableBalance")
+                or row.get("balance")
+                or "0",
+                "equity": row.get("equity") or row.get("balance") or "0",
+            }
+
+        out = [
+            as_weex(row)
+            for row in rows
+            if str(row.get("asset") or row.get("currency") or want).upper() == want
+        ]
+        if out or not rows:
+            return out
+        # Биржа назвала другую монету - отдаём то, что есть, а не пустоту:
+        # молчаливый ноль на счёте с деньгами хуже незнакомого названия.
+        logger.info("BingX ведёт счёт не в %s, а в %s", want, rows[0].get("asset"))
+        return [as_weex(rows[0])]
 
     async def positions(self) -> list[dict[str, Any]]:
         data = await self._request("GET", ENDPOINTS["positions"])

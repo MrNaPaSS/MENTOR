@@ -61,6 +61,7 @@ from core.bingx.futures import (  # noqa: E402
     public_price,
     source_key,
     symbol_id,
+    sync_clock,
 )
 from core.bingx.stream import BingxPrivateStream  # noqa: E402
 
@@ -233,9 +234,21 @@ async def check_account(session_factory, keys: Credentials) -> bool:
 
     client = BingxFutures(keys, session_factory, demo=demo())
     try:
+        # Часы: расхождение больше пяти секунд биржа не прощает вовсе, и это
+        # первое, что стоит увидеть при отказах «timestamp is invalid».
+        skew = await sync_clock(await session_factory(), client.base_url, force=True)
+        line(
+            OK if abs(skew) < 2000 else NO,
+            f"часы против биржи: {skew:+.0f} мс"
+            + ("" if abs(skew) < 2000 else " - поправку клиент вносит сам, но часы стоит сверить"),
+        )
         balance = await client.balance()
         row = balance[0] if balance else {}
-        line(OK, f"баланс: {row.get('availableBalance')} из {row.get('equity')} USDT")
+        line(
+            OK,
+            f"баланс: {row.get('availableBalance')} из {row.get('equity')} "
+            f"{row.get('marginCoin') or client.margin_coin}",
+        )
         line(OK, f"номер счёта: {await client.account_uid()}")
         mode = await client.position_mode()
         line(OK, f"режим позиций: {mode}")
