@@ -40,14 +40,20 @@ export interface Exchange {
 /**
  * Биржи по порядку показа.
  *
- * Первой идёт та, что работает. Соблазн поставить вперёд Binance ради узнавания
+ * Сначала те, что работают. Соблазн поставить вперёд Binance ради узнавания
  * прямой обман: человек кликнет и упрётся в «скоро».
+ *
+ * WEEX, BingX и OKX помечены рабочими: у всех трёх есть торговый адаптер,
+ * ключи подключаются в терминале, и сделки уходят на биржу
+ * (`core/weex`, `core/bingx`, `core/okx`). Тот же список рабочих держит
+ * `core/exchanges.py` (`KEY_EXCHANGES`) - расходиться им нельзя: здесь
+ * обещание, там кнопка.
  */
 export const EXCHANGES: readonly Exchange[] = [
   { id: "weex", name: "WEEX", status: "live", makerRate: 0.0002, takerRate: 0.0008 },
-  { id: "bingx", name: "BingX", status: "soon", makerRate: 0.0002, takerRate: 0.0005 },
+  { id: "bingx", name: "BingX", status: "live", makerRate: 0.0002, takerRate: 0.0005 },
+  { id: "okx", name: "OKX", status: "live", makerRate: 0.0002, takerRate: 0.0005 },
   { id: "bybit", name: "Bybit", status: "soon", makerRate: 0.0002, takerRate: 0.00055 },
-  { id: "okx", name: "OKX", status: "soon", makerRate: 0.0002, takerRate: 0.0005 },
   { id: "binance", name: "Binance", status: "soon", makerRate: 0.0002, takerRate: 0.0005 },
   { id: "bitget", name: "Bitget", status: "soon", makerRate: 0.0002, takerRate: 0.0006 },
 ] as const;

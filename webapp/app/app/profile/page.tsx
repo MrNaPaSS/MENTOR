@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fmtUsd, maskUid } from "@/lib/format";
 import { tradingStatus, type TradingStatus } from "@/lib/trading";
+import { venueTitle } from "@/lib/exchanges";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import { setTerminalTheme, useTerminalTheme } from "@/lib/terminalTheme";
 import { setSoundOn, useSoundOn } from "@/lib/notifySound";
@@ -29,6 +30,25 @@ const GOLD_BTN =
   "flex items-center gap-1.5 rounded-lg border border-accent-gold/60 bg-[color:color-mix(in_srgb,var(--pane-gold)_8%,transparent)] " +
   "px-3 py-2 text-[12px] font-semibold text-[var(--pane-gold)] transition-colors duration-150 " +
   "hover:bg-[color:color-mix(in_srgb,var(--pane-gold)_15%,transparent)]";
+
+// Знак биржи на карточке счёта. Человек узнаёт свою биржу по знаку раньше, чем
+// прочитает её название, - поэтому знак тот же, что у неё самой, а не общая
+// иконка ключа. Биржи без знака показывают знак WEEX: он же и биржа по
+// умолчанию (core/exchanges.py, KEYS_EXCHANGE).
+const VENUE_MARKS: Record<string, string> = {
+  weex: "/art/brand/weex-mark.webp",
+  bingx: "/art/brand/bingx-mark.webp",
+  okx: "/art/brand/okx-mark.webp",
+};
+
+// Свечение под знаком - в цвет самого знака: жёлтое под жёлтым WEEX, синее под
+// BingX. Знак OKX чернильный, ему свечение не нужно вовсе, а на тёмном листе
+// его переворачивает CSS - иначе чёрное на чёрном пропадает.
+const VENUE_MARK_GLOW: Record<string, string> = {
+  weex: "art-glow",
+  bingx: "art-glow-blue",
+  okx: "mark-ink",
+};
 
 // Выбранный вариант переключателя - золотом, остальные приглушены.
 const SEG_ON =
@@ -141,6 +161,10 @@ export default function ProfilePage() {
 
   const initial = (p.username || "U").slice(0, 1).toUpperCase();
   const isAdmin = p.weex_uid === ADMIN_WEEX_UID;
+  // Счёт, на который уходят сделки: по нему и подпись, и знак биржи. Выбора
+  // ещё нет - показываем биржу по умолчанию, а не пустое место.
+  const activeAccount = exchange?.accounts?.find((one) => one.exchange === exchange.active);
+  const venueCode = (exchange?.active || "weex").toLowerCase();
 
   return (
     // Колонкой во всю высоту окна: нижний баннер прижат к низу страницы, а не
@@ -247,80 +271,95 @@ export default function ProfilePage() {
         </div>
         {/* ── Биржевой счёт ──
             Ключи вводятся в терминале, но вопрос «подключено ли» человек задаёт
-            себе здесь - и ответа тут не было вовсе. */}
-        <div className={`${CARD} relative overflow-hidden`}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/art/brand/weex-mark.webp"
-            alt=""
-            aria-hidden
-            // Знак WEEX справа по середине карточки. В ширину 128 точек - он
-            // укладывается в поле справа от текста (pr-40).
-            className="art-glow pointer-events-none absolute right-4 top-1/2 hidden h-auto w-32 -translate-y-1/2 sm:block"
-          />
-          <div className="relative mb-3 flex items-center justify-between gap-3 sm:pr-40">
-            <span className="text-[14px] font-bold text-[var(--pane-text)]">
-              {t.profile.exchangeTitle}
-            </span>
-            <span
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                exchange?.connected ? "bg-[color:color-mix(in_srgb,var(--pane-up)_10%,transparent)] text-[var(--pane-up)]" : "bg-[var(--pane-hover)] text-[var(--pane-muted)]"
-              }`}
-            >
-              {exchange?.connected ? t.profile.connected : t.profile.disconnected}
-            </span>
-          </div>
+            себе здесь - и ответа тут не было вовсе.
 
-          <div className="relative flex items-center gap-3 sm:pr-40">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-accent-gold/40 bg-black text-[var(--pane-gold)]">
-              <Key className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 text-[12px]">
-              {/* Биржа активного счёта: на ней терминал ставит сделки. */}
-              <div className="font-semibold text-[var(--pane-text)]">
-                {exchange?.accounts?.find((one) => one.exchange === exchange.active)?.title ??
-                  "WEEX Futures"}
+            Справа - знак той биржи, где стоит счёт, а под ним кнопка действия:
+            сперва человек узнаёт биржу по знаку, потом решает, что с ней делать.
+            Состояние вынесено в точку у верхнего угла: словом «подключён»
+            карточка говорила то же самое, но занимала им целую строку. */}
+        <div className={`${CARD} relative overflow-hidden`}>
+          <span
+            title={exchange?.connected ? t.profile.connected : t.profile.disconnected}
+            aria-label={exchange?.connected ? t.profile.connected : t.profile.disconnected}
+            className={`absolute right-3 top-3 h-2.5 w-2.5 rounded-full ${
+              exchange?.connected
+                ? "bg-[var(--pane-up)] shadow-[0_0_0_3px_color-mix(in_srgb,var(--pane-up)_18%,transparent)]"
+                : "bg-[var(--pane-muted)] opacity-50"
+            }`}
+          />
+
+          <div className="flex items-stretch gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="mb-3 pr-6 text-[14px] font-bold text-[var(--pane-text)]">
+                {t.profile.exchangeTitle}
               </div>
-              <div className="mt-0.5 text-[12px] text-[var(--pane-muted)]">
-                {exchange?.connected ? (
-                  <>
-                    {t.profile.keyTail(exchange.key_tail)}
-                    {exchange.updated_at && (
+
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-accent-gold/40 bg-black text-[var(--pane-gold)]">
+                  <Key className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 text-[12px]">
+                  {/* Биржа активного счёта: на ней терминал ставит сделки. */}
+                  <div className="font-semibold text-[var(--pane-text)]">
+                    {activeAccount?.title ?? venueTitle(venueCode)}
+                  </div>
+                  <div className="mt-0.5 text-[12px] text-[var(--pane-muted)]">
+                    {exchange?.connected ? (
                       <>
-                        {t.profile.keySince(
-                          new Date(exchange.updated_at).toLocaleDateString(intlLocale(locale))
+                        {t.profile.keyTail(exchange.key_tail)}
+                        {exchange.updated_at && (
+                          <>
+                            {t.profile.keySince(
+                              new Date(exchange.updated_at).toLocaleDateString(intlLocale(locale))
+                            )}
+                          </>
                         )}
                       </>
+                    ) : exchange && !exchange.enabled ? (
+                      t.profile.vaultOff
+                    ) : (
+                      t.profile.noKeys
                     )}
-                  </>
-                ) : exchange && !exchange.enabled ? (
-                  t.profile.vaultOff
-                ) : (
-                  t.profile.noKeys
-                )}
+                  </div>
+                </div>
               </div>
+
+              <p className="mt-4 text-[11px] leading-relaxed text-[var(--pane-muted)]">
+                {t.profile.keysNote}
+              </p>
+
+              {/* Дорога к остальным биржам. Ключи одной биржи - это про «где я
+                  сейчас»; витрина отвечает на «где ещё можно и что это даёт». */}
+              <Link
+                href="/app/exchanges"
+                className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--pane-gold)] transition-colors duration-150 hover:text-[var(--pane-text)]"
+              >
+                {t.exchanges.title}
+                <ChevronRight className="h-3 w-3" />
+              </Link>
             </div>
-            <button
-              onClick={() => setKeysOpen(true)}
-              className={`ml-auto shrink-0 ${GOLD_BTN}`}
-            >
-              {exchange?.connected ? t.common.change : t.common.connect}
-            </button>
+
+            {/* Знак биржи и кнопка под ним. Колонка растянута по высоте
+                карточки, поэтому кнопка всегда стоит в нижнем правом углу, где
+                её и ищут. На узком экране знака нет - там дорога каждая точка. */}
+            <div className="flex shrink-0 flex-col items-end justify-between gap-3 pt-5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={VENUE_MARKS[venueCode] ?? VENUE_MARKS.weex}
+                alt=""
+                aria-hidden
+                // Знак вписан в общий прямоугольник, а не поставлен по ширине:
+                // у бирж он разной формы - WEEX широкий, OKX почти квадратный, -
+                // и по одной ширине карточки вышли бы разной высоты.
+                className={`pointer-events-none hidden max-h-16 w-28 object-contain sm:block ${
+                  VENUE_MARK_GLOW[venueCode] ?? "art-glow"
+                }`}
+              />
+              <button onClick={() => setKeysOpen(true)} className={`mt-auto ${GOLD_BTN}`}>
+                {exchange?.connected ? t.common.change : t.common.connect}
+              </button>
+            </div>
           </div>
-
-          <p className="relative mt-4 text-[11px] leading-relaxed text-[var(--pane-muted)] sm:pr-40">
-            {t.profile.keysNote}
-          </p>
-
-          {/* Дорога к остальным биржам. Ключи одной биржи - это про «где я
-              сейчас»; витрина отвечает на «где ещё можно и что это даёт». */}
-          <Link
-            href="/app/exchanges"
-            className="relative mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--pane-gold)] transition-colors duration-150 hover:text-[var(--pane-text)]"
-          >
-            {t.exchanges.title}
-            <ChevronRight className="h-3 w-3" />
-          </Link>
         </div>
 
         </div>

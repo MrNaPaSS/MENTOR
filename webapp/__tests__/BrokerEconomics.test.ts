@@ -174,4 +174,18 @@ describe("список бирж", () => {
   it("первой стоит подключённая биржа", () => {
     expect(EXCHANGES[0].status).toBe("live");
   });
+
+  it("рабочие биржи идут раньше тех, что ждут очереди", () => {
+    // Иначе человек читает список сверху вниз и упирается в «скоро» там, где
+    // мог бы торговать уже сегодня.
+    const first = EXCHANGES.findIndex((e) => e.status === "soon");
+    expect(EXCHANGES.slice(first).every((e) => e.status === "soon")).toBe(true);
+  });
+
+  it("рабочими помечены те биржи, у которых есть адаптер", () => {
+    // Тот же список держит core/exchanges.py (KEY_EXCHANGES): здесь обещание
+    // на витрине, там кнопка подключения ключей.
+    const live = EXCHANGES.filter((e) => e.status === "live").map((e) => e.id);
+    expect(live).toEqual(["weex", "bingx", "okx"]);
+  });
 });
