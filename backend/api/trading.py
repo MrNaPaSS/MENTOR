@@ -38,6 +38,7 @@ from backend.trading.accounts import (
     trade_exchange,
 )
 from core.exchanges import KEY_EXCHANGES, KEYS_EXCHANGE, exchange_code, title_of
+from core.bingx.futures import public_filters as bingx_public_filters
 from core.okx.futures import OkxFutures, public_filters as okx_public_filters
 from core.referral import grant_referral_vip
 from core.weex.uid import clean_uid, looks_like_uid
@@ -515,10 +516,12 @@ async def limits(
     Ключей не требует - справочник биржи открыт, и знать предел вправе и тот,
     кто счёт ещё не подключил.
     """
-    # Пределы той биржи, на которую уйдёт сделка: шаги и потолок плеча у бирж
-    # разные, и предел WEEX на счёте OKX обещал бы то, чего там нет.
+    # Пределы той биржи, на которую уйдёт сделка: шаги, минимумы и потолок
+    # плеча у бирж разные, и предел WEEX на счёте BingX обещал бы то, чего там
+    # нет.
     row = active_account(session, student)
-    source = okx_public_filters if row is not None and row.exchange == "okx" else public_filters
+    by_exchange = {"okx": okx_public_filters, "bingx": bingx_public_filters}
+    source = by_exchange.get(row.exchange if row is not None else "", public_filters)
     filters = await source(await _get_session(), symbol.upper())
     return {
         "symbol": symbol.upper(),

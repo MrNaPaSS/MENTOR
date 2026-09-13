@@ -13,7 +13,7 @@ export type { LivePosition, PositionBook };
 
 /** Счёт ученика на одной бирже: подключён ли и каким ключом. */
 export type ExchangeAccount = {
-  /** Код биржи: weex, okx. */
+  /** Код биржи: weex, okx, bingx. */
   exchange: string;
   /** Подпись биржи: «OKX Futures». */
   title: string;

@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from core.models import ExchangeAccount, Student, utcnow
+from core.bingx.futures import BingxFutures
 from core.okx.futures import OkxFutures
 from core.weex import keys as keystore
 from core.weex.futures import Credentials, WeexFutures, WeexTradeError
@@ -35,7 +36,7 @@ logger = logging.getLogger("nmnh.trading.connect")
 
 # Клиент проверки по бирже. Тот же список, что у торговли, но здесь он нужен
 # до сохранения: проверяем ровно тем клиентом, которым потом будем торговать.
-PROBES: dict[str, type] = {"weex": WeexFutures, "okx": OkxFutures}
+PROBES: dict[str, type] = {"weex": WeexFutures, "okx": OkxFutures, "bingx": BingxFutures}
 
 
 class ConnectRefused(Exception):

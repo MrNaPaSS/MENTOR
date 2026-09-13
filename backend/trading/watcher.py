@@ -678,6 +678,23 @@ class PositionWatcher:
             if await self._ensure_stop(client, trade, price, decision.size or None):
                 changed = True
 
+        # Биржи, где условную заявку нечем пометить (BingX): стоп, приложенный
+        # ко входу, приходит без нашего идентификатора, и узнать его можно
+        # только номером. Записываем номер сразу, как позиция открылась. Иначе
+        # при закрытии сделки эту заявку нечем будет снять, и она останется
+        # висеть на пустом объёме - а рынок, дойдя до её цены, откроет позицию
+        # заново.
+        if (
+            trade.status == "open"
+            and not trade.sl_order_id
+            and getattr(client, "plans_unlabeled", False)
+        ):
+            found = await self._find_stop_order(client, trade)
+            if found:
+                trade.sl_order_id = found
+                changed = True
+                logger.info("Стоп %s опознан номером %s", trade.symbol, found)
+
         if decision.filled_orders:
             takes = json.loads(trade.tp_orders_json or "[]")
             for take in takes:
@@ -854,9 +871,15 @@ class PositionWatcher:
             str(t.get("order_id") or "")
             for t in json.loads(trade.tp_orders_json or "[]")
         }
+        side = trade.side.upper()
         for order in orders:
             order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
             if order_id in ours:
+                continue
+            # Сторона позиции решает не меньше вида: на встречной позиции по той
+            # же монете стоит свой стоп, и записать его за этой сделкой значит
+            # однажды снять чужую защиту вместо своей.
+            if str(order.get("positionSide") or side).upper() not in (side, ""):
                 continue
             kind = str(order.get("planType") or order.get("type") or "").lower()
             if "sl" in kind or "stop" in kind or "loss" in kind:
@@ -1627,16 +1650,26 @@ def order_marks(order: dict[str, Any]) -> set[str]:
 
 
 def _alnum(value: str | None) -> str:
-    return "".join(ch for ch in str(value or "") if ch.isascii() and ch.isalnum())
+    """Идентификатор в виде, пригодном для сверки: буквы и цифры, строчными.
+
+    Строчными - из-за BingX: она переводит `clientOrderId` в нижний регистр и
+    возвращает его уже изменённым (`core/bingx/futures.py`). Сравнение с
+    учётом регистра не сошлось бы, и сделка осталась бы без сопровождения -
+    свою заявку оно не узнало бы. Для WEEX и OKX это ничего не меняет:
+    идентификаторы сделок собираются из монеты и времени, и двух, различных
+    только регистром, у одного ученика не бывает.
+    """
+    return "".join(ch for ch in str(value or "") if ch.isascii() and ch.isalnum()).lower()
 
 
 def client_matches(mark: str | None, client_id: str | None) -> bool:
     """Наша ли это заявка: идентификатор с биржи против идентификатора сделки.
 
     Сравниваем по началу строки: при переносе лимитки к идентификатору
-    дописывается номер попытки. И в очищенном виде - только буквы и цифры: OKX
-    других знаков в идентификаторе не принимает и режет его до 32 символов, и
-    `BTCUSDT-1789_x1` возвращается с биржи как `BTCUSDT1789x1`.
+    дописывается номер попытки. И в очищенном виде - только буквы и цифры и без
+    учёта регистра: OKX других знаков в идентификаторе не принимает и режет его
+    до 32 символов (`BTCUSDT-1789_x1` возвращается как `BTCUSDT1789x1`), а
+    BingX ещё и переводит его в строчные.
 
     Обрезанный биржей идентификатор - начало нашего; принимаем и его, но только
     длинный: короткое совпадение начала ничего не доказывает.

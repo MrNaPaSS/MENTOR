@@ -59,7 +59,10 @@ class FakeSession:
         self.sent: list[dict] = []
 
     def request(self, method, url, data=None, headers=None, timeout=None):
-        parsed = urlparse(url)
+        # Адрес приходит объектом библиотеки: подпись считается по пути со
+        # строкой запроса, и она обязана дойти до биржи ровно такой
+        # (`signed_url`).
+        parsed = urlparse(str(url))
         body = json.loads(data.decode()) if data else None
         self.sent.append(
             {"method": method, "path": parsed.path, "query": parse_qs(parsed.query), "body": body, "headers": headers}
@@ -113,6 +116,19 @@ def test_request_is_signed_with_the_query_and_marked_demo():
     assert headers["OK-ACCESS-KEY"] == "key"
     assert headers["OK-ACCESS-PASSPHRASE"] == "phrase"
     assert headers["x-simulated-trading"] == "1"
+
+
+def test_the_address_keeps_the_query_exactly_as_signed():
+    """Перекодированная строка запроса - это другая подпись, то есть отказ.
+
+    Библиотека адресов по умолчанию возвращает `%2C` запятой, а подпись
+    считается по пути со строкой запроса. Список условных заявок
+    (`ordType=conditional,oco`) на этом и ломался бы: «Invalid Sign».
+    """
+    from core.okx.futures import signed_url
+
+    path = "/api/v5/trade/orders-algo-pending?ordType=conditional%2Coco"
+    assert str(signed_url("https://www.okx.com", path)) == f"https://www.okx.com{path}"
 
 
 def test_instrument_names_go_both_ways():

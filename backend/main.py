@@ -41,6 +41,7 @@ from backend.balance_collector import BalanceCollector
 from backend.cashback_collector import CashbackCollector
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.market_hub import MarketHub
+from backend.scalping.bingx_collector import BingxCollector
 from backend.scalping.okx_collector import OkxCollector
 from backend.scalping.density_alerts import DensityWatcher, run_watcher as run_density_watcher
 from backend.ws.scalping_hub import ScalpingHub
@@ -77,11 +78,14 @@ def create_app(
     # открыли стакан, и молчат, пока не открыли (ТЗ мультибиржи, §4.4 и §10.3).
     # Имя с хвостом не для красоты: `market` в этом модуле - роутер рыночных
     # ручек, и переменная с тем же именем молча его затирала.
-    market_hub = (
-        MarketHub(scalping, {"okx": OkxCollector} if config.okx_book_enabled else {})
-        if scalping
-        else None
-    )
+    # Сборщики книг по биржам: каждый включается своим флагом - постоянное
+    # соединение стоит памяти и трафика, и включать их вместе незачем.
+    books: dict[str, type] = {}
+    if config.okx_book_enabled:
+        books["okx"] = OkxCollector
+    if config.bingx_book_enabled:
+        books["bingx"] = BingxCollector
+    market_hub = MarketHub(scalping, books) if scalping else None
     scalping_hub = ScalpingHub(scalping, market_hub) if scalping else None
     if scalping:
         # Рыночные ручки ходят на Binance тем же клиентом, что и скальпинг:

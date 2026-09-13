@@ -13,9 +13,14 @@
   сопровождение и ведёт. Счета без сделок потока не держат: соединение стоит
   памяти, а спрашивать о них некому;
 * поток гаснет, когда на счёте не осталось живых сделок;
-* поток есть не у каждой биржи. У OKX он описан и открыт; у WEEX приватного
-  потока в документации брокера не названо, и счета WEEX остаются на опросе -
-  это честнее, чем догадываться об адресе.
+* поток есть не у каждой биржи. У OKX и BingX он описан и открыт; у WEEX
+  приватного потока в документации брокера не названо, и счета WEEX остаются
+  на опросе - это честнее, чем догадываться об адресе.
+
+Потоки бирж устроены по-разному, и разница видна здесь одним местом: OKX
+присылает снимок позиций сама, а BingX - только изменения, поэтому её потоку
+нужен торговый клиент, которым он возьмёт снимок при подключении
+(`core/bingx/stream.py`).
 
 Событие о заявке здесь не превращается в состояние: каналы заявок снимка не
 дают, и собранный по ним список молча разошёлся бы с биржей. Событие работает
@@ -34,6 +39,8 @@ from typing import Any
 import aiohttp
 
 from backend.trading import live_state
+from core.bingx.futures import BingxFutures
+from core.bingx.stream import BingxPrivateStream
 from core.models import ExchangeAccount
 from core.okx.futures import load_instruments
 from core.okx.stream import OkxPrivateStream
@@ -43,7 +50,7 @@ from core.weex.futures import Credentials
 logger = logging.getLogger("nmnh.trading.stream")
 
 # Биржи, у которых приватный поток описан и подключён.
-STREAMED = ("okx",)
+STREAMED = ("okx", "bingx")
 
 Waker = Callable[[int], Awaitable[Any]]
 SessionFactory = Callable[[], Awaitable[aiohttp.ClientSession]]
@@ -91,13 +98,9 @@ class PrivateStreams:
         if account in self._streams:
             return
 
-        stream = OkxPrivateStream(
-            credentials(row),
-            self._specs,
-            on_orders=lambda _symbol, s=int(row.student_id): self._ring(s),
-            on_down=lambda a=account: live_state.forget(a),
-            demo=_demo(),
-        )
+        stream = self._build(exchange, row, account)
+        if stream is None:
+            return
         self._streams[account] = stream
         # Память чтений начинает спрашивать поток, а не биржу - но только пока
         # он сам считает себя живым (`ready`).
@@ -127,6 +130,42 @@ class PrivateStreams:
             task.cancel()
         self._waking.clear()
 
+    # ── потоки бирж ─────────────────────────────────────────────────────────
+
+    def _build(self, exchange: str, row: ExchangeAccount, account: tuple[int, str]) -> Any:
+        """Поток биржи этого счёта. `None` - биржа потока не даёт."""
+        student = int(row.student_id)
+
+        def ring(_symbol: str) -> None:
+            """Заявка изменилась - разбудить сопровождение этого ученика."""
+            self._ring(student)
+
+        def down() -> None:
+            """Поток оборвался - память чтений этого счёта больше не верна."""
+            live_state.forget(account)
+
+        if exchange == "okx":
+            return OkxPrivateStream(
+                credentials(row),
+                self._specs,
+                on_orders=ring,
+                on_down=down,
+                demo=_demo(),
+            )
+        if exchange == "bingx":
+            # Снимок позиций берёт торговый клиент: адрес, подпись и перевод
+            # полей у него уже есть, и второй такой же код разошёлся бы с ним.
+            demo = _bingx_demo()
+            client = BingxFutures(credentials(row), self._http, demo=demo)
+            return BingxPrivateStream(
+                credentials(row),
+                client.positions,
+                on_orders=ring,
+                on_down=down,
+                demo=demo,
+            )
+        return None
+
     # ── вспомогательное ─────────────────────────────────────────────────────
 
     async def _specs(self) -> dict[str, Any]:
@@ -149,3 +188,8 @@ class PrivateStreams:
 def _demo() -> bool:
     """Демо-счёт OKX: у него свой адрес приватного потока."""
     return os.getenv("OKX_DEMO", "").strip().lower() in ("1", "true", "yes")
+
+
+def _bingx_demo() -> bool:
+    """Демо-контур BingX (VST): свой адрес и у ручек, и у потока."""
+    return os.getenv("BINGX_DEMO", "").strip().lower() in ("1", "true", "yes")

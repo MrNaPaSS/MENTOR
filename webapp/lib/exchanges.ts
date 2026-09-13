@@ -11,6 +11,7 @@ export const VENUES: Record<string, string> = {
   weex: "WEEX Futures",
   binance: "Binance Futures",
   okx: "OKX Futures",
+  bingx: "BingX Futures",
   bybit: "Bybit Futures",
   bitget: "Bitget Futures",
 };

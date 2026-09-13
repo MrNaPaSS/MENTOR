@@ -102,12 +102,14 @@ VENUES: tuple[Venue, ...] = (
     Venue(
         code="bingx",
         name="BingX",
-        # Академия уже приводит на неё учеников и подтверждает счета; торговать
-        # в терминале пока нельзя - адаптера нет.
-        trading=False,
-        book=False,
+        # Академия приводит на неё учеников по своей ссылке и подтверждает
+        # счета; с сентября 2026 терминал на ней и торгует (core/bingx).
+        trading=True,
+        book=True,        # своя книга и лента, backend/scalping/bingx_collector.py
         connect=(KEYS,),
         broker=TALKS,
+        taker=0.0005,
+        maker=0.0002,
         cashback=0.10,
     ),
     Venue(

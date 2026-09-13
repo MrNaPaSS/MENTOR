@@ -22,7 +22,9 @@ from backend.sources import session as sources_session
 from backend.scalping.clusters import DEFAULT_COLUMNS as CLUSTER_COLUMNS, fit_to_rows
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.market_hub import PRIMARY, MarketHub
+from backend.scalping.bingx import BingxPublicRest
 from backend.scalping.okx import OkxPublicRest
+from core.bingx.futures import symbol_id
 from core.okx.futures import inst_id
 from backend.scalping.footprint import (
     build as build_footprint,
@@ -259,6 +261,52 @@ async def okx_klines(request: Request, symbol: str, interval: str, limit: int) -
     return out
 
 
+# Названия таймфреймов у BingX. Свои совпадают с нашими знак в знак - кроме
+# недели и месяца, которые биржа пишет заглавными.
+BINGX_BARS = {
+    "1m": "1m",
+    "3m": "3m",
+    "5m": "5m",
+    "15m": "15m",
+    "30m": "30m",
+    "1h": "1h",
+    "4h": "4h",
+    "1d": "1d",
+    "1w": "1w",
+    "1M": "1M",
+}
+
+
+async def bingx_klines(request: Request, symbol: str, interval: str, limit: int) -> list[list]:
+    """Свечи BingX в том же виде, в каком их отдаёт Binance.
+
+    Биржа отдаёт их словарями и от новых к старым; объём - в монетах, как и
+    везде у неё, поэтому переводить его не нужно.
+    """
+    bar = BINGX_BARS.get(interval)
+    if not bar:
+        return []
+    collector = get_market(request).collector("bingx")
+    rest = getattr(collector, "rest", None) or BingxPublicRest(sources_session.get)
+    rows = await rest.candles(symbol_id(symbol), bar, min(limit, 500))
+    out: list[list] = []
+    for row in reversed(rows):
+        try:
+            out.append(
+                [
+                    int(row["time"]),
+                    row["open"],
+                    row["high"],
+                    row["low"],
+                    row["close"],
+                    row["volume"],
+                ]
+            )
+        except (TypeError, ValueError, KeyError):
+            continue
+    return out
+
+
 @router.get("/klines/{symbol}")
 async def klines(
     request: Request,
@@ -307,6 +355,8 @@ async def klines(
         try:
             if venue == "okx":
                 raw = await okx_klines(request, sym, source, limit * factor)
+            elif venue == "bingx":
+                raw = await bingx_klines(request, sym, source, limit * factor)
             else:
                 raw = await collector.rest.klines(sym, source, limit * factor)
         finally:

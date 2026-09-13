@@ -221,7 +221,13 @@ def test_one_student_connects_several_exchanges(api):
     status = client.get("/api/trading/status").json()
     # Первый подключённый стал активным.
     assert status["active"] == "okx"
-    assert {a["exchange"]: a["connected"] for a in status["accounts"]} == {"weex": True, "okx": True}
+    # В списке все биржи с адаптером, а не только подключённые: ученик должен
+    # видеть, куда ещё может принести ключи.
+    assert {a["exchange"]: a["connected"] for a in status["accounts"]} == {
+        "weex": True,
+        "okx": True,
+        "bingx": False,
+    }
     assert "key-12345678" not in str(status)
 
 

@@ -50,6 +50,7 @@ from typing import Any, Awaitable, Callable
 from urllib.parse import urlencode
 
 import aiohttp
+from yarl import URL
 
 from core.throttle import take as take_budget
 from core.weex.futures import (
@@ -143,6 +144,18 @@ def timestamp() -> str:
     """Время запроса: ISO 8601 в UTC с миллисекундами и буквой Z."""
     now = datetime.now(timezone.utc)
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+
+
+def signed_url(base_url: str, request_path: str) -> URL:
+    """Адрес запроса ровно в том виде, в каком он подписан.
+
+    `encoded=True` здесь обязателен. Без него библиотека адресов перекодирует
+    строку запроса по-своему - `%2C` она возвращает запятой, - а подпись
+    считается по пути со строкой запроса. Биржа тогда считает её от другого
+    текста и отвечает «Invalid Sign». Виднее всего это на списке условных
+    заявок: `ordType=conditional,oco` - как раз тот случай.
+    """
+    return URL(f"{base_url}{request_path}", encoded=True)
 
 
 def sign(secret: str, stamp: str, method: str, request_path: str, body: str) -> str:
@@ -332,7 +345,7 @@ def _unwrap(payload: Any, status: int) -> Any:
 async def _public_get(session, path: str, params: dict[str, Any], base_url: str = BASE_URL) -> Any:
     """Открытая ручка без подписи: справочник и цена."""
     query = urlencode({k: v for k, v in params.items() if v not in (None, "")})
-    url = f"{base_url}{path}" + (f"?{query}" if query else "")
+    url = signed_url(base_url, path + (f"?{query}" if query else ""))
     async with session.request("GET", url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
         text = await resp.text()
         status = resp.status
@@ -455,7 +468,7 @@ class OkxFutures:
         try:
             async with session.request(
                 method,
-                f"{self.base_url}{request_path}",
+                signed_url(self.base_url, request_path),
                 data=body.encode("utf-8") if body else None,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=self.timeout),
