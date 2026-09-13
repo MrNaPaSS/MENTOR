@@ -104,6 +104,24 @@ def test_grant_finds_student_by_weex_uid(client):
     assert second.json()["student_id"] == first.json()["student_id"]
 
 
+def test_grant_finds_the_student_whatever_the_prefix(client):
+    """Один и тот же счёт, записанный по-разному, - один и тот же ученик.
+
+    Бот академии до переделки приписывал к номеру «PO», и в базе один счёт лежал
+    то с приставкой, то без неё. Точное сравнение своего же ученика не находило
+    и заводило рядом второго - с тем же счётом, пустой историей и отдельным
+    кабинетом. На живой базе так разошлись три пары.
+    """
+    first = grant(client, weex_uid="PO7005", ref="m1")
+    second = grant(client, weex_uid="7005", ref="m2")
+    assert second.json()["student_id"] == first.json()["student_id"]
+
+    # И в обратную сторону: сперва цифрами, потом с приставкой.
+    third = grant(client, weex_uid="7006", ref="m3")
+    fourth = grant(client, weex_uid="PO7006", ref="m4")
+    assert fourth.json()["student_id"] == third.json()["student_id"]
+
+
 def test_grant_links_second_key_to_existing_student(client):
     """Ученик пришёл сначала по tg_id, потом academy прислала и UID — связываем."""
     r1 = grant(client, tg_id=555003, ref="m1")

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from core import repo
 from core.weex.uid import clean_uid
 from core.models import iso, CoinTransaction, Student
 from backend import coin_ledger
@@ -277,9 +278,13 @@ def find_or_create_student(
             select(Student).where(Student.tg_id == tg_id)
         ).scalar_one_or_none()
     if student is None and weex_uid:
-        student = session.execute(
-            select(Student).where(Student.weex_uid == weex_uid)
-        ).scalar_one_or_none()
+        # Не точным совпадением, а по всем написаниям номера. Бот академии до
+        # переделки приписывал к номеру «PO», и в базе один и тот же счёт лежит
+        # то с приставкой, то без неё. Точное сравнение своего же ученика не
+        # находило и заводило рядом второго - с тем же счётом, пустой историей
+        # и отдельным кабинетом. Три такие пары нашлись на живой базе
+        # (`check_student_links.py`).
+        student = repo.get_student_by_weex_uid(session, weex_uid)
 
     if student is not None:
         # Второй ключ мог появиться позже — дописываем, чтобы связка окрепла.
