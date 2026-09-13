@@ -67,7 +67,10 @@ echo   Config: !CFG!
 :: ============ 5. ZAPUSK ============
 echo [5/5] Zapusk komponentov...
 
-start "MENTOR Backend" cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload"
+:: Sledim tolko za kodom. Bez --reload-dir uvicorn obhodit vsu papku,
+:: vklyuchaya .git: on derzhal pack-faily, i git pull ne mog ih udalit
+:: ("Unlink of file .git/objects/pack/... failed").
+start "MENTOR Backend" cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir backend --reload-dir core"
 start "MENTOR Bot"     cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && python -m bot.main"
 
 timeout /t 3 /nobreak >nul
