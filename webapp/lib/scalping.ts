@@ -64,6 +64,21 @@ export type ClusterColumn = {
 
 export type DomFrame = {
   symbol: string;
+  /**
+   * Чья это книга.
+   *
+   * Стакан идёт с биржи, на которой ученик торгует: плиты, спред и лента у
+   * каждой свои, а заявка исполняется по своим. Поле расходится с asked, когда
+   * книгу пришлось взять с общей биржи - причина в fallback.
+   */
+  exchange: string;
+  /** Какую биржу просил клиент. Пусто - не просил, общая книга. */
+  asked: string;
+  /**
+   * Почему книга не с той биржи, что просили: "no_symbol" - монеты там нет,
+   * "no_feed" - её поток у нас не заведён. Пусто - книга своя.
+   */
+  fallback: string;
   tick: number;
   best_bid: number;
   best_ask: number;
@@ -146,6 +161,12 @@ function wsUrl(): string {
 
 type Options = {
   symbol: string | null;
+  /**
+   * Биржа, книгу которой смотрит ученик: та, где стоит его активный счёт.
+   *
+   * Пусто - общая книга Binance: так у тех, кто счёт ещё не подключил.
+   */
+  exchange?: string;
   rows: number;
   agg: number;
   sort: SortKey;
@@ -178,7 +199,16 @@ function cachedScreener(): ScreenerRow[] {
   }
 }
 
-export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval, foot }: Options) {
+export function useScalpingFeed({
+  symbol,
+  exchange = "",
+  rows,
+  agg,
+  sort,
+  shelf,
+  interval,
+  foot,
+}: Options) {
   const [screener, setScreener] = useState<ScreenerRow[]>([]);
   const [dom, setDom] = useState<DomFrame | null>(null);
   const [connected, setConnected] = useState(false);
@@ -188,8 +218,8 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval, foot
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Настройки читаем из ref: пересоздавать соединение при смене шага сетки
   // незачем, достаточно отправить команду.
-  const optsRef = useRef({ symbol, rows, agg, sort, shelf, interval, foot });
-  optsRef.current = { symbol, rows, agg, sort, shelf, interval, foot };
+  const optsRef = useRef({ symbol, exchange, rows, agg, sort, shelf, interval, foot });
+  optsRef.current = { symbol, exchange, rows, agg, sort, shelf, interval, foot };
 
   const send = useCallback((message: object) => {
     const ws = socketRef.current;
@@ -221,6 +251,7 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval, foot
             JSON.stringify({
               action: "symbol",
               symbol: o.symbol,
+              exchange: o.exchange,
               rows: o.rows,
               agg: o.agg,
               shelf: o.shelf,
@@ -274,8 +305,8 @@ export function useScalpingFeed({ symbol, rows, agg, sort, shelf, interval, foot
   // секунды останутся цены прошлой монеты.
   useEffect(() => {
     setDom(null);
-    send({ action: "symbol", symbol, rows, agg, shelf, interval });
-  }, [symbol, rows, agg, shelf, interval, send]);
+    send({ action: "symbol", symbol, exchange, rows, agg, shelf, interval });
+  }, [symbol, exchange, rows, agg, shelf, interval, send]);
 
   useEffect(() => {
     send({ action: "sort", sort });

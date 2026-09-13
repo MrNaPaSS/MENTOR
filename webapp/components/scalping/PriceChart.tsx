@@ -682,6 +682,7 @@ const NO_MOVES: ReadonlySet<string> = new Set();
 
 function PriceChart({
   symbol,
+  venue = "",
   interval,
   wall,
   shelves,
@@ -715,6 +716,14 @@ function PriceChart({
   onAxisHeight,
 }: {
   symbol: string;
+  /**
+   * Биржа свечей - та же, с которой идёт стакан.
+   *
+   * Оставить график на общей бирже рядом со своей книгой значит показать две
+   * разные истории одной монеты: цены на биржах расходятся, и уровень,
+   * снятый с чужого графика, встанет мимо.
+   */
+  venue?: string;
   interval: string;
   wall: Wall | null;
   shelves: Wall[];
@@ -1481,7 +1490,8 @@ function PriceChart({
       if (Date.now() < retryAfter.current) return;
       try {
         const res = await fetch(
-          `${API_URL}/api/scalping/klines/${symbol}?interval=${interval}&limit=400`,
+          `${API_URL}/api/scalping/klines/${symbol}?interval=${interval}&limit=400` +
+            (venue ? `&exchange=${encodeURIComponent(venue)}` : ""),
         );
         if (!res.ok) {
           // Причину называем словами. Пустой график молча — это то же самое,
@@ -1532,7 +1542,7 @@ function PriceChart({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [symbol, interval]);
+  }, [symbol, venue, interval]);
 
   // Видимость индикаторов — отдельно от данных: переключение не должно
   // дёргать загрузку и сбрасывать масштаб.
@@ -2066,7 +2076,8 @@ function PriceChart({
         // её только тому, у кого он куплен.
         const token = getAccessToken();
         const res = await fetch(
-          `${API_URL}/api/scalping/footprint/${symbol}?interval=${interval}&time=${openBar}`,
+          `${API_URL}/api/scalping/footprint/${symbol}?interval=${interval}&time=${openBar}` +
+            (venue ? `&exchange=${encodeURIComponent(venue)}` : ""),
           token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
         );
         if (!res.ok) {

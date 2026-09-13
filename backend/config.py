@@ -58,6 +58,10 @@ class BackendConfig:
     # постоянное соединение и заметный поток данных, включать осознанно.
     scalping_enabled: bool = False
     scalping_top_n: int = 50
+    # Книга OKX своим потоком. Отдельный выключатель, а не общий со скальпингом:
+    # это второе постоянное соединение, и включать его надо осознанно - как и
+    # каждую следующую биржу.
+    okx_book_enabled: bool = True
     # Оповещения о плотности в стакане: крупные заявки в тему торгового
     # форума. Работают только вместе со скальпингом - берут его же книгу.
     density_alerts_enabled: bool = False
@@ -124,6 +128,7 @@ class BackendConfig:
             admin_tg_id=int(os.getenv("ADMIN_TG_ID", "0") or "0"),
             scalping_enabled=os.getenv("SCALPING_ENABLED", "false").lower() == "true",
             scalping_top_n=int(os.getenv("SCALPING_TOP_N", "50") or "50"),
+            okx_book_enabled=os.getenv("OKX_BOOK_ENABLED", "true").lower() == "true",
             density_alerts_enabled=os.getenv("DENSITY_ALERTS_ENABLED", "false").lower() == "true",
             density_chat_id=int(os.getenv("DENSITY_CHAT_ID", "0") or "0"),
             density_topic_id=int(os.getenv("DENSITY_TOPIC_ID", "0") or "0"),

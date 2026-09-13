@@ -132,7 +132,8 @@ async def ws_scalping(websocket: WebSocket, token: str = Query(default="")):
 
     Команды приходят JSON-сообщениями:
 
-        {"action": "symbol", "symbol": "BTCUSDT", "rows": 40, "agg": 1}
+        {"action": "symbol", "symbol": "BTCUSDT", "rows": 40, "agg": 1,
+         "exchange": "okx"}                      — книга своей биржи
         {"action": "symbol", "symbol": null}     — закрыть стакан
         {"action": "sort", "sort": "walls"}
         {"action": "foot", "time": 1757320800}   — какая свеча разобрана
@@ -147,7 +148,12 @@ async def ws_scalping(websocket: WebSocket, token: str = Query(default="")):
     await websocket.accept()
     await hub.connect(websocket)
     try:
-        await websocket.send_json({"event": "hello", "payload": {"sorts": sorted(SORT_KEYS)}})
+        # Биржи, книгу которых сервер умеет показывать. Клиент по ним решает,
+        # просить ли стакан своей биржи или остаться на общем.
+        venues = list(getattr(hub.market, "exchanges", ()))
+        await websocket.send_json(
+            {"event": "hello", "payload": {"sorts": sorted(SORT_KEYS), "venues": venues}}
+        )
         while True:
             message = await websocket.receive_json()
             # Права перечитываются на каждую команду: их немного, а покупку в
@@ -185,6 +191,9 @@ async def _handle_scalping_command(
                 message.get("shelf"), SHELF_MIN_NOTIONAL, SHELF_MIN_LIMIT, SHELF_MAX_LIMIT
             ),
             interval=str(message.get("interval") or "1m")[:8],
+            # Биржа ученика. Незнакомую не передаём дальше: книгу такой биржи
+            # мы всё равно не держим, а реестр ответит подменой без причины.
+            exchange=_venue(message.get("exchange")),
         )
     elif action == "foot":
         # Разбор свечи открыт или закрыт. Ноль означает «закрыт»: профиль
@@ -195,6 +204,12 @@ async def _handle_scalping_command(
         sort = message.get("sort")
         if isinstance(sort, str) and sort in SORT_KEYS:
             await hub.set_sort(websocket, sort)
+
+
+def _venue(value) -> str:
+    """Код биржи из команды клиента: только буквы, коротко и в нижнем регистре."""
+    text = str(value or "").strip().lower()
+    return text[:16] if text.isalpha() else ""
 
 
 def _clamp(value, default: int, low: int, high: int) -> int:

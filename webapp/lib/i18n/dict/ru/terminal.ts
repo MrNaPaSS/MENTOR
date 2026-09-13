@@ -59,6 +59,14 @@ export const terminal = {
   connectExchange: "Подключить биржевой счёт",
   // Биржа рядом с парой: куда уйдёт заявка, если нажать «войти».
   venue: "Заявки уходят на эту биржу - её счёт выбран активным",
+  // Чья книга на экране. Своя биржа - подписи нет, она и так рядом с парой;
+  // подпись появляется, когда стакан пришлось взять с общей биржи.
+  book: (venue: string) => `книга ${venue.toUpperCase()}`,
+  bookOwn: (venue: string) => `Стакан, лента и свечи идут с ${venue.toUpperCase()}`,
+  bookNoSymbol: (asked: string) =>
+    `На ${asked.toUpperCase()} этой монеты нет - стакан и лента показаны с Binance`,
+  bookNoFeed: (asked: string) =>
+    `Стакан ${asked.toUpperCase()} мы пока не собираем - книга и лента с Binance`,
   journalTitle: "Журнал сделок",
   chatWidth: "Ширина чата · двойной клик сбрасывает",
   expandChat: "Открыть чат",

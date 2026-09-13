@@ -53,6 +53,12 @@ export const terminal = {
   exchangeConnected: (tail: string) => `Exchange connected (${tail})`,
   connectExchange: "Connect an exchange account",
   venue: "Orders go to this exchange - its account is the active one",
+  book: (venue: string) => `${venue.toUpperCase()} book`,
+  bookOwn: (venue: string) => `Book, tape and candles come from ${venue.toUpperCase()}`,
+  bookNoSymbol: (asked: string) =>
+    `${asked.toUpperCase()} does not list this pair - book and tape are from Binance`,
+  bookNoFeed: (asked: string) =>
+    `We do not collect the ${asked.toUpperCase()} book yet - book and tape are from Binance`,
   journalTitle: "Trade journal",
   chatWidth: "Chat width · double click resets",
   expandChat: "Open chat",

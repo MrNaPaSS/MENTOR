@@ -22,6 +22,7 @@ from backend.scalping.footprint import build as build_footprint, from_columns
 from backend.scalping.ladder import DEFAULT_ROWS, build_ladder
 from backend.scalping.metrics import SHELF_MIN_NOTIONAL
 from backend.scalping.collector import KEEP_BAND_BP, ScalpingCollector
+from backend.scalping.market_hub import PRIMARY, MarketHub
 from backend.scalping.state import (
     BAND_BP,
     DEFAULT_SORT,
@@ -46,6 +47,12 @@ class Subscription:
 
     def __init__(self) -> None:
         self.symbol: str | None = None
+        # Биржа, которую попросил клиент, и биржа, с которой книга идёт на
+        # самом деле. Они расходятся, когда монеты на бирже ученика нет или её
+        # поток у нас не заведён: подменять книгу молча нельзя.
+        self.asked: str = ""
+        self.venue: str = ""
+        self.reason: str = ""
         self.rows: int = DEFAULT_ROWS
         self.agg: int = 1
         self.sort: str = DEFAULT_SORT
@@ -61,8 +68,11 @@ class Subscription:
 class ScalpingHub:
     """Держит подписки клиентов и рассылает им кадры."""
 
-    def __init__(self, collector: ScalpingCollector):
+    def __init__(self, collector: ScalpingCollector, market: MarketHub | None = None):
         self.collector = collector
+        # Реестр бирж: у кого какая книга. Без него - одна биржа, как было до
+        # мультибиржи; так хаб остаётся собираемым в тестах одним сборщиком.
+        self.market = market or MarketHub(collector)
         self._subs: dict[object, Subscription] = {}
         self._lock = asyncio.Lock()
         self._task: asyncio.Task | None = None
@@ -95,7 +105,7 @@ class ScalpingHub:
         async with self._lock:
             sub = self._subs.pop(ws, None)
         if sub and sub.symbol:
-            await self.collector.unpin(sub.symbol)
+            await self.market.unpin(sub.venue, sub.symbol)
 
     async def set_symbol(
         self,
@@ -105,11 +115,16 @@ class ScalpingHub:
         agg: int,
         shelf: float,
         interval: str = "1m",
+        exchange: str = "",
     ) -> None:
-        """Переключить клиента на другой стакан.
+        """Переключить клиента на другой стакан - на его бирже.
 
         Прошлый инструмент отпускаем, новый удерживаем: пока хоть один клиент
         на него смотрит, сборщик не выбросит его из наблюдения.
+
+        Биржа приходит от клиента: ученик видит книгу той биржи, где торгует.
+        Не вышло - реестр отдаёт Binance и называет причину, а кадр несёт её
+        клиенту: подменять книгу молча нельзя (ТЗ мультибиржи, §4.4).
         """
         async with self._lock:
             sub = self._subs.get(ws)
@@ -117,15 +132,21 @@ class ScalpingHub:
             return
 
         old, new = sub.symbol, symbol.upper() if symbol else None
+        asked = (exchange or "").strip().lower()
         sub.rows, sub.agg, sub.shelf, sub.interval = rows, agg, shelf, interval
-        if old == new:
+        if old == new and asked == sub.asked:
             return
 
+        was, venue = sub.symbol, sub.venue
         sub.symbol = new
+        sub.asked = asked
         if new:
-            await self.collector.pin(new)
-        if old:
-            await self.collector.unpin(old)
+            pinned = await self.market.pin(asked, new)
+            sub.venue, sub.reason = pinned.exchange, pinned.reason
+        else:
+            sub.venue, sub.reason = "", ""
+        if was:
+            await self.market.unpin(venue, was)
 
     async def set_foot(self, ws, at: int) -> None:
         """Какую свечу клиент разобрал на экране. Ноль - разбор закрыт.
@@ -174,7 +195,7 @@ class ScalpingHub:
         # Десять человек на биткойне с одинаковыми настройками это один расчёт
         # лестницы за такт, а не десять: собрать стакан дороже, чем отправить.
         screener_cache: dict[str, dict] = {}
-        dom_cache: dict[tuple[str, int, int, float, str, int], dict | None] = {}
+        dom_cache: dict[tuple[str, str, int, int, float, str, int], dict | None] = {}
         dead: list[object] = []
 
         for ws, sub in targets:
@@ -186,7 +207,15 @@ class ScalpingHub:
                         screener_cache[sub.sort] = frame
                     await ws.send_json({"event": "screener", "payload": frame})
                 if sub.symbol:
-                    key = (sub.symbol, sub.rows, sub.agg, sub.shelf, sub.interval, sub.foot)
+                    key = (
+                        sub.venue,
+                        sub.symbol,
+                        sub.rows,
+                        sub.agg,
+                        sub.shelf,
+                        sub.interval,
+                        sub.foot,
+                    )
                     if key in dom_cache:
                         dom = dom_cache[key]
                     else:
@@ -205,7 +234,8 @@ class ScalpingHub:
         return {"sort": sort, "rows": [asdict(r) for r in rows]}
 
     def _dom_frame(self, sub: Subscription) -> dict | None:
-        state = self.collector.state.get(sub.symbol or "")
+        market = self.market.state_of(sub.venue or PRIMARY)
+        state = market.get(sub.symbol or "") if market else None
         if state is None or not state.book.ready:
             return None
         # Порог крупной заявки в лестнице — тот же, что у полок на графике:
@@ -220,6 +250,11 @@ class ScalpingHub:
         columns = state.clusters.snapshot() if state.clusters else []
         return {
             "symbol": state.symbol,
+            # Чья это книга. Расходится с запрошенной - клиент подписывает
+            # подмену: «на OKX этой монеты нет, показана книга Binance».
+            "exchange": sub.venue or PRIMARY,
+            "asked": sub.asked,
+            "fallback": sub.reason,
             "tick": step,
             "best_bid": state.book.best_bid,
             "best_ask": state.book.best_ask,

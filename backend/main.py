@@ -29,6 +29,7 @@ from backend.api import scalping as scalping_api
 from backend.api import trading_move
 from backend.api import trading_nudge
 from backend.api import exchange_uids
+from backend.api import exchanges as exchanges_api
 from backend.api import certificates as certificates_api
 from backend.api import cashback as cashback_api
 from backend.api import market_status as market_status_api
@@ -39,6 +40,8 @@ from backend.price_collector import PriceCollector
 from backend.balance_collector import BalanceCollector
 from backend.cashback_collector import CashbackCollector
 from backend.scalping.collector import ScalpingCollector
+from backend.scalping.market_hub import MarketHub
+from backend.scalping.okx_collector import OkxCollector
 from backend.scalping.density_alerts import DensityWatcher, run_watcher as run_density_watcher
 from backend.ws.scalping_hub import ScalpingHub
 from backend.notify import get_notifier
@@ -69,7 +72,17 @@ def create_app(
     # Скальпинг держит постоянное соединение с биржей и заметный поток данных,
     # поэтому включается флагом, а не сам собой.
     scalping = ScalpingCollector(top_n=config.scalping_top_n) if config.scalping_enabled else None
-    scalping_hub = ScalpingHub(scalping) if scalping else None
+    # Книга по биржам: Binance держится постоянно - с неё идут скринер и стакан
+    # тех, у кого биржа не подключена; остальные включаются, когда на них
+    # открыли стакан, и молчат, пока не открыли (ТЗ мультибиржи, §4.4 и §10.3).
+    # Имя с хвостом не для красоты: `market` в этом модуле - роутер рыночных
+    # ручек, и переменная с тем же именем молча его затирала.
+    market_hub = (
+        MarketHub(scalping, {"okx": OkxCollector} if config.okx_book_enabled else {})
+        if scalping
+        else None
+    )
+    scalping_hub = ScalpingHub(scalping, market_hub) if scalping else None
     if scalping:
         # Рыночные ручки ходят на Binance тем же клиентом, что и скальпинг:
         # бюджет запросов биржа считает по адресу, и два счёта в одном
@@ -154,6 +167,8 @@ def create_app(
             await sources_session.close()
             if scalping_hub:
                 await scalping_hub.stop()
+            if market_hub:
+                await market_hub.stop()
             if scalping:
                 await scalping.stop()
             await collector.stop()
@@ -175,6 +190,7 @@ def create_app(
     app.state.price_collector = collector
     app.state.scalping = scalping
     app.state.scalping_hub = scalping_hub
+    app.state.market_hub = market_hub
     # Сопровождение позиций: к нему обращается просьба терминала проверить
     # сделки ученика вне очереди - после взятой цели стоп ждать обхода не должен.
     app.state.position_watcher = watcher
@@ -237,6 +253,7 @@ def create_app(
     app.include_router(trading_nudge.router)
     app.include_router(coins.router)
     app.include_router(exchange_uids.router)
+    app.include_router(exchanges_api.router)
     app.include_router(shop.router)
     app.include_router(shop.admin_router)
     app.include_router(cashback_api.router)

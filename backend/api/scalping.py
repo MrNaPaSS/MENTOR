@@ -17,9 +17,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from backend import tools
+from backend.sources import session as sources_session
 
 from backend.scalping.clusters import fit_to_rows
 from backend.scalping.collector import ScalpingCollector
+from backend.scalping.market_hub import PRIMARY, MarketHub
+from backend.scalping.okx import OkxPublicRest
+from core.okx.futures import inst_id
 from backend.scalping.footprint import (
     build as build_footprint,
     collect,
@@ -44,6 +48,29 @@ def get_collector(request: Request) -> ScalpingCollector:
     if collector is None:
         raise HTTPException(503, "Сборщик скальпинга не запущен")
     return collector
+
+
+def get_market(request: Request) -> MarketHub:
+    """Реестр бирж. Его может не быть у сервера, собранного до мультибиржи."""
+    market = getattr(request.app.state, "market_hub", None)
+    if market is None:
+        market = MarketHub(get_collector(request))
+    return market
+
+
+def venue_state(request: Request, exchange: str | None):
+    """Состояние рынка нужной биржи и её код.
+
+    Биржа не заведена или её стакан никто не открывал - отдаём Binance и
+    говорим об этом кодом в ответе: ученик должен видеть, чью книгу читает.
+    """
+    market = get_market(request)
+    code = (exchange or "").strip().lower()
+    if code and code != PRIMARY:
+        state = market.state_of(code)
+        if state is not None:
+            return state, code
+    return get_collector(request).state, PRIMARY
 
 
 @router.get("/screener")
@@ -86,18 +113,20 @@ async def dom(
         le=SHELF_MAX_LIMIT,
         description="Порог полки ликвидности в деньгах",
     ),
+    exchange: str = Query("", description="Биржа книги; пусто - Binance"),
     rights: frozenset[str] = Depends(tool_rights),
 ) -> dict[str, Any]:
     """Лестница стакана с плитами и метриками по одному инструменту.
 
     Глубина и шаг - по купленным инструментам: без них бесплатный уровень.
+    Книга - той биржи, где ученик торгует: плиты и спред у каждой свои.
     """
     rows = tools.limit_rows(rows, rights)
     agg = tools.limit_agg(agg, rights)
-    collector = get_collector(request)
+    market_state, venue = venue_state(request, exchange)
     sym = symbol.upper()
 
-    state = collector.state.get(sym)
+    state = market_state.get(sym)
     if state is None:
         raise HTTPException(404, f"{sym} не под наблюдением - откройте его через WebSocket")
     if not state.book.ready:
@@ -111,6 +140,7 @@ async def dom(
 
     return {
         "symbol": sym,
+        "exchange": venue,
         "tick": step,
         "base_tick": step / max(1, agg) if not tick else step,
         "best_bid": state.book.best_bid,
@@ -175,6 +205,44 @@ def fold_candles(rows: list[dict], seconds: int) -> list[dict]:
 # одной монете складывались в один поход на биржу, а не в десять.
 _klines_inflight: dict[str, Any] = {}
 
+# Названия таймфреймов у OKX. Дневные, недельные и месячные берём в UTC:
+# по умолчанию биржа считает их от гонконгского времени, и уровни прошлого дня
+# у ученика разъехались бы с теми, что рисует график Binance.
+OKX_BARS = {
+    "1m": "1m",
+    "3m": "3m",
+    "5m": "5m",
+    "15m": "15m",
+    "30m": "30m",
+    "1h": "1H",
+    "4h": "4H",
+    "1d": "1Dutc",
+    "1w": "1Wutc",
+    "1M": "1Mutc",
+}
+
+
+async def okx_klines(request: Request, symbol: str, interval: str, limit: int) -> list[list]:
+    """Свечи OKX в том же виде, в каком их отдаёт Binance.
+
+    Биржа присылает их от новых к старым и объём двумя мерами: в контрактах
+    (``vol``) и в монетах (``volCcy``). Берём монеты - так же, как у Binance,
+    иначе объём на графике был бы в сотню раз больше.
+    """
+    bar = OKX_BARS.get(interval)
+    if not bar:
+        return []
+    collector = get_market(request).collector("okx")
+    rest = getattr(collector, "rest", None) or OkxPublicRest(sources_session.get)
+    rows = await rest.candles(inst_id(symbol), bar, min(limit, 300))
+    out: list[list] = []
+    for row in reversed(rows):
+        try:
+            out.append([int(row[0]), row[1], row[2], row[3], row[4], row[6]])
+        except (TypeError, ValueError, IndexError):
+            continue
+    return out
+
 
 @router.get("/klines/{symbol}")
 async def klines(
@@ -184,11 +252,20 @@ async def klines(
     # уровней прошлого периода: индикатор рисует их на любом таймфрейме.
     interval: str = Query("1m", pattern=r"^(1m|3m|5m|10m|15m|30m|1h|4h|1d|1w|1M)$"),
     limit: int = Query(240, ge=2, le=500),
+    exchange: str = Query("", description="Биржа свечей; пусто - Binance"),
 ) -> dict[str, Any]:
-    """Свечи для графика рядом со стаканом — из того же источника, что и книга."""
+    """Свечи для графика рядом со стаканом — из того же источника, что и книга.
+
+    Биржа та же, что у стакана: оставить график на Binance рядом со своей
+    книгой значит показать рядом две разные истории одной монеты
+    (ТЗ мультибиржи, §4.4).
+    """
     collector = get_collector(request)
+    venue = (exchange or "").strip().lower()
+    if venue and venue not in get_market(request).exchanges:
+        venue = ""
     sym = symbol.upper()
-    key = f"{sym}:{interval}:{limit}"
+    key = f"{venue or PRIMARY}:{sym}:{interval}:{limit}"
 
     cached = _klines_cache.get(key)
     now = time.monotonic()
@@ -213,7 +290,10 @@ async def klines(
         # эпохи, - поэтому свечи получаются те же, что были бы у биржи.
         source, factor = ("5m", 2) if interval == "10m" else (interval, 1)
         try:
-            raw = await collector.rest.klines(sym, source, limit * factor)
+            if venue == "okx":
+                raw = await okx_klines(request, sym, source, limit * factor)
+            else:
+                raw = await collector.rest.klines(sym, source, limit * factor)
         finally:
             _klines_inflight.pop(key, None)
             if not done.done():
@@ -243,14 +323,14 @@ async def klines(
             _klines_cache[key] = (now, rows)
 
     if not rows:
-        if collector.rest.blocked:
+        if not venue and collector.rest.blocked:
             raise HTTPException(
                 503,
                 f"Биржа ограничила запросы, свечи появятся через "
                 f"{collector.rest.blocked_for:.0f} с",
             )
         raise HTTPException(502, f"Свечи {sym} недоступны")
-    return {"symbol": sym, "interval": interval, "candles": rows}
+    return {"symbol": sym, "interval": interval, "exchange": venue or PRIMARY, "candles": rows}
 
 
 # ── Профиль объёма внутри свечи ─────────────────────────────────────────────
@@ -365,6 +445,7 @@ async def footprint(
     symbol: str,
     interval: str = Query("1m", pattern=r"^(1m|3m|5m|10m|15m|30m|1h)$"),
     at: int = Query(..., alias="time", ge=0, description="Начало свечи, секунды"),
+    exchange: str = Query("", description="Биржа ленты; пусто - Binance"),
     rights: frozenset[str] = Depends(tool_rights),
 ) -> dict[str, Any]:
     """Объём внутри одной свечи: строки профиля и итоги.
@@ -378,6 +459,7 @@ async def footprint(
     if not tools.can_footprint(rights):
         raise HTTPException(403, "Кластерная свеча продаётся в маркете, в разделе «Инструменты»")
     collector = get_collector(request)
+    market_state, venue = venue_state(request, exchange)
     sym = symbol.upper()
     seconds = FOOTPRINT_INTERVALS[interval]
     start = at - at % seconds
@@ -386,7 +468,7 @@ async def footprint(
     if start > now:
         raise HTTPException(400, "Эта свеча ещё не началась")
 
-    state = collector.state.get(sym)
+    state = market_state.get(sym)
     live = state.clusters if state else None
 
     # Своя лента — первым делом: она не стоит бирже ни одного запроса, а на
@@ -398,7 +480,14 @@ async def footprint(
             shot = build_footprint(
                 cells, time=start, seconds=seconds, tick=live.tick, partial=False
             )
-            return _foot_payload(sym, interval, shot, source="tape")
+            return _foot_payload(sym, interval, shot, source="tape", exchange=venue)
+
+    # Своей ленты не хватило. Добрать сделки по REST мы умеем только у
+    # Binance: подставить её сделки под книгу другой биржи нельзя - это разные
+    # цены и разные объёмы, и профиль вышел бы чужим.
+    if venue != PRIMARY:
+        shot = build_footprint({}, time=start, seconds=seconds, tick=0.0, partial=True)
+        return _foot_payload(sym, interval, shot, source="tape", exchange=venue)
 
     key = f"{sym}:{interval}:{start}"
     cached = _foot_cache.get(key)
@@ -448,13 +537,16 @@ async def footprint(
     return payload
 
 
-def _foot_payload(symbol: str, interval: str, shot, source: str) -> dict[str, Any]:
+def _foot_payload(
+    symbol: str, interval: str, shot, source: str, exchange: str = PRIMARY
+) -> dict[str, Any]:
     """Ответ клиенту. Строки тройками — по той же причине, что и у кластеров:
     ключи JSON обязаны быть строками, а str(1e-05) в Python и в JavaScript
     выглядит по-разному, и ячейки монет с мелким шагом просто не нашлись бы."""
     return {
         "symbol": symbol,
         "interval": interval,
+        "exchange": exchange,
         "time": shot.time,
         "seconds": shot.seconds,
         "tick": shot.tick,
@@ -468,9 +560,31 @@ def _foot_payload(symbol: str, interval: str, shot, source: str) -> dict[str, An
 
 @router.get("/status")
 async def status(request: Request) -> dict[str, Any]:
-    """Состояние сборщика — что под наблюдением и жив ли поток биржи."""
+    """Состояние сборщиков — что под наблюдением и живы ли потоки бирж.
+
+    По биржам, а не одной строкой: на девяти биржах наставнику нужно видеть,
+    какая из них молчит, а не общее «всё хорошо» (ТЗ мультибиржи, §10.4).
+    """
     collector = get_collector(request)
     ready = sum(1 for s in collector.state.values() if s.book.ready)
+    market = get_market(request)
+    venues = []
+    for code in market.exchanges:
+        one = market.collector(code)
+        if one is None:
+            # Биржа заведена, но её поток ещё ни разу не понадобился.
+            venues.append({"exchange": code, "running": False, "connected": False, "tracked": []})
+            continue
+        venues.append(
+            {
+                "exchange": code,
+                "running": True,
+                "connected": bool(getattr(one, "connected", False))
+                or bool(getattr(getattr(one, "stream", None), "connected", False)),
+                "tracked": sorted(getattr(one, "tracked", ())),
+                "books_ready": sum(1 for s in one.state.values() if s.book.ready),
+            }
+        )
     return {
         "connected": collector.stream.connected,
         "tracked": sorted(collector.tracked),
@@ -479,4 +593,5 @@ async def status(request: Request) -> dict[str, Any]:
         # Сколько секунд биржа держит нас закрытыми. Ноль — всё в порядке;
         # больше нуля значит 418 или 429, и до конца паузы книги не соберутся.
         "throttled_for": round(collector.rest.blocked_for, 1),
+        "venues": venues,
     }
