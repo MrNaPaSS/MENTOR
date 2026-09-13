@@ -151,6 +151,12 @@ export default function MarketTicker() {
 
     const dpr = window.devicePixelRatio || 1;
     const speed = marqueeSpeed(dpr);
+    // Ступени - только под мышью. Safari на iPad не умеет отдать видеокарте
+    // анимацию со steps() и крутит её на главном потоке, а тот на время
+    // прокрутки пальцем занят жестом: лента дёргалась ровно пока листают и
+    // оживала, стоило остановиться. Прямую он ведёт на видеокарте, а дрожь
+    // краёв на дробном пикселе на экране планшета с плотностью 2x не видна.
+    const touch = window.matchMedia("(pointer: coarse)").matches;
     let span = 0;
     let motions: Animation[] = [];
 
@@ -181,7 +187,7 @@ export default function MarketTicker() {
         iterations: Infinity,
         // Ступень на пиксель экрана, а не плавная прямая: прямая ставит слой
         // между пикселями на каждом кадре.
-        easing: `steps(${next.steps}, end)`,
+        easing: touch ? "linear" : `steps(${next.steps}, end)`,
       };
       const time = (at / speed) * 1000;
       motions = nodes.map((node) => {

@@ -226,8 +226,9 @@ const UNTRANSLATED_LAYERS: Partial<Record<LayerKey, string>> = {
 
 // Отклик на нажатие: 150 мс ease-out и лёгкое сжатие. Кнопка должна показать,
 // что интерфейс услышал палец, не дожидаясь новых данных.
+// pane-chip подтягивает кнопку до размера пальца на сенсорном экране (globals.css).
 const CHIP =
-  "rounded px-1.5 py-0.5 text-[11px] transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]";
+  "pane-chip rounded px-1.5 py-0.5 text-[11px] transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97]";
 const CHIP_ON = "bg-[var(--pane-chip-faint)] text-[var(--pane-chip)]";
 const CHIP_OFF = "text-[var(--pane-muted)] hover:text-[var(--pane-text)]";
 
@@ -262,10 +263,13 @@ function paneHeight(
   //
   // Число обязано сходиться с отступами: пока здесь стояло сто двадцать четыре,
   // а поле снизу стало восемью, под панелями оставалась лишняя полоса пустоты.
+  //
+  // dvh, а не vh: в Safari на iPad vh считается без панели адреса, и низ
+  // стакана с графиком уезжал под неё.
   const around = full ? 16 : 104;
   return journalOpen
-    ? { height: `calc(100vh - ${around + journalH + 20}px)`, minHeight: 220 }
-    : { height: `calc(100vh - ${around}px)`, minHeight: full ? 320 : 520 };
+    ? { height: `calc(100dvh - ${around + journalH + 20}px)`, minHeight: 220 }
+    : { height: `calc(100dvh - ${around}px)`, minHeight: full ? 320 : 520 };
 }
 
 // Ширины панелей по умолчанию и границы, за которые их не утянуть.
@@ -278,12 +282,18 @@ function paneHeight(
 // деньгах в ней прячется (см. DOM_TICK_W): он есть в подсказке множителя, а
 // перенос ряда на вторую строку съедает у лестницы больше, чем эта подпись
 // даёт.
+//
+// share - доля окна, больше которой панель не бывает. На мониторе она не
+// мешает, а на планшете в горизонтали (1024-1366) без неё скринер в 500 и
+// стакан в 620 оставляли графику двести точек. Та же доля стоит в классах
+// ширины (min(var, vw)) - сохранённая на мониторе ширина на планшете
+// ужимается сама, а не выдавливает график.
 const PANE_LIMITS = {
-  screener: { def: 500, min: 360, max: 900 },
-  dom: { def: 620, min: 300, max: 1200 },
+  screener: { def: 500, min: 360, max: 900, share: 0.34 },
+  dom: { def: 620, min: 300, max: 1200, share: 0.36 },
   // Чат уже остальных: это лента коротких реплик, а не таблица. Шире 640 он
   // начинает отбирать место у графика, ради которого трейдер здесь и сидит.
-  chat: { def: 340, min: 260, max: 640 },
+  chat: { def: 340, min: 260, max: 640, share: 0.26 },
 };
 
 /**
@@ -297,13 +307,13 @@ const PANE_LIMITS = {
 const EDGE_STRIP =
   "hidden w-9 shrink-0 flex-col gap-2 rounded-xl border border-[var(--pane-border)] " +
   "bg-[var(--pane-bg)] py-3 text-[var(--pane-muted)] transition-colors duration-150 " +
-  "ease-out hover:text-[var(--pane-text)] xl:flex";
+  "ease-out hover:text-[var(--pane-text)] lg:flex";
 
 /** Полоса слева: уезжает за левый край, содержимое прижато к правому. */
-const EDGE_LEFT = `${EDGE_STRIP} -translate-x-[22px] items-end pr-[4px] xl:-mr-4`;
+const EDGE_LEFT = `${EDGE_STRIP} -translate-x-[22px] items-end pr-[4px] lg:-mr-4`;
 
 /** Полоса справа: зеркально. */
-const EDGE_RIGHT = `${EDGE_STRIP} translate-x-[22px] items-start pl-[4px] xl:-ml-4`;
+const EDGE_RIGHT = `${EDGE_STRIP} translate-x-[22px] items-start pl-[4px] lg:-ml-4`;
 
 /**
  * С какой ширины стакана в шапке показывается шаг в деньгах.
@@ -369,6 +379,18 @@ const DEFAULT_INDICATORS: Indicators = {
 
 function clamp(value: number, { min, max }: { min: number; max: number }) {
   return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Границы панели на этом окне: верх зажат долей ширины экрана.
+ *
+ * Без этого на планшете разделитель продолжал копить ширину за пределом,
+ * который панели не даёт CSS, и обратный ход руки какое-то время ничего не
+ * менял - панель будто залипала.
+ */
+function fitPane({ min, max, share }: { min: number; max: number; share: number }) {
+  if (typeof window === "undefined") return { min, max };
+  return { min, max: Math.max(min, Math.min(max, Math.round(window.innerWidth * share))) };
 }
 
 /** Настройки рабочего места, которые переживают перезагрузку страницы. */
@@ -1179,7 +1201,9 @@ export default function ScalpingPage() {
   // NaN приходит по двойному клику на разделителе — это сброс к умолчанию.
   function resizeScreener(delta: number) {
     setScreenerW((w) =>
-      Number.isNaN(delta) ? PANE_LIMITS.screener.def : clamp(w + delta, PANE_LIMITS.screener),
+      Number.isNaN(delta)
+        ? PANE_LIMITS.screener.def
+        : clamp(w + delta, fitPane(PANE_LIMITS.screener)),
     );
   }
 
@@ -1195,12 +1219,14 @@ export default function ScalpingPage() {
   // поэтому знак смещения обратный, как и у журнала.
   function resizeChat(delta: number) {
     setChatW((w) =>
-      Number.isNaN(delta) ? PANE_LIMITS.chat.def : clamp(w - delta, PANE_LIMITS.chat),
+      Number.isNaN(delta) ? PANE_LIMITS.chat.def : clamp(w - delta, fitPane(PANE_LIMITS.chat)),
     );
   }
 
   function resizeDom(delta: number) {
-    setDomW((w) => (Number.isNaN(delta) ? PANE_LIMITS.dom.def : clamp(w + delta, PANE_LIMITS.dom)));
+    setDomW((w) =>
+      Number.isNaN(delta) ? PANE_LIMITS.dom.def : clamp(w + delta, fitPane(PANE_LIMITS.dom)),
+    );
   }
 
   function toggle(key: keyof Indicators) {
@@ -3136,7 +3162,9 @@ export default function ScalpingPage() {
       {/* Уведомления поверх всего: лимитка срабатывает сама, и почти всегда
           тогда, когда трейдер смотрит на другую монету. */}
       <div
-        className="flex flex-col gap-3 xl:flex-row xl:gap-0"
+        // В ряд - с 1024, а не с 1280: планшет в горизонтали получал колонку
+        // как телефон, со стаканом над графиком и без чата.
+        className="flex flex-col gap-3 lg:flex-row lg:gap-0"
         style={
           {
             "--screener-w": `${screenerW}px`,
@@ -3195,7 +3223,7 @@ export default function ScalpingPage() {
 
         {/* Скринер: ширина по своим колонкам, без растягивания. */}
         <section
-          className={`${screenerOpen ? "flex" : "hidden"} shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] xl:w-[var(--screener-w)]`}
+          className={`${screenerOpen ? "flex" : "hidden"} shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] lg:w-[min(var(--screener-w),34vw)]`}
           style={paneStyle}
         >
           <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-2 py-1.5">
@@ -3280,7 +3308,7 @@ export default function ScalpingPage() {
           <>
             {/* Стакан: ширина по своим колонкам, история прокручивается влево. */}
             <section
-              className={`flex shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] xl:w-[var(--dom-w)]`}
+              className={`flex shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[var(--pane-text-2)] lg:w-[min(var(--dom-w),36vw)]`}
               style={paneStyle}
             >
               {/* Шапка переносится по строкам, а не выдавливает кнопки наружу.
@@ -3584,7 +3612,7 @@ export default function ScalpingPage() {
                       <Palette className="h-3.5 w-3.5" />
                     </button>
                     {themeMenu && (
-                      <div className="absolute right-0 top-7 z-30 w-40 overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] py-1 shadow-xl">
+                      <div className="absolute right-0 top-full z-30 mt-1 w-40 overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] py-1 shadow-xl">
                         {CHART_PALETTES.map((key) => {
                           const swatch = paletteSwatch(key, paper);
                           return (
@@ -3625,7 +3653,7 @@ export default function ScalpingPage() {
                       <Camera className="h-3.5 w-3.5" />
                     </button>
                     {shotMenu && (
-                      <div className="absolute right-0 top-7 z-30 w-44 overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] py-1 shadow-xl">
+                      <div className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] py-1 shadow-xl">
                         {(
                           [
                             ["download", t.terminal.shotDownload],
@@ -3934,7 +3962,7 @@ export default function ScalpingPage() {
               ни следа от них. Разговор при этом идёт, и место его от выбора
               монеты не зависит.
 
-              Только на широком экране. Ниже xl терминал складывается в
+              С 1024 и шире, планшет в горизонтали тоже. Ниже терминал складывается в
               колонку, и лента разговора между графиком и журналом оказалась
               бы там, где её никто не ждёт; для узкого экрана есть страница
               чата в кабинете. */}
@@ -3942,7 +3970,7 @@ export default function ScalpingPage() {
             <>
               <PaneDivider onResize={resizeChat} title={t.terminal.chatWidth} />
               <section
-                className={`hidden shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] xl:flex xl:w-[var(--chat-w)]`}
+                className={`hidden shrink-0 flex-col rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] lg:flex lg:w-[min(var(--chat-w),26vw)]`}
                 style={paneStyle}
               >
                 <ChatRoom

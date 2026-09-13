@@ -743,3 +743,29 @@
 .pane-dark .graffiti-ink {
   filter: invert(1) brightness(0.92);
 }
+
+/* ── Терминал на сенсорном экране ─────────────────────────────────────────
+   Планшет в горизонтали получает ту же раскладку, что монитор, но пальцем в
+   кнопку высотой двадцать точек не попасть. Размер подтягивается только при
+   грубом указателе: на мониторе ряд инструментов остаётся прежним. */
+@media (pointer: coarse) {
+  .pane-chip {
+    min-width: 28px;
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Разделитель виден в две точки, а хватать его надо пальцем: невидимое
+     поле по обе стороны, раскладку оно не двигает. */
+  .pane-divider::before {
+    content: "";
+    position: absolute;
+    inset: 0 -10px;
+  }
+
+  .pane-divider[aria-orientation="horizontal"]::before {
+    inset: -10px 0;
+  }
+}

@@ -61,8 +61,8 @@ export default function PaneDivider({
       onDoubleClick={() => onResize(Number.NaN)}   // сброс к ширине по умолчанию
       className={
         horizontal
-          ? "flex h-2 shrink-0 cursor-row-resize touch-none items-center justify-center"
-          : "relative z-10 hidden w-2 -mx-[3px] shrink-0 cursor-col-resize touch-none items-center justify-center xl:flex"
+          ? "pane-divider relative flex h-2 shrink-0 cursor-row-resize touch-none items-center justify-center"
+          : "pane-divider relative z-10 hidden w-2 -mx-[3px] shrink-0 cursor-col-resize touch-none items-center justify-center lg:flex"
       }
     >
       <span
