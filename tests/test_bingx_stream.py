@@ -168,8 +168,8 @@ def test_order_event_reads_short_field_names():
     assert row["status"] == "FILLED"
 
 
-async def test_linked_conditional_order_is_remembered():
-    """`o.ti` - единственное, чем биржа связывает защиту со входом."""
+async def test_order_event_wakes_the_watcher():
+    """Событие заявки будит сопровождение по этой монете - в тот же миг."""
     woken: list[str] = []
     stream = make_stream([], on_orders=woken.append)
     await stream._take_snapshot()
@@ -177,13 +177,32 @@ async def test_linked_conditional_order_is_remembered():
     stream._apply_order(
         {
             "e": "ORDER_TRADE_UPDATE",
-            "o": {"s": "BTC-USDT", "i": "42", "c": "BTCUSDT-1789", "X": "NEW", "ti": "7001"},
+            "o": {"s": "BTC-USDT", "i": "42", "c": "BTCUSDT-1789", "X": "NEW"},
         }
     )
-    assert stream.linked("BTCUSDT-1789") == {"7001"}
-    assert stream.linked("чужая") == set()
-    # И сопровождение разбужено по этой монете.
     assert woken == ["BTCUSDT"]
+
+
+def test_ti_points_at_the_order_itself_not_at_the_entry():
+    """Связи «защита - вход» поток не даёт, хотя документация её обещает.
+
+    Проверено сделкой на демо-счёте: в событии условной заявки `o.ti` равен
+    номеру самой этой заявки, а в событии исполненного входа его нет вовсе.
+    Значит свою защиту опознаём только номерами, записанными при постановке.
+    """
+    protection = order_event(
+        {
+            "e": "ORDER_TRADE_UPDATE",
+            "o": {"s": "BTC-USDT", "i": "7001", "o": "STOP_MARKET", "X": "NEW", "ti": "7001"},
+        }
+    )
+    assert protection["linkedOrderId"] == protection["orderId"]
+    assert protection["clientOrderId"] == ""
+
+    entry = order_event(
+        {"e": "ORDER_TRADE_UPDATE", "o": {"s": "BTC-USDT", "i": "42", "c": "BTCUSDT-1789", "X": "FILLED"}}
+    )
+    assert entry["linkedOrderId"] == ""
 
 
 async def test_fill_asks_for_a_fresh_snapshot():

@@ -27,11 +27,12 @@ BingX считает частоту и по счёту, и по адресу - �
 но исполнение - то единственное место, где ошибка в размере позиции стоит
 денег: на нём считается лестница целей и объём стопа.
 
-Отдельно здесь живёт `o.ti` - номер условной заявки, связанной с исполненной.
-У стопов и целей BingX своего идентификатора нет (ТЗ BingX, §3.2), и эта связь
-- второй способ узнать свою защиту, кроме номера, записанного при постановке.
-Пока связь не проверена на демо, она только копится и отдаётся наружу
-(`linked`), решений по ней не принимается.
+Что здесь **не** работает, хотя обещано документацией: поле `o.ti` - «номер
+связанной условной заявки». Проверено сделкой на демо-счёте 14 сентября 2026:
+в событии условной заявки `o.ti` равен номеру **самой этой заявки**, а в
+событии исполненного входа его нет вовсе. Связи «защита - вход» биржа не даёт,
+и опознавать свою защиту приходится только номерами, которые она вернула при
+постановке (ТЗ BingX, §3.2; `backend/trading/watcher.py`, `_find_stop_order`).
 """
 
 from __future__ import annotations
@@ -132,8 +133,9 @@ def order_event(event: dict[str, Any]) -> dict[str, Any]:
         "status": str(order.get("X") or "").upper(),
         "side": str(order.get("S") or "").upper(),
         "positionSide": str(order.get("ps") or "").upper(),
-        # Номер связанной условной заявки - та самая связь, которой у нас нет
-        # другого способа получить.
+        # Поле `ti` биржа заполняет номером самой этой заявки, а не номером
+        # связанной: связи «защита - вход» из потока не достать (проверено на
+        # демо). Оставлено ради журнала, решений по нему не принимается.
         "linkedOrderId": str(order.get("ti") or ""),
     }
 
@@ -177,8 +179,6 @@ class BingxPrivateStream:
         self._ready = False
         # Позиции по ключу «пара и сторона», уже в полях WEEX.
         self._positions: dict[tuple[str, str], dict] = {}
-        # Связь «наша заявка - её условная заявка», из поля `o.ti`.
-        self._links: dict[str, set[str]] = {}
         # Когда поток последний раз подтверждал, что жив.
         self.alive_at = 0.0
 
@@ -195,10 +195,6 @@ class BingxPrivateStream:
 
     def positions(self) -> list[dict]:
         return list(self._positions.values())
-
-    def linked(self, client_order_id: str | None) -> set[str]:
-        """Условные заявки, связанные с нашей заявкой, по данным потока."""
-        return set(self._links.get(client_id(client_order_id), set()))
 
     # ── жизненный цикл ──────────────────────────────────────────────────────
 
@@ -235,7 +231,6 @@ class BingxPrivateStream:
     def _down(self) -> None:
         """Соединения нет: состоянию верить нельзя, читаем биржу как раньше."""
         self._positions.clear()
-        self._links.clear()
         self._ready = False
         self.alive_at = 0.0
         if self._on_down:
@@ -430,11 +425,6 @@ class BingxPrivateStream:
         symbol = event["symbol"]
         if not symbol:
             return
-
-        linked = event["linkedOrderId"]
-        mark = event["clientOrderId"]
-        if linked and mark:
-            self._links.setdefault(mark, set()).add(linked)
 
         if event["status"] in FILL_STATES:
             # Позиция изменилась - и это то место, где ошибка в её размере
