@@ -10,11 +10,12 @@
    что она говорит о ней: точности (из них считаются шаги), оба минимума -
    в монетах и в деньгах, - и три признака, каждый из которых означает отказ,
    непонятный ученику: `brokerState`, `apiStateOpen`, `apiStateClose`;
-2. **книга и лента** - публичный поток. Собирается ли стакан, держится ли
-   непрерывность `lastUpdateId` минуту без пересборок, идут ли сделки. Тут же
-   книга потока сверяется с глубиной по REST: **в какой мере биржа считает
-   объём в потоке, документация прямо не говорит**, а метрики стакана считают
-   деньги как цену на объём - расхождение здесь видно сразу;
+2. **книга и лента** - публичный поток. Собирается ли стакан, живёт ли он
+   минуту без пересборок, идут ли сделки. Отдельно печатаются пропуски в
+   нумерации: биржа их допускает, и это не беда - бедой была бы пересборка.
+   Тут же книга потока сверяется с глубиной по REST: объём в потоке биржа
+   считает в монетах, но документация этого прямо не говорит, а метрики
+   стакана считают деньги как цену на объём;
 3. **счёт по ключам** - баланс, номер счёта, режим позиций, ставка комиссии.
    Ключи берутся из окружения и никуда не отправляются;
 4. **приватный поток** - ключ, снимок позиций и события. Пока он жив, терминал
@@ -164,29 +165,33 @@ async def check_book(symbol: str) -> bool:
         # видно только здесь. Ошибка тут - это плита на экране, которой нет.
         await _compare_depth(collector, symbol, book)
 
-        # Непрерывность цепочки: считаем пересборки за минуту. Каждая - это
-        # разрыв в номерах, то есть книга, разошедшаяся с биржей.
-        resets = 0
-        seen = book.last_update_id
+        # Цепочка за минуту. Пересборка - это книга, которую пришлось собирать
+        # заново; пропуск в номерах - нормальное поведение биржи, и его мы
+        # считаем отдельно, чтобы видеть, сколько его сегодня.
+        gaps_before, resyncs_before = collector.gaps, collector.resyncs
+        started = book.last_update_id
+        broken = False
         until = time.monotonic() + CHAIN_SECONDS
         while time.monotonic() < until:
             await asyncio.sleep(0.5)
             fresh = collector.state.get(symbol)
             if fresh is None:
                 break
-            if not fresh.book.ready or fresh.book.last_update_id < seen:
-                resets += 1
-            seen = fresh.book.last_update_id
+            broken = broken or not fresh.book.ready
+
+        gaps = collector.gaps - gaps_before
+        resyncs = collector.resyncs - resyncs_before
+        seen = collector.state.get(symbol).book.last_update_id
         line(
-            OK if resets == 0 else NO,
-            f"цепочка за {CHAIN_SECONDS:.0f} с: пересборок {resets}, "
-            f"номер дошёл до {seen}",
+            OK if not (broken or resyncs) else NO,
+            f"цепочка за {CHAIN_SECONDS:.0f} с: пересборок {resyncs}, "
+            f"пропусков в нумерации {gaps}, номер прошёл {started} -> {seen}",
         )
 
         tape = state.tape.metrics(int(time.time()))
         trades = tape.trades_per_min
         line(OK if trades else NO, f"лента: сделок за минуту {trades:.0f}")
-        return resets == 0
+        return not (broken or resyncs)
     finally:
         await collector.stop()
 

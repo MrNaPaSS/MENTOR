@@ -125,11 +125,13 @@ def test_update_continues_the_chain_by_one():
     assert book.last_update_id == 101
 
 
-async def test_gap_in_the_chain_resets_the_book():
-    """Пропущенное сообщение - книга разошлась: показывать её нельзя.
+def test_gap_in_numbering_is_applied_and_counted():
+    """Пропуск в номерах - счётчик биржи, а не потеря сообщения.
 
-    Тест асинхронный не для красоты: пересборка идёт задачей, и без живого
-    цикла событий её некому завести.
+    Живая биржа шаг в единицу не держит: на BTC-USDT попадаются шаги в два-три
+    номера, десяток за минуту. Пересборка на каждом означала бы подпись «стакан
+    собирается» вместо стакана. Потерять сообщение канал не может - он поверх
+    TCP, - поэтому обновление применяем, а пропуск считаем.
     """
     collector = make_collector()
     opened(collector)
@@ -140,7 +142,12 @@ async def test_gap_in_the_chain_resets_the_book():
         "incrDepth",
         {"action": "update", "lastUpdateId": 105, "bids": [["99.9", "30"]], "asks": []},
     )
-    assert collector.state.get("BTCUSDT").book.ready is False
+    book = collector.state.get("BTCUSDT").book
+    assert book.ready is True
+    assert book.bids[99.9] == pytest.approx(30)
+    assert book.last_update_id == 105
+    assert collector.gaps == 1
+    assert collector.resyncs == 0
 
 
 def test_repeated_message_is_not_a_gap():
