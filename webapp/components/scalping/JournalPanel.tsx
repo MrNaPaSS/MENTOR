@@ -26,7 +26,9 @@ import {
   type JournalDay,
   type JournalSummary,
   type JournalTrade,
+  type VenueSlice,
 } from "@/lib/journal";
+import { useVenuePick, venueLabel } from "@/lib/venuePick";
 
 function money(value: number): string {
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
@@ -133,6 +135,11 @@ export default function JournalPanel({
 
   const [trades, setTrades] = useState<JournalTrade[]>([]);
   const [summary, setSummary] = useState<JournalSummary | null>(null);
+  // Биржи, встречающиеся в сделках за период, и та, на которую уходят новые.
+  // По ним рисуется переключатель: журнал показывает один счёт за раз, потому
+  // что суммы двух счетов в одной строке итога не сходятся ни с одним из них.
+  const [venues, setVenues] = useState<VenueSlice[]>([]);
+  const [active, setActive] = useState("");
   const [days, setDays] = useState<JournalDay[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -154,17 +161,27 @@ export default function JournalPanel({
     };
   }, []);
 
+  const pick = useVenuePick(
+    venues.map((row) => row.exchange),
+    active,
+  );
+  const venue = pick.venue;
+
   const reload = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
       const [list, cal] = await Promise.all([
-        loadTrades(90, onlySymbol ? symbol : undefined),
-        loadCalendar(year, month),
+        loadTrades(90, onlySymbol ? symbol : undefined, venue || undefined),
+        loadCalendar(year, month, venue || undefined),
       ]);
       if (list) {
         setTrades(list.trades);
         setSummary(list.summary);
+        // Разрез приходит полным и с выбранной биржей: переключатель не должен
+        // терять биржу, которую только что отфильтровали.
+        setVenues(list.by_exchange ?? []);
+        setActive(list.active ?? "");
       }
       if (cal) {
         setDays(cal.days);
@@ -176,7 +193,7 @@ export default function JournalPanel({
     } finally {
       setBusy(false);
     }
-  }, [year, month, onlySymbol, symbol]);
+  }, [year, month, onlySymbol, symbol, venue]);
 
   useEffect(() => {
     reload();
@@ -208,7 +225,27 @@ export default function JournalPanel({
   return (
     <div className="flex h-full flex-col text-[12px]">
       <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-3 py-2">
-        <span className="font-semibold text-[var(--pane-text)]">{t.journal.title}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="font-semibold text-[var(--pane-text)]">{t.journal.title}</span>
+          {/* Биржи журнала. Показывается одна: итог, календарь и отчёт считаются
+              по ней, а суммы двух счетов в одной строке не сходятся ни с одним
+              из них. История при этом вся - переключатель доводит до любой. */}
+          {pick.many &&
+            venues.map((row) => (
+              <button
+                key={row.exchange}
+                onClick={() => pick.pick(row.exchange)}
+                title={t.journal.venueHint(venueLabel(row.exchange, t.journal.venueNone), row.count)}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-150 ease-out ${
+                  venue === row.exchange
+                    ? "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]"
+                    : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+                }`}
+              >
+                {venueLabel(row.exchange, t.journal.venueNone)}
+              </button>
+            ))}
+        </div>
         <div className="flex items-center gap-2">
           {symbol && (
             <button
@@ -225,7 +262,7 @@ export default function JournalPanel({
           {report.loaded &&
             (report.owned ? (
               <button
-                onClick={() => report.run(onlySymbol ? symbol : undefined)}
+                onClick={() => report.run(onlySymbol ? symbol : undefined, venue || undefined)}
                 disabled={report.busy || report.spent}
                 title={
                   report.quota

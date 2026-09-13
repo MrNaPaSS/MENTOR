@@ -237,3 +237,63 @@ def test_quiet_day_has_no_volume(ctx):
 
     days = _cal(client, h, _Y, _M)
     assert days[f"{_Y:04d}-{_M:02d}-15"]["journal_volume"] == pytest.approx(0.0)
+
+
+# ── биржи в клетке дня ──────────────────────────────────────────────────────
+#
+# Общая цифра дня остаётся общей: на ней стоят вехи, достижения и уровень - они
+# про ученика академии, а не про его счёт. Рядом идёт разрез по биржам: отчёт, в
+# котором суммы двух счетов лежат в одной строке, не сходится ни с одним из них.
+
+
+def _trade_on(student_id: int, closed: datetime, pnl: str, client_id: str, exchange: str) -> None:
+    with SessionLocal() as s:
+        s.add(ScalpTrade(
+            student_id=student_id, client_id=client_id, symbol="BTCUSDT", side="short",
+            entry=Decimal("79000"), stop=Decimal("80000"), exit_price=Decimal("78500"),
+            qty=Decimal("0.01"), margin=Decimal("100"), leverage=20,
+            outcome="take", pnl=Decimal(pnl), closed_at=closed, exchange=exchange,
+        ))
+        s.commit()
+
+
+def test_day_splits_by_exchange_but_keeps_the_common_number(ctx):
+    client = ctx
+    sid, h = _student(client)
+    at = datetime(_Y, _M, 14, 9, 0, tzinfo=timezone.utc)
+    _trade_on(sid, at, "50", "a", "weex")
+    _trade_on(sid, at, "-20", "b", "okx")
+
+    day = _cal(client, h, _Y, _M)[f"{_Y:04d}-{_M:02d}-14"]
+    # Общее - как было: награды считают по всем биржам сразу.
+    assert day["journal_pnl"] == pytest.approx(30.0)
+    assert day["pnl_pct"] == pytest.approx(30.0)
+
+    rows = {row["exchange"]: row for row in day["journal_by_exchange"]}
+    assert rows["weex"]["pnl"] == pytest.approx(50.0)
+    assert rows["weex"]["pnl_pct"] == pytest.approx(50.0)
+    assert rows["okx"]["pnl"] == pytest.approx(-20.0)
+    assert rows["okx"]["trades"] == 1
+
+
+def test_paper_trades_do_not_borrow_someone_elses_exchange(ctx):
+    """Сделка без биржи - торговля по стакану: у неё свой ключ в разрезе."""
+    client = ctx
+    sid, h = _student(client)
+    at = datetime(_Y, _M, 16, 9, 0, tzinfo=timezone.utc)
+    _trade_on(sid, at, "12", "p", "")
+
+    day = _cal(client, h, _Y, _M)[f"{_Y:04d}-{_M:02d}-16"]
+    assert [row["exchange"] for row in day["journal_by_exchange"]] == ["none"]
+
+
+def test_month_lists_the_exchanges_it_saw(ctx):
+    client = ctx
+    sid, h = _student(client)
+    _trade_on(sid, datetime(_Y, _M, 5, 9, 0, tzinfo=timezone.utc), "10", "a", "okx")
+    _trade_on(sid, datetime(_Y, _M, 6, 9, 0, tzinfo=timezone.utc), "10", "b", "okx")
+    _trade_on(sid, datetime(_Y, _M, 7, 9, 0, tzinfo=timezone.utc), "10", "c", "weex")
+
+    body = client.get(f"/api/analytics/calendar?year={_Y}&month={_M}", headers=h).json()
+    # Сначала та, где торговали больше: переключатель читается слева направо.
+    assert body["exchanges"] == ["okx", "weex"]

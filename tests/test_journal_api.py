@@ -518,3 +518,114 @@ def test_card_page_signs_the_exchange_safely():
     assert _venue("WEEX Futures") == "WEEX Futures"
     assert _venue('<script>alert(1)</script>') == ""
     assert _venue(None) == ""
+
+
+# ── биржи в журнале ─────────────────────────────────────────────────────────
+#
+# Мультибиржа: ученик приходит со счётом на своей бирже, а у части учеников
+# счетов два. Журнал показывает историю целиком - сделки принадлежат ученику, -
+# но одна строка отчёта принадлежит одной бирже: суммы разных счетов в ней не
+# складываются.
+
+
+def _session(client):
+    """Та же сессия, что видит приложение: записи заводим прямо в ней."""
+    return client.app.dependency_overrides[get_session]()
+
+
+def _from_exchange(client, client_id: str, exchange: str, pnl: float = 10.0) -> None:
+    """Запись сопровождения: её делает сервер по исполнениям биржи."""
+    from core.models import ScalpTrade, utcnow
+
+    session = _session(client)
+    session.add(ScalpTrade(
+        student_id=1, client_id=client_id, symbol="BTCUSDT", side="long",
+        entry=100, stop=99, exit_price=101, qty=1, margin=100, leverage=10,
+        outcome="manual", pnl=pnl, closed_at=utcnow(),
+        from_exchange=True, exchange=exchange,
+    ))
+    session.commit()
+
+
+def test_trade_remembers_the_exchange_it_was_made_on(client):
+    body = client.post("/api/journal/trades", json=trade(exchange="OKX")).json()
+    assert body["exchange"] == "okx"
+
+
+def test_unknown_exchange_of_a_trade_is_dropped_not_stored(client):
+    """Чужой код в журнал не попадает: по нему потом считают деньги."""
+    body = client.post("/api/journal/trades", json=trade(exchange="дом")).json()
+    assert body["exchange"] == ""
+
+
+def test_listing_keeps_one_exchange(client):
+    client.post("/api/journal/trades", json=trade(client_id="a", exchange="okx", pnl=30.0))
+    client.post("/api/journal/trades", json=trade(client_id="b", exchange="weex", pnl=-10.0))
+
+    okx = client.get("/api/journal/trades", params={"exchange": "okx"}).json()
+    assert [t["client_id"] for t in okx["trades"]] == ["a"]
+    # Итог - про отобранное, а не про всё сразу: иначе он спорит со списком.
+    assert okx["summary"]["pnl"] == 30.0
+
+
+def test_old_records_of_the_first_exchange_are_found_by_its_name(client):
+    """До мультибиржи биржу не писали: такие записи - WEEX, других не было."""
+    _from_exchange(client, "old", exchange="", pnl=7.0)
+
+    found = client.get("/api/journal/trades", params={"exchange": "weex"}).json()
+    assert [t["client_id"] for t in found["trades"]] == ["old"]
+    assert found["summary"]["pnl"] == 7.0
+
+
+def test_trades_without_an_exchange_have_their_own_filter(client):
+    """Торговля по стакану без счёта: биржи у сделки нет, и чужой она не станет."""
+    client.post("/api/journal/trades", json=trade(client_id="paper", pnl=5.0))
+    client.post("/api/journal/trades", json=trade(client_id="live", exchange="okx", pnl=50.0))
+
+    paper = client.get("/api/journal/trades", params={"exchange": "none"}).json()
+    assert [t["client_id"] for t in paper["trades"]] == ["paper"]
+    assert client.get(
+        "/api/journal/trades", params={"exchange": "okx"}
+    ).json()["summary"]["pnl"] == 50.0
+
+
+def test_exchanges_are_counted_apart_and_never_summed(client):
+    client.post("/api/journal/trades", json=trade(client_id="a", exchange="okx", pnl=30.0))
+    client.post("/api/journal/trades", json=trade(client_id="b", exchange="okx", pnl=-10.0))
+    client.post("/api/journal/trades", json=trade(client_id="c", exchange="weex", pnl=100.0))
+
+    rows = {row["exchange"]: row for row in client.get("/api/journal/trades").json()["by_exchange"]}
+    assert rows["okx"]["pnl"] == 20.0 and rows["okx"]["count"] == 2
+    assert rows["weex"]["pnl"] == 100.0 and rows["weex"]["count"] == 1
+    assert (rows["okx"]["wins"], rows["okx"]["losses"]) == (1, 1)
+
+
+def test_the_switch_keeps_every_exchange_while_one_is_chosen(client):
+    """По разрезу рисуется переключатель: выбранная биржа не гасит остальные."""
+    client.post("/api/journal/trades", json=trade(client_id="a", exchange="okx"))
+    client.post("/api/journal/trades", json=trade(client_id="b", exchange="weex"))
+
+    body = client.get("/api/journal/trades", params={"exchange": "okx"}).json()
+    assert {row["exchange"] for row in body["by_exchange"]} == {"okx", "weex"}
+
+
+def test_unknown_exchange_in_the_query_is_refused(client):
+    assert client.get("/api/journal/trades", params={"exchange": "мтс"}).status_code == 422
+    assert client.get("/api/journal/calendar", params={
+        "year": 2026, "month": 9, "exchange": "мтс"
+    }).status_code == 422
+
+
+def test_calendar_counts_one_exchange(client):
+    when = datetime.now(timezone.utc).replace(day=15, hour=9, minute=0, second=0, microsecond=0)
+    client.post("/api/journal/trades", json=trade(
+        client_id="a", exchange="okx", pnl=30.0, closed_at=when))
+    client.post("/api/journal/trades", json=trade(
+        client_id="b", exchange="weex", pnl=-100.0, closed_at=when))
+
+    body = client.get("/api/journal/calendar", params={
+        "year": when.year, "month": when.month, "exchange": "okx"
+    }).json()
+    assert body["total"] == 30.0
+    assert body["days"][0]["trades"] == 1
+    assert {row["exchange"] for row in body["by_exchange"]} == {"okx", "weex"}

@@ -51,6 +51,25 @@ export type JournalDay = {
   losses: number;
 };
 
+/**
+ * Итог одной биржи за тот же период.
+ *
+ * Суммы разных бирж не складываются в одной строке отчёта - это требование
+ * учёта, а не вкус: одна строка принадлежит одному счёту. По этому же списку
+ * рисуется переключатель бирж, поэтому он приходит полным и тогда, когда одна
+ * биржа уже выбрана.
+ */
+export type VenueSlice = {
+  exchange: string;
+  count: number;
+  pnl: number;
+  wins: number;
+  losses: number;
+};
+
+/** Сделки без биржи: торговля по стакану, без подключённого счёта. */
+export const NO_VENUE = "none";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   const token = getAccessToken();
   if (!token) return null;
@@ -65,12 +84,20 @@ export function journalAvailable(): boolean {
   return Boolean(getAccessToken());
 }
 
-export function loadTrades(days = 90, symbol?: string) {
+export type TradeListing = {
+  trades: JournalTrade[];
+  summary: JournalSummary;
+  /** Разрез по биржам за тот же период: по нему рисуется переключатель. */
+  by_exchange: VenueSlice[];
+  /** Биржа, на которую уходят новые сделки: с неё открывается журнал. */
+  active: string;
+};
+
+export function loadTrades(days = 90, symbol?: string, exchange?: string) {
   const query = new URLSearchParams({ days: String(days) });
   if (symbol) query.set("symbol", symbol);
-  return request<{ trades: JournalTrade[]; summary: JournalSummary }>(
-    `/api/journal/trades?${query}`,
-  );
+  if (exchange) query.set("exchange", exchange);
+  return request<TradeListing>(`/api/journal/trades?${query}`);
 }
 
 /** Сколько выгрузок журнала осталось в этом месяце. */
@@ -91,9 +118,14 @@ export function exportQuota() {
  * Выгрузить журнал: сделки за год для отчёта. Засчитывается сервером - три
  * выгрузки в месяц.
  */
-export function exportJournal(symbol?: string) {
-  const query = symbol ? `?symbol=${encodeURIComponent(symbol)}` : "";
-  return request<{ trades: JournalTrade[]; quota: ExportQuota }>(`/api/journal/export${query}`, {
+export function exportJournal(symbol?: string, exchange?: string) {
+  const query = new URLSearchParams();
+  if (symbol) query.set("symbol", symbol);
+  // Отчёт наследует биржу того экрана, с которого его заказали: два счёта в
+  // одной бумаге не сходятся ни с одним из них.
+  if (exchange) query.set("exchange", exchange);
+  const tail = query.size ? `?${query}` : "";
+  return request<{ trades: JournalTrade[]; quota: ExportQuota }>(`/api/journal/export${tail}`, {
     method: "POST",
   });
 }
@@ -104,15 +136,17 @@ export function exportJournal(symbol?: string) {
  * Отдельно от `loadTrades`: там окно «последние N дней» от сегодня, а в
  * календаре нажимают на клетку - и клетка может быть в прошлом марте.
  */
-export function loadDay(date: string) {
-  return request<{ trades: JournalTrade[]; summary: JournalSummary }>(
-    `/api/journal/trades?date=${encodeURIComponent(date)}`,
-  );
+export function loadDay(date: string, exchange?: string) {
+  const query = new URLSearchParams({ date });
+  if (exchange) query.set("exchange", exchange);
+  return request<TradeListing>(`/api/journal/trades?${query}`);
 }
 
-export function loadCalendar(year: number, month: number) {
-  return request<{ days: JournalDay[]; total: number }>(
-    `/api/journal/calendar?year=${year}&month=${month}`,
+export function loadCalendar(year: number, month: number, exchange?: string) {
+  const query = new URLSearchParams({ year: String(year), month: String(month) });
+  if (exchange) query.set("exchange", exchange);
+  return request<{ days: JournalDay[]; total: number; by_exchange: VenueSlice[] }>(
+    `/api/journal/calendar?${query}`,
   );
 }
 
@@ -154,7 +188,7 @@ export async function canEditJournal(): Promise<boolean> {
  * Идентификатор берётся с клиента: повторная отправка после обрыва связи
  * обновит запись, а не заведёт вторую такую же.
  */
-export function saveTrade(trade: ActiveTrade) {
+export function saveTrade(trade: ActiveTrade, exchange?: string) {
   if (trade.status !== "closed") return Promise.resolve(null);
   return request<JournalTrade>("/api/journal/trades", {
     method: "POST",
@@ -178,6 +212,9 @@ export function saveTrade(trade: ActiveTrade) {
       opened_at: trade.openedAt ? new Date(trade.openedAt).toISOString() : null,
       closed_at: new Date(trade.closedAt ?? Date.now()).toISOString(),
       note: "",
+      // Биржа сделки. Без счёта её нет вовсе: торговля шла по стакану, и
+      // приписывать такую запись чужой бирже значит испортить её отчёт.
+      exchange: exchange ?? "",
     }),
   });
 }

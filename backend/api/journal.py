@@ -17,10 +17,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, or_, select
 
 from backend import entitlements
-from core.exchanges import KEYS_EXCHANGE
+from core.exchanges import KEYS_EXCHANGE, TITLES
 from core.models import iso, JournalExport, ScalpTrade, ScalpWorkspace, Student, utcnow
 from backend.config import BackendConfig
 from backend.deps import get_config, get_current_student, get_session
@@ -37,6 +37,106 @@ MAX_WORKSPACE_BYTES = 16_384
 
 SIDES = {"long", "short"}
 OUTCOMES = {"stop", "take", "manual"}
+
+# Как в запросе называется «сделка без биржи»: учебная, по стакану, без
+# подключённого счёта. Пустая строка в параметре не годится - её не отличить
+# от «биржу не спрашивали».
+NO_VENUE = "none"
+
+
+def _venue(code: str | None) -> str:
+    """Код биржи из запроса. Незнакомая или пустая - пусто: сделка без биржи."""
+    value = (code or "").strip().lower()
+    return value if value in TITLES else ""
+
+
+def _exchange_of(trade: ScalpTrade) -> str:
+    """Биржа записи.
+
+    У сделок, записанных сопровождением до появления поля, биржа - та, чьи
+    ключи тогда подключали: других в терминале не было. У записей с экрана
+    биржи может не быть вовсе - это торговля по стакану без счёта.
+    """
+    return (trade.exchange or "").strip().lower() or (
+        KEYS_EXCHANGE if trade.from_exchange else ""
+    )
+
+
+# Код биржи в выборке: у старых строк колонка может быть пустой или NULL.
+_VENUE_COLUMN = func.coalesce(ScalpTrade.exchange, "")
+
+
+def _venue_clause(code: str):
+    """Условие отбора по бирже.
+
+    Записи сопровождения без кода биржи относим к WEEX по той же причине, по
+    которой её подставляет `_exchange_of`: до мультибиржи других счетов не
+    было, и прятать эту историю от фильтра значит показать ученику пустой
+    журнал там, где у него год торговли.
+    """
+    if code == NO_VENUE:
+        return and_(_VENUE_COLUMN == "", ScalpTrade.from_exchange.is_(False))
+    if code == KEYS_EXCHANGE:
+        return or_(
+            _VENUE_COLUMN == KEYS_EXCHANGE,
+            and_(_VENUE_COLUMN == "", ScalpTrade.from_exchange.is_(True)),
+        )
+    return _VENUE_COLUMN == code
+
+
+def _asked_venue(code: str | None) -> str | None:
+    """Биржа из параметра запроса. `None` - не спрашивали, значит все.
+
+    Незнакомый код - отказ, а не молчаливый показ всего: ученик, открывший
+    журнал с опечаткой в ссылке, должен увидеть ошибку, а не чужие суммы под
+    видом своей биржи.
+    """
+    if code is None:
+        return None
+    value = code.strip().lower()
+    if not value:
+        return None
+    if value != NO_VENUE and not _venue(value):
+        raise HTTPException(422, "Неизвестная биржа")
+    return value
+
+
+def _by_venue(session, *conditions) -> list[dict[str, Any]]:
+    """Разрез по биржам: сколько сделок и с каким итогом на каждой.
+
+    Считается всегда по всему отбору, а не по выбранной бирже: по этому списку
+    рисуется сам переключатель, и биржа, которую только что отфильтровали, не
+    должна из него исчезать.
+
+    Суммы разных бирж здесь не складываются намеренно - это требование учёта:
+    одна строка отчёта принадлежит одной бирже.
+    """
+    rows = session.execute(
+        select(
+            _VENUE_COLUMN,
+            ScalpTrade.from_exchange,
+            func.count(ScalpTrade.id),
+            func.sum(ScalpTrade.pnl),
+            func.sum(case((ScalpTrade.pnl > 0, 1), else_=0)),
+            func.sum(case((ScalpTrade.pnl < 0, 1), else_=0)),
+        )
+        .where(*conditions)
+        .group_by(_VENUE_COLUMN, ScalpTrade.from_exchange)
+    ).all()
+
+    out: dict[str, dict[str, Any]] = {}
+    for code, from_exchange, count, pnl, wins, losses in rows:
+        key = (code or "").strip().lower() or (KEYS_EXCHANGE if from_exchange else NO_VENUE)
+        cell = out.setdefault(key, {"exchange": key, "count": 0, "pnl": 0.0, "wins": 0, "losses": 0})
+        cell["count"] += int(count or 0)
+        cell["pnl"] += float(pnl or 0)
+        cell["wins"] += int(wins or 0)
+        cell["losses"] += int(losses or 0)
+
+    for cell in out.values():
+        cell["pnl"] = round(cell["pnl"], 8)
+    # Сначала та, где торговали больше: переключатель читается слева направо.
+    return sorted(out.values(), key=lambda cell: (-cell["count"], cell["exchange"]))
 
 
 class TradeIn(BaseModel):
@@ -60,6 +160,9 @@ class TradeIn(BaseModel):
     opened_at: datetime | None = None
     closed_at: datetime
     note: str = Field(default="", max_length=255)
+    # Где сделка шла. Терминал знает свою биржу и без счёта: стакан и лента
+    # идут с неё же. Пусто - торговля по стакану общей биржи, без своего счёта.
+    exchange: str = Field(default="", max_length=16)
 
 
 def _validate(trade: TradeIn) -> None:
@@ -110,7 +213,7 @@ def _row(trade: ScalpTrade) -> dict[str, Any]:
         "note": trade.note,
         # Где открыта. У записей с биржи, сделанных до этого поля, - биржа
         # ключей: других тогда не было.
-        "exchange": trade.exchange or (KEYS_EXCHANGE if trade.from_exchange else ""),
+        "exchange": _exchange_of(trade),
     }
 
 
@@ -161,6 +264,7 @@ async def export_quota(
 @router.post("/export")
 async def export_journal(
     symbol: str | None = Query(None, max_length=32),
+    exchange: str | None = Query(None, max_length=16),
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
@@ -169,7 +273,12 @@ async def export_journal(
     Счёт на сервере, а не в браузере: лимит, который держит сама страница,
     обходится очисткой хранилища. Засчитывается только выгрузка, которая
     состоялась: сделки собраны и отданы.
+
+    Отчёт наследует биржу того экрана, с которого его заказали: смешать в нём
+    два счёта значит выдать ученику бумагу, в которой итог не сходится ни с
+    одной биржей.
     """
+    venue = _asked_venue(exchange)
     quota = _quota(session, student.id)
     if not quota["owned"]:
         raise HTTPException(403, "Выгрузка журнала продаётся в маркете, в разделе «Инструменты»")
@@ -187,6 +296,8 @@ async def export_journal(
     )
     if symbol:
         query = query.where(ScalpTrade.symbol == symbol.upper())
+    if venue:
+        query = query.where(_venue_clause(venue))
     trades = session.execute(query).scalars().all()
 
     session.add(JournalExport(student_id=student.id, trades=len(trades)))
@@ -199,6 +310,7 @@ async def list_trades(
     days: int = Query(90, ge=1, le=365),
     symbol: str | None = Query(None, max_length=32),
     date: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    exchange: str | None = Query(None, max_length=16),
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
@@ -208,23 +320,28 @@ async def list_trades(
     нажимают на клетку, а не на «последние девяносто дней». День берётся
     целиком по UTC - в том же поясе, в котором календарь их и раскладывал, иначе
     сделка на границе суток попала бы в соседнюю клетку.
+
+    `exchange` оставляет одну биржу. Итог в `summary` всегда про то, что
+    отобрано: складывать в одну строку счета разных бирж нельзя, поэтому
+    разрез по каждой идёт отдельным списком `by_exchange` - по нему страница и
+    рисует переключатель.
     """
-    query = (
-        select(ScalpTrade)
-        .where(ScalpTrade.student_id == student.id)
-        .order_by(ScalpTrade.closed_at.desc())
-        .limit(MAX_TRADES)
-    )
+    venue = _asked_venue(exchange)
+    scope: list[Any] = [ScalpTrade.student_id == student.id]
     if date:
         start = datetime.fromisoformat(date).replace(tzinfo=timezone.utc)
-        query = query.where(
-            ScalpTrade.closed_at >= start,
-            ScalpTrade.closed_at < start + timedelta(days=1),
-        )
+        scope.append(ScalpTrade.closed_at >= start)
+        scope.append(ScalpTrade.closed_at < start + timedelta(days=1))
     else:
-        query = query.where(ScalpTrade.closed_at >= utcnow() - timedelta(days=days))
+        scope.append(ScalpTrade.closed_at >= utcnow() - timedelta(days=days))
     if symbol:
-        query = query.where(ScalpTrade.symbol == symbol.upper())
+        scope.append(ScalpTrade.symbol == symbol.upper())
+
+    query = (
+        select(ScalpTrade).where(*scope).order_by(ScalpTrade.closed_at.desc()).limit(MAX_TRADES)
+    )
+    if venue:
+        query = query.where(_venue_clause(venue))
 
     trades = session.execute(query).scalars().all()
     wins = [t for t in trades if float(t.pnl) > 0]
@@ -233,6 +350,10 @@ async def list_trades(
 
     return {
         "trades": [_row(t) for t in trades],
+        "by_exchange": _by_venue(session, *scope),
+        # Биржа, на которую уходят новые сделки: с неё страница и открывается,
+        # когда ученик ещё ничего не выбирал.
+        "active": (student.active_exchange or "").strip().lower(),
         "summary": {
             "count": len(trades),
             "pnl": round(total, 8),
@@ -295,6 +416,11 @@ async def add_trade(
     trade.opened_at = _as_utc(body.opened_at)
     trade.closed_at = _as_utc(body.closed_at) or utcnow()
     trade.note = body.note
+    # Биржу с экрана берём только знакомую и только когда она названа: пустое
+    # поле у старого клиента не должно стирать уже проставленную биржу.
+    venue = _venue(body.exchange)
+    if venue:
+        trade.exchange = venue
 
     session.commit()
     session.refresh(trade)
@@ -354,6 +480,7 @@ async def delete_trade(
 async def calendar(
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12),
+    exchange: str | None = Query(None, max_length=16),
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
@@ -361,16 +488,23 @@ async def calendar(
 
     Считается на месте, а не хранится: сделок за месяц сотни, а не миллионы, и
     отдельная таблица итогов означала бы ещё одно место, где данные расходятся.
+
+    `exchange` оставляет одну биржу: клетка месяца - это отчёт, а в одной
+    строке отчёта суммы разных счетов не живут.
     """
+    venue = _asked_venue(exchange)
     start = datetime(year, month, 1, tzinfo=timezone.utc)
     end = datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=timezone.utc)
+    scope: list[Any] = [
+        ScalpTrade.student_id == student.id,
+        ScalpTrade.closed_at >= start,
+        ScalpTrade.closed_at < end,
+    ]
 
-    trades = session.execute(
-        select(ScalpTrade)
-        .where(ScalpTrade.student_id == student.id)
-        .where(ScalpTrade.closed_at >= start)
-        .where(ScalpTrade.closed_at < end)
-    ).scalars().all()
+    query = select(ScalpTrade).where(*scope)
+    if venue:
+        query = query.where(_venue_clause(venue))
+    trades = session.execute(query).scalars().all()
 
     days: dict[str, dict[str, float]] = {}
     for trade in trades:
@@ -386,6 +520,7 @@ async def calendar(
     return {
         "year": year,
         "month": month,
+        "by_exchange": _by_venue(session, *scope),
         "days": [
             {"date": key, "pnl": round(v["pnl"], 8), **{k: int(v[k]) for k in ("trades", "wins", "losses")}}
             for key, v in sorted(days.items())

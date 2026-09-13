@@ -18,9 +18,10 @@ import { Download, Filter, Lock, RotateCcw } from "lucide-react";
 
 import { summarize } from "@/lib/analytics/advanced";
 import { useIntlLocale, useT } from "@/lib/i18n";
-import { loadTrades, type JournalTrade } from "@/lib/journal";
+import { loadTrades, type JournalTrade, type VenueSlice } from "@/lib/journal";
 import { useFitHeight } from "@/lib/useFitHeight";
 import { useJournalExport } from "@/lib/journalExport";
+import { useVenuePick, venueLabel } from "@/lib/venuePick";
 import DetailView from "./views/DetailView";
 import OverviewView from "./views/OverviewView";
 import type { ViewProps } from "./views/types";
@@ -56,7 +57,18 @@ export default function AdvancedPanel() {
   const [side, setSide] = useState<Side>("all");
   const [symbol, setSymbol] = useState<string | null>(null);
   const [all, setAll] = useState<JournalTrade[] | null>(null);
+  // Биржи, встречающиеся в сделках, и та, куда уходят новые. Раздел считает
+  // одну биржу за раз: показатели, кривая и разрезы - это отчёт по счёту, а
+  // счетов у ученика может быть два.
+  const [venues, setVenues] = useState<VenueSlice[]>([]);
+  const [active, setActive] = useState("");
   const fit = useFitHeight(420);
+
+  const pick = useVenuePick(
+    venues.map((row) => row.exchange),
+    active,
+  );
+  const venue = pick.venue;
 
   useEffect(() => {
     try {
@@ -80,15 +92,20 @@ export default function AdvancedPanel() {
     let alive = true;
     setAll(null);
     // Два периода: второй целиком уходит в сравнение.
-    loadTrades(days * 2)
+    loadTrades(days * 2, undefined, venue || undefined)
       .then((res) => {
-        if (alive) setAll(res?.trades ?? []);
+        if (!alive) return;
+        setAll(res?.trades ?? []);
+        // Разрез приходит по всем биржам и с выбранной: переключатель не
+        // теряет ту, которую только что отфильтровали.
+        setVenues(res?.by_exchange ?? []);
+        setActive(res?.active ?? "");
       })
       .catch(() => alive && setAll([]));
     return () => {
       alive = false;
     };
-  }, [days]);
+  }, [days, venue]);
 
   const edge = useMemo(() => Date.now() - days * 24 * 60 * 60 * 1000, [days]);
 
@@ -165,6 +182,29 @@ export default function AdvancedPanel() {
           ))}
         </div>
 
+        {/* Биржи. «Все сразу» здесь нет намеренно: показатели раздела - это
+            отчёт по счёту, а суммы двух счетов в одной строке не сходятся ни с
+            одним из них. История остаётся вся, переключатель доводит до
+            любой биржи, включая ту, которой ученик больше не пользуется. */}
+        {pick.many && (
+          <>
+            <span className="h-4 w-px bg-[var(--pane-border)]" />
+            <div className="flex gap-1.5">
+              {venues.map((row) => (
+                <button
+                  key={row.exchange}
+                  type="button"
+                  onClick={() => pick.pick(row.exchange)}
+                  title={t.journal.venueHint(venueLabel(row.exchange, t.journal.venueNone), row.count)}
+                  className={`${CHIP} ${venue === row.exchange ? CHIP_ON : CHIP_OFF}`}
+                >
+                  {venueLabel(row.exchange, t.journal.venueNone)}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
         <span className="h-4 w-px bg-[var(--pane-border)]" />
 
         {/* Экран раздела - здесь же, в строке разреза: это такой же выбор
@@ -217,7 +257,7 @@ export default function AdvancedPanel() {
             (exporting.owned ? (
               <button
                 type="button"
-                onClick={() => exporting.run(symbol ?? undefined)}
+                onClick={() => exporting.run(symbol ?? undefined, venue || undefined)}
                 disabled={exporting.busy || exporting.spent}
                 title={
                   exporting.quota

@@ -417,6 +417,9 @@ export const journal = {
   },
   title: "Trade journal",
   onlyCoin: (coin: string) => `${coin} only`,
+  venueNone: "no exchange",
+  venueHint: (venue: string, trades: number) =>
+    `Show ${venue}: ${trades} trades in the period. Totals and calendar are counted per exchange`,
   refresh: "Refresh",
   close: "Close the journal",
   needLogin: "The journal is available after you sign in",

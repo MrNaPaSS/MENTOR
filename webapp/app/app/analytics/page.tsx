@@ -1,7 +1,7 @@
 ﻿"use client";
 // v8
-import { intlLocale, useIntlLocale, useLocale, useT } from "@/lib/i18n";
-import { useEffect, useState } from "react";
+import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
+import { useEffect, useMemo, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import Link from "next/link";
 import { api, API_URL, AnalyticsMe, CalendarDay, DepositRecord, TradeSummary, CoinsBalance } from "@/lib/api";
@@ -13,6 +13,8 @@ import PnlCard from "@/components/scalping/PnlCard";
 import { price as fmtPrice, type CardData } from "@/lib/pnl/card";
 import { cardFromPeriod, cardFromTrade } from "@/lib/pnl/data";
 import { periodOf, type Span } from "@/lib/pnl/period";
+import { useVenuePick, venueLabel } from "@/lib/venuePick";
+import { dayOfVenue, monthTradesOf } from "@/lib/venueDay";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import { getAccessToken } from "@/lib/auth";
 import { COINS_EVENT } from "@/lib/useCoins";
@@ -295,6 +297,14 @@ export default function AnalyticsPage() {
   const [month, setMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
   const [calData, setCalData] = useState<CalendarDay[]>([]);
+  // Биржи месяца и та, куда уходят новые сделки. Календарь показывает одну:
+  // клетка - это отчёт дня, а суммы двух счетов в ней не сходятся ни с одним
+  // из них. Награды, вехи и уровень считаются рядом по всем биржам сразу -
+  // они про ученика академии, а не про его счёт.
+  const [venues, setVenues] = useState<string[]>([]);
+  const [activeVenue, setActiveVenue] = useState("");
+  const pickVenue = useVenuePick(venues, activeVenue);
+  const venue = pickVenue.venue;
   const [loaded, setLoaded] = useState(false);
   // undefined - спрашиваем, null - спросить не вышло, [] - сделок в этот день
   // не было. Три разных случая, и путать их нельзя.
@@ -449,7 +459,7 @@ export default function AnalyticsPage() {
     }
     let cancelled = false;
     setDayTrades(undefined);
-    loadDay(selectedDay.date)
+    loadDay(selectedDay.date, venue || undefined)
       .then((body) => {
         if (!cancelled) setDayTrades(body?.trades ?? []);
       })
@@ -461,24 +471,36 @@ export default function AnalyticsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDay]);
+  }, [selectedDay, venue]);
 
   useEffect(() => {
     const token = getAccessToken();
     if (!token) return;
     setLoaded(false);
     api.analyticsCalendar(token, year, month)
-      .then((r) => setCalData(r.days))
+      .then((r) => {
+        setCalData(r.days);
+        setVenues(r.exchanges ?? []);
+        setActiveVenue(r.active ?? "");
+      })
       .catch(() => setCalData([]))
       .finally(() => setLoaded(true));
   }, [year, month]);
+
+  // Календарь в разрезе одной биржи: клетки, карточка итога и список дня.
+  // Всё, что ниже кормит награды и уровень, по-прежнему считается по calData -
+  // по всем биржам сразу.
+  const venueDays = useMemo(
+    () => (venue ? calData.map((day) => dayOfVenue(day, venue)) : calData),
+    [calData, venue],
+  );
 
   // Сетка
   const firstDay = new Date(year, month, 1);
   const startOffset = (firstDay.getDay() + 6) % 7;
   const cells: (CalendarDay | null)[] = [
     ...Array(startOffset).fill(null),
-    ...calData,
+    ...venueDays,
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
@@ -517,8 +539,8 @@ export default function AnalyticsPage() {
   //
   // Всё по журналу сделок, а не по снимкам баланса: журнал знает и объём, и
   // результат каждой закрытой сделки, а снимок - только то, чем день кончился.
-  const monthTrades = calData.reduce((sum, d) => sum + (d.journal_trades ?? 0), 0);
-  const monthPnl = calData.reduce((sum, d) => sum + (d.journal_pnl ?? 0), 0);
+  const monthTrades = venueDays.reduce((sum, d) => sum + (d.journal_trades ?? 0), 0);
+  const monthPnl = venueDays.reduce((sum, d) => sum + (d.journal_pnl ?? 0), 0);
   const volumePerDay = tradingDays > 0 ? monthVolume / tradingDays : 0;
 
   // ── Счёт и издержки ──
@@ -631,8 +653,9 @@ export default function AnalyticsPage() {
   const todayStr = today.toISOString().slice(0, 10);
   const noData = loaded && validPnl.length === 0 && activeDays === 0;
 
-  // Лучший/худший день месяца
-  const realDays = calData.filter(d => d.pnl_pct !== null);
+  // Лучший/худший день месяца. По тем же клеткам, что на сетке: звезда должна
+  // стоять на дне, который ученик видит, а не на дне другой биржи.
+  const realDays = venueDays.filter(d => d.pnl_pct !== null);
   // Опорная дата сроков: выбранный день, а если не выбран - последний день
   // месяца, который вообще есть в календаре. Открытый месяц кончается сегодня,
   // так что для текущего это и будет сегодня.
@@ -828,6 +851,29 @@ export default function AnalyticsPage() {
                   {t.analytics.calendar.months[month]} <span className="text-[var(--pane-muted)] font-medium">{year}</span>
                 </h2>
 
+              {/* Биржи месяца. Календарь показывает одну: клетка - это отчёт
+                  дня, и суммы двух счетов в ней не сходятся ни с одним из них.
+                  Награды, вехи и уровень рядом считаются по всем сразу. */}
+              {pickVenue.many && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {venues.map((code) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => pickVenue.pick(code)}
+                      title={t.journal.venueHint(venueLabel(code, t.journal.venueNone), monthTradesOf(calData, code))}
+                      className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors duration-150 ${
+                        venue === code
+                          ? "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]"
+                          : "bg-[var(--pane-hover)] text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+                      }`}
+                    >
+                      {venueLabel(code, t.journal.venueNone)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Статспиллы */}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <span className="flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--pane-up)_10%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
@@ -949,7 +995,7 @@ export default function AnalyticsPage() {
                 {t.analytics.summary.cardFor}
               </span>
               {SPANS.map((id) => {
-                const ready = periodOf(calData, id, anchor);
+                const ready = periodOf(venueDays, id, anchor);
                 return (
                   <button
                     key={id}
@@ -1170,7 +1216,7 @@ export default function AnalyticsPage() {
                   делает то же, но до неё надо закрыть окно, а смотрят день и
                   решают им поделиться именно здесь. */}
               {(() => {
-                const ready = periodOf(calData, "day", selectedDay.date);
+                const ready = periodOf(venueDays, "day", selectedDay.date);
                 return (
                   <button
                     disabled={!ready}

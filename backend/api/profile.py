@@ -12,7 +12,7 @@ from core.weex.uid import clean_uid
 from core.referral import grant_referral_vip
 from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student
 from backend.trading.funds import trade_roi, trade_volume
-from backend.api.journal import is_admin
+from backend.api.journal import _exchange_of, is_admin
 from backend.trading.funds import balance_by_keys
 from backend.config import BackendConfig
 from backend.deps import get_config, get_current_student, get_session, get_weex
@@ -185,19 +185,48 @@ async def analytics_calendar(
         .where(ScalpTrade.closed_at < month_end)
     ).scalars().all()
 
+    # Клетка дня считается дважды: целиком и по каждой бирже отдельно.
+    #
+    # Общая цифра остаётся потому, что на ней стоят вехи, достижения и уровень:
+    # они про ученика академии, а не про его счёт, и складываются по всем
+    # биржам сразу. Разрез рядом нужен ровно для обратного: отчёт, в котором
+    # суммы двух счетов лежат в одной строке, не сходится ни с одним из них.
     journal_by_date: dict[str, dict[str, float]] = {}
-    for t in journal:
-        closed = t.closed_at if t.closed_at.tzinfo else t.closed_at.replace(tzinfo=timezone.utc)
-        cell = journal_by_date.setdefault(
-            closed.strftime("%Y-%m-%d"),
-            {"pnl": 0.0, "roi": 0.0, "volume": 0.0, "trades": 0},
-        )
-        cell["pnl"] += float(t.pnl)
-        cell["roi"] += trade_roi(float(t.pnl), float(t.margin or 0))
+    venues_by_date: dict[str, dict[str, dict[str, float]]] = {}
+
+    def _add(cell: dict[str, float], trade: ScalpTrade) -> None:
+        cell["pnl"] += float(trade.pnl)
+        cell["roi"] += trade_roi(float(trade.pnl), float(trade.margin or 0))
         cell["volume"] += trade_volume(
-            float(t.qty or 0), float(t.entry or 0), float(t.exit_price or 0) or None
+            float(trade.qty or 0), float(trade.entry or 0), float(trade.exit_price or 0) or None
         )
         cell["trades"] += 1
+
+    def _blank() -> dict[str, float]:
+        return {"pnl": 0.0, "roi": 0.0, "volume": 0.0, "trades": 0}
+
+    for t in journal:
+        closed = t.closed_at if t.closed_at.tzinfo else t.closed_at.replace(tzinfo=timezone.utc)
+        date_key = closed.strftime("%Y-%m-%d")
+        _add(journal_by_date.setdefault(date_key, _blank()), t)
+        # Сделка без биржи - торговля по стакану, без своего счёта. У неё свой
+        # ключ, чтобы она не приписалась чужой бирже.
+        venue = _exchange_of(t) or "none"
+        _add(venues_by_date.setdefault(date_key, {}).setdefault(venue, _blank()), t)
+
+    def _venue_rows(date_key: str) -> list[dict[str, float | str]]:
+        """Разрез дня по биржам, от большего итога к меньшему."""
+        rows = [
+            {
+                "exchange": code,
+                "pnl": round(cell["pnl"], 2),
+                "pnl_pct": round(cell["roi"], 4),
+                "volume": round(cell["volume"], 2),
+                "trades": int(cell["trades"]),
+            }
+            for code, cell in venues_by_date.get(date_key, {}).items()
+        ]
+        return sorted(rows, key=lambda row: (-row["trades"], row["exchange"]))
 
     # ── Строим список дней ──────────────────────────────────────────────────
     #
@@ -244,6 +273,20 @@ async def analytics_calendar(
             "journal_pnl": round(day_pnl, 2),
             "journal_volume": round(float(cell.get("volume", 0.0)), 2),
             "journal_trades": day_trades,
+            "journal_by_exchange": _venue_rows(date_str),
         })
 
-    return {"days": days_out}
+    # Биржи месяца и активная: по ним страница рисует переключатель, не
+    # перебирая все клетки сама.
+    venues = sorted(
+        {code for day in venues_by_date.values() for code in day},
+        key=lambda code: (
+            -sum(int(day.get(code, {}).get("trades", 0)) for day in venues_by_date.values()),
+            code,
+        ),
+    )
+    return {
+        "days": days_out,
+        "exchanges": venues,
+        "active": (student.active_exchange or "").strip().lower(),
+    }

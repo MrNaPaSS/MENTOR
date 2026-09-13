@@ -366,10 +366,31 @@ export interface CalendarDay {
   /** Оборот дня по журналу: вход и выход каждой закрытой сделки. */
   journal_volume?: number;
   journal_trades?: number;
+  /**
+   * Тот же день в разрезе по биржам.
+   *
+   * Общая цифра дня рядом остаётся: на ней стоят вехи, достижения и уровень -
+   * они про ученика академии, а не про его счёт. Разрез нужен календарю: в
+   * одной клетке отчёта суммы двух счетов не сходятся ни с одним из них.
+   */
+  journal_by_exchange?: VenueDay[];
+}
+
+/** День одной биржи. Код `none` - торговля по стакану, без счёта. */
+export interface VenueDay {
+  exchange: string;
+  pnl: number;
+  pnl_pct: number;
+  volume: number;
+  trades: number;
 }
 
 export interface AnalyticsCalendar {
   days: CalendarDay[];
+  /** Биржи, встречавшиеся в месяце: по ним рисуется переключатель. */
+  exchanges?: string[];
+  /** Биржа, на которую уходят новые сделки. */
+  active?: string;
 }
 
 export interface Trade {

@@ -29,8 +29,8 @@ export interface JournalExport {
   /** Когда счётчик обнулится, словами. */
   resetDay: string;
   error: string | null;
-  /** Собрать отчёт и отдать его файлом. */
-  run: (symbol?: string) => Promise<void>;
+  /** Собрать отчёт и отдать его файлом. Биржа - та, что на экране. */
+  run: (symbol?: string, exchange?: string) => Promise<void>;
 }
 
 export function useJournalExport(): JournalExport {
@@ -51,13 +51,13 @@ export function useJournalExport(): JournalExport {
   }, [owned]);
 
   const run = useCallback(
-    async (symbol?: string) => {
+    async (symbol?: string, exchange?: string) => {
       setBusy(true);
       setError(null);
       try {
         // За год, а не за период на экране: отчёт берут для разбора целиком.
         // Сделки приходят вместе с засчитанной выгрузкой.
-        const body = await exportJournal(symbol);
+        const body = await exportJournal(symbol, exchange);
         if (!body) throw new Error();
         setQuota(body.quota);
         const stamp = new Date().toISOString().slice(0, 10);

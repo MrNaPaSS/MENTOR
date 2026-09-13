@@ -1360,7 +1360,7 @@ export default function ScalpingPage() {
     if (truthful && truthful.id !== remaining.id) {
       // Частичную запись эффект журнала не увидит: у него на руках останется
       // живая сделка, а не закрытая. Пишем сами.
-      saveTrade(truthful)
+      saveTrade(truthful, venue)
         .then((saved) => {
           if (saved) setJournalKey((k) => k + 1);
         })
@@ -2655,7 +2655,7 @@ export default function ScalpingPage() {
     );
     for (const t of done) {
       savedTradesRef.current.add(t.id);
-      saveTrade(t)
+      saveTrade(t, venue)
         .then((saved) => {
           if (saved) setJournalKey((k) => k + 1);
         })

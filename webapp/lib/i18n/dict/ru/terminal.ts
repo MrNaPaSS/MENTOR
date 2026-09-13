@@ -439,6 +439,10 @@ export const journal = {
   },
   title: "Журнал сделок",
   onlyCoin: (coin: string) => `только ${coin}`,
+  venueNone: "без биржи",
+  venueHint: (venue: string, trades: number) =>
+    `Показать ${venue}: сделок за период ${trades}. Итог и календарь считаются по одной бирже`,
+
   refresh: "Обновить",
   close: "Закрыть журнал",
   needLogin: "Журнал доступен после входа в кабинет",
