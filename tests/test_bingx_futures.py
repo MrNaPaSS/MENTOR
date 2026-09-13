@@ -113,7 +113,13 @@ def _fresh_caches():
     bingx_market._MODES.clear()
     bingx_market._SOURCE_SEEN.clear()
     bingx_market._INSTRUMENTS_AT = 0.0
+    # И поправка часов: она общая на процесс, и тест, оставивший её за собой,
+    # менял бы время в подписи у соседних.
+    bingx_market._SKEW_MS = 0.0
+    bingx_market._SKEW_AT = 0.0
     yield
+    bingx_market._SKEW_MS = 0.0
+    bingx_market._SKEW_AT = 0.0
 
 
 def client(session: FakeSession, **kw) -> BingxFutures:
@@ -139,9 +145,68 @@ def sent_to(session: FakeSession, path: str) -> dict:
 # ── основа ───────────────────────────────────────────────────────────────────
 
 
-def test_signature_is_hmac_of_the_query_string():
-    expected = hmac.new(b"secret", b"symbol=BTC-USDT&timestamp=1", hashlib.sha256).hexdigest()
-    assert sign("secret", "symbol=BTC-USDT&timestamp=1") == expected
+def test_signing_string_is_sorted_and_unencoded():
+    """Правило биржи: параметры по ключу, значения как есть, без кодирования.
+
+    Подпись считается именно от этой строки; в адрес значения уходят в
+    процентах только когда внутри JSON.
+    """
+    from core.bingx.market import request_query, signing_string
+
+    raw = signing_string(
+        {"symbol": "BTC-USDT", "timestamp": "1", "recvWindow": "0", "empty": ""}
+    )
+    assert raw == "recvWindow=0&symbol=BTC-USDT&timestamp=1"
+    # Без JSON кодировать нечего - адрес повторяет строку подписи.
+    assert request_query(raw) == raw
+
+    expected = hmac.new(b"secret", raw.encode(), hashlib.sha256).hexdigest()
+    assert sign("secret", raw) == expected
+
+
+def test_only_values_are_encoded_and_only_with_json():
+    """Ключи не кодируются никогда, значения - только при `{` или `[`."""
+    from core.bingx.market import request_query
+
+    raw = 'stopLoss={"type":"STOP_MARKET","stopPrice":78000}&symbol=BTC-USDT'
+    out = request_query(raw)
+    assert out.startswith("stopLoss=%7B%22type%22")
+    assert "&symbol=BTC-USDT" in out
+    assert "%26" not in out.split("&")[1]   # разделитель пар остался разделителем
+
+
+def test_order_with_protection_is_signed_by_the_raw_string():
+    """Вход со стопом: подпись от сырой строки, в адресе - закодированные значения.
+
+    Это то место, где догадка «подписываем ровно то, что отправляем» разошлась
+    бы с биржей: в параметре `stopLoss` лежит JSON, и биржа считает подпись по
+    незакодированному тексту.
+    """
+    session = FakeSession({"/openApi/swap/v2/trade/order": _order_route()})
+    run(
+        client(session).place_order(
+            symbol="BTCUSDT",
+            side="BUY",
+            position_side="LONG",
+            quantity="0.5",
+            sl_trigger="78000",
+        )
+    )
+    call = sent_to(session, "/openApi/swap/v2/trade/order")
+    sent, _, signature = call["raw_query"].rpartition("&signature=")
+
+    from urllib.parse import unquote
+
+    # В адресе значения в процентах...
+    assert "%7B%22type%22" in sent
+    # ...а подпись посчитана по тем же парам без кодирования.
+    raw = "&".join(
+        f"{pair.split('=', 1)[0]}={unquote(pair.split('=', 1)[1])}" for pair in sent.split("&")
+    )
+    assert signature == sign("secret", raw)
+    # И пары идут по ключу, как требует биржа.
+    keys = [pair.split("=", 1)[0] for pair in sent.split("&")]
+    assert keys == sorted(keys)
 
 
 def test_the_address_keeps_the_query_exactly_as_signed():
@@ -162,7 +227,7 @@ def test_request_is_signed_and_carries_the_key():
     call = sent_to(session, "/openApi/swap/v2/user/positions")
     query = call["raw_query"]
     body, _, signature = query.rpartition("&signature=")
-    # Подписывается ровно та строка, что ушла в адресе.
+    # Здесь JSON в параметрах нет, поэтому адрес и строка подписи совпадают.
     assert signature == sign("secret", body)
     assert call["headers"]["X-BX-APIKEY"] == "key"
     # Метки брокера нет - значит и заголовка нет вовсе.

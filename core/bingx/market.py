@@ -28,7 +28,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import aiohttp
 from yarl import URL
@@ -133,9 +133,11 @@ PLAN_TYPES = {
     "TRAILING_TP_SL",
 }
 
-# Остаток запросов в окне биржа называет сама, заголовком ответа. Меньше этого
-# - пишем в журнал: значит, бюджет подобран неверно.
-LOW_REMAIN = 5
+# Остаток запросов в окне биржа называет сама, заголовком ответа. Тревожимся
+# только у самого края: у большинства ручек предел - пять запросов в секунду, и
+# остаток в три-четыре там обычное дело. Порог в пять засыпал журнал тревогой
+# на ровном месте (поймано на живом счёте 14 сентября 2026).
+LOW_REMAIN = 1
 
 
 def client_id(value: str | None) -> str:
@@ -178,8 +180,40 @@ def sign(secret: str, query: str) -> str:
     return hmac.new(secret.encode("utf-8"), query.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+def signing_string(params: dict[str, Any]) -> str:
+    """Строка, по которой считается подпись.
+
+    Правило биржи, дословно: собрать все параметры кроме подписи, отсортировать
+    по ключу в порядке ASCII и склеить как есть - **без кодирования**. Значения
+    кодируются только в самом адресе, и только если в строке есть `{` или `[`
+    (`request_query` ниже).
+
+    Это не мелочь. Заявка с приложенной защитой несёт JSON прямо в параметре
+    (`stopLoss={"type":"STOP_MARKET",...}`), и подпись, посчитанная по
+    закодированной строке, разошлась бы с тем, что считает биржа: отказ по
+    подписи на каждом входе со стопом.
+    """
+    rows = {k: v for k, v in params.items() if v not in (None, "")}
+    return "&".join(f"{key}={rows[key]}" for key in sorted(rows))
+
+
+def request_query(signing: str) -> str:
+    """Та же строка, но пригодная для адреса.
+
+    Кодируем только значения и только когда в строке есть `{` или `[` - так
+    сказано у биржи. Ключи не трогаем вовсе, пробел уходит как `%20`.
+    """
+    if "{" not in signing and "[" not in signing:
+        return signing
+    out = []
+    for pair in signing.split("&"):
+        key, _, value = pair.partition("=")
+        out.append(f"{key}={quote(value, safe='')}")
+    return "&".join(out)
+
+
 def query_string(params: dict[str, Any]) -> str:
-    """Строка параметров в том виде, в каком она уйдёт в адресе."""
+    """Строка параметров для открытых ручек: подписи там нет, порядок не важен."""
     return urlencode({k: v for k, v in params.items() if v not in (None, "")})
 
 

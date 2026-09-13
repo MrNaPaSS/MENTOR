@@ -107,8 +107,10 @@ from core.bingx.market import (  # noqa: F401 - часть имён здесь �
     public_filters,
     public_price,
     query_string,
+    request_query,
     sign,
     signed_url,
+    signing_string,
     stamp,
     sync_clock,
     source_key,
@@ -194,11 +196,15 @@ class BingxFutures:
             # набегает на любой машине, а биржа отклоняет такие запросы.
             data["timestamp"] = stamp()
             data["recvWindow"] = str(RECV_WINDOW)
-        query = query_string(data)
         if signed:
-            query = f"{query}&signature={sign(self.creds.secret_key, query)}"
-        # Адрес собирается так, чтобы уйти байт в байт подписанным: см.
-        # `signed_url` - перекодирование строки запроса ломает подпись.
+            # Подпись считается по строке, отсортированной по ключу и не
+            # закодированной - так требует биржа. В адрес уходит та же строка,
+            # но со значениями в процентах, когда в ней есть JSON (`stopLoss`,
+            # `takeProfit`).
+            signing = signing_string(data)
+            query = f"{request_query(signing)}&signature={sign(self.creds.secret_key, signing)}"
+        else:
+            query = query_string(data)
         url = signed_url(self.base_url, path, query)
 
         headers = {"X-BX-APIKEY": self.creds.api_key}
