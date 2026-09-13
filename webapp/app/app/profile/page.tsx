@@ -311,6 +311,16 @@ export default function ProfilePage() {
           <p className="relative mt-4 text-[11px] leading-relaxed text-[var(--pane-muted)] sm:pr-40">
             {t.profile.keysNote}
           </p>
+
+          {/* Дорога к остальным биржам. Ключи одной биржи - это про «где я
+              сейчас»; витрина отвечает на «где ещё можно и что это даёт». */}
+          <Link
+            href="/app/exchanges"
+            className="relative mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--pane-gold)] transition-colors duration-150 hover:text-[var(--pane-text)]"
+          >
+            {t.exchanges.title}
+            <ChevronRight className="h-3 w-3" />
+          </Link>
         </div>
 
         </div>

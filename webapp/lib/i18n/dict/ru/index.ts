@@ -7,6 +7,7 @@ import { broker } from "./broker";
 import { cert } from "./cert";
 import { chat } from "./chat";
 import { common } from "./common";
+import { exchanges } from "./exchanges";
 import { format } from "./format";
 import { landing } from "./landing";
 import { market } from "./market";
@@ -26,6 +27,7 @@ export const ru = {
   cert,
   chat,
   common,
+  exchanges,
   format,
   landing,
   market,

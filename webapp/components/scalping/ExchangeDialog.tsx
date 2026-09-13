@@ -391,6 +391,18 @@ export default function ExchangeDialog({
           </div>
         )}
 
+        {/* Все биржи и условия - отдельной страницей: здесь ключи одного счёта,
+            там выбор, где вообще заводить. */}
+        <div className="px-5 pb-1 pt-0">
+          <Link
+            href="/app/exchanges"
+            onClick={onClose}
+            className="text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+          >
+            {t.exchanges.title}
+          </Link>
+        </div>
+
         <div className="flex items-center justify-between border-t border-[var(--pane-border)] px-5 py-3">
           {connected ? (
             <button
