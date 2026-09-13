@@ -22,7 +22,10 @@
     python merge_students.py                # что будет сделано
     python merge_students.py --apply        # сделать
 
-Перед `--apply` скопируйте файл базы: `copy nmnh.sqlite3 nmnh.sqlite3.bak`.
+Перед `--apply`: остановить бэкенд и бот и скопировать базу. Имя файла скрипт
+печатает сам - оно берётся из `DATABASE_URL`, а не угадывается. У SQLite в
+режиме WAL рядом с файлом живут `-wal` и `-shm`: копировать нужно все три,
+иначе в копии не окажется последних записанных сделок.
 """
 
 from __future__ import annotations
@@ -202,7 +205,13 @@ def existing_tables(session) -> list[str]:
 def main() -> int:
     apply = "--apply" in sys.argv
     init_engine()
-    get_engine()
+    engine = get_engine()
+
+    # Называем базу до того, как что-то сделаем: копию снимают именно с неё, и
+    # угадывать имя файла в такой операции нельзя.
+    print(f"База: {engine.url}")
+    if apply:
+        print("Бэкенд и бот должны быть остановлены: они пишут в эту же базу.")
 
     with SessionLocal() as session:
         print("Ищем разошедшиеся записи одного ученика...")
