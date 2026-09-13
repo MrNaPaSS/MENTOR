@@ -834,8 +834,13 @@ export default function ScalpingPage() {
     return out;
   }, [indicators, tools.vision, tools.volumeCandles]);
 
+  // Биржа, книгу которой показываем: та, где стоит активный счёт ученика.
+  // Счёта нет - общая книга, как и было до мультибиржи.
+  const venue = exchange?.connected ? exchange.active || exchange.exchange || "" : "";
+
   const { screener, dom, connected } = useScalpingFeed({
     symbol,
+    exchange: venue,
     rows: shownRows,
     agg: shownAgg,
     sort,
@@ -2003,7 +2008,12 @@ export default function ScalpingPage() {
       // дёшево.
       const mind = await liveTrades().catch(() => null);
       if (cancelled) return;
-      const served = mind ? new Set(mind.trades.map((one) => one.client_id)) : null;
+      // Сделки, которые сервер ещё ведёт. Те, по которым он уже решил, что
+      // позиции нет, сюда не входят: он дописывает журнал, а экрану ждать
+      // вместе с ним нечего - защита с биржи снята вместе с позицией.
+      const served = mind
+        ? new Set(mind.trades.filter((one) => !one.closing).map((one) => one.client_id))
+        : null;
       const serverSays = new Map((mind?.trades ?? []).map((one) => [one.client_id, one]));
       // Только что закрытые - с настоящими ценой выхода и итогом. По ним
       // уведомление говорит, чем кончилась сделка, а не угадывает.
@@ -2079,6 +2089,10 @@ export default function ScalpingPage() {
         const held = now - miss.since;
         // Знает ли о сделке сервер: да, нет или «не спросили».
         const alive = served ? served.has(trade.id) : null;
+        // Сервер сказал прямо: позиции нет, идёт запись в журнал. Это не
+        // догадка по пустому ответу биржи, а его решение - ждать выдержку
+        // поверх него незачем.
+        const done = serverSays.get(trade.id)?.closing === true;
 
         // Пишем каждый пустой ответ, а не только последний: по одной записи
         // «закрыли» нельзя понять, что показывала биржа до этого - пустоту,
@@ -2094,6 +2108,7 @@ export default function ScalpingPage() {
           total: one.total,
           matched: one.matched,
           server: alive,
+          closing: done,
           takesHit: trade.takesHit,
           targets: trade.targets.length,
         });
@@ -2114,7 +2129,7 @@ export default function ScalpingPage() {
 
         // Хороним только при согласии биржи и сервера: пока сопровождение
         // сделку ведёт, пустой ответ был заминкой, а не закрытием.
-        if (!settled && !shouldBury(miss, now, alive)) continue;
+        if (!settled && !done && !shouldBury(miss, now, alive)) continue;
         bury.add(trade.id);
         missingRef.current.delete(trade.id);
         // Пишем сделку сразу и своей оценкой: сопровождение на сервере
@@ -3755,6 +3770,26 @@ export default function ScalpingPage() {
                     {exchange.exchange}
                   </span>
                 )}
+                {/* Чья книга на экране. Подпись появляется только при подмене:
+                    на бирже ученика монеты может не быть, и стакан тогда
+                    общий - молчать об этом нельзя, заявка исполнится не по
+                    этим ценам. */}
+                {dom?.fallback && (
+                  <span
+                    title={
+                      dom.fallback === "no_symbol"
+                        ? t.terminal.bookNoSymbol(dom.asked || venue)
+                        : t.terminal.bookNoFeed(dom.asked || venue)
+                    }
+                    className={`rounded px-1 text-[10px] uppercase tracking-wide ${
+                      dom.fallback === "no_symbol"
+                        ? "bg-[var(--pane-down-faint)] text-[var(--pane-down)]"
+                        : "bg-[var(--pane-hover)] text-[var(--pane-muted)]"
+                    }`}
+                  >
+                    {t.terminal.book(dom.exchange)}
+                  </span>
+                )}
                 <span className="text-[var(--pane-text-2)]">
                   {dom ? fmtPrice(dom.mid, dom.tick) : "-"}
                 </span>
@@ -3892,6 +3927,7 @@ export default function ScalpingPage() {
 
                 <PriceChart
                   symbol={symbol}
+                  venue={dom?.exchange ?? ""}
                   interval={timeframe}
                   wall={dom?.wall ?? null}
                   shelves={dom?.shelves ?? []}

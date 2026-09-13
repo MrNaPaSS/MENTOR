@@ -26,6 +26,7 @@ from core.db import Base
 from core.models import ExchangeAccount, LiveTrade, Student, WeexCredential
 from core.okx.futures import OkxFutures
 from core.weex.futures import WeexFutures
+from backend.trading import connect as connect_mod
 
 
 def _session():
@@ -193,8 +194,11 @@ def api(monkeypatch):
     session.add(student)
     session.commit()
 
-    monkeypatch.setattr(trading_api, "WeexFutures", lambda *_a, **_k: _Probe())
-    monkeypatch.setattr(trading_api, "OkxFutures", lambda *_a, **_k: _Probe())
+    # Проверка ключей живёт в общем месте подключения: её используют и ручка
+    # ключей, и вход биржей (backend/trading/connect.py).
+    monkeypatch.setattr(
+        connect_mod, "PROBES", {"weex": lambda *_a, **_k: _Probe(), "okx": lambda *_a, **_k: _Probe()}
+    )
 
     app = FastAPI()
     app.include_router(trading_api.router)

@@ -17,6 +17,15 @@
 **Любая запись сбрасывает память счёта.** Поставили заявку, сняли стоп,
 передвинули цель - следующий вопрос уходит на биржу. Иначе терминал секунду
 показывал бы состояние до действия, а сопровождение приняло бы его за правду.
+
+Поверх памяти живёт второй, более быстрый источник - **приватный поток биржи**
+(`core/okx/stream.py`). Пока он подключён, позиции счёта не спрашиваются вовсе:
+биржа сама присылает их при каждом изменении. Источник привязывается к счёту
+(`attach`) и отвязывается при обрыве - решает он сам, свойством `ready`, и
+поэтому здесь нет ни срока жизни, ни отдельного сердцебиения.
+
+Сразу после нашей записи потоку выдерживается пауза недоверия: событие о новой
+заявке идёт к нам доли секунды, и в это окно правду знает только биржа.
 """
 
 from __future__ import annotations
@@ -47,20 +56,55 @@ WRITES = (
     "set_leverage",
 )
 
+# Сколько после своей записи не доверяем потоку. Событие о новой заявке идёт
+# от биржи доли секунды, и в это окно её ответ на запрос правдивее push-а.
+DISTRUST = 1.0
+
 _cache: dict[tuple, tuple[float, Any]] = {}
 _locks: dict[tuple, asyncio.Lock] = {}
+# Приватные потоки по счетам: объект со свойством `ready` и методом
+# `positions()`. Держим ссылку, а не снимок: поток сам знает, жив ли он.
+_sources: dict[tuple, Any] = {}
+# До какого момента счёт читаем только с биржи - после своей же записи.
+_distrust: dict[tuple, float] = {}
 
 
 def forget(account: tuple) -> None:
     """Забыть всё, что помним про этот счёт."""
     for key in [k for k in _cache if k[: len(account)] == account]:
         _cache.pop(key, None)
+    # И потоку в это окно не верим: он ещё не знает о том, что мы сделали.
+    _distrust[tuple(account)] = time.monotonic() + DISTRUST
+
+
+def attach(account: tuple, source: Any) -> None:
+    """Подключить приватный поток счёта: пока он жив, позиции не опрашиваются."""
+    _sources[tuple(account)] = source
+
+
+def detach(account: tuple) -> None:
+    """Поток закрыт - возвращаемся к опросу биржи."""
+    _sources.pop(tuple(account), None)
+    forget(account)
+
+
+def live_positions(account: tuple) -> Any | None:
+    """Позиции из приватного потока. `None` - потока нет, доверять нечему."""
+    key = tuple(account)
+    if time.monotonic() < _distrust.get(key, 0.0):
+        return None
+    source = _sources.get(key)
+    if source is None or not getattr(source, "ready", False):
+        return None
+    return source.positions()
 
 
 def clear() -> None:
     """Забыть всё. Нужно тестам и перезапуску."""
     _cache.clear()
     _locks.clear()
+    _sources.clear()
+    _distrust.clear()
 
 
 async def read(key: tuple, fetch: Callable[[], Awaitable[Any]], ttl: float = TTL) -> Any:
@@ -111,6 +155,11 @@ class Cached:
         return value
 
     async def positions(self) -> Any:
+        # Приватный поток биржи знает позиции точнее и раньше: он присылает их
+        # в момент изменения, а не через секунду опроса.
+        live = live_positions(self._account)
+        if live is not None:
+            return live
         return await read(
             (*self._account, "positions"), self._client.positions, self._ttl
         )

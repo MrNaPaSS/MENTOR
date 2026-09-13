@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.api import exchange_uids as service_api
 from backend.api import trading as trading_api
+from backend.trading import connect as connect_mod
 from backend.config import BackendConfig
 from backend.deps import get_config, get_current_student, get_session, get_weex
 from core.db import Base
@@ -74,7 +75,9 @@ def api(monkeypatch):
 
 
 def okx(monkeypatch, uid: str) -> None:
-    monkeypatch.setattr(trading_api, "OkxFutures", lambda *_a, **_k: _Probe(uid))
+    # Клиент проверки берётся там же, где подключается счёт: общее место для
+    # ключей и входа биржей (backend/trading/connect.py).
+    monkeypatch.setattr(connect_mod, "PROBES", {**connect_mod.PROBES, "okx": lambda *_a, **_k: _Probe(uid)})
 
 
 def confirm(client, items, **who):
@@ -168,7 +171,9 @@ def test_weex_account_is_matched_by_the_student_uid(api, monkeypatch):
     """У WEEX номер счёта - это UID ученика, он проверен ещё при входе."""
     client, session, _, inner = api
     confirm(client, [{"exchange": "weex", "uid": "6067083524"}])
-    inner.setattr(trading_api, "WeexFutures", lambda *_a, **_k: _Probe())
+    inner.setattr(
+        connect_mod, "PROBES", {**connect_mod.PROBES, "weex": lambda *_a, **_k: _Probe()}
+    )
 
     body = client.put("/api/trading/keys", json=KEYS).json()
     assert body["access"] == "academy"

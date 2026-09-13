@@ -1008,6 +1008,114 @@ def test_take_alive_under_its_label_is_not_counted_as_filled():
     assert decision.filled_orders == []
 
 
+def test_hung_exchange_does_not_hold_the_round():
+    """Зависшая биржа держит только свой счёт, и не дольше одного прохода.
+
+    Замок счёта берут и обход, и просьба терминала проверить сделки. Пока
+    запрос к зависшей бирже не вернулся, обе стояли - а вместе с ними стоп,
+    который надо было переставить.
+    """
+    import asyncio
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from backend.trading import watcher as watcher_mod
+    from backend.trading.watcher import PositionWatcher
+    from core.models import Base, Student
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    student = Student(tg_id=1)
+    session.add(student)
+    session.commit()
+    row = trade(student_id=student.id, status="open")
+    session.add(row)
+    session.commit()
+
+    watcher = PositionWatcher(lambda: session, lambda: None)
+
+    async def hangs(*_args, **_kwargs):
+        await asyncio.sleep(3600)
+
+    watcher._handle_student = hangs  # type: ignore[assignment]
+
+    async def run():
+        # Таймаут укорачиваем: ждать сорок пять секунд в тесте незачем.
+        watcher_mod.ACCOUNT_TIMEOUT = 0.05
+        return await asyncio.wait_for(watcher._check_account(student.id, "weex"), timeout=5)
+
+    try:
+        assert asyncio.run(run()) is True
+    finally:
+        watcher_mod.ACCOUNT_TIMEOUT = 45.0
+
+
+def test_trade_is_closing_while_the_journal_waits_for_fills():
+    """Позиции нет - терминалу говорим сразу, не дожидаясь отчёта биржи.
+
+    Запись в журнал ждёт исполнения выхода до сорока секунд, и всё это время
+    сделка оставалась «живой»: трейдер видел, как сработал стоп, и ещё минуту
+    смотрел на бокс сделки, которой на бирже уже нет. Ждать отчёт - дело
+    журнала, а не экрана.
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from backend.trading.watcher import Decision, PositionWatcher
+    from core.models import Base, Student
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    student = Student(tg_id=1)
+    session.add(student)
+    session.commit()
+
+    row = trade(student_id=student.id, opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    session.add(row)
+    session.commit()
+
+    class OnlyEntry:
+        async def user_trades(self, symbol, limit=100):
+            return [{"time": 4102444800000, "price": "100", "side": "BUY", "qty": "3"}]
+
+        async def symbol_filters(self, symbol):
+            return {"taker_fee": 0.0006}
+
+    watcher = PositionWatcher(lambda: session, lambda: None)
+    asyncio.run(watcher._apply(session, OnlyEntry(), row, Decision(0, closed=True)))
+
+    # Журнал ещё ждёт исполнений - сделка в базе открыта, но терминалу уже
+    # сказано, что позиции нет.
+    assert row.status != "closed"
+    assert watcher.closing(row.id) is True
+
+
+def test_returned_position_is_not_closing_anymore():
+    """Пустой ответ был заминкой биржи: позиция вернулась - сделка жива."""
+    import asyncio
+
+    from backend.trading.watcher import Decision, PositionWatcher
+
+    row = trade()
+    watcher = PositionWatcher(lambda: None, lambda: None)
+    watcher._closing.add(row.id)
+
+    asyncio.run(watcher._apply(None, None, row, Decision(0, size=3.0)))
+    assert watcher.closing(row.id) is False
+
+
 def test_record_waits_for_the_closing_fill():
     """Пока выхода нет в отчёте, запись не делается.
 

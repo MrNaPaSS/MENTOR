@@ -22,7 +22,7 @@ from typing import Any
 
 import aiohttp
 import certifi
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -56,6 +56,7 @@ from core.trading.position import (
     should_move_stop,
 )
 from backend.trading import leverage_caps
+from backend.trading.connect import ConnectRefused, connect as connect_account
 from backend.trading.refusals import explain, max_size_in
 from core.weex import keys as keystore
 from backend.trading.rewards import award_trade_coins
@@ -214,6 +215,7 @@ def _fail(exc: WeexTradeError) -> HTTPException:
 
 @router.get("/live")
 async def live_trades(
+    request: Request,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
@@ -244,6 +246,12 @@ async def live_trades(
         .scalars()
         .all()
     )
+    # По каким сделкам сопровождение уже решило, что позиции нет, и дописывает
+    # журнал. Терминалу этого хватает, чтобы снять разметку: ждать отчёт биржи
+    # вместе с журналом экрану незачем.
+    watcher = getattr(request.app.state, "position_watcher", None)
+    closing = getattr(watcher, "closing", None)
+
     return {
         "trades": [
             {
@@ -251,6 +259,8 @@ async def live_trades(
                 "symbol": row.symbol,
                 "side": row.side,
                 "status": row.status,
+                # Позиции на бирже нет, идёт запись в журнал.
+                "closing": bool(closing(row.id)) if callable(closing) else False,
                 "qty": float(row.qty),
                 "entry": float(row.entry),
                 "stop": float(row.current_stop),
@@ -669,60 +679,21 @@ async def save_keys(
     session=Depends(get_session),
     weex=Depends(get_weex),
 ):
-    """Подключить ключи биржи. Проверяем их сразу — иначе ошибка всплывёт на ордере."""
-    if not keystore.enabled():
-        raise HTTPException(503, "Торговля выключена: на сервере не задан ключ шифрования")
+    """Подключить ключи биржи. Проверяем их сразу — иначе ошибка всплывёт на ордере.
+
+    Само подключение - в `backend/trading/connect.py`: те же правила проверки
+    и сверки счёта действуют и для входа биржей, и разойтись им нельзя.
+    """
     code = exchange_code(body.exchange)
     if not code:
         raise HTTPException(422, f"К бирже {body.exchange} подключиться пока нельзя")
 
     creds = Credentials(body.api_key, body.secret_key, body.passphrase)
-    probe = WeexFutures(creds, _get_session) if code == "weex" else OkxFutures(creds, _get_session)
     try:
-        await probe.balance()
-    except WeexTradeError as exc:
-        raise HTTPException(400, f"Ключи не подошли: {exc}") from exc
+        row = await connect_account(session, student, code, creds, _get_session)
+    except ConnectRefused as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
 
-    # Чей это счёт. Номер спрашиваем у самой биржи: названный учеником может
-    # быть чужим по ошибке, а ребейт с него уйдёт другому человеку. У WEEX
-    # номер счёта - это UID ученика, он уже проверен при входе.
-    confirmed = confirmed_uids(session, student.id, code)
-    uid = ""
-    ask_uid = getattr(probe, "account_uid", None)
-    if ask_uid is not None:
-        try:
-            uid = clean_uid(await ask_uid())
-        except WeexTradeError as exc:
-            logger.warning("Номер счёта на %s не получен: %s", code, exc)
-    if not uid and code == "weex":
-        uid = clean_uid(student.weex_uid)
-
-    # Академия подтвердила другой счёт этой биржи - подключать этот нельзя:
-    # скидка и кешбэк считаются по подтверждённому номеру.
-    if confirmed and uid and uid not in confirmed:
-        raise HTTPException(
-            409,
-            f"Академия подтвердила на {code.upper()} другой счёт. "
-            "Подключите тот, чей UID вы называли, или пришлите новый UID в бот академии.",
-        )
-    access = access_kind(uid, confirmed)
-
-    row = account_for(session, student.id, code)
-    if row is None:
-        row = ExchangeAccount(student_id=student.id, exchange=code)
-        session.add(row)
-    row.exchange_uid = uid
-    row.access = access
-    row.api_key_enc = keystore.encrypt(body.api_key)
-    row.secret_enc = keystore.encrypt(body.secret_key)
-    row.passphrase_enc = keystore.encrypt(body.passphrase)
-    row.key_tail = keystore.mask(body.api_key)
-    row.is_active = True
-    row.updated_at = utcnow()
-    # Первый подключённый счёт и становится активным: ученику с одной биржей
-    # выбирать не из чего.
-    if not (student.active_exchange or "").strip():
-        student.active_exchange = code
     # Счёт подключён - если он заведён через академию, VIP сразу. Партнёрка
     # пока одна, WEEX; не ответила - обычный уровень, а подключение от этого не
     # падает.
@@ -734,7 +705,7 @@ async def save_keys(
         "key_tail": row.key_tail,
         "vip": bool(student.is_vip),
         "exchange": code,
-        "access": access,
+        "access": row.access,
     }
 
 

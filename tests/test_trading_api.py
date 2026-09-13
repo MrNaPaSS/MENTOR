@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.api import trading as trading_api
+from backend.trading import connect as connect_mod
 from backend.deps import get_current_student, get_session, get_weex
 from core.db import Base
 from core.models import Student
@@ -168,7 +169,11 @@ def test_status_reports_configuration(app_and_exchange):
 
 def test_keys_are_stored_encrypted_and_never_returned(app_and_exchange, monkeypatch):
     client, exchange, session = app_and_exchange
-    monkeypatch.setattr(trading_api, "WeexFutures", lambda *_a, **_k: exchange)
+    # Проверка ключей живёт в общем месте подключения: одни правила у ключей
+    # и у входа биржей (backend/trading/connect.py).
+    monkeypatch.setattr(
+        connect_mod, "PROBES", {**connect_mod.PROBES, "weex": lambda *_a, **_k: exchange}
+    )
 
     body = client.put(
         "/api/trading/keys",
@@ -199,7 +204,9 @@ def test_bad_keys_are_rejected_before_saving(app_and_exchange, monkeypatch):
 
             raise WeexTradeError("подпись не сошлась")
 
-    monkeypatch.setattr(trading_api, "WeexFutures", lambda *_a, **_k: Rejecting())
+    monkeypatch.setattr(
+        connect_mod, "PROBES", {**connect_mod.PROBES, "weex": lambda *_a, **_k: Rejecting()}
+    )
     res = client.put(
         "/api/trading/keys",
         json={"api_key": "key-1234", "secret_key": "secret-x", "passphrase": "pass"},

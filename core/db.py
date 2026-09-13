@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, inspect as sa_inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
@@ -21,10 +21,47 @@ def get_database_url() -> str:
     return os.getenv("DATABASE_URL", "sqlite:///nmnh_dev.sqlite3")
 
 
+# Настройки SQLite, без которых он держит читателей за писателями.
+#
+# Сопровождение сделок обходит счета параллельно и пишет в базу одновременно с
+# тем, как ученик открывает журнал. В обычном режиме SQLite на время записи
+# закрывает базу целиком: журнал за девяносто дней ждал, пока допишется чужая
+# сделка, и открывался секундами. В режиме WAL читатели и писатель живут
+# параллельно, а `busy_timeout` заменяет мгновенный отказ «database is locked»
+# коротким ожиданием.
+#
+# `synchronous=NORMAL` при WAL - обычная пара: запись не ждёт подтверждения
+# диска на каждой транзакции. Потерять можно только последние транзакции при
+# отключении питания, и это дешевле, чем секундные паузы на каждой записи.
+SQLITE_PRAGMAS = (
+    "PRAGMA journal_mode=WAL",
+    "PRAGMA synchronous=NORMAL",
+    "PRAGMA busy_timeout=5000",
+)
+
+
 def make_engine(url: str | None = None):
     url = url or get_database_url()
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-    return create_engine(url, future=True, connect_args=connect_args)
+    engine = create_engine(url, future=True, connect_args=connect_args)
+    if url.startswith("sqlite"):
+        _tune_sqlite(engine)
+    return engine
+
+
+def _tune_sqlite(engine) -> None:
+    """Применять настройки к каждому соединению: они живут в соединении."""
+
+    @event.listens_for(engine, "connect")
+    def _on_connect(dbapi_connection, _record):  # noqa: ANN001 - подпись события
+        cursor = dbapi_connection.cursor()
+        try:
+            for pragma in SQLITE_PRAGMAS:
+                cursor.execute(pragma)
+        except Exception as exc:  # noqa: BLE001 - без настроек база работает, просто медленнее
+            logging.getLogger("nmnh.db").warning("Настройки SQLite не применены: %s", exc)
+        finally:
+            cursor.close()
 
 
 # Глобальные engine/Session (ленивая инициализация при первом обращении).
@@ -52,6 +89,7 @@ def create_all() -> None:
 
     engine = get_engine()
     Base.metadata.create_all(engine)
+    _ensure_indexes(engine)
     _migrate_add_columns(engine)
     _move_weex_keys(engine)
     _seed_chat_threads(engine)
@@ -65,6 +103,29 @@ def create_all() -> None:
     _apply_shop_catalog_v7(engine)
     _apply_shop_catalog_v8(engine)
     _apply_shop_catalog_v9(engine)
+
+
+# Составные указатели под самые частые выборки. `create_all` их не добавит:
+# существующую таблицу он пропускает целиком, вместе с её указателями.
+INDEXES = (
+    # Журнал сделок: свои сделки за период, свежие первыми.
+    ("ix_scalp_trades_student_closed", "scalp_trades", "student_id, closed_at"),
+    # Обход сопровождения и список живых сделок терминала.
+    ("ix_live_trades_student_status", "live_trades", "student_id, status"),
+)
+
+
+def _ensure_indexes(engine) -> None:
+    """Досоздать указатели, которых нет. Молча пропускаем то, что уже есть."""
+    tables = set(sa_inspect(engine).get_table_names())
+    with engine.begin() as conn:
+        for name, table, columns in INDEXES:
+            if table not in tables:
+                continue
+            try:
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({columns})"))
+            except Exception as exc:  # noqa: BLE001 - без указателя всё работает, просто медленнее
+                logging.getLogger("nmnh.db").warning("Указатель %s не создан: %s", name, exc)
 
 
 def _migrate_add_columns(engine) -> None:

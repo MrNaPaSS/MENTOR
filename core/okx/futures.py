@@ -226,6 +226,45 @@ def parse_instrument(row: dict[str, Any]) -> Instrument | None:
     )
 
 
+def position_row(row: dict[str, Any], spec: Instrument | None) -> dict[str, Any] | None:
+    """Позиция OKX в полях WEEX. Пусто - позиции нет или инструмент не наш.
+
+    Отдельной функцией, а не внутри запроса: тем же переводом пользуется
+    приватный поток позиций (`core/okx/stream.py`), и разойтись этим двум
+    местам нельзя - сопровождение читает результат как одно и то же.
+    """
+    contracts = _f(row.get("pos"))
+    name = str(row.get("instId") or "").upper()
+    if contracts == 0 or spec is None:
+        return None
+    side = str(row.get("posSide") or "").lower()
+    if side not in ("long", "short"):
+        side = "long" if contracts > 0 else "short"
+    size = spec.to_coins(contracts)
+    avg = _f(row.get("avgPx"))
+    position = {
+        "symbol": symbol_of(name),
+        "instId": name,
+        "side": side.upper(),
+        "positionSide": side.upper(),
+        "size": _num(size),
+        "leverage": row.get("lever") or "",
+        "markPrice": row.get("markPx") or "",
+        "unrealizePnl": row.get("upl") or "0",
+        "liquidatePrice": row.get("liqPx") or "",
+        "marginSize": row.get("margin") or row.get("imr") or "",
+        "averageOpenPrice": row.get("avgPx") or "",
+        # Средняя цена входа у сопровождения - стоимость на объём.
+        "cumOpenSize": _num(size),
+        "cumOpenValue": _num(avg * size),
+    }
+    # Безубыток OKX считает сама, с комиссией: терминал обязан быть зеркалом
+    # биржи, а не спорить с ней своей формулой.
+    if _f(row.get("bePx")) > 0:
+        position["breakEvenPrice"] = row.get("bePx")
+    return position
+
+
 _INSTRUMENTS: dict[str, Instrument] = {}
 _INSTRUMENTS_AT = 0.0
 _MODES: dict[str, tuple[str, float]] = {}
@@ -506,37 +545,9 @@ class OkxFutures:
         for row in rows or []:
             if not isinstance(row, dict):
                 continue
-            contracts = _f(row.get("pos"))
-            name = str(row.get("instId") or "").upper()
-            spec = specs.get(name)
-            if contracts == 0 or spec is None:
-                continue
-            side = str(row.get("posSide") or "").lower()
-            if side not in ("long", "short"):
-                side = "long" if contracts > 0 else "short"
-            size = spec.to_coins(contracts)
-            avg = _f(row.get("avgPx"))
-            position = {
-                "symbol": symbol_of(name),
-                "instId": name,
-                "side": side.upper(),
-                "positionSide": side.upper(),
-                "size": _num(size),
-                "leverage": row.get("lever") or "",
-                "markPrice": row.get("markPx") or "",
-                "unrealizePnl": row.get("upl") or "0",
-                "liquidatePrice": row.get("liqPx") or "",
-                "marginSize": row.get("margin") or row.get("imr") or "",
-                "averageOpenPrice": row.get("avgPx") or "",
-                # Средняя цена входа у сопровождения - стоимость на объём.
-                "cumOpenSize": _num(size),
-                "cumOpenValue": _num(avg * size),
-            }
-            # Безубыток OKX считает сама, с комиссией: терминал обязан быть
-            # зеркалом биржи, а не спорить с ней своей формулой.
-            if _f(row.get("bePx")) > 0:
-                position["breakEvenPrice"] = row.get("bePx")
-            out.append(position)
+            position = position_row(row, specs.get(str(row.get("instId") or "").upper()))
+            if position is not None:
+                out.append(position)
         return out
 
     async def set_leverage(self, symbol: str, leverage: int, margin_coin: str = "USDT") -> Any:

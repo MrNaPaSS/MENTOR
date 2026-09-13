@@ -27,6 +27,7 @@ from sqlalchemy import select
 
 from backend.trading.accounts import account_for, client_for, trade_exchange
 from backend.trading.live_state import cached
+from backend.trading.private_ws import PrivateStreams
 from backend.trading.rewards import award_trade_coins
 from core.models import LiveTrade, ScalpTrade, utcnow
 from core.trading.position import (
@@ -70,6 +71,16 @@ NUDGE_GAP = 2.0
 # биржа держала всех остальных. Верхний предел - чтобы разом не открыть сотни
 # запросов с одного адреса.
 PARALLEL_ACCOUNTS = 8
+
+# Сколько один счёт может занимать обход, прежде чем его прервут.
+#
+# Проход по счёту делает несколько запросов подряд - позиции, планы, цена,
+# заявки, - и у каждого свой таймаут в пятнадцать секунд. Сорок пять секунд
+# при нормальной работе не наступают никогда; наступают они тогда, когда биржа
+# зависла, а замок счёта в это время держит и обход, и просьбу терминала
+# проверить сделки. Прерывать безопасно: следующий проход перечитывает
+# состояние с биржи и доделывает то, что не успело (ТЗ мультибиржи, §10.1).
+ACCOUNT_TIMEOUT = 45.0
 
 # Сколько проверок подряд позиция может отсутствовать, прежде чем считать её
 # закрытой. Ответ приходит не мгновенно, и одна пустая выдача сразу после
@@ -315,6 +326,10 @@ class PositionWatcher:
         self._missing: dict[int, int] = {}
         # Сколько проходов ждём исполнения выхода по каждой сделке.
         self._pending: dict[int, int] = {}
+        # Сделки, по которым решение принято: позиции на бирже нет, ждём только
+        # отчёт об исполнениях для журнала. Терминалу этого достаточно, чтобы
+        # снять разметку - ждать вместе с журналом ему нечего (см. `closing`).
+        self._closing: set[int] = set()
         # Обход и внеочередная проверка ученика не идут одновременно: вдвоём они
         # переставили бы один и тот же стоп дважды.
         self._lock = asyncio.Lock()
@@ -323,6 +338,21 @@ class PositionWatcher:
         self._locks: dict[tuple[int, str], asyncio.Lock] = {}
         # Когда ученика последний раз проверяли по просьбе терминала.
         self._nudged: dict[int, float] = {}
+        # Приватные потоки бирж: там, где биржа их даёт, позиции приходят сами,
+        # а об исполнении она сообщает в тот же миг - не через пять секунд
+        # обхода (backend/trading/private_ws.py).
+        self.streams = PrivateStreams(http_session_factory, self.check_student)
+
+    def closing(self, trade_id: int) -> bool:
+        """Позиции уже нет, дописывается журнал.
+
+        Отчёт об исполнениях биржа заполняет не мгновенно, и запись в журнал
+        ждёт его до восьми проходов - до сорока секунд. Всё это время сделка
+        оставалась в списке живых, и терминал держал разметку на графике:
+        трейдер видел, как сработал стоп, и ещё минуту смотрел на бокс сделки,
+        которой на бирже уже нет. Ждать отчёт - дело журнала, а не экрана.
+        """
+        return trade_id in self._closing
 
     def start(self) -> None:
         if not keystore.enabled():
@@ -340,6 +370,7 @@ class PositionWatcher:
                 await task
             except asyncio.CancelledError:
                 pass
+        await self.streams.stop()
 
     async def _loop(self) -> None:
         while True:
@@ -383,7 +414,19 @@ class PositionWatcher:
                 if not trades:
                     return False
                 try:
-                    await self._handle_student(session, student_id, trades, exchange)
+                    await asyncio.wait_for(
+                        self._handle_student(session, student_id, trades, exchange),
+                        timeout=ACCOUNT_TIMEOUT,
+                    )
+                except asyncio.TimeoutError:
+                    # Зависшая биржа не держит очередь дольше одного прохода:
+                    # иначе её ждут стопы всех остальных счетов.
+                    logger.warning(
+                        "Биржа %s не ответила за %.0f с (ученик %s) - прерываем проход",
+                        exchange,
+                        ACCOUNT_TIMEOUT,
+                        student_id,
+                    )
                 except Exception as exc:  # noqa: BLE001 — один счёт не мешает другим
                     logger.warning("Ученик %s (%s): %s", student_id, exchange, exc)
                 session.commit()
@@ -444,6 +487,9 @@ class PositionWatcher:
             )
         finally:
             session.close()
+        # Приватные потоки держим ровно на тех счетах, где идут сделки: на
+        # остальных их незачем держать, а без сделок и будить некого.
+        await self._sync_streams(set(accounts))
         if not accounts:
             return
 
@@ -454,6 +500,24 @@ class PositionWatcher:
                 await self._check_account(student_id, exchange)
 
         await asyncio.gather(*(one(s, e) for s, e in accounts))
+
+    async def _sync_streams(self, accounts: set[tuple[int, str]]) -> None:
+        """Свести набор приватных потоков к счетам с живыми сделками."""
+        await self.streams.keep(accounts)
+        if not accounts:
+            return
+        session = self._sessions()
+        try:
+            for student_id, exchange in sorted(accounts):
+                if self.streams.has(student_id, exchange):
+                    continue
+                row = account_for(session, student_id, exchange)
+                if row is not None:
+                    await self.streams.ensure(row)
+        except Exception as exc:  # noqa: BLE001 - без потока сопровождение живо
+            logger.warning("Приватные потоки не подняты: %s", exc)
+        finally:
+            session.close()
 
     async def _handle_student(
         self,
@@ -632,6 +696,11 @@ class PositionWatcher:
                 changed = True
 
         if decision.closed:
+            # Решение принято: позиции на бирже нет. Говорим об этом терминалу
+            # сразу - дальше идёт запись в журнал, и она может ждать отчёт
+            # биржи десятки секунд, но разметке на графике ждать нечего.
+            self._closing.add(trade.id)
+
             # Сначала запись, потом закрытие. Наоборот - это сделка, которой
             # нет ни на бирже, ни в журнале: запись падала, сделка всё равно
             # помечалась закрытой, и следующий проход её уже не видел. Сделки
@@ -651,7 +720,11 @@ class PositionWatcher:
             trade.closed_at = utcnow()
             changed = True
             self._missing.pop(trade.id, None)
+            self._closing.discard(trade.id)
             logger.info("Позиция закрыта: %s", trade.symbol)
+        elif decision.size > 0:
+            # Позиция снова на бирже: пустой ответ был заминкой, и сделка жива.
+            self._closing.discard(trade.id)
 
         if changed:
             trade.updated_at = utcnow()
