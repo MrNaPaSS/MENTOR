@@ -5,7 +5,7 @@ import { ChevronRight, Key, LogOut, MonitorDown, Moon, RefreshCw, ShieldCheck, S
 import { api, API_URL, Profile } from "@/lib/api";
 import { getAccessToken, logout } from "@/lib/auth";
 import { profileChanged } from "@/lib/profileEvent";
-import { installApp, useCanInstall } from "@/lib/installApp";
+import { installApp, isInstalled, useCanInstall } from "@/lib/installApp";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fmtUsd, maskUid } from "@/lib/format";
@@ -52,9 +52,27 @@ export default function ProfilePage() {
   // отдельная обёртка больше не нужна.
   const theme = useTerminalTheme();
   const sound = useSoundOn();
-  // Браузер сам решает, когда готов установить сайт: кнопку показываем только
-  // в этот момент и только тем, у кого кабинет ещё не установлен.
+  // Кнопка установки стоит всегда, пока кабинет не установлен. Браузер сам
+  // решает, когда готов ставить сайт, а Safari на iPad и iPhone не готов
+  // никогда - там кнопки не было вовсе, и искать установку было негде. Готов -
+  // открываем его окно; нет - говорим, где это сделать руками.
   const canInstall = useCanInstall();
+  const [installed, setInstalled] = useState(false);
+  const [installNote, setInstallNote] = useState<string | null>(null);
+  useEffect(() => setInstalled(isInstalled()), []);
+
+  async function install() {
+    if (canInstall) {
+      setInstallNote(null);
+      await installApp();
+      return;
+    }
+    // iPadOS представляется компьютером Mac, отличает его только сенсор.
+    const apple =
+      /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    setInstallNote(apple ? t.profile.installApple : t.profile.installManual);
+  }
 
   useEffect(() => {
     const token = getAccessToken();
@@ -400,14 +418,13 @@ export default function ProfilePage() {
               </div>
             </SettingRow>
 
-            {/* Установка на рабочий стол. Показываем только там, где браузер и
-                правда готов её выполнить: кнопка, которая ничего не делает,
-                хуже её отсутствия. Уже установленный кабинет её не показывает
-                вовсе. */}
-            {canInstall && (
+            {/* Установка на рабочий стол. Постоянно, кроме уже установленного
+                кабинета: там она не нужна. Где браузер не ставит сам, кнопка
+                не молчит, а говорит, как поставить руками. */}
+            {!installed && (
               <SettingRow label={t.profile.install}>
                 <button
-                  onClick={() => void installApp()}
+                  onClick={() => void install()}
                   title={t.profile.installHint}
                   className="flex items-center gap-1.5 rounded-lg border border-[var(--pane-border)] bg-[var(--pane-hover)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--pane-text-2)] transition-colors duration-150 hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-accent)]"
                 >
@@ -415,6 +432,9 @@ export default function ProfilePage() {
                   {t.profile.installAction}
                 </button>
               </SettingRow>
+            )}
+            {!installed && installNote && (
+              <p className="text-right text-[11px] leading-snug text-[var(--pane-muted)]">{installNote}</p>
             )}
 
             {/* Подпись на карточке. Отдельно от ника Telegram: тот переписывается

@@ -264,6 +264,44 @@ def test_broken_photo_does_not_lose_the_message(client):
         assert row.text == "беру отсюда"
 
 
+# Начало JPEG: по нему сервер отличает картинку от чего угодно другого.
+_JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
+
+
+def test_forum_photo_opens_by_its_link(client, tmp_path, monkeypatch):
+    """Фото из форума сохраняется, и по записанной ссылке оно открывается."""
+    from backend.api import shots
+
+    monkeypatch.setattr(shots, "_DIR", tmp_path / "shots")
+    monkeypatch.setattr(shots, "BASE_URL", "")
+    res = client.post(
+        "/api/chat/forum",
+        json=_message(photo=base64.b64encode(_JPEG).decode()),
+        headers=HEADERS,
+    )
+    assert res.status_code == 201
+    with SessionLocal() as session:
+        attach = json.loads(session.get(ChatMessage, res.json()["id"]).attach_json)
+    assert attach["image"].startswith("http://testserver/")
+    assert attach["image"].endswith(".jpg")
+    assert client.get(attach["image"].removeprefix("http://testserver")).status_code == 200
+
+
+def test_internal_address_is_named_in_the_log(client, tmp_path, monkeypatch, caplog):
+    """Бот стучится на 127.0.0.1: без SHOTS_BASE_URL это видно в логе сразу."""
+    from backend.api import shots
+
+    monkeypatch.setattr(shots, "_DIR", tmp_path / "shots")
+    monkeypatch.setattr(shots, "BASE_URL", "")
+    with caplog.at_level("WARNING", logger="nmnh.forum"):
+        client.post(
+            "/api/chat/forum",
+            json=_message(photo=base64.b64encode(_JPEG).decode()),
+            headers={**HEADERS, "host": "127.0.0.1:8000"},
+        )
+    assert "SHOTS_BASE_URL" in caplog.text
+
+
 # ── Ветки на сайте ───────────────────────────────────────────────────────────
 
 

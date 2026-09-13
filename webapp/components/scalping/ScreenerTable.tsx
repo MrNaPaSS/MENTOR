@@ -11,7 +11,7 @@
 // потом оборот. Сортировка — по клику на заголовок.
 
 import { useT } from "@/lib/i18n";
-import { memo } from "react";
+import { memo, useRef } from "react";
 import { ArrowDown, Star } from "lucide-react";
 import {
   base,
@@ -138,11 +138,24 @@ const Row = memo(function Row({
   onSelect: (symbol: string) => void;
 }) {
   const t = useT();
+  // Каким указателем нажали: мышь выбирает сразу, палец - только тапом.
+  const touch = useRef(false);
   return (
     <tr
-      // Реакция на нажатие, а не на отпускание: подсветка должна появиться в тот
-      // момент, когда палец коснулся строки.
-      onPointerDown={() => onSelect(row.symbol)}
+      // Мышью - на нажатие, а не на отпускание: подсветка должна появиться в
+      // тот момент, когда кнопка пошла вниз.
+      //
+      // Пальцем - только тапом. На планшете касание строки - это ещё и начало
+      // прокрутки списка: выбор на касании открывал монету, а выбор сворачивает
+      // скринер, и список прятался, стоило его потянуть. click браузер не
+      // присылает, если палец поехал, - прокрутка остаётся прокруткой.
+      onPointerDown={(event) => {
+        touch.current = event.pointerType !== "mouse";
+        if (!touch.current) onSelect(row.symbol);
+      }}
+      onClick={() => {
+        if (touch.current) onSelect(row.symbol);
+      }}
       className={`cursor-pointer border-b border-[color:color-mix(in_srgb,var(--pane-border)_40%,transparent)] transition-colors duration-150 ease-out ${
         selected
           ? "bg-[var(--pane-accent-faint)] shadow-[inset_2px_0_0_#0AFFE0]"
@@ -157,7 +170,11 @@ const Row = memo(function Row({
             <button
               // Нажатие не должно открывать монету: звезда - отдельное
               // действие, и промах по ней стоил бы смены инструмента.
-              onPointerDown={(event) => {
+              // Нажатие гасим до строки на обоих путях - и мышином, и
+              // пальцевом, - а звезда ставится по тапу: палец, поехавший
+              // прокручивать список, звёзды не расставляет.
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
                 event.stopPropagation();
                 onStar(row.symbol);
               }}

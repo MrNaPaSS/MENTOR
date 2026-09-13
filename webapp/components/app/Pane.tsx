@@ -104,8 +104,10 @@ export function PaneHead({
             панели кабинета (HeadArt): вершиной они заходят на неё, а сюда
             спускаются. Пустой блок держит им место, и кнопки раздела встают
             левее, а не поверх снега. */}
-        <div aria-hidden className="hidden items-center gap-2 xl:flex">
-          <span className="h-10 w-56 shrink-0" />
+        {/* На планшете (lg) девиз и корона есть, а пустого места под снег нет:
+            вкладки «Рынка» с ним не помещались в строку и уезжали на вторую. */}
+        <div aria-hidden className="hidden items-center gap-2 lg:flex">
+          <span className="hidden h-10 w-56 shrink-0 xl:block" />
           <Motto lines={BRAND_MOTTO} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/art/brand/crown.webp" alt="" className="h-11 w-auto drop-shadow-[0_4px_10px_rgba(240,185,11,0.35)]" />

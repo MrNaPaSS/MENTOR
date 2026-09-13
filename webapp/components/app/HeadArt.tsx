@@ -72,7 +72,9 @@ export default function HeadArt({ pathname }: { pathname: string }) {
   const opacity = useRidgeOpacity();
   if (!ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`))) return null;
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 hidden overflow-hidden xl:block">
+    // С lg, а не с xl: планшет в горизонтали (1024-1279) раньше оставался без гор
+    // на всех разделах, хотя места под них в шапке хватает.
+    <div aria-hidden className="pointer-events-none absolute inset-0 hidden overflow-hidden lg:block">
       <Ridge top={TOP_IN_HEADER} right={RIGHT} opacity={opacity} />
     </div>
   );
@@ -142,7 +144,7 @@ export function PageRidge() {
   }, []);
 
   return (
-    <span ref={anchor} aria-hidden className="pointer-events-none absolute inset-0 -z-10 hidden xl:block">
+    <span ref={anchor} aria-hidden className="pointer-events-none absolute inset-0 -z-10 hidden lg:block">
       {pos && <Ridge top={pos.top} right={pos.right} opacity={opacity} />}
     </span>
   );

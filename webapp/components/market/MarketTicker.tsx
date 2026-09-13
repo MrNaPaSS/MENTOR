@@ -274,8 +274,17 @@ export default function MarketTicker() {
       // Прочитать цену бегущей пары нельзя, а нажать на неё - тем более: к
       // моменту нажатия под курсором уже соседняя. Пауза на всю строку, а не
       // на одну пару: остановить надо ленту, по которой ведут курсор.
-      onMouseEnter={() => hold(true)}
-      onMouseLeave={() => hold(false)}
+      //
+      // Только под мышью. Safari на iPad перед тапом присылает поддельный
+      // mouseenter, и остановка ленты в нём - видимая перемена - заставляла его
+      // считать первое касание наведением: click не приходил, и тап по паре
+      // никуда не вёл. Палец и так не ведёт по строке, останавливать нечего.
+      onPointerEnter={(event) => {
+        if (event.pointerType === "mouse") hold(true);
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "mouse") hold(false);
+      }}
       style={{
         background: "var(--tick-bg)",
         borderColor: "var(--tick-line)",

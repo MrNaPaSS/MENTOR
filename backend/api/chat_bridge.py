@@ -21,6 +21,7 @@ import base64
 import binascii
 import json
 import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -37,6 +38,9 @@ logger = logging.getLogger("nmnh.forum")
 # Столько же, сколько принимает сам чат: сообщение из форума ничем не
 # отличается от написанного на сайте.
 MAX_TEXT = 2000
+
+# Адрес, который виден только изнутри стола.
+_LOOPBACK = re.compile(r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$", re.IGNORECASE)
 
 
 class ForumLink(BaseModel):
@@ -117,6 +121,14 @@ def _attach(body: ForumMessage, base: str) -> dict | None:
 
     # Полным адресом: картинку показывает браузер ученика, а сайт и снимки
     # живут на разных доменах - относительный путь он искал бы у себя.
+    #
+    # Бот стучится изнутри стола, на 127.0.0.1, и без SHOTS_BASE_URL адрес
+    # собирается из этого запроса: снаружи он не откроется. Сайт такой хост
+    # подменяет сам (lib/chat/assetUrl.ts), но причину надо видеть в логе.
+    if _LOOPBACK.match(base):
+        logger.warning(
+            "SHOTS_BASE_URL не задан: фото из форума записано с внутренним адресом %s", base
+        )
     url = f"{base}/{name}"
     return {"kind": "shot", "url": url, "image": url, "trade": None}
 

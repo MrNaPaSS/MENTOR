@@ -53,6 +53,8 @@ import {
   type SharedTrade,
 } from "@/lib/chat/store";
 import { preview, uploadPhoto, type LinkPreview } from "@/lib/chat/api";
+import { publicAsset } from "@/lib/chat/assetUrl";
+import { API_URL } from "@/lib/api";
 import { fromJournal } from "@/lib/chat/share";
 import { journalAvailable, loadTrades, type JournalTrade } from "@/lib/journal";
 import { firstLink, type LinkCard } from "@/lib/chat/link";
@@ -1202,10 +1204,10 @@ function Bubble({
         {/* Снимок открывается страницей на сайте: там подпись, монета и время,
             и там же его развернёт превью мессенджера. */}
         {message.attach?.kind === "shot" && (
-          <a href={message.attach.url} target="_blank" rel="noopener noreferrer">
+          <a href={publicAsset(message.attach.url, API_URL)} target="_blank" rel="noopener noreferrer">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={message.attach.image}
+              src={publicAsset(message.attach.image, API_URL)}
               alt=""
               className="mt-1.5 max-h-56 w-full rounded-lg object-cover"
             />

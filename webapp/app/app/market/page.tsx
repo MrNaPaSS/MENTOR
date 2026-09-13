@@ -77,16 +77,17 @@ const TABS: { key: Section; icon: React.ReactNode }[] = [
 
 // Раскладка по макету: сверху настроение, деньги за позиции и то, о чём
 // говорят; снизу цена биткоина со свечами, его сеть под баннером и колонка
-// оформления. На среднем экране - по две панели в ряд, на узком - столбиком.
+// оформления. С планшета в горизонтали (lg) - та же сетка, что на мониторе;
+// уже - по две панели в ряд, на телефоне - столбиком.
 function PulseSection() {
   const t = useT();
   return (
-    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-12">
-      <FearGreedPane className="xl:col-span-5" />
-      <FundingPane className="xl:col-span-4" />
-      <TrendingPane className="xl:col-span-3" />
-      <BitcoinPane part="price" className="xl:col-span-5" />
-      <div className="flex flex-col gap-3 xl:col-span-3">
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-12">
+      <FearGreedPane className="lg:col-span-5" />
+      <FundingPane className="lg:col-span-4" />
+      <TrendingPane className="lg:col-span-3" />
+      <BitcoinPane part="price" className="lg:col-span-5" />
+      <div className="flex flex-col gap-3 lg:col-span-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/art/market/bitcoin-leads.webp"
@@ -95,7 +96,7 @@ function PulseSection() {
         />
         <BitcoinPane part="network" className="flex-1" />
       </div>
-      <PulsePromo className="xl:col-span-4" />
+      <PulsePromo className="lg:col-span-4" />
     </div>
   );
 }
@@ -111,11 +112,16 @@ function PulseSection() {
 /** Высота шапки панели, пока её не измерили: две строки текста и отступы. */
 const PANE_HEAD = 46;
 
+/** С этой ширины секция подгоняется под окно: планшет в горизонтали и шире. */
+const TABLET_WIDE = 1024;
+
 function MapsSection() {
   const t = useT();
   // Карты - последняя секция раздела, и она должна кончаться внизу окна:
   // тепловая карта с прокруткой страницы читается плохо, её смотрят целиком.
-  const { ref, height, head, wide } = useFitHeight(420);
+  // С 1024: планшет в горизонтали смотрит карты так же, как монитор, - рядом и
+  // во всю высоту окна.
+  const { ref, height, head, wide } = useFitHeight(420, TABLET_WIDE);
   // Пока шапку не измерили, берём ожидаемую: две строки текста и отступы.
   const headSize = head || PANE_HEAD;
   // Минус два: столько чужой виджет добавляет к заданной высоте своей рамкой,
@@ -123,8 +129,8 @@ function MapsSection() {
   const widget = Math.max(260, Math.round(height - headSize) - 2);
 
   return (
-    <div ref={ref} className="grid gap-3 xl:grid-cols-3">
-      <HeatmapPane className="xl:col-span-2" height={wide ? widget : 520} />
+    <div ref={ref} className="grid gap-3 lg:grid-cols-3">
+      <HeatmapPane className="lg:col-span-2" height={wide ? widget : 520} />
       <EtfFlowsPane height={wide ? widget : undefined} />
     </div>
   );
@@ -135,8 +141,8 @@ function MapsSection() {
 function CalendarSection() {
   // Календарь - последняя секция раздела, и она должна кончаться внизу окна:
   // события за неделю читают целиком, а не листая страницу.
-  const { ref, height, head, wide } = useFitHeight(420);
-  const body = Math.max(320, Math.round(height - (head || PANE_HEAD)) - 26);
+  const { ref, height, head, wide } = useFitHeight(420, TABLET_WIDE);
+  const body =Math.max(320, Math.round(height - (head || PANE_HEAD)) - 26);
 
   return (
     <div ref={ref}>

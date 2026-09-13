@@ -45,13 +45,16 @@ function Cell({
   }[tone];
   return (
     <div
-      className="flex min-w-0 items-center gap-3 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-3.5 py-2 transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-16px_rgba(0,0,0,0.45)]"
+      // На планшете в горизонтали пять карточек по двести с небольшим точек:
+      // значок, число и изменение за сутки в них не помещались, и капитализация
+      // обрезалась до «$2.6…». Там всё на ступень мельче, на мониторе - как было.
+      className="flex min-w-0 items-center gap-2 rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] px-2.5 py-2 transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-16px_rgba(0,0,0,0.45)] xl:gap-3 xl:px-3.5"
       title={hint}
     >
-      <span className="grid h-10 w-10 shrink-0 place-items-center">{icon}</span>
+      <span className="grid h-8 w-8 shrink-0 place-items-center [&>*]:max-h-full [&>*]:max-w-full xl:h-10 xl:w-10">{icon}</span>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[11px] text-[var(--pane-muted)]">{label}</div>
-        <div className={`truncate font-mono text-[20px] font-bold leading-tight tabular-nums ${color}`}>{value}</div>
+        <div className={`truncate font-mono text-[17px] font-bold leading-tight tabular-nums xl:text-[20px] ${color}`}>{value}</div>
       </div>
       {change !== undefined && Number.isFinite(change) && (
         <span

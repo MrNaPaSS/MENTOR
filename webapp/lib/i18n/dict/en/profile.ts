@@ -23,6 +23,8 @@ export const profile = {
   install: "App",
   installAction: "Install to desktop",
   installHint: "The cabinet opens in its own window, without tabs or an address bar",
+  installApple: "In Safari tap Share, then Add to Home Screen",
+  installManual: "Open the browser menu and choose Install app or Add to Home screen",
   sound: "Event sounds",
   cardName: "Name on the card",
   cardNamePlaceholder: "as in Telegram",
