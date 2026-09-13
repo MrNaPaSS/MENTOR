@@ -93,13 +93,42 @@ def test_password_is_not_stored_as_is(app):
         assert row.code_hash == hashlib.sha256(plain.encode()).hexdigest()
 
 
-def test_without_uid_it_is_a_bot_error(app):
+def test_a_student_without_a_weex_account_still_gets_the_password(app):
+    """Номер счёта WEEX больше не обязателен.
+
+    Ученик приходит с OKX или BingX, и требовать у него номер на WEEX значит не
+    пустить его в кабинет вовсе. Опознаётся он по Telegram.
+    """
     answer = app.post(
         "/api/auth/tg/code",
         headers={"X-Service-Key": KEY},
-        json={"tg_id": 111, "weex_uid": "   ", "username": ""},
+        json={"tg_id": 111, "weex_uid": "   ", "username": "без_вееха"},
     )
-    assert answer.status_code in (400, 422)
+    assert answer.status_code == 200
+    assert answer.json()["code"]
+
+
+def test_an_empty_uid_does_not_catch_someone_elses_account(app):
+    """Пустой номер не должен находить первого попавшегося ученика без номера."""
+    first = app.post(
+        "/api/auth/tg/code",
+        headers={"X-Service-Key": KEY},
+        json={"tg_id": 222, "weex_uid": "", "username": "первый"},
+    )
+    second = app.post(
+        "/api/auth/tg/code",
+        headers={"X-Service-Key": KEY},
+        json={"tg_id": 333, "weex_uid": "", "username": "второй"},
+    )
+    assert first.status_code == second.status_code == 200
+
+    with SessionLocal() as session:
+        names = {
+            s.tg_id: s.username
+            for s in session.execute(select(Student)).scalars()
+            if s.tg_id in (222, 333)
+        }
+    assert names == {222: "первый", 333: "второй"}
 
 
 def test_a_stranger_key_gets_nothing(app):

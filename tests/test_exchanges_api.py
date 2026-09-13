@@ -95,13 +95,28 @@ def test_showcase_lists_venues_and_their_state(api):
     assert okx["connected"] is False
 
 
-def test_showcase_does_not_promise_unconfirmed_terms(api):
-    """Скидка академии и кешбэк не выдуманы: условий нет - стоит пусто."""
+def test_showcase_does_not_promise_a_rate_nobody_confirmed(api):
+    """Сниженной ставки биржи не называли - на витрине её нет."""
     client, *_ = api
     body = client.get("/api/exchanges").json()
     for venue in body["venues"]:
         assert venue["academy_taker"] is None
-        assert venue["cashback"] is None
+
+
+def test_cashback_matches_what_the_academy_promises(api):
+    """Доля возврата - та же, что ученик прочитал в боте академии.
+
+    Человек видит цифру сначала там, потом здесь: расхождение он заметит первым
+    же делом, и дороже всего оно обойдётся именно на деньгах.
+    """
+    client, *_ = api
+    rows = {v["exchange"]: v["cashback"] for v in client.get("/api/exchanges").json()["venues"]}
+    assert rows["weex"] == 0.15
+    assert rows["okx"] == 0.10
+    assert rows["bingx"] == 0.10
+    # Биржам, куда академия никого не звала, обещать нечего.
+    assert rows["bybit"] is None
+    assert rows["binance"] is None
 
 
 def test_oauth_is_not_offered_until_the_broker_id_arrives(api, monkeypatch):

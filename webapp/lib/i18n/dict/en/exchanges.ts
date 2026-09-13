@@ -26,14 +26,17 @@ export const exchanges = {
   terms: {
     taker: "taker",
     maker: "maker",
-    academy: "via academy",
-    cashback: "cashback",
+    academy: "academy rate",
+    cashback: "fee returned",
     unknown: "terms being agreed",
-    note: "Reference rates for tier zero. Yours is derived from your own trades and always wins over the reference one.",
+    note:
+      "Reference rates for tier zero: yours is derived from your own trades and always wins. " +
+      "The returned fee lands on your exchange account and applies when you registered through the academy " +
+      "and trade in the terminal - the same numbers you saw in the academy bot.",
   },
 
   access: {
-    academy: "Opened through the academy: lower fees and cashback.",
+    academy: "Opened through the academy: part of the fee comes back to it.",
     own: "Your own account: the terminal works, academy terms do not apply.",
     uid: (uid: string) => `Account ${uid}`,
     confirmed: (uids: string) => `Confirmed by the academy: ${uids}`,

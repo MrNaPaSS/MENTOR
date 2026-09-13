@@ -244,12 +244,16 @@ function VenueCard({
         </div>
       </div>
 
-      {/* Условия. Пусто - так и пишем: «уточняются». */}
+      {/* Условия. Пусто - так и пишем: «уточняются».
+
+          Сниженную ставку биржи пока не называли, и пустая строка рядом с
+          живым числом возврата читается как противоречие - поэтому её видно
+          только тогда, когда она есть. */}
       <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[12px] tabular-nums">
         <Row label={d.terms.taker} value={taker} fallback={d.terms.unknown} />
         <Row label={d.terms.maker} value={maker} fallback={d.terms.unknown} />
-        <Row label={d.terms.academy} value={academy} fallback={d.terms.unknown} />
         <Row label={d.terms.cashback} value={cashback} fallback={d.terms.unknown} />
+        {academy && <Row label={d.terms.academy} value={academy} fallback={d.terms.unknown} />}
       </div>
 
       {/* Свой счёт: подключён ли, чем и каким номером. */}

@@ -355,9 +355,9 @@ async def tg_code(
     его. Ученик нажал кнопку дважды - он ждёт один пароль, а не гадает, какой из
     двух рабочий.
     """
+    # Номер счёта WEEX теперь необязателен: ученик приходит и с OKX, и с BingX,
+    # а опознаётся по Telegram. Прислали номер - свяжем и его.
     uid = _uid(body.weex_uid)
-    if not uid:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен weex_uid")
 
     # Счёт выдач - по ученику, а не по адресу: ходит бот, и адрес у всех
     # запросов один. Ограничитель живёт на приложении, а не на функции: на
@@ -373,10 +373,11 @@ async def tg_code(
     # выдаём: связь с ней рвётся, а вход из-за этого падать не должен, и
     # отметки бота в этом случае достаточно.
     referral = False
-    try:
-        referral = await weex.get_affiliate_balance(uid) is not None
-    except Exception as exc:  # noqa: BLE001 - причина в журнале, вход важнее
-        logger.warning("UID %s при выдаче пароля не проверен: %s", uid, exc)
+    if uid:
+        try:
+            referral = await weex.get_affiliate_balance(uid) is not None
+        except Exception as exc:  # noqa: BLE001 - причина в журнале, вход важнее
+            logger.warning("UID %s при выдаче пароля не проверен: %s", uid, exc)
 
     # Ученика заводим и связываем сразу, а не при вводе: тогда пароль,
     # доехавший до сайта, уже находит кого впустить, и связка UID с Telegram
@@ -473,14 +474,17 @@ def _link_student(session, tg_id: int, weex_uid: str, username: str):
     """
     from core.models import Student as StudentModel
 
-    student = repo.get_student_by_weex_uid(session, weex_uid)
+    # Номера счёта может не быть вовсе: ученик пришёл с OKX или BingX. Искать
+    # по пустой строке нельзя - так находится первый попавшийся ученик без
+    # номера, и пароль уходит чужому кабинету.
+    student = repo.get_student_by_weex_uid(session, weex_uid) if weex_uid else None
     if student is None:
         student = session.query(StudentModel).filter(StudentModel.tg_id == tg_id).one_or_none()
 
     if student is None:
         student = StudentModel(
             tg_id=tg_id,
-            weex_uid=weex_uid,
+            weex_uid=weex_uid or None,
             username=username or None,
             created_via="academy",
         )

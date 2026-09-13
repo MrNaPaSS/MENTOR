@@ -9,6 +9,11 @@
 Ходит сервер академии, а не браузер, поэтому проверка та же, что у начисления
 монет: общий секрет в заголовке `X-Service-Key`.
 
+Биржи здесь принимаются шире, чем в подключении ключей: академия приводит
+учеников на BingX раньше, чем у нас появится её адаптер. Отказать ей значит
+потерять подтверждение, а ученику - остаться «своим» на бирже, куда его привела
+академия. Торговать на такой бирже всё равно нельзя - это решает `KEY_EXCHANGES`.
+
 Список по каждой названной бирже заменяется целиком: академия знает, какие
 счета подтверждены сейчас, и отозванный UID должен исчезать, а не копиться.
 Биржи, которых в запросе нет, не трогаем - академия могла прислать только часть.
@@ -30,7 +35,7 @@ from sqlalchemy import select
 from backend.api.coins import find_or_create_student, require_service_key
 from backend.deps import get_session
 from backend.trading.accounts import access_kind, accounts_of, confirmed_uids
-from core.exchanges import exchange_code
+from core.exchanges import known_exchange
 from core.models import AcademyUid, utcnow
 from core.weex.uid import clean_uid
 
@@ -88,12 +93,12 @@ def confirm(body: UidsIn, session=Depends(get_session)):
 
     wanted: dict[str, set[str]] = {}
     for name in body.exchanges:
-        code = exchange_code(name)
+        code = known_exchange(name)
         if not code:
             raise HTTPException(422, f"Биржа {name} нам неизвестна")
         wanted.setdefault(code, set())
     for item in body.items:
-        code = exchange_code(item.exchange)
+        code = known_exchange(item.exchange)
         if not code:
             raise HTTPException(422, f"Биржа {item.exchange} нам неизвестна")
         uid = clean_uid(item.uid)
@@ -102,7 +107,7 @@ def confirm(body: UidsIn, session=Depends(get_session)):
         wanted.setdefault(code, set()).add(uid)
 
     when = {
-        (exchange_code(item.exchange), clean_uid(item.uid)): item.confirmed_at
+        (known_exchange(item.exchange), clean_uid(item.uid)): item.confirmed_at
         for item in body.items
     }
 

@@ -16,6 +16,7 @@ TITLES: dict[str, str] = {
     "weex": "WEEX Futures",
     "binance": "Binance Futures",
     "okx": "OKX Futures",
+    "bingx": "BingX Futures",
     "bybit": "Bybit Futures",
     "bitget": "Bitget Futures",
 }
@@ -24,7 +25,26 @@ TITLES: dict[str, str] = {
 KEYS_EXCHANGE = "weex"
 
 # Биржи, ключи которых ученик может подключить. Порядок - порядок в интерфейсе.
+#
+# Здесь только те, у кого есть торговый адаптер: подключить ключи биржи, на
+# которую нечем поставить заявку, значит соврать ученику.
 KEY_EXCHANGES: tuple[str, ...] = ("weex", "okx")
+
+# Биржи, которые мы вообще знаем по имени. Шире предыдущего списка: академия
+# подтверждает счёт на бирже раньше, чем у нас появляется её адаптер, и
+# отказывать ей в этом нельзя - иначе подтверждение потеряется, а ученик
+# окажется «своим» на бирже, куда его привела академия.
+KNOWN_EXCHANGES: tuple[str, ...] = ("weex", "okx", "bingx", "bybit", "bitget", "binance")
+
+
+def known_exchange(code: str | None) -> str:
+    """Код любой знакомой биржи, торгуем мы на ней или ещё нет.
+
+    Для подтверждений академии и витрины. Для ключей и заявок - `exchange_code`:
+    там список уже, и это разные вопросы.
+    """
+    value = (code or "").strip().lower()
+    return value if value in KNOWN_EXCHANGES else ""
 
 
 def title_of(code: str | None) -> str:
