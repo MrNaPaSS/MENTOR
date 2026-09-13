@@ -98,6 +98,22 @@ class MarketHub:
     def collector(self, exchange: str | None) -> Any | None:
         return self._collectors.get(_code(exchange))
 
+    def listed(self, exchange: str | None) -> frozenset[str] | None:
+        """Монеты биржи, какие знаем прямо сейчас. `None` - не знаем.
+
+        Спрашивается на каждой рассылке скринера, поэтому без сети: справочник
+        инструментов сборщик держит у себя и обновляет сам. Пустого ответа нет
+        намеренно - «мы ещё не спросили» и «биржа таких монет не торгует» это
+        разные вещи, и вторую нельзя показывать вместо первой: ученик увидел бы
+        весь список помеченным как чужой.
+        """
+        collector = self._collectors.get(_code(exchange))
+        known = getattr(collector, "listed_symbols", None)
+        if known is None:
+            return None
+        symbols = known()
+        return frozenset(symbols) if symbols else None
+
     def _ensure(self, exchange: str) -> Any | None:
         """Поднять сборщик биржи, если он ещё не заведён.
 

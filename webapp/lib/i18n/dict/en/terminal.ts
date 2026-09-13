@@ -514,6 +514,10 @@ export const domScreener = {
   star: "Add to favourites",
   hasPosition: "There's an open position on this coin",
   hasOrder: "An order is waiting on this coin",
+  notOnVenue: (venue: string) =>
+    venue
+      ? `${venue.toUpperCase()} does not list this coin: the book will be the shared one, and no trade can be placed`
+      : "Your exchange does not list this coin: the book will be the shared one, and no trade can be placed",
   buysPct: (pct: string) => `${pct}% buys`,
   sortLabels: {
     walls: "Walls",

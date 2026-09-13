@@ -537,6 +537,10 @@ export const domScreener = {
   star: "В избранное",
   hasPosition: "По этой монете открыта позиция",
   hasOrder: "По этой монете ждёт заявка",
+  notOnVenue: (venue: string) =>
+    venue
+      ? `Этой монеты нет на ${venue.toUpperCase()}: стакан будет общий, сделку не поставить`
+      : "Этой монеты нет на вашей бирже: стакан будет общий, сделку не поставить",
   buysPct: (pct: string) => `${pct}% покупок`,
   sortLabels: {
     walls: "Плиты",

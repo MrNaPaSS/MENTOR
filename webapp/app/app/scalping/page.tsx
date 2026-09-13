@@ -838,7 +838,7 @@ export default function ScalpingPage() {
   // Счёта нет - общая книга, как и было до мультибиржи.
   const venue = exchange?.connected ? exchange.active || exchange.exchange || "" : "";
 
-  const { screener, dom, connected } = useScalpingFeed({
+  const { screener, absent, dom, connected } = useScalpingFeed({
     symbol,
     exchange: venue,
     rows: shownRows,
@@ -3315,6 +3315,8 @@ export default function ScalpingPage() {
               state={tradeState}
               favorites={starred}
               onToggleFavorite={toggleFavorite}
+              absent={absent}
+              venue={venue}
               sort={sort}
               onSort={setSort}
               onSelect={(next) => {

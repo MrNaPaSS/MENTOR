@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import pytest
 
+from dataclasses import dataclass
+
 from backend.scalping.market_hub import MarketHub
 from backend.scalping.okx import checksum
 from backend.scalping.okx_collector import OkxCollector, RawBook, top_symbols
@@ -248,6 +250,9 @@ class FakeCollector:
     async def supports(self, symbol: str) -> bool:
         return self._known is None or symbol in self._known
 
+    def listed_symbols(self) -> frozenset[str]:
+        return frozenset(self._known or ())
+
 
 async def test_hub_gives_own_book_when_exchange_has_symbol():
     primary = FakeCollector("binance")
@@ -293,3 +298,64 @@ async def test_hub_unpins_on_the_same_exchange():
     await hub.unpin("okx", "BTCUSDT")
     assert okx.unpinned == ["BTCUSDT"]
     assert primary.unpinned == []
+
+
+# ── чужие монеты в скринере ─────────────────────────────────────────────────
+#
+# Список монет идёт с Binance: там все монеты и самый живой объём. Торгует
+# ученик у себя, и монету, которой его биржа не знает, до сих пор выдавала
+# только подменённая книга после нажатия. Теперь она помечена в списке.
+
+
+async def test_hub_tells_which_symbols_the_exchange_lists():
+    okx = FakeCollector("okx", {"BTCUSDT", "ETHUSDT"})
+    hub = MarketHub(FakeCollector("binance"), {"okx": lambda: okx})
+    await hub.pin("okx", "BTCUSDT")
+
+    assert hub.listed("okx") == frozenset({"BTCUSDT", "ETHUSDT"})
+
+
+async def test_hub_says_nothing_until_the_feed_is_up():
+    """Сборщик не заведён - состава не знаем. Это не «монет нет»."""
+    hub = MarketHub(FakeCollector("binance"), {"okx": lambda: FakeCollector("okx", {"BTCUSDT"})})
+
+    assert hub.listed("okx") is None
+
+
+async def test_empty_reference_is_not_an_answer():
+    """Справочник ещё не пришёл: пометить весь список чужим хуже, чем молчать."""
+    okx = FakeCollector("okx", set())
+    hub = MarketHub(FakeCollector("binance"), {"okx": lambda: okx})
+    await hub.pin("okx", "BTCUSDT")
+
+    assert hub.listed("okx") is None
+
+
+
+
+def test_screener_frame_marks_what_the_exchange_does_not_list():
+    from backend.ws.scalping_hub import ScalpingHub
+
+    class State:
+        def rows(self, sort: str):
+            return [_Row("BTCUSDT"), _Row("PEPEUSDT")]
+
+    class Collector:
+        state = State()
+
+    okx = FakeCollector("okx", {"BTCUSDT"})
+    hub = ScalpingHub(Collector(), MarketHub(Collector(), {"okx": lambda: okx}))
+    hub.market._ensure("okx")
+
+    frame = hub._screener_frame("walls", "okx")
+    assert frame["absent"] == ["PEPEUSDT"]
+    assert frame["exchange"] == "okx"
+    # Без биржи ученика пометки нет вовсе: помечать нечем и незачем.
+    assert "absent" not in hub._screener_frame("walls", "")
+
+
+@dataclass
+class _Row:
+    """Строка скринера ровно в том объёме, в каком её читает кадр."""
+
+    symbol: str

@@ -194,17 +194,20 @@ class ScalpingHub:
         # Кадр одинаков для всех, кто смотрит одно и то же, — считаем по разу.
         # Десять человек на биткойне с одинаковыми настройками это один расчёт
         # лестницы за такт, а не десять: собрать стакан дороже, чем отправить.
-        screener_cache: dict[str, dict] = {}
+        # Ключ - пара «сортировка и биржа ученика»: список один и тот же, а
+        # пометка чужих монет у каждой биржи своя.
+        screener_cache: dict[tuple[str, str], dict] = {}
         dom_cache: dict[tuple[str, str, int, int, float, str, int], dict | None] = {}
         dead: list[object] = []
 
         for ws, sub in targets:
             try:
                 if with_screener and sub.screener:
-                    frame = screener_cache.get(sub.sort)
+                    key = (sub.sort, sub.asked)
+                    frame = screener_cache.get(key)
                     if frame is None:
-                        frame = self._screener_frame(sub.sort)
-                        screener_cache[sub.sort] = frame
+                        frame = self._screener_frame(sub.sort, sub.asked)
+                        screener_cache[key] = frame
                     await ws.send_json({"event": "screener", "payload": frame})
                 if sub.symbol:
                     key = (
@@ -229,9 +232,24 @@ class ScalpingHub:
         for ws in dead:
             await self.disconnect(ws)
 
-    def _screener_frame(self, sort: str) -> dict:
+    def _screener_frame(self, sort: str, asked: str = "") -> dict:
+        """Список монет и те из них, которых нет на бирже ученика.
+
+        Сам список идёт с Binance: там все монеты и самый живой объём. Но
+        торгует ученик на своей бирже, и монета, которой у неё нет, до сих пор
+        выдавала себя только после нажатия - подменённой книгой. Честнее
+        сказать это в самом списке.
+
+        Пометки нет, пока справочник биржи не пришёл: пустой ответ означал бы,
+        что чужой у нас весь список.
+        """
         rows = self.collector.state.rows(sort=sort)[:SCREENER_LIMIT]
-        return {"sort": sort, "rows": [asdict(r) for r in rows]}
+        frame = {"sort": sort, "rows": [asdict(r) for r in rows]}
+        listed = self.market.listed(asked) if asked and asked != PRIMARY else None
+        if listed is not None:
+            frame["exchange"] = asked
+            frame["absent"] = [r.symbol for r in rows if r.symbol not in listed]
+        return frame
 
     def _dom_frame(self, sub: Subscription) -> dict | None:
         market = self.market.state_of(sub.venue or PRIMARY)

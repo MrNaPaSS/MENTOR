@@ -231,6 +231,16 @@ class OkxCollector:
         specs = await self.specs()
         return inst_id(symbol) in specs
 
+    def listed_symbols(self) -> frozenset[str]:
+        """Монеты биржи из уже загруженного справочника, без запроса к ней.
+
+        Нужно скринеру: список монет приходит с Binance, а торгует ученик на
+        своей бирже, и монету, которой у неё нет, честнее пометить в списке, а
+        не показывать пустой стакан после нажатия. Справочник ещё не пришёл -
+        пусто: пометить весь список чужим хуже, чем не пометить ничего.
+        """
+        return frozenset(symbol_of(inst) for inst in self._specs)
+
     def _spec(self, inst: str) -> Instrument | None:
         return self._specs.get(inst)
 

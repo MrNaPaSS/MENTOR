@@ -210,6 +210,10 @@ export function useScalpingFeed({
   foot,
 }: Options) {
   const [screener, setScreener] = useState<ScreenerRow[]>([]);
+  // Монеты, которых нет на бирже ученика. Список идёт с Binance, торгует он у
+  // себя: монета, которой у его биржи нет, до сих пор выдавала себя только
+  // после нажатия - подменённой книгой.
+  const [absent, setAbsent] = useState<ReadonlySet<string>>(new Set());
   const [dom, setDom] = useState<DomFrame | null>(null);
   const [connected, setConnected] = useState(false);
 
@@ -270,8 +274,11 @@ export function useScalpingFeed({
           return;
         }
         if (message.event === "screener") {
-          const payload = message.payload as { rows: ScreenerRow[] };
+          const payload = message.payload as { rows: ScreenerRow[]; absent?: string[] };
           setScreener(payload.rows ?? []);
+          // Поля нет вовсе, пока сервер не знает состава биржи: пометить весь
+          // список чужим хуже, чем не пометить ничего.
+          setAbsent(new Set(payload.absent ?? []));
           try {
             sessionStorage.setItem(SCREENER_CACHE, JSON.stringify(payload.rows ?? []));
           } catch {
@@ -319,7 +326,7 @@ export function useScalpingFeed({
     send({ action: "foot", time: foot });
   }, [foot, send]);
 
-  return { screener, dom, connected };
+  return { screener, absent, dom, connected };
 }
 
 // ── форматирование чисел ────────────────────────────────────────────────────

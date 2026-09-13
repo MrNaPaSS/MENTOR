@@ -78,16 +78,29 @@ async def screener(
     request: Request,
     sort: str = Query(DEFAULT_SORT, description=f"Одно из: {', '.join(SORT_KEYS)}"),
     limit: int = Query(50, ge=1, le=200),
+    exchange: str | None = Query(None, description="Биржа ученика: чужие монеты будут помечены"),
 ) -> dict[str, Any]:
-    """Список монет с метриками скальпинга, отсортированный по выбранному полю."""
+    """Список монет с метриками скальпинга, отсортированный по выбранному полю.
+
+    Список один на всех и собирается с Binance: там все монеты и самый живой
+    объём. `exchange` добавляет к нему `absent` - монеты, которых на бирже
+    ученика нет: стакан по ним будет общий, а сделку не поставить. Состав биржи
+    ещё не известен - поля нет вовсе, помечать весь список чужим нельзя.
+    """
     collector = get_collector(request)
     rows = collector.state.rows(sort=sort)[:limit]
-    return {
+    body = {
         "sort": sort if sort in SORT_KEYS else DEFAULT_SORT,
         "band_bp": BAND_BP,
         "count": len(rows),
         "rows": [asdict(r) for r in rows],
     }
+    code = (exchange or "").strip().lower()
+    listed = get_market(request).listed(code) if code and code != PRIMARY else None
+    if listed is not None:
+        body["exchange"] = code
+        body["absent"] = [r.symbol for r in rows if r.symbol not in listed]
+    return body
 
 
 def tool_rights(
