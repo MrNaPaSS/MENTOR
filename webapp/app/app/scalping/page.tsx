@@ -3730,6 +3730,17 @@ export default function ScalpingPage() {
                 <span className="text-[12px] font-semibold text-[var(--pane-text)]">
                   {base(symbol)}
                 </span>
+                {/* Биржа, на которую уйдёт заявка. Счетов у ученика может быть
+                    несколько, и знать, где исполнится нажатие, он должен, не
+                    вспоминая, что выбрал час назад. */}
+                {exchange?.connected && exchange.exchange && (
+                  <span
+                    title={t.terminal.venue}
+                    className="rounded bg-[var(--pane-hover)] px-1 text-[10px] uppercase tracking-wide text-[var(--pane-muted)]"
+                  >
+                    {exchange.exchange}
+                  </span>
+                )}
                 <span className="text-[var(--pane-text-2)]">
                   {dom ? fmtPrice(dom.mid, dom.tick) : "-"}
                 </span>

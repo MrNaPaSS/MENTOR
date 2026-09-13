@@ -384,6 +384,11 @@ export default function JournalPanel({
                       </span>{" "}
                       <span className="text-[10px] text-[var(--pane-muted)]">
                         ×{row.leverage} · {t.journal.reasons[row.outcome]}
+                        {/* Где сделка была открыта: биржи считаются порознь, и
+                            строка без биржи в общем списке ни о чём не говорит. */}
+                        {row.exchange && (
+                          <span className="ml-1 uppercase tracking-wide">{row.exchange}</span>
+                        )}
                       </span>
                     </td>
                     <td className="text-[var(--pane-text-2)]">{row.entry}</td>

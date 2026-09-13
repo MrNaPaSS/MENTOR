@@ -52,6 +52,7 @@ export const terminal = {
   soundOff: "Sound is off",
   exchangeConnected: (tail: string) => `Exchange connected (${tail})`,
   connectExchange: "Connect an exchange account",
+  venue: "Orders go to this exchange - its account is the active one",
   journalTitle: "Trade journal",
   chatWidth: "Chat width · double click resets",
   expandChat: "Open chat",
