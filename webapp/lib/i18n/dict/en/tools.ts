@@ -32,7 +32,7 @@ export const tools = {
   leaderboard: {
     badge: "Updated in real time",
     eyebrow: "Leaderboard",
-    title: "NMNH traders leaderboard",
+    title: "The platform's best traders",
     subtitle: "Real results from students trading the signals. The top 3 are marked with medals.",
     disclaimer: "These results reflect the trading of specific students and do not guarantee future returns.",
     heading: "Leaderboard",

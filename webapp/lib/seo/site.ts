@@ -36,7 +36,6 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   { path: "/community", priority: 0.8, changeFrequency: "monthly" },
   { path: "/journal", priority: 0.8, changeFrequency: "monthly" },
   { path: "/calculator", priority: 0.7, changeFrequency: "monthly" },
-  { path: "/leaderboard", priority: 0.6, changeFrequency: "daily" },
 ] as const;
 
 /** Разделы, закрытые от обхода: личный кабинет, вход, админка, загрузки. */
