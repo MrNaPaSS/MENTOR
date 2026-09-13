@@ -179,6 +179,42 @@ def test_weex_account_is_matched_by_the_student_uid(api, monkeypatch):
     assert body["access"] == "academy"
 
 
+def test_academy_revokes_the_last_account_of_an_exchange(api):
+    """Отзыв последнего счёта: биржа названа, счетов по ней нет.
+
+    Пустым списком сказать это нельзя - он ничего не называет, а молчание
+    означает «академия прислала только часть». Поэтому биржа называется прямо.
+    """
+    client, session, _, monkeypatch = api
+    confirm(client, [{"exchange": "okx", "uid": "551122"}])
+    okx(monkeypatch, "551122")
+    client.put("/api/trading/keys", json={**KEYS, "exchange": "okx"})
+
+    body = client.post(
+        "/api/service/exchange-uids",
+        json={"tg_id": 77, "items": [], "exchanges": ["okx"]},
+        headers=HEADERS,
+    ).json()
+    assert body["removed"] == 1
+
+    # Счёт остаётся подключённым, но становится своим: условий академии нет.
+    row = session.execute(
+        select(ExchangeAccount).where(ExchangeAccount.exchange == "okx")
+    ).scalar_one()
+    assert row.access == "own"
+    assert row.is_active is True
+
+
+def test_unknown_exchange_in_the_revocation_is_refused(api):
+    client, *_ = api
+    answer = client.post(
+        "/api/service/exchange-uids",
+        json={"tg_id": 77, "items": [], "exchanges": ["гдетотам"]},
+        headers=HEADERS,
+    )
+    assert answer.status_code == 422
+
+
 def test_revoking_the_confirmation_moves_the_account_to_his_own(api):
     client, session, _, monkeypatch = api
     confirm(client, [{"exchange": "okx", "uid": "551122"}])

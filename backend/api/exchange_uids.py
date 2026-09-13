@@ -12,6 +12,10 @@
 Список по каждой названной бирже заменяется целиком: академия знает, какие
 счета подтверждены сейчас, и отозванный UID должен исчезать, а не копиться.
 Биржи, которых в запросе нет, не трогаем - академия могла прислать только часть.
+
+Отсюда и поле `exchanges`: сказать «по WEEX у ученика больше нет подтверждённых
+счетов» списком счетов нельзя - пустой список ничего не называет. Биржи из
+`exchanges` очищаются, даже если ни одного счёта по ним не пришло.
 """
 
 from __future__ import annotations
@@ -51,6 +55,10 @@ class UidsIn(BaseModel):
     # Двадцати бирж у одного ученика не бывает; предел - от случайной петли на
     # стороне академии.
     items: list[UidIn] = Field(default_factory=list, max_length=20)
+    # Биржи, списки которых надо заменить целиком, даже если счетов по ним
+    # больше нет. Так академия отзывает подтверждение: без этого поля отзыв
+    # последнего счёта на бирже сказать нечем.
+    exchanges: list[str] = Field(default_factory=list, max_length=20)
 
 
 def _student_of(session, body: UidsIn):
@@ -79,6 +87,11 @@ def confirm(body: UidsIn, session=Depends(get_session)):
     student = _student_of(session, body)
 
     wanted: dict[str, set[str]] = {}
+    for name in body.exchanges:
+        code = exchange_code(name)
+        if not code:
+            raise HTTPException(422, f"Биржа {name} нам неизвестна")
+        wanted.setdefault(code, set())
     for item in body.items:
         code = exchange_code(item.exchange)
         if not code:
