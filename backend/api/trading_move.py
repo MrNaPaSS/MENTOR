@@ -35,6 +35,7 @@ from backend.api.trading import _fail, _get_session, _num, _require_client
 from backend.deps import get_current_student, get_session
 from backend.trading.watcher import (
     cancel_plan,
+    client_matches,
     mark_price,
     order_marks,
     plan_alive,
@@ -201,8 +202,9 @@ async def move_levels(
     if body.entry is None and body.stop is None and body.take is None:
         raise HTTPException(422, "Нечего переносить")
 
-    client = _require_client(session, student)
     live = _live(session, student, body)
+    # Двигаем на той бирже, где сделка открыта, а не на выбранной сейчас.
+    client = _require_client(session, student, live.exchange or None)
     tick = (await client.symbol_filters(live.symbol))["tick"]
 
     try:
@@ -218,7 +220,12 @@ async def move_levels(
         # где цель, и прежний стоп оставался висеть рядом с новым.
         market = mark_price(position)
         if market is None:
-            market = await public_price(await _get_session(), live.symbol)
+            own = getattr(client, "last_price", None)
+            market = (
+                await own(live.symbol)
+                if own
+                else await public_price(await _get_session(), live.symbol)
+            )
         result = await _move_open(client, live, body, tick, market, _siblings(session, live))
 
     live.updated_at = utcnow()
@@ -634,6 +641,6 @@ async def _entry_order(client: WeexFutures, live: LiveTrade) -> str:
         raise _fail(exc) from exc
     for order in orders:
         mark = str(order.get("clientOrderId") or order.get("clientOid") or "")
-        if mark.startswith(live.client_id):
+        if client_matches(mark, live.client_id):
             return str(order.get("orderId") or order.get("id") or "")
     return ""

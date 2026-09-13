@@ -44,7 +44,8 @@ from sqlalchemy import select
 import backend.config  # noqa: F401
 from backend.trading.rewards import award_trade_coins
 from core.db import SessionLocal, init_engine
-from core.models import ScalpTrade, WeexCredential, utcnow
+from backend.trading.accounts import account_for, client_for, trade_exchange
+from core.models import ScalpTrade, utcnow
 from core.weex import keys as keystore
 from core.weex.futures import Credentials, WeexFutures, WeexTradeError
 
@@ -96,9 +97,10 @@ async def recount(days: int, apply: bool, student: int | None) -> int:
             print("Запускать нужно там же, где работает бекенд, и с тем же .env.")
             return 0
 
-        by_student: dict[int, list[ScalpTrade]] = {}
+        # По ученику и бирже: исполнения сделки лежат на той бирже, где она шла.
+        by_student: dict[tuple[int, str], list[ScalpTrade]] = {}
         for one in trades:
-            by_student.setdefault(one.student_id, []).append(one)
+            by_student.setdefault((one.student_id, trade_exchange(one.exchange)), []).append(one)
 
         # Корневые сертификаты берём из certifi, а не из системного хранилища:
         # на Windows Python до него не достаёт, и запрос к бирже падает с
@@ -115,22 +117,15 @@ async def recount(days: int, apply: bool, student: int | None) -> int:
             async def http_session() -> aiohttp.ClientSession:
                 return http
 
-            for student_id, group in by_student.items():
-                row = session.execute(
-                    select(WeexCredential).where(WeexCredential.student_id == student_id)
-                ).scalar_one_or_none()
+            for (student_id, exchange), group in by_student.items():
+                row = account_for(session, student_id, exchange)
                 if row is None or not row.is_active:
-                    print(f"  ученик {student_id}: ключей нет, пропускаем {len(group)} сделок")
+                    print(
+                        f"  ученик {student_id}: ключей {exchange} нет, пропускаем {len(group)} сделок"
+                    )
                     continue
 
-                client = WeexFutures(
-                    Credentials(
-                        keystore.decrypt(row.api_key_enc),
-                        keystore.decrypt(row.secret_enc),
-                        keystore.decrypt(row.passphrase_enc),
-                    ),
-                    http_session,
-                )
+                client = client_for(row, http_session)
 
                 # Отчёт по инструменту берём один раз на всех: у одной монеты
                 # сделок за день бывает много, а окно исполнений общее.

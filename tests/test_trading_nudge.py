@@ -50,7 +50,7 @@ def watching(factory):
     watcher = PositionWatcher(factory, lambda: None)
     seen: list[tuple[int, list[str]]] = []
 
-    async def handle(_session, student_id, trades):
+    async def handle(_session, student_id, trades, exchange="weex"):
         seen.append((student_id, sorted(t.client_id for t in trades)))
 
     watcher._handle_student = handle

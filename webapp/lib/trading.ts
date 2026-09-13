@@ -11,13 +11,28 @@ import { readBook, type LivePosition, type PositionBook } from "./trade/exchange
 
 export type { LivePosition, PositionBook };
 
-export type TradingStatus = {
-  /** Хранилище ключей настроено на сервере. */
-  enabled: boolean;
-  /** Ключи этого ученика подключены. */
+/** Счёт ученика на одной бирже: подключён ли и каким ключом. */
+export type ExchangeAccount = {
+  /** Код биржи: weex, okx. */
+  exchange: string;
+  /** Подпись биржи: «OKX Futures». */
+  title: string;
   connected: boolean;
   key_tail: string;
   updated_at: string | null;
+};
+
+export type TradingStatus = {
+  /** Хранилище ключей настроено на сервере. */
+  enabled: boolean;
+  /** Ключи активного счёта подключены. */
+  connected: boolean;
+  key_tail: string;
+  updated_at: string | null;
+  /** Биржа, на которую уходят новые сделки. Пусто - счетов нет. */
+  active?: string;
+  /** Все биржи, к которым можно подключиться, с состоянием каждой. */
+  accounts?: ExchangeAccount[];
   /**
    * Ставка комиссии этого трейдера, доля от оборота одной ноги.
    *
@@ -47,19 +62,40 @@ export async function tradingStatus(): Promise<TradingStatus | null> {
   return body;
 }
 
-export function saveKeys(api_key: string, secret_key: string, passphrase: string) {
-  return request<{ ok: boolean; key_tail: string }>("/api/trading/keys", {
+export function saveKeys(
+  api_key: string,
+  secret_key: string,
+  passphrase: string,
+  exchange = "weex",
+) {
+  return request<{ ok: boolean; key_tail: string; exchange: string }>("/api/trading/keys", {
     method: "PUT",
-    body: JSON.stringify({ api_key, secret_key, passphrase }),
+    body: JSON.stringify({ api_key, secret_key, passphrase, exchange }),
   });
 }
 
-export function dropKeys() {
-  return request<{ ok: boolean }>("/api/trading/keys", { method: "DELETE" });
+/** Отключить счёт биржи. Без названия - активный. */
+export function dropKeys(exchange?: string) {
+  const query = exchange ? `?exchange=${encodeURIComponent(exchange)}` : "";
+  return request<{ ok: boolean }>(`/api/trading/keys${query}`, { method: "DELETE" });
 }
 
-export function balance() {
-  return request<{ balance: unknown }>("/api/trading/balance");
+/**
+ * Сменить биржу, на которую уходят новые сделки.
+ *
+ * Идущие сделки это не трогает: каждая ведётся на своей бирже.
+ */
+export function setActiveExchange(exchange: string) {
+  return request<{ ok: boolean; exchange: string }>("/api/trading/active", {
+    method: "PUT",
+    body: JSON.stringify({ exchange }),
+  });
+}
+
+/** Остаток на счёте биржи. Без названия - на активном. */
+export function balance(exchange?: string) {
+  const query = exchange ? `?exchange=${encodeURIComponent(exchange)}` : "";
+  return request<{ balance: unknown }>(`/api/trading/balance${query}`);
 }
 
 /**

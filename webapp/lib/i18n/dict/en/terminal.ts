@@ -250,10 +250,17 @@ export const dialogs = {
   exchange: {
     connectFailed: "Couldn't connect",
     disconnectFailed: "Couldn't disconnect",
-    title: "WEEX exchange account",
+    activeFailed: "Couldn't switch the exchange",
+    title: "Exchange accounts",
     keyTail: (tail: string) => `Key ${tail}`,
     canPlace: "Connect your API key to trade through the terminal",
     howTo: "Where to get the key - five steps with pictures →",
+    howToOther:
+      "Create the key in the API section of the exchange app: futures trading allowed, withdrawals off. You set the passphrase yourself when creating it.",
+    activeBadge: "active",
+    makeActive: "Place trades from this account",
+    activeNote:
+      "New trades go to this account. Trades opened on other exchanges are managed where they were opened.",
     unreachable:
       "Couldn't read the account state. Sign in - the trading section belongs to a student; if you already are signed in, the server is unavailable right now.",
     vaultOff:

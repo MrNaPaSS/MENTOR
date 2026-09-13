@@ -90,6 +90,10 @@ class Student(Base):
     # Откуда VIP: referral - выдан сервером рефералу, manual - решение
     # наставника, его автоматика не трогает. Пусто - ещё не решалось.
     vip_source: Mapped[str] = mapped_column(String(16), default="")
+    # С какой биржи терминал ставит новые сделки, когда подключено несколько.
+    # Пусто - с первой подключённой. Идущие сделки это не трогает: каждая
+    # ведётся на той бирже, где открыта (LiveTrade.exchange).
+    active_exchange: Mapped[str] = mapped_column(String(16), default="")
     # Право убирать записи из своего журнала. Выдаётся наставником поимённо и
     # по умолчанию закрыто: журнал - это статистика, по которой судят о
     # торговле, и возможность стереть из неё неудачную сделку обесценивает её
@@ -594,6 +598,34 @@ class WeexCredential(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ExchangeAccount(Base):
+    """Счёт ученика на одной бирже: зашифрованные ключи и их хвост.
+
+    По строке на пару «ученик и биржа» - подключить можно хоть все биржи сразу.
+    `WeexCredential` держал одну строку на ученика и вторую биржу вместить не
+    мог; его ключи переносятся сюда при старте (core/db.py) и дальше живут
+    только здесь.
+
+    Правила хранения прежние: мастер-ключ в окружении сервера, в базе
+    шифротекст, наружу уходит только хвост.
+    """
+
+    __tablename__ = "exchange_accounts"
+    __table_args__ = (UniqueConstraint("student_id", "exchange", name="uq_exchange_account"),)
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    # Код биржи: weex, okx (core/exchanges.py).
+    exchange: Mapped[str] = mapped_column(String(16), index=True)
+    api_key_enc: Mapped[str] = mapped_column(Text)
+    secret_enc: Mapped[str] = mapped_column(Text)
+    passphrase_enc: Mapped[str] = mapped_column(Text)
+    key_tail: Mapped[str] = mapped_column(String(8), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class LiveTrade(Base):
     """Сделка, которую сервер ведёт сам.
 
@@ -635,6 +667,11 @@ class LiveTrade(Base):
     # Сопровождение переносит стоп в безубыток после первой цели, и без этой
     # отметки оно возвращало руками поставленный стоп обратно своим расчётом.
     hand_stop: Mapped[int] = mapped_column(Integer, default=-1)
+    # Биржа, на которой открыта сделка. Пусто - записана до мультибиржи, то есть
+    # WEEX. Сопровождение, закрытие и перенос уровней идут ключом этой биржи, а
+    # не той, что сейчас выбрана в терминале: иначе стоп позиции OKX ушёл бы на
+    # WEEX.
+    exchange: Mapped[str] = mapped_column(String(16), default="")
     # Ордера целей: [{"price":..., "order_id":"...", "filled":false}, ...].
     # Исполнение узнаём опросом самих ордеров, а не по остатку позиции: биржа
     # знает исполненный объём точно, а остаток врёт на частичном исполнении.
@@ -772,4 +809,4 @@ class CashbackAccrual(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "LiveTrade", "JournalExport", "LeverageCap", "Entitlement", "Certificate", "CashbackProgram", "CashbackAccrual", "utcnow"]
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "ExchangeAccount", "LiveTrade", "JournalExport", "LeverageCap", "Entitlement", "Certificate", "CashbackProgram", "CashbackAccrual", "utcnow"]

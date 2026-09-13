@@ -176,9 +176,10 @@ def test_keys_are_stored_encrypted_and_never_returned(app_and_exchange, monkeypa
     ).json()
     assert body["key_tail"] == "…1234"
 
-    from core.models import WeexCredential
+    from core.models import ExchangeAccount
 
-    row = session.query(WeexCredential).one()
+    row = session.query(ExchangeAccount).one()
+    assert row.exchange == "weex"
     # В базе шифротекст, а не сам ключ.
     assert "key-1234" not in row.api_key_enc
     assert "secret-x" not in row.secret_enc
@@ -205,9 +206,9 @@ def test_bad_keys_are_rejected_before_saving(app_and_exchange, monkeypatch):
     )
     assert res.status_code == 400
 
-    from core.models import WeexCredential
+    from core.models import ExchangeAccount
 
-    assert session.query(WeexCredential).count() == 0
+    assert session.query(ExchangeAccount).count() == 0
 
 
 def test_open_sends_stop_together_with_entry(app_and_exchange):

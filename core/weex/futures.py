@@ -293,6 +293,9 @@ class WeexFutures:
     их столько, сколько учеников, — а живут они дольше самого запроса.
     """
 
+    # Код биржи: по нему сделка запоминает, где открыта (core/exchanges.py).
+    exchange = "weex"
+
     def __init__(
         self,
         creds: Credentials,
@@ -379,6 +382,10 @@ class WeexFutures:
     async def positions(self) -> list[dict]:
         data = await self._request("GET", ENDPOINTS["positions"])
         return data if isinstance(data, list) else []
+
+    async def last_price(self, symbol: str) -> float | None:
+        """Цена инструмента на этой бирже - та, от которой ставится стоп."""
+        return await public_price(await self._session_factory(), symbol)
 
     async def set_leverage(self, symbol: str, leverage: int, margin_coin: str = "USDT") -> Any:
         """Поставить плечо по монете - и в кросс-режиме, и в изолированном.

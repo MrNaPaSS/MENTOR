@@ -18,9 +18,9 @@ from typing import Any
 
 from sqlalchemy import select
 
-from core.models import Student, WeexCredential
+from backend.trading.accounts import accounts_of, active_account, client_for
+from core.models import Student
 from core.weex import keys as keystore
-from core.weex.futures import Credentials, WeexFutures
 
 logger = logging.getLogger("nmnh.trading")
 
@@ -64,27 +64,25 @@ def usdt_from(payload: Any) -> Decimal | None:
 
 
 def has_keys(session, student: Student) -> bool:
-    """Подключены ли у ученика рабочие ключи биржи."""
+    """Подключены ли у ученика рабочие ключи хоть одной биржи."""
     if not keystore.enabled():
         return False
-    row = session.execute(
-        select(WeexCredential).where(WeexCredential.student_id == student.id)
-    ).scalar_one_or_none()
-    return row is not None and bool(row.is_active)
+    return bool(accounts_of(session, student.id, connected_only=True))
 
 
 async def balance_by_keys(session, student: Student) -> Decimal | None:
     """Баланс по ключам ученика. `None` - ключей нет или биржа не ответила.
+
+    С активного счёта: с него терминал ставит сделки, и именно эту цифру
+    трейдер сверяет с приложением биржи.
 
     Молчим отказом, а не исключением: баланс - это цифра в углу экрана, и
     ронять из-за неё профиль нельзя. Причина уходит в журнал сервера.
     """
     if not keystore.enabled():
         return None
-    row = session.execute(
-        select(WeexCredential).where(WeexCredential.student_id == student.id)
-    ).scalar_one_or_none()
-    if row is None or not row.is_active:
+    row = active_account(session, student)
+    if row is None:
         return None
 
     # Импорт внутри: сессию с проверкой сертификата держит торговый роутер, а он
@@ -93,14 +91,7 @@ async def balance_by_keys(session, student: Student) -> Decimal | None:
     from backend.api.trading import _get_session
 
     try:
-        client = WeexFutures(
-            Credentials(
-                api_key=keystore.decrypt(row.api_key_enc),
-                secret_key=keystore.decrypt(row.secret_enc),
-                passphrase=keystore.decrypt(row.passphrase_enc),
-            ),
-            _get_session,
-        )
+        client = client_for(row, _get_session)
         return usdt_from(await client.balance())
     except Exception as exc:  # noqa: BLE001 - причина в журнале, баланс не критичен
         logger.warning("Баланс по ключам ученика %s не получен: %s", student.id, exc)
@@ -172,35 +163,39 @@ async def futures_volume_by_keys(
     """
     if not keystore.enabled():
         return None
-    row = session.execute(
-        select(WeexCredential).where(WeexCredential.student_id == student.id)
-    ).scalar_one_or_none()
-    if row is None or not row.is_active:
+    rows = accounts_of(session, student.id, connected_only=True)
+    if not rows:
         return None
 
     from backend.api.trading import _get_session
 
-    try:
-        client = WeexFutures(
-            Credentials(
-                api_key=keystore.decrypt(row.api_key_enc),
-                secret_key=keystore.decrypt(row.secret_enc),
-                passphrase=keystore.decrypt(row.passphrase_enc),
-            ),
-            _get_session,
-        )
-        wanted = _FILLS_WANTED
+    # Оборот - по всем подключённым биржам: ученик торгует там, где ему удобно,
+    # а уровень и календарь считают его торговлю целиком.
+    total = 0.0
+    whole = True
+    answered = False
+    for row in rows:
         try:
-            fills = await client.user_trades(limit=wanted)
-        except Exception:  # noqa: BLE001 - сотня точно поддерживается
-            wanted = _FILLS_FALLBACK
-            fills = await client.user_trades(limit=wanted)
-    except Exception as exc:  # noqa: BLE001 - причина в журнале, оборот не критичен
-        logger.warning("Оборот по ключам ученика %s не получен: %s", student.id, exc)
-        return None
+            client = client_for(row, _get_session)
+            wanted = _FILLS_WANTED
+            try:
+                fills = await client.user_trades(limit=wanted)
+            except Exception:  # noqa: BLE001 - сотня точно поддерживается
+                wanted = _FILLS_FALLBACK
+                fills = await client.user_trades(limit=wanted)
+        except Exception as exc:  # noqa: BLE001 - причина в журнале, оборот не критичен
+            logger.warning(
+                "Оборот по ключам ученика %s (%s) не получен: %s", student.id, row.exchange, exc
+            )
+            whole = False
+            continue
+        answered = True
+        total += turnover_on(fills, day)
+        whole = whole and len(fills) < wanted
 
-    whole = len(fills) < wanted
-    return turnover_on(fills, day), whole
+    if not answered:
+        return None
+    return total, whole
 
 
 # Оборот по журналу терминала.

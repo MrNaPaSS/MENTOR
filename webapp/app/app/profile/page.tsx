@@ -276,7 +276,11 @@ export default function ProfilePage() {
               <Key className="h-4 w-4" />
             </div>
             <div className="min-w-0 text-[12px]">
-              <div className="font-semibold text-[var(--pane-text)]">WEEX Futures</div>
+              {/* Биржа активного счёта: на ней терминал ставит сделки. */}
+              <div className="font-semibold text-[var(--pane-text)]">
+                {exchange?.accounts?.find((one) => one.exchange === exchange.active)?.title ??
+                  "WEEX Futures"}
+              </div>
               <div className="mt-0.5 text-[12px] text-[var(--pane-muted)]">
                 {exchange?.connected ? (
                   <>

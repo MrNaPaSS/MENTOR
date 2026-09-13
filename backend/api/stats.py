@@ -9,7 +9,8 @@ from sqlalchemy import case, func, select
 
 from core import repo
 from core.models import utcnow
-from core.models import BalanceSnapshot, ScalpTrade, Signal, Student, WeexCredential
+from backend.trading.accounts import keyed_students
+from core.models import BalanceSnapshot, ScalpTrade, Signal, Student
 from backend.deps import get_session
 from backend.schemas import PublicStats, LeaderboardRow, TraderRow
 
@@ -75,7 +76,7 @@ def traders(
 
     since = (utcnow() - timedelta(days=days)).date().isoformat()
 
-    keyed = select(WeexCredential.student_id).where(WeexCredential.is_active.is_(True))
+    keyed = keyed_students()
     students = session.execute(
         select(Student)
         .where(Student.is_approved.is_(True), Student.is_active.is_(True))

@@ -25,9 +25,9 @@ from typing import Any, Iterable
 
 from sqlalchemy import select
 
+from backend.trading.accounts import account_for, client_for, trade_exchange
 from backend.trading.rewards import award_trade_coins
-from core.exchanges import KEYS_EXCHANGE
-from core.models import LiveTrade, ScalpTrade, WeexCredential, utcnow
+from core.models import LiveTrade, ScalpTrade, utcnow
 from core.trading.position import (
     DEFAULT_TAKER_FEE,
     Position,
@@ -62,6 +62,13 @@ POLL_INTERVAL = 5.0
 # сделки вне очереди. Просят все его открытые вкладки, каждая раз в несколько
 # секунд, а обход между ними одинаковый.
 NUDGE_GAP = 2.0
+
+# Сколько счетов обходим одновременно. Обход идёт по парам «ученик и биржа»
+# параллельно: раньше ученики шли по очереди под одним замком, и сотня учеников
+# это минута на проход - стоп после взятой цели ждал её целиком, а зависшая
+# биржа держала всех остальных. Верхний предел - чтобы разом не открыть сотни
+# запросов с одного адреса.
+PARALLEL_ACCOUNTS = 8
 
 # Сколько проверок подряд позиция может отсутствовать, прежде чем считать её
 # закрытой. Ответ приходит не мгновенно, и одна пустая выдача сразу после
@@ -310,6 +317,9 @@ class PositionWatcher:
         # Обход и внеочередная проверка ученика не идут одновременно: вдвоём они
         # переставили бы один и тот же стоп дважды.
         self._lock = asyncio.Lock()
+        # Замок на пару «ученик и биржа»: чужие счета друг друга не ждут, а
+        # один и тот же счёт по-прежнему не обходится дважды разом.
+        self._locks: dict[tuple[int, str], asyncio.Lock] = {}
         # Когда ученика последний раз проверяли по просьбе терминала.
         self._nudged: dict[int, float] = {}
 
@@ -341,9 +351,44 @@ class PositionWatcher:
                 logger.warning("Сбой ведения позиций: %s", exc)
 
     async def tick(self) -> None:
-        """Один обход - под замком, общим с внеочередной проверкой ученика."""
-        async with self._lock:
-            await self._tick()
+        """Один обход. Замки - на счёт, общие с внеочередной проверкой ученика."""
+        await self._tick()
+
+    def _lock_for(self, student_id: int, exchange: str) -> asyncio.Lock:
+        key = (student_id, exchange)
+        if key not in self._locks:
+            self._locks[key] = asyncio.Lock()
+        return self._locks[key]
+
+    async def _check_account(self, student_id: int, exchange: str) -> bool:
+        """Обойти сделки одного счёта: своей сессией базы и под своим замком.
+
+        Своя сессия - потому что счета обходятся параллельно, а одна сессия на
+        всех смешала бы их незаписанные изменения. `False` - на счёте нечего
+        вести.
+        """
+        async with self._lock_for(student_id, exchange):
+            session = self._sessions()
+            try:
+                trades = [
+                    t
+                    for t in session.execute(
+                        select(LiveTrade)
+                        .where(LiveTrade.student_id == student_id)
+                        .where(LiveTrade.status.in_(("waiting", "open")))
+                    ).scalars()
+                    if trade_exchange(t.exchange) == exchange
+                ]
+                if not trades:
+                    return False
+                try:
+                    await self._handle_student(session, student_id, trades, exchange)
+                except Exception as exc:  # noqa: BLE001 — один счёт не мешает другим
+                    logger.warning("Ученик %s (%s): %s", student_id, exchange, exc)
+                session.commit()
+                return True
+            finally:
+                session.close()
 
     async def check_student(self, student_id: int) -> bool:
         """Проверить сделки одного ученика сейчас, не дожидаясь обхода.
@@ -361,68 +406,68 @@ class PositionWatcher:
             return False
         self._nudged[student_id] = now
 
-        async with self._lock:
-            session = self._sessions()
-            try:
-                trades = (
-                    session.execute(
-                        select(LiveTrade)
-                        .where(LiveTrade.student_id == student_id)
-                        .where(LiveTrade.status.in_(("waiting", "open")))
-                    )
-                    .scalars()
-                    .all()
-                )
-                if not trades:
-                    return False
-                await self._handle_student(session, student_id, trades)
-                session.commit()
-                return True
-            finally:
-                session.close()
-
-    async def _tick(self) -> None:
-        """Один обход: по одному запросу позиций на ученика."""
+        # По каждой бирже, где у ученика идут сделки: трейдер просит проверить
+        # «свои сделки», а не сделки одной биржи.
         session = self._sessions()
         try:
-            trades = (
-                session.execute(
-                    select(LiveTrade).where(LiveTrade.status.in_(("waiting", "open")))
-                )
-                .scalars()
-                .all()
+            exchanges = sorted(
+                {
+                    trade_exchange(code)
+                    for (code,) in session.execute(
+                        select(LiveTrade.exchange)
+                        .where(LiveTrade.student_id == student_id)
+                        .where(LiveTrade.status.in_(("waiting", "open")))
+                    ).all()
+                }
             )
-            if not trades:
-                return
-
-            by_student: dict[int, list[LiveTrade]] = {}
-            for trade in trades:
-                by_student.setdefault(trade.student_id, []).append(trade)
-
-            for student_id, group in by_student.items():
-                try:
-                    await self._handle_student(session, student_id, group)
-                except Exception as exc:  # noqa: BLE001 — один ученик не мешает другим
-                    logger.warning("Ученик %s: %s", student_id, exc)
-            session.commit()
         finally:
             session.close()
+        checked = False
+        for exchange in exchanges:
+            checked = await self._check_account(student_id, exchange) or checked
+        return checked
 
-    async def _handle_student(self, session, student_id: int, trades: Iterable[LiveTrade]) -> None:
-        row = session.execute(
-            select(WeexCredential).where(WeexCredential.student_id == student_id)
-        ).scalar_one_or_none()
+    async def _tick(self) -> None:
+        """Один обход: счета параллельно, по одному запросу позиций на счёт."""
+        session = self._sessions()
+        try:
+            accounts = sorted(
+                {
+                    (student_id, trade_exchange(code))
+                    for student_id, code in session.execute(
+                        select(LiveTrade.student_id, LiveTrade.exchange).where(
+                            LiveTrade.status.in_(("waiting", "open"))
+                        )
+                    ).all()
+                }
+            )
+        finally:
+            session.close()
+        if not accounts:
+            return
+
+        gate = asyncio.Semaphore(PARALLEL_ACCOUNTS)
+
+        async def one(student_id: int, exchange: str) -> None:
+            async with gate:
+                await self._check_account(student_id, exchange)
+
+        await asyncio.gather(*(one(s, e) for s, e in accounts))
+
+    async def _handle_student(
+        self,
+        session,
+        student_id: int,
+        trades: Iterable[LiveTrade],
+        exchange: str = "weex",
+    ) -> None:
+        # Ключ той биржи, где открыты эти сделки, а не той, что выбрана в
+        # терминале сейчас.
+        row = account_for(session, student_id, exchange)
         if row is None or not row.is_active:
             return
 
-        client = WeexFutures(
-            Credentials(
-                keystore.decrypt(row.api_key_enc),
-                keystore.decrypt(row.secret_enc),
-                keystore.decrypt(row.passphrase_enc),
-            ),
-            self._http,
-        )
+        client = client_for(row, self._http)
         positions = await client.positions()
 
         # Цену спрашиваем отдельно и по одному разу на инструмент: в ответе по
@@ -448,7 +493,12 @@ class PositionWatcher:
                     # Фабрика сессии асинхронная: без ожидания в запрос уходил
                     # не сеанс, а корутина - и обход сделок падал целиком,
                     # оставляя позиции без сопровождения.
-                    prices[sym] = await public_price(await self._http(), sym)
+                    # Цена той биржи, где открыта сделка: цены бирж расходятся,
+                    # а стоп подводится к рынку именно этой.
+                    own = getattr(client, "last_price", None)
+                    prices[sym] = (
+                        await own(sym) if own else await public_price(await self._http(), sym)
+                    )
                 price = prices[sym]
 
             plans = await self._open_plans(client, trade)
@@ -489,7 +539,7 @@ class PositionWatcher:
             mark = str(order.get("clientOrderId") or order.get("clientOid") or "")
             # По началу строки: при переносе лимитки к идентификатору
             # дописывается номер попытки, а сам он остаётся прежним.
-            if mark and mark.startswith(trade.client_id):
+            if client_matches(mark, trade.client_id):
                 return True
         return False
 
@@ -549,6 +599,17 @@ class PositionWatcher:
         if decision.size > float(trade.qty):
             trade.qty = decision.size
             changed = True
+
+        # Позиция без стопа - на биржах, где приложенный ко входу стоп ждёт
+        # полного исполнения (OKX). Частичное исполнение там оставляло набранный
+        # объём без защиты до конца заполнения лимитки.
+        if (
+            trade.status == "open"
+            and getattr(client, "stop_waits_full_fill", False)
+            and not trade.sl_order_id
+        ):
+            if await self._ensure_stop(client, trade, price, decision.size or None):
+                changed = True
 
         if decision.filled_orders:
             takes = json.loads(trade.tp_orders_json or "[]")
@@ -658,6 +719,46 @@ class PositionWatcher:
 
     async def _drop_old_stops(self, client: WeexFutures, trade: LiveTrade, keep: str) -> None:
         await drop_old_stops(client, trade, keep)
+
+    async def _ensure_stop(
+        self,
+        client,
+        trade: LiveTrade,
+        price: float | None,
+        held: float | None,
+    ) -> bool:
+        """Поставить стоп открытой позиции, если на бирже его нет. True - поставили.
+
+        Стоп этой стороны уже стоит - ничего не делаем: это приложенный ко входу,
+        и второй рядом с ним не нужен. Не спросили биржу - тоже ничего: ставить
+        стоп вслепую значит однажды поставить второй.
+
+        Если позже биржа доложит приложенный стоп после полного исполнения, на
+        позиции окажутся два: лишний снимется первым же переносом стопа
+        (`drop_old_stops`), а после закрытия позиции оба снимет сама биржа -
+        заявки защиты привязаны к позиции.
+        """
+        try:
+            orders = await client.algo_orders(trade.symbol)
+        except WeexTradeError as exc:
+            logger.debug("Стоп %s не проверен: %s", trade.symbol, exc)
+            return False
+
+        side = trade.side.upper()
+        for order in orders:
+            kind = str(order.get("planType") or order.get("type") or "").lower()
+            if "stop" not in kind and "loss" not in kind:
+                continue
+            if str(order.get("positionSide") or side).upper() in (side, ""):
+                return False
+
+        logger.warning(
+            "Позиция %s (%s) без стопа на бирже - ставим на %s",
+            trade.symbol,
+            trade.client_id,
+            trade.current_stop,
+        )
+        return await set_stop(client, trade, float(trade.current_stop), price, held=held)
 
 
     async def _find_stop_order(self, client: WeexFutures, trade: LiveTrade) -> str:
@@ -853,9 +954,9 @@ class PositionWatcher:
         record.note = "биржа"
         # Отметка для журнала: эту запись оценкой с экрана не переписывают.
         record.from_exchange = True
-        # Где открыта: по этому подписывается карточка итога. Сделку ведёт
-        # ключ ученика, а ключи сейчас от одной биржи.
-        record.exchange = KEYS_EXCHANGE
+        # Где открыта: по этому подписывается карточка итога и считается
+        # статистика по биржам.
+        record.exchange = trade_exchange(trade.exchange)
         if exists is None:
             session.add(record)
         # Монеты за результат: сделка закрылась на бирже, пока трейдер спал, и
@@ -1447,6 +1548,30 @@ def order_marks(order: dict[str, Any]) -> set[str]:
     }
     marks.discard("")
     return marks
+
+
+def _alnum(value: str | None) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isascii() and ch.isalnum())
+
+
+def client_matches(mark: str | None, client_id: str | None) -> bool:
+    """Наша ли это заявка: идентификатор с биржи против идентификатора сделки.
+
+    Сравниваем по началу строки: при переносе лимитки к идентификатору
+    дописывается номер попытки. И в очищенном виде - только буквы и цифры: OKX
+    других знаков в идентификаторе не принимает и режет его до 32 символов, и
+    `BTCUSDT-1789_x1` возвращается с биржи как `BTCUSDT1789x1`.
+
+    Обрезанный биржей идентификатор - начало нашего; принимаем и его, но только
+    длинный: короткое совпадение начала ничего не доказывает.
+    """
+    ours = _alnum(client_id)
+    theirs = _alnum(mark)
+    if not ours or not theirs:
+        return False
+    if theirs.startswith(ours):
+        return True
+    return len(theirs) >= 24 and ours.startswith(theirs)
 
 
 def position_side(row: dict[str, Any] | None) -> str:

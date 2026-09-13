@@ -15,7 +15,8 @@ from sqlalchemy import or_, select
 
 from backend.trading.funds import balance_by_keys, futures_volume_by_keys
 from core.db import SessionLocal
-from core.models import BalanceSnapshot, Student, WeexCredential
+from backend.trading.accounts import keyed_students
+from core.models import BalanceSnapshot, Student
 from core.weex.base import WeexClient
 from core.weex.uid import clean_uid
 from core.own_accounts import is_own_account
@@ -46,7 +47,7 @@ async def snapshot_all(weex: WeexClient) -> int:
         # Ученики, о балансе которых есть кого спросить: свои ключи биржи или
         # UID у наставника. Раньше брались только те, у кого есть UID, и ученик
         # с подключёнными ключами оставался без снимков вовсе.
-        keyed = select(WeexCredential.student_id).where(WeexCredential.is_active.is_(True))
+        keyed = keyed_students()
         students = session.execute(
             select(Student)
             .where(Student.is_approved.is_(True))

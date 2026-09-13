@@ -53,6 +53,7 @@ def create_all() -> None:
     engine = get_engine()
     Base.metadata.create_all(engine)
     _migrate_add_columns(engine)
+    _move_weex_keys(engine)
     _seed_chat_threads(engine)
     _seed_shop_items(engine)
     _normalize_shop_dashes(engine)
@@ -126,6 +127,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
         ChatMessage,
         ChatThread,
         CoinTransaction,
+        ExchangeAccount,
         LiveTrade,
         Signal,
         ScalpTrade,
@@ -142,6 +144,7 @@ def _add_missing_columns(conn, inspector, engine) -> None:
         ScalpTrade,
         ScalpWorkspace,
         WeexCredential,
+        ExchangeAccount,
         LiveTrade,
         ChartShot,
         ChatBridge,
@@ -172,6 +175,52 @@ def _add_missing_columns(conn, inspector, engine) -> None:
             logging.getLogger("nmnh.db").info(
                 "Добавлена колонка %s.%s", table.name, column.name
             )
+
+
+def _move_weex_keys(engine) -> None:
+    """Перенести ключи WEEX в счета по биржам - по разу на ученика.
+
+    `weex_credentials` держал одну строку на ученика, и вторая биржа туда не
+    помещалась. Ключи копируются как есть, шифротекстом: расшифровывать их ради
+    переноса незачем, мастер-ключ тот же.
+
+    Уже перенесённого не трогаем: ученик мог заменить ключи в новой таблице, и
+    старая копия не должна их затереть. Отключённый счёт удаляется из обеих
+    таблиц (backend/api/trading.py), поэтому сюда он не вернётся.
+    """
+    from sqlalchemy import inspect, select
+    from sqlalchemy.orm import Session
+    from core.models import ExchangeAccount, WeexCredential
+
+    names = set(inspect(engine).get_table_names())
+    if "weex_credentials" not in names or "exchange_accounts" not in names:
+        return
+
+    with Session(engine) as session:
+        have = set(
+            session.execute(
+                select(ExchangeAccount.student_id).where(ExchangeAccount.exchange == "weex")
+            ).scalars()
+        )
+        moved = [
+            ExchangeAccount(
+                student_id=row.student_id,
+                exchange="weex",
+                api_key_enc=row.api_key_enc,
+                secret_enc=row.secret_enc,
+                passphrase_enc=row.passphrase_enc,
+                key_tail=row.key_tail,
+                is_active=row.is_active,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+            for row in session.execute(select(WeexCredential)).scalars()
+            if row.student_id not in have
+        ]
+        if moved:
+            session.add_all(moved)
+            session.commit()
+            logging.getLogger("nmnh.db").info("Ключи WEEX перенесены в счета: %d", len(moved))
 
 
 # Ветки чата - они же темы торгового форума в Telegram.

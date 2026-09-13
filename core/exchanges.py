@@ -20,11 +20,19 @@ TITLES: dict[str, str] = {
     "bitget": "Bitget Futures",
 }
 
-# Биржа ключей, которые сейчас подключают ученики. Сделки, которые сервер
-# ведёт по ключу, открыты на ней.
+# Биржа по умолчанию: сделки и ключи, записанные до мультибиржи, - с неё.
 KEYS_EXCHANGE = "weex"
+
+# Биржи, ключи которых ученик может подключить. Порядок - порядок в интерфейсе.
+KEY_EXCHANGES: tuple[str, ...] = ("weex", "okx")
 
 
 def title_of(code: str | None) -> str:
     """Подпись биржи. Неизвестная или пустая - пустая строка: без подписи."""
     return TITLES.get((code or "").strip().lower(), "")
+
+
+def exchange_code(code: str | None) -> str:
+    """Код биржи ключей. Пусто - биржа по умолчанию; незнакомая - пустая строка."""
+    value = (code or "").strip().lower() or KEYS_EXCHANGE
+    return value if value in KEY_EXCHANGES else ""

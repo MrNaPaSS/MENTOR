@@ -27,10 +27,26 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.deps import get_current_student, get_session, get_weex
-from core.exchanges import KEYS_EXCHANGE
+from backend.trading.accounts import (
+    account_for,
+    accounts_of,
+    active_account,
+    client_for,
+    trade_exchange,
+)
+from core.exchanges import KEY_EXCHANGES, KEYS_EXCHANGE, exchange_code, title_of
+from core.okx.futures import OkxFutures, public_filters as okx_public_filters
 from core.referral import grant_referral_vip
 from core.weex.uid import clean_uid, looks_like_uid
-from core.models import iso, LiveTrade, ScalpTrade, Student, WeexCredential, utcnow
+from core.models import (
+    ExchangeAccount,
+    iso,
+    LiveTrade,
+    ScalpTrade,
+    Student,
+    WeexCredential,
+    utcnow,
+)
 from core.trading.position import (
     Position,
     breakeven_price,
@@ -41,6 +57,7 @@ from backend.trading.refusals import explain, max_size_in
 from core.weex import keys as keystore
 from backend.trading.rewards import award_trade_coins
 from backend.trading.watcher import (
+    client_matches,
     fill_time,
     order_marks,
     position_for,
@@ -96,6 +113,15 @@ class KeysIn(BaseModel):
     api_key: str = Field(min_length=8, max_length=256)
     secret_key: str = Field(min_length=8, max_length=256)
     passphrase: str = Field(min_length=1, max_length=256)
+    # Биржа ключей. По умолчанию WEEX: терминал, собранный до мультибиржи,
+    # биржу не присылает.
+    exchange: str = Field(default=KEYS_EXCHANGE, max_length=16)
+
+
+class ActiveIn(BaseModel):
+    """С какой биржи ставить новые сделки."""
+
+    exchange: str = Field(min_length=1, max_length=16)
 
 
 class OrderIn(BaseModel):
@@ -134,30 +160,37 @@ class StopIn(BaseModel):
     mark_price: float | None = Field(default=None, gt=0)
 
 
-def _credential(session, student: Student) -> WeexCredential | None:
-    return session.execute(
-        select(WeexCredential).where(WeexCredential.student_id == student.id)
-    ).scalar_one_or_none()
+def _credential(
+    session, student: Student, exchange: str | None = None
+) -> ExchangeAccount | None:
+    """Счёт на названной бирже, а без названия - активный."""
+    if exchange:
+        return account_for(session, student.id, exchange)
+    return active_account(session, student)
 
 
-def _client(row: WeexCredential) -> WeexFutures:
-    return WeexFutures(
-        Credentials(
-            api_key=keystore.decrypt(row.api_key_enc),
-            secret_key=keystore.decrypt(row.secret_enc),
-            passphrase=keystore.decrypt(row.passphrase_enc),
-        ),
-        _get_session,
-    )
+def _client(row: ExchangeAccount):
+    return client_for(row, _get_session)
 
 
-def _require_client(session, student: Student) -> WeexFutures:
+def _require_client(session, student: Student, exchange: str | None = None):
+    """Торговый клиент: биржи сделки, если она названа, иначе активной.
+
+    Сделка, открытая на OKX, закрывается и переносится ключом OKX, даже если
+    трейдер уже переключил терминал на WEEX.
+    """
     if not keystore.enabled():
         raise HTTPException(503, "Торговля выключена: на сервере не задан ключ шифрования")
-    row = _credential(session, student)
+    row = _credential(session, student, exchange)
     if row is None or not row.is_active:
-        raise HTTPException(428, "Сначала подключите ключи WEEX")
+        name = (exchange or "").upper() or "биржи"
+        raise HTTPException(428, f"Сначала подключите ключи {name}")
     return _client(row)
+
+
+def _exchange_of(client) -> str:
+    """Биржа клиента. У подменённых в тестах клиентов её нет - значит WEEX."""
+    return trade_exchange(getattr(client, "exchange", ""))
 
 
 def _fail(exc: WeexTradeError) -> HTTPException:
@@ -290,12 +323,19 @@ async def plans(
     except WeexTradeError as exc:
         raise _fail(exc) from exc
 
-    live = session.execute(
-        select(LiveTrade)
-        .where(LiveTrade.student_id == student.id)
-        .where(LiveTrade.symbol == sym)
-        .where(LiveTrade.status.in_(("waiting", "open")))
-    ).scalars().all()
+    # Только сделки этой биржи: заявки другой биржи в её списке не стоят, и
+    # сверять их с ним значит объявить защиту пропавшей.
+    here = _exchange_of(client)
+    live = [
+        row
+        for row in session.execute(
+            select(LiveTrade)
+            .where(LiveTrade.student_id == student.id)
+            .where(LiveTrade.symbol == sym)
+            .where(LiveTrade.status.in_(("waiting", "open")))
+        ).scalars().all()
+        if trade_exchange(row.exchange) == here
+    ]
 
     # Свои заявки узнаём по записанным идентификаторам, а не по названию вида:
     # имена у биржи свои, и по ним мы уже дважды принимали цели за чужое.
@@ -375,7 +415,7 @@ async def plans(
         resting = [
             row.client_id
             for row in live
-            if any(mark.startswith(row.client_id) for mark in marks if mark)
+            if any(client_matches(mark, row.client_id) for mark in marks if mark)
         ]
     return {
         "symbol": sym,
@@ -460,7 +500,11 @@ async def limits(
     Ключей не требует - справочник биржи открыт, и знать предел вправе и тот,
     кто счёт ещё не подключил.
     """
-    filters = await public_filters(await _get_session(), symbol.upper())
+    # Пределы той биржи, на которую уйдёт сделка: шаги и потолок плеча у бирж
+    # разные, и предел WEEX на счёте OKX обещал бы то, чего там нет.
+    row = active_account(session, student)
+    source = okx_public_filters if row is not None and row.exchange == "okx" else public_filters
+    filters = await source(await _get_session(), symbol.upper())
     return {
         "symbol": symbol.upper(),
         "max_leverage": int(filters.get("max_leverage") or 20),
@@ -523,16 +567,33 @@ async def status(
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
-    """Готов ли терминал торговать с биржевого счёта."""
+    """Готов ли терминал торговать с биржевого счёта - и с каких счетов может.
+
+    Верхние поля - про активный счёт, в прежнем виде: их читают терминал,
+    профиль и шапка кабинета. `accounts` - все биржи, к которым можно
+    подключиться, с состоянием каждой.
+    """
     row = _credential(session, student)
+    rows = {account.exchange: account for account in accounts_of(session, student.id)}
     return {
         "enabled": keystore.enabled(),
         "connected": bool(row and row.is_active),
         "key_tail": row.key_tail if row else "",
         "updated_at": iso(row.updated_at) if row else None,
-        "taker_fee": taker_fee(session, student),
-        # Биржа ключа: по ней терминал подписывает карточки идущих сделок.
-        "exchange": KEYS_EXCHANGE if row else "",
+        "taker_fee": taker_fee(session, student, row.exchange if row else None),
+        # Биржа активного счёта: по ней терминал подписывает карточки сделок.
+        "exchange": row.exchange if row else "",
+        "active": row.exchange if row else "",
+        "accounts": [
+            {
+                "exchange": code,
+                "title": title_of(code),
+                "connected": bool(rows.get(code) and rows[code].is_active),
+                "key_tail": rows[code].key_tail if code in rows else "",
+                "updated_at": iso(rows[code].updated_at) if code in rows else None,
+            }
+            for code in KEY_EXCHANGES
+        ],
     }
 
 
@@ -545,7 +606,7 @@ async def status(
 FEE_SAMPLE = 20
 
 
-def taker_fee(session, student: Student) -> float | None:
+def taker_fee(session, student: Student, exchange: str | None = None) -> float | None:
     """Ставка комиссии этого трейдера - по его же сделкам.
 
     У каждого она своя: биржа считает её от уровня VIP, и справочные 0.08% с
@@ -560,13 +621,20 @@ def taker_fee(session, student: Student) -> float | None:
     справочной ставке. Врать в меньшую сторону здесь нельзя - оценка результата
     выйдет выше того, что придёт на счёт.
     """
-    rows = session.execute(
+    query = (
         select(ScalpTrade.fee, ScalpTrade.entry, ScalpTrade.exit_price, ScalpTrade.qty)
         .where(ScalpTrade.student_id == student.id)
         .where(ScalpTrade.from_exchange.is_(True))
         .where(ScalpTrade.fee > 0)
-        .order_by(ScalpTrade.closed_at.desc())
-        .limit(FEE_SAMPLE)
+    )
+    # Ставка у каждой биржи своя. Сделки до мультибиржи записаны без биржи -
+    # это WEEX.
+    if exchange:
+        code = trade_exchange(exchange)
+        names = [code, ""] if code == KEYS_EXCHANGE else [code]
+        query = query.where(ScalpTrade.exchange.in_(names))
+    rows = session.execute(
+        query.order_by(ScalpTrade.closed_at.desc()).limit(FEE_SAMPLE)
     ).all()
 
     paid = 0.0
@@ -593,21 +661,23 @@ async def save_keys(
     session=Depends(get_session),
     weex=Depends(get_weex),
 ):
-    """Подключить ключи. Проверяем их сразу — иначе ошибка всплывёт на ордере."""
+    """Подключить ключи биржи. Проверяем их сразу — иначе ошибка всплывёт на ордере."""
     if not keystore.enabled():
         raise HTTPException(503, "Торговля выключена: на сервере не задан ключ шифрования")
+    code = exchange_code(body.exchange)
+    if not code:
+        raise HTTPException(422, f"К бирже {body.exchange} подключиться пока нельзя")
 
-    probe = WeexFutures(
-        Credentials(body.api_key, body.secret_key, body.passphrase), _get_session
-    )
+    creds = Credentials(body.api_key, body.secret_key, body.passphrase)
+    probe = WeexFutures(creds, _get_session) if code == "weex" else OkxFutures(creds, _get_session)
     try:
         await probe.balance()
     except WeexTradeError as exc:
         raise HTTPException(400, f"Ключи не подошли: {exc}") from exc
 
-    row = _credential(session, student)
+    row = account_for(session, student.id, code)
     if row is None:
-        row = WeexCredential(student_id=student.id)
+        row = ExchangeAccount(student_id=student.id, exchange=code)
         session.add(row)
     row.api_key_enc = keystore.encrypt(body.api_key)
     row.secret_enc = keystore.encrypt(body.secret_key)
@@ -615,12 +685,36 @@ async def save_keys(
     row.key_tail = keystore.mask(body.api_key)
     row.is_active = True
     row.updated_at = utcnow()
+    # Первый подключённый счёт и становится активным: ученику с одной биржей
+    # выбирать не из чего.
+    if not (student.active_exchange or "").strip():
+        student.active_exchange = code
     # Счёт подключён - если он заведён через академию, VIP сразу. Партнёрка
-    # отвечает только по своим рефералам; не ответила - обычный уровень, а
-    # подключение от этого не падает.
-    await _check_referral(session, weex, student)
+    # пока одна, WEEX; не ответила - обычный уровень, а подключение от этого не
+    # падает.
+    if code == "weex":
+        await _check_referral(session, weex, student)
     session.commit()
-    return {"ok": True, "key_tail": row.key_tail, "vip": bool(student.is_vip)}
+    return {"ok": True, "key_tail": row.key_tail, "vip": bool(student.is_vip), "exchange": code}
+
+
+@router.put("/active")
+async def set_active(
+    body: ActiveIn,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Сменить биржу, с которой ставятся новые сделки.
+
+    Идущие сделки не мешают: каждая ведётся и закрывается на своей бирже.
+    """
+    code = exchange_code(body.exchange)
+    row = account_for(session, student.id, code) if code else None
+    if row is None or not row.is_active:
+        raise HTTPException(409, "Сначала подключите ключи этой биржи")
+    student.active_exchange = code
+    session.commit()
+    return {"ok": True, "exchange": code}
 
 
 async def _check_referral(session, weex, student: Student) -> None:
@@ -636,12 +730,41 @@ async def _check_referral(session, weex, student: Student) -> None:
 
 @router.delete("/keys")
 async def drop_keys(
+    exchange: str | None = None,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
-    row = _credential(session, student)
+    """Отключить счёт биржи. Без названия - активный, как раньше."""
+    row = _credential(session, student, exchange_code(exchange) if exchange else None)
     if row is None:
         raise HTTPException(404, "Ключи не подключены")
+
+    # Пока на бирже идёт сделка терминала, ключ ей нужен: без него стоп не
+    # переедет в безубыток, а цели не снимутся после закрытия.
+    busy = [
+        t
+        for t in session.execute(
+            select(LiveTrade)
+            .where(LiveTrade.student_id == student.id)
+            .where(LiveTrade.status.in_(("waiting", "open")))
+        ).scalars()
+        if trade_exchange(t.exchange) == row.exchange
+    ]
+    if busy:
+        raise HTTPException(
+            409,
+            f"На {row.exchange.upper()} идут сделки терминала ({len(busy)}): "
+            "без ключа их некому сопровождать. Закройте их и отключите счёт.",
+        )
+
+    if row.exchange == "weex":
+        # Старая таблица ключей: без этого перенос при старте вернул бы счёт.
+        for legacy in session.execute(
+            select(WeexCredential).where(WeexCredential.student_id == student.id)
+        ).scalars():
+            session.delete(legacy)
+    if (student.active_exchange or "") == row.exchange:
+        student.active_exchange = ""
     session.delete(row)
     session.commit()
     return {"ok": True}
@@ -649,10 +772,11 @@ async def drop_keys(
 
 @router.get("/balance")
 async def balance(
+    exchange: str | None = None,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
-    client = _require_client(session, student)
+    client = _require_client(session, student, exchange)
     try:
         return {"balance": await client.balance()}
     except WeexTradeError as exc:
@@ -661,10 +785,11 @@ async def balance(
 
 @router.get("/positions")
 async def positions(
+    exchange: str | None = None,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
-    client = _require_client(session, student)
+    client = _require_client(session, student, exchange)
     try:
         return {"positions": await client.positions()}
     except WeexTradeError as exc:
@@ -872,6 +997,9 @@ async def open_position(
     live.takes_hit = 0
     live.status = "waiting"
     live.sl_order_id = ""
+    # Где открыта: сопровождать, закрывать и переносить её будут ключом этой
+    # биржи, что бы трейдер ни выбрал потом.
+    live.exchange = _exchange_of(client)
     live.updated_at = utcnow()
     session.commit()
 
@@ -901,17 +1029,10 @@ async def close_position(
     if body.side not in {"long", "short"}:
         raise HTTPException(422, "Сторона сделки: long или short")
 
-    client = _require_client(session, student)
     symbol = body.symbol.upper()
     long = body.side == "long"
 
     try:
-        positions = await client.positions()
-        # Со стороной, а не просто по инструменту. При открытом шорте отмена
-        # ждущей лимитки в лонг уходила закрывать... шорт: терминал видел его
-        # объём и слал рыночный приказ с чужой стороной. Биржа отвечала
-        # «position side invalid» - и была права, а лимитка так и висела.
-        position = position_for(positions, symbol, body.side)
         # Момент входа нужен, чтобы собрать все исполнения этой сделки, а не
         # только последний ордер.
         rows = session.execute(
@@ -931,6 +1052,19 @@ async def close_position(
             # не та, которую закрывают.
             same = [r for r in rows if r.side == body.side]
             live = same[0] if len(same) == 1 else None
+
+        # Закрываем на той бирже, где сделка открыта. Сделку не опознали -
+        # на активной: там трейдер её и видит.
+        client = _require_client(session, student, live.exchange if live else None)
+        positions = await client.positions()
+        # Со стороной, а не просто по инструменту. При открытом шорте отмена
+        # ждущей лимитки в лонг уходила закрывать... шорт: терминал видел его
+        # объём и слал рыночный приказ с чужой стороной. Биржа отвечала
+        # «position side invalid» - и была права, а лимитка так и висела.
+        position = position_for(positions, symbol, body.side)
+        # Соседние сделки другой биржи к этой позиции отношения не имеют.
+        here = _exchange_of(client)
+        rows = [r for r in rows if trade_exchange(r.exchange) == here]
         # Если позиция ещё не отмечена набранной, берём момент отправки входа:
         # сопровождение проставляет opened_at раз в пятнадцать секунд, а закрыть
         # руками можно и раньше. Без этого в итог попадал бы только последний
@@ -1095,6 +1229,7 @@ def _journal(
     row.closed_at = utcnow()
     row.note = "биржа"
     row.from_exchange = True
+    row.exchange = trade_exchange(live.exchange)
     # Монеты начисляются здесь же, до коммита: сделка и награда за неё обязаны
     # попасть в базу одной операцией.
     award_trade_coins(session, row)
@@ -1236,7 +1371,7 @@ async def _cancel_orphans(client: WeexFutures, symbol: str, keep: Sequence[LiveT
         if order_marks(order) & marks:
             return True
         mark = str(order.get("clientOrderId") or order.get("clientOid") or "")
-        return any(mark.startswith(p) for p in prefixes if mark)
+        return any(client_matches(mark, p) for p in prefixes if mark)
 
     try:
         for order in await client.open_orders(symbol):
@@ -1300,7 +1435,7 @@ async def _cancel_trade(
         for order in await client.open_orders(symbol):
             order_id = str(order.get("orderId") or order.get("id") or "")
             client_id = str(order.get("clientOrderId") or order.get("clientOid") or "")
-            if order_id not in mine and not client_id.startswith(live.client_id):
+            if order_id not in mine and not client_matches(client_id, live.client_id):
                 continue
             try:
                 await client.cancel_order(symbol, order_id)
@@ -1384,7 +1519,7 @@ async def _entry_resting(client: WeexFutures, live: LiveTrade | None) -> bool:
         return live.status == "waiting"
     for order in orders:
         mark = str(order.get("clientOrderId") or order.get("clientOid") or "")
-        if mark and mark.startswith(live.client_id):
+        if client_matches(mark, live.client_id):
             return True
     return False
 

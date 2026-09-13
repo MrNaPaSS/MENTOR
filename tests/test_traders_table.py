@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from core.db import Base
-from core.models import BalanceSnapshot, ScalpTrade, Student, WeexCredential, utcnow
+from core.models import BalanceSnapshot, ExchangeAccount, ScalpTrade, Student, utcnow
 
 
 @pytest.fixture()
@@ -60,8 +60,9 @@ def student(session, name: str, *, keys: bool = True, approved: bool = True) -> 
     session.flush()
     if keys:
         session.add(
-            WeexCredential(
+            ExchangeAccount(
                 student_id=row.id,
+                exchange="weex",
                 api_key_enc="x",
                 secret_enc="x",
                 passphrase_enc="x",
