@@ -36,6 +36,14 @@ from dataclasses import dataclass, field
 DEFAULT_BUCKET_SECONDS = 60
 DEFAULT_COLUMNS = 8
 
+# Сколько колонок храним. Больше, чем показываем, и по другой причине: из этой
+# же истории считается профиль разобранной свечи, а свеча бывает крупнее
+# картинки у стакана. На восьми минутах профиль десяти- и пятнадцатиминутной
+# свечи не собирался никогда, и каждые три секунды за ним шли на биржу - по
+# двадцать единиц веса за страницу сделок. Шестнадцать минут закрывают оба
+# таймфрейма своей лентой, то есть даром.
+HISTORY_COLUMNS = 16
+
 
 @dataclass(frozen=True)
 class Cell:
@@ -73,7 +81,7 @@ class ClusterHistory:
 
     tick: float
     bucket_seconds: int = DEFAULT_BUCKET_SECONDS
-    columns: int = DEFAULT_COLUMNS
+    columns: int = HISTORY_COLUMNS
     # Секунда первой записанной сделки. По ней видно, с какого момента история
     # полная: монету открыли в середине минуты, и профиль этой минуты у нас
     # обрезан — отдавать его как полный значит занизить объём молча.
@@ -124,10 +132,18 @@ class ClusterHistory:
         while len(self._data) > self.columns:
             self._data.popitem(last=False)
 
-    def snapshot(self) -> list[Column]:
-        """Срез истории от старой колонки к свежей, на базовом шаге."""
+    def snapshot(self, limit: int | None = None) -> list[Column]:
+        """Срез истории от старой колонки к свежей, на базовом шаге.
+
+        `limit` - сколько последних колонок нужно. Картинке у стакана хватает
+        восьми, профилю свечи нужна вся история: это одни и те же данные, но
+        разные их части.
+        """
+        items = list(self._data.items())
+        if limit is not None and limit > 0:
+            items = items[-limit:]
         out: list[Column] = []
-        for start, column in self._data.items():
+        for start, column in items:
             cells = {price: Cell(buy=b, sell=s) for price, (b, s) in column.items()}
             buy = sum(c.buy for c in cells.values())
             sell = sum(c.sell for c in cells.values())

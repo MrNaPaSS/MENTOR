@@ -17,7 +17,7 @@ import time
 import logging
 from dataclasses import asdict
 
-from backend.scalping.clusters import fit_to_rows
+from backend.scalping.clusters import DEFAULT_COLUMNS, fit_to_rows
 from backend.scalping.footprint import build as build_footprint, from_columns
 from backend.scalping.ladder import DEFAULT_ROWS, build_ladder
 from backend.scalping.metrics import SHELF_MIN_NOTIONAL
@@ -268,7 +268,9 @@ class ScalpingHub:
                     state, band_bp=_shelf_band(state, sub.rows, step), min_notional=sub.shelf, step=step
                 )
             ],
-            "clusters": _clusters(columns, ladder, step),
+            # Картинке слева от стакана - последние восемь колонок, как и было;
+            # профиль свечи ниже берёт из тех же данных всю историю.
+            "clusters": _clusters(columns[-DEFAULT_COLUMNS:], ladder, step),
             # Живая свеча из ленты сделок: график рисует её сразу, не дожидаясь
             # следующего опроса истории.
             "candle": _live_candle(state, sub.interval),

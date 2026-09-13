@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from backend import tools
 from backend.sources import session as sources_session
 
-from backend.scalping.clusters import fit_to_rows
+from backend.scalping.clusters import DEFAULT_COLUMNS as CLUSTER_COLUMNS, fit_to_rows
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.market_hub import PRIMARY, MarketHub
 from backend.scalping.okx import OkxPublicRest
@@ -160,7 +160,9 @@ async def dom(
                 "cells": [[p, x.buy, x.sell] for p, x in c.cells.items()],
             }
             for c in (
-                fit_to_rows(state.clusters.snapshot(), [r.price for r in ladder], step)
+                fit_to_rows(
+                    state.clusters.snapshot(CLUSTER_COLUMNS), [r.price for r in ladder], step
+                )
                 if state.clusters
                 else []
             )
@@ -358,7 +360,10 @@ _FOOT_PAGES = 6
 
 # Свежесть кэша. Закрытая свеча не меняется никогда, поэтому живёт долго и
 # больше не стоит бирже ни одного запроса; текущая пересобирается почти сразу.
-_FOOT_LIVE_TTL = 2.0
+# Пять секунд, а не две: страница сделок стоит двадцать единиц веса, а профиль
+# внутри идущей свечи от двух лишних секунд не устаревает. Своя лента, когда
+# она эту свечу закрывает, обновляет профиль восемь раз в секунду и даром.
+_FOOT_LIVE_TTL = 5.0
 _FOOT_DONE_TTL = 900.0
 _FOOT_CACHE_MAX = 96
 _foot_cache: "OrderedDict[str, tuple[float, dict]]" = OrderedDict()

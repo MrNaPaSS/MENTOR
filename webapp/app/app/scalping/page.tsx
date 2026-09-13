@@ -3921,9 +3921,15 @@ export default function ScalpingPage() {
                   />
                 )}
 
+                {/* Биржа свечей - только когда книга не с общей биржи. Пустая
+                    строка и "binance" - один и тот же источник, но разные
+                    адреса запроса: пока первый кадр стакана не пришёл, график
+                    успевал сходить за свечами без биржи, а следом второй раз -
+                    с ней. Лишний поход стоит веса запросов, которого не
+                    хватает снимкам стаканов. */}
                 <PriceChart
                   symbol={symbol}
-                  venue={dom?.exchange ?? ""}
+                  venue={dom?.exchange && dom.exchange !== "binance" ? dom.exchange : ""}
                   interval={timeframe}
                   wall={dom?.wall ?? null}
                   shelves={dom?.shelves ?? []}
