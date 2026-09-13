@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.deps import get_current_student, get_session, get_weex
+from backend.trading.live_state import cached
 from backend.trading.accounts import (
     account_for,
     accounts_of,
@@ -170,7 +171,9 @@ def _credential(
 
 
 def _client(row: ExchangeAccount):
-    return client_for(row, _get_session)
+    # С общей памятью чтений: терминал спрашивает позиции и защиту по несколько
+    # раз в секунду, а биржа отвечает то же самое (backend/trading/live_state.py).
+    return cached(client_for(row, _get_session), row.student_id, row.exchange)
 
 
 def _require_client(session, student: Student, exchange: str | None = None):

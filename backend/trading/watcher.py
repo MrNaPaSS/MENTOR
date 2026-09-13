@@ -26,6 +26,7 @@ from typing import Any, Iterable
 from sqlalchemy import select
 
 from backend.trading.accounts import account_for, client_for, trade_exchange
+from backend.trading.live_state import cached
 from backend.trading.rewards import award_trade_coins
 from core.models import LiveTrade, ScalpTrade, utcnow
 from core.trading.position import (
@@ -467,7 +468,9 @@ class PositionWatcher:
         if row is None or not row.is_active:
             return
 
-        client = client_for(row, self._http)
+        # Та же память чтений, что у торговых ручек: обход и терминал
+        # спрашивают биржу об одном и том же в одни и те же секунды.
+        client = cached(client_for(row, self._http), student_id, exchange)
         positions = await client.positions()
 
         # Цену спрашиваем отдельно и по одному разу на инструмент: в ответе по

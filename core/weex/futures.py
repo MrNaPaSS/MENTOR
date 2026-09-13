@@ -35,6 +35,7 @@ from typing import Any, Callable, Awaitable
 import aiohttp
 
 from core.broker import BrokerMark, weex_algo_mark, weex_mark
+from core.throttle import take as take_budget
 
 logger = logging.getLogger("nmnh.weex.futures")
 
@@ -333,6 +334,10 @@ class WeexFutures:
         # через json.dumps с другими пробелами ломает подпись.
         body = json.dumps(data, separators=(",", ":"), ensure_ascii=False) if data else ""
         url = f"{self.base_url}{path}" + (f"?{query}" if query else "")
+
+        # Бюджет запросов биржи: сверх него ждём очереди, а не ловим отказ
+        # (core/throttle.py).
+        await take_budget("weex", self.creds.api_key)
 
         session = await self._session_factory()
         try:

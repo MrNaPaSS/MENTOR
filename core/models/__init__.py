@@ -621,6 +621,14 @@ class ExchangeAccount(Base):
     secret_enc: Mapped[str] = mapped_column(Text)
     passphrase_enc: Mapped[str] = mapped_column(Text)
     key_tail: Mapped[str] = mapped_column(String(8), default="")
+    # Как подключён счёт: keys - ключи руками, oauth - вход биржей по
+    # брокерскому ID, без ввода ключей вовсе. Второй путь станет основным, как
+    # только биржи выдадут брокерский статус; поля заведены заранее, чтобы не
+    # переделывать базу на живых учениках.
+    auth_kind: Mapped[str] = mapped_column(String(8), default="keys")
+    oauth_token_enc: Mapped[str] = mapped_column(Text, default="")
+    oauth_refresh_enc: Mapped[str] = mapped_column(Text, default="")
+    oauth_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

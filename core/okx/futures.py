@@ -51,6 +51,7 @@ from urllib.parse import urlencode
 
 import aiohttp
 
+from core.throttle import take as take_budget
 from core.weex.futures import (
     DEFAULT_FILTERS,
     POSITION_SIDES,
@@ -388,6 +389,10 @@ class OkxFutures:
         }
         if self.demo:
             headers["x-simulated-trading"] = "1"
+
+        # Бюджет запросов биржи: сверх него ждём очереди, а не ловим отказ
+        # (core/throttle.py).
+        await take_budget(EXCHANGE, self.creds.api_key)
 
         session = await self._session_factory()
         try:
