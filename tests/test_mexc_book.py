@@ -9,11 +9,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import pytest
 
-from backend.scalping.mexc import channel_of, sub_message
-from backend.scalping.mexc_collector import MexcCollector, levels, top_symbols
+from backend.scalping.mexc import MexcStreamClient, channel_of, sub_message
+from backend.scalping.mexc_collector import MexcCollector, levels, span, top_symbols
 from core.mexc.market import Instrument
 
 BTC = Instrument(
@@ -110,8 +111,19 @@ def depth(version: int = 100) -> dict:
     }
 
 
-def change(version: int, bids=None, asks=None) -> dict:
-    return {"version": version, "bids": bids or [], "asks": asks or []}
+def change(version: int, bids=None, asks=None, begin: int | None = None) -> dict:
+    """Изменение книги: биржа шлёт диапазон версий, а не одну.
+
+    `begin` по умолчанию - следующая за прошлой версией, то есть сообщение
+    продолжает цепочку без разрыва.
+    """
+    return {
+        "version": version,
+        "end": version,
+        "begin": version if begin is None else begin,
+        "bids": bids or [],
+        "asks": asks or [],
+    }
 
 
 # ── перевод объёма ───────────────────────────────────────────────────────────
@@ -195,8 +207,8 @@ async def test_gap_is_caught_up_by_commits_without_rebuilding():
     await collector._snapshot("BTCUSDT")
     rest.depth_calls = 0
 
-    # Номер шагнул через один: 103 после 100.
-    collector._on_message("BTC_USDT", "depth", change(103, bids=[[99.9, 1300, 3]]))
+    # Сообщение начинается с 103, а у нас 100: между ними дыра.
+    collector._on_message("BTC_USDT", "depth", change(103, bids=[[99.9, 1300, 3]], begin=103))
     await asyncio.sleep(0)
     await asyncio.sleep(0)
 
@@ -216,7 +228,7 @@ async def test_gap_wider_than_commits_rebuilds_the_book():
     await collector._snapshot("BTCUSDT")
     rest.depth_calls = 0
 
-    collector._on_message("BTC_USDT", "depth", change(500, bids=[[99.9, 1300, 3]]))
+    collector._on_message("BTC_USDT", "depth", change(500, bids=[[99.9, 1300, 3]], begin=500))
     await asyncio.sleep(0)
     await asyncio.sleep(0)
 
@@ -251,6 +263,34 @@ async def test_snapshot_without_version_is_refused():
     assert state.book.ready is False
 
 
+async def test_wide_version_range_is_not_a_gap():
+    """Версия шагает внутри сообщения, и это не потеря - это его диапазон.
+
+    Живой пробник 14 сентября 2026 насчитал 289 «разрывов» за минуту и девять
+    пересборок книги, пока цепочка проверялась по одной `version`: на BTC_USDT
+    номер шагает через десятки и сотни. По диапазону разрывов нет.
+    """
+    rest = FakeRest(depth=depth(100))
+    collector = make_collector(rest)
+    state = opened(collector)
+    await collector._snapshot("BTCUSDT")
+
+    # Сообщение покрывает версии 101-350: начинается там, где мы стоим.
+    collector._on_message(
+        "BTC_USDT", "depth", change(350, bids=[[99.9, 1300, 3]], begin=101)
+    )
+    assert collector.gaps == 0
+    assert rest.commit_calls == 0
+    assert state.book.last_update_id == 350
+    assert state.book.bids[99.9] == pytest.approx(0.13)
+
+
+def test_span_falls_back_to_a_single_version():
+    """У снимка по REST диапазона нет - только `version`, и это не дыра."""
+    assert span({"begin": 101, "end": 350, "version": 350}) == (101, 350)
+    assert span({"version": 100}) == (100, 100)
+
+
 # ── лента ────────────────────────────────────────────────────────────────────
 
 
@@ -266,6 +306,37 @@ async def test_trade_goes_to_tape_in_coins_with_the_taker_side():
     collector._on_message("BTC_USDT", "deal", {"t": 1757320800000, "p": 100, "v": 500, "T": 2})
     # Продажа той же величины гасит перевес: сторону читаем по `T`.
     assert state.tape.metrics(1757320800).delta_notional == pytest.approx(0.0)
+
+
+def test_trades_arrive_as_a_list_and_each_one_counts():
+    """Ленту биржа шлёт списком сделок за такт, книгу - объектом.
+
+    Ждать только объект значило бы не увидеть ни одной сделки: поймано живым
+    пробником - лента молчала, пока разбор отбрасывал списки.
+    """
+    got: list[tuple[str, str, dict]] = []
+    client = MexcStreamClient(lambda symbol, channel, row: got.append((symbol, channel, row)))
+    client._dispatch(
+        json.dumps(
+            {
+                "channel": "push.deal",
+                "symbol": "BTC_USDT",
+                "data": [
+                    {"p": 77696.6, "v": 17646, "T": 2, "t": 1789385667495},
+                    {"p": 77696.7, "v": 9, "T": 1, "t": 1789385667652},
+                ],
+            }
+        )
+    )
+    assert [one[1] for one in got] == ["deal", "deal"]
+    assert got[0][2]["v"] == 17646
+
+    # Книга по-прежнему приходит одним объектом.
+    got.clear()
+    client._dispatch(
+        json.dumps({"channel": "push.depth", "symbol": "BTC_USDT", "data": {"version": 5}})
+    )
+    assert len(got) == 1
 
 
 # ── подписки и сводка ────────────────────────────────────────────────────────

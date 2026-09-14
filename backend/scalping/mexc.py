@@ -343,10 +343,17 @@ class MexcStreamClient:
 
         name = channel_of(channel)
         symbol = str(payload.get("symbol") or "").upper()
-        row = payload.get("data")
-        if not name or not symbol or not isinstance(row, dict):
+        rows = payload.get("data")
+        if not name or not symbol or rows is None:
             return
-        try:
-            self._on_message(symbol, name, row)
-        except Exception:  # noqa: BLE001 - сбой обработчика не рвёт поток
-            logger.exception("Ошибка обработки события MEXC %s", name)
+        # Книгу биржа шлёт объектом, а ленту - списком сделок за такт. Ждать
+        # только объект значило бы не увидеть ни одной сделки: поймано живым
+        # пробником 14 сентября 2026 - лента молчала час.
+        items = rows if isinstance(rows, list) else [rows]
+        for row in items:
+            if not isinstance(row, dict):
+                continue
+            try:
+                self._on_message(symbol, name, row)
+            except Exception:  # noqa: BLE001 - сбой обработчика не рвёт поток
+                logger.exception("Ошибка обработки события MEXC %s", name)

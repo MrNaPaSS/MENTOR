@@ -5,9 +5,15 @@
 
 * **снимок берётся запросом** (`/contract/depth/{symbol}`), и у него есть номер
   `version`;
-* **каждое сообщение потока применяется, только если его `version` равен
-  сохранённому плюс один.** Не «примерно вперёд», как на BingX, а ровно
-  следующий: биржа нумерует изменения подряд;
+* **каждое сообщение несёт диапазон версий**, а не одну: `begin` - первая в
+  нём, `end` - последняя, и она же `version`. Непрерывность проверяется по
+  началу диапазона: следующее сообщение обязано начинаться там, где кончилось
+  предыдущее (`begin == previous + 1`).
+
+  Смотреть на одну `version`, как поначалу делали мы, нельзя: за минуту на
+  BTC_USDT она шагает через десятки и сотни номеров - внутри сообщения. Живой
+  пробник насчитал так 289 «разрывов» и девять пересборок книги на ровном
+  месте (14 сентября 2026); по диапазону разрывов нет вовсе;
 * **разрыв догоняется коммитами** (`/contract/depth_commits/{symbol}/1000` -
   последняя тысяча изменений по возрастанию версии), а не пересборкой книги
   снимком. Это дешевле и быстрее: ученик не видит подписи «стакан собирается»
@@ -70,6 +76,18 @@ def _f(value, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def span(row: dict) -> tuple[int, int]:
+    """Диапазон версий сообщения: первая и последняя.
+
+    Биржа называет их `begin` и `end`, а `version` повторяет `end`. Полей может
+    не быть вовсе - у снимка по REST есть только `version`; тогда диапазон
+    вырождается в одну версию, и правило непрерывности сходится к прежнему.
+    """
+    end = int(_f(row.get("end") or row.get("version"), -1))
+    begin = int(_f(row.get("begin"), end))
+    return begin, end
 
 
 def top_symbols(tickers: list[dict], limit: int) -> list[str]:
@@ -310,8 +328,8 @@ class MexcCollector:
             state.clusters.add(ts, price, qty, is_buy)
 
     def _on_book(self, state, symbol: str, row: dict) -> None:
-        """Изменение книги. Применяется, только если номер - следующий по счёту."""
-        version = int(_f(row.get("version"), -1))
+        """Изменение книги. Применяется, только если продолжает цепочку версий."""
+        begin, end = span(row)
         if not state.book.ready:
             # Снимок ещё не пришёл: копим изменения, чтобы применить их следом
             # и не начать книгу с дыры длиной в запрос.
@@ -319,18 +337,20 @@ class MexcCollector:
             return
 
         previous = state.book.last_update_id
-        if version >= 0 and version <= previous:
-            # Тот же номер или старее - изменение уже учтено снимком.
+        if end >= 0 and end <= previous:
+            # Диапазон целиком старше нашего - изменение уже учтено снимком.
             return
-        if version >= 0 and previous >= 0 and version != previous + 1:
-            # Разрыв цепочки. Догоняем коммитами: пересобирать книгу снимком
-            # дороже, а ученик в это время смотрит на «стакан собирается».
+        if begin >= 0 and previous >= 0 and begin > previous + 1:
+            # Настоящий разрыв: между нашей версией и началом этого сообщения
+            # есть номера, которых мы не видели. Догоняем коммитами -
+            # пересобирать книгу снимком дороже, а ученик в это время смотрит
+            # на подпись «стакан собирается».
             self.gaps += 1
             self._catch_up(symbol, previous)
             self._hold(symbol, row)
             return
 
-        self._apply(state, symbol, row, version, previous)
+        self._apply(state, symbol, row, end, previous)
 
     def _apply(self, state, symbol: str, row: dict, version: int, previous: int) -> None:
         size = self._contract_size(symbol)
@@ -362,16 +382,16 @@ class MexcCollector:
         if state is None or not state.book.ready:
             return
         for row in sorted(rows, key=lambda one: _f(one.get("version"))):
-            version = int(_f(row.get("version"), -1))
+            begin, end = span(row)
             previous = state.book.last_update_id
-            if version >= 0 and version <= previous:
+            if end >= 0 and end <= previous:
                 continue
-            if version >= 0 and previous >= 0 and version != previous + 1:
+            if begin >= 0 and previous >= 0 and begin > previous + 1:
                 # Между снимком и этим изменением всё ещё дыра: дальше применять
                 # нечего, книгу догонит следующий круг коммитов.
                 self.gaps += 1
                 return
-            self._apply(state, symbol, row, version, previous)
+            self._apply(state, symbol, row, end, previous)
 
     # ── восстановление цепочки ──────────────────────────────────────────────
 
@@ -390,16 +410,16 @@ class MexcCollector:
                 return
             applied = 0
             for row in sorted(rows, key=lambda one: _f(one.get("version"))):
-                version = int(_f(row.get("version"), -1))
+                begin, end = span(row)
                 current = state.book.last_update_id
-                if version <= current:
+                if end <= current:
                     continue
-                if version != current + 1:
+                if begin > current + 1:
                     # Коммитов не хватило: дыра шире тысячи изменений - тогда
                     # честнее собрать книгу заново.
                     await self._snapshot(symbol)
                     return
-                self._apply(state, symbol, row, version, current)
+                self._apply(state, symbol, row, end, current)
                 applied += 1
             if applied:
                 self.commits += 1
