@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import { forgetLogin, pendingLogin, ratePct } from "@/lib/exchanges";
+import { cashbackKind, cashbackPct, forgetLogin, pendingLogin, ratePct } from "@/lib/exchanges";
 
 // Витрина бирж: ставки и начатый вход биржей.
 //
@@ -19,6 +19,29 @@ describe("ставка на витрине", () => {
     expect(ratePct(null)).toBeNull();
     expect(ratePct(undefined)).toBeNull();
     expect(ratePct(0)).toBeNull();
+  });
+});
+
+describe("возврат комиссии на карточке", () => {
+  it("доля названа - возвращаем и говорим сколько", () => {
+    expect(cashbackKind({ cashback: 0.15, trading: true })).toBe("pays");
+    expect(cashbackPct(0.15)).toBe("15%");
+    expect(cashbackPct(0.1)).toBe("10%");
+  });
+
+  // Ноль пришёл с сервера намеренно: Binance запрещает партнёрам делиться
+  // комиссией. Показать здесь «уточняется» значит пообещать несуществующее.
+  it("ноль - это «не будет», а не «пока не знаем»", () => {
+    expect(cashbackKind({ cashback: 0, trading: true })).toBe("forbidden");
+    expect(cashbackPct(0)).toBeNull();
+  });
+
+  it("биржа подключена, а долю не назвали - уточняется", () => {
+    expect(cashbackKind({ cashback: null, trading: true })).toBe("unknown");
+  });
+
+  it("биржи в терминале ещё нет - условий по ней и быть не может", () => {
+    expect(cashbackKind({ cashback: null, trading: false })).toBe("waiting");
   });
 });
 

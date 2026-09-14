@@ -22,6 +22,8 @@ import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import VenueMark from "@/components/ui/VenueMark";
 import { useLocale, useT } from "@/lib/i18n";
 import {
+  cashbackKind,
+  cashbackPct,
   chooseVenue,
   dropVenue,
   finishVenueLogin,
@@ -218,15 +220,6 @@ function VenueCard({
   const taker = ratePct(venue.taker);
   const maker = ratePct(venue.maker);
   const academy = ratePct(venue.academy_taker);
-  // Ноль и пустое - разные ответы: пустое значит «условия ещё не назвали», а
-  // ноль - «биржа возврата не разрешает» (Binance). Показать одно вместо
-  // другого значит либо пообещать несуществующее, либо отнять существующее.
-  const cashback =
-    venue.cashback === 0
-      ? d.terms.noCashback
-      : venue.cashback
-        ? `${Math.round(venue.cashback * 100)}%`
-        : null;
   // Биржа закрыта, пока академия не подтвердила счёт. Сервер, собранный до
   // этого правила, поля не присылает - тогда ведём себя как раньше.
   const locked = venue.keys_supported && venue.may_connect === false;
@@ -282,9 +275,10 @@ function VenueCard({
       <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[12px] tabular-nums">
         <Row label={d.terms.taker} value={taker} fallback={d.terms.unknown} />
         <Row label={d.terms.maker} value={maker} fallback={d.terms.unknown} />
-        <Row label={d.terms.cashback} value={cashback} fallback={d.terms.unknown} />
         {academy && <Row label={d.terms.academy} value={academy} fallback={d.terms.unknown} />}
       </div>
+
+      <Cashback venue={venue} />
 
       {/* Свой счёт: подключён ли, чем и каким номером. */}
       <div className="mt-3 space-y-1 text-[11px] leading-snug">
@@ -383,6 +377,42 @@ function VenueCard({
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Возврат комиссии: сколько и куда придёт.
+ *
+ * Ради него счёт и заводят через академию, поэтому он вынесен из столбца
+ * ставок в отдельную строку: число среди четырёх других чисел человек
+ * пролистывает, а строку - читает. Вопросов у него два подряд - «сколько» и
+ * «куда это придёт», - и оба закрыты здесь же, чтобы не идти за ответом в
+ * сноску под карточками.
+ *
+ * Где возврата нет, строка всё равно стоит и называет причину. Пустое место
+ * на карточке биржи читается как «забыли», а не как «не даём».
+ */
+function Cashback({ venue }: { venue: VenueRow }) {
+  const d = useT().exchanges;
+  const kind = cashbackKind(venue);
+
+  if (kind !== "pays") {
+    return (
+      <p className="mt-3 text-[11px] leading-relaxed text-[var(--pane-muted)]">
+        {kind === "forbidden" ? d.payout.forbidden : kind === "unknown" ? d.payout.unknown : d.payout.waiting}
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-lg bg-[var(--pane-accent-faint)] px-3 py-2">
+      <p className="text-[12px] font-semibold text-[var(--pane-accent)]">
+        {d.payout.pays(cashbackPct(venue.cashback) ?? "")}
+      </p>
+      <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--pane-text-2)]">
+        {d.payout.where(venue.name)}
+      </p>
     </div>
   );
 }

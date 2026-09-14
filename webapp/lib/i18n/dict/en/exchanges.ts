@@ -5,7 +5,7 @@ export const exchanges = {
   title: "Exchanges",
   hint: "Where the terminal trades and what an academy account gives",
   lead:
-    "An exchange opens once the academy confirms it: send the UID of your account there to the academy bot, and it shows up here with a connect button. Going through the academy means lower fees and cashback.",
+    "An exchange opens once the academy confirms it: send the UID of your account there to the academy bot, and it shows up here with a connect button. How much of the fee comes back and where it lands is written on every card.",
 
   state: {
     active: "active",
@@ -27,13 +27,20 @@ export const exchanges = {
     taker: "taker",
     maker: "maker",
     academy: "academy rate",
-    cashback: "fee returned",
     unknown: "terms being agreed",
-    noCashback: "not allowed by the exchange",
     note:
       "Reference rates for tier zero: yours is derived from your own trades and always wins. " +
-      "The returned fee lands on your exchange account and applies when you registered through the academy " +
-      "and trade in the terminal - the same numbers you saw in the academy bot.",
+      "The cashback lands on your exchange account, not on a terminal balance, and is counted from the " +
+      "exchange's own reports - the same numbers you saw in the academy bot.",
+  },
+
+  payout: {
+    pays: (pct: string) => `${pct} of your fee comes back`,
+    where: (name: string) =>
+      `Lands on your ${name} account: for trades made in the terminal from an account opened through the academy link.`,
+    forbidden: "No cashback here: the exchange forbids partners from sharing fees with traders.",
+    unknown: "The exchange has not named the share yet - it shows up here once it does.",
+    waiting: "The exchange is not connected yet, so there are no terms for it.",
   },
 
   access: {

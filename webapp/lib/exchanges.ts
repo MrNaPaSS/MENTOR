@@ -149,3 +149,34 @@ export function ratePct(rate: number | null | undefined): string | null {
   if (rate === null || rate === undefined || !(rate > 0)) return null;
   return `${(rate * 100).toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}%`;
 }
+
+/**
+ * Что отвечать про возврат комиссии на этой бирже.
+ *
+ * Ответов четыре, и путать их нельзя - каждый читается как обещание:
+ *
+ * * `pays` - возврат есть, доля названа. Тогда же говорим и куда он придёт;
+ * * `forbidden` - биржа запрещает партнёрам делиться комиссией (Binance).
+ *   Это не «пока не знаем», а «не будет»: ноль пришёл с сервера намеренно;
+ * * `unknown` - биржа подключена, а долю партнёрский менеджер ещё не назвал;
+ * * `waiting` - биржи в терминале ещё нет, условий по ней и быть не может.
+ *
+ * Показать «уточняется» вместо «не будет» значит пообещать несуществующее, а
+ * наоборот - отнять существующее.
+ */
+export type CashbackKind = "pays" | "forbidden" | "unknown" | "waiting";
+
+export function cashbackKind(venue: {
+  cashback: number | null;
+  trading: boolean;
+}): CashbackKind {
+  if (venue.cashback !== null && venue.cashback > 0) return "pays";
+  if (venue.cashback === 0) return "forbidden";
+  return venue.trading ? "unknown" : "waiting";
+}
+
+/** Доля возврата в процентах: 0.15 -> «15%». Пусто - возврата нет. */
+export function cashbackPct(share: number | null | undefined): string | null {
+  if (share === null || share === undefined || !(share > 0)) return null;
+  return `${Math.round(share * 100)}%`;
+}
