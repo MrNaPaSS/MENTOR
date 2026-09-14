@@ -285,7 +285,8 @@ export function useScalpingFeed({
             // Приватное окно — переживём без кэша.
           }
         } else if (message.event === "dom") {
-          setDom(message.payload as DomFrame);
+          const frame = message.payload as DomFrame;
+          if (ourFrame(frame, optsRef.current)) setDom(frame);
         }
       };
 
@@ -327,6 +328,27 @@ export function useScalpingFeed({
   }, [foot, send]);
 
   return { screener, absent, dom, connected };
+}
+
+/**
+ * Кадр стакана про то, что сейчас на экране.
+ *
+ * Подписка меняется мгновенно, а кадр прежней монеты уже в пути: он приходил
+ * следом и рисовался как текущий. С ценой и плитой SpaceX в шапке BTC и одной
+ * гигантской свечой на весь график - переключение с дешёвой монеты на дорогую
+ * ломало экран до следующего кадра.
+ *
+ * Биржу сверяем по `asked` - что клиент просил, а не что сервер дал: книга
+ * могла прийти с общей биржи, и это законно (`fallback`).
+ */
+export function ourFrame(
+  frame: { symbol?: string; asked?: string },
+  // Символ может быть пустым: монета ещё не выбрана, и кадров тогда нет.
+  want: { symbol: string | null; exchange?: string },
+): boolean {
+  if (frame.symbol && frame.symbol !== want.symbol) return false;
+  if (frame.asked && want.exchange && frame.asked !== want.exchange) return false;
+  return true;
 }
 
 // ── форматирование чисел ────────────────────────────────────────────────────

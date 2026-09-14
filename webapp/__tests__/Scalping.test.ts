@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { base, money, price,
+import { base, money, ourFrame, price,
   priceFormat,
 } from "@/lib/scalping";
 
@@ -62,5 +62,34 @@ describe("точность ценовой шкалы", () => {
 
   it("глубже восьми знаков не уходит: дальше это уже не цена", () => {
     expect(priceFormat(0.0000000001).precision).toBe(8);
+  });
+});
+
+describe("чей кадр стакана", () => {
+  const want = { symbol: "BTCUSDT", exchange: "weex" };
+
+  it("кадр своей монеты проходит", () => {
+    expect(ourFrame({ symbol: "BTCUSDT", asked: "weex" }, want)).toBe(true);
+  });
+
+  // Переключение с дешёвой монеты на дорогую ломало экран: кадр прежней
+  // монеты долетал следом, и в шапке BTC стояла цена SpaceX, а график
+  // растягивала одна гигантская свеча.
+  it("кадр прежней монеты не проходит", () => {
+    expect(ourFrame({ symbol: "SPACEXUSDT", asked: "weex" }, want)).toBe(false);
+  });
+
+  it("кадр прежней биржи не проходит", () => {
+    expect(ourFrame({ symbol: "BTCUSDT", asked: "okx" }, want)).toBe(false);
+  });
+
+  // Книга с общей биржи - это законно: сервер сам говорит об этом полем
+  // fallback, и такой кадр отбрасывать нельзя.
+  it("общая книга вместо своей - всё ещё наш кадр", () => {
+    expect(ourFrame({ symbol: "BTCUSDT", asked: "weex" }, want)).toBe(true);
+  });
+
+  it("сервер без этих полей не блокирует экран", () => {
+    expect(ourFrame({}, want)).toBe(true);
   });
 });
