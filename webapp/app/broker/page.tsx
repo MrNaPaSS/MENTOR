@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import PageBackdrop from "@/components/ui/PageBackdrop";
+import ScrollSceneMount from "@/components/landing/ScrollSceneMount";
 import BrokerHeader from "@/components/broker/BrokerHeader";
 import Footer from "@/components/landing/Footer";
 import BrokerHero from "@/components/broker/BrokerHero";
@@ -35,9 +35,14 @@ export const metadata: Metadata = {
     // возврате комиссии, и превью с рабочим местом объясняет её быстрее, чем
     // заголовок. Метка версии - потому что превью кэшируют все, кому его
     // однажды отдали, и держат старое неделями.
-    images: [{ url: "/broker/og-broker.jpg?v=1", width: 1200, height: 630, type: "image/jpeg" }],
+    //
+    // Картинки лежат в `art/broker`, а не в `broker`: папка с именем страницы
+    // перекрывает саму страницу. При статической раздаче сервер, увидев
+    // каталог `/broker`, отдаёт его, а не `broker.html`, - и страница
+    // превращается в «страницы нет».
+    images: [{ url: "/art/broker/og-broker.jpg?v=1", width: 1200, height: 630, type: "image/jpeg" }],
   },
-  twitter: { card: "summary_large_image", images: ["/broker/og-broker.jpg?v=1"] },
+  twitter: { card: "summary_large_image", images: ["/art/broker/og-broker.jpg?v=1"] },
 };
 
 export default function BrokerPage() {
@@ -60,7 +65,7 @@ export default function BrokerPage() {
           faqLd(broker.faq.items),
         ]}
       />
-      <PageBackdrop />
+      <ScrollSceneMount />
       <BrokerHeader />
       <main>
         <BrokerHero />

@@ -6,7 +6,7 @@ export const broker = {
   meta: {
     title: "Exchange fee rebates with no subscription",
     description:
-      "Trade in the NMNH terminal and get up to 40% of your exchange fees back. No monthly plans: the full terminal, risk manager and journal are open to everyone. WEEX is live.",
+      "Trade in the NMNH terminal and get part of your exchange fees back: 15% on WEEX, 10% on OKX and BingX. No monthly plans - the full terminal, risk manager and journal are open to everyone.",
   },
 
   nav: {
@@ -24,7 +24,7 @@ export const broker = {
     lead:
       "You already pay the exchange on every trade. Trade through the NMNH terminal and part of that money comes back to you, while the workstation stays free - all of it, no tiers, no monthly fee.",
     bullets: [
-      "Up to 40% of fees back",
+      "Up to 15% of fees back",
       "Zero subscription",
       "Your money stays on your exchange",
     ],
@@ -32,10 +32,14 @@ export const broker = {
     ctaSecondary: "Open the terminal",
     imageAlt:
       "NMNH trading terminal on two laptops: order book, footprint chart and time and sales",
+    today: {
+      label: "Cashback today",
+      note: "Open the account through the academy link, trade in the terminal - the cashback lands on your account at the exchange.",
+    },
     ticker: {
-      label: "Rebate by tier",
+      label: "What comes next",
       from: "from",
-      note: "Your tier grows with 30-day volume, not with how much you paid us.",
+      note: "The 30-day volume ladder switches on together with broker status - the applications are in, we are waiting for answers.",
     },
   },
 
@@ -55,7 +59,7 @@ export const broker = {
       },
       {
         title: "We pass part of it back to you",
-        text: "From 25 to 40% of your own fees, based on 30-day volume. The remainder is our revenue, and we have no other.",
+        text: "Today that is 15% of your own fees on WEEX and 10% on OKX and BingX. The remainder is our revenue, and we have no other.",
       },
     ],
     footnote:
@@ -75,7 +79,7 @@ export const broker = {
     eyebrow: "Calculator",
     title: "What comes back to you",
     subtitle:
-      "Move the volume and the trading style. Calculated from the exchange's public rate and the programme tiers - the same formulas the payouts use.",
+      "Move the volume and the trading style. Calculated from the exchange's public rate and its own cashback share - the same formulas the payouts use.",
     volumeLabel: "30-day volume",
     volumeHint: "Total of entries and exits, not your deposit.",
     styleLabel: "Trading style",
@@ -84,11 +88,13 @@ export const broker = {
     styleTaker: "Market only",
     exchangeLabel: "Exchange",
     exchangeSoon: "soon",
+    exchangeNoCashback: "no cashback",
+    exchangeCashbackSoon: "cashback tbd",
     results: {
       commission: "Fees per month",
       commissionHint: (rate: string) => `Blended rate ${rate}`,
       cashback: "Rebate per month",
-      cashbackHint: (share: string) => `Tier pays ${share} of fees`,
+      cashbackHint: (share: string) => `${share} of the fee back on this exchange`,
       effective: "Your rate after the rebate",
       effectiveHint: (from: string, to: string) => `Was ${from}, now ${to}`,
       yearly: "Kept over a year",
@@ -205,8 +211,8 @@ export const broker = {
         text:
           "Order book with walls, clusters and tape on one screen. Orders are placed from the chart: drag a level and the order on the exchange follows.",
         points: ["Book and clusters", "Levels by mouse", "Each account sees its own exchange"],
-        image: "/broker/terminal.jpg",
-        webp: "/broker/terminal.webp",
+        image: "/art/broker/terminal.jpg",
+        webp: "/art/broker/terminal.webp",
         alt: "NMNH terminal: order book, clusters and a chart with the trade drawn on it",
       },
       {
@@ -243,11 +249,12 @@ export const broker = {
     eyebrow: "Exchanges",
     title: "Where this already works",
     subtitle:
-      "An honest list. The connected exchange comes first, the rest are waiting their turn and labelled for what they are.",
+      "An honest list. Connected exchanges come first, the rest are waiting their turn and labelled for what they are.",
     columns: {
       exchange: "Exchange",
       maker: "Maker",
       taker: "Taker",
+      cashback: "Cashback",
       effective: "Taker after rebate",
       status: "Status",
     },
@@ -255,12 +262,14 @@ export const broker = {
       live: "Live",
       soon: "Soon",
     },
-    note: (share: string) =>
-      `The "after rebate" column uses the ${share} tier - the base one, which every participant gets from day one.`,
+    cashbackNo: "not allowed by the exchange",
+    cashbackSoon: "being agreed",
+    note:
+      "The \"after rebate\" column uses each exchange's own share rather than one common number: the shares differ, and a single figure would be wrong in half the rows.",
     rateNote:
       "Rates are set by the exchange, not by us. Where the base taker fee is higher, the rebate does not fully close the gap - there is a separate question about that below.",
     waitlist: {
-      title: "Not trading on WEEX?",
+      title: "Your exchange not on the list?",
       text: "Tell us in the chat which exchange you need: the connection queue follows demand, not the alphabet.",
       button: "Message on Telegram",
     },
@@ -322,12 +331,12 @@ export const broker = {
       {
         tag: "Rates",
         q: "WEEX takers cost more than Binance. Where is the benefit?",
-        a: "True: 0.08% against 0.05%, and the rebate does not fully close that gap. Three things change the picture. The rebate on WEEX works today, while on the cheaper exchange neither we nor you have one yet. The maker fee is the same 0.02% everywhere, so a trader who enters with limits barely feels the difference. And WEEX has its own VIP ladder: the taker fee drops as volume grows. If you take everything at market and your volume is large, the honest answer is to wait for your exchange to be connected, and we will say when that happens.",
+        a: "True: 0.08% against 0.05%, and a 15% rebate does not fully close that gap. Three things change the picture. The rebate on WEEX works today, while on Binance there will be none at all - the exchange forbids partners from sharing fees. The maker fee is the same 0.02% everywhere, so a trader who enters with limits barely feels the difference. And WEEX has its own VIP ladder: the taker fee drops as volume grows. If you take everything at market and your volume is large, run your own exchange through the calculator above - it will give you that answer too.",
       },
       {
         tag: "Tiers",
         q: "Why can't the tier be bought?",
-        a: "Because then we would start earning from people who barely trade, and those are exactly the people with nothing to spare. The tier grows with 30-day volume, like VIP levels on the exchange itself.",
+        a: "Because then we would start earning from people who barely trade, and those are exactly the people with nothing to spare. The tier grows with 30-day volume, like VIP levels on the exchange itself. The ladder is not running yet: it switches on together with broker status, and until then cashback follows the affiliate model, with its own share on each exchange.",
       },
       {
         tag: "Risk",
@@ -337,12 +346,12 @@ export const broker = {
       {
         tag: "Coverage",
         q: "Which exchanges does this work on today?",
-        a: "Trading is connected on three - WEEX, OKX and BingX. In total we work with more than 8 official exchanges; the rest are pending, and until they are connected they say \"soon\" instead of appearing as logos in the footer.",
+        a: "Trading is connected on five - WEEX, OKX, BingX, MEXC and Binance. Cashback runs on three of them: WEEX 15%, OKX and BingX 10% each. In total we work with more than 8 official exchanges; the rest are pending, and until they are connected they say \"soon\" instead of appearing as logos in the footer.",
       },
       {
         tag: "Binance",
         q: "Is it true that cashback is banned on Binance?",
-        a: "It is. Binance forbids affiliates from returning fees to users and cuts the rate for it, and it only counts new users without another referral code. So when we connect there, the benefit will not be in cash, and we will write that on the page rather than let you discover it after signing up.",
+        a: "It is. Binance forbids affiliates from returning fees to users and cuts the rate for it, and it only counts new users without another referral code. Trading on Binance has worked in the terminal since September 2026, and there is no cashback there and never will be - it says so in the table above rather than turning up after you sign up.",
       },
       {
         tag: "Payouts",

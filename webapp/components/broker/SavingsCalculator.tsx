@@ -75,7 +75,7 @@ export default function SavingsCalculator() {
       <Reveal className="mt-14">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           {/* Ввод */}
-          <div className="rounded-2xl border border-border bg-bg-card/95 backdrop-blur-sm p-5 md:p-6">
+          <div className="rounded-2xl border border-border bg-bg-panel/85 backdrop-blur-xl p-5 md:p-6">
             <label className="block">
               <span className="text-sm font-semibold text-text-primary">
                 {t.broker.calculator.volumeLabel}
@@ -135,9 +135,10 @@ export default function SavingsCalculator() {
               <span className="text-sm font-semibold text-text-primary">
                 {t.broker.calculator.exchangeLabel}
               </span>
-              {/* Считать можно и по неподключённой бирже: человек хочет знать,
-                  что его ждёт. Метка «скоро» стоит прямо на кнопке, поэтому
-                  расчёт не превращается в обещание. */}
+              {/* Считать можно по любой бирже из списка: человек хочет знать,
+                  что его ждёт. Метка стоит прямо на кнопке, поэтому расчёт не
+                  превращается в обещание - и меток две, потому что причин две:
+                  биржа ещё не подключена или возврата на ней нет. */}
               <div className="mt-3 flex flex-wrap gap-2">
                 {EXCHANGES.map((item) => {
                   const active = item.id === exchange.id;
@@ -154,9 +155,13 @@ export default function SavingsCalculator() {
                       aria-pressed={active}
                     >
                       {item.name}
-                      {item.status !== "live" && (
+                      {(item.status !== "live" || !item.cashback) && (
                         <span className="rounded-md bg-bg-panel px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                          {t.broker.calculator.exchangeSoon}
+                          {item.status !== "live"
+                            ? t.broker.calculator.exchangeSoon
+                            : item.cashback === 0
+                              ? t.broker.calculator.exchangeNoCashback
+                              : t.broker.calculator.exchangeCashbackSoon}
                         </span>
                       )}
                     </button>
@@ -199,7 +204,7 @@ export default function SavingsCalculator() {
 
       {/* Сравнение с подпиской */}
       <Reveal delay={0.15} className="mt-6">
-        <div className="rounded-2xl border border-border bg-bg-card/95 backdrop-blur-sm p-5 md:p-6">
+        <div className="rounded-2xl border border-border bg-bg-panel/85 backdrop-blur-xl p-5 md:p-6">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h3 className="text-lg font-bold text-text-primary">
               {t.broker.calculator.versus.title}

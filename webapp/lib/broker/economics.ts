@@ -61,8 +61,31 @@ export function tierFor(monthlyVolume: number): CashbackTier {
  */
 export const MAX_CASHBACK_SHARE = REBATE_SHARE - MIN_MARGIN;
 
-/** Доля комиссии, которая вернётся трейдеру с таким оборотом. */
-export function cashbackShare(monthlyVolume: number): number {
+/**
+ * Доля комиссии, которая вернётся трейдеру на этой бирже сегодня.
+ *
+ * Считается не по лестнице уровней: лестница - это брокерская модель, и
+ * включится она вместе с брокерской меткой, которой у нас пока нет ни на
+ * одной бирже. Сегодня работает партнёрская модель, и доля у каждой биржи
+ * своя - та самая, которую академия обещает ученику в боте при регистрации
+ * (`lib/venues.ts`).
+ *
+ * Пусто и ноль здесь одинаково дают ноль возврата, но означают разное, и
+ * разницу называет уже текст страницы: у Binance биржа запрещает возврат, у
+ * MEXC долю ещё не назвали.
+ */
+export function cashbackShare(exchange: Exchange): number {
+  return Math.min(exchange.cashback ?? 0, MAX_CASHBACK_SHARE);
+}
+
+/**
+ * Доля возврата по лестнице уровней - то, что будет с брокерским статусом.
+ *
+ * Отдельной функцией, а не заменой расчёта: страница показывает лестницу как
+ * план, и считать по ней сегодняшнюю экономию значило бы обещать её уже
+ * сейчас.
+ */
+export function plannedShare(monthlyVolume: number): number {
   return Math.min(tierFor(monthlyVolume).share, MAX_CASHBACK_SHARE);
 }
 
@@ -85,7 +108,7 @@ export interface Outcome {
 export function outcomeFor(exchange: Exchange, profile: TradingProfile): Outcome {
   const rate = blendedRate(exchange, profile.takerShare);
   const commission = monthlyCommission(profile.monthlyVolume, rate);
-  const share = cashbackShare(profile.monthlyVolume);
+  const share = cashbackShare(exchange);
   const cashback = commission * share;
 
   return {

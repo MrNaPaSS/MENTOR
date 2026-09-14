@@ -4,15 +4,22 @@ import Link from "next/link";
 import { ArrowRight, Check, Calculator } from "lucide-react";
 import { CASHBACK_TIERS } from "@/lib/broker/program";
 import { compactMoney, share } from "@/lib/broker/format";
+import { cashbackPct, PAYING } from "@/lib/venues";
 import { useLocale, useT } from "@/lib/i18n";
 
 /**
- * Первый экран: обещание, снимок рабочего места и лестница уровней.
+ * Первый экран: обещание, снимок рабочего места и условия возврата.
  *
- * Уровни стоят прямо в первом экране намеренно. Подписочные витрины прячут
- * условия под «подробнее о тарифах», и человек, который однажды в такое
- * упирался, ищет подвох раньше, чем читает заголовок. Здесь искать нечего:
- * вся сетка возврата видна до первого клика.
+ * Условия стоят прямо в первом экране намеренно. Подписочные витрины прячут
+ * их под «подробнее о тарифах», и человек, который однажды в такое упирался,
+ * ищет подвох раньше, чем читает заголовок. Здесь искать нечего: сколько
+ * возвращается на каждой бирже, видно до первого клика.
+ *
+ * Полос две, и порядок между ними важен. Первая - то, что работает сегодня:
+ * доля по каждой бирже, та же, что в боте академии и в кабинете. Вторая -
+ * лестница по обороту, и она подписана как план: включится вместе с
+ * брокерской меткой, которой у нас пока нет ни на одной бирже. Поменяй их
+ * местами - и страница снова будет обещать то, чего не даёт.
  */
 export default function BrokerHero() {
   const t = useT();
@@ -82,9 +89,9 @@ export default function BrokerHero() {
               style={{ background: "radial-gradient(60% 60% at 50% 40%, rgba(6,182,212,0.20), transparent 70%)" }}
             />
             <picture>
-              <source srcSet="/broker/terminal.webp" type="image/webp" />
+              <source srcSet="/art/broker/terminal.webp" type="image/webp" />
               <img
-                src="/broker/terminal.jpg"
+                src="/art/broker/terminal.jpg"
                 alt={t.broker.hero.imageAlt}
                 width={1600}
                 height={840}
@@ -95,10 +102,36 @@ export default function BrokerHero() {
           </div>
         </div>
 
-        {/* Лестница уровней. Не таблица - четыре ступени в строку: их читают
-            глазами за секунду, и видно, что ступень одна другой шире по
-            обороту, а не по цене. */}
-        <div className="mt-14 rounded-2xl border border-border bg-bg-card/95 backdrop-blur-sm p-5 backdrop-blur-sm md:mt-16 md:p-6">
+        {/* Возврат сегодня - по бирже. Цифры из общего реестра: те же стоят в
+            боте академии и в кабинете, и разойтись им нельзя - человек читает
+            все три. */}
+        <div className="mt-14 rounded-2xl border border-border bg-bg-panel/60 p-5 backdrop-blur-md md:mt-16 md:p-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-sm font-semibold uppercase tracking-wider text-text-muted">
+              {t.broker.hero.today.label}
+            </span>
+            <span className="text-sm text-text-secondary">{t.broker.hero.today.note}</span>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {PAYING.map((venue) => (
+              <div
+                key={venue.code}
+                className="rounded-xl border border-border/70 bg-bg-card/60 px-4 py-3 backdrop-blur-sm"
+              >
+                <div className="font-mono text-2xl font-black tabular-nums text-accent-cyan">
+                  {cashbackPct(venue.cashback)}
+                </div>
+                <div className="mt-0.5 text-xs text-text-muted">{venue.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Лестница уровней - это план, и подписана она планом. Не таблица:
+            четыре ступени в строку читаются глазами за секунду, и видно, что
+            ступень одна другой шире по обороту, а не по цене. */}
+        <div className="mt-4 rounded-2xl border border-dashed border-border bg-bg-panel/40 p-5 backdrop-blur-md md:p-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="text-sm font-semibold uppercase tracking-wider text-text-muted">
               {t.broker.hero.ticker.label}
@@ -110,9 +143,9 @@ export default function BrokerHero() {
             {CASHBACK_TIERS.map((tier, i) => (
               <div
                 key={tier.id}
-                className="relative overflow-hidden rounded-xl border border-border/70 bg-bg-panel/80 px-4 py-3"
+                className="relative overflow-hidden rounded-xl border border-border/70 bg-bg-card/40 px-4 py-3"
               >
-                <div className="font-mono text-2xl font-black tabular-nums text-accent-cyan">
+                <div className="font-mono text-2xl font-black tabular-nums text-text-secondary">
                   {share(tier.share, locale)}
                 </div>
                 <div className="mt-0.5 text-xs text-text-muted">
@@ -120,7 +153,7 @@ export default function BrokerHero() {
                 </div>
                 {/* Полоска растёт со ступенью: сетка читается ещё до цифр. */}
                 <div
-                  className="absolute inset-x-0 bottom-0 h-0.5 bg-accent-cyan/60"
+                  className="absolute inset-x-0 bottom-0 h-0.5 bg-text-muted/40"
                   style={{ width: `${((i + 1) / CASHBACK_TIERS.length) * 100}%` }}
                 />
               </div>

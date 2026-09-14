@@ -12,6 +12,7 @@ import {
   MAX_CASHBACK_SHARE,
 } from "@/lib/broker/economics";
 import { CASHBACK_TIERS, EXCHANGES, exchangeById } from "@/lib/broker/program";
+import { TRADING, VENUES } from "@/lib/venues";
 import { RIVAL_PLANS } from "@/lib/broker/rivals";
 
 // Числа с этой страницы человек считает за нами на калькуляторе телефона.
@@ -84,17 +85,31 @@ describe("расчёт трейдера", () => {
     expect(out.commission).toBeCloseTo(800, 6);
   });
 
-  it("на этом обороте действует уровень 30%", () => {
-    expect(out.share).toBeCloseTo(0.3, 10);
-    expect(out.cashback).toBeCloseTo(240, 6);
+  // Доля не зависит от оборота: лестница уровней - брокерская модель, она
+  // включится с брокерской меткой. Сегодня работает партнёрская, и доля у
+  // каждой биржи своя - у WEEX 15%.
+  it("возврат считается по доле биржи, а не по обороту", () => {
+    expect(out.share).toBeCloseTo(0.15, 10);
+    expect(out.cashback).toBeCloseTo(120, 6);
+
+    const больше = outcomeFor(weex, { monthlyVolume: 20_000_000, takerShare: 1 });
+    expect(больше.share).toBeCloseTo(0.15, 10);
+  });
+
+  it("биржа без возврата возвращает ноль, а не долю с соседней", () => {
+    const binance = outcomeFor(exchangeById("binance"), { monthlyVolume: 1_000_000, takerShare: 1 });
+    expect(binance.share).toBe(0);
+    expect(binance.cashback).toBe(0);
+    // Ставку после возврата это не портит: платит человек ровно биржевую.
+    expect(binance.effectiveRate).toBeCloseTo(binance.rate, 10);
   });
 
   it("ставка после возврата ниже биржевой ровно на долю возврата", () => {
-    expect(out.effectiveRate).toBeCloseTo(0.00056, 10);
+    expect(out.effectiveRate).toBeCloseTo(0.00068, 10);
   });
 
   it("за год возвращается двенадцать месячных возвратов", () => {
-    expect(out.yearly).toBeCloseTo(2880, 6);
+    expect(out.yearly).toBeCloseTo(1440, 6);
   });
 
   it("нулевой оборот - нулевые деньги, а не деление на ноль", () => {
@@ -147,11 +162,11 @@ describe("сравнение за год", () => {
     const ours = outcomeFor(weex, profile);
     const theirs = planOutcome(monthlyCommission(profile.monthlyVolume, 0.0005), RIVAL_PLANS[2]);
 
-    // У нас: комиссия $80, возврат 25% - $20 в месяц, $240 за год.
-    expect(ours.yearly).toBeCloseTo(240, 6);
+    // У нас: комиссия $80, возврат 15% - $12 в месяц, $144 за год.
+    expect(ours.yearly).toBeCloseTo(144, 6);
     // У них: возврат $22.5 минус $99 подписки - минус $76.5 в месяц.
     expect(theirs.yearly).toBeCloseTo(-918, 6);
-    expect(yearlyAdvantage(ours, theirs)).toBeCloseTo(1158, 6);
+    expect(yearlyAdvantage(ours, theirs)).toBeCloseTo(1062, 6);
   });
 });
 
@@ -182,10 +197,17 @@ describe("список бирж", () => {
     expect(EXCHANGES.slice(first).every((e) => e.status === "soon")).toBe(true);
   });
 
-  it("рабочими помечены те биржи, у которых есть адаптер", () => {
-    // Тот же список держит core/exchanges.py (KEY_EXCHANGES): здесь обещание
-    // на витрине, там кнопка подключения ключей.
+  it("рабочими помечены те биржи, на которых терминал торгует", () => {
+    // Список один на весь сайт (lib/venues.ts), и с сервером его сверяет
+    // tests/test_landing_venues.py: здесь обещание на витрине, там кнопка
+    // подключения ключей.
     const live = EXCHANGES.filter((e) => e.status === "live").map((e) => e.id);
-    expect(live).toEqual(["weex", "bingx", "okx"]);
+    expect(live).toEqual(TRADING.map((one) => one.code));
+  });
+
+  it("доля возврата на витрине - та же, что в общем реестре", () => {
+    for (const venue of VENUES) {
+      expect(exchangeById(venue.code).cashback, venue.code).toBe(venue.cashback);
+    }
   });
 });
