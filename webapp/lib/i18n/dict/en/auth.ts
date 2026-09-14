@@ -18,7 +18,7 @@ export const auth = {
   uidHint: "Where to find the UID: WEEX → Profile → UID (the numeric account id).",
   uidBackToBot: "← Sign in through the academy bot",
   uidFallbackNote: "This route is a last resort. The normal way in is the password from the academy bot.",
-  noAccount: "No WEEX account?",
+  noAccount: "No exchange account yet?",
   registerLink: "Register →",
   uidNotFound: "This UID isn't in the system",
   requestCode: "Get the code",

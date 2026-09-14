@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Reveal from "@/components/ui/Reveal";
-import { weexRegisterUrl } from "@/lib/content";
-import { useLocale, useT } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
+import SignupPicker from "@/components/landing/SignupPicker";
 
 /**
  * Последний экран.
@@ -16,7 +16,6 @@ import { useLocale, useT } from "@/lib/i18n";
  */
 export default function BrokerCta() {
   const t = useT();
-  const locale = useLocale();
 
   return (
     <section className="mx-auto max-w-6xl px-4 pb-24 md:px-6 md:pb-32">
@@ -35,14 +34,10 @@ export default function BrokerCta() {
               >
                 {t.broker.cta.primary} <ArrowRight className="h-[15px] w-[15px]" />
               </Link>
-              <a
-                href={weexRegisterUrl(locale)}
-                target="_blank"
-                rel="noopener noreferrer"
+              <SignupPicker
+                label={t.broker.cta.secondary}
                 className="inline-flex items-center gap-2 rounded-full border border-border px-7 py-3 text-[15px] font-semibold text-text-primary transition-all duration-200 hover:bg-bg-panel/60 active:scale-[0.97]"
-              >
-                {t.broker.cta.secondary} <ExternalLink className="h-[14px] w-[14px] opacity-50" />
-              </a>
+              />
             </div>
 
             <p className="mt-5 text-sm text-text-muted">{t.broker.cta.note}</p>

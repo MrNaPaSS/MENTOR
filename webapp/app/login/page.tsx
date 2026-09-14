@@ -7,8 +7,9 @@ import Logo from "@/components/ui/Logo";
 import LocaleSwitch from "@/components/ui/LocaleSwitch";
 import { api } from "@/lib/api";
 import { setStudentTokens } from "@/lib/auth";
-import { SOCIAL_LINKS, weexRegisterUrl } from "@/lib/content";
-import { useLocale, useT } from "@/lib/i18n";
+import { SOCIAL_LINKS } from "@/lib/content";
+import SignupPicker from "@/components/landing/SignupPicker";
+import { useT } from "@/lib/i18n";
 
 const OTP_LEN = 6;
 
@@ -30,7 +31,6 @@ function prettyPass(value: string): string {
 export default function LoginPage() {
   const router = useRouter();
   const t = useT();
-  const locale = useLocale();
   // Telegram - основной путь: только через него UID биржи связывается с
   // человеком, а его ник попадает в подписи на карточках и снимках. Вход по
   // одному UID остаётся запасным и может быть закрыт на сервере.
@@ -271,14 +271,10 @@ export default function LoginPage() {
               </p>
               <p className="text-xs text-text-muted">
                 {t.auth.noAccount}{" "}
-                <a
-                  href={weexRegisterUrl(locale)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent-cyan underline-offset-2 hover:underline"
-                >
-                  {t.auth.registerLink}
-                </a>
+                <SignupPicker
+                  label={t.auth.registerLink}
+                  className="inline-flex items-center gap-1 text-accent-cyan underline-offset-2 hover:underline"
+                />
               </p>
               <button
                 className="btn-primary w-full"

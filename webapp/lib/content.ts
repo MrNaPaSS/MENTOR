@@ -22,17 +22,6 @@ export const SOCIAL_LINKS = {
 export const PARTNER_EMAIL = "partners@nmnh.trade";
 
 /**
- * Партнёрская ссылка на регистрацию с учётом языка.
- *
- * У биржи свой раздел на каждый язык, и «/ru/register» открывает англоязычному
- * гостю русскую страницу - на первом же шаге, ещё до академии.
- */
-export function weexRegisterUrl(locale: string): string {
-  const lang = locale === "en" ? "en" : "ru";
-  return `https://www.weex.com/${lang}/register?vipCode=kaktotakxme`;
-}
-
-/**
  * Партнёрские ссылки бирж, по которым ученик заводит счёт.
  *
  * Порядок - порядок кнопок в подвале. Биржа без ссылки не показывается вовсе:

@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, ExternalLink, Send } from "lucide-react";
-import { weexRegisterUrl } from "@/lib/content";
-import { useLocale, useT } from "@/lib/i18n";
+import { ArrowRight, Check, Send } from "lucide-react";
+import { useT } from "@/lib/i18n";
+import SignupPicker from "@/components/landing/SignupPicker";
 
 export default function Hero() {
   const t = useT();
-  const locale = useLocale();
 
   return (
     <section
@@ -55,15 +54,11 @@ export default function Hero() {
               {t.landing.hero.ctaTerminal} <ArrowRight className="h-[15px] w-[15px]" />
             </Link>
 
-            {/* WEEX */}
-            <a
-              href={weexRegisterUrl(locale)}
-              target="_blank"
-              rel="noopener noreferrer"
+            {/* Счёт на бирже: какой именно - человек выбирает в окне. */}
+            <SignupPicker
+              label={t.landing.hero.ctaWeex}
               className="inline-flex items-center gap-2 rounded-full border border-border px-7 py-3 text-[15px] font-semibold text-text-primary transition-all duration-200 hover:border-border hover:bg-bg-panel/60 active:scale-[0.97]"
-            >
-              {t.landing.hero.ctaWeex} <ExternalLink className="h-[14px] w-[14px] opacity-50" />
-            </a>
+            />
 
             {/* Telegram */}
             <a

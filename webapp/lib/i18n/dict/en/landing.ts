@@ -21,7 +21,7 @@ export const landing = {
       "API keys with withdrawals disabled",
     ],
     ctaTerminal: "Open the terminal",
-    ctaWeex: "Open a WEEX account",
+    ctaWeex: "Open an exchange account",
   },
 
   terminal: {
@@ -67,7 +67,20 @@ export const landing = {
     ctaTitle: "Terminal access is free",
     ctaText: "Registering on an exchange through our link unlocks it. No subscriptions, no payments.",
     ctaPrimary: "Open the terminal",
-    ctaSecondary: "WEEX account",
+    ctaSecondary: "Exchange account",
+  },
+
+  signup: {
+    button: "Open an exchange account",
+    title: "Where to open an account",
+    subtitle: "The terminal works on all five. What differs is the cashback terms.",
+    cashback: (pct: string) => `${pct} of the fee comes back`,
+    noCashback: "This exchange does not allow cashback",
+    cashbackSoon: "Cashback terms are being agreed",
+    open: "Open account",
+    close: "Close",
+    note:
+      "The account is opened on the exchange itself and stays yours. Use the link from here: an account opened elsewhere is invisible to the academy, and none of the terms apply to it.",
   },
 
   exchanges: {

@@ -25,8 +25,8 @@ import {
 import Link from "next/link";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
-import { weexRegisterUrl } from "@/lib/content";
-import { useLocale, useT } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
+import SignupPicker from "@/components/landing/SignupPicker";
 
 interface Feature {
   icon: LucideIcon;
@@ -55,7 +55,6 @@ const SAFETY_ICONS = [Lock, ShieldCheck, X];
 
 export default function Terminal() {
   const t = useT();
-  const locale = useLocale();
   const copy = t.landing.terminal;
 
   return (
@@ -212,14 +211,7 @@ export default function Terminal() {
             <Link href="/login" className="btn-primary">
               {copy.ctaPrimary}
             </Link>
-            <a
-              href={weexRegisterUrl(locale)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-outline"
-            >
-              {copy.ctaSecondary}
-            </a>
+            <SignupPicker label={copy.ctaSecondary} className="btn-outline" />
           </div>
         </div>
       </Reveal>

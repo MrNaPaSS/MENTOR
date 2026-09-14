@@ -309,7 +309,7 @@ export const broker = {
     title: "Last month's fees are already paid",
     text: "Those you cannot get back. Next month's you can start recovering today, and it takes seven minutes.",
     primary: "Open the terminal",
-    secondary: "Open a WEEX account",
+    secondary: "Open an exchange account",
     note: "No subscription, no application, no call with a manager.",
   },
 };

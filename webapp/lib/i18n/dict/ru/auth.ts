@@ -20,7 +20,7 @@ export const auth = {
   uidHint: "Где взять UID: WEEX → Профиль → UID (числовой идентификатор аккаунта).",
   uidBackToBot: "← Войти через бота академии",
   uidFallbackNote: "Этот путь оставлен на крайний случай. Обычный вход - паролем из бота академии.",
-  noAccount: "Нет аккаунта WEEX?",
+  noAccount: "Нет счёта на бирже?",
   registerLink: "Зарегистрироваться →",
   uidNotFound: "UID не найден в системе",
   requestCode: "Получить код",
