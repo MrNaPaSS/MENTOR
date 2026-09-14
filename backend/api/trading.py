@@ -264,6 +264,10 @@ async def live_trades(
                 "symbol": row.symbol,
                 "side": row.side,
                 "status": row.status,
+                # Биржа сделки. Ответ идёт по всем биржам сразу - сопровождение
+                # ведёт каждую там, где она открыта, - и терминалу надо знать,
+                # чья это сделка: на графике чужой биржи её рисовать нельзя.
+                "exchange": trade_exchange(row.exchange),
                 # Позиции на бирже нет, идёт запись в журнал.
                 "closing": bool(closing(row.id)) if callable(closing) else False,
                 "qty": float(row.qty),
@@ -313,6 +317,8 @@ def _just_closed(session, student_id: int) -> list[dict[str, Any]]:
     return [
         {
             "client_id": row.client_id,
+            # Биржа сделки: терминал показывает итог только той, что открыта.
+            "exchange": trade_exchange(row.exchange),
             "exit_price": float(row.exit_price) if row.exit_price is not None else None,
             "pnl": float(row.pnl or 0),
             "fee": float(row.fee or 0),

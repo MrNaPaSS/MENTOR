@@ -217,21 +217,22 @@ def switch_refusal(session, student: Student, code: str) -> str:
 
     Повторный выбор той же биржи переключением не считается: менять нечего.
 
-    Смотрим только на ту биржу, **с которой уходим**. Сделки на других к
-    переключению отношения не имеют: каждая ведётся своим ключом и закрывается
-    там же, где открыта. Считать все подряд значило бы запирать человека
-    из-за счёта, которого он даже не трогает, - именно так и вышло: сделка на
-    WEEX не пускала с OKX на BingX.
+    Держит любая живая сделка, на какой бы бирже она ни шла (решение
+    владельца): счёт не меняют, пока по нему что-то открыто, и разбираться,
+    какая именно биржа занята, человеку в этот момент некогда.
+
+    Брошенные записи при этом не считаются - за ними никто не следит, и
+    запирать из-за них нельзя (`live_by_exchange`, `fresh_only`).
     """
-    current = (student.active_exchange or "").strip().lower()
-    if code == current or not current:
+    if code == (student.active_exchange or "").strip().lower():
         return ""
-    live = live_by_exchange(session, student.id, fresh_only=True).get(current, 0)
+    live = live_by_exchange(session, student.id, fresh_only=True)
     if not live:
         return ""
+    where = ", ".join(f"{name.upper()} - {count}" for name, count in sorted(live.items()))
     return (
-        f"На {current.upper()} идут сделки терминала ({live}). Пока они открыты, "
-        "биржу не сменить: закройте их или дождитесь цели."
+        f"Идут сделки терминала ({where}). Пока они открыты, биржу не сменить: "
+        "закройте их или дождитесь цели."
     )
 
 

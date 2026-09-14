@@ -188,11 +188,7 @@ export default function ExchangesPage() {
             venue={venue}
             active={venue.exchange === active}
             busy={busy === venue.exchange}
-            busyTrades={
-              // Сделки той биржи, с которой уходим: чужие переключению не
-              // мешают, каждая ведётся своим ключом.
-              (listing?.venues ?? []).find((one) => one.exchange === active)?.live ?? 0
-            }
+            busyTrades={listing?.live_total ?? 0}
             onLogin={() => login(venue.exchange)}
             onKeys={() => setKeysOpen(true)}
             onActive={() => act(venue.exchange, () => chooseVenue(venue.exchange))}
@@ -230,7 +226,7 @@ function VenueCard({
   venue: VenueRow;
   active: boolean;
   busy: boolean;
-  /** Сделок терминала, идущих на активной бирже: они держат переключение. */
+  /** Сделок терминала, идущих сейчас: любая из них держит переключение. */
   busyTrades: number;
   onLogin: () => void;
   onKeys: () => void;
@@ -392,10 +388,9 @@ function VenueCard({
             {venue.connected ? d.actions.replace : d.actions.keys}
           </button>
         )}
-        {/* Уйти с биржи, где идёт сделка, нельзя: позиция осталась бы на одной
-            бирже, а следующая заявка ушла бы на другую. Сделки других бирж не
-            мешают - они ведутся своим ключом. Сервер откажет и сам, но кнопку
-            лучше запереть до нажатия, с причиной. */}
+        {/* Счёт не меняют, пока по нему что-то открыто: держит любая живая
+            сделка, на какой бы бирже она ни шла. Сервер откажет и сам, но
+            кнопку лучше запереть до нажатия, с причиной. */}
         {venue.connected && !active && (
           <button
             onClick={onActive}

@@ -325,27 +325,22 @@ def test_exchange_does_not_switch_under_a_live_trade(api):
     assert student.active_exchange == "weex"
 
 
-def test_trade_on_another_exchange_does_not_block(api):
-    """Сделка на чужой бирже переключению не мешает.
+def test_trade_on_another_exchange_holds_the_switch_too(api):
+    """Держит любая живая сделка, на какой бы бирже она ни шла.
 
-    Каждая сделка ведётся и закрывается своим ключом, и та, что идёт на WEEX,
-    не имеет отношения к переходу с OKX на BingX. Считать все подряд значило
-    бы запирать человека из-за счёта, которого он даже не трогает.
+    Решение владельца: счёт не меняют, пока по нему что-то открыто, и
+    разбираться, какая именно биржа занята, человеку в этот момент некогда.
     """
     client, session, student, _ = api
     client.post("/api/exchanges/weex/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
     client.post("/api/exchanges/okx/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
     _live_trade(session, student, "weex")
-
-    # Уходим с OKX: на ней сделок нет, значит переключение свободно, хотя на
-    # WEEX сделка идёт.
     student.active_exchange = "okx"
     session.commit()
 
     answer = client.post("/api/exchanges/active", json={"exchange": "weex"})
-    assert answer.status_code == 200
-    session.refresh(student)
-    assert student.active_exchange == "weex"
+    assert answer.status_code == 409
+    assert "WEEX" in answer.json()["detail"]
 
 
 def test_same_exchange_is_not_a_switch(api):

@@ -2018,8 +2018,21 @@ export default function ScalpingPage() {
       //
       // Это память сервера, а не поход на биржу: спрашивать её каждый круг
       // дёшево.
-      const mind = await liveTrades().catch(() => null);
+      const all = await liveTrades().catch(() => null);
       if (cancelled) return;
+      // Только сделки той биржи, что открыта сейчас. Сопровождение ведёт
+      // сделки всех бирж разом, и без этого на графике OKX появлялась позиция
+      // с WEEX вместе со своей прибылью. Сделка без биржи - запись до
+      // мультибиржи, то есть WEEX; сервер, не присылающий поле, ведёт себя
+      // как раньше.
+      const ours = (one: { exchange?: string }) =>
+        !one.exchange || !venue || one.exchange === venue;
+      const mind = all
+        ? {
+            trades: all.trades.filter(ours),
+            closed: (all.closed ?? []).filter(ours),
+          }
+        : null;
       // Сделки, которые сервер ещё ведёт. Те, по которым он уже решил, что
       // позиции нет, сюда не входят: он дописывает журнал, а экрану ждать
       // вместе с ним нечего - защита с биржи снята вместе с позицией.
