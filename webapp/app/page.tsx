@@ -3,6 +3,7 @@ import ScrollSceneMount from "@/components/landing/ScrollSceneMount";
 import Hero from "@/components/landing/Hero";
 import Terminal from "@/components/landing/Terminal";
 import Exchanges from "@/components/landing/Exchanges";
+import WhyUs from "@/components/landing/WhyUs";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Faq from "@/components/landing/Faq";
 import Socials from "@/components/landing/Socials";
@@ -35,6 +36,7 @@ export default function Home() {
         <Hero />
         <Terminal />
         <Exchanges />
+        <WhyUs />
         <HowItWorks />
         <Faq />
         <Socials />

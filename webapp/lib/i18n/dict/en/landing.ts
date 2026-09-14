@@ -81,6 +81,31 @@ export const landing = {
       "The account is opened on the exchange itself and stays yours. Use the link from here: an account opened elsewhere is invisible to the academy, and none of the terms apply to it.",
   },
 
+  why: {
+    eyebrow: "Why us",
+    title: "Four parts of one system",
+    subtitle: "Sold separately elsewhere, and not cheaply. Here they work together.",
+    items: [
+      {
+        title: "The terminal",
+        text: "Order book, footprint and risk sized before entry. Stop and targets go to the exchange with the trade, and the server runs it from there - while you sleep.",
+      },
+      {
+        title: "Five exchanges",
+        text: "WEEX, OKX, BingX, MEXC and Binance in one interface. The account stays yours, the key has no withdrawal rights.",
+      },
+      {
+        title: "Fee cashback",
+        text: "Up to 45% of your own fee comes back to your exchange account. No subscriptions, no plans: the terminal is free.",
+      },
+      {
+        title: "Academy and community",
+        text: "Training from the basics upwards, live trading sessions and trade reviews - in the same place you trade.",
+      },
+    ],
+    note: "None of it is sold separately or locked behind access tiers.",
+  },
+
   exchanges: {
     eyebrow: "Partners",
     title: "Our partners",

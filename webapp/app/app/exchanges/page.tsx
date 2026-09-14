@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, ChevronLeft, ExternalLink, KeyRound, LogIn } from "lucide-react";
+import { Activity, Check, ChevronLeft, ExternalLink, KeyRound, LogIn } from "lucide-react";
 
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import { EXCHANGE_SIGNUP } from "@/lib/content";
@@ -240,75 +240,78 @@ function VenueCard({
   const locked = venue.keys_supported && venue.may_connect === false;
 
   return (
-    <div className={CARD}>
-      <div className="flex items-start justify-between gap-2">
-        {/* Знак биржи перед её названием: в списке из семи карточек свою
-            человек находит по знаку раньше, чем прочитает заголовок. Знак
-            тот же, что на главной и на карточке счёта в профиле, - узнавание
-            должно работать во все стороны. */}
-        <div className="flex items-start gap-2.5">
-          <VenueMark
-            code={venue.exchange}
-            name={venue.name}
-            decorative
-            className="h-7 w-9 shrink-0"
-            nameClassName="text-[11px]"
-          />
-          <div>
-            <p className="text-[13px] font-semibold text-[var(--pane-text)]">{venue.title}</p>
-            <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
-              {d.broker[venue.broker] ?? venue.broker}
+    <div
+      className={`${CARD} ${
+        // Подключённая биржа выделена рамкой: в списке из пяти карточек своя
+        // должна находиться взглядом, а не чтением.
+        venue.connected ? "border-[var(--pane-accent-soft)]" : ""
+      }`}
+    >
+      {/* Шапка: знак, название и состояние счёта одной строкой.
+          Состояние счёта стоит прямо под названием - это первое, что человек
+          здесь ищет; раньше на этом месте была подпись «переговоры идут»,
+          которая ничего ему не говорила. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--pane-hover)]">
+            <VenueMark
+              code={venue.exchange}
+              name={venue.name}
+              decorative
+              className="h-7 w-8"
+              nameClassName="text-[10px]"
+            />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-[14px] font-semibold text-[var(--pane-text)]">
+              {venue.title}
+            </p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--pane-text-2)]">
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                  venue.connected ? "bg-[var(--pane-up)]" : "bg-[var(--pane-border)]"
+                }`}
+              />
+              <span className="truncate">
+                {venue.connected
+                  ? `${d.state.connected} · ${
+                      venue.auth_kind === "oauth" ? d.auth.oauth : d.auth.keys
+                    }${venue.key_tail ? ` · ${venue.key_tail}` : ""}`
+                  : d.state.notConnected}
+              </span>
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap justify-end gap-1">
+        <div className="flex shrink-0 flex-wrap justify-end gap-1">
           {active && (
             <span className={`${CHIP} bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]`}>
               {d.state.active}
             </span>
           )}
-          <span
-            className={`${CHIP} ${
-              venue.trading
-                ? "bg-[var(--pane-hover)] text-[var(--pane-text-2)]"
-                : "bg-[var(--pane-hover)] text-[var(--pane-muted)]"
-            }`}
-          >
-            {venue.trading ? d.state.trading : d.state.soon}
-          </span>
           <span className={`${CHIP} bg-[var(--pane-hover)] text-[var(--pane-muted)]`}>
             {venue.book ? d.state.ownBook : d.state.sharedBook}
           </span>
         </div>
       </div>
 
-      {/* Условия. Пусто - так и пишем: «уточняются».
-
-          Сниженную ставку биржи пока не называли, и пустая строка рядом с
-          живым числом возврата читается как противоречие - поэтому её видно
-          только тогда, когда она есть. */}
-      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[12px] tabular-nums">
-        <Row label={d.terms.taker} value={taker} fallback={d.terms.unknown} />
-        <Row label={d.terms.maker} value={maker} fallback={d.terms.unknown} />
-        {academy && <Row label={d.terms.academy} value={academy} fallback={d.terms.unknown} />}
+      {/* Условия тремя плитками: тейкер, мейкер, возврат.
+          Строкой они растягивались по ширине карточки, и между подписью и
+          числом оставалась пустая полоса - глаз их не связывал. */}
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <Tile label={d.terms.taker} value={taker} fallback={d.terms.unknown} />
+        <Tile label={d.terms.maker} value={maker} fallback={d.terms.unknown} />
+        <CashbackTile venue={venue} />
       </div>
+      {academy && (
+        <p className="mt-2 text-[11px] text-[var(--pane-muted)]">
+          {d.terms.academy}: <span className="font-mono tabular-nums">{academy}</span>
+        </p>
+      )}
 
       <Cashback venue={venue} />
 
-      {/* Свой счёт: подключён ли, чем и каким номером. */}
+      {/* Свой счёт: чем подключён, каким номером и что на нём идёт. */}
       <div className="mt-3 space-y-1 text-[11px] leading-snug">
-        <p className="flex items-center gap-1.5 text-[var(--pane-text-2)]">
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              venue.connected ? "bg-[var(--pane-up)]" : "bg-[var(--pane-border)]"
-            }`}
-          />
-          {venue.connected
-            ? `${d.state.connected} · ${
-                venue.auth_kind === "oauth" ? d.auth.oauth : d.auth.keys
-              }${venue.key_tail ? ` · ${venue.key_tail}` : ""}`
-            : d.state.notConnected}
-        </p>
         {venue.connected && (
           <p
             className={
@@ -319,7 +322,10 @@ function VenueCard({
           </p>
         )}
         {(venue.live ?? 0) > 0 && (
-          <p className="text-[var(--pane-accent)]">{d.state.liveTrades(venue.live ?? 0)}</p>
+          <p className="flex items-center gap-1.5 text-[var(--pane-accent)]">
+            <Activity className="h-3 w-3 shrink-0" />
+            {d.state.liveTrades(venue.live ?? 0)}
+          </p>
         )}
         {venue.uid && <p className="text-[var(--pane-muted)]">{d.access.uid(venue.uid)}</p>}
         {venue.academy_uids.length > 0 && (
@@ -404,13 +410,48 @@ function VenueCard({
 }
 
 /**
- * Возврат комиссии: сколько и куда придёт.
+ * Плитка возврата: доля числом либо короткий ответ, почему её нет.
  *
- * Ради него счёт и заводят через академию, поэтому он вынесен из столбца
- * ставок в отдельную строку: число среди четырёх других чисел человек
- * пролистывает, а строку - читает. Вопросов у него два подряд - «сколько» и
- * «куда это придёт», - и оба закрыты здесь же, чтобы не идти за ответом в
- * сноску под карточками.
+ * Стоит третьей в ряду ставок, потому что читается вместе с ними: тейкер,
+ * мейкер и то, сколько из них вернётся. Подробности - строкой ниже
+ * (`Cashback`), здесь только цифра.
+ */
+function CashbackTile({ venue }: { venue: VenueRow }) {
+  const d = useT().exchanges;
+  const kind = cashbackKind(venue);
+  const back = cashbackPct(venue.cashback);
+
+  if (kind === "pays") {
+    return (
+      <div className="rounded-lg bg-[var(--pane-accent-faint)] px-2.5 py-2">
+        <p className="text-[10px] uppercase tracking-wide text-[var(--pane-accent)] opacity-80">
+          {d.terms.cashback}
+        </p>
+        <p className="mt-0.5 font-mono text-[13px] font-semibold tabular-nums text-[var(--pane-accent)]">
+          {back}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-[var(--pane-muted)]">
+        {d.terms.cashback}
+      </p>
+      <p className="mt-0.5 text-[11px] leading-tight text-[var(--pane-muted)]">
+        {kind === "forbidden" ? d.terms.noCashback : d.terms.unknown}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Куда придёт возврат.
+ *
+ * Сколько - написано плиткой выше (`CashbackTile`), а здесь второй вопрос,
+ * который человек задаёт сразу за первым: куда эти деньги попадут. Ответ
+ * короткий и стоит под ставками, чтобы за ним не идти в сноску.
  *
  * Где возврата нет, строка всё равно стоит и называет причину. Пустое место
  * на карточке биржи читается как «забыли», а не как «не даём».
@@ -419,27 +460,18 @@ function Cashback({ venue }: { venue: VenueRow }) {
   const d = useT().exchanges;
   const kind = cashbackKind(venue);
 
-  if (kind !== "pays") {
-    return (
-      <p className="mt-3 text-[11px] leading-relaxed text-[var(--pane-muted)]">
-        {kind === "forbidden" ? d.payout.forbidden : kind === "unknown" ? d.payout.unknown : d.payout.waiting}
-      </p>
-    );
-  }
+  // Возврата нет - плитка выше уже сказала это словом, и повторять незачем.
+  if (kind !== "pays") return null;
 
   return (
-    <div className="mt-3 rounded-lg bg-[var(--pane-accent-faint)] px-3 py-2">
-      <p className="text-[12px] font-semibold text-[var(--pane-accent)]">
-        {d.payout.pays(cashbackPct(venue.cashback) ?? "")}
-      </p>
-      <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--pane-text-2)]">
-        {d.payout.where(venue.name)}
-      </p>
-    </div>
+    <p className="mt-2 text-[11px] leading-relaxed text-[var(--pane-text-2)]">
+      {d.payout.where(venue.name)}
+    </p>
   );
 }
 
-function Row({
+/** Плитка условия: подпись сверху, число под ней. */
+function Tile({
   label,
   value,
   fallback,
@@ -449,11 +481,15 @@ function Row({
   fallback: string;
 }) {
   return (
-    <div className="flex justify-between gap-2">
-      <span className="text-[var(--pane-muted)]">{label}</span>
-      <span className={value ? "text-[var(--pane-text-2)]" : "text-[var(--pane-muted)]"}>
+    <div className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-[var(--pane-muted)]">{label}</p>
+      <p
+        className={`mt-0.5 font-mono text-[13px] tabular-nums ${
+          value ? "text-[var(--pane-text)]" : "text-[11px] text-[var(--pane-muted)]"
+        }`}
+      >
         {value ?? fallback}
-      </span>
+      </p>
     </div>
   );
 }

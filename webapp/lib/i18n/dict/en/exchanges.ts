@@ -12,16 +12,8 @@ export const exchanges = {
     connected: "connected",
     notConnected: "not connected",
     liveTrades: (n: number) => `Terminal trades running: ${n}`,
-    trading: "trading",
-    soon: "soon",
     ownBook: "own book",
     sharedBook: "shared book",
-  },
-
-  broker: {
-    talks: "in talks",
-    applied: "application sent",
-    live: "broker ID received",
   },
 
   terms: {
@@ -29,6 +21,8 @@ export const exchanges = {
     maker: "maker",
     academy: "academy rate",
     unknown: "terms being agreed",
+    cashback: "cashback",
+    noCashback: "none",
     note:
       "Reference rates for tier zero: yours is derived from your own trades and always wins. " +
       "The cashback lands on your exchange account, not on a terminal balance, and is counted from the " +
@@ -36,12 +30,8 @@ export const exchanges = {
   },
 
   payout: {
-    pays: (pct: string) => `${pct} of your fee comes back`,
     where: (name: string) =>
       `Lands on your ${name} account: for trades made in the terminal from an account opened through the academy link.`,
-    forbidden: "There is no cashback on this exchange.",
-    unknown: "The exchange has not named the share yet - it shows up here once it does.",
-    waiting: "The exchange is not connected yet, so there are no terms for it.",
   },
 
   access: {

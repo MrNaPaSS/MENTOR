@@ -114,8 +114,20 @@ def test_showcase_opens_only_confirmed_exchanges(api):
     assert rows["okx"]["may_connect"] is True
     assert rows["bingx"]["keys_supported"] is True
     assert rows["bingx"]["may_connect"] is False
-    # Биржа без адаптера закрыта в любом случае - подключать нечем.
-    assert rows["bybit"]["may_connect"] is False
+    # Биржи без адаптера на витрине кабинета нет вовсе: подключать нечем, и
+    # строка, с которой ничего не сделать, читается как обещание срока.
+    assert "bybit" not in rows
+
+
+def test_showcase_shows_only_tradable_exchanges(api):
+    """На витрине кабинета только биржи, где терминал торгует.
+
+    Остальные - строка, с которой ничего нельзя сделать: ни счёт открыть, ни
+    ключи подключить. Их число названо словами на главной, и там это уместно.
+    """
+    client, *_ = api
+    codes = {v["exchange"] for v in client.get("/api/exchanges").json()["venues"]}
+    assert codes == {"weex", "okx", "bingx", "mexc", "binance"}
 
 
 def test_showcase_does_not_promise_a_rate_nobody_confirmed(api):
@@ -137,8 +149,8 @@ def test_cashback_matches_what_the_academy_promises(api):
     assert rows["weex"] == 0.15
     assert rows["okx"] == 0.10
     assert rows["bingx"] == 0.10
-    # Биржам, куда академия никого не звала, обещать нечего.
-    assert rows["bybit"] is None
+    # Неподключённых бирж здесь нет - им и обещать нечего.
+    assert "bybit" not in rows
     # MEXC: те же 10%, что на OKX и BingX - решение владельца от 14 сентября,
     # и бот академии обещает ученику ровно эту цифру.
     assert rows["mexc"] == 0.10
