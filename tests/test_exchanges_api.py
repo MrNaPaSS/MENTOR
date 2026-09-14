@@ -163,6 +163,53 @@ def test_showcase_shows_connected_account(api):
     assert body["active"] == "okx"        # первый счёт становится активным
 
 
+def test_key_without_trading_right_is_not_connected(api, monkeypatch):
+    """Ключ на чтение до счёта не допускается: отказ приходит сразу, не на заявке.
+
+    OKX выдаёт торговое право, только когда на счёте есть сто долларов. Баланс
+    читается и ключом без этого права, поэтому проверки балансом мало: счёт
+    подключался успешно, а биржа отказывала потом - в момент, когда ученик уже
+    нажал «войти».
+    """
+
+    class ReadOnly(_Probe):
+        async def can_trade(self):
+            return False
+
+    client, session, _st, inner = api
+    inner.setattr(
+        connect_mod, "PROBES", {**connect_mod.PROBES, "okx": lambda *_a, **_k: ReadOnly()}
+    )
+
+    answer = client.post(
+        "/api/exchanges/okx/keys",
+        json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"},
+    )
+    assert answer.status_code == 400
+    assert "100 USD" in answer.json()["detail"]
+    assert session.execute(select(ExchangeAccount)).scalars().all() == []
+
+
+def test_silence_about_rights_does_not_block_the_connection(api, monkeypatch):
+    """Биржа не назвала права - подключаем. Молчание не повод отказывать."""
+
+    class Silent(_Probe):
+        async def can_trade(self):
+            return None
+
+    client, session, _st, inner = api
+    inner.setattr(
+        connect_mod, "PROBES", {**connect_mod.PROBES, "okx": lambda *_a, **_k: Silent()}
+    )
+
+    answer = client.post(
+        "/api/exchanges/okx/keys",
+        json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"},
+    )
+    assert answer.status_code == 200
+    assert session.execute(select(ExchangeAccount)).scalars().one().exchange == "okx"
+
+
 # ── активная биржа и отключение ─────────────────────────────────────────────
 
 

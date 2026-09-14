@@ -78,6 +78,33 @@ async def account_uid(probe: Any, student: Student, code: str) -> str:
     return uid
 
 
+# Что сказать про биржу, которая не дала ключу торговое право. Текст называет
+# причину, а не только факт: ученик должен понять, что делать дальше.
+NO_TRADE_RIGHT = {
+    "okx": (
+        "Ключ выдан только на чтение. OKX даёт право торговли, когда на счёте "
+        "есть 100 USD - пополните счёт и создайте ключ заново, отметив «Trade»."
+    ),
+}
+
+
+async def check_trading_right(probe: Any, code: str) -> None:
+    """Может ли этот ключ ставить заявки. Биржа молчит - не мешаем."""
+    ask = getattr(probe, "can_trade", None)
+    if ask is None:
+        return
+    try:
+        allowed = await ask()
+    except WeexTradeError as exc:
+        logger.warning("Права ключа на %s не получены: %s", code, exc)
+        return
+    if allowed is False:
+        raise ConnectRefused(
+            NO_TRADE_RIGHT.get(code, "Ключ выдан только на чтение: заявки им не поставить."),
+            400,
+        )
+
+
 def check_uid(session, student: Student, code: str, uid: str) -> str:
     """Сверить счёт с подтверждённым академией. Вернуть вид доступа."""
     confirmed = confirmed_uids(session, student.id, code)
@@ -123,6 +150,13 @@ async def connect(
         await probe.balance()
     except WeexTradeError as exc:
         raise ConnectRefused(f"Ключи не подошли: {exc}", 400) from exc
+
+    # Баланс читается и ключом без права торговли, поэтому одной этой проверки
+    # мало. OKX выдаёт торговое право не всякому ключу: пока на счёте меньше
+    # ста долларов, ключ создаётся только на чтение. Раньше такой счёт
+    # подключался успешно, а отказ приходил в момент заявки - там объяснять
+    # его уже поздно.
+    await check_trading_right(probe, code)
 
     uid = await account_uid(probe, student, code) or clean_uid(uid_hint)
     access = check_uid(session, student, code, uid)

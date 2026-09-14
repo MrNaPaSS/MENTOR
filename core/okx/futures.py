@@ -520,6 +520,26 @@ class OkxFutures:
         row = (rows or [{}])[0] if isinstance(rows, list) and rows else {}
         return str(row.get("uid") or "")
 
+    async def can_trade(self) -> bool | None:
+        """Есть ли у ключа право торговать. `None` - биржа не сказала.
+
+        OKX выдаёт право торговли не всякому ключу: пока на счёте меньше ста
+        долларов, ключ создаётся **только на чтение**. Наша проверка при
+        подключении спрашивает баланс, а чтение как раз разрешено - счёт
+        подключался успешно, и отказ приходил позже, в момент заявки, где
+        объяснить его уже некому.
+
+        Права биржа называет в конфигурации счёта, полем `perm`:
+        `read_only,trade` или одно `read_only`.
+        """
+        rows = await self._request("GET", ENDPOINTS["config"])
+        row = (rows or [{}])[0] if isinstance(rows, list) and rows else {}
+        perm = str(row.get("perm") or "")
+        if not perm:
+            # Поля нет - молчание биржи не повод отказывать в подключении.
+            return None
+        return "trade" in {part.strip().lower() for part in perm.split(",")}
+
     async def taker_fee(self) -> float:
         """Ставка тейкера этого счёта. OKX отдаёт её со знаком минус - это удержание."""
         if self._fee is not None:
