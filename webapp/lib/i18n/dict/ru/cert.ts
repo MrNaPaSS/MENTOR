@@ -8,7 +8,6 @@ export const cert = {
     silver: "Серебро",
     gold: "Золото",
   },
-  levelLine: (level: string, n: number) => `Уровень «${level}» · столпов: ${n} из 4`,
   need: (n: number) => `Столпов: ${n} из 4`,
   left: (n: number) => `Не хватает столпов: ${n}`,
   issued: (date: string) => `Выдан ${date}`,

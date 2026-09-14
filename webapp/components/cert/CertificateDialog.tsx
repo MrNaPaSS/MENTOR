@@ -18,7 +18,15 @@ import { Copy, Download, X } from "lucide-react";
 import type { Certificate } from "@/lib/api";
 import { useIntlLocale, useT } from "@/lib/i18n";
 import { certData } from "@/lib/certificates";
-import { CERT_H, CERT_W, renderCert, SIGNATURE_SRC, SPOTS, stampSrc, type CertLevel } from "@/lib/cert/render";
+import {
+  CERT_H,
+  CERT_W,
+  placesOf,
+  renderCert,
+  SIGNATURE_SRC,
+  stampSrc,
+  type CertLevel,
+} from "@/lib/cert/render";
 import { SIGNATURE } from "@/lib/cert/signaturePath";
 import { copy, download } from "@/lib/pnl/share";
 
@@ -83,8 +91,11 @@ export default function CertificateDialog({
     setNote(t.cert.saved);
   }
 
-  const sig = SPOTS.signature;
-  const stamp = SPOTS.stamp;
+  // Места - по листу уровня: у серебра и золота своя разметка, и подпись с
+  // печатью в анимации обязаны встать туда же, куда их ставит холст.
+  const places = placesOf(level);
+  const sig = places.signature;
+  const stamp = places.stamp;
 
   return (
     <div

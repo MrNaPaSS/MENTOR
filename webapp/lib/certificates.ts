@@ -49,7 +49,6 @@ export function certData(cert: Certificate, owner: string, t: Dict, locale: stri
     pillars: cert.pillars,
     labels: {
       level: levelName,
-      levelLine: t.cert.levelLine(levelName, done),
       pillarValues: cert.pillars.map((p) => pillarValue(p, t)),
       date: new Date(cert.issued_at).toLocaleDateString(locale, {
         day: "numeric",

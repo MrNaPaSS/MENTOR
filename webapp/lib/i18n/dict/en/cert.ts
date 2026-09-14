@@ -6,7 +6,6 @@ export const cert = {
     silver: "Silver",
     gold: "Gold",
   },
-  levelLine: (level: string, n: number) => `${level} level · pillars: ${n} of 4`,
   need: (n: number) => `Pillars: ${n} of 4`,
   left: (n: number) => `Pillars missing: ${n}`,
   issued: (date: string) => `Issued ${date}`,
