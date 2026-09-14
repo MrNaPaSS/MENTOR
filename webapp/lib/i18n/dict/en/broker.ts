@@ -282,8 +282,8 @@ export const broker = {
       },
       {
         tag: "Coverage",
-        q: "Why only WEEX when there are a dozen exchanges?",
-        a: "Because one is connected. Limit calculation, fees and trade management are built on WEEX, the partnership is confirmed, and the programme runs there today. Applications for the others are in progress, and until they are connected they say \"soon\" instead of appearing as logos in the footer.",
+        q: "Which exchanges does this work on today?",
+        a: "Trading is connected on three - WEEX, OKX and BingX. In total we work with more than 8 official exchanges; the rest are being connected, and until then they say \"soon\" instead of appearing as logos in the footer.",
       },
       {
         tag: "Binance",

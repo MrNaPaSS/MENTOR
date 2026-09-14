@@ -46,7 +46,7 @@ export const landing = {
       "The journal counts from exchange fills",
     ],
     features: [
-      { title: "Your account, your exchange", text: "API connection in a minute. The money stays in your WEEX account." },
+      { title: "Three exchanges", text: "Trading on WEEX, OKX and BingX. The money stays in your account." },
       { title: "Order book and tape", text: "Liquidity walls, clusters and a market-wide screener - live." },
       { title: "Drag your levels", text: "Drag the stop on the chart and the exchange order follows it." },
       { title: "Risk sized for you", text: "Lot step, leverage cap and the symbol's fees are accounted for before entry." },
@@ -59,7 +59,7 @@ export const landing = {
       { title: "Unlink in one click", text: "Or revoke the key on the exchange side - any time." },
     ],
     ctaTitle: "Terminal access is free",
-    ctaText: "Registering on WEEX through our link unlocks it. No subscriptions, no payments.",
+    ctaText: "Registering on an exchange through our link unlocks it. No subscriptions, no payments.",
     ctaPrimary: "Open the terminal",
     ctaSecondary: "WEEX account",
   },
@@ -69,9 +69,9 @@ export const landing = {
     title: "From sign-up to your first trade",
     subtitle: "Four steps and the terminal trades on your exchange account. No payments, no applications.",
     steps: [
-      { title: "Sign up on WEEX", text: "Open an account through the partner link and fund it - it takes a couple of minutes." },
-      { title: "Log in through the bot", text: "The academy bot recognises you by your WEEX UID and issues a password for the platform." },
-      { title: "Connect the exchange", text: "Create a WEEX API key without withdrawal rights and paste it into the terminal - your account is live." },
+      { title: "Sign up on an exchange", text: "Open an account through the partner link and fund it - it takes a couple of minutes." },
+      { title: "Send your UID to the bot", text: "The academy confirms your account - and the exchange shows up in your settings." },
+      { title: "Connect the exchange", text: "Create an API key without withdrawal rights and paste it into the terminal - your account is live." },
       { title: "Trade from the terminal", text: "The signal is already sized to your deposit: hit “Enter” and the server runs the trade to the end." },
     ],
   },
@@ -124,18 +124,18 @@ export const landing = {
       },
       {
         tag: "Exchange",
-        q: "Is it WEEX only?",
-        a: "Yes. Limit sizing, fee calculation and trade management are all built around WEEX, and WEEX is also what opens access to the academy.",
+        q: "Which exchanges does the terminal support?",
+        a: "We work with more than 8 official exchanges. Trading is already live on three - WEEX, OKX and BingX; the rest are coming soon.",
       },
       {
         tag: "Price",
         q: "What does access cost?",
-        a: "Nothing at all. Just register on WEEX through our partner link and access opens automatically.",
+        a: "Nothing. Just register on an exchange through our partner link - the platform is paid for by the exchange fee, not by the trader.",
       },
       {
         tag: "Access",
         q: "How do I get in?",
-        a: "Register on WEEX through the partner link, send your WEEX UID to the bot - and you're in. No payments, no applications, no waiting.",
+        a: "Register on an exchange through the partner link and send your account UID to the academy bot. Once confirmed, the exchange opens in your settings - connect a key and trade.",
       },
       {
         tag: "What's inside",
