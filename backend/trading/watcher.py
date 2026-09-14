@@ -91,6 +91,12 @@ RECORD_ATTEMPTS = 8
 
 MISSING_TOLERANCE = 2
 
+# Сколько обходов подряд ждущая заявка должна отсутствовать на бирже, чтобы
+# считать её снятой. Больше, чем у позиции: пустой список заявок у биржи бывает
+# и на её собственной заминке, а снятая по ошибке запись уносит с экрана
+# разметку сделки, которую человек ещё ждёт.
+GONE_TOLERANCE = 5
+
 # Насколько средняя цена позиции может отойти от цены ждущей заявки, чтобы
 # позиция считалась набранной именно ею. Лимитка исполняется по своей цене,
 # и позиция, набранная ею, стоит рядом с ней; полпроцента - запас на
@@ -114,6 +120,12 @@ class Decision:
     move_stop_to: float | None = None
     opened: bool = False
     closed: bool = False
+    # Сделки не было: вход так и не исполнился, а заявки на бирже больше нет.
+    #
+    # Отдельно от `closed`: закрытие пишет сделку в журнал по исполнениям с
+    # биржи, а здесь писать нечего - позиции не было ни секунды. Запись просто
+    # снимается с сопровождения.
+    cancelled: bool = False
     filled_orders: list[str] = field(default_factory=list)
     # Объём позиции на бирже. По нему считаются взятые цели, и он же
     # записывается сделке: лимитка исполняется и частями, а планируемый объём
@@ -195,7 +207,22 @@ def decide(
         # нет на бирже, тоже «не стоит в стакане» - и такая запись забирала
         # новую позицию: лонг BTC по 76 950 получил цели заявки по 78 160.
         ours = size > 0 and not resting and not taken and entry_matches(trade, position)
-        return Decision(trade.takes_hit, opened=ours, size=size)
+        if ours:
+            return Decision(trade.takes_hit, opened=True, size=size)
+
+        # Заявки на бирже нет, позиции тоже - ждать нечего.
+        #
+        # Вход снимают руками в приложении биржи или его отклоняет сама биржа,
+        # и тогда запись оставалась ждущей навсегда: лимитка от 5 сентября
+        # девять дней держала счёт ученика и не давала сменить биржу.
+        #
+        # `resting` врать в эту сторону не умеет: биржа, которая не ответила,
+        # считается подтвердившей заявку (`_resting`). А запас по обходам нужен
+        # на другое - на миг между исполнением заявки и появлением позиции.
+        if not resting and size <= 0 and missing_streak >= GONE_TOLERANCE:
+            return Decision(trade.takes_hit, cancelled=True, size=0.0)
+
+        return Decision(trade.takes_hit, opened=False, size=size)
 
     takes: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
 
@@ -644,6 +671,21 @@ class PositionWatcher:
         price: float | None = None,
     ) -> None:
         changed = False
+
+        if decision.cancelled:
+            # Ни позиции, ни заявки: снимаем запись с сопровождения молча.
+            # В журнал не пишем - сделки не было.
+            trade.status = "closed"
+            trade.closed_at = utcnow()
+            trade.updated_at = utcnow()
+            self._missing.pop(trade.id, None)
+            logger.info(
+                "Ждущая сделка %s (%s %s) снята: заявки на бирже нет",
+                trade.client_id,
+                trade.symbol,
+                trade.side,
+            )
+            return
 
         if decision.opened:
             trade.status = "open"

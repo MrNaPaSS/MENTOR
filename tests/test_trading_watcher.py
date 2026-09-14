@@ -14,6 +14,7 @@ import pytest
 
 from backend.trading.watcher import (
     take_label,
+    GONE_TOLERANCE,
     MISSING_TOLERANCE,
     decide,
     position_size,
@@ -147,8 +148,48 @@ def test_missing_position_closes_the_trade_only_after_a_pause():
 
 
 def test_waiting_trade_is_not_closed_by_an_empty_book():
+    """Пустой ответ биржи ждущую сделку в журнал не отправляет.
+
+    Закрытие пишет сделку по исполнениям, а её не было: позиция не набиралась
+    ни разу. Снять запись - другое дело, см. тесты ниже.
+    """
     row = trade(status="waiting")
     assert decide(row, None, set(), None, 5).closed is False
+
+
+def test_waiting_trade_is_dropped_when_its_order_is_gone():
+    """Заявки на бирже нет и позиции нет - запись снимается.
+
+    Вход снимают руками в приложении биржи или его отклоняет сама биржа. Такая
+    запись оставалась ждущей навсегда: лимитка от 5 сентября девять дней
+    держала счёт ученика и не давала сменить биржу.
+    """
+    row = trade(status="waiting")
+    assert decide(row, None, set(), None, GONE_TOLERANCE, resting=False).cancelled is True
+    # И в журнал при этом ничего не уходит: сделки не было.
+    assert decide(row, None, set(), None, GONE_TOLERANCE, resting=False).closed is False
+
+
+def test_waiting_trade_survives_a_short_silence():
+    """Пара пустых ответов подряд - ещё не снятая заявка.
+
+    Между исполнением заявки и появлением позиции есть миг, когда на бирже нет
+    ни того, ни другого. Снять запись в этот момент значит убрать с экрана
+    разметку сделки, которая только что открылась.
+    """
+    row = trade(status="waiting")
+    assert decide(row, None, set(), None, 1, resting=False).cancelled is False
+    assert decide(row, None, set(), None, GONE_TOLERANCE - 1, resting=False).cancelled is False
+
+
+def test_resting_order_is_never_dropped():
+    """Пока заявка стоит в стакане, сделка ждёт сколько угодно.
+
+    Биржа, которая не ответила про заявки, считается подтвердившей их
+    (`_resting`), - и по её молчанию запись не снимается.
+    """
+    row = trade(status="waiting")
+    assert decide(row, None, set(), None, 99, resting=True).cancelled is False
 
 
 def test_waiting_trade_does_not_take_over_a_position_someone_else_leads():
