@@ -26,6 +26,8 @@
 | [integrations/okx-api-map.md](integrations/okx-api-map.md) | **Карта API OKX v5**: разделы целиком, что из них наше, находки в нашем коде |
 | [integrations/broker-program-plan.md](integrations/broker-program-plan.md) | **План брокерской программы**: ребейт бирж, кэшбэк трейдерам, все биржи, этапы |
 | [integrations/bingx-api.md](integrations/bingx-api.md) | BingX: подпись, заявки, книга потоком, приватный поток, метка брокера - до первой строки адаптера |
+| [integrations/academy.md](integrations/academy.md) | Связка с академией: монеты за учёбу, баланс, подтверждённые счета, общий секрет |
+| [integrations/academy-trading.md](integrations/academy-trading.md) | **Статистика торговли в мини-аппе академии**: ручка сводки, поля, пустые состояния, что показать на экране |
 | [worklog/2026-09-08-terminal.md](worklog/2026-09-08-terminal.md) | Журнал, комиссия, радио и разметка: что чинилось и почему |
 | [worklog/2026-09-08-journal-duplicates.md](worklog/2026-09-08-journal-duplicates.md) | Двойная запись в журнале, комиссия на три четверти, боксы на графике |
 | [worklog/2026-09-11-rewards-breakeven-caps.md](worklog/2026-09-11-rewards-breakeven-caps.md) | Награды с получением, стоп в б/у сразу после тейка, предел позиции по плечу, новый «Маркет» и функции за монеты |
