@@ -4,7 +4,7 @@
 
 export const broker = {
   meta: {
-    title: "Exchange fee rebates with no subscription - NMNH broker programme",
+    title: "Exchange fee rebates with no subscription",
     description:
       "Trade in the NMNH terminal and get up to 40% of your exchange fees back. No monthly plans: the full terminal, risk manager and journal are open to everyone. WEEX is live.",
   },
