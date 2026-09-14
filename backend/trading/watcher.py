@@ -19,7 +19,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from datetime import timezone
+from datetime import timedelta, timezone
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -751,6 +751,31 @@ class PositionWatcher:
 
         if changed:
             trade.updated_at = utcnow()
+        else:
+            self._touch(trade)
+
+    # Как часто отмечаем, что сопровождение видело сделку.
+    #
+    # Обход идёт каждые несколько секунд, и писать метку на каждом значило бы
+    # менять строку сделки десятки раз в минуту. Минуты хватает: по метке
+    # решается, живая сделка или брошенная запись, и точность до секунды там не
+    # нужна.
+    SEEN_EVERY = timedelta(minutes=1)
+
+    def _touch(self, trade: LiveTrade) -> None:
+        """Отметить, что сопровождение видит эту сделку.
+
+        Пульс нужен, чтобы отличить идущую сделку от зависшей записи. Запись
+        зависает, когда счёт биржи отключили: обход до неё не доходит
+        (`_handle_student` выходит на неактивном счёте), статус остаётся
+        `open`, и такая строка блокировала бы смену биржи навсегда.
+        """
+        seen = trade.updated_at
+        if seen is not None and seen.tzinfo is None:
+            seen = seen.replace(tzinfo=timezone.utc)
+        now = utcnow()
+        if seen is None or now - seen >= self.SEEN_EVERY:
+            trade.updated_at = now
 
     async def _place_takes(self, client: WeexFutures, trade: LiveTrade) -> bool:
         """Выставить лестницу целей на уже открытой позиции."""

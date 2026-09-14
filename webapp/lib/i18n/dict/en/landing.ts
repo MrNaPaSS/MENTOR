@@ -24,7 +24,7 @@ export const landing = {
 
   terminal: {
     eyebrow: "The academy terminal",
-    titleTop: "These aren't signals.",
+    titleTop: "NMNH.TRADE",
     titleAccent: "This is your workstation.",
     subtitle:
       "A trade opens in one click: the risk is sized, stop and targets go to the exchange with your entry, and the server runs the position from there.",

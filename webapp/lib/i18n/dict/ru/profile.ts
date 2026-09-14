@@ -2,6 +2,17 @@
 
 export const profile = {
   avatarAlt: "аватар",
+  // Четыре факта о себе под балансом: стаж, монеты, сертификаты и своя
+  // настоящая ставка комиссии.
+  facts: {
+    member: "в академии",
+    coins: "монет NMNH",
+    certificates: "сертификатов",
+    fee: "ваша ставка",
+    days: (n: number) => `${n} дн.`,
+    months: (n: number) => `${n} мес.`,
+    years: (n: number) => `${n} г.`,
+  },
   balance: "Баланс",
   balanceFromKeys: "● По вашим ключам WEEX",
   balanceFromAffiliate: "● Синхронизировано с WEEX",

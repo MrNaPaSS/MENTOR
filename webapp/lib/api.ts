@@ -343,6 +343,8 @@ export interface Profile {
    */
   journal_delete_allowed?: boolean;
   /** Открыт ли скальпинг-терминал: раздел работает с живыми деньгами. */
+  /** С какого дня человек в академии. По нему считается стаж в профиле. */
+  created_at?: string | null;
 }
 
 export interface AnalyticsMe {

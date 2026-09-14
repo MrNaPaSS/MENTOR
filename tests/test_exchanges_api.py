@@ -7,6 +7,7 @@
 """
 
 from __future__ import annotations
+from datetime import datetime, timedelta, timezone
 
 import time
 
@@ -322,6 +323,46 @@ def test_exchange_does_not_switch_under_a_live_trade(api):
     assert "WEEX" in answer.json()["detail"]
     session.refresh(student)
     assert student.active_exchange == "weex"
+
+
+def test_stale_trade_does_not_lock_the_switch(api):
+    """Брошенная запись не запирает биржу навсегда.
+
+    Сопровождение отмечает каждую сделку на обходе. Если до неё никто не
+    доходит - счёт биржи отключили, ключи протухли, запись осталась от старой
+    позиции, - метка стареет. Такая строка не должна держать человека: позиции
+    за ней нет, а сменить биржу он не может.
+    """
+    client, session, student, _ = api
+    client.post("/api/exchanges/weex/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+    client.post("/api/exchanges/okx/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+    _live_trade(session, student, "weex")
+
+    stale = session.execute(select(LiveTrade)).scalars().first()
+    stale.updated_at = datetime.now(timezone.utc) - timedelta(hours=3)
+    session.commit()
+
+    answer = client.post("/api/exchanges/active", json={"exchange": "okx"})
+    assert answer.status_code == 200
+    session.refresh(student)
+    assert student.active_exchange == "okx"
+
+
+def test_stale_trade_still_holds_the_keys(api):
+    """А вот отключить счёт она по-прежнему не даёт.
+
+    Ключ может понадобиться, чтобы эту же запись закрыть: снять его значит
+    оставить позицию, если она всё-таки есть, без сопровождения.
+    """
+    client, session, student, _ = api
+    client.post("/api/exchanges/weex/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+    _live_trade(session, student, "weex")
+
+    stale = session.execute(select(LiveTrade)).scalars().first()
+    stale.updated_at = datetime.now(timezone.utc) - timedelta(hours=3)
+    session.commit()
+
+    assert client.delete("/api/exchanges/weex").status_code == 409
 
 
 def test_same_exchange_is_not_a_switch(api):

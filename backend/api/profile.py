@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 
 from core.weex.uid import clean_uid
 from core.referral import grant_referral_vip
-from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student
+from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student, iso
 from backend.trading.funds import trade_roi, trade_volume
 from backend.api.journal import _exchange_of, is_admin
 from backend.trading.funds import balance_by_keys
@@ -30,6 +30,9 @@ def _profile(s: Student, admin: bool = False) -> ProfileOut:
         copy_allowed=bool(s.copy_allowed),
         journal_delete_allowed=bool(s.journal_delete_allowed),
         is_admin=admin,
+        # С меткой пояса: без неё браузер читает время как местное и считает
+        # стаж на пару часов иначе (`core/models`, `iso`).
+        created_at=iso(s.created_at),
     )
 
 

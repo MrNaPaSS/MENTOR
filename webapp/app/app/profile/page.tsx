@@ -10,10 +10,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fmtUsd, maskUid } from "@/lib/format";
 import { tradingStatus, type TradingStatus } from "@/lib/trading";
-import { venueTitle } from "@/lib/exchanges";
+import { ratePct, venueTitle } from "@/lib/exchanges";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import { setTerminalTheme, useTerminalTheme } from "@/lib/terminalTheme";
 import { setSoundOn, useSoundOn } from "@/lib/notifySound";
+import { useCoins } from "@/lib/useCoins";
 import { intlLocale, setLocale, useLocale, useT, type Locale } from "@/lib/i18n";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import FramedAvatar from "@/components/avatar/FramedAvatar";
@@ -50,6 +51,11 @@ export default function ProfilePage() {
   // человек спрашивал «подключено ли» на этой странице, а отвечать на это его
   // отправляли в другой раздел и искать там нужную кнопку.
   const [keysOpen, setKeysOpen] = useState(false);
+  // Сертификаты считаем отдельной ручкой: в профиле их нет, а спрашивать ради
+  // одной цифры весь список дешевле, чем заводить новое поле на сервере.
+  const [certCount, setCertCount] = useState<number | null>(null);
+  // Монеты академии: тот же источник, что у счётчика в шапке кабинета.
+  const { coins } = useCoins("profile");
   // Тема нужна самой странице: переключатель показывает, какая сейчас стоит.
   // Цвета панелей на страницу приносит PaneScope - окну ключей внутри неё
   // отдельная обёртка больше не нужна.
@@ -93,6 +99,10 @@ export default function ProfilePage() {
     // «подключено ли» человек задаёт себе именно здесь.
     tradingStatus()
       .then(setExchange)
+      .catch(() => {});
+    api
+      .certificates(token)
+      .then((body) => setCertCount(body.certificates.length))
       .catch(() => {});
   }, []);
 
@@ -151,6 +161,12 @@ export default function ProfilePage() {
   }
 
   const initial = (p.username || "U").slice(0, 1).toUpperCase();
+  // Своя ставка тейкера: считается по закрытым сделкам ученика, и это его
+  // настоящая комиссия, а не справочная с витрины. Нет сделок - нет и цифры.
+  const feeText = ratePct(exchange?.taker_fee ?? null);
+  // Ноль прячем: «0 сертификатов» и «0 монет» читаются упрёком, а плитки
+  // тогда просто нет - строка сама подстраивается под то, что у человека есть.
+  const certs = certCount ? String(certCount) : null;
   const isAdmin = p.weex_uid === ADMIN_WEEX_UID;
   // Счёт, на который уходят сделки: по нему и подпись, и знак биржи. Выбора
   // ещё нет - показываем биржу по умолчанию, а не пустое место.
@@ -237,6 +253,20 @@ export default function ProfilePage() {
               {t.common.refresh}
             </button>
           </div>
+
+          {/* Четыре факта о себе. Здесь только то, чего нет больше нигде в
+              кабинете: аналитика и журнал показывают сделки, витрина - биржи,
+              а стаж, монеты, сертификаты и своя настоящая ставка комиссии
+              живут в профиле или не живут вовсе.
+
+              Пустая плитка не рисуется: «0 сертификатов» у новичка читается
+              как упрёк, а прочерк под ставкой - как поломка. */}
+          <div className="relative mt-4 grid grid-cols-2 gap-2 border-t border-[var(--pane-border)] pt-3 sm:grid-cols-4">
+            <Fact label={t.profile.facts.member} value={daysHere(p.created_at, t)} />
+            <Fact label={t.profile.facts.coins} value={coins ? String(coins) : null} />
+            <Fact label={t.profile.facts.certificates} value={certs} />
+            <Fact label={t.profile.facts.fee} value={feeText} />
+          </div>
         </div>
         {/* ── Биржевой счёт ──
             Ключи вводятся в терминале, но вопрос «подключено ли» человек задаёт
@@ -268,7 +298,10 @@ export default function ProfilePage() {
                     биржу по знаку раньше, чем прочитает её название, а общий
                     ключ не говорил ничего. Биржи без знака - и тех, у кого
                     файл ещё не положен, - выручает ключ. */}
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-accent-gold/40 bg-black text-[var(--pane-gold)]">
+                {/* Подложка нейтральная, а не чёрная: знак OKX нарисован
+                    чернилами, и на чёрном квадрате он пропадал целиком -
+                    вместо биржи оставалось пустое место. */}
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-accent-gold/40 bg-[var(--pane-hover)] text-[var(--pane-gold)]">
                   {venueMark(venueCode) ? (
                     <VenueMark
                       code={venueCode}
@@ -542,6 +575,36 @@ function SettingRow({ label, children }: { label: string; children: React.ReactN
     <div className="-mx-1.5 flex items-center justify-between gap-3 rounded-lg px-1.5 py-1 transition-colors duration-150 hover:bg-[var(--pane-hover)]">
       <span className="shrink-0 text-[12px] text-[var(--pane-text-2)]">{label}</span>
       <div className="w-44 shrink-0">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Сколько человек в академии, словами.
+ *
+ * Дни, пока их мало, потом месяцы: «412 дней» читается как счётчик, а «1 год
+ * 2 месяца» - как стаж. Даты нет (старая запись) - плитки не будет вовсе.
+ */
+function daysHere(iso: string | null | undefined, t: ReturnType<typeof useT>): string | null {
+  if (!iso) return null;
+  const started = Date.parse(iso);
+  if (Number.isNaN(started)) return null;
+  const days = Math.max(0, Math.floor((Date.now() - started) / 86_400_000));
+  if (days < 60) return t.profile.facts.days(days);
+  const months = Math.floor(days / 30);
+  if (months < 24) return t.profile.facts.months(months);
+  return t.profile.facts.years(Math.floor(months / 12));
+}
+
+/** Плитка факта. Пусто - плитки нет: прочерк выглядит поломкой. */
+function Fact({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-[var(--pane-muted)]">{label}</p>
+      <p className="mt-0.5 font-mono text-[13px] font-semibold tabular-nums text-[var(--pane-text)]">
+        {value}
+      </p>
     </div>
   );
 }

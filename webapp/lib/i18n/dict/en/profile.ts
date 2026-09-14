@@ -1,5 +1,14 @@
 export const profile = {
   avatarAlt: "avatar",
+  facts: {
+    member: "with us",
+    coins: "NMNH coins",
+    certificates: "certificates",
+    fee: "your fee",
+    days: (n: number) => `${n} d.`,
+    months: (n: number) => `${n} mo.`,
+    years: (n: number) => `${n} y.`,
+  },
   balance: "Balance",
   balanceFromKeys: "● From your WEEX API keys",
   balanceFromAffiliate: "● Synced with WEEX",

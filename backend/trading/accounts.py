@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import aiohttp
@@ -160,23 +161,50 @@ def may_connect(session, student: Student, exchange: str) -> bool:
     return bool(row and row.is_active)
 
 
-def live_by_exchange(session, student_id: int) -> dict[str, int]:
+# Сколько сделка может молчать, оставаясь живой.
+#
+# Сопровождение отмечает каждую сделку на обходе, а обход идёт каждые
+# несколько секунд (`backend/trading/watcher.py`, `_touch`). Молчание дольше
+# четверти часа значит, что до сделки никто не доходит: счёт биржи отключили,
+# ключи протухли, запись осталась от старой позиции. Такая строка - брошенная,
+# и держать из-за неё человека нельзя.
+LIVE_SILENCE = timedelta(minutes=15)
+
+
+def live_by_exchange(session, student_id: int, *, fresh_only: bool = False) -> dict[str, int]:
     """Сколько сделок терминала идёт на каждой бирже.
 
     Живая сделка - это выставленный на бирже стоп, цели и сопровождение на
     сервере. Пока она идёт, биржу нельзя ни отключить (некому вести), ни
     сменить активную.
+
+    `fresh_only` оставляет только те, которые сопровождение видело недавно.
+    Для отключения счёта это неверно - там важна любая запись, даже брошенная:
+    ключ ещё может понадобиться, чтобы её закрыть. А вот держать смену биржи
+    из-за записи, до которой никто не доходит, значит запереть человека
+    навсегда.
     """
     rows = session.execute(
         select(LiveTrade)
         .where(LiveTrade.student_id == student_id)
         .where(LiveTrade.status.in_(("waiting", "open")))
     ).scalars()
+    edge = datetime.now(timezone.utc) - LIVE_SILENCE
     counts: dict[str, int] = {}
     for trade in rows:
+        if fresh_only and _silent_since(trade) < edge:
+            continue
         code = (trade.exchange or "weex").strip().lower()
         counts[code] = counts.get(code, 0) + 1
     return counts
+
+
+def _silent_since(trade: LiveTrade) -> datetime:
+    """Когда сопровождение последний раз видело сделку."""
+    seen = trade.updated_at or trade.created_at
+    if seen is None:
+        return datetime.now(timezone.utc)
+    return seen if seen.tzinfo else seen.replace(tzinfo=timezone.utc)
 
 
 def switch_refusal(session, student: Student, code: str) -> str:
@@ -191,7 +219,7 @@ def switch_refusal(session, student: Student, code: str) -> str:
     """
     if code == (student.active_exchange or "").strip().lower():
         return ""
-    live = live_by_exchange(session, student.id)
+    live = live_by_exchange(session, student.id, fresh_only=True)
     if not live:
         return ""
     where = ", ".join(f"{name.upper()} - {count}" for name, count in sorted(live.items()))
