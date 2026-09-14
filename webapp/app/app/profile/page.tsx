@@ -341,20 +341,20 @@ export default function ProfilePage() {
               </div>
 
               <div className="flex items-center gap-3">
-                {/* Знак биржи прямо в иконке счёта: человек узнаёт свою
-                    биржу по знаку раньше, чем прочитает её название, а общий
-                    ключ не говорил ничего. Биржи без знака - и тех, у кого
-                    файл ещё не положен, - выручает ключ. */}
-                {/* Подложка нейтральная, а не чёрная: знак OKX нарисован
-                    чернилами, и на чёрном квадрате он пропадал целиком -
-                    вместо биржи оставалось пустое место. */}
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-accent-gold/40 bg-[var(--pane-hover)] text-[var(--pane-gold)]">
+                {/* Знак биржи вместо общего ключа: человек узнаёт свою биржу
+                    по знаку раньше, чем прочитает название. Биржи без знака -
+                    и тех, у кого файл ещё не положен, - выручает ключ.
+
+                    Без подложки и рамки: знак нарисован на прозрачном фоне и
+                    светится сам (`VenueMark`), а квадрат вокруг него спорил с
+                    ним за внимание. */}
+                <div className="grid h-11 w-11 shrink-0 place-items-center text-[var(--pane-gold)]">
                   {venueMark(venueCode) ? (
                     <VenueMark
                       code={venueCode}
                       name={venueTitle(venueCode)}
                       decorative
-                      className="h-6 w-7"
+                      className="h-9 w-10"
                       nameClassName="text-[9px]"
                     />
                   ) : (

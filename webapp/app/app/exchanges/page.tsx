@@ -260,15 +260,15 @@ function VenueCard({
           которая ничего ему не говорила. */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--pane-hover)]">
-            <VenueMark
-              code={venue.exchange}
-              name={venue.name}
-              decorative
-              className="h-7 w-8"
-              nameClassName="text-[10px]"
-            />
-          </span>
+          {/* Знак без подложки: он нарисован на прозрачном фоне и светится
+              сам, а квадрат вокруг спорил с ним за внимание. */}
+          <VenueMark
+            code={venue.exchange}
+            name={venue.name}
+            decorative
+            className="h-10 w-11 shrink-0"
+            nameClassName="text-[11px]"
+          />
           <div className="min-w-0">
             <p className="truncate text-[14px] font-semibold text-[var(--pane-text)]">
               {venue.title}
