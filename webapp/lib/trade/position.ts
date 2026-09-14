@@ -253,6 +253,45 @@ export function pendingTargets(trade: ActiveTrade): number[] {
 }
 
 /**
+ * Разложить цели впереди по ценам, которые назвала биржа.
+ *
+ * Нужна после переноса цели мышью. Подставить одну цену на прежнее место мало:
+ * перетащив цель через соседнюю, трейдер меняет их порядок, а на графике цели
+ * идут по возрастанию в сторону прибыли, и новая цена на прежнем номере
+ * оказывается ценой чужой цели. Линия вставала не туда и держалась так до
+ * следующего опроса биржи - со стороны это выглядело как «поставилось не туда,
+ * а через время само переехало куда вели».
+ *
+ * Цен столько же, сколько целей впереди - раскладываем весь ряд: от ближней к
+ * дальней, в том же порядке, в каком его рисует график. Меньше - значит часть
+ * лестницы на бирже не стоит и раскладывать не по чему: тогда двигаем только
+ * ту цель, которую тянули, ближайшей к ней ценой из ответа.
+ *
+ * @param index Номер цели среди оставшихся - той, которую тянули.
+ * @param price Куда дотянул трейдер. Пригодится, если разложить не вышло.
+ */
+export function spreadTakes(
+  trade: ActiveTrade,
+  index: number,
+  price: number,
+  takes: number[],
+): ActiveTrade {
+  const live = takes.filter((one) => one > 0);
+  const ahead = trade.targets.length - trade.takesHit;
+
+  if (ahead <= 0 || live.length !== ahead) {
+    const near = live.length
+      ? live.reduce((best, one) => (Math.abs(one - price) < Math.abs(best - price) ? one : best))
+      : price;
+    const at = trade.takesHit + index;
+    return { ...trade, targets: trade.targets.map((one, i) => (i === at ? near : one)) };
+  }
+
+  const sorted = [...live].sort((a, b) => (trade.side === "long" ? a - b : b - a));
+  return { ...trade, targets: [...trade.targets.slice(0, trade.takesHit), ...sorted] };
+}
+
+/**
  * Снят ли риск: стоп стоит по ту сторону цены входа.
  *
  * Именно это значит «безубыток» для трейдера, и проверяется это числами, а не

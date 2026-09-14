@@ -158,6 +158,7 @@ import {
   closePartially,
   createTrade,
   pickFilled,
+  spreadTakes,
   wasEntered,
   type ActiveTrade,
 } from "@/lib/trade/position";
@@ -1563,6 +1564,13 @@ export default function ScalpingPage() {
     );
   }
 
+  /** Разложить цели по ответу биржи: вся лестница разом, а не одна цена. */
+  function applyTakes(trade: ActiveTrade, index: number, price: number, takes: number[]) {
+    setTrades((list) =>
+      list.map((t) => (t.id === trade.id ? spreadTakes(t, index, price, takes) : t)),
+    );
+  }
+
   /**
    * Отпустили: только теперь уровень едет на бирже.
    *
@@ -1610,16 +1618,20 @@ export default function ScalpingPage() {
       if (!body) throw new Error(t.terminal.notes.serverSilent);
       movedRef.current.set(trade.id, Date.now());
       record("level.moved", { id: trade.id, kind, entry: body.entry, stop: body.stop, takes: body.takes });
-      dragTrade(
-        trade,
-        kind,
-        index,
-        kind === "entry"
-          ? body.entry
-          : kind === "stop"
-            ? body.stop
-            : body.takes[index] ?? price,
-      );
+      if (kind === "take" && !body.planned) {
+        applyTakes(trade, index, price, body.takes);
+      } else {
+        dragTrade(
+          trade,
+          kind,
+          index,
+          kind === "entry"
+            ? body.entry
+            : kind === "stop"
+              ? body.stop
+              : body.takes[index] ?? price,
+        );
+      }
       setOrderNote({
         text:
           kind === "entry"
