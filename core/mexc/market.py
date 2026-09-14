@@ -59,6 +59,9 @@ ENDPOINTS = {
     "asset": "/api/v1/private/account/asset",
     "positions": "/api/v1/private/position/open_positions",
     "leverage": "/api/v1/private/position/change_leverage",
+    # Плечо, стоящее сейчас: заявка на открытие обязана нести его в теле,
+    # а изменить его биржа даёт не всегда - значит надо уметь прочитать.
+    "leverage_info": "/api/v1/private/position/leverage",
     "position_mode": "/api/v1/private/position/position_mode",
     # Заявки.
     "order": "/api/v1/private/order/create",
@@ -73,7 +76,10 @@ ENDPOINTS = {
     "order_get": "/api/v1/private/order/get",
     "order_external": "/api/v1/private/order/external",
     "deals": "/api/v1/private/order/list/order_deals",
-    # Защита позиции - своя ручка, не общая с заявками.
+    # Защита позиции - своя ручка, не общая с заявками. Это важнее, чем
+    # кажется: обычной заявкой с ценой защиты биржа закрывает позицию по рынку
+    # сразу (проверено живым счётом), а здесь заводит именно стоп и цель.
+    "stop_place": "/api/v1/private/stoporder/place",
     "stop_orders": "/api/v1/private/stoporder/list/orders",
     "stop_cancel": "/api/v1/private/stoporder/cancel",
     "stop_change": "/api/v1/private/stoporder/change_price",

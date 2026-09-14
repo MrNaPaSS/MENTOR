@@ -82,6 +82,15 @@ class FakeSession:
                 "data": {"positionMode": 1 if hedge else 2},
             },
             "/api/v1/private/position/open_positions": {"code": 0, "data": []},
+            # Плечо: живая биржа отвечает по стороне позиции, и заявка на
+            # открытие обязана нести его в теле.
+            "/api/v1/private/position/leverage": {
+                "code": 0,
+                "data": [
+                    {"positionType": 1, "openType": 1, "leverage": 20},
+                    {"positionType": 2, "openType": 1, "leverage": 20},
+                ],
+            },
             **(routes or {}),
         }
         self.sent: list[dict] = []
@@ -444,12 +453,17 @@ def test_cancel_by_number_sends_a_list():
 # ── защита позиции ───────────────────────────────────────────────────────────
 
 
-def test_stop_is_placed_on_the_open_position():
-    """Стоп ставится сокращающей заявкой с ценой срабатывания на ту позицию."""
+def test_stop_is_placed_by_its_own_endpoint():
+    """Защита ставится своей ручкой, а не заявкой с ценой защиты.
+
+    Разница не формальная. Обычная заявка с полем `takeProfitPrice` уходит на
+    биржу рыночной и исполняется сразу: на живом счёте цель, поставленная
+    сопровождением, закрыла позицию через четыре секунды после входа.
+    """
     session = FakeSession(
         {
             "/api/v1/private/position/open_positions": {"code": 0, "data": [LONG_POSITION]},
-            "/api/v1/private/order/create": order_route("900"),
+            "/api/v1/private/stoporder/place": {"code": 0, "data": 900},
         }
     )
     placed = run(
@@ -461,13 +475,61 @@ def test_stop_is_placed_on_the_open_position():
             position_side="LONG",
         )
     )
-    body = sent_to(session, "/api/v1/private/order/create")["body"]
-    assert body["side"] == 4            # закрытие лонга
+    body = sent_to(session, "/api/v1/private/stoporder/place")["body"]
     assert body["stopLossPrice"] == 78000
     assert body["positionId"] == 4242
     assert body["vol"] == 100
+    # Заявкой защита не ставится вовсе - иначе позиция закроется по рынку.
+    assert not any(s["path"] == "/api/v1/private/order/create" for s in session.sent)
     # Метки у защиты нет - опознаётся номером, как на BingX.
     assert placed == {"orderId": "900", "algoId": "900", "clientAlgoId": ""}
+
+
+def test_entry_carries_the_leverage_exchange_demands():
+    """Открытие в изолированной марже несёт плечо: без него биржа откажет.
+
+    Код 2006, «Leverage multiplier must be within the upper limit 500 and lower
+    limit 1». На записанных ответах этого не видно - нашлось живым счётом.
+    """
+    session = FakeSession({"/api/v1/private/order/create": order_route()})
+    run(
+        client(session).place_order(
+            symbol="BTCUSDT", side="BUY", position_side="LONG", quantity="0.01"
+        )
+    )
+    assert sent_to(session, "/api/v1/private/order/create")["body"]["leverage"] == 20
+
+
+def test_closing_needs_no_leverage():
+    """Закрытие адресуется позицией: плечо у неё уже своё."""
+    session = FakeSession(
+        {
+            "/api/v1/private/position/open_positions": {"code": 0, "data": [LONG_POSITION]},
+            "/api/v1/private/order/create": order_route(),
+        }
+    )
+    run(
+        client(session).place_order(
+            symbol="BTCUSDT",
+            side="SELL",
+            position_side="LONG",
+            quantity="0.01",
+            reduce_only=True,
+        )
+    )
+    body = sent_to(session, "/api/v1/private/order/create")["body"]
+    assert "leverage" not in body
+    assert body["positionId"] == 4242
+
+
+def test_leverage_we_set_is_remembered_for_the_entry():
+    """Плечо, только что выставленное терминалом, биржу больше не спрашиваем."""
+    session = FakeSession({"/api/v1/private/order/create": order_route()})
+    one = client(session)
+    run(one.set_leverage("BTCUSDT", 7))
+    run(one.place_order(symbol="BTCUSDT", side="BUY", position_side="LONG", quantity="0.01"))
+    assert sent_to(session, "/api/v1/private/order/create")["body"]["leverage"] == 7
+    assert not any(s["path"] == "/api/v1/private/position/leverage" for s in session.sent)
 
 
 def test_stop_without_position_is_refused():
@@ -485,8 +547,14 @@ def test_stop_without_position_is_refused():
         )
 
 
-def test_stop_moves_in_place_without_cancelling():
-    """Перенос стопа - одна ручка биржи. Окна без защиты не возникает вовсе."""
+def test_stop_is_moved_by_cancel_and_place():
+    """Перенос стопа - снятие и новая постановка: менять цену биржа не даёт.
+
+    Обе ручки «поменять цену» проверены живым счётом и не годятся:
+    `change_price` отвечает успехом и не двигает ничего, `change_plan_price`
+    отказывает. Прежде здесь стояла первая, и перенос стопа в безубыток на
+    MEXC молча не работал.
+    """
     session = FakeSession(
         {
             "/api/v1/private/stoporder/list/orders": {
@@ -494,23 +562,43 @@ def test_stop_moves_in_place_without_cancelling():
                 "data": [
                     {
                         "id": 900,
+                        "orderId": "7001",
                         "symbol": "BTC_USDT",
                         "positionId": 4242,
                         "positionType": 1,
                         "stopLossPrice": 78000,
+                        "takeProfitPrice": 82000,
                         "vol": 100,
                         "state": 1,
                     }
                 ],
             },
-            "/api/v1/private/stoporder/change_price": {"code": 0},
+            "/api/v1/private/stoporder/cancel": {"code": 0},
+            "/api/v1/private/stoporder/place": {"code": 0, "data": 901},
         }
     )
-    run(client(session).modify_tp_sl(symbol="BTCUSDT", order_id="900", trigger_price="79000"))
-    call = sent_to(session, "/api/v1/private/stoporder/change_price")
-    assert call["body"] == {"orderId": 900, "stopLossPrice": 79000}
-    # Снятия прежней заявки нет - в этом вся разница с BingX.
-    assert not [one for one in session.sent if one["path"].endswith("/stoporder/cancel")]
+    moved = run(client(session).modify_tp_sl(symbol="BTCUSDT", order_id="900", trigger_price="79000"))
+
+    cancelled = sent_to(session, "/api/v1/private/stoporder/cancel")["body"]
+    assert cancelled == [{"symbol": "BTC_USDT", "stopPlanOrderId": 900}]
+
+    placed = sent_to(session, "/api/v1/private/stoporder/place")["body"]
+    assert placed["stopLossPrice"] == 79000
+    assert placed["positionId"] == 4242
+    assert placed["vol"] == 100
+    # Цель переносится как была: защита у MEXC - одна запись на обе цены, и
+    # поставить только стоп значит потерять цель.
+    assert placed["takeProfitPrice"] == 82000
+    assert moved["orderId"] == "901"
+
+
+def test_moving_the_stop_needs_the_record_to_exist():
+    """Записи нет - говорим это, а не снимаем чужую защиту наугад."""
+    session = FakeSession(
+        {"/api/v1/private/stoporder/list/orders": {"code": 0, "data": []}}
+    )
+    with pytest.raises(WeexTradeError):
+        run(client(session).modify_tp_sl(symbol="BTCUSDT", order_id="900", trigger_price="79000"))
 
 
 def test_stop_and_target_of_one_record_read_as_two_orders():

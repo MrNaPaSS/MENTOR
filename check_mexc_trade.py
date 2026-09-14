@@ -110,7 +110,8 @@ async def main() -> int:
     try:
         # ── деньги на счёте ─────────────────────────────────────────────────
         balance = await client.balance()
-        free = next((float(row.get("available") or 0) for row in balance), 0.0)
+        # Поле то же, что у WEEX: клиент приводит ответ MEXC к её именам.
+        free = next((float(row.get("availableBalance") or 0) for row in balance), 0.0)
         line(OK if free > 0 else NO, f"свободно на счёте: {free} USDT")
         if free <= 0:
             print("\nБез денег на счёте заявку не поставить: пополните 5-10 USDT.")

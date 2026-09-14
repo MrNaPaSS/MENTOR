@@ -163,6 +163,32 @@ async def test_order_event_wakes_the_watcher():
     assert woken == ["BTCUSDT"]
 
 
+async def test_stop_event_wakes_the_watcher_and_asks_for_a_snapshot():
+    """Защита у MEXC ходит своими каналами - и они важнее заявочного.
+
+    Сработавший стоп закрывает позицию. Узнавать об этом обходом значит ждать
+    до пяти секунд с закрытой сделкой на экране - каналы сняты с живого счёта:
+    `push.personal.stop.planorder` и `push.personal.stop.order`.
+    """
+    for channel in ("push.personal.stop.planorder", "push.personal.stop.order"):
+        woken: list[str] = []
+        calls: list[int] = []
+
+        async def snapshot() -> list[dict]:
+            calls.append(1)
+            return [POSITION]
+
+        stream = MexcPrivateStream(
+            Credentials("key", "secret", ""), snapshot, on_orders=woken.append
+        )
+        await stream._take_snapshot()
+        stream._dispatch(push(channel, {"symbol": "BTC_USDT", "stopLossPrice": 76000}))
+        await stream._resync
+        assert woken == ["BTCUSDT"], channel
+        # Снимок просим заново: позиции после стопа может уже не быть.
+        assert len(calls) == 2, channel
+
+
 async def test_position_event_does_not_count_contracts_itself():
     """Событие позиции просит снимок, а не переводит контракты своим кодом.
 

@@ -63,6 +63,11 @@ CHANNEL_ERROR = "rs.error"
 CHANNEL_ORDER = "push.personal.order"
 CHANNEL_POSITION = "push.personal.position"
 CHANNEL_ASSET = "push.personal.asset"
+# Защита позиции идёт своими каналами, и их два: один про запись защиты
+# целиком, другой про её стоп-заявку. Имена сняты с живого счёта - в них
+# приходят и постановка, и перенос, и срабатывание.
+CHANNEL_STOP_PLAN = "push.personal.stop.planorder"
+CHANNEL_STOP_ORDER = "push.personal.stop.order"
 
 # Состояние заявки, после которого состояние позиции точно изменилось:
 # 3 - исполнена. Частичное исполнение биржа шлёт тем же каналом состоянием 2,
@@ -297,6 +302,8 @@ class MexcPrivateStream:
             self._apply_position(payload.get("data"))
         elif channel == CHANNEL_ORDER:
             self._apply_order(payload.get("data"))
+        elif channel in (CHANNEL_STOP_PLAN, CHANNEL_STOP_ORDER):
+            self._apply_stop(payload.get("data"))
         # Канал счёта (push.personal.asset) читаем как подтверждение жизни:
         # баланс терминал берёт запросом, и второй его источник разошёлся бы с
         # первым.
@@ -313,6 +320,26 @@ class MexcPrivateStream:
         if not self._ready or not isinstance(row, dict):
             return
         self._resnapshot()
+
+    def _apply_stop(self, row: Any) -> None:
+        """Защита изменилась: поставлена, перенесена или сработала.
+
+        Сработавший стоп закрывает позицию, и узнать об этом из обхода значило
+        бы ждать до пяти секунд - те самые секунды, в которые ученик смотрит на
+        экран и не понимает, где его сделка. Поэтому снимок просим сразу, а
+        сопровождение будим звонком, как на заявке.
+        """
+        if not isinstance(row, dict):
+            return
+        symbol = symbol_of(str(row.get("symbol") or ""))
+        if not symbol:
+            return
+        self._resnapshot()
+        if self._on_orders:
+            try:
+                self._on_orders(symbol)
+            except Exception:  # noqa: BLE001 - сбой обработчика не рвёт поток
+                logger.exception("Сбой обработчика события защиты MEXC")
 
     def _apply_order(self, row: Any) -> None:
         """Заявка изменилась: будим сопровождение, при исполнении - снимок."""

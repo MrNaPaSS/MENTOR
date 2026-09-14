@@ -159,6 +159,10 @@ class MexcFutures:
         # Ручка заявки у биржи в двух написаниях. Какое живёт на этом счёте,
         # выясняется первым же отказом - и второй раз мы туда не ходим.
         self._order_path = ENDPOINTS["order"]
+        # Плечо по паре, каким мы сами его выставили. Заявка на открытие обязана
+        # нести плечо в теле, а лишний запрос к бирже перед каждым входом стоит
+        # времени в самый неподходящий момент.
+        self._leverage: dict[str, int] = {}
 
     # ── запрос ──────────────────────────────────────────────────────────────
 
@@ -357,6 +361,9 @@ class MexcFutures:
         """
         name = symbol_id(symbol)
         value = int(leverage)
+        # Запоминаем до запроса: заявке плечо нужно тем же числом, каким его
+        # только что поставил терминал, и спрашивать его у биржи заново незачем.
+        self._leverage[name] = value
         position = await self._position_of(symbol, "")
         if position and position.get("positionId"):
             return await self._request(
@@ -377,6 +384,29 @@ class MexcFutures:
                 },
             )
         return result
+
+    async def leverage_of(self, symbol: str, long: bool = True) -> int:
+        """Плечо, с которым биржа откроет позицию по этой паре.
+
+        Сначала своё - то, что выставил терминал перед входом. Его нет (сделку
+        ведёт сопровождение после перезапуска, плечо меняли из приложения
+        биржи) - спрашиваем биржу: у MEXC плечо своё у каждой стороны, и
+        `positionType` различает длинную и короткую.
+        """
+        name = symbol_id(symbol)
+        mine = self._leverage.get(name)
+        if mine:
+            return mine
+        rows = await self._request(
+            "GET", ENDPOINTS["leverage_info"], params={"symbol": name}
+        )
+        want = 1 if long else 2
+        for row in rows or []:
+            if _i(row.get("positionType")) == want and _i(row.get("leverage")) > 0:
+                value = _i(row.get("leverage"))
+                self._leverage[name] = value
+                return value
+        return 0
 
     # ── ордера ──────────────────────────────────────────────────────────────
 
@@ -462,6 +492,20 @@ class MexcFutures:
             # Закрытие адресуется номером позиции: в двустороннем режиме по
             # паре и стороне биржа не поймёт, какую из двух закрывать.
             body["positionId"] = _i(position["positionId"])
+        else:
+            # Открытие в изолированной марже обязано нести плечо в теле заявки.
+            # Без него биржа отвечает «Leverage multiplier must be within the
+            # upper limit 500 and lower limit 1» (код 2006) - и вход не проходит
+            # вовсе. На записанных ответах этого не видно: там плечо никто не
+            # проверяет, и живой вход упирался в отказ.
+            if _i(body["openType"]) == OPEN_ISOLATED:
+                lever = await self.leverage_of(symbol, long=(wanted or "LONG") == "LONG")
+                if lever <= 0:
+                    raise WeexTradeError(
+                        f"MEXC не назвала плечо по паре {symbol} - заявку на открытие "
+                        "без него биржа не примет"
+                    )
+                body["leverage"] = lever
 
         mark = client_id(client_order_id)
         if mark:
@@ -498,13 +542,15 @@ class MexcFutures:
     ) -> dict[str, Any]:
         """Условная заявка защиты: стоп или цель на открытую позицию.
 
-        У MEXC защита ставится **сокращающей заявкой с ценой срабатывания** -
-        той же ручкой заявки, полями `stopLossPrice` и `takeProfitPrice`.
-        Отдельной ручки постановки защиты на уже открытую позицию биржа не даёт:
-        есть только перенос цены у существующей (`modify_tp_sl`).
+        Ставится **своей ручкой** (`stoporder/place`), а не заявкой с ценой
+        защиты. Разница в этом месте стоила бы ученику позиции: обычная заявка
+        с полем `takeProfitPrice` уходит на биржу рыночной и исполняется в тот
+        же миг - на живом счёте так и вышло, цель, поставленная сопровождением,
+        закрыла позицию по рынку через четыре секунды после входа.
 
-        Объём здесь - объём защиты, а не всей позиции: лестница целей закрывает
-        позицию частями, и биржа обязана знать, какую именно часть.
+        Защита у MEXC - одна запись на позицию, со своими ценой и объёмом у
+        стопа и у цели. Объём здесь - объём защиты, а не всей позиции: лестница
+        целей закрывает позицию частями, и биржа обязана знать, какую именно.
         """
         spec = await self._spec(symbol)
         await self._check_tradable(spec)
@@ -524,20 +570,29 @@ class MexcFutures:
         stop = "STOP" in name or "LOSS" in name
         body: dict[str, Any] = {
             "symbol": spec.symbol,
-            "vol": contracts,
-            # Закрытие лонга - продажа, закрытие шорта - покупка.
-            "side": CLOSE_LONG if long else CLOSE_SHORT,
-            "type": ORDER_MARKET_TYPE,
-            "openType": _i(position.get("openType")) or OPEN_ISOLATED,
             "positionId": _i(position.get("positionId")),
+            "vol": contracts,
         }
         body["stopLossPrice" if stop else "takeProfitPrice"] = _f(trigger_price)
-        placed = await self._order(body)
-        order_id = placed["orderId"]
+        data = await self._request("POST", ENDPOINTS["stop_place"], body=body)
+        order_id = str(data if isinstance(data, (str, int)) else (data or {}).get("id") or "")
         # Метки у защиты MEXC нет: она привязана к позиции. Возвращаем номер и
         # как `orderId`, и как `algoId`, чтобы сопровождение читало все биржи
         # одним кодом.
         return {"orderId": order_id, "algoId": order_id, "clientAlgoId": ""}
+
+    async def _stop_record(self, symbol: str, order_id: str) -> dict[str, Any] | None:
+        """Сырая запись защиты по её номеру: в ней обе цены и объём."""
+        name = symbol_id(symbol)
+        data = await self._request(
+            "GET",
+            ENDPOINTS["stop_orders"],
+            params={"symbol": name, "is_finished": 0, "page_num": 1, "page_size": 100},
+        )
+        for row in rows_of(data):
+            if str(row.get("id")) == str(order_id) or str(row.get("orderId")) == str(order_id):
+                return row
+        return None
 
     async def modify_tp_sl(
         self,
@@ -548,27 +603,46 @@ class MexcFutures:
         execute_price: str | None = None,
         trigger_price_type: str | None = None,
     ) -> Any:
-        """Передвинуть защиту - одной ручкой, без снятия.
+        """Передвинуть защиту: снять прежнюю и поставить новую.
 
-        Это то, чего не хватает на BingX: там перенос разложен на «поставить
-        новую, снять прежнюю», и между ними живёт лишняя заявка. Здесь биржа
-        меняет цену на месте, и окна без защиты не возникает вовсе.
+        Ручки «поменять цену» у защиты позиции биржа не даёт, хотя на первый
+        взгляд их две. Обе проверены живым счётом, и обе не годятся:
+        `change_price` отвечает `success` и не двигает ничего - цена в списке
+        остаётся прежней, а сопровождение считает стоп перенесённым;
+        `change_plan_price` отказывает кодом 5002. Прежде здесь стояла первая, и
+        перенос стопа в безубыток на MEXC молча не работал вовсе.
+
+        Значит перенос в два шага, как на BingX, и окно без защиты здесь тоже
+        есть - короткое, между снятием и постановкой.
+
+        Вторую цену переносим как была: защита у MEXC - одна запись со стопом и
+        целью сразу, и поставить только стоп значит потерять цель.
         """
-        current = next(
-            (
-                one
-                for one in await self.algo_orders(symbol)
-                if str(order_id) == str(one.get("orderId"))
-            ),
-            None,
-        )
-        if current is None:
+        record = await self._stop_record(symbol, order_id)
+        if record is None:
             raise WeexTradeError(f"Заявки {order_id} нет среди условных на MEXC")
-        stop = str(current.get("planType") or "").upper() == "STOP_LOSS"
-        body: dict[str, Any] = {"orderId": _i(order_id)}
-        body["stopLossPrice" if stop else "takeProfitPrice"] = _f(trigger_price)
-        await self._request("POST", ENDPOINTS["stop_change"], body=body)
-        return {"orderId": str(order_id), "algoId": str(order_id), "clientAlgoId": ""}
+
+        stop_price = _f(record.get("stopLossPrice"))
+        take_price = _f(record.get("takeProfitPrice"))
+        # Двигаем то, что в записи есть. Терминал зовёт эту ручку ради переноса
+        # стопа в безубыток, и стоп в записи всегда стоит первым по важности.
+        moving_stop = stop_price > 0
+        body: dict[str, Any] = {
+            "symbol": symbol_id(symbol),
+            "positionId": _i(record.get("positionId")),
+            "vol": _i(record.get("vol")) or 1,
+        }
+        if moving_stop:
+            body["stopLossPrice"] = _f(trigger_price)
+            if take_price > 0:
+                body["takeProfitPrice"] = take_price
+        else:
+            body["takeProfitPrice"] = _f(trigger_price)
+
+        await self.cancel_algo_order(symbol, str(record.get("id")))
+        data = await self._request("POST", ENDPOINTS["stop_place"], body=body)
+        new_id = str(data if isinstance(data, (str, int)) else (data or {}).get("id") or "")
+        return {"orderId": new_id, "algoId": new_id, "clientAlgoId": ""}
 
     async def get_order(self, symbol: str, order_id: str) -> dict[str, Any]:
         """Заявка по номеру или по нашей метке - у каждой свой адрес ручки."""
