@@ -42,7 +42,7 @@ from dotenv import load_dotenv
 # Ключи берём и из `.env`, как остальные пробники.
 load_dotenv(override=True)
 
-from core.okx.futures import OkxFutures  # noqa: E402
+from core.okx.futures import OkxFutures, load_instruments  # noqa: E402
 from core.okx.stream import OkxPrivateStream  # noqa: E402
 from core.weex.futures import Credentials, WeexTradeError  # noqa: E402
 
@@ -92,7 +92,14 @@ async def main() -> int:
 
     client = OkxFutures(keys, factory, demo=demo())
     woken: list[str] = []
-    stream = OkxPrivateStream(keys, client.positions, on_orders=woken.append, demo=demo())
+
+    # Поток OKX просит не снимок позиций, а справочник инструментов: позиции он
+    # собирает сам из канала, а размер контракта нужен, чтобы перевести их в
+    # монеты. Так же его кормит и боевой код (`backend/trading/private_ws.py`).
+    async def specs() -> dict:
+        return await load_instruments(session)
+
+    stream = OkxPrivateStream(keys, specs, on_orders=woken.append, demo=demo())
 
     opened = False
     pending = ""
