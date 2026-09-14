@@ -29,6 +29,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from core.models import ExchangeAccount, Student, utcnow
+from core.binance.futures import BinanceFutures
 from core.bingx.futures import BingxFutures
 from core.mexc.futures import MexcFutures
 from core.okx.futures import OkxFutures
@@ -52,6 +53,7 @@ PROBES: dict[str, type] = {
     "okx": OkxFutures,
     "bingx": BingxFutures,
     "mexc": MexcFutures,
+    "binance": BinanceFutures,
 }
 
 

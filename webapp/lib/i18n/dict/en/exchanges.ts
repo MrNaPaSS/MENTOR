@@ -29,6 +29,7 @@ export const exchanges = {
     academy: "academy rate",
     cashback: "fee returned",
     unknown: "terms being agreed",
+    noCashback: "not allowed by the exchange",
     note:
       "Reference rates for tier zero: yours is derived from your own trades and always wins. " +
       "The returned fee lands on your exchange account and applies when you registered through the academy " +

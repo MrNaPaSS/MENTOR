@@ -13,9 +13,9 @@
   сопровождение и ведёт. Счета без сделок потока не держат: соединение стоит
   памяти, а спрашивать о них некому;
 * поток гаснет, когда на счёте не осталось живых сделок;
-* поток есть не у каждой биржи. У OKX, BingX и MEXC он описан и открыт; у
-  WEEX приватного потока в документации брокера не названо, и счета WEEX
-  остаются на опросе - это честнее, чем догадываться об адресе.
+* поток есть не у каждой биржи. У OKX, BingX, MEXC и Binance он описан и
+  открыт; у WEEX приватного потока в документации брокера не названо, и счета
+  WEEX остаются на опросе - это честнее, чем догадываться об адресе.
 
 Потоки бирж устроены по-разному, и разница видна здесь одним местом: OKX
 присылает снимок позиций сама, а BingX и MEXC - только изменения, поэтому их
@@ -39,6 +39,8 @@ from typing import Any
 import aiohttp
 
 from backend.trading import live_state
+from core.binance.futures import BinanceFutures
+from core.binance.stream import BinancePrivateStream
 from core.bingx.futures import BingxFutures
 from core.bingx.stream import BingxPrivateStream
 from core.mexc.futures import MexcFutures
@@ -52,7 +54,7 @@ from core.weex.futures import Credentials
 logger = logging.getLogger("nmnh.trading.stream")
 
 # Биржи, у которых приватный поток описан и подключён.
-STREAMED = ("okx", "bingx", "mexc")
+STREAMED = ("okx", "bingx", "mexc", "binance")
 
 Waker = Callable[[int], Awaitable[Any]]
 SessionFactory = Callable[[], Awaitable[aiohttp.ClientSession]]
@@ -166,6 +168,19 @@ class PrivateStreams:
                 on_down=down,
                 demo=demo,
             )
+        if exchange == "binance":
+            # Как у BingX и MEXC: снимок позиций берёт торговый клиент. У
+            # Binance это ещё и вес запроса - пять единиц из общего бюджета
+            # адреса, - и второй такой же код стоил бы его дважды.
+            testnet = _binance_testnet()
+            client = BinanceFutures(credentials(row), self._http, testnet=testnet)
+            return BinancePrivateStream(
+                credentials(row),
+                client.positions,
+                on_orders=ring,
+                on_down=down,
+                testnet=testnet,
+            )
         if exchange == "mexc":
             # Как у BingX: снимок позиций берёт торговый клиент. У MEXC это
             # ещё и перевод контрактов в монеты - считать его вторым кодом в
@@ -202,6 +217,11 @@ class PrivateStreams:
 def _demo() -> bool:
     """Демо-счёт OKX: у него свой адрес приватного потока."""
     return os.getenv("OKX_DEMO", "").strip().lower() in ("1", "true", "yes")
+
+
+def _binance_testnet() -> bool:
+    """Учебный контур Binance: свой адрес и у ручек, и у потока."""
+    return os.getenv("BINANCE_TESTNET", "").strip().lower() in ("1", "true", "yes")
 
 
 def _bingx_demo() -> bool:

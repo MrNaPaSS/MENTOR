@@ -217,7 +217,15 @@ function VenueCard({
   const taker = ratePct(venue.taker);
   const maker = ratePct(venue.maker);
   const academy = ratePct(venue.academy_taker);
-  const cashback = venue.cashback ? `${Math.round(venue.cashback * 100)}%` : null;
+  // Ноль и пустое - разные ответы: пустое значит «условия ещё не назвали», а
+  // ноль - «биржа возврата не разрешает» (Binance). Показать одно вместо
+  // другого значит либо пообещать несуществующее, либо отнять существующее.
+  const cashback =
+    venue.cashback === 0
+      ? d.terms.noCashback
+      : venue.cashback
+        ? `${Math.round(venue.cashback * 100)}%`
+        : null;
   // Биржа закрыта, пока академия не подтвердила счёт. Сервер, собранный до
   // этого правила, поля не присылает - тогда ведём себя как раньше.
   const locked = venue.keys_supported && venue.may_connect === false;

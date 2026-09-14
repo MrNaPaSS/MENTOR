@@ -233,6 +233,7 @@ def test_one_student_connects_several_exchanges(api):
         "okx": True,
         "bingx": False,
         "mexc": False,
+        "binance": False,
     }
     assert "key-12345678" not in str(status)
 

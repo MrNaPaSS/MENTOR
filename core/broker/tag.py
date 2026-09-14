@@ -25,6 +25,13 @@ logger = logging.getLogger("nmnh.broker.tag")
 # Столько символов WEEX отводит под newClientOrderId вместе с меткой.
 WEEX_LIMIT = 64
 
+# Столько отводит под newClientOrderId Binance - вместе с меткой. Самый тесный
+# предел из пяти бирж: наш идентификатор сделки (`{symbol}-{timestamp}`) на
+# длинных тикерах занимает почти весь, и с префиксом заявка уходит без метки
+# (см. `tag`). Пока брокерская программа Binance закрыта порогами
+# (docs/integrations/broker-applications.md, §6), это ничего не стоит.
+BINANCE_LIMIT = 36
+
 # А столько - под clientAlgoId условной заявки: вдвое меньше. Брокерская
 # команда WEEX подтвердила 12 сентября 2026, что стопы и цели засчитываются и
 # метку надо класть именно сюда. До этого ответа условные заявки уходили без
@@ -109,6 +116,19 @@ def weex_algo_mark(broker_id: str | None) -> BrokerMark:
     if not broker:
         return NO_MARK
     return BrokerMark(prefix=f"b-{broker}-", limit=WEEX_ALGO_LIMIT)
+
+
+def binance_mark(broker_id: str | None) -> BrokerMark:
+    """Метка Binance: ``x-{BrokerID}`` перед нашим идентификатором заявки.
+
+    Формат из документации Link-программы: `newClientOrderId` обязан
+    начинаться с `x-` и идентификатора брокера. Пусто - метки нет вовсе, и так
+    оно и стоит: статуса Link у нас нет (§6 реестра заявок).
+    """
+    broker = (broker_id or "").strip()
+    if not broker:
+        return NO_MARK
+    return BrokerMark(prefix=f"x-{broker}", limit=BINANCE_LIMIT)
 
 
 def weex_mark(broker_id: str | None) -> BrokerMark:

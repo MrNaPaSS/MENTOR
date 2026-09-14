@@ -745,6 +745,17 @@
   filter: drop-shadow(0 0 18px rgb(59 130 246 / 0.48)) drop-shadow(0 6px 18px rgb(0 0 0 / 0.45));
 }
 
+/* Знак MEXC зелёный - и свет под ним зелёный, по тому же правилу, что у BingX:
+   свет всегда в цвет самого знака. */
+.art-glow-green {
+  filter: drop-shadow(0 0 14px rgb(0 184 151 / 0.30)) drop-shadow(0 6px 14px rgb(0 0 0 / 0.18));
+}
+
+[data-terminal="dark"] .art-glow-green,
+.pane-dark .art-glow-green {
+  filter: drop-shadow(0 0 18px rgb(0 184 151 / 0.45)) drop-shadow(0 6px 18px rgb(0 0 0 / 0.45));
+}
+
 /* Знак OKX нарисован чернилами - под светлый лист, как и фирменный. На тёмном
    он переворачивается: тот же приём, что у граффити ниже. Своего свечения ему
    не нужно - хватает тени.

@@ -39,6 +39,7 @@ from backend.trading.accounts import (
     trade_exchange,
 )
 from core.exchanges import KEY_EXCHANGES, KEYS_EXCHANGE, exchange_code, title_of
+from core.binance.futures import public_filters as binance_public_filters
 from core.bingx.futures import public_filters as bingx_public_filters
 from core.mexc.futures import public_filters as mexc_public_filters
 from core.okx.futures import OkxFutures, public_filters as okx_public_filters
@@ -526,6 +527,7 @@ async def limits(
         "okx": okx_public_filters,
         "bingx": bingx_public_filters,
         "mexc": mexc_public_filters,
+        "binance": binance_public_filters,
     }
     source = by_exchange.get(row.exchange if row is not None else "", public_filters)
     filters = await source(await _get_session(), symbol.upper())

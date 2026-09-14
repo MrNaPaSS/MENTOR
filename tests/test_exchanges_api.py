@@ -139,7 +139,12 @@ def test_cashback_matches_what_the_academy_promises(api):
     assert rows["bingx"] == 0.10
     # Биржам, куда академия никого не звала, обещать нечего.
     assert rows["bybit"] is None
-    assert rows["binance"] is None
+    # MEXC: партнёрка есть, долю ещё не назвали - это «уточняется», а не ноль.
+    assert rows["mexc"] is None
+    # Binance: ноль - это ответ, а не молчание. Биржа запрещает партнёрам
+    # возвращать комиссию пользователям, и витрина обязана сказать это прямо,
+    # иначе ученик узнает правду после регистрации.
+    assert rows["binance"] == 0.0
 
 
 def test_oauth_is_not_offered_until_the_broker_id_arrives(api, monkeypatch):
