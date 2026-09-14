@@ -34,6 +34,14 @@ export interface SeoPage {
   h1: string;
   /** Первый абзац: он же чаще всего попадает в сниппет выдачи. */
   lead: string;
+  /**
+   * Картинка под первым абзацем: как выглядит то, о чём страница.
+   *
+   * Необязательная. Текст важнее - он и есть причина, по которой страницу
+   * находят, - поэтому картинка идёт после него и грузится лениво, не
+   * задерживая первый экран.
+   */
+  cover?: { src: string; alt: string };
   sections: readonly SeoSection[];
   faq: readonly FaqItem[];
   cta: { heading: string; text: string };

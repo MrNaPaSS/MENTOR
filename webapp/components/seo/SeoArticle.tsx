@@ -61,6 +61,17 @@ export default function SeoArticle({ page }: { page: SeoPage }) {
           <h1 className="text-h1 mt-2 text-text-primary">{page.h1}</h1>
           <p className="mt-6 text-lg leading-relaxed text-text-secondary">{page.lead}</p>
 
+          {page.cover && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={page.cover.src}
+              alt={page.cover.alt}
+              loading="lazy"
+              decoding="async"
+              className="mt-8 w-full rounded-2xl border border-white/10 shadow-lg"
+            />
+          )}
+
           {page.sections.map((section) => (
             <section key={section.heading} className="mt-14">
               <h2 className="text-h3 text-text-primary">{section.heading}</h2>
