@@ -25,6 +25,7 @@ from sqlalchemy import select
 from core.exchanges import KEY_EXCHANGES, KEYS_EXCHANGE
 from core.models import AcademyUid, ExchangeAccount, Student
 from core.bingx.futures import BingxFutures
+from core.mexc.futures import MexcFutures
 from core.okx.futures import OkxFutures
 from core.weex.uid import clean_uid
 from core.weex import keys as keystore
@@ -33,7 +34,12 @@ from core.weex.futures import Credentials, WeexFutures
 SessionFactory = Callable[[], Awaitable[aiohttp.ClientSession]]
 
 # Код биржи -> торговый клиент. Новая биржа - новая строка здесь и адаптер.
-CLIENTS: dict[str, type] = {"weex": WeexFutures, "okx": OkxFutures, "bingx": BingxFutures}
+CLIENTS: dict[str, type] = {
+    "weex": WeexFutures,
+    "okx": OkxFutures,
+    "bingx": BingxFutures,
+    "mexc": MexcFutures,
+}
 
 
 def trade_exchange(code: str | None) -> str:

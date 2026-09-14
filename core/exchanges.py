@@ -17,6 +17,7 @@ TITLES: dict[str, str] = {
     "binance": "Binance Futures",
     "okx": "OKX Futures",
     "bingx": "BingX Futures",
+    "mexc": "MEXC Futures",
     "bybit": "Bybit Futures",
     "bitget": "Bitget Futures",
 }
@@ -28,13 +29,21 @@ KEYS_EXCHANGE = "weex"
 #
 # Здесь только те, у кого есть торговый адаптер: подключить ключи биржи, на
 # которую нечем поставить заявку, значит соврать ученику.
-KEY_EXCHANGES: tuple[str, ...] = ("weex", "okx", "bingx")
+KEY_EXCHANGES: tuple[str, ...] = ("weex", "okx", "bingx", "mexc")
 
 # Биржи, которые мы вообще знаем по имени. Шире предыдущего списка: академия
 # подтверждает счёт на бирже раньше, чем у нас появляется её адаптер, и
 # отказывать ей в этом нельзя - иначе подтверждение потеряется, а ученик
 # окажется «своим» на бирже, куда его привела академия.
-KNOWN_EXCHANGES: tuple[str, ...] = ("weex", "okx", "bingx", "bybit", "bitget", "binance")
+KNOWN_EXCHANGES: tuple[str, ...] = (
+    "weex",
+    "okx",
+    "bingx",
+    "mexc",
+    "bybit",
+    "bitget",
+    "binance",
+)
 
 
 def known_exchange(code: str | None) -> str:

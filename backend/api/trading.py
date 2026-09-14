@@ -40,6 +40,7 @@ from backend.trading.accounts import (
 )
 from core.exchanges import KEY_EXCHANGES, KEYS_EXCHANGE, exchange_code, title_of
 from core.bingx.futures import public_filters as bingx_public_filters
+from core.mexc.futures import public_filters as mexc_public_filters
 from core.okx.futures import OkxFutures, public_filters as okx_public_filters
 from core.referral import grant_referral_vip
 from core.weex.uid import clean_uid, looks_like_uid
@@ -521,7 +522,11 @@ async def limits(
     # плеча у бирж разные, и предел WEEX на счёте BingX обещал бы то, чего там
     # нет.
     row = active_account(session, student)
-    by_exchange = {"okx": okx_public_filters, "bingx": bingx_public_filters}
+    by_exchange = {
+        "okx": okx_public_filters,
+        "bingx": bingx_public_filters,
+        "mexc": mexc_public_filters,
+    }
     source = by_exchange.get(row.exchange if row is not None else "", public_filters)
     filters = await source(await _get_session(), symbol.upper())
     return {

@@ -23,8 +23,10 @@ from backend.scalping.clusters import DEFAULT_COLUMNS as CLUSTER_COLUMNS, fit_to
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.market_hub import PRIMARY, MarketHub
 from backend.scalping.bingx import BingxPublicRest
+from backend.scalping.mexc import BARS as MEXC_BARS, MexcPublicRest
 from backend.scalping.okx import OkxPublicRest
 from core.bingx.futures import symbol_id
+from core.mexc.futures import symbol_id as mexc_symbol_id
 from core.okx.futures import inst_id
 from backend.scalping.footprint import (
     build as build_footprint,
@@ -307,6 +309,38 @@ async def bingx_klines(request: Request, symbol: str, interval: str, limit: int)
     return out
 
 
+async def mexc_klines(request: Request, symbol: str, interval: str, limit: int) -> list[list]:
+    """Свечи MEXC в том же виде, в каком их отдаёт Binance.
+
+    Биржа отдаёт их столбцами, а не строками, и время - в секундах; складывает
+    их в строки сам клиент (`backend/scalping/mexc.py`). Объём приходит в
+    контрактах, а в свечу кладётся оборот в деньгах (`amount`): у графика
+    объёма это честнее, чем контракты, которых у каждой пары свой размер.
+    """
+    bar = MEXC_BARS.get(interval)
+    if not bar:
+        return []
+    collector = get_market(request).collector("mexc")
+    rest = getattr(collector, "rest", None) or MexcPublicRest(sources_session.get)
+    rows = await rest.candles(mexc_symbol_id(symbol), bar, min(limit, 500))
+    out: list[list] = []
+    for row in rows:
+        try:
+            out.append(
+                [
+                    int(row["time"]),
+                    row["open"],
+                    row["high"],
+                    row["low"],
+                    row["close"],
+                    row.get("amount") or row["volume"],
+                ]
+            )
+        except (TypeError, ValueError, KeyError):
+            continue
+    return out
+
+
 @router.get("/klines/{symbol}")
 async def klines(
     request: Request,
@@ -357,6 +391,8 @@ async def klines(
                 raw = await okx_klines(request, sym, source, limit * factor)
             elif venue == "bingx":
                 raw = await bingx_klines(request, sym, source, limit * factor)
+            elif venue == "mexc":
+                raw = await mexc_klines(request, sym, source, limit * factor)
             else:
                 raw = await collector.rest.klines(sym, source, limit * factor)
         finally:

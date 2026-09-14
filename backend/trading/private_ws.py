@@ -13,14 +13,14 @@
   сопровождение и ведёт. Счета без сделок потока не держат: соединение стоит
   памяти, а спрашивать о них некому;
 * поток гаснет, когда на счёте не осталось живых сделок;
-* поток есть не у каждой биржи. У OKX и BingX он описан и открыт; у WEEX
-  приватного потока в документации брокера не названо, и счета WEEX остаются
-  на опросе - это честнее, чем догадываться об адресе.
+* поток есть не у каждой биржи. У OKX, BingX и MEXC он описан и открыт; у
+  WEEX приватного потока в документации брокера не названо, и счета WEEX
+  остаются на опросе - это честнее, чем догадываться об адресе.
 
 Потоки бирж устроены по-разному, и разница видна здесь одним местом: OKX
-присылает снимок позиций сама, а BingX - только изменения, поэтому её потоку
-нужен торговый клиент, которым он возьмёт снимок при подключении
-(`core/bingx/stream.py`).
+присылает снимок позиций сама, а BingX и MEXC - только изменения, поэтому их
+потокам нужен торговый клиент, которым они возьмут снимок при подключении
+(`core/bingx/stream.py`, `core/mexc/stream.py`).
 
 Событие о заявке здесь не превращается в состояние: каналы заявок снимка не
 дают, и собранный по ним список молча разошёлся бы с биржей. Событие работает
@@ -41,6 +41,8 @@ import aiohttp
 from backend.trading import live_state
 from core.bingx.futures import BingxFutures
 from core.bingx.stream import BingxPrivateStream
+from core.mexc.futures import MexcFutures
+from core.mexc.stream import MexcPrivateStream
 from core.models import ExchangeAccount
 from core.okx.futures import load_instruments
 from core.okx.stream import OkxPrivateStream
@@ -50,7 +52,7 @@ from core.weex.futures import Credentials
 logger = logging.getLogger("nmnh.trading.stream")
 
 # Биржи, у которых приватный поток описан и подключён.
-STREAMED = ("okx", "bingx")
+STREAMED = ("okx", "bingx", "mexc")
 
 Waker = Callable[[int], Awaitable[Any]]
 SessionFactory = Callable[[], Awaitable[aiohttp.ClientSession]]
@@ -163,6 +165,18 @@ class PrivateStreams:
                 on_orders=ring,
                 on_down=down,
                 demo=demo,
+            )
+        if exchange == "mexc":
+            # Как у BingX: снимок позиций берёт торговый клиент. У MEXC это
+            # ещё и перевод контрактов в монеты - считать его вторым кодом в
+            # потоке значило бы завести второй источник правды о размере
+            # позиции (`core/mexc/stream.py`).
+            client = MexcFutures(credentials(row), self._http)
+            return MexcPrivateStream(
+                credentials(row),
+                client.positions,
+                on_orders=ring,
+                on_down=down,
             )
         return None
 
