@@ -14,8 +14,10 @@ export const profile = {
     years: (n: number) => `${n} г.`,
   },
   balance: "Баланс",
-  balanceFromKeys: "● По вашим ключам WEEX",
-  balanceFromAffiliate: "● Синхронизировано с WEEX",
+  // Биржу подставляем: раньше в подписи стояло «WEEX» словом, и человек с
+  // подключённой OKX читал под своим балансом чужое имя.
+  balanceFromKeys: (venue: string) => `● По вашим ключам ${venue}`,
+  balanceFromAffiliate: (venue: string) => `● Синхронизировано с ${venue}`,
   balanceManual: "● Введено вручную",
 
   exchangeTitle: "Биржевой счёт",

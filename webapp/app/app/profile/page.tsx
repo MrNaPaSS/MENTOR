@@ -20,6 +20,7 @@ import { PaneHead, PaneScope } from "@/components/app/Pane";
 import FramedAvatar from "@/components/avatar/FramedAvatar";
 import VenueMark from "@/components/ui/VenueMark";
 import { venueMark } from "@/lib/venueMarks";
+import { venueName } from "@/lib/venues";
 import Motto, { BRAND_MOTTO } from "@/components/app/Motto";
 
 const ADMIN_WEEX_UID = "6613031308";
@@ -250,9 +251,13 @@ export default function ProfilePage() {
                   что приложение биржи, другая приходит с задержкой. */}
               <div className="text-[10px] text-[var(--pane-muted)]">
                 {p.balance_source === "api_keys"
-                  ? t.profile.balanceFromKeys
+                  ? // По ключам - с активного счёта, оттуда же терминал
+                    // ставит сделки (backend/trading/funds.py).
+                    t.profile.balanceFromKeys(venueName(venueCode))
                   : p.balance_source === "affiliate_api"
-                    ? t.profile.balanceFromAffiliate
+                    ? // А партнёрская ручка одна и всегда WEEX: она смотрит на
+                      // счёт по номеру, который академия знает у себя.
+                      t.profile.balanceFromAffiliate(venueName("weex"))
                     : t.profile.balanceManual}
               </div>
             </div>

@@ -10,8 +10,8 @@ export const profile = {
     years: (n: number) => `${n} y.`,
   },
   balance: "Balance",
-  balanceFromKeys: "● From your WEEX API keys",
-  balanceFromAffiliate: "● Synced with WEEX",
+  balanceFromKeys: (venue: string) => `● From your ${venue} API keys`,
+  balanceFromAffiliate: (venue: string) => `● Synced with ${venue}`,
   balanceManual: "● Entered manually",
 
   exchangeTitle: "Exchange account",
