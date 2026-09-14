@@ -17,7 +17,6 @@ export default function BrokerHeader() {
       links={[
         { href: "#how", label: t.broker.nav.how },
         { href: "#calculator", label: t.broker.nav.calculator },
-        { href: "#plans", label: t.broker.nav.plans },
         { href: "#exchanges", label: t.broker.nav.exchanges },
         { href: "#faq", label: t.broker.nav.faq },
       ]}

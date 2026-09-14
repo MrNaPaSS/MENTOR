@@ -12,7 +12,6 @@ export const broker = {
   nav: {
     how: "How it works",
     calculator: "Calculator",
-    plans: "Why no plans",
     exchanges: "Exchanges",
     faq: "Questions",
   },
@@ -59,7 +58,7 @@ export const broker = {
       },
       {
         title: "We pass part of it back to you",
-        text: "Today that is 15% of your own fees on WEEX and 10% on OKX and BingX. The remainder is our revenue, and we have no other.",
+        text: "Today that is 15% of your own fees on WEEX and 10% on OKX and BingX. It lands on your exchange account, counted from the exchange's own reports.",
       },
     ],
     footnote:
@@ -100,78 +99,15 @@ export const broker = {
       yearly: "Kept over a year",
       yearlyHint: "Twelve months of rebates in a row",
     },
-    versus: {
-      title: "The same trader on a subscription",
-      subtitle:
-        "A typical crypto broker plan: $99 a month for a promise to return 45% of fees.",
-      theirCashback: "Their rebate",
-      theirPrice: "Minus the plan",
-      theirNet: "Left in hand",
-      ourNet: "Left with NMNH",
-      advantageWin: (sum: string) => `${sum} a year of difference in your favour`,
-      advantageLose: (sum: string) =>
-        `At this volume the subscription beats us by ${sum} a year. We say it plainly instead of hiding it in a footnote.`,
-      lossNote:
-        "The negative number is not a typo. At this volume the monthly fee exceeds the rebate, so the trader pays for the right to receive their own money.",
-    },
     disclaimer:
       "This is an estimate: your rate depends on your VIP level, and exchange affiliate rates get revised. Payouts follow the exchange's confirmed reports, not this number.",
   },
 
-  plans: {
-    eyebrow: "Plans",
-    title: "Why we do not have any",
-    subtitle:
-      "The subscription model looks fair until you sit down with the numbers. We did. Here is what came out.",
-    breakeven: {
-      title: "When the monthly fee pays for itself",
-      subtitle:
-        "The 30-day volume below which a plan takes more than it returns. Taker rate 0.05%.",
-      planColumn: "Plan",
-      shareColumn: "Promised rebate",
-      volumeColumn: "Volume to break even",
-      priceSuffix: "$/mo",
-    },
-    upgrade: {
-      title: "And when an upgrade pays for itself",
-      subtitle:
-        "The gap between tiers is two to five points of rebate for twenty to seventy dollars more. Here is the volume at which that difference returns the money.",
-      from: "from",
-      to: "to",
-      volume: "requires volume",
-      verdict:
-        "Millions in monthly volume means a full-time scalper. Everyone else is sold the percentage and pays for the features.",
-    },
-    cuts: {
-      title: "And what gets locked behind tiers",
-      subtitle: "Rows from a real price list. On the right: where it sits with us.",
-      ours: "With us",
-      oursValue: "everyone",
-      lockedOn: (plan: string) => `${plan} only`,
-      rows: {
-        workspaces: "More than one workspace",
-        widgets: "Unlimited widgets",
-        history: "Full trade history in the journal",
-        dailyLossLimit: "Daily losing-trade limit",
-        withdrawLock: "Withdrawal lock when the risk manager fires",
-        subaccountLock: "Sub-account transfer lock",
-        alertGroups: "Alert groups",
-        customDashboard: "Custom journal dashboard",
-        simulator: "Replay simulator",
-        vipSupport: "Priority support",
-      },
-      verdict: {
-        title: "Two rows on this list should never be for sale",
-        text:
-          "A daily losing-trade limit and a withdrawal lock when the risk manager fires are not conveniences. They are protection for the day someone starts revenge trading, and they matter most to the trader who does not have a spare hundred dollars a month. Ours are on for everyone, always.",
-      },
-    },
-  },
 
   included: {
     eyebrow: "Workstation",
     title: "What everyone gets",
-    subtitle: "Not an upsell tier, just what we trade on ourselves every day.",
+    subtitle: "What we trade on ourselves every day. One terminal for everyone, no access levels.",
     items: [
       {
         title: "Order book, footprint and tape",
@@ -204,7 +140,7 @@ export const broker = {
     eyebrow: "The desk",
     title: "What it looks like at work",
     subtitle:
-      "The four things the terminal was built for. All of it is open to everyone - no tiers, no add-ons.",
+      "The four things the terminal was built for. Open to everyone, right away.",
     items: [
       {
         title: "Terminal",
@@ -316,7 +252,7 @@ export const broker = {
       {
         tag: "Catch",
         q: "What is the catch if the terminal is free?",
-        a: "There is no catch, there is a revenue source. The exchange rebates part of the fees on volume routed through NMNH, and the gap between that rebate and your cashback is all we earn. So we only earn when you do, and it is against our interest for you to blow up the account and leave.",
+        a: "There is no catch, there is a revenue source. Exchanges pay venues for the volume routed through them, and we share part of that with you. So it only works out for us when you trade, and it is against our interest for you to blow up the account and leave.",
       },
       {
         tag: "Custody",

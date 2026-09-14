@@ -1,17 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
-import {
-  monthlyCommission,
-  outcomeFor,
-  planOutcome,
-  yearlyAdvantage,
-} from "@/lib/broker/economics";
+import { outcomeFor } from "@/lib/broker/economics";
 import { EXCHANGES, DEFAULT_EXCHANGE, exchangeById } from "@/lib/broker/program";
-import { RIVAL_TOP } from "@/lib/broker/rivals";
 import { compactMoney, money, moneyPrecise, rate, share } from "@/lib/broker/format";
 import { useLocale, useT } from "@/lib/i18n";
 
@@ -47,22 +41,10 @@ export default function SavingsCalculator() {
   const volume = positionToVolume(position);
   const exchange = exchangeById(exchangeId);
 
-  const view = useMemo(() => {
-    const takerShare = takerPercent / 100;
-    const ours = outcomeFor(exchange, { monthlyVolume: volume, takerShare });
-
-    // Подписочный брокер считается на ставке своей биржи, а не нашей: сравнение
-    // должно отвечать на вопрос «где выгоднее мне», а не подгонять чужую
-    // модель под удобные нам цифры.
-    const rivalExchange = exchangeById("binance");
-    const rivalRate =
-      rivalExchange.takerRate * takerShare + rivalExchange.makerRate * (1 - takerShare);
-    const theirs = planOutcome(monthlyCommission(volume, rivalRate), RIVAL_TOP);
-
-    return { ours, theirs, advantage: yearlyAdvantage(ours, theirs) };
-  }, [exchange, takerPercent, volume]);
-
-  const { ours, theirs, advantage } = view;
+  const ours = useMemo(
+    () => outcomeFor(exchange, { monthlyVolume: volume, takerShare: takerPercent / 100 }),
+    [exchange, takerPercent, volume],
+  );
 
   return (
     <section id="calculator" className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
@@ -199,64 +181,6 @@ export default function SavingsCalculator() {
               accent
             />
           </div>
-        </div>
-      </Reveal>
-
-      {/* Сравнение с подпиской */}
-      <Reveal delay={0.15} className="mt-6">
-        <div className="rounded-2xl border border-border bg-bg-panel/85 backdrop-blur-xl p-5 md:p-6">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h3 className="text-lg font-bold text-text-primary">
-              {t.broker.calculator.versus.title}
-            </h3>
-            <p className="text-sm text-text-muted">{t.broker.calculator.versus.subtitle}</p>
-          </div>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center">
-            <div className="rounded-xl border border-border/70 bg-bg-panel/80 p-4">
-              <Row label={t.broker.calculator.versus.theirCashback} value={moneyPrecise(theirs.cashback, locale)} />
-              <Row label={t.broker.calculator.versus.theirPrice} value={`− ${moneyPrecise(theirs.price, locale)}`} />
-              <div className="my-2.5 h-px bg-border" />
-              <Row
-                label={t.broker.calculator.versus.theirNet}
-                value={moneyPrecise(theirs.net, locale)}
-                tone={theirs.net < 0 ? "danger" : "plain"}
-                strong
-              />
-            </div>
-
-            <div className="grid place-items-center text-text-muted md:rotate-[-90deg]">
-              <ArrowDown className="h-5 w-5" />
-            </div>
-
-            <div className="rounded-xl border border-accent-cyan/30 bg-accent-cyan/5 p-4">
-              <Row label={t.broker.calculator.results.cashback} value={moneyPrecise(ours.cashback, locale)} />
-              <Row label={t.broker.calculator.versus.theirPrice} value={moneyPrecise(0, locale)} />
-              <div className="my-2.5 h-px bg-accent-cyan/20" />
-              <Row
-                label={t.broker.calculator.versus.ourNet}
-                value={moneyPrecise(ours.cashback, locale)}
-                tone="accent"
-                strong
-              />
-            </div>
-          </div>
-
-          <p
-            className={`mt-5 text-center text-lg font-bold ${
-              advantage >= 0 ? "text-accent-cyan" : "text-text-secondary"
-            }`}
-          >
-            {advantage >= 0
-              ? t.broker.calculator.versus.advantageWin(money(Math.abs(advantage), locale))
-              : t.broker.calculator.versus.advantageLose(money(Math.abs(advantage), locale))}
-          </p>
-
-          {theirs.net < 0 && (
-            <p className="mt-2 text-center text-sm text-text-muted">
-              {t.broker.calculator.versus.lossNote}
-            </p>
-          )}
         </div>
       </Reveal>
 

@@ -5,7 +5,6 @@ import Footer from "@/components/landing/Footer";
 import BrokerHero from "@/components/broker/BrokerHero";
 import FeeFlow from "@/components/broker/FeeFlow";
 import SavingsCalculator from "@/components/broker/SavingsCalculator";
-import SubscriptionMath from "@/components/broker/SubscriptionMath";
 import WhatsIncluded from "@/components/broker/WhatsIncluded";
 import ExchangeTable from "@/components/broker/ExchangeTable";
 import BrokerSteps from "@/components/broker/BrokerSteps";
@@ -71,7 +70,6 @@ export default function BrokerPage() {
         <BrokerHero />
         <FeeFlow />
         <SavingsCalculator />
-        <SubscriptionMath />
         <WhatsIncluded />
         <ExchangeTable />
         <BrokerSteps />
