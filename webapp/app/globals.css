@@ -729,6 +729,7 @@
   filter: drop-shadow(0 0 14px rgb(240 185 11 / 0.28)) drop-shadow(0 6px 14px rgb(0 0 0 / 0.18));
 }
 
+[data-terminal="dark"] .art-glow,
 .pane-dark .art-glow {
   filter: drop-shadow(0 0 18px rgb(240 185 11 / 0.42)) drop-shadow(0 6px 18px rgb(0 0 0 / 0.45));
 }
@@ -739,17 +740,23 @@
   filter: drop-shadow(0 0 14px rgb(37 99 235 / 0.32)) drop-shadow(0 6px 14px rgb(0 0 0 / 0.18));
 }
 
+[data-terminal="dark"] .art-glow-blue,
 .pane-dark .art-glow-blue {
   filter: drop-shadow(0 0 18px rgb(59 130 246 / 0.48)) drop-shadow(0 6px 18px rgb(0 0 0 / 0.45));
 }
 
 /* Знак OKX нарисован чернилами - под светлый лист, как и фирменный. На тёмном
-   листе чёрное на чёрном пропадает, поэтому там он переворачивается: тот же
-   приём, что у граффити ниже. Своего свечения ему не нужно - хватает тени. */
+   он переворачивается: тот же приём, что у граффити ниже. Своего свечения ему
+   не нужно - хватает тени.
+
+   Селектора два, и оба нужны: `[data-terminal="dark"]` - тёмная тема всего
+   сайта (её ставит переключатель в шапке), `.pane-dark` - тёмная панель внутри
+   светлой страницы, как в кабинете. Знак живёт и там, и там. */
 .mark-ink {
   filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.18));
 }
 
+[data-terminal="dark"] .mark-ink,
 .pane-dark .mark-ink {
   filter: invert(1) drop-shadow(0 0 16px rgb(255 255 255 / 0.22)) drop-shadow(0 6px 18px rgb(0 0 0 / 0.45));
 }

@@ -71,7 +71,7 @@ export const landing = {
     subtitle: "We work with more than 8 official exchanges.",
     live: "trading is live",
     signup: "open an account →",
-    note: "The rest are pending. The order book and tape come from the exchange your account is on.",
+    note: "5 pending connection",
   },
 
   how: {
