@@ -37,6 +37,7 @@ def _to_out(s: Student) -> StudentOut:
         created_at=_iso(s.created_at),
         first_login_at=_iso(s.first_login_at),
         last_login_at=_iso(s.last_login_at),
+        last_seen_at=_iso(s.last_seen_at),
         login_count=s.login_count or 0,
     )
 

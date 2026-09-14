@@ -66,6 +66,7 @@ export const exchanges = {
       `${n} terminal trade(s) are running. You cannot switch exchanges while they are open.`,
     disconnect: "Disconnect",
     open: "Open the terminal",
+    backToProfile: "Profile",
   },
 
   auth: {

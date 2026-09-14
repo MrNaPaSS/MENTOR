@@ -112,6 +112,13 @@ class Student(Base):
     # Учёт входов в кабинет. first_login_at = NULL означает «ни разу не заходил».
     first_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Когда ученика видели в кабинете в последний раз.
+    #
+    # Вход и присутствие - разные вещи, и админке нужны обе. Человек заходит
+    # утром и работает весь день: по `last_login_at` он «заходил восемь часов
+    # назад», хотя сидит в терминале прямо сейчас. Эта метка обновляется на
+    # его запросах (`backend/deps.py`), по ней и видно, кто онлайн.
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     login_count: Mapped[int] = mapped_column(Integer, default=0)
 
     deliveries: Mapped[list["SignalDelivery"]] = relationship(back_populates="student")

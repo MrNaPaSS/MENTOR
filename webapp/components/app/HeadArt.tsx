@@ -19,7 +19,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 
 /** Разделы со шапкой, где справа девиз и корона: горы нужны только им. */
-const ROUTES = ["/app/analysis", "/app/analytics", "/app/market", "/app/profile", "/app/shop"];
+const ROUTES = [
+  "/app/analysis",
+  "/app/analytics",
+  "/app/exchanges",
+  "/app/market",
+  "/app/profile",
+  "/app/shop",
+];
 
 /** Сколько прокрутить, чтобы гора спряталась. */
 const HIDE_AFTER = 24;

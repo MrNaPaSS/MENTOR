@@ -196,6 +196,8 @@ class StudentOut(BaseModel):
     # Входы в кабинет. first_login_at = null означает «ни разу не заходил».
     first_login_at: Optional[str] = None
     last_login_at: Optional[str] = None
+    # Когда ученика видели в кабинете. По нему считается «онлайн».
+    last_seen_at: Optional[str] = None
     login_count: int = 0
 
 

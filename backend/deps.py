@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -89,7 +90,41 @@ def get_current_student(
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "Вход выполнен на другом устройстве"
         )
+
+    touch_seen(session, student)
     return student
+
+
+# Как часто обновляем отметку присутствия.
+#
+# Кабинет шлёт запросы каждые несколько секунд - цены, позиции, журнал, - и
+# писать в базу на каждый значило бы менять строку ученика десятки раз в
+# минуту ради поля, которое смотрят раз в час. Минуты хватает: онлайн считается
+# по окну в несколько минут, и точность до секунды там не нужна.
+SEEN_EVERY = timedelta(minutes=1)
+
+
+def touch_seen(session, student: Student) -> None:
+    """Отметить, что ученик сейчас в кабинете.
+
+    Коммитим сразу: сессия читающей ручки закрывается без записи, и метка
+    просто пропала бы. Одна короткая запись раз в минуту на ученика дешевле,
+    чем неверный ответ на вопрос «кто сейчас в терминале».
+
+    Ошибку записи глотаем: присутствие - не тот повод, из-за которого стоит
+    ронять запрос ученика.
+    """
+    now = datetime.now(timezone.utc)
+    seen = student.last_seen_at
+    if seen is not None and seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    if seen is not None and now - seen < SEEN_EVERY:
+        return
+    student.last_seen_at = now
+    try:
+        session.commit()
+    except Exception:  # noqa: BLE001 - метка присутствия не стоит отказа ручки
+        session.rollback()
 
 
 def get_current_mentor(payload: dict = Depends(get_token_payload)) -> dict:

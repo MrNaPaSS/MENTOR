@@ -122,6 +122,12 @@ export default function AdminStudents() {
             tone="warn"
           />
           <SummaryCard
+            label="Сейчас в кабинете"
+            value={students.filter((s) => isOnline(s.last_seen_at)).length}
+            total={students.length}
+            tone="ok"
+          />
+          <SummaryCard
             label="Активны за неделю"
             value={students.filter((s) => isRecent(s.last_login_at, 7)).length}
             total={students.length}
@@ -186,7 +192,24 @@ export default function AdminStudents() {
             <tbody>
               {students.map((s) => (
                 <tr key={s.id} className="border-t border-border/60">
-                  <td className="py-2.5 font-medium text-text-primary">@{s.username || s.id}</td>
+                  <td className="py-2.5 font-medium text-text-primary">
+                    <span className="flex items-center gap-2">
+                      {/* Зелёная точка - ученик в кабинете прямо сейчас. */}
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                          isOnline(s.last_seen_at) ? "bg-success" : "bg-border"
+                        }`}
+                        title={
+                          isOnline(s.last_seen_at)
+                            ? "В кабинете сейчас"
+                            : s.last_seen_at
+                              ? `Был в кабинете: ${fmtDateTime(s.last_seen_at)}`
+                              : "В кабинете не замечен"
+                        }
+                      />
+                      @{s.username || s.id}
+                    </span>
+                  </td>
                   <td className="font-mono text-text-muted">{maskUid(s.weex_uid)}</td>
                   <td className="text-right font-mono">{fmtUsd(s.balance_usdt)}$</td>
                   <td
@@ -197,7 +220,13 @@ export default function AdminStudents() {
                         : "В кабинет ни разу не заходил"
                     }
                   >
-                    {s.first_login_at ? fmtAgo(s.last_login_at) : "не заходил"}
+                    {/* Пока человек в кабинете, время входа устаревает на
+                        глазах - показываем присутствие, оно и есть ответ. */}
+                    {isOnline(s.last_seen_at)
+                      ? "в кабинете"
+                      : s.first_login_at
+                        ? fmtAgo(s.last_seen_at || s.last_login_at)
+                        : "не заходил"}
                   </td>
                   <td className="text-center font-mono text-text-muted">{s.login_count || 0}</td>
                   <td className="text-text-muted">{sourceLabel(s.created_via)}</td>
@@ -275,6 +304,21 @@ export default function AdminStudents() {
 }
 
 /** Был ли вход за последние N дней. */
+/**
+ * Ученик в кабинете прямо сейчас.
+ *
+ * Окно - пять минут: метка присутствия обновляется раз в минуту на запросах
+ * кабинета (`backend/deps.py`), и запас нужен на паузу между ними, на
+ * свёрнутую вкладку и на разницу часов сервера с браузером.
+ */
+const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+function isOnline(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const ts = Date.parse(iso);
+  return !Number.isNaN(ts) && Date.now() - ts < ONLINE_WINDOW_MS;
+}
+
 function isRecent(iso: string | null | undefined, days: number): boolean {
   if (!iso) return false;
   const ts = Date.parse(iso);

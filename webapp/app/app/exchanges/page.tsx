@@ -13,8 +13,9 @@
 // оговорку - нет.
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, ExternalLink, KeyRound, LogIn } from "lucide-react";
+import { Check, ChevronLeft, ExternalLink, KeyRound, LogIn } from "lucide-react";
 
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import { EXCHANGE_SIGNUP } from "@/lib/content";
@@ -143,7 +144,17 @@ export default function ExchangesPage() {
 
   return (
     <PaneScope className="flex flex-col gap-3">
-      <PaneHead title={d.title} hint={d.hint} />
+      <PaneHead title={d.title} hint={d.hint}>
+        {/* Раздел открывается из профиля, а в меню кабинета его нет: без этой
+            кнопки уйти отсюда можно было только кнопкой браузера. */}
+        <Link
+          href="/app/profile"
+          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-semibold text-[var(--pane-muted)] transition-colors duration-150 hover:text-[var(--pane-text)]"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          {d.actions.backToProfile}
+        </Link>
+      </PaneHead>
 
       <p className="text-[12px] leading-relaxed text-[var(--pane-muted)]">{d.lead}</p>
       {listing && !listing.vault && (
