@@ -739,6 +739,12 @@ class PositionWatcher:
             self._missing.pop(trade.id, None)
             self._closing.discard(trade.id)
             logger.info("Позиция закрыта: %s", trade.symbol)
+
+            # У большинства бирж защита привязана к позиции и уходит вместе с
+            # ней. У Binance - нет: стоп и цели остаются висеть, и следующая
+            # сделка по той же монете получит чужую защиту по ценам прошлой.
+            if not getattr(client, "clears_protection_on_close", True):
+                await self._drop_protection(client, trade)
         elif decision.size > 0:
             # Позиция снова на бирже: пустой ответ был заминкой, и сделка жива.
             self._closing.discard(trade.id)
@@ -885,6 +891,31 @@ class PositionWatcher:
             if "sl" in kind or "stop" in kind or "loss" in kind:
                 return order_id
         return ""
+
+    async def _drop_protection(self, client: WeexFutures, trade: LiveTrade) -> None:
+        """Снять защиту, пережившую позицию.
+
+        Зовётся только для бирж, которые не убирают её сами, и только когда
+        позиции на бирже уже нет - то есть снимать нечего, кроме осиротевших
+        заявок. Сторону всё равно проверяем: на встречной позиции по той же
+        монете стоит своя защита, и снять её вместо этой значило бы оставить
+        живую сделку голой.
+        """
+        try:
+            orders = await client.algo_orders(trade.symbol)
+        except WeexTradeError as exc:
+            logger.warning("Защита %s после закрытия не проверена: %s", trade.symbol, exc)
+            return
+
+        side = trade.side.upper()
+        dropped = 0
+        for order in orders:
+            if str(order.get("positionSide") or side).upper() not in (side, ""):
+                continue
+            if await cancel_plan(client, trade.symbol, order):
+                dropped += 1
+        if dropped:
+            logger.info("После закрытия %s снято заявок защиты: %s", trade.symbol, dropped)
 
     async def _record(self, session, client: WeexFutures, trade: LiveTrade) -> bool:
         """Записать закрытую сделку в журнал по реальным исполнениям.

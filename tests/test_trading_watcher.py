@@ -1342,3 +1342,75 @@ def test_a_partial_report_may_not_lower_the_counter():
     fills = [{"side": "SELL", "price": "100.08", "qty": "2"}]
 
     assert takes_from_fills(row, fills) == 2
+
+
+# ── защита, пережившая позицию ───────────────────────────────────────────────
+#
+# У WEEX, OKX и MEXC заявки защиты привязаны к позиции и уходят вместе с ней.
+# Binance так не делает: после закрытия сделки её стоп и цели остаются висеть -
+# проверено живым счётом 14 сентября. Следующая сделка по той же монете
+# получила бы чужую защиту по ценам прошлой.
+
+
+class _PlansClient:
+    """Биржа, которая помнит свои условные заявки и умеет их снимать."""
+
+    def __init__(self, orders):
+        self.orders = list(orders)
+        self.cancelled: list[str] = []
+
+    async def algo_orders(self, symbol: str):
+        return list(self.orders)
+
+    async def cancel_algo_order(self, symbol: str, order_id: str):
+        self.cancelled.append(str(order_id))
+        self.orders = [o for o in self.orders if str(o.get("orderId")) != str(order_id)]
+        return {"ok": True}
+
+
+def _live(side: str = "long"):
+    from core.models import LiveTrade
+
+    return LiveTrade(id=1, student_id=1, client_id="c1", symbol="BTCUSDT", side=side)
+
+
+async def test_protection_left_by_the_exchange_is_cleared():
+    """Осиротевшие стоп и цель снимаются - иначе их получит следующая сделка."""
+    from backend.trading.watcher import PositionWatcher
+
+    client = _PlansClient(
+        [
+            {"orderId": "1", "planType": "STOP_LOSS", "positionSide": "LONG"},
+            {"orderId": "2", "planType": "TAKE_PROFIT", "positionSide": "LONG"},
+        ]
+    )
+    watcher = PositionWatcher(lambda: None, lambda: None)
+    await watcher._drop_protection(client, _live("long"))
+
+    assert client.cancelled == ["1", "2"]
+    assert client.orders == []
+
+
+async def test_protection_of_the_other_side_is_left_alone():
+    """На встречной позиции стоит своя защита: снять её значит оставить её голой."""
+    from backend.trading.watcher import PositionWatcher
+
+    client = _PlansClient(
+        [
+            {"orderId": "1", "planType": "STOP_LOSS", "positionSide": "SHORT"},
+            {"orderId": "2", "planType": "STOP_LOSS", "positionSide": "LONG"},
+        ]
+    )
+    watcher = PositionWatcher(lambda: None, lambda: None)
+    await watcher._drop_protection(client, _live("long"))
+
+    assert client.cancelled == ["2"]
+
+
+async def test_exchanges_that_clear_protection_themselves_are_not_touched():
+    """Признак включён по умолчанию: лишние запросы к бирже никому не нужны."""
+    from core.binance.futures import BinanceFutures
+    from core.weex.futures import WeexFutures
+
+    assert getattr(WeexFutures, "clears_protection_on_close", True) is True
+    assert BinanceFutures.clears_protection_on_close is False

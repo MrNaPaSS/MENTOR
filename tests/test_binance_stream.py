@@ -54,11 +54,16 @@ def event(kind: str, **fields) -> str:
 # ── адрес ────────────────────────────────────────────────────────────────────
 
 
-def test_key_goes_into_the_path():
-    """У Binance ключ живёт в пути адреса, а не в параметре, как у BingX."""
-    assert ws_url(False, "abc123") == "wss://fstream.binance.com/ws/abc123"
-    # Учебный контур - свой адрес, из документации биржи.
-    assert ws_url(True, "abc123").startswith("wss://demo-fstream.binance.com/ws/")
+def test_private_stream_has_its_own_address():
+    """Потоки разведены по адресам, и события счёта живут только на своём.
+
+    Прежний путь биржа отключила 23 апреля 2026: соединение по нему
+    открывается и живёт, но событий счёта в нём нет вовсе - проверено живым
+    счётом 14 сентября, сделка прошла, а поток промолчал.
+    """
+    assert ws_url(False, "abc123") == "wss://fstream.binance.com/private/ws?listenKey=abc123"
+    # Учебный контур - тот же путь, свой хост.
+    assert ws_url(True, "abc123") == "wss://demo-fstream.binance.com/private/ws?listenKey=abc123"
 
 
 # ── снимок ───────────────────────────────────────────────────────────────────

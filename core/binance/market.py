@@ -59,6 +59,11 @@ ENDPOINTS = {
     "dual": "/fapi/v1/positionSide/dual",
     "commission": "/fapi/v1/commissionRate",
     "order": "/fapi/v1/order",
+    # Условные заявки с 9 декабря 2025 живут отдельно: обычная ручка заявки
+    # отвечает на них кодом -4120 «Order type not supported for this endpoint».
+    # Стоп и цель ставятся, читаются и снимаются только здесь.
+    "algo_order": "/fapi/v1/algoOrder",
+    "open_algo_orders": "/fapi/v1/openAlgoOrders",
     "open_orders": "/fapi/v1/openOrders",
     "all_open_orders": "/fapi/v1/allOpenOrders",
     "user_trades": "/fapi/v1/userTrades",
@@ -382,7 +387,10 @@ def plan_row(row: dict[str, Any], mark: BrokerMark | None = None) -> dict[str, A
     заявка с `closePosition`, закрывающая позицию целиком; в таком виде её и
     показываем, нулём, а не выдуманным числом.
     """
-    kind = str(row.get("type") or row.get("origType") or "").upper()
+    # У алго-ручки свои имена: вид заявки в `orderType`, номер в `algoId`,
+    # цена срабатывания в `triggerPrice`, состояние в `algoStatus`. Читаем оба
+    # написания: обычную ручку мы ещё спрашиваем про лимитки.
+    kind = str(row.get("type") or row.get("origType") or row.get("orderType") or "").upper()
     name = str(row.get("symbol") or "").upper()
     side = str(row.get("positionSide") or "").upper()
     if side not in ("LONG", "SHORT"):
@@ -392,18 +400,23 @@ def plan_row(row: dict[str, Any], mark: BrokerMark | None = None) -> dict[str, A
     stop_like = "STOP" in kind
     tag = mark or broker_mark()
     return {
-        "orderId": str(row.get("orderId") or ""),
+        "orderId": str(row.get("algoId") or row.get("orderId") or ""),
+        "algoId": str(row.get("algoId") or row.get("orderId") or ""),
         # У Binance метка есть и у условных заявок - в отличие от BingX и MEXC.
-        "clientAlgoId": client_id(tag.untag(str(row.get("clientOrderId") or ""))),
-        "clientOrderId": client_id(tag.untag(str(row.get("clientOrderId") or ""))),
+        "clientAlgoId": client_id(
+            tag.untag(str(row.get("clientAlgoId") or row.get("clientOrderId") or ""))
+        ),
+        "clientOrderId": client_id(
+            tag.untag(str(row.get("clientAlgoId") or row.get("clientOrderId") or ""))
+        ),
         "symbol": name,
         "positionSide": side,
         "side": str(row.get("side") or "").upper(),
         "planType": "STOP_LOSS" if stop_like else "TAKE_PROFIT",
         "type": kind,
-        "triggerPrice": row.get("stopPrice") or "",
-        "quantity": _num(abs(_f(row.get("origQty")))),
-        "state": str(row.get("status") or ""),
+        "triggerPrice": row.get("triggerPrice") or row.get("stopPrice") or "",
+        "quantity": _num(abs(_f(row.get("quantity") or row.get("origQty")))),
+        "state": str(row.get("algoStatus") or row.get("status") or ""),
         # Заявка закрывает позицию целиком: объёма у неё нет по устройству.
         "closePosition": _bool(row.get("closePosition"), False),
     }

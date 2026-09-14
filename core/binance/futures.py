@@ -119,6 +119,14 @@ class BinanceFutures:
     # Опознавать защиту номером не нужно.
     plans_unlabeled = False
 
+    # Защиту после закрытия позиции биржа не снимает.
+    #
+    # У WEEX, OKX и MEXC заявки защиты привязаны к позиции и уходят вместе с
+    # ней; здесь они живут сами по себе и остаются висеть. Оставить их нельзя:
+    # следующая сделка по той же монете получит чужой стоп по цене прошлой -
+    # проверено живым счётом, после закрытия висели все три.
+    clears_protection_on_close = False
+
     def __init__(
         self,
         creds: Credentials,
@@ -526,9 +534,14 @@ class BinanceFutures:
     ) -> dict[str, Any]:
         """Условная заявка защиты: стоп или цель, исполнение по рынку.
 
-        Своей ручки для условных заявок у Binance нет - это та же ручка заявки
-        с типом `STOP_MARKET` или `TAKE_PROFIT_MARKET`, и висят они в общем
-        списке. Метку биржа у них принимает - в отличие от BingX и MEXC.
+        С 9 декабря 2025 у условных заявок своя ручка (`/fapi/v1/algoOrder`), и
+        обычная их больше не принимает: отвечает кодом -4120 «Order type not
+        supported for this endpoint». Живой счёт показал это прямо - позиция
+        открывалась, а стоп за ней не вставал вовсе.
+
+        Имена полей там свои: цена срабатывания - `triggerPrice`, метка -
+        `clientAlgoId`, номер в ответе - `algoId`. Метку биржа принимает, в
+        отличие от BingX и MEXC.
         """
         spec = await self._spec(symbol)
         await self._check_tradable(spec)
@@ -542,10 +555,11 @@ class BinanceFutures:
             working = "MARK_PRICE" if "MARK" in working else "CONTRACT_PRICE"
 
         params: dict[str, Any] = {
+            "algoType": "CONDITIONAL",
             "symbol": spec.symbol,
             "side": "SELL" if long else "BUY",
             "type": "STOP_MARKET" if stop else "TAKE_PROFIT_MARKET",
-            "stopPrice": trigger_price,
+            "triggerPrice": trigger_price,
             "workingType": working,
             **self._sides(hedge, position_side, position_side, closing=True),
         }
@@ -565,12 +579,12 @@ class BinanceFutures:
 
         mark = client_id(self.mark.tag(client_id(client_algo_id)))
         if mark:
-            params["newClientOrderId"] = mark
+            params["clientAlgoId"] = mark
 
-        data = await self._request("POST", ENDPOINTS["order"], params=params)
+        data = await self._request("POST", ENDPOINTS["algo_order"], params=params)
         row = data if isinstance(data, dict) else {}
-        order_id = str(row.get("orderId") or "")
-        own = client_id(self.mark.untag(str(row.get("clientOrderId") or mark)))
+        order_id = str(row.get("algoId") or row.get("orderId") or "")
+        own = client_id(self.mark.untag(str(row.get("clientAlgoId") or mark)))
         return {"orderId": order_id, "algoId": order_id, "clientAlgoId": own}
 
     async def modify_tp_sl(
@@ -611,7 +625,7 @@ class BinanceFutures:
             trigger_price_type=trigger_price_type or "MARK_PRICE",
         )
         try:
-            await self.cancel_order(symbol, str(order_id))
+            await self.cancel_algo_order(symbol, str(order_id))
         except WeexTradeError as exc:
             # Новая уже стоит: молчать нельзя - на позиции две заявки, и
             # разбирать это будет сопровождение при следующем переносе.
@@ -639,12 +653,16 @@ class BinanceFutures:
         return [order_row(row, self.mark) for row in await self._pending(symbol) if not is_plan(row)]
 
     async def algo_orders(self, symbol: str) -> list[dict[str, Any]]:
-        """Условные заявки: стоп и цели.
+        """Условные заявки: стоп и цели. С декабря 2025 - своей ручкой.
 
-        Тот же список биржи, что и у `open_orders`, но другой его половиной:
-        отдельной ручки для условных заявок у Binance нет.
+        В общем списке заявок их больше нет: биржа держит их отдельно, и
+        спрашивать надо там же, где ставили.
         """
-        return [plan_row(row, self.mark) for row in await self._pending(symbol) if is_plan(row)]
+        data = await self._request(
+            "GET", ENDPOINTS["open_algo_orders"], params={"symbol": symbol_id(symbol)}
+        )
+        rows = data if isinstance(data, list) else []
+        return [plan_row(row, self.mark) for row in rows if isinstance(row, dict)]
 
     async def cancel_order(self, symbol: str, order_id: str) -> Any:
         params: dict[str, Any] = {"symbol": symbol_id(symbol)}
@@ -655,8 +673,13 @@ class BinanceFutures:
         return await self._request("DELETE", ENDPOINTS["order"], params=params)
 
     async def cancel_algo_order(self, symbol: str, order_id: str) -> Any:
-        """Снять условную заявку. Ручка та же, что у обычной: они одно и то же."""
-        return await self.cancel_order(symbol, order_id)
+        """Снять условную заявку - своей ручкой, по номеру алго или по метке."""
+        params: dict[str, Any] = {"symbol": symbol_id(symbol)}
+        if str(order_id).isdigit():
+            params["algoId"] = str(order_id)
+        else:
+            params["clientAlgoId"] = client_id(self.mark.tag(client_id(order_id)))
+        return await self._request("DELETE", ENDPOINTS["algo_order"], params=params)
 
     async def cancel_all_algo(self, symbol: str) -> int:
         """Снять условные заявки пары - по одной, а не все заявки разом.
@@ -670,7 +693,7 @@ class BinanceFutures:
             if not order_id:
                 continue
             try:
-                await self.cancel_order(symbol, order_id)
+                await self.cancel_algo_order(symbol, order_id)
                 removed += 1
             except WeexTradeError as exc:
                 logger.warning("Условная заявка %s на Binance не снята: %s", order_id, exc)

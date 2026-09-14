@@ -47,11 +47,18 @@ from core.weex.futures import Credentials
 
 logger = logging.getLogger("nmnh.binance.stream")
 
-# Адрес приватного потока. Ключ идёт в пути - так у Binance устроены все
-# пользовательские потоки.
-WS_PRIVATE = "wss://fstream.binance.com/ws"
-# Учебный контур: адрес из документации биржи, рядом с `demo-fapi`.
-WS_PRIVATE_TESTNET = "wss://demo-fstream.binance.com/ws"
+# Адрес приватного потока.
+#
+# Биржа развела потоки по трём адресам - `/public`, `/market` и `/private`, - а
+# прежние пути отключила 23 апреля 2026: соединение по ним открывается и живёт,
+# но событий счёта в нём нет вовсе. Ровно это мы и увидели на живом счёте -
+# сделка прошла, а поток промолчал; голое соединение по старому адресу вело
+# себя так же, то есть дело было не в нашем разборе.
+#
+# Ключ теперь идёт запросом, а не в пути.
+WS_PRIVATE = "wss://fstream.binance.com/private/ws"
+# Учебный контур: тот же путь, свой хост.
+WS_PRIVATE_TESTNET = "wss://demo-fstream.binance.com/private/ws"
 
 # Ключ живёт час. Продлеваем вдвое чаще: сетевой сбой не должен стоить
 # соединения.
@@ -73,11 +80,16 @@ FILL_STATES = ("FILLED", "PARTIALLY_FILLED")
 
 
 def ws_url(testnet: bool, listen_key: str, base: str | None = None) -> str:
-    """Адрес подключения с ключом в пути."""
+    """Адрес подключения: ключ параметром запроса.
+
+    События не перечисляем: без списка биржа шлёт все, включая `listenKeyExpired`.
+    Он нам нужен - молчащий поток опаснее оборвавшегося, и по этому событию мы
+    переподключаемся с новым ключом.
+    """
     root = base or os.getenv("BINANCE_WS_PRIVATE", "").strip() or (
         WS_PRIVATE_TESTNET if testnet else WS_PRIVATE
     )
-    return f"{root.rstrip('/')}/{listen_key}"
+    return f"{root.rstrip('/')}?listenKey={listen_key}"
 
 
 def account_positions(event: dict[str, Any]) -> list[dict[str, Any]]:

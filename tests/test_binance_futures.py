@@ -142,6 +142,11 @@ def orders_of(session: FakeSession) -> list[dict]:
     return [one for one in session.sent if one["path"] == "/fapi/v1/order"]
 
 
+def algos_of(session: FakeSession) -> list[dict]:
+    """Условные заявки с декабря 2025 уходят на свою ручку, а не в общую."""
+    return [one for one in session.sent if one["path"] == "/fapi/v1/algoOrder"]
+
+
 def order_route(order_id: str = "77"):
     def route(call):
         return {
@@ -149,6 +154,20 @@ def order_route(order_id: str = "77"):
             "symbol": call["query"].get("symbol", "BTCUSDT"),
             "clientOrderId": call["query"].get("newClientOrderId", ""),
             "status": "NEW",
+        }
+
+    return route
+
+
+def algo_route(algo_id: str = "88"):
+    """Ответ ручки условных заявок: свои имена полей."""
+
+    def route(call):
+        return {
+            "algoId": int(algo_id),
+            "symbol": call["query"].get("symbol", "BTCUSDT"),
+            "clientAlgoId": call["query"].get("clientAlgoId", ""),
+            "algoStatus": "NEW",
         }
 
     return route
@@ -330,7 +349,9 @@ def test_protection_goes_as_separate_orders_after_the_entry():
     Это главное отличие биржи от WEEX, BingX и MEXC, и оно видно здесь: на одну
     просьбу войти со стопом и целью уходит три заявки, а не одна.
     """
-    session = FakeSession({"/fapi/v1/order": order_route()})
+    session = FakeSession(
+        {"/fapi/v1/order": order_route(), "/fapi/v1/algoOrder": algo_route()}
+    )
     placed = run(
         client(session).place_order(
             symbol="BTCUSDT",
@@ -341,14 +362,21 @@ def test_protection_goes_as_separate_orders_after_the_entry():
             tp_trigger="82000",
         )
     )
-    kinds = [one["query"]["type"] for one in orders_of(session)]
-    assert kinds == ["MARKET", "STOP_MARKET", "TAKE_PROFIT_MARKET"]
+    # Вход - обычной ручкой, защита - ручкой условных заявок.
+    assert [one["query"]["type"] for one in orders_of(session)] == ["MARKET"]
+    assert [one["query"]["type"] for one in algos_of(session)] == [
+        "STOP_MARKET",
+        "TAKE_PROFIT_MARKET",
+    ]
     # Номера защиты возвращаются вызывающему: по ним стоп потом переносится.
     assert placed["slOrderId"] and placed["tpOrderId"]
 
-    stop = orders_of(session)[1]["query"]
+    stop = algos_of(session)[0]["query"]
     assert stop["side"] == "SELL"
-    assert stop["stopPrice"] == "78000"
+    assert stop["algoType"] == "CONDITIONAL"
+    # Цена срабатывания у этой ручки называется иначе, чем у обычной.
+    assert stop["triggerPrice"] == "78000"
+    assert "stopPrice" not in stop
     assert stop["workingType"] == "MARK_PRICE"
 
 
@@ -366,7 +394,7 @@ def test_failed_protection_does_not_cancel_the_entry():
             return {"orderId": 5, "clientOrderId": "", "status": "NEW"}
         return {"code": -2021, "msg": "Order would immediately trigger."}
 
-    session = FakeSession({"/fapi/v1/order": route})
+    session = FakeSession({"/fapi/v1/order": route, "/fapi/v1/algoOrder": route})
     placed = run(
         client(session).place_order(
             symbol="BTCUSDT",
@@ -383,7 +411,7 @@ def test_failed_protection_does_not_cancel_the_entry():
 
 def test_stop_without_quantity_closes_the_whole_position():
     """Стоп на всю позицию объёма не имеет: подросла лимиткой - он накроет всю."""
-    session = FakeSession({"/fapi/v1/order": order_route()})
+    session = FakeSession({"/fapi/v1/algoOrder": algo_route()})
     run(
         client(session).place_tp_sl(
             symbol="BTCUSDT",
@@ -393,7 +421,7 @@ def test_stop_without_quantity_closes_the_whole_position():
             position_side="LONG",
         )
     )
-    query = orders_of(session)[-1]["query"]
+    query = algos_of(session)[-1]["query"]
     assert query["closePosition"] == "true"
     assert "quantity" not in query
     assert "reduceOnly" not in query
@@ -401,7 +429,7 @@ def test_stop_without_quantity_closes_the_whole_position():
 
 def test_target_keeps_its_quantity():
     """Лестница целей закрывает части - там объём нужен."""
-    session = FakeSession({"/fapi/v1/order": order_route()})
+    session = FakeSession({"/fapi/v1/algoOrder": algo_route()})
     run(
         client(session).place_tp_sl(
             symbol="BTCUSDT",
@@ -411,7 +439,7 @@ def test_target_keeps_its_quantity():
             position_side="LONG",
         )
     )
-    query = orders_of(session)[-1]["query"]
+    query = algos_of(session)[-1]["query"]
     assert query["type"] == "TAKE_PROFIT_MARKET"
     assert query["quantity"] == "0.005"
     assert query["reduceOnly"] == "true"
@@ -421,45 +449,52 @@ def test_stop_moves_by_placing_first_and_cancelling_after():
     """Сначала новая, потом снятие прежней: наоборот - окно без защиты."""
     session = FakeSession(
         {
-            "/fapi/v1/order": order_route("900"),
-            "/fapi/v1/openOrders": [
+            "/fapi/v1/algoOrder": algo_route("900"),
+            "/fapi/v1/openAlgoOrders": [
                 {
-                    "orderId": 800,
+                    "algoId": 800,
                     "symbol": "BTCUSDT",
-                    "type": "STOP_MARKET",
+                    "orderType": "STOP_MARKET",
                     "side": "SELL",
                     "positionSide": "BOTH",
-                    "stopPrice": "78000",
-                    "origQty": "0",
+                    "triggerPrice": "78000",
+                    "quantity": "0",
                     "closePosition": True,
-                    "status": "NEW",
+                    "algoStatus": "NEW",
                 }
             ],
         }
     )
     run(client(session).modify_tp_sl(symbol="BTCUSDT", order_id="800", trigger_price="79000"))
-    order_calls = [one for one in session.sent if one["path"] == "/fapi/v1/order"]
-    assert [one["method"] for one in order_calls] == ["POST", "DELETE"]
+    calls = [one for one in session.sent if one["path"] == "/fapi/v1/algoOrder"]
+    assert [one["method"] for one in calls] == ["POST", "DELETE"]
     # Новая заявка тоже без объёма: иначе стоп перестал бы накрывать позицию целиком.
-    assert order_calls[0]["query"]["closePosition"] == "true"
-    assert order_calls[1]["query"]["orderId"] == "800"
+    assert calls[0]["query"]["closePosition"] == "true"
+    assert calls[1]["query"]["algoId"] == "800"
 
 
-def test_plans_and_orders_are_two_halves_of_one_list():
-    """Своей ручки для условных заявок у Binance нет - они в общем списке."""
+def test_plans_live_on_their_own_endpoint():
+    """С декабря 2025 условные заявки в общем списке не лежат - только в своём.
+
+    Обычная ручка их больше и не принимает: отвечает кодом -4120 «Order type
+    not supported for this endpoint» (проверено живым счётом 14 сентября).
+    """
     session = FakeSession(
         {
             "/fapi/v1/openOrders": [
                 {"orderId": 1, "symbol": "BTCUSDT", "type": "LIMIT", "origQty": "0.01"},
+            ],
+            "/fapi/v1/openAlgoOrders": [
                 {
-                    "orderId": 2,
+                    "algoId": 2,
                     "symbol": "BTCUSDT",
-                    "type": "STOP_MARKET",
+                    "orderType": "STOP_MARKET",
                     "side": "SELL",
-                    "stopPrice": "78000",
-                    "origQty": "0.01",
+                    "triggerPrice": "78000",
+                    "quantity": "0.01",
+                    "algoStatus": "NEW",
                 },
-            ]
+            ],
         }
     )
     one = client(session)
@@ -467,6 +502,7 @@ def test_plans_and_orders_are_two_halves_of_one_list():
     plans = run(one.algo_orders("BTCUSDT"))
     assert [row["orderId"] for row in plans] == ["2"]
     assert plans[0]["planType"] == "STOP_LOSS"
+    assert plans[0]["triggerPrice"] == "78000"
 
 
 # ── метка брокера ────────────────────────────────────────────────────────────
