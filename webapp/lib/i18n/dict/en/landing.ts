@@ -75,7 +75,7 @@ export const landing = {
     title: "Where to open an account",
     subtitle: "The terminal works on all five. What differs is the cashback terms.",
     cashback: (pct: string) => `${pct} of the fee comes back`,
-    noCashback: "This exchange does not allow cashback",
+    noCashback: "No cashback",
     cashbackSoon: "Cashback terms are being agreed",
     open: "Open account",
     close: "Close",
@@ -90,7 +90,7 @@ export const landing = {
     live: "trading is live",
     signup: "open an account →",
     cashback: (pct: string) => `${pct} of the fee back`,
-    noCashback: "the exchange forbids cashback",
+    noCashback: "no cashback",
     cashbackSoon: "cashback terms being agreed",
     note: (pending: number) => `${pending} pending connection`,
   },
@@ -166,7 +166,7 @@ export const landing = {
       {
         tag: "Price",
         q: "How much of the fee comes back, and where does it land?",
-        a: `${cashbackList()} of your own fee. It lands on your account at the exchange itself, not on a terminal balance, and is counted from the exchange's own reports. One condition: the account was opened through the academy link and the trades are made in the terminal. Binance pays nothing back - the exchange forbids partners from sharing fees; MEXC terms are being agreed.`,
+        a: `${cashbackList()} of your own fee. It lands on your account at the exchange itself, not on a terminal balance, and is counted from the exchange's own reports. One condition: the account was opened through the academy link and the trades are made in the terminal. Binance has no cashback.`,
       },
       {
         tag: "Access",

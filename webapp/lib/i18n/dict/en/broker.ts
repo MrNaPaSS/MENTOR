@@ -6,7 +6,7 @@ export const broker = {
   meta: {
     title: "Exchange fee rebates with no subscription",
     description:
-      "Trade in the NMNH terminal and get part of your exchange fees back: 15% on WEEX, 10% on OKX and BingX. No monthly plans - the full terminal, risk manager and journal are open to everyone.",
+      "Trade in the NMNH terminal and get part of your exchange fees back: 15% on WEEX, 10% each on OKX, BingX and MEXC. No monthly plans - the full terminal, risk manager and journal are open to everyone.",
   },
 
   nav: {
@@ -58,7 +58,7 @@ export const broker = {
       },
       {
         title: "We pass part of it back to you",
-        text: "Today that is 15% of your own fees on WEEX and 10% on OKX and BingX. It lands on your exchange account, counted from the exchange's own reports.",
+        text: "Today that is 15% of your own fees on WEEX and 10% each on OKX, BingX and MEXC. It lands on your exchange account, counted from the exchange's own reports.",
       },
     ],
     footnote:
@@ -198,7 +198,7 @@ export const broker = {
       live: "Live",
       soon: "Soon",
     },
-    cashbackNo: "not allowed by the exchange",
+    cashbackNo: "none",
     cashbackSoon: "being agreed",
     note:
       "The \"after rebate\" column uses each exchange's own share rather than one common number: the shares differ, and a single figure would be wrong in half the rows.",
@@ -267,7 +267,7 @@ export const broker = {
       {
         tag: "Rates",
         q: "WEEX takers cost more than Binance. Where is the benefit?",
-        a: "True: 0.08% against 0.05%, and a 15% rebate does not fully close that gap. Three things change the picture. The rebate on WEEX works today, while on Binance there will be none at all - the exchange forbids partners from sharing fees. The maker fee is the same 0.02% everywhere, so a trader who enters with limits barely feels the difference. And WEEX has its own VIP ladder: the taker fee drops as volume grows. If you take everything at market and your volume is large, run your own exchange through the calculator above - it will give you that answer too.",
+        a: "True: 0.08% against 0.05%, and a 15% rebate does not fully close that gap. Three things change the picture. The rebate on WEEX works today, while on Binance there is none. The maker fee is the same 0.02% everywhere, so a trader who enters with limits barely feels the difference. And WEEX has its own VIP ladder: the taker fee drops as volume grows. If you take everything at market and your volume is large, run your own exchange through the calculator above - it will give you that answer too.",
       },
       {
         tag: "Tiers",
@@ -282,7 +282,7 @@ export const broker = {
       {
         tag: "Coverage",
         q: "Which exchanges does this work on today?",
-        a: "Trading is connected on five - WEEX, OKX, BingX, MEXC and Binance. Cashback runs on three of them: WEEX 15%, OKX and BingX 10% each. In total we work with more than 8 official exchanges; the rest are pending, and until they are connected they say \"soon\" instead of appearing as logos in the footer.",
+        a: "Trading is connected on five - WEEX, OKX, BingX, MEXC and Binance. Cashback runs on four of them: WEEX 15%, OKX, BingX and MEXC 10% each; Binance has none. In total we work with more than 8 official exchanges; the rest are pending, and until they are connected they say \"soon\" instead of appearing as logos in the footer.",
       },
       {
         tag: "Binance",

@@ -28,7 +28,7 @@ export const VENUES: readonly PublicVenue[] = [
   { code: "weex", name: "WEEX", trading: true, cashback: 0.15 },
   { code: "okx", name: "OKX", trading: true, cashback: 0.1 },
   { code: "bingx", name: "BingX", trading: true, cashback: 0.1 },
-  { code: "mexc", name: "MEXC", trading: true, cashback: null },
+  { code: "mexc", name: "MEXC", trading: true, cashback: 0.1 },
   { code: "bybit", name: "Bybit", trading: false, cashback: null },
   { code: "bitget", name: "Bitget", trading: false, cashback: null },
   // Возврата на Binance не будет: биржа запрещает партнёрам возвращать

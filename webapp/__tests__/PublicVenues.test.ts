@@ -12,7 +12,7 @@ describe("реестр бирж лендинга", () => {
   });
 
   it("возврат обещан только там, где доля названа числом", () => {
-    expect(PAYING.map((one) => one.code)).toEqual(["weex", "okx", "bingx"]);
+    expect(PAYING.map((one) => one.code)).toEqual(["weex", "okx", "bingx", "mexc"]);
     // Binance в списке платящих быть не может: биржа запрещает возврат.
     expect(PAYING.some((one) => one.code === "binance")).toBe(false);
   });
@@ -25,6 +25,6 @@ describe("реестр бирж лендинга", () => {
   });
 
   it("список для текстов собирается из реестра", () => {
-    expect(cashbackList()).toBe("WEEX - 15%, OKX - 10%, BingX - 10%");
+    expect(cashbackList()).toBe("WEEX - 15%, OKX - 10%, BingX - 10%, MEXC - 10%");
   });
 });

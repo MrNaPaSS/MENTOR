@@ -38,7 +38,7 @@ export const exchanges = {
     pays: (pct: string) => `${pct} of your fee comes back`,
     where: (name: string) =>
       `Lands on your ${name} account: for trades made in the terminal from an account opened through the academy link.`,
-    forbidden: "No cashback here: the exchange forbids partners from sharing fees with traders.",
+    forbidden: "There is no cashback on this exchange.",
     unknown: "The exchange has not named the share yet - it shows up here once it does.",
     waiting: "The exchange is not connected yet, so there are no terms for it.",
   },
