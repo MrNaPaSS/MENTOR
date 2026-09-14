@@ -194,6 +194,51 @@ export const broker = {
     ],
   },
 
+  tour: {
+    eyebrow: "The desk",
+    title: "What it looks like at work",
+    subtitle:
+      "The four things the terminal was built for. All of it is open to everyone - no tiers, no add-ons.",
+    items: [
+      {
+        title: "Terminal",
+        text:
+          "Order book with walls, clusters and tape on one screen. Orders are placed from the chart: drag a level and the order on the exchange follows.",
+        points: ["Book and clusters", "Levels by mouse", "Each account sees its own exchange"],
+        image: "/broker/terminal.jpg",
+        webp: "/broker/terminal.webp",
+        alt: "NMNH terminal: order book, clusters and a chart with the trade drawn on it",
+      },
+      {
+        title: "Trade journal",
+        text:
+          "A trade lands in the journal by itself, with the exit price and the fee the exchange charged - not our estimate. Days, sides, coins and hours are counted from those same records.",
+        points: ["Writes itself", "Real exchange numbers", "Split by exchange"],
+        image: "",
+        webp: "",
+        alt: "Trade journal: closed trades with the day's result",
+      },
+      {
+        title: "Sizing before entry",
+        text:
+          "Position size against your deposit and risk, lot step, leverage ceiling and the coin's fee - all counted before the order leaves. There is nowhere to miss a zero.",
+        points: ["Risk in percent", "Exchange limits applied", "Ladder of targets"],
+        image: "",
+        webp: "",
+        alt: "Trade sizing: risk, size and the ladder of targets",
+      },
+      {
+        title: "The desk on your phone",
+        text:
+          "The account area installs on a phone like an app - no stores, no downloads. The trade is visible where it happens.",
+        points: ["Installs from the site", "Event notifications", "The same account"],
+        image: "",
+        webp: "",
+        alt: "NMNH account area on a phone",
+      },
+    ],
+  },
+
   exchanges: {
     eyebrow: "Exchanges",
     title: "Where this already works",
@@ -243,6 +288,15 @@ export const broker = {
         text: "The rebate is calculated automatically from exchange reports. Nothing to click, nobody to ask.",
       },
     ],
+  },
+
+  help: {
+    eyebrow: "If you get stuck",
+    title: "Start in fifteen minutes",
+    text:
+      "The key, the first trade and the markup - in one conversation. Write to the academy bot; a person answers, not an autoresponder.",
+    action: "Message the mentor",
+    note: "Free and without an appointment: that is what the academy is for.",
   },
 
   faq: {
