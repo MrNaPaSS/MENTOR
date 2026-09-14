@@ -195,6 +195,14 @@ export default function ProfilePage() {
             lines={BRAND_MOTTO}
             className="absolute right-5 top-5 hidden !text-[11px] !tracking-[0.42em] !text-[var(--pane-text-2)] md:block"
           />
+          {/* Три колонки: слева кто я и сколько у меня, посередине факты,
+              справа кнопка. Решётка стояла в одной строке с балансом, под
+              строкой ника, и сверху над ней оставалось втрое больше воздуха,
+              чем снизу - теперь она делит высоту карточки пополам. */}
+          <div className="relative flex flex-wrap items-center justify-between gap-4">
+          {/* Левой колонке нужен свой минимум: без него ник и номер счёта
+              сжимались в столбик по букве, лишь бы уместить решётку рядом. */}
+          <div className="min-w-[240px] flex-1">
           <div className="relative flex items-center gap-4">
             {/* Аватарка из Telegram, если она есть. Файл отдаёт бэкенд, поэтому
                 к пути добавляем API_URL: сайт живёт на другом домене. Нет
@@ -226,7 +234,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Balance */}
-          <div className="relative mt-4 flex flex-wrap items-end justify-between gap-4">
+          <div className="relative mt-4">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--pane-muted)]">{t.profile.balance}</div>
               <div className="font-mono text-[28px] font-bold leading-tight tabular-nums text-[var(--pane-text)]">
@@ -258,23 +266,32 @@ export default function ProfilePage() {
                 подписи по всей ширине карточки, и глаз читал их как отдельные
                 колонки таблицы. Квадрат стоит посередине, между балансом и
                 кнопкой, и занимает ровно столько, сколько нужно. */}
-            <div className="mx-auto grid w-full max-w-sm flex-1 grid-cols-2 gap-2">
-              <Fact label={t.profile.facts.member} value={daysHere(p.created_at, t)} />
-              <Fact label={t.profile.facts.coins} value={coins ? String(coins) : null} />
-              <Fact label={t.profile.facts.certificates} value={certs} />
-              <Fact label={t.profile.facts.fee} value={feeText} />
-            </div>
+
+          </div>
+          </div>
+
+          {/* Факты о себе - колонкой по центру карточки.
+              Здесь только то, чего нет больше нигде в кабинете: аналитика и
+              журнал показывают сделки, витрина - биржи, а стаж, монеты,
+              сертификаты и своя настоящая ставка живут в профиле или не живут
+              вовсе. Пустая плитка не рисуется: «0 сертификатов» у новичка
+              читается упрёком, а прочерк под ставкой - поломкой. */}
+          <div className="grid w-full min-w-[260px] max-w-sm flex-1 grid-cols-2 gap-2">
+            <Fact label={t.profile.facts.member} value={daysHere(p.created_at, t)} />
+            <Fact label={t.profile.facts.coins} value={coins ? String(coins) : null} />
+            <Fact label={t.profile.facts.certificates} value={certs} />
+            <Fact label={t.profile.facts.fee} value={feeText} />
+          </div>
 
             <button
               onClick={refreshBalance}
               disabled={refreshing}
-              className={`${GOLD_BTN} relative !bg-[var(--pane-bg)] disabled:opacity-50`}
+              className={`${GOLD_BTN} relative shrink-0 !bg-[var(--pane-bg)] disabled:opacity-50`}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               {t.common.refresh}
             </button>
           </div>
-
         </div>
         {/* ── Биржевой счёт ──
             Ключи вводятся в терминале, но вопрос «подключено ли» человек задаёт
