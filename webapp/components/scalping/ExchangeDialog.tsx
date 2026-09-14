@@ -15,6 +15,7 @@
 import Link from "next/link";
 
 import { useT } from "@/lib/i18n";
+import { venueName } from "@/lib/venues";
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import {
@@ -225,9 +226,16 @@ export default function ExchangeDialog({
         </div>
 
         {/* Биржи - вкладками. Точка - подключён ли счёт, подпись - на какой
-            из них сейчас ставятся сделки. */}
+            из них сейчас ставятся сделки.
+
+            Имена короткие и ряд прокручивается: бирж пять, и «WEEX Futures»
+            пять раз подряд за край окна не помещались - последняя вкладка
+            обрезалась на середине слова. */}
         {accounts.length > 1 && (
-          <div className="flex gap-1 border-b border-[var(--pane-border)] px-3 py-2" role="tablist">
+          <div
+            className="flex gap-1 overflow-x-auto border-b border-[var(--pane-border)] px-3 py-2"
+            role="tablist"
+          >
             {accounts.map((one) => {
               const on = one.exchange === code;
               return (
@@ -236,7 +244,7 @@ export default function ExchangeDialog({
                   role="tab"
                   aria-selected={on}
                   onClick={() => setCode(one.exchange)}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors duration-150 ease-out ${
+                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition-colors duration-150 ease-out ${
                     on
                       ? "bg-[var(--pane-accent-faint)] text-[var(--pane-text)]"
                       : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
@@ -251,7 +259,7 @@ export default function ExchangeDialog({
                           : "bg-[var(--pane-border)]"
                     }`}
                   />
-                  {one.title || one.exchange.toUpperCase()}
+                  {venueName(one.exchange)}
                   {one.connected && one.exchange === active && (
                     <span className="rounded bg-[var(--pane-hover)] px-1 py-px text-[9px] font-medium text-[var(--pane-accent)]">
                       {d.activeBadge}

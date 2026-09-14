@@ -18,6 +18,7 @@
 // условий на нём не будет.
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ExternalLink, X } from "lucide-react";
 
 import VenueMark from "@/components/ui/VenueMark";
@@ -71,9 +72,16 @@ function Dialog({ onClose }: { onClose: () => void }) {
     };
   }, [onKey]);
 
-  return (
+  // Окно уходит в портал, а не рисуется на месте кнопки.
+  //
+  // Кнопки стоят внутри секций, которые появляются с анимацией, а у
+  // анимированного предка есть `transform` - и `position: fixed` внутри него
+  // отсчитывается от этого предка, а не от экрана. Окно вставало посреди
+  // страницы, затемнение накрывало только свою секцию, и текст под ним
+  // просвечивал. Из `document.body` оно снова поверх всего.
+  const dialog = (
     <div
-      className="fixed inset-0 z-[70] flex items-end justify-center bg-bg-deep/70 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-[100] flex animate-fade-in items-center justify-center bg-bg-deep/80 p-4 backdrop-blur-md motion-reduce:animate-none"
       role="dialog"
       aria-modal="true"
       aria-label={copy.title}
@@ -147,4 +155,6 @@ function Dialog({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+
+  return createPortal(dialog, document.body);
 }

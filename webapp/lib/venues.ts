@@ -48,6 +48,18 @@ export const PAYING: readonly PublicVenue[] = VENUES.filter(
   (one) => one.cashback !== null && one.cashback > 0,
 );
 
+/**
+ * Короткое имя биржи: «BingX», а не «BingX Futures».
+ *
+ * Сервер подписывает счёт полным названием, и там, где подписи стоят в ряд -
+ * вкладки, чипы, узкие карточки, - пять полных названий за край не помещаются.
+ * Незнакомый код возвращается заглавными: пусть будет некрасиво, но видно.
+ */
+export function venueName(code: string | null | undefined): string {
+  const key = (code ?? "").trim().toLowerCase();
+  return VENUES.find((one) => one.code === key)?.name ?? key.toUpperCase();
+}
+
 /** Доля возврата в процентах: 0.15 -> «15%». Пусто - возврата нет. */
 export function cashbackPct(share: number | null): string | null {
   if (share === null || !(share > 0)) return null;
