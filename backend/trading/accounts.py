@@ -184,19 +184,28 @@ def live_by_exchange(session, student_id: int, *, fresh_only: bool = False) -> d
     из-за записи, до которой никто не доходит, значит запереть человека
     навсегда.
     """
+    counts: dict[str, int] = {}
+    for trade in live_trades(session, student_id, fresh_only=fresh_only):
+        code = (trade.exchange or "weex").strip().lower()
+        counts[code] = counts.get(code, 0) + 1
+    return counts
+
+
+def live_trades(session, student_id: int, *, fresh_only: bool = False) -> list[LiveTrade]:
+    """Сами записи, а не их число: отказ должен называть, что именно держит.
+
+    «Идут сделки терминала (WEEX - 1)» не говорит человеку ничего: какая
+    монета, вошла она или ещё ждёт лимитку - по этому тексту не понять, и
+    искать нечего. Поэтому наружу отдаём записи, а счётчики считаем из них.
+    """
     rows = session.execute(
         select(LiveTrade)
         .where(LiveTrade.student_id == student_id)
         .where(LiveTrade.status.in_(("waiting", "open")))
+        .order_by(LiveTrade.id)
     ).scalars()
     edge = datetime.now(timezone.utc) - LIVE_SILENCE
-    counts: dict[str, int] = {}
-    for trade in rows:
-        if fresh_only and _silent_since(trade) < edge:
-            continue
-        code = (trade.exchange or "weex").strip().lower()
-        counts[code] = counts.get(code, 0) + 1
-    return counts
+    return [trade for trade in rows if not (fresh_only and _silent_since(trade) < edge)]
 
 
 def _silent_since(trade: LiveTrade) -> datetime:
@@ -226,13 +235,22 @@ def switch_refusal(session, student: Student, code: str) -> str:
     """
     if code == (student.active_exchange or "").strip().lower():
         return ""
-    live = live_by_exchange(session, student.id, fresh_only=True)
+    live = live_trades(session, student.id, fresh_only=True)
     if not live:
         return ""
-    where = ", ".join(f"{name.upper()} - {count}" for name, count in sorted(live.items()))
+
+    # Называем сделки поимённо: монету, биржу и состояние. Человек по этому
+    # тексту идёт в терминал и закрывает то, что держит, а не гадает, откуда
+    # взялась единица в скобках.
+    parts = []
+    for trade in live:
+        where = (trade.exchange or "weex").strip().upper()
+        state = "в позиции" if trade.status == "open" else "ждёт входа"
+        parts.append(f"{where} {trade.symbol.upper()} ({state})")
+
     return (
-        f"Идут сделки терминала ({where}). Пока они открыты, биржу не сменить: "
-        "закройте их или дождитесь цели."
+        f"Идут сделки терминала: {', '.join(parts)}. Пока они открыты, биржу не "
+        "сменить: закройте их или дождитесь цели."
     )
 
 

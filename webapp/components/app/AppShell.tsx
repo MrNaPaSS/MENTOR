@@ -136,9 +136,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           // это чаще всего моргнувшая сеть, и выбрасывать за неё человека,
           // который сидит в терминале, нельзя.
           if (!first) return;
-          console.error("Auth error, redirecting to login:", err);
-          logout();
-          router.replace("/login");
+          // Конец сессии определяет слой запросов: он один видит, отказал
+          // сервер по самому refresh или просто оборвалась связь. Здесь
+          // смотрим на итог - пропали токены, значит сессия закрыта.
+          //
+          // Раньше отсюда звали logout() на любую ошибку, и частый F5 выбивал
+          // из кабинета: перезагрузка обрывала запрос профиля, обрыв читался
+          // как отказ, токены стирались.
+          if (!getAccessToken()) {
+            router.replace("/login");
+            return;
+          }
+          console.error("Профиль не пришёл:", err);
         });
     },
     [router],

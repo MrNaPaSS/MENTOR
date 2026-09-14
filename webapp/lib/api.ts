@@ -50,31 +50,74 @@ function whoseToken(token: string): TokenKind | null {
   return tokenKind(token);
 }
 
+/**
+ * Чем кончилась попытка обновить токен.
+ *
+ * Разделение на «отказали» и «не дозвонились» тут не формальность: по первому
+ * сессию надо закрывать, по второму - ни в коем случае. Раньше оба случая
+ * возвращали `null`, и любой сорванный запрос уводил человека на страницу
+ * входа.
+ */
+type Renewal =
+  | { ok: true; token: string }
+  /** `dead` - сервер отказал по самому refresh: такую сессию не спасти. */
+  | { ok: false; dead: boolean };
+
+/**
+ * Страница уходит: запросы, которые браузер оборвал на выходе, - не отказ.
+ *
+ * Отсюда и брался разлогин на частом F5. Перезагрузка отменяет висящий
+ * `/auth/refresh`, fetch падает с сетевой ошибкой, и это читалось как «refresh
+ * отвергнут»: токены стирались, и следующая загрузка открывала уже лендинг.
+ */
+let leaving = false;
+if (typeof window !== "undefined") {
+  const mark = () => {
+    leaving = true;
+  };
+  window.addEventListener("pagehide", mark);
+  window.addEventListener("beforeunload", mark);
+}
+
 // Пока обновление в полёте, параллельные запросы ждут его, а не плодят свои:
 // иначе десяток виджетов дашборда разом отправил бы десяток /auth/refresh.
-const refreshing: Partial<Record<TokenKind, Promise<string | null>>> = {};
+const refreshing: Partial<Record<TokenKind, Promise<Renewal>>> = {};
 
-async function requestNewAccessToken(kind: TokenKind): Promise<string | null> {
+async function requestNewAccessToken(kind: TokenKind): Promise<Renewal> {
   const refreshToken = kind === "mentor" ? getMentorRefreshToken() : getRefreshToken();
-  if (!refreshToken) return null;
+  // Обновляться нечем: это уже не сессия, а её отсутствие.
+  if (!refreshToken) return { ok: false, dead: true };
 
-  const res = await fetch(`${API_URL}/api/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  if (!res.ok) return null;
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  } catch {
+    // Сеть, туннель или отмена запроса самой страницей. Токены целы.
+    return { ok: false, dead: false };
+  }
+
+  if (!res.ok) {
+    // Сессию закрываем только по приговору самого сервера. Пятисотые и ответы
+    // прокси перед ним - это молчание, а не отказ: на них человек должен
+    // остаться в кабинете и попробовать ещё раз.
+    const rejected = res.status === 401 || res.status === 403;
+    return { ok: false, dead: rejected && !isServerGone(res.status) };
+  }
 
   const pair = (await res.json()) as { access_token: string; refresh_token: string };
   if (kind === "mentor") setMentorToken(pair.access_token, pair.refresh_token);
   else setStudentTokens(pair.access_token, pair.refresh_token);
-  return pair.access_token;
+  return { ok: true, token: pair.access_token };
 }
 
-function refreshAccessToken(kind: TokenKind): Promise<string | null> {
+function refreshAccessToken(kind: TokenKind): Promise<Renewal> {
   if (!refreshing[kind]) {
     refreshing[kind] = requestNewAccessToken(kind)
-      .catch(() => null)
+      .catch(() => ({ ok: false, dead: false }) as Renewal)
       .finally(() => {
         delete refreshing[kind];
       });
@@ -106,10 +149,14 @@ export async function liveAccessToken(): Promise<string | null> {
   const token = getAccessToken();
   if (!token) return null;
   if (!expiresSoon(token)) return token;
-  return refreshAccessToken("student");
+  const renewed = await refreshAccessToken("student");
+  return renewed.ok ? renewed.token : null;
 }
 
 function endSession(kind: TokenKind) {
+  // Со страницы, которая и так уходит, уводить некуда: её запросы оборвались
+  // не потому, что сессия кончилась.
+  if (leaving) return;
   if (kind === "mentor") {
     logoutMentor();
     window.location.href = "/admin";
@@ -162,17 +209,19 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     const kind = whoseToken(token);
 
     if (kind) {
-      const fresh = await refreshAccessToken(kind);
-      if (fresh) {
+      const renewed = await refreshAccessToken(kind);
+      if (renewed.ok) {
         res = await send(path, {
           ...init,
-          headers: { ...(init?.headers || {}), Authorization: `Bearer ${fresh}` },
+          headers: { ...(init?.headers || {}), Authorization: `Bearer ${renewed.token}` },
         });
         // Свежий токен тоже отвергнут — сессию не спасти.
         if (res.status === 401) endSession(kind);
-      } else {
+      } else if (renewed.dead) {
         endSession(kind);
       }
+      // Иначе до сервера не дозвонились: сессию не трогаем, запрос отдаст
+      // ошибку, и следующий заход попробует снова.
     }
   }
 
