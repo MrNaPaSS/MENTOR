@@ -1,3 +1,5 @@
+import { cashbackList } from "@/lib/venues";
+
 export const landing = {
   nav: {
     about: "About",
@@ -47,7 +49,10 @@ export const landing = {
       "The journal counts from exchange fills",
     ],
     features: [
-      { title: "Three exchanges", text: "Trading on WEEX, OKX and BingX. The money stays in your account." },
+      {
+        title: "Five exchanges",
+        text: "Trading on WEEX, OKX, BingX, MEXC and Binance. The money stays in your account.",
+      },
       { title: "Order book and tape", text: "Liquidity walls, clusters and a market-wide screener - live." },
       { title: "Drag your levels", text: "Drag the stop on the chart and the exchange order follows it." },
       { title: "Risk sized for you", text: "Lot step, leverage cap and the symbol's fees are accounted for before entry." },
@@ -71,6 +76,9 @@ export const landing = {
     subtitle: "We work with more than 8 official exchanges.",
     live: "trading is live",
     signup: "open an account →",
+    cashback: (pct: string) => `${pct} of the fee back`,
+    noCashback: "the exchange forbids cashback",
+    cashbackSoon: "cashback terms being agreed",
     note: (pending: number) => `${pending} pending connection`,
   },
 
@@ -135,12 +143,17 @@ export const landing = {
       {
         tag: "Exchange",
         q: "Which exchanges does the terminal support?",
-        a: "We work with more than 8 official exchanges. Trading is already live on three - WEEX, OKX and BingX; the rest are pending.",
+        a: "We work with more than 8 official exchanges. Trading is already live on five - WEEX, OKX, BingX, MEXC and Binance; the rest are pending.",
       },
       {
         tag: "Price",
         q: "What does access cost?",
         a: "Nothing. Just register on an exchange through our partner link - the platform is paid for by the exchange fee, not by the trader.",
+      },
+      {
+        tag: "Price",
+        q: "How much of the fee comes back, and where does it land?",
+        a: `${cashbackList()} of your own fee. It lands on your account at the exchange itself, not on a terminal balance, and is counted from the exchange's own reports. One condition: the account was opened through the academy link and the trades are made in the terminal. Binance pays nothing back - the exchange forbids partners from sharing fees; MEXC terms are being agreed.`,
       },
       {
         tag: "Access",

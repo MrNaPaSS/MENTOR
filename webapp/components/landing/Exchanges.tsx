@@ -4,6 +4,7 @@ import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
 import VenueMark from "@/components/ui/VenueMark";
 import { EXCHANGE_SIGNUP } from "@/lib/content";
+import { cashbackPct, PENDING, TRADING } from "@/lib/venues";
 import { useLocale, useT } from "@/lib/i18n";
 
 /**
@@ -25,25 +26,16 @@ import { useLocale, useT } from "@/lib/i18n";
  * Поэтому карточка переживает отсутствие файла - вместо знака она пишет имя
  * биржи её же цветом (`components/ui/VenueMark.tsx`). Появится `webp` -
  * подхватится сам, без правки кода.
+ *
+ * Под знаком - доля возврата комиссии, и это главное, что человек здесь
+ * читает: знак отвечает «моя ли это биржа», процент - «зачем мне заводить
+ * счёт именно так». Где возврата нет, стоит причина, а не пустота: Binance
+ * запрещает партнёрам делиться комиссией, у MEXC долю ещё не назвали.
+ *
+ * Список и цифры - из общего реестра (`lib/venues.ts`), который сверяется с
+ * сервером тестом. Подпись «в ожидании» считается от того же списка: «2 в
+ * ожидании» под пятью подключёнными читалось бы как ошибка терминала.
  */
-const LIVE = ["weex", "okx", "bingx", "mexc", "binance"] as const;
-
-/** Имя биржи так, как пишет её она сама. */
-const NAMES: Record<string, string> = {
-  weex: "WEEX",
-  okx: "OKX",
-  bingx: "BingX",
-  mexc: "MEXC",
-  binance: "Binance",
-};
-
-/**
- * Сколько бирж из реестра ещё ждут подключения (`core/venues.py`, `trading`).
- * Число живёт здесь, а не в словаре: меняется оно вместе со списком выше, и
- * разъехаться им нельзя - подпись «5 в ожидании» под пятью подключёнными
- * читается как ошибка терминала.
- */
-const PENDING = 2;
 
 export default function Exchanges() {
   const t = useT();
@@ -58,9 +50,10 @@ export default function Exchanges() {
       <SectionHeading eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.subtitle} />
 
       <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {LIVE.map((code, i) => {
+        {TRADING.map((venue, i) => {
+          const { code, name } = venue;
           const link = signup(code);
-          const name = NAMES[code];
+          const back = cashbackPct(venue.cashback);
           return (
             <Reveal key={code} delay={i * 0.1}>
               <a
@@ -77,10 +70,29 @@ export default function Exchanges() {
                 />
                 <div>
                   <p className="font-bold text-text-primary">{name}</p>
-                  <p className="mt-1 text-[13px] text-text-muted">{copy.live}</p>
-                  <p className="mt-2 text-[13px] font-semibold text-accent-cyan opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                    {copy.signup}
-                  </p>
+                  {/* Возврат - крупно и цветом, причина его отсутствия -
+                      мелко и приглушённо. Разный вес не для красоты: одно
+                      здесь предложение, другое оговорка, и выглядеть
+                      одинаково они не должны. */}
+                  {back ? (
+                    <p className="mt-1 text-[13px] font-semibold text-accent-cyan">
+                      {copy.cashback(back)}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[13px] text-text-muted">
+                      {venue.cashback === 0 ? copy.noCashback : copy.cashbackSoon}
+                    </p>
+                  )}
+                  <p className="mt-0.5 text-[13px] text-text-muted">{copy.live}</p>
+                  {/* Зовём открыть счёт только там, куда есть куда вести.
+                      У Binance партнёрской ссылки нет - биржа не засчитывает
+                      пришедших с чужим кодом, - и надпись без ссылки была бы
+                      кнопкой в никуда. */}
+                  {link && (
+                    <p className="mt-2 text-[13px] font-semibold text-accent-cyan opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      {copy.signup}
+                    </p>
+                  )}
                 </div>
               </a>
             </Reveal>
