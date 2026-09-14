@@ -216,7 +216,13 @@ export default function AdminStudents() {
                     className={s.first_login_at ? "text-text-secondary" : "text-text-muted"}
                     title={
                       s.first_login_at
-                        ? `Первый вход: ${fmtDateTime(s.first_login_at)}\nПоследний: ${fmtDateTime(s.last_login_at)}`
+                        ? [
+                            `Первый вход: ${fmtDateTime(s.first_login_at)}`,
+                            `Последний вход: ${fmtDateTime(s.last_login_at)}`,
+                            s.last_seen_at
+                              ? `Был в кабинете: ${fmtDateTime(s.last_seen_at)}`
+                              : "В кабинете не замечен после обновления",
+                          ].join("\n")
                         : "В кабинет ни разу не заходил"
                     }
                   >

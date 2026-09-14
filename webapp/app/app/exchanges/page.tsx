@@ -174,8 +174,15 @@ export default function ExchangesPage() {
         </p>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        {(listing?.venues ?? []).map((venue) => (
+      {/* Три колонки на широком экране: на двух карточка растягивалась через
+          пол-стола, и плитки условий расползались вместе с ней.
+
+          Неторгующие биржи отсеиваем и здесь, хотя их не присылает и сервер:
+          кабинет открыт из браузера, а сервер обновляют отдельно, и один
+          вечер между этими двумя правками ученик смотрел бы на биржи, с
+          которыми ничего нельзя сделать. */}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {(listing?.venues ?? []).filter((one) => one.trading).map((venue) => (
           <VenueCard
             key={venue.exchange}
             venue={venue}
