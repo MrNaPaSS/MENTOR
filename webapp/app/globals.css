@@ -798,3 +798,16 @@
     inset: -10px 0;
   }
 }
+
+/* Лента партнёров: две одинаковые половины едут влево на половину ширины.
+   Длительность взята под пять карточек по 256 пикселей с зазорами - около
+   тридцати пикселей в секунду, как у биржевой ленты цен. */
+@keyframes marquee-x {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+.animate-marquee {
+  animation: marquee-x 46s linear infinite;
+  will-change: transform;
+}

@@ -82,9 +82,9 @@ export const landing = {
   },
 
   exchanges: {
-    eyebrow: "Exchanges",
-    title: "Where you trade",
-    subtitle: "We work with more than 8 official exchanges.",
+    eyebrow: "Partners",
+    title: "Our partners",
+    subtitle: "We work with more than 8 official exchanges. On five of them the terminal already trades.",
     live: "trading is live",
     signup: "open an account →",
     cashback: (pct: string) => `${pct} of the fee back`,
