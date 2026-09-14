@@ -283,7 +283,7 @@ export const broker = {
       {
         tag: "Coverage",
         q: "Which exchanges does this work on today?",
-        a: "Trading is connected on three - WEEX, OKX and BingX. In total we work with more than 8 official exchanges; the rest are being connected, and until then they say \"soon\" instead of appearing as logos in the footer.",
+        a: "Trading is connected on three - WEEX, OKX and BingX. In total we work with more than 8 official exchanges; the rest are pending, and until they are connected they say \"soon\" instead of appearing as logos in the footer.",
       },
       {
         tag: "Binance",

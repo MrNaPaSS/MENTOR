@@ -70,7 +70,7 @@ export const landing = {
     title: "Where you trade",
     subtitle: "We work with more than 8 official exchanges.",
     live: "trading is live",
-    note: "The rest are coming soon. The order book and tape come from the exchange your account is on.",
+    note: "The rest are pending. The order book and tape come from the exchange your account is on.",
   },
 
   how: {
@@ -134,7 +134,7 @@ export const landing = {
       {
         tag: "Exchange",
         q: "Which exchanges does the terminal support?",
-        a: "We work with more than 8 official exchanges. Trading is already live on three - WEEX, OKX and BingX; the rest are coming soon.",
+        a: "We work with more than 8 official exchanges. Trading is already live on three - WEEX, OKX and BingX; the rest are pending.",
       },
       {
         tag: "Price",
