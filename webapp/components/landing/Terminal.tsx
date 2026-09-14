@@ -61,16 +61,59 @@ export default function Terminal() {
     <section id="terminal" className="relative mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
       <div className="pointer-events-none absolute inset-x-0 top-1/4 -z-10 h-72 bg-radial-cyan opacity-40" />
 
-      <SectionHeading
-        eyebrow={copy.eyebrow}
-        title={
-          <>
-            {copy.titleTop}{" "}
-            <span className="text-accent-cyan text-glow-cyan">{copy.titleAccent}</span>
-          </>
-        }
-        subtitle={copy.subtitle}
-      />
+      {/* Шапка в две колонки: слева - о чём раздел, справа - карточка
+          терминала с тем, что человек получает.
+
+          Раньше карточка стояла ниже, рядом с колонкой «Канал с сигналами», и
+          весь смысл держался на споре с каналами. Спор убран: мы не сравниваем
+          себя с сигналами, а показываем инструмент. */}
+      <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <SectionHeading
+          align="left"
+          eyebrow={copy.eyebrow}
+          title={
+            <>
+              {copy.titleTop}{" "}
+              <span className="text-accent-cyan text-glow-cyan">{copy.titleAccent}</span>
+            </>
+          }
+          subtitle={copy.subtitle}
+        />
+
+        <Reveal delay={0.12}>
+          <div className="relative overflow-hidden rounded-2xl border border-accent-cyan/25 bg-bg-panel/95 p-6 backdrop-blur-2xl">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(ellipse at top right, rgba(6,182,212,0.12) 0%, transparent 60%)",
+              }}
+            />
+            <div className="relative">
+              <span className="badge-cyan absolute right-0 top-0">
+                <Sparkles className="h-3 w-3" /> {copy.usBadge}
+              </span>
+              {/* Подписи «как у нас» больше нет: сравнивать не с чем, раздел
+                  показывает инструмент, а не спорит с каналами. */}
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/30">
+                  <LineChart className="h-4 w-4" />
+                </span>
+                <div className="text-lg font-bold text-text-primary">{copy.usTitle}</div>
+              </div>
+              <ul className="mt-5 space-y-3">
+                {copy.usGains.map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-sm text-text-primary">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent-cyan" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Reveal>
+      </div>
 
       {/* Как он выглядит. Раздел рассказывает про рабочее место трейдера, и
           показать его надо раньше, чем объяснять словами: человек решает по
@@ -86,67 +129,6 @@ export default function Terminal() {
         />
       </Reveal>
 
-      {/* Сравнение: канал против терминала */}
-      <div className="mt-14 grid gap-4 md:grid-cols-2">
-        <Reveal>
-          <div className="h-full rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6">
-            <div className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/[0.05] text-text-muted ring-1 ring-white/10">
-                <X className="h-4 w-4" />
-              </span>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-text-muted">
-                  {copy.channelEyebrow}
-                </div>
-                <div className="font-bold text-text-secondary">{copy.channelTitle}</div>
-              </div>
-            </div>
-            <ul className="mt-5 space-y-3">
-              {copy.channelLimits.map((item) => (
-                <li key={item} className="flex items-start gap-2.5 text-sm text-text-muted">
-                  <X className="mt-0.5 h-4 w-4 shrink-0 opacity-50" />
-                  <span className="line-through decoration-white/15">{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Reveal>
-
-        <Reveal delay={0.12}>
-          <div
-            className="relative h-full overflow-hidden rounded-2xl border p-6"
-            style={{
-              borderColor: "rgba(6,182,212,0.28)",
-              background:
-                "radial-gradient(ellipse at top right, rgba(6,182,212,0.10) 0%, transparent 60%), linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)",
-            }}
-          >
-            <span className="badge-cyan absolute right-5 top-5">
-              <Sparkles className="h-3 w-3" /> {copy.usBadge}
-            </span>
-            <div className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/30">
-                <LineChart className="h-4 w-4" />
-              </span>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-cyan">
-                  {copy.usEyebrow}
-                </div>
-                <div className="font-bold text-text-primary">{copy.usTitle}</div>
-              </div>
-            </div>
-            <ul className="mt-5 space-y-3">
-              {copy.usGains.map((item) => (
-                <li key={item} className="flex items-start gap-2.5 text-sm text-text-primary">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent-cyan" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Reveal>
-      </div>
-
       {/* Возможности терминала */}
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((f, i) => {
@@ -155,19 +137,25 @@ export default function Terminal() {
           const text = copy.features[i];
           return (
             <Reveal as="article" key={text.title} delay={(i % 3) * 0.1}>
-              <div
-                className="group h-full rounded-2xl border border-white/[0.07] p-5 transition-all duration-500 hover:-translate-y-1.5 hover:border-white/15"
-                style={{
-                  background: `radial-gradient(ellipse at top left, ${a.glow} 0%, transparent 60%), linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%)`,
-                }}
-              >
-                <span
-                  className={`grid h-11 w-11 place-items-center rounded-xl ring-1 transition-transform duration-300 group-hover:scale-110 ${a.ring} ${a.text}`}
-                >
-                  <Icon className="h-5 w-5" />
-                </span>
-                <h3 className="mt-4 font-bold text-text-primary">{text.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-secondary">{text.text}</p>
+              {/* Подложка почти сплошная: за страницей живая сцена, и сквозь
+                  полупрозрачную карточку тёмные свечи шли прямо по строкам. */}
+              <div className="group relative h-full overflow-hidden rounded-2xl border border-border bg-bg-panel/95 p-5 backdrop-blur-2xl transition-all duration-500 hover:-translate-y-1.5 hover:border-accent-cyan/30">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background: `radial-gradient(ellipse at top left, ${a.glow} 0%, transparent 60%)`,
+                  }}
+                />
+                <div className="relative">
+                  <span
+                    className={`grid h-11 w-11 place-items-center rounded-xl ring-1 transition-transform duration-300 group-hover:scale-110 ${a.ring} ${a.text}`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <h3 className="mt-4 font-bold text-text-primary">{text.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-text-secondary">{text.text}</p>
+                </div>
               </div>
             </Reveal>
           );
@@ -176,11 +164,11 @@ export default function Terminal() {
 
       {/* Безопасность: три возражения, которые снимаются до ввода ключа */}
       <Reveal delay={0.1}>
-        <div className="mt-4 grid gap-px overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.06] sm:grid-cols-3">
+        <div className="mt-4 grid gap-px overflow-hidden rounded-2xl border border-border bg-border/60 backdrop-blur-2xl sm:grid-cols-3">
           {copy.safety.map((s, i) => {
             const Icon = SAFETY_ICONS[i];
             return (
-              <div key={s.title} className="bg-bg-deep/80 p-5">
+              <div key={s.title} className="bg-bg-panel/95 p-5">
                 <div className="flex items-center gap-2 text-accent-cyan">
                   <Icon className="h-4 w-4" />
                   <span className="text-sm font-bold text-text-primary">{s.title}</span>
@@ -194,20 +182,22 @@ export default function Terminal() {
 
       {/* CTA */}
       <Reveal delay={0.2}>
-        <div
-          className="mt-4 flex flex-col items-center gap-5 rounded-2xl border p-7 text-center md:flex-row md:justify-between md:text-left"
-          style={{
-            background: "linear-gradient(135deg, rgba(6,182,212,0.08) 0%, rgba(168,85,247,0.06) 100%)",
-            borderColor: "rgba(6,182,212,0.22)",
-          }}
-        >
-          <div>
+        <div className="relative mt-4 flex flex-col items-center gap-5 overflow-hidden rounded-2xl border border-accent-cyan/25 bg-bg-panel/95 p-7 text-center backdrop-blur-2xl md:flex-row md:justify-between md:text-left">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(6,182,212,0.10) 0%, rgba(168,85,247,0.07) 100%)",
+            }}
+          />
+          <div className="relative">
             <p className="text-xl font-black text-text-primary">{copy.ctaTitle}</p>
             <p className="mt-1.5 text-sm text-text-secondary">
               {copy.ctaText}
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap justify-center gap-3">
+          <div className="relative flex shrink-0 flex-wrap justify-center gap-3">
             <Link href="/login" className="btn-primary">
               {copy.ctaPrimary}
             </Link>

@@ -51,8 +51,10 @@ export default function HowItWorks() {
           return (
             <Reveal as="article" key={step.num} delay={i * 0.12}>
               <div
-                className={`group relative h-full overflow-hidden rounded-2xl border border-border p-px transition-all duration-500 hover:-translate-y-2`}
-                style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)" }}
+                // Подложка почти сплошная и с размытием: за страницей живая
+                // сцена, и сквозь полупрозрачную карточку тёмные свечи шли
+                // прямо по тексту шага.
+                className="group relative h-full overflow-hidden rounded-2xl border border-border bg-bg-panel/95 p-px backdrop-blur-2xl transition-all duration-500 hover:-translate-y-2"
               >
                 {/* Gradient glow на hover */}
                 <div className={`absolute inset-0 bg-gradient-to-br ${grad} opacity-0 transition-opacity duration-500 group-hover:opacity-100`} />

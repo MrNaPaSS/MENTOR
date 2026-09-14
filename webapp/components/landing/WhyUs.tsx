@@ -48,19 +48,28 @@ export default function WhyUs() {
           const text = copy.items[i];
           return (
             <Reveal as="article" key={text.title} delay={(i % 4) * 0.1}>
-              <div
-                className="group h-full rounded-2xl border border-white/[0.07] p-5 transition-all duration-500 hover:-translate-y-1.5 hover:border-white/15"
-                style={{
-                  background: `radial-gradient(ellipse at top left, ${a.glow} 0%, transparent 60%), linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%)`,
-                }}
-              >
-                <span
-                  className={`grid h-11 w-11 place-items-center rounded-xl ring-1 transition-transform duration-300 group-hover:scale-110 ${a.ring} ${a.text}`}
-                >
-                  <Icon className="h-5 w-5" />
-                </span>
-                <h3 className="mt-4 font-bold text-text-primary">{text.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-secondary">{text.text}</p>
+              {/* Подложка почти сплошная: сцена за страницей живая, и сквозь
+                  полупрозрачную карточку тёмные свечи проходили прямо по
+                  строкам текста - читать приходилось сквозь них.
+                  Цветное свечение лежит отдельным слоем поверх неё - иначе
+                  градиент в `style` затирал бы фон целиком. */}
+              <div className="group relative h-full overflow-hidden rounded-2xl border border-border bg-bg-panel/95 p-5 backdrop-blur-2xl transition-all duration-500 hover:-translate-y-1.5 hover:border-accent-cyan/30">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background: `radial-gradient(ellipse at top left, ${a.glow} 0%, transparent 60%)`,
+                  }}
+                />
+                <div className="relative">
+                  <span
+                    className={`grid h-11 w-11 place-items-center rounded-xl ring-1 transition-transform duration-300 group-hover:scale-110 ${a.ring} ${a.text}`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <h3 className="mt-4 font-bold text-text-primary">{text.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-text-secondary">{text.text}</p>
+                </div>
               </div>
             </Reveal>
           );

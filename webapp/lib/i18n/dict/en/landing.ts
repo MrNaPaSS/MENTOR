@@ -29,15 +29,6 @@ export const landing = {
     subtitle:
       "A trade opens in one click: the risk is sized, stop and targets go to the exchange with your entry, and the server runs the position from there.",
     shotAlt: "NMNH terminal: chart, order book and order panel in one window",
-    channelEyebrow: "Everywhere else",
-    channelTitle: "A signal channel",
-    channelLimits: [
-      "A screenshot with levels - do the math yourself",
-      "It landed at night - the entry is gone",
-      "Nobody moves your stop for you",
-      "No statistics",
-    ],
-    usEyebrow: "Here",
     usTitle: "The NMNH terminal",
     usBadge: "Free",
     usGains: [
