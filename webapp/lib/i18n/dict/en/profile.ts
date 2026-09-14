@@ -1,5 +1,6 @@
 export const profile = {
   avatarAlt: "avatar",
+  linkedCount: (n: number) => `Exchanges connected: ${n}`,
   facts: {
     member: "with us",
     coins: "NMNH coins",

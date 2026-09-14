@@ -240,26 +240,38 @@ export default function ProfilePage() {
             </div>
             <div className="min-w-0">
               <div className="truncate text-[20px] font-bold text-[var(--pane-text)]">@{p.username || "-"}</div>
-              {/* Подключённые счета: биржа и номер на ней.
-                  Раньше здесь стояла одна строка «WEEX UID», и у человека с
-                  OKX она называла биржу, которой он не пользуется. Счетов
-                  может быть до пяти - показываем все, а если подключён один,
-                  строка получается такой же короткой, как была.
+              {/* Один счёт - его биржа и номер, как было. Счетов больше -
+                  строка превращается в кнопку: перечислять пять номеров под
+                  ником незачем, а вот дорога к ним нужна. Кнопка открывает то
+                  же окно счетов, что и «Изменить» ниже: там и переключение
+                  между биржами, и отключение.
 
                   Ничего не подключено - остаётся номер из академии: по нему
-                  ученика знает бот, и он здесь не лишний. */}
-              <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[12px] text-[var(--pane-muted)]">
-                {linked.length > 0 ? (
-                  linked.map((one) => (
-                    <span key={one.exchange}>
-                      <span className="text-[var(--pane-text-2)]">{venueName(one.exchange)}</span>{" "}
-                      {one.uid ? maskUid(one.uid) : one.key_tail || "-"}
-                    </span>
-                  ))
-                ) : (
-                  <span>{venueName("weex")} UID: {maskUid(p.weex_uid)}</span>
-                )}
-              </div>
+                  ученика знает бот, и здесь он не лишний. */}
+              {linked.length > 1 ? (
+                <button
+                  onClick={() => setKeysOpen(true)}
+                  className="mt-0.5 flex items-center gap-1 font-mono text-[12px] text-[var(--pane-accent)] transition-colors duration-150 hover:text-[var(--pane-text)]"
+                >
+                  {t.profile.linkedCount(linked.length)}
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              ) : (
+                <div className="mt-0.5 font-mono text-[12px] text-[var(--pane-muted)]">
+                  {linked.length === 1 ? (
+                    <>
+                      <span className="text-[var(--pane-text-2)]">
+                        {venueName(linked[0].exchange)}
+                      </span>{" "}
+                      {linked[0].uid ? maskUid(linked[0].uid) : linked[0].key_tail || "-"}
+                    </>
+                  ) : (
+                    <>
+                      {venueName("weex")} UID: {maskUid(p.weex_uid)}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
