@@ -308,7 +308,7 @@ def test_exchange_switches_while_nothing_is_running(api):
 
 
 def test_exchange_does_not_switch_under_a_live_trade(api):
-    """Сделка идёт - биржу не сменить, и неважно, на какой она бирже.
+    """Сделка на активной бирже держит переключение.
 
     Иначе позиция остаётся на одной бирже, а следующая заявка уходит на
     другую, и человек перестаёт понимать, где он торгует.
@@ -325,44 +325,27 @@ def test_exchange_does_not_switch_under_a_live_trade(api):
     assert student.active_exchange == "weex"
 
 
-def test_stale_trade_does_not_lock_the_switch(api):
-    """Брошенная запись не запирает биржу навсегда.
+def test_trade_on_another_exchange_does_not_block(api):
+    """Сделка на чужой бирже переключению не мешает.
 
-    Сопровождение отмечает каждую сделку на обходе. Если до неё никто не
-    доходит - счёт биржи отключили, ключи протухли, запись осталась от старой
-    позиции, - метка стареет. Такая строка не должна держать человека: позиции
-    за ней нет, а сменить биржу он не может.
+    Каждая сделка ведётся и закрывается своим ключом, и та, что идёт на WEEX,
+    не имеет отношения к переходу с OKX на BingX. Считать все подряд значило
+    бы запирать человека из-за счёта, которого он даже не трогает.
     """
     client, session, student, _ = api
     client.post("/api/exchanges/weex/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
     client.post("/api/exchanges/okx/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
     _live_trade(session, student, "weex")
 
-    stale = session.execute(select(LiveTrade)).scalars().first()
-    stale.updated_at = datetime.now(timezone.utc) - timedelta(hours=3)
+    # Уходим с OKX: на ней сделок нет, значит переключение свободно, хотя на
+    # WEEX сделка идёт.
+    student.active_exchange = "okx"
     session.commit()
 
-    answer = client.post("/api/exchanges/active", json={"exchange": "okx"})
+    answer = client.post("/api/exchanges/active", json={"exchange": "weex"})
     assert answer.status_code == 200
     session.refresh(student)
-    assert student.active_exchange == "okx"
-
-
-def test_stale_trade_still_holds_the_keys(api):
-    """А вот отключить счёт она по-прежнему не даёт.
-
-    Ключ может понадобиться, чтобы эту же запись закрыть: снять его значит
-    оставить позицию, если она всё-таки есть, без сопровождения.
-    """
-    client, session, student, _ = api
-    client.post("/api/exchanges/weex/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
-    _live_trade(session, student, "weex")
-
-    stale = session.execute(select(LiveTrade)).scalars().first()
-    stale.updated_at = datetime.now(timezone.utc) - timedelta(hours=3)
-    session.commit()
-
-    assert client.delete("/api/exchanges/weex").status_code == 409
+    assert student.active_exchange == "weex"
 
 
 def test_same_exchange_is_not_a_switch(api):

@@ -226,7 +226,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Balance */}
-          <div className="relative mt-4 flex items-end justify-between gap-3">
+          <div className="relative mt-4 flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--pane-muted)]">{t.profile.balance}</div>
               <div className="font-mono text-[28px] font-bold leading-tight tabular-nums text-[var(--pane-text)]">
@@ -244,6 +244,25 @@ export default function ProfilePage() {
                     : t.profile.balanceManual}
               </div>
             </div>
+            {/* Четыре факта о себе - посередине карточки, в пустом поле
+                между балансом и кнопкой.
+
+                Здесь только то, чего нет больше нигде в кабинете: аналитика и
+                журнал показывают сделки, витрина - биржи, а стаж, монеты,
+                сертификаты и своя настоящая ставка комиссии живут в профиле
+                или не живут вовсе.
+
+                Пустая плитка не рисуется: «0 сертификатов» у новичка читается
+                как упрёк, а прочерк под ставкой - как поломка. */}
+            {/* На узкой колонке - два столбца: четыре подписи в ряд ломаются
+                пополам и карточка растёт вдвое. Широкой хватает одного ряда. */}
+            <div className="grid flex-1 grid-cols-2 gap-2 xl:grid-cols-4">
+              <Fact label={t.profile.facts.member} value={daysHere(p.created_at, t)} />
+              <Fact label={t.profile.facts.coins} value={coins ? String(coins) : null} />
+              <Fact label={t.profile.facts.certificates} value={certs} />
+              <Fact label={t.profile.facts.fee} value={feeText} />
+            </div>
+
             <button
               onClick={refreshBalance}
               disabled={refreshing}
@@ -254,19 +273,6 @@ export default function ProfilePage() {
             </button>
           </div>
 
-          {/* Четыре факта о себе. Здесь только то, чего нет больше нигде в
-              кабинете: аналитика и журнал показывают сделки, витрина - биржи,
-              а стаж, монеты, сертификаты и своя настоящая ставка комиссии
-              живут в профиле или не живут вовсе.
-
-              Пустая плитка не рисуется: «0 сертификатов» у новичка читается
-              как упрёк, а прочерк под ставкой - как поломка. */}
-          <div className="relative mt-4 grid grid-cols-2 gap-2 border-t border-[var(--pane-border)] pt-3 sm:grid-cols-4">
-            <Fact label={t.profile.facts.member} value={daysHere(p.created_at, t)} />
-            <Fact label={t.profile.facts.coins} value={coins ? String(coins) : null} />
-            <Fact label={t.profile.facts.certificates} value={certs} />
-            <Fact label={t.profile.facts.fee} value={feeText} />
-          </div>
         </div>
         {/* ── Биржевой счёт ──
             Ключи вводятся в терминале, но вопрос «подключено ли» человек задаёт
@@ -600,8 +606,8 @@ function daysHere(iso: string | null | undefined, t: ReturnType<typeof useT>): s
 function Fact({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
-    <div className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-2">
-      <p className="text-[10px] uppercase tracking-wide text-[var(--pane-muted)]">{label}</p>
+    <div className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-1.5">
+      <p className="truncate text-[9px] uppercase tracking-wide text-[var(--pane-muted)]">{label}</p>
       <p className="mt-0.5 font-mono text-[13px] font-semibold tabular-nums text-[var(--pane-text)]">
         {value}
       </p>

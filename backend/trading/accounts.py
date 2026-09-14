@@ -216,16 +216,22 @@ def switch_refusal(session, student: Student, code: str) -> str:
     понимает, где торгует. Дешевле запретить, чем потом объяснять.
 
     Повторный выбор той же биржи переключением не считается: менять нечего.
+
+    Смотрим только на ту биржу, **с которой уходим**. Сделки на других к
+    переключению отношения не имеют: каждая ведётся своим ключом и закрывается
+    там же, где открыта. Считать все подряд значило бы запирать человека
+    из-за счёта, которого он даже не трогает, - именно так и вышло: сделка на
+    WEEX не пускала с OKX на BingX.
     """
-    if code == (student.active_exchange or "").strip().lower():
+    current = (student.active_exchange or "").strip().lower()
+    if code == current or not current:
         return ""
-    live = live_by_exchange(session, student.id, fresh_only=True)
+    live = live_by_exchange(session, student.id, fresh_only=True).get(current, 0)
     if not live:
         return ""
-    where = ", ".join(f"{name.upper()} - {count}" for name, count in sorted(live.items()))
     return (
-        f"Идут сделки терминала ({where}). Пока они открыты, биржу не сменить: "
-        "закройте их или дождитесь цели."
+        f"На {current.upper()} идут сделки терминала ({live}). Пока они открыты, "
+        "биржу не сменить: закройте их или дождитесь цели."
     )
 
 
