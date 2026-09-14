@@ -250,6 +250,91 @@ def test_account_with_a_live_trade_is_not_disconnected(api):
     assert session.execute(select(ExchangeAccount)).scalars().all()
 
 
+def _live_trade(session, student, exchange: str, client_id: str = "проверка") -> None:
+    session.add(
+        LiveTrade(
+            student_id=student.id,
+            client_id=client_id,
+            symbol="BTCUSDT",
+            side="LONG",
+            status="open",
+            exchange=exchange,
+            entry=1,
+            initial_stop=0.9,
+            current_stop=0.9,
+            qty=1,
+            leverage=1,
+        )
+    )
+    session.commit()
+
+
+def test_second_exchange_does_not_disconnect_the_first(api):
+    """Подключение биржи не выбивает предыдущую: счета живут рядом."""
+    client, session, student, _ = api
+    client.post("/api/exchanges/weex/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+    client.post("/api/exchanges/okx/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+
+    rows = {row.exchange: row for row in session.execute(select(ExchangeAccount)).scalars()}
+    assert set(rows) == {"weex", "okx"}
+    assert all(row.is_active for row in rows.values())
+    # Активной остаётся первая: вторая биржа сама себя активной не назначает.
+    session.refresh(student)
+    assert student.active_exchange == "weex"
+
+
+def test_exchange_switches_while_nothing_is_running(api):
+    client, session, student, _ = api
+    client.post("/api/exchanges/weex/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+    client.post("/api/exchanges/okx/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+
+    answer = client.post("/api/exchanges/active", json={"exchange": "okx"})
+    assert answer.status_code == 200
+    session.refresh(student)
+    assert student.active_exchange == "okx"
+
+
+def test_exchange_does_not_switch_under_a_live_trade(api):
+    """Сделка идёт - биржу не сменить, и неважно, на какой она бирже.
+
+    Иначе позиция остаётся на одной бирже, а следующая заявка уходит на
+    другую, и человек перестаёт понимать, где он торгует.
+    """
+    client, session, student, _ = api
+    client.post("/api/exchanges/weex/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+    client.post("/api/exchanges/okx/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+    _live_trade(session, student, "weex")
+
+    answer = client.post("/api/exchanges/active", json={"exchange": "okx"})
+    assert answer.status_code == 409
+    assert "WEEX" in answer.json()["detail"]
+    session.refresh(student)
+    assert student.active_exchange == "weex"
+
+
+def test_same_exchange_is_not_a_switch(api):
+    """Повторный выбор той же биржи проходит и под сделкой: менять нечего."""
+    client, session, student, _ = api
+    client.post("/api/exchanges/weex/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+    _live_trade(session, student, "weex")
+
+    answer = client.post("/api/exchanges/active", json={"exchange": "weex"})
+    assert answer.status_code == 200
+
+
+def test_showcase_counts_live_trades(api):
+    """Витрина отдаёт, где идут сделки: по ней фронт запирает кнопку."""
+    client, session, student, _ = api
+    client.post("/api/exchanges/okx/keys", json={"api_key": "k" * 12, "secret_key": "s", "passphrase": "p"})
+    _live_trade(session, student, "okx")
+
+    body = client.get("/api/exchanges").json()
+    assert body["live_total"] == 1
+    rows = {one["exchange"]: one for one in body["venues"]}
+    assert rows["okx"]["live"] == 1
+    assert rows["weex"]["live"] == 0
+
+
 # ── вход биржей ─────────────────────────────────────────────────────────────
 
 

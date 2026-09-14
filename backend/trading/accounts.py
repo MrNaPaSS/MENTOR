@@ -23,7 +23,7 @@ import aiohttp
 from sqlalchemy import select
 
 from core.exchanges import KEY_EXCHANGES, KEYS_EXCHANGE
-from core.models import AcademyUid, ExchangeAccount, Student
+from core.models import AcademyUid, ExchangeAccount, LiveTrade, Student
 from core.binance.futures import BinanceFutures
 from core.bingx.futures import BingxFutures
 from core.mexc.futures import MexcFutures
@@ -158,6 +158,47 @@ def may_connect(session, student: Student, exchange: str) -> bool:
         return True
     row = account_for(session, student.id, code)
     return bool(row and row.is_active)
+
+
+def live_by_exchange(session, student_id: int) -> dict[str, int]:
+    """Сколько сделок терминала идёт на каждой бирже.
+
+    Живая сделка - это выставленный на бирже стоп, цели и сопровождение на
+    сервере. Пока она идёт, биржу нельзя ни отключить (некому вести), ни
+    сменить активную.
+    """
+    rows = session.execute(
+        select(LiveTrade)
+        .where(LiveTrade.student_id == student_id)
+        .where(LiveTrade.status.in_(("waiting", "open")))
+    ).scalars()
+    counts: dict[str, int] = {}
+    for trade in rows:
+        code = (trade.exchange or "weex").strip().lower()
+        counts[code] = counts.get(code, 0) + 1
+    return counts
+
+
+def switch_refusal(session, student: Student, code: str) -> str:
+    """Почему нельзя сделать эту биржу активной. Пусто - можно.
+
+    Технически переключение идущей сделке не мешает: она ведётся и
+    закрывается на своей бирже. Мешает оно человеку - позиция остаётся на
+    одной бирже, а следующая заявка уходит на другую, и через минуту он не
+    понимает, где торгует. Дешевле запретить, чем потом объяснять.
+
+    Повторный выбор той же биржи переключением не считается: менять нечего.
+    """
+    if code == (student.active_exchange or "").strip().lower():
+        return ""
+    live = live_by_exchange(session, student.id)
+    if not live:
+        return ""
+    where = ", ".join(f"{name.upper()} - {count}" for name, count in sorted(live.items()))
+    return (
+        f"Идут сделки терминала ({where}). Пока они открыты, биржу не сменить: "
+        "закройте их или дождитесь цели."
+    )
 
 
 def access_kind(uid: str | None, confirmed: set[str]) -> str:

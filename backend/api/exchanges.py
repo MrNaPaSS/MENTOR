@@ -37,7 +37,13 @@ from core.weex.futures import Credentials
 from backend.api.trading import _get_session
 from backend.deps import get_current_student, get_session
 from backend.security import TokenError, decode_token, encode_token
-from backend.trading.accounts import account_for, accounts_of, may_connect
+from backend.trading.accounts import (
+    account_for,
+    accounts_of,
+    live_by_exchange,
+    may_connect,
+    switch_refusal,
+)
 from backend.trading.connect import ConnectRefused, connect
 
 logger = logging.getLogger("nmnh.api.exchanges")
@@ -79,6 +85,7 @@ async def listing(
     условий - список кодов.
     """
     rows = {row.exchange: row for row in accounts_of(session, student.id)}
+    live = live_by_exchange(session, student.id)
     confirmed: dict[str, list[str]] = {}
     for uid_row in session.execute(
         select(AcademyUid).where(AcademyUid.student_id == student.id)
@@ -109,11 +116,16 @@ async def listing(
                 "updated_at": iso(row.updated_at) if row else None,
                 # Номера, подтверждённые академией: по ним считается кешбэк.
                 "academy_uids": sorted(confirmed.get(one.code, [])),
+                # Сделок терминала, идущих на этой бирже прямо сейчас.
+                "live": live.get(one.code, 0),
             }
         )
     return {
         "active": (student.active_exchange or "").strip().lower(),
         "vault": keystore.enabled(),
+        # Пока хоть одна сделка идёт, активную биржу менять нельзя: счёт
+        # переключился бы под открытой позицией.
+        "live_total": sum(live.values()),
         "venues": out,
     }
 
@@ -129,13 +141,22 @@ async def set_active(
 ) -> dict:
     """Сменить биржу, на которую уходят новые сделки.
 
-    Идущие сделки не мешают: каждая ведётся и закрывается на своей бирже
-    (`backend/trading/accounts.py`).
+    Подключение биржи активную не меняет: счета живут рядом, и старый
+    остаётся подключённым (`backend/trading/connect.py`). Меняется она только
+    здесь и только руками.
+
+    Пока идёт хоть одна сделка терминала - отказ; почему именно, написано у
+    самого правила (`backend/trading/accounts.py`, `switch_refusal`).
     """
     code = exchange_code(body.exchange)
     row = account_for(session, student.id, code) if code else None
     if row is None or not row.is_active:
         raise HTTPException(409, "Сначала подключите счёт этой биржи")
+
+    refusal = switch_refusal(session, student, code)
+    if refusal:
+        raise HTTPException(409, refusal)
+
     student.active_exchange = code
     session.commit()
     return {"ok": True, "exchange": code, "title": title_of(code)}
@@ -153,16 +174,11 @@ async def disconnect(
     if row is None:
         raise HTTPException(404, "Счёт этой биржи не подключён")
 
-    busy = session.execute(
-        select(LiveTrade)
-        .where(LiveTrade.student_id == student.id)
-        .where(LiveTrade.status.in_(("waiting", "open")))
-    ).scalars()
-    live = [t for t in busy if (t.exchange or "weex").lower() == row.exchange]
+    live = live_by_exchange(session, student.id).get(row.exchange, 0)
     if live:
         raise HTTPException(
             409,
-            f"На {row.exchange.upper()} идут сделки терминала ({len(live)}): "
+            f"На {row.exchange.upper()} идут сделки терминала ({live}): "
             "без ключа их некому сопровождать. Закройте их и отключите счёт.",
         )
     if (student.active_exchange or "") == row.exchange:

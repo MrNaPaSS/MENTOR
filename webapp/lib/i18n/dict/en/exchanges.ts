@@ -11,6 +11,7 @@ export const exchanges = {
     active: "active",
     connected: "connected",
     notConnected: "not connected",
+    liveTrades: (n: number) => `Terminal trades running: ${n}`,
     trading: "trading",
     soon: "soon",
     ownBook: "own book",
@@ -61,6 +62,8 @@ export const exchanges = {
     needsAcademy: "Confirm the account in the academy bot first",
     replace: "Replace keys",
     makeActive: "Place orders from here",
+    switchLocked: (n: number) =>
+      `${n} terminal trade(s) are running. You cannot switch exchanges while they are open.`,
     disconnect: "Disconnect",
     open: "Open the terminal",
   },

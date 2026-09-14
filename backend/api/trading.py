@@ -36,6 +36,7 @@ from backend.trading.accounts import (
     client_for,
     confirmed_uids,
     may_connect,
+    switch_refusal,
     trade_exchange,
 )
 from core.exchanges import KEY_EXCHANGES, KEYS_EXCHANGE, exchange_code, title_of
@@ -732,12 +733,19 @@ async def set_active(
 ):
     """Сменить биржу, с которой ставятся новые сделки.
 
-    Идущие сделки не мешают: каждая ведётся и закрывается на своей бирже.
+    Та же ручка, что на витрине, и то же правило: под идущей сделкой биржу не
+    меняем (`backend/trading/accounts.py`, `switch_refusal`). Запрет в одном
+    месте из двух обходился бы вторым.
     """
     code = exchange_code(body.exchange)
     row = account_for(session, student.id, code) if code else None
     if row is None or not row.is_active:
         raise HTTPException(409, "Сначала подключите ключи этой биржи")
+
+    refusal = switch_refusal(session, student, code)
+    if refusal:
+        raise HTTPException(409, refusal)
+
     student.active_exchange = code
     session.commit()
     return {"ok": True, "exchange": code}

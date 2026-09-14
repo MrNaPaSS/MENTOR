@@ -170,6 +170,7 @@ export default function ExchangesPage() {
             venue={venue}
             active={venue.exchange === active}
             busy={busy === venue.exchange}
+            busyTrades={listing?.live_total ?? 0}
             onLogin={() => login(venue.exchange)}
             onKeys={() => setKeysOpen(true)}
             onActive={() => act(venue.exchange, () => chooseVenue(venue.exchange))}
@@ -198,6 +199,7 @@ function VenueCard({
   venue,
   active,
   busy,
+  busyTrades,
   onLogin,
   onKeys,
   onActive,
@@ -206,6 +208,8 @@ function VenueCard({
   venue: VenueRow;
   active: boolean;
   busy: boolean;
+  /** Сделок терминала, идущих сейчас на всех биржах вместе. */
+  busyTrades: number;
   onLogin: () => void;
   onKeys: () => void;
   onActive: () => void;
@@ -303,6 +307,9 @@ function VenueCard({
             {venue.access === "academy" ? d.access.academy : d.access.own}
           </p>
         )}
+        {(venue.live ?? 0) > 0 && (
+          <p className="text-[var(--pane-accent)]">{d.state.liveTrades(venue.live ?? 0)}</p>
+        )}
         {venue.uid && <p className="text-[var(--pane-muted)]">{d.access.uid(venue.uid)}</p>}
         {venue.academy_uids.length > 0 && (
           <p className="text-[var(--pane-muted)]">
@@ -357,10 +364,14 @@ function VenueCard({
             {venue.connected ? d.actions.replace : d.actions.keys}
           </button>
         )}
+        {/* Сменить биржу под открытой сделкой нельзя: позиция осталась бы на
+            одной бирже, а следующая заявка ушла бы на другую. Сервер откажет
+            и сам, но кнопку лучше запереть до нажатия - с причиной. */}
         {venue.connected && !active && (
           <button
             onClick={onActive}
-            disabled={busy}
+            disabled={busy || busyTrades > 0}
+            title={busyTrades > 0 ? d.actions.switchLocked(busyTrades) : undefined}
             className={`${ACTION} flex items-center gap-1.5 border-[var(--pane-border)] text-[var(--pane-text-2)]`}
           >
             <Check className="h-3.5 w-3.5" />
