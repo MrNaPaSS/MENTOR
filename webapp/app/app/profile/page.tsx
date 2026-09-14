@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fmtUsd, maskUid } from "@/lib/format";
 import { tradingStatus, type TradingStatus } from "@/lib/trading";
-import { ratePct, venueTitle } from "@/lib/exchanges";
+import { loadVenues, ratePct, venueTitle, type VenueRow } from "@/lib/exchanges";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
 import { setTerminalTheme, useTerminalTheme } from "@/lib/terminalTheme";
 import { setSoundOn, useSoundOn } from "@/lib/notifySound";
@@ -55,6 +55,9 @@ export default function ProfilePage() {
   // Сертификаты считаем отдельной ручкой: в профиле их нет, а спрашивать ради
   // одной цифры весь список дешевле, чем заводить новое поле на сервере.
   const [certCount, setCertCount] = useState<number | null>(null);
+  // Подключённые счета с номерами на биржах. Состояние ключей приходит и в
+  // tradingStatus, но номера счёта там нет, а он и нужен под ником.
+  const [linked, setLinked] = useState<VenueRow[]>([]);
   // Монеты академии: тот же источник, что у счётчика в шапке кабинета.
   const { coins } = useCoins("profile");
   // Тема нужна самой странице: переключатель показывает, какая сейчас стоит.
@@ -104,6 +107,9 @@ export default function ProfilePage() {
     api
       .certificates(token)
       .then((body) => setCertCount(body.certificates.length))
+      .catch(() => {});
+    loadVenues()
+      .then((body) => setLinked((body?.venues ?? []).filter((one) => one.connected)))
       .catch(() => {});
   }, []);
 
@@ -234,7 +240,26 @@ export default function ProfilePage() {
             </div>
             <div className="min-w-0">
               <div className="truncate text-[20px] font-bold text-[var(--pane-text)]">@{p.username || "-"}</div>
-              <div className="mt-0.5 font-mono text-[12px] text-[var(--pane-muted)]">WEEX UID: {maskUid(p.weex_uid)}</div>
+              {/* Подключённые счета: биржа и номер на ней.
+                  Раньше здесь стояла одна строка «WEEX UID», и у человека с
+                  OKX она называла биржу, которой он не пользуется. Счетов
+                  может быть до пяти - показываем все, а если подключён один,
+                  строка получается такой же короткой, как была.
+
+                  Ничего не подключено - остаётся номер из академии: по нему
+                  ученика знает бот, и он здесь не лишний. */}
+              <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[12px] text-[var(--pane-muted)]">
+                {linked.length > 0 ? (
+                  linked.map((one) => (
+                    <span key={one.exchange}>
+                      <span className="text-[var(--pane-text-2)]">{venueName(one.exchange)}</span>{" "}
+                      {one.uid ? maskUid(one.uid) : one.key_tail || "-"}
+                    </span>
+                  ))
+                ) : (
+                  <span>{venueName("weex")} UID: {maskUid(p.weex_uid)}</span>
+                )}
+              </div>
             </div>
           </div>
 
