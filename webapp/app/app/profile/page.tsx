@@ -18,6 +18,7 @@ import { intlLocale, setLocale, useLocale, useT, type Locale } from "@/lib/i18n"
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import FramedAvatar from "@/components/avatar/FramedAvatar";
 import VenueMark from "@/components/ui/VenueMark";
+import { venueMark } from "@/lib/venueMarks";
 import Motto, { BRAND_MOTTO } from "@/components/app/Motto";
 
 const ADMIN_WEEX_UID = "6613031308";
@@ -170,32 +171,10 @@ export default function ProfilePage() {
         {/* Кто я и сколько у меня. Без градиента и свечения: терминал рядом
             собран из ровных панелей, и цветное пятно здесь читалось бы куском
             другого приложения. */}
-        {/* Без обрезки содержимого: вершина горы выходит за верхний край
-            карточки, и обрезка срезала бы корону. */}
         <div className="relative rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-4">
-          {/* Горы с короной, свечами и граффити NMNH - на прозрачном фоне, по
-              середине карточки и растянуты вширь. Края растворяются, чтобы
-              под балансом и у кнопки «Обновить» оставалось чистое поле. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/art/profile/card-crown.webp"
-            alt=""
-            aria-hidden
-            // Рамка 3:1 при картинке 2.6:1 - это и есть растяжение вширь, не
-            // больше 18%. Высота считается от ширины и карточкой не
-            // ограничена: гора выше карточки, и вершина с короной выходит за
-            // её верхний край. Ширина упёрта в 46rem, чтобы растяжение не
-            // росло на очень широкой карточке. В половине экрана (lg) карточка
-            // узкая, и центр съезжает вправо: иначе левый склон ложится под
-            // баланс.
-            className="profile-art art-glow pointer-events-none absolute bottom-0 left-1/2 hidden aspect-[3/1] w-[72%] max-w-[46rem] -translate-x-1/2 object-fill sm:block lg:left-[58%] 2xl:left-1/2"
-            style={{
-              maskImage: "linear-gradient(90deg, transparent 0%, #000 18%, #000 90%, transparent 100%)",
-              WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 18%, #000 90%, transparent 100%)",
-            }}
-          />
-          {/* Девиз набран текстом, а не впечатан в картинку: так он читается и
-              на тёмной теме. */}
+          {/* Девиз - текстом, на том же месте, где раньше стояла картинка с
+              горами и короной. Картинка убрана: карточка про счёт и баланс, и
+              рисунок во всю её ширину спорил с цифрами за внимание. */}
           <Motto
             lines={BRAND_MOTTO}
             className="absolute right-5 top-5 hidden !text-[11px] !tracking-[0.42em] !text-[var(--pane-text-2)] md:block"
@@ -263,10 +242,10 @@ export default function ProfilePage() {
             Ключи вводятся в терминале, но вопрос «подключено ли» человек задаёт
             себе здесь - и ответа тут не было вовсе.
 
-            Справа - знак той биржи, где стоит счёт, а под ним кнопка действия:
-            сперва человек узнаёт биржу по знаку, потом решает, что с ней делать.
-            Состояние вынесено в точку у верхнего угла: словом «подключён»
-            карточка говорила то же самое, но занимала им целую строку. */}
+            Знак биржи стоит в иконке счёта - человек узнаёт свою биржу по
+            знаку раньше, чем прочитает название. Состояние вынесено в точку у
+            верхнего угла: словом «подключён» карточка говорила то же самое, но
+            занимала им целую строку. */}
         <div className={`${CARD} relative overflow-hidden`}>
           <span
             title={exchange?.connected ? t.profile.connected : t.profile.disconnected}
@@ -285,8 +264,22 @@ export default function ProfilePage() {
               </div>
 
               <div className="flex items-center gap-3">
+                {/* Знак биржи прямо в иконке счёта: человек узнаёт свою
+                    биржу по знаку раньше, чем прочитает её название, а общий
+                    ключ не говорил ничего. Биржи без знака - и тех, у кого
+                    файл ещё не положен, - выручает ключ. */}
                 <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-accent-gold/40 bg-black text-[var(--pane-gold)]">
-                  <Key className="h-4 w-4" />
+                  {venueMark(venueCode) ? (
+                    <VenueMark
+                      code={venueCode}
+                      name={venueTitle(venueCode)}
+                      decorative
+                      className="h-6 w-7"
+                      nameClassName="text-[9px]"
+                    />
+                  ) : (
+                    <Key className="h-4 w-4" />
+                  )}
                 </div>
                 <div className="min-w-0 text-[12px]">
                   {/* Биржа активного счёта: на ней терминал ставит сделки. */}
@@ -329,21 +322,10 @@ export default function ProfilePage() {
               </Link>
             </div>
 
-            {/* Знак биржи и кнопка под ним. Колонка растянута по высоте
-                карточки, поэтому кнопка всегда стоит в нижнем правом углу, где
-                её и ищут. На узком экране знака нет - там дорога каждая точка. */}
-            <div className="flex shrink-0 flex-col items-center justify-between gap-3 pt-5">
-              {/* Знак вписан в общий прямоугольник, а не поставлен по ширине:
-                  у бирж он разной формы - WEEX широкий, OKX почти квадратный, -
-                  и по одной ширине карточки вышли бы разной высоты. */}
-              <VenueMark
-                code={venueCode}
-                name={venueTitle(venueCode)}
-                decorative
-                className="pointer-events-none hidden max-h-16 w-28 sm:block"
-                nameClassName="justify-center text-lg"
-              />
-              <button onClick={() => setKeysOpen(true)} className={`mt-auto ${GOLD_BTN}`}>
+            {/* Кнопка действия - в нижнем правом углу карточки, где её и
+                ищут. Знак биржи переехал в иконку счёта слева. */}
+            <div className="flex shrink-0 items-end">
+              <button onClick={() => setKeysOpen(true)} className={GOLD_BTN}>
                 {exchange?.connected ? t.common.change : t.common.connect}
               </button>
             </div>
