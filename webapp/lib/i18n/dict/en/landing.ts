@@ -5,8 +5,6 @@ export const landing = {
     about: "About",
     terminal: "Terminal",
     how: "How it works",
-    signals: "Signals",
-    results: "Results",
     faq: "FAQ",
   },
 
@@ -117,20 +115,6 @@ export const landing = {
     volume: "Trading volume ($)",
     avgProfit: "Avg profit/trade",
     yearsOnMarket: "Years on the market",
-  },
-
-  publicSignals: {
-    eyebrow: "Mentor's analysis",
-    title: "Market breakdowns - members only",
-    subtitle: "Annotated charts with the mentor's reasoning. Full access after you log in.",
-    unlock: "Log in to read it all →",
-  },
-
-  results: {
-    eyebrow: "Student results",
-    title: "Real PnL",
-    subtitle: "Screenshots from the exchange. Published with the students' consent.",
-    imageAlt: "PnL result",
   },
 
   faq: {

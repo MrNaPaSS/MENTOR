@@ -4,9 +4,7 @@ import Hero from "@/components/landing/Hero";
 import Terminal from "@/components/landing/Terminal";
 import Exchanges from "@/components/landing/Exchanges";
 import HowItWorks from "@/components/landing/HowItWorks";
-import PublicSignals from "@/components/landing/PublicSignals";
 import PlatformStats from "@/components/landing/PlatformStats";
-import Testimonials from "@/components/landing/Testimonials";
 import Faq from "@/components/landing/Faq";
 import Socials from "@/components/landing/Socials";
 import Footer from "@/components/landing/Footer";
@@ -39,9 +37,7 @@ export default function Home() {
         <Terminal />
         <Exchanges />
         <HowItWorks />
-        <PublicSignals />
         <PlatformStats />
-        <Testimonials />
         <Faq />
         <Socials />
       </main>
