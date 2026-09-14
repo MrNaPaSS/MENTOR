@@ -27,7 +27,7 @@ export const landing = {
     titleTop: "These aren't signals.",
     titleAccent: "This is your workstation.",
     subtitle:
-      "A signal opens in one click: the risk is sized, stop and targets are already on the exchange, and the server runs the position from there.",
+      "A trade opens in one click: the risk is sized, stop and targets go to the exchange with your entry, and the server runs the position from there.",
     shotAlt: "NMNH terminal: chart, order book and order panel in one window",
     channelEyebrow: "Everywhere else",
     channelTitle: "A signal channel",
@@ -101,20 +101,8 @@ export const landing = {
       { title: "Sign up on an exchange", text: "Open an account through the partner link and fund it - it takes a couple of minutes." },
       { title: "Send your UID to the bot", text: "The academy confirms your account - and the exchange shows up in your settings." },
       { title: "Connect the exchange", text: "Create an API key without withdrawal rights and paste it into the terminal - your account is live." },
-      { title: "Trade from the terminal", text: "The signal is already sized to your deposit: hit “Enter” and the server runs the trade to the end." },
+      { title: "Trade from the terminal", text: "The size is already fitted to your deposit: hit “Enter” and the server runs the trade to the end." },
     ],
-  },
-
-  stats: {
-    eyebrow: "Platform statistics",
-    title: "Numbers, not promises",
-    subtitle: "Live platform data - nothing dressed up.",
-    winrate: "Win rate",
-    bestRR: "Best signal RR",
-    maxMove: "Max. move",
-    volume: "Trading volume ($)",
-    avgProfit: "Avg profit/trade",
-    yearsOnMarket: "Years on the market",
   },
 
   faq: {
@@ -125,12 +113,12 @@ export const landing = {
       {
         tag: "Academy",
         q: "What is NMNH?",
-        a: "NMNH (No Money No Honey) is a trading academy with its own terminal, community and analytics. It isn't a signal channel: the terminal connects to your exchange account and manages the open position itself.",
+        a: "NMNH (No Money No Honey) is a trader's ecosystem: a professional terminal wired to your exchange account, training, a community and a trade journal. We do not sell signals - we give you the instrument people trade with.",
       },
       {
         tag: "Terminal",
-        q: "How is this different from ordinary signals?",
-        a: "A signal in a channel is a picture - the rest you do by hand. Here it opens in the terminal: size is fitted to your deposit, stop and targets go to the exchange along with the entry, and the server then moves the stop to breakeven for you.",
+        q: "How is this different from signal channels?",
+        a: "A channel hands you a picture with levels and leaves the rest to you. We hand you a workstation: size is fitted to your deposit, stop and targets go to the exchange along with the entry, and the server then moves the stop to breakeven. What to trade is your call.",
       },
       {
         tag: "Security",
@@ -160,17 +148,17 @@ export const landing = {
       {
         tag: "What's inside",
         q: "What does the academy include?",
-        a: "Trading signals sized to your deposit, our own market-analysis software, a live community of traders, trade reviews and constant development.",
+        a: "A terminal with order book, footprint and risk sizing, our own market-analysis software, a live community of traders, trade reviews and constant development.",
       },
       {
         tag: "Getting started",
         q: "Do I need trading experience?",
-        a: "No. The academy suits beginners and experienced traders alike. Every signal already carries all the parameters - all that's left is to open the trade.",
+        a: "No. The terminal works out size, lot step and leverage for you, and the training starts from the basics. It removes routine for the experienced and keeps beginners from mis-sizing a position.",
       },
       {
         tag: "Mobile",
         q: "Is there a mobile app?",
-        a: "Yes - the WebApp runs right inside Telegram and is fully adapted for phones. Open trades, read signals and analytics in one tap.",
+        a: "Yes - the WebApp runs right inside Telegram and is fully adapted for phones. Open trades, read the order book and analytics in one tap.",
       },
     ],
     ctaTitle: "Still have a question?",
