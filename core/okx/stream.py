@@ -61,7 +61,18 @@ RECONNECT_MAX = 30.0
 LOGIN_TIMEOUT = 10.0
 
 # Каналы счёта. Позиции держим состоянием, заявки - звонком.
-CHANNELS = ("positions", "orders", "orders-algo")
+#
+# Условных заявок здесь нет намеренно. Канал `orders-algo` живёт не на этом
+# адресе, а на деловом (`/ws/v5/business`), и подписка на него с приватного
+# отвергается: «wrong URL or channel: orders-algo, instType: SWAP doesn't
+# exist» - проверено живым счётом. Просить его отсюда значит на каждом
+# соединении получать отказ и писать его в журнал как сбой входа.
+#
+# Потери состояния в этом нет: снимка эти каналы всё равно не дают, и список
+# условных заявок терминал берёт запросом. Понадобится мгновенное событие о
+# срабатывании стопа - это второе соединение на деловой адрес, отдельной
+# работой.
+CHANNELS = ("positions", "orders")
 
 
 def login_sign(secret: str, stamp: str) -> str:
@@ -267,7 +278,7 @@ class OkxPrivateStream:
 
         if channel == "positions":
             await self._apply_positions(rows)
-        elif channel in ("orders", "orders-algo"):
+        elif channel in ("orders", "orders-algo"):  # алго - если придёт с делового адреса
             self._ring(rows)
 
     async def _apply_positions(self, rows: list) -> None:
