@@ -203,7 +203,7 @@ export default function ProfilePage() {
               место и выталкивала решётку к кнопке. Края одинаковой доли -
               середина приходится ровно на середину карточки, что бы в этих
               краях ни стояло. */}
-          <div className="relative grid items-center gap-4 lg:grid-cols-[1fr_auto_1fr]">
+          <div className="relative grid items-stretch gap-4 lg:grid-cols-[1fr_auto_1fr]">
           {/* Левой колонке нужен свой минимум: без него ник и номер счёта
               сжимались в столбик по букве, лишь бы уместить решётку рядом. */}
           <div className="min-w-[240px]">
@@ -256,20 +256,6 @@ export default function ProfilePage() {
                     : t.profile.balanceManual}
               </div>
             </div>
-            {/* Четыре факта о себе - посередине карточки, в пустом поле
-                между балансом и кнопкой.
-
-                Здесь только то, чего нет больше нигде в кабинете: аналитика и
-                журнал показывают сделки, витрина - биржи, а стаж, монеты,
-                сертификаты и своя настоящая ставка комиссии живут в профиле
-                или не живут вовсе.
-
-                Пустая плитка не рисуется: «0 сертификатов» у новичка читается
-                как упрёк, а прочерк под ставкой - как поломка. */}
-            {/* Решёткой два на два, а не строкой в четыре: строка растягивала
-                подписи по всей ширине карточки, и глаз читал их как отдельные
-                колонки таблицы. Квадрат стоит посередине, между балансом и
-                кнопкой, и занимает ровно столько, сколько нужно. */}
 
           </div>
           </div>
@@ -280,7 +266,7 @@ export default function ProfilePage() {
               сертификаты и своя настоящая ставка живут в профиле или не живут
               вовсе. Пустая плитка не рисуется: «0 сертификатов» у новичка
               читается упрёком, а прочерк под ставкой - поломкой. */}
-          <div className="grid w-full min-w-[260px] max-w-sm grid-cols-2 gap-2">
+          <div className="grid w-full min-w-[260px] max-w-sm grid-cols-2 content-center gap-2">
             <Fact label={t.profile.facts.member} value={daysHere(p.created_at, t)} />
             <Fact label={t.profile.facts.coins} value={coins ? String(coins) : null} />
             <Fact label={t.profile.facts.certificates} value={certs} />
@@ -290,7 +276,9 @@ export default function ProfilePage() {
             <button
               onClick={refreshBalance}
               disabled={refreshing}
-              className={`${GOLD_BTN} relative shrink-0 justify-self-end !bg-[var(--pane-bg)] disabled:opacity-50`}
+              // В правый нижний угол: по центру своей ячейки кнопка вставала
+              // вплотную под девиз и читалась как его продолжение.
+              className={`${GOLD_BTN} relative shrink-0 justify-self-end self-end !bg-[var(--pane-bg)] disabled:opacity-50`}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               {t.common.refresh}
