@@ -465,6 +465,9 @@ function readWorkspace(): Partial<Workspace> | null {
   }
 }
 
+/** Монета, с которой терминал открывается после смены биржи: она есть у всех. */
+const DEFAULT_SYMBOL = "BTCUSDT";
+
 export default function ScalpingPage() {
   const t = useT();
   const layerLabels = t.terminal.layers;
@@ -838,6 +841,24 @@ export default function ScalpingPage() {
   // Биржа, книгу которой показываем: та, где стоит активный счёт ученика.
   // Счёта нет - общая книга, как и было до мультибиржи.
   const venue = exchange?.connected ? exchange.active || exchange.exchange || "" : "";
+
+  // Сменили счёт - открываем биткоин.
+  //
+  // Монета прежней биржи на новой может не торговаться вовсе: SKHYNIX есть на
+  // WEEX и нет на BingX, и терминал оставался на паре, по которой заявка не
+  // уйдёт. Биткоин есть у всех пяти - с него и начинаем, а дальше человек
+  // выберет сам.
+  //
+  // Только при смене, а не при первом появлении биржи: иначе запомненное
+  // рабочее место затиралось бы биткоином на каждом открытии терминала.
+  const lastVenue = useRef<string | null>(null);
+  useEffect(() => {
+    const was = lastVenue.current;
+    lastVenue.current = venue;
+    if (was === null || was === venue || !venue) return;
+    setSymbol(DEFAULT_SYMBOL);
+    setScreenerOpen(false);
+  }, [venue]);
 
   const { screener, absent, dom, connected } = useScalpingFeed({
     symbol,
@@ -4207,6 +4228,9 @@ export default function ScalpingPage() {
           onConfirm={confirmTrade}
           onCancel={cancelDialog}
           live={Boolean(exchange?.connected)}
+          // Монеты нет на бирже ученика: книга на экране подставлена с общей,
+          // и заявка туда не уйдёт. Запираем до нажатия, а не ловим отказ.
+          missing={dom?.fallback === "no_symbol"}
           opposing={opposing}
           maxLeverage={limits?.max_leverage}
           takerFee={limits?.taker_fee}

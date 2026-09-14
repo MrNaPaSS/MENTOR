@@ -357,6 +357,7 @@ export const dialogs = {
     fillHint: "Enter the amount, leverage and stop - the numbers will appear here",
     willGoLive: "The order goes to the exchange",
     notConnected: "No account connected - trading is unavailable",
+    notOnVenue: "Your exchange does not list this symbol - the order will not go through",
   },
 };
 

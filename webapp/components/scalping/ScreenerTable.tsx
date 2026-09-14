@@ -12,7 +12,7 @@
 
 import { useT } from "@/lib/i18n";
 import { memo, useRef } from "react";
-import { ArrowDown, Ban, Star } from "lucide-react";
+import { ArrowDown, Star } from "lucide-react";
 import {
   base,
   money,
@@ -112,7 +112,14 @@ export default function ScreenerTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {/* Пары, которых на бирже ученика нет, из списка убраны.
+              Раньше они стояли приглушёнными: человек открывал такую, видел
+              книгу с общей биржи и узнавал об отказе только при заявке.
+              Показывать то, чем нельзя торговать, - значит звать на ошибку.
+
+              Пустого списка это не создаёт: пока сервер не знает состава
+              биржи, `absent` не приходит вовсе, и видно всё. */}
+          {rows.filter((row) => !absent?.has(row.symbol)).map((row) => (
             <Row
               key={row.symbol}
               row={row}
@@ -120,8 +127,6 @@ export default function ScreenerTable({
               state={state?.get(row.symbol)}
               starred={Boolean(favorites?.has(row.symbol))}
               onStar={onToggleFavorite}
-              elsewhere={Boolean(absent?.has(row.symbol))}
-              venue={venue}
               onSelect={onSelect}
             />
           ))}
@@ -141,8 +146,6 @@ const Row = memo(function Row({
   state,
   starred,
   onStar,
-  elsewhere,
-  venue,
   onSelect,
 }: {
   row: ScreenerRow;
@@ -153,8 +156,6 @@ const Row = memo(function Row({
   starred: boolean;
   onStar?: (symbol: string) => void;
   /** Монеты нет на бирже ученика: книга будет общая, а сделку не поставить. */
-  elsewhere: boolean;
-  venue?: string;
   onSelect: (symbol: string) => void;
 }) {
   const t = useT();
@@ -176,12 +177,7 @@ const Row = memo(function Row({
       onClick={() => {
         if (touch.current) onSelect(row.symbol);
       }}
-      // Чужую монету не прячем и нажимать не запрещаем: смотреть её по общей
-      // книге - обычное дело, а торговать всё равно не выйдет. Строка просто
-      // тусклее, и причина написана у значка.
       className={`cursor-pointer border-b border-[color:color-mix(in_srgb,var(--pane-border)_40%,transparent)] transition-colors duration-150 ease-out ${
-        elsewhere ? "opacity-55" : ""
-      } ${
         selected
           ? "bg-[var(--pane-accent-faint)] shadow-[inset_2px_0_0_#0AFFE0]"
           : "hover:bg-[color:color-mix(in_srgb,var(--pane-bg)_60%,transparent)] active:bg-[var(--pane-bg)]"
@@ -235,16 +231,7 @@ const Row = memo(function Row({
           {/* Сам тикер цветом ничего не говорит: раньше он красился в акцент у
               своих монет и спорил с подсветкой выбранной строки - два разных
               смысла одним цветом. Смысл теперь на точке. */}
-          {/* Монеты нет на бирже ученика. Значок стоит у самого тикера: в
-              списке из тридцати строк подпись под ним искать некогда. */}
-          {elsewhere && (
-            <Ban
-              aria-hidden
-              className="h-2.5 w-2.5 shrink-0 self-center text-[var(--pane-muted)]"
-            />
-          )}
           <span
-            title={elsewhere ? t.domScreener.notOnVenue(venue || "") : undefined}
             className="w-[62px] shrink-0 overflow-hidden text-ellipsis font-semibold text-[var(--pane-text)]"
           >
             {base(row.symbol)}

@@ -67,6 +67,7 @@ export default function TradeDialog({
   onConfirm,
   onCancel,
   live = false,
+  missing = false,
   maxLeverage,
   takerFee,
   maxQty,
@@ -84,6 +85,14 @@ export default function TradeDialog({
   onCancel: () => void;
   /** Счёт подключён: подтверждение отправит заявку на биржу. */
   live?: boolean;
+  /**
+   * Монеты нет на бирже ученика: книга на экране подставлена с общей.
+   *
+   * Заявка на такую монету не уйдёт - биржа не знает инструмента. Кнопка,
+   * которая гарантированно приведёт к отказу, это не выбор, а ловушка: она
+   * заперта, и рядом написано почему.
+   */
+  missing?: boolean;
   /**
    * Потолок плеча по этой монете.
    *
@@ -401,6 +410,9 @@ export default function TradeDialog({
                 {d.notConnected}
               </span>
             )}
+            {live && missing && (
+              <span className="text-[var(--pane-down)]">{d.notOnVenue}</span>
+            )}
           </span>
           <div className="flex gap-2">
             <button
@@ -411,7 +423,7 @@ export default function TradeDialog({
             </button>
             <button
               onClick={onConfirm}
-              disabled={!plan || overLimit || overSize || !live}
+              disabled={!plan || overLimit || overSize || !live || missing}
               className={`${BUTTON} ${
                 long ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]" : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
               } disabled:opacity-40`}
