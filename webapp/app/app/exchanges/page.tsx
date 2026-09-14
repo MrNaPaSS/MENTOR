@@ -19,6 +19,7 @@ import { Check, ExternalLink, KeyRound, LogIn } from "lucide-react";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import { EXCHANGE_SIGNUP } from "@/lib/content";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
+import VenueMark from "@/components/ui/VenueMark";
 import { useLocale, useT } from "@/lib/i18n";
 import {
   chooseVenue,
@@ -233,11 +234,24 @@ function VenueCard({
   return (
     <div className={CARD}>
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[13px] font-semibold text-[var(--pane-text)]">{venue.title}</p>
-          <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
-            {d.broker[venue.broker] ?? venue.broker}
-          </p>
+        {/* Знак биржи перед её названием: в списке из семи карточек свою
+            человек находит по знаку раньше, чем прочитает заголовок. Знак
+            тот же, что на главной и на карточке счёта в профиле, - узнавание
+            должно работать во все стороны. */}
+        <div className="flex items-start gap-2.5">
+          <VenueMark
+            code={venue.exchange}
+            name={venue.name}
+            decorative
+            className="h-7 w-9 shrink-0"
+            nameClassName="text-[11px]"
+          />
+          <div>
+            <p className="text-[13px] font-semibold text-[var(--pane-text)]">{venue.title}</p>
+            <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
+              {d.broker[venue.broker] ?? venue.broker}
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap justify-end gap-1">
           {active && (

@@ -17,6 +17,7 @@ import { setSoundOn, useSoundOn } from "@/lib/notifySound";
 import { intlLocale, setLocale, useLocale, useT, type Locale } from "@/lib/i18n";
 import { PaneHead, PaneScope } from "@/components/app/Pane";
 import FramedAvatar from "@/components/avatar/FramedAvatar";
+import VenueMark from "@/components/ui/VenueMark";
 import Motto, { BRAND_MOTTO } from "@/components/app/Motto";
 
 const ADMIN_WEEX_UID = "6613031308";
@@ -30,25 +31,6 @@ const GOLD_BTN =
   "flex items-center gap-1.5 rounded-lg border border-accent-gold/60 bg-[color:color-mix(in_srgb,var(--pane-gold)_8%,transparent)] " +
   "px-3 py-2 text-[12px] font-semibold text-[var(--pane-gold)] transition-colors duration-150 " +
   "hover:bg-[color:color-mix(in_srgb,var(--pane-gold)_15%,transparent)]";
-
-// Знак биржи на карточке счёта. Человек узнаёт свою биржу по знаку раньше, чем
-// прочитает её название, - поэтому знак тот же, что у неё самой, а не общая
-// иконка ключа. Биржи без знака показывают знак WEEX: он же и биржа по
-// умолчанию (core/exchanges.py, KEYS_EXCHANGE).
-const VENUE_MARKS: Record<string, string> = {
-  weex: "/art/brand/weex-mark.webp",
-  bingx: "/art/brand/bingx-mark.webp",
-  okx: "/art/brand/okx-mark.webp",
-};
-
-// Свечение под знаком - в цвет самого знака: жёлтое под жёлтым WEEX, синее под
-// BingX. Знак OKX чернильный, ему свечение не нужно вовсе, а на тёмном листе
-// его переворачивает CSS - иначе чёрное на чёрном пропадает.
-const VENUE_MARK_GLOW: Record<string, string> = {
-  weex: "art-glow",
-  bingx: "art-glow-blue",
-  okx: "mark-ink",
-};
 
 // Выбранный вариант переключателя - золотом, остальные приглушены.
 const SEG_ON =
@@ -351,17 +333,15 @@ export default function ProfilePage() {
                 карточки, поэтому кнопка всегда стоит в нижнем правом углу, где
                 её и ищут. На узком экране знака нет - там дорога каждая точка. */}
             <div className="flex shrink-0 flex-col items-center justify-between gap-3 pt-5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={VENUE_MARKS[venueCode] ?? VENUE_MARKS.weex}
-                alt=""
-                aria-hidden
-                // Знак вписан в общий прямоугольник, а не поставлен по ширине:
-                // у бирж он разной формы - WEEX широкий, OKX почти квадратный, -
-                // и по одной ширине карточки вышли бы разной высоты.
-                className={`pointer-events-none hidden max-h-16 w-28 object-contain sm:block ${
-                  VENUE_MARK_GLOW[venueCode] ?? "art-glow"
-                }`}
+              {/* Знак вписан в общий прямоугольник, а не поставлен по ширине:
+                  у бирж он разной формы - WEEX широкий, OKX почти квадратный, -
+                  и по одной ширине карточки вышли бы разной высоты. */}
+              <VenueMark
+                code={venueCode}
+                name={venueTitle(venueCode)}
+                decorative
+                className="pointer-events-none hidden max-h-16 w-28 sm:block"
+                nameClassName="justify-center text-lg"
               />
               <button onClick={() => setKeysOpen(true)} className={`mt-auto ${GOLD_BTN}`}>
                 {exchange?.connected ? t.common.change : t.common.connect}

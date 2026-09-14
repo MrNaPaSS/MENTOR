@@ -734,8 +734,9 @@
   filter: drop-shadow(0 0 18px rgb(240 185 11 / 0.42)) drop-shadow(0 6px 18px rgb(0 0 0 / 0.45));
 }
 
-/* Знак BingX синий, и жёлтый ореол под ним выглядел бы чужим: свет всегда в
-   цвет самого знака, иначе он читается как подсветка соседнего элемента. */
+/* Знаки BingX и MEXC синие, и жёлтый ореол под ними выглядел бы чужим: свет
+   всегда в цвет самого знака, иначе он читается как подсветка соседнего
+   элемента. */
 .art-glow-blue {
   filter: drop-shadow(0 0 14px rgb(37 99 235 / 0.32)) drop-shadow(0 6px 14px rgb(0 0 0 / 0.18));
 }
@@ -743,17 +744,6 @@
 [data-terminal="dark"] .art-glow-blue,
 .pane-dark .art-glow-blue {
   filter: drop-shadow(0 0 18px rgb(59 130 246 / 0.48)) drop-shadow(0 6px 18px rgb(0 0 0 / 0.45));
-}
-
-/* Знак MEXC зелёный - и свет под ним зелёный, по тому же правилу, что у BingX:
-   свет всегда в цвет самого знака. */
-.art-glow-green {
-  filter: drop-shadow(0 0 14px rgb(0 184 151 / 0.30)) drop-shadow(0 6px 14px rgb(0 0 0 / 0.18));
-}
-
-[data-terminal="dark"] .art-glow-green,
-.pane-dark .art-glow-green {
-  filter: drop-shadow(0 0 18px rgb(0 184 151 / 0.45)) drop-shadow(0 6px 18px rgb(0 0 0 / 0.45));
 }
 
 /* Знак OKX нарисован чернилами - под светлый лист, как и фирменный. На тёмном
