@@ -45,10 +45,21 @@ export const EXCHANGE_SIGNUP: readonly { code: string; name: string; url: (local
   {
     code: "weex",
     name: "WEEX",
+    // У WEEX свой раздел под каждый язык: «/ru/register» открыл бы
+    // англоязычному гостю русскую страницу на первом же шаге.
     url: (locale) => `https://www.weex.com/${locale === "en" ? "en" : "ru"}/register?vipCode=kaktotakxme`,
   },
-  // OKX и BingX: партнёрских ссылок пока нет. Появятся - добавляются строкой
-  // здесь, и кнопка в подвале возникает сама.
+  {
+    code: "okx",
+    name: "OKX",
+    // Язык OKX выбирает сама, по браузеру: ссылка одна на всех.
+    url: () => "https://okx.com/join/NMNHTRADE",
+  },
+  {
+    code: "bingx",
+    name: "BingX",
+    url: () => "https://bingx.com/partner/kaktotakxm/0Q55KY",
+  },
 ];
 
 /** Страница пары на бирже - на языке, которым человек пользуется. */

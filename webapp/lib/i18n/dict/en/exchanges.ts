@@ -48,6 +48,7 @@ export const exchanges = {
   actions: {
     login: "Sign in with the exchange",
     loginSoon: "Exchange sign-in arrives with the broker ID",
+    signup: "Open an account",
     keys: "Connect with API keys",
     needsAcademy: "Confirm the account in the academy bot first",
     replace: "Replace keys",

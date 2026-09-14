@@ -14,11 +14,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, KeyRound, LogIn } from "lucide-react";
+import { Check, ExternalLink, KeyRound, LogIn } from "lucide-react";
 
 import { PaneHead, PaneScope } from "@/components/app/Pane";
+import { EXCHANGE_SIGNUP } from "@/lib/content";
 import ExchangeDialog from "@/components/scalping/ExchangeDialog";
-import { useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 import {
   chooseVenue,
   dropVenue,
@@ -208,7 +209,11 @@ function VenueCard({
   onDrop: () => void;
 }) {
   const t = useT();
+  const locale = useLocale();
   const d = t.exchanges;
+  // Партнёрская ссылка биржи. Счёт заводят по ней: иначе ни сниженной ставки,
+  // ни кешбэка не будет - биржа не узнает, что человек пришёл от нас.
+  const signup = EXCHANGE_SIGNUP.find((one) => one.code === venue.exchange);
   const taker = ratePct(venue.taker);
   const maker = ratePct(venue.maker);
   const academy = ratePct(venue.academy_taker);
@@ -297,6 +302,20 @@ function VenueCard({
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* Первый шаг для того, у кого счёта на бирже ещё нет. Стоит первым и
+            заметным: подключать ключи нечего, пока счёта нет, а заведённый
+            мимо нашей ссылки счёт останется без условий академии. */}
+        {signup && !venue.connected && (
+          <a
+            href={signup.url(locale)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${ACTION} flex items-center gap-1.5 border-[var(--pane-accent-soft)] bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]`}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            {d.actions.signup}
+          </a>
+        )}
         {venue.connect.includes("oauth") && (
           <button
             onClick={onLogin}

@@ -2,7 +2,8 @@
 
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
-import { useT } from "@/lib/i18n";
+import { EXCHANGE_SIGNUP } from "@/lib/content";
+import { useLocale, useT } from "@/lib/i18n";
 
 /**
  * Биржи, с которыми работает терминал.
@@ -26,31 +27,46 @@ const LIVE = [
 
 export default function Exchanges() {
   const t = useT();
+  const locale = useLocale();
   const copy = t.landing.exchanges;
+  // Партнёрская ссылка биржи, если она у нас есть: карточка тогда ведёт на
+  // регистрацию, а не просто показывает знак.
+  const signup = (code: string) => EXCHANGE_SIGNUP.find((one) => one.code === code);
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
       <SectionHeading eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.subtitle} />
 
       <div className="mt-10 grid gap-4 sm:grid-cols-3">
-        {LIVE.map((one, i) => (
-          <Reveal key={one.code} delay={i * 0.1}>
-            <div className="flex h-full flex-col items-center gap-4 rounded-2xl border border-border bg-bg-panel/60 p-6 text-center backdrop-blur-md">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={one.mark}
-                alt={one.name}
-                loading="lazy"
-                decoding="async"
-                className={`h-12 w-auto max-w-[140px] object-contain ${one.glow}`}
-              />
-              <div>
-                <p className="font-bold text-text-primary">{one.name}</p>
-                <p className="mt-1 text-[13px] text-text-muted">{copy.live}</p>
-              </div>
-            </div>
-          </Reveal>
-        ))}
+        {LIVE.map((one, i) => {
+          const link = signup(one.code);
+          return (
+            <Reveal key={one.code} delay={i * 0.1}>
+              <a
+                href={link?.url(locale)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex h-full flex-col items-center gap-4 rounded-2xl border border-border bg-bg-panel/60 p-6 text-center backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-accent-cyan/40"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={one.mark}
+                  alt={one.name}
+                  loading="lazy"
+                  decoding="async"
+                  className={`h-12 w-auto max-w-[140px] object-contain ${one.glow}`}
+                />
+                <div>
+                  <p className="font-bold text-text-primary">{one.name}</p>
+                  <p className="mt-1 text-[13px] text-text-muted">{copy.live}</p>
+                  <p className="mt-2 text-[13px] font-semibold text-accent-cyan opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                    {copy.signup}
+                  </p>
+                </div>
+              </a>
+            </Reveal>
+          );
+        })}
       </div>
 
       <Reveal delay={0.3}>
