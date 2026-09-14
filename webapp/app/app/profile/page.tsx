@@ -199,10 +199,14 @@ export default function ProfilePage() {
               справа кнопка. Решётка стояла в одной строке с балансом, под
               строкой ника, и сверху над ней оставалось втрое больше воздуха,
               чем снизу - теперь она делит высоту карточки пополам. */}
-          <div className="relative flex flex-wrap items-center justify-between gap-4">
+          {/* Сетка, а не флекс: у флекса левая колонка забирала всё свободное
+              место и выталкивала решётку к кнопке. Края одинаковой доли -
+              середина приходится ровно на середину карточки, что бы в этих
+              краях ни стояло. */}
+          <div className="relative grid items-center gap-4 lg:grid-cols-[1fr_auto_1fr]">
           {/* Левой колонке нужен свой минимум: без него ник и номер счёта
               сжимались в столбик по букве, лишь бы уместить решётку рядом. */}
-          <div className="min-w-[240px] flex-1">
+          <div className="min-w-[240px]">
           <div className="relative flex items-center gap-4">
             {/* Аватарка из Telegram, если она есть. Файл отдаёт бэкенд, поэтому
                 к пути добавляем API_URL: сайт живёт на другом домене. Нет
@@ -276,7 +280,7 @@ export default function ProfilePage() {
               сертификаты и своя настоящая ставка живут в профиле или не живут
               вовсе. Пустая плитка не рисуется: «0 сертификатов» у новичка
               читается упрёком, а прочерк под ставкой - поломкой. */}
-          <div className="grid w-full min-w-[260px] max-w-sm flex-1 grid-cols-2 gap-2">
+          <div className="grid w-full min-w-[260px] max-w-sm grid-cols-2 gap-2">
             <Fact label={t.profile.facts.member} value={daysHere(p.created_at, t)} />
             <Fact label={t.profile.facts.coins} value={coins ? String(coins) : null} />
             <Fact label={t.profile.facts.certificates} value={certs} />
@@ -286,7 +290,7 @@ export default function ProfilePage() {
             <button
               onClick={refreshBalance}
               disabled={refreshing}
-              className={`${GOLD_BTN} relative shrink-0 !bg-[var(--pane-bg)] disabled:opacity-50`}
+              className={`${GOLD_BTN} relative shrink-0 justify-self-end !bg-[var(--pane-bg)] disabled:opacity-50`}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               {t.common.refresh}
