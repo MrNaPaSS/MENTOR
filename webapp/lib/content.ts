@@ -32,6 +32,25 @@ export function weexRegisterUrl(locale: string): string {
   return `https://www.weex.com/${lang}/register?vipCode=kaktotakxme`;
 }
 
+/**
+ * Партнёрские ссылки бирж, по которым ученик заводит счёт.
+ *
+ * Порядок - порядок кнопок в подвале. Биржа без ссылки не показывается вовсе:
+ * отправить человека на биржу мимо партнёрской ссылки значит потерять и
+ * ребейт, и его кешбэк - он окажется «своим» на бирже, куда его привели мы.
+ *
+ * Ссылка зависит от языка там, где у биржи свои разделы под языки.
+ */
+export const EXCHANGE_SIGNUP: readonly { code: string; name: string; url: (locale: string) => string }[] = [
+  {
+    code: "weex",
+    name: "WEEX",
+    url: (locale) => `https://www.weex.com/${locale === "en" ? "en" : "ru"}/register?vipCode=kaktotakxme`,
+  },
+  // OKX и BingX: партнёрских ссылок пока нет. Появятся - добавляются строкой
+  // здесь, и кнопка в подвале возникает сама.
+];
+
 /** Страница пары на бирже - на языке, которым человек пользуется. */
 export function weexFuturesUrl(symbol: string, locale: string): string {
   const lang = locale === "en" ? "en" : "ru";

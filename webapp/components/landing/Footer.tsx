@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { SiTelegram } from "@icons-pack/react-simple-icons";
 import Logo from "@/components/ui/Logo";
-import { NAV_ANCHORS, PARTNER_EMAIL, SEO_PAGES, SOCIAL_LINKS, weexRegisterUrl } from "@/lib/content";
+import { EXCHANGE_SIGNUP, NAV_ANCHORS, PARTNER_EMAIL, SEO_PAGES, SOCIAL_LINKS } from "@/lib/content";
 import { useLocale, useT } from "@/lib/i18n";
 
 export default function Footer() {
@@ -61,14 +61,23 @@ export default function Footer() {
 
           <div>
             <h4 className="text-sm font-semibold uppercase tracking-wider text-text-muted">{t.landing.footer.partnerHeading}</h4>
-            <a
-              href={weexRegisterUrl(locale)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-text-primary transition hover:border-accent-cyan/40"
-            >
-              {t.landing.footer.weexButton}
-            </a>
+            {/* По кнопке на биржу, у которой есть партнёрская ссылка
+                (`EXCHANGE_SIGNUP`). Биржи без ссылки здесь не показываются:
+                отправить человека мимо неё значит потерять и ребейт, и его
+                кешбэк. */}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {EXCHANGE_SIGNUP.map((one) => (
+                <a
+                  key={one.code}
+                  href={one.url(locale)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-text-primary transition hover:border-accent-cyan/40"
+                >
+                  {t.landing.footer.exchangeButton(one.name)}
+                </a>
+              ))}
+            </div>
 
             {/* Адрес для деловых писем. Не «свяжитесь с нами» и не форма:
                 биржи и площадки пишут почтой, и адрес должен копироваться

@@ -73,6 +73,20 @@ export default function Terminal() {
         subtitle={copy.subtitle}
       />
 
+      {/* Как он выглядит. Раздел рассказывает про рабочее место трейдера, и
+          показать его надо раньше, чем объяснять словами: человек решает по
+          картинке, читать ли дальше. Грузится лениво - первый экран выше. */}
+      <Reveal delay={0.05}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/art/seo/terminal-cover.webp"
+          alt={copy.shotAlt}
+          loading="lazy"
+          decoding="async"
+          className="mt-12 w-full rounded-2xl border border-white/[0.07] shadow-2xl"
+        />
+      </Reveal>
+
       {/* Сравнение: канал против терминала */}
       <div className="mt-14 grid gap-4 md:grid-cols-2">
         <Reveal>

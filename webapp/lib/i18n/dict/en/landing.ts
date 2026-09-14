@@ -28,6 +28,7 @@ export const landing = {
     titleAccent: "This is your workstation.",
     subtitle:
       "A signal opens in one click: the risk is sized, stop and targets are already on the exchange, and the server runs the position from there.",
+    shotAlt: "NMNH terminal: chart, order book and order panel in one window",
     channelEyebrow: "Everywhere else",
     channelTitle: "A signal channel",
     channelLimits: [
@@ -62,6 +63,14 @@ export const landing = {
     ctaText: "Registering on an exchange through our link unlocks it. No subscriptions, no payments.",
     ctaPrimary: "Open the terminal",
     ctaSecondary: "WEEX account",
+  },
+
+  exchanges: {
+    eyebrow: "Exchanges",
+    title: "Where you trade",
+    subtitle: "We work with more than 8 official exchanges.",
+    live: "trading is live",
+    note: "The rest are coming soon. The order book and tape come from the exchange your account is on.",
   },
 
   how: {
@@ -180,6 +189,8 @@ export const landing = {
     calculator: "Calculator",
     partnerHeading: "Partner",
     weexButton: "WEEX exchange →",
+    /** Sign-up button: the exchange name comes from the link registry. */
+    exchangeButton: (name: string) => `${name} exchange →`,
     emailHeading: "Partnerships",
     emailHint: "Exchanges, venues and affiliate programmes",
     rights: "© 2024 NMNH. All rights reserved.",
