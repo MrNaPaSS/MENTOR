@@ -254,9 +254,11 @@ export default function ProfilePage() {
 
                 Пустая плитка не рисуется: «0 сертификатов» у новичка читается
                 как упрёк, а прочерк под ставкой - как поломка. */}
-            {/* На узкой колонке - два столбца: четыре подписи в ряд ломаются
-                пополам и карточка растёт вдвое. Широкой хватает одного ряда. */}
-            <div className="grid flex-1 grid-cols-2 gap-2 xl:grid-cols-4">
+            {/* Решёткой два на два, а не строкой в четыре: строка растягивала
+                подписи по всей ширине карточки, и глаз читал их как отдельные
+                колонки таблицы. Квадрат стоит посередине, между балансом и
+                кнопкой, и занимает ровно столько, сколько нужно. */}
+            <div className="mx-auto grid w-full max-w-sm flex-1 grid-cols-2 gap-2">
               <Fact label={t.profile.facts.member} value={daysHere(p.created_at, t)} />
               <Fact label={t.profile.facts.coins} value={coins ? String(coins) : null} />
               <Fact label={t.profile.facts.certificates} value={certs} />
