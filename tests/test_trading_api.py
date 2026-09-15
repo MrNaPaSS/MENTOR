@@ -55,7 +55,19 @@ class FakeExchange:
         return list(self.pending)
 
     async def cancel_order(self, symbol, order_id):
+        # Снятая заявка уходит из списка - как на бирже. Пока она там
+        # оставалась, проверка «убрали ли за собой» ничего не проверяла: код
+        # видел её снова и снимал второй раз.
         self.cancelled.append(order_id)
+        self.pending = [
+            o
+            for o in self.pending
+            if str(order_id)
+            not in {
+                str(o.get(name) or "")
+                for name in ("orderId", "id", "clientOrderId", "clientOid")
+            }
+        ]
 
     async def algo_orders(self, symbol):
         return list(self.plans_open)

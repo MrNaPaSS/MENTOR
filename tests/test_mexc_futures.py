@@ -941,3 +941,37 @@ def test_the_protection_refusal_is_heard_too():
         run(client(session).cancel_algo_order("BTCUSDT", "900"))
     assert "900" in str(failed.value)
     assert "not exist" in str(failed.value)
+
+
+def test_long_order_numbers_survive_intact():
+    """Номера MEXC восемнадцатизначные, и терять на них точность нельзя.
+
+    В double умещается пятнадцать знаков: из сотни подряд идущих номеров
+    девяносто девять возвращались искажёнными, кратными 64. Биржа на такой
+    номер отвечает «order not exist», и мимо цели уходило всё, что адресуется
+    номером: снятие лимитки, снятие и перенос защиты, постановка целей на
+    позицию.
+    """
+    from core.mexc.market import _i
+
+    assert _i("854902673092049031") == 854902673092049031
+    assert _i(854902673092049031) == 854902673092049031
+    # И обычные числа по-прежнему читаются.
+    assert _i("12.9") == 12
+    assert _i(None) == 0
+    assert _i("мусор") == 0
+
+
+def test_the_order_number_reaches_the_exchange_unchanged():
+    """Снятие уходит тем самым номером, что вернула биржа."""
+    session = FakeSession({"/api/v1/private/order/cancel": {"code": 0}})
+    run(client(session).cancel_order("BTCUSDT", "854902673092049031"))
+    assert sent_to(session, "/api/v1/private/order/cancel")["body"] == [854902673092049031]
+
+
+def test_the_protection_number_reaches_the_exchange_unchanged():
+    """И снятие защиты тоже: перенос стопа на MEXC начинается со снятия."""
+    session = FakeSession({"/api/v1/private/stoporder/cancel": {"code": 0}})
+    run(client(session).cancel_algo_order("BTCUSDT", "854902673092049031"))
+    body = sent_to(session, "/api/v1/private/stoporder/cancel")["body"]
+    assert body == [{"symbol": "BTC_USDT", "stopPlanOrderId": 854902673092049031}]

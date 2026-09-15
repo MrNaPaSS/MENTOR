@@ -52,6 +52,7 @@ from core.weex.futures import (
     SIDES,
     Credentials,
     WeexTradeError,
+    order_gone,
 )
 
 # Словарь биржи целиком: имена, подпись, справочник и перевод ответов. Имена
@@ -652,7 +653,17 @@ class MexcFutures:
         if take_price > 0:
             previous["takeProfitPrice"] = take_price
 
-        await self.cancel_algo_order(symbol, str(record.get("id")))
+        try:
+            await self.cancel_algo_order(symbol, str(record.get("id")))
+        except WeexTradeError as exc:
+            # Защиты уже нет - это не помеха переносу, а его половина: снимать
+            # нечего, ставим новую. Отказ по другой причине - другое дело:
+            # снять не вышло, и вторая защита рядом с первой биржей не
+            # принимается.
+            if not order_gone(exc):
+                raise
+            logger.info("Защита %s уже снята биржей: %s", symbol, exc)
+
         try:
             data = await self._request("POST", ENDPOINTS["stop_place"], body=body)
         except WeexTradeError as exc:

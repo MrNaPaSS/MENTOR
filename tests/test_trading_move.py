@@ -701,3 +701,55 @@ def test_the_move_goes_on_when_there_is_nothing_to_cancel(moving):
 
     assert move(client, entry=80_000.0).status_code == 200
     assert exchange.orders[-1]["price"] == "80000"
+
+
+def test_a_refusal_that_means_there_is_nothing_to_cancel_does_not_stop_the_move(moving):
+    """«Заявки нет» - это не отказ переноса.
+
+    MEXC отвечает так и на заявку, которая ещё висит в её же списке: снятие
+    прошло раньше, а список отстал. Перенос при этом падал отказом, и трейдер
+    не мог двигать вход вовсе.
+    """
+    client, exchange, session, live = moving
+    exchange.pending = [{"orderId": "e1", "clientOrderId": "BTCUSDT-1"}]
+
+    async def gone(symbol, order_id):
+        from core.weex.futures import WeexTradeError
+
+        exchange.cancelled.append(order_id)
+        raise WeexTradeError("Заявка e1 на MEXC не снята: order not exist", code="2040")
+
+    exchange.cancel_order = gone  # type: ignore[assignment]
+
+    res = move(client, entry=80_000.0)
+    assert res.status_code == 200
+    assert exchange.orders[-1]["price"] == "80000"
+
+
+def test_the_old_limit_is_swept_after_the_move(moving):
+    """Прежняя лимитка, пережившая снятие, убирается после постановки новой.
+
+    Иначе на бирже остаются две заявки на один вход - двойной объём, если
+    исполнятся обе.
+    """
+    client, exchange, session, live = moving
+    exchange.pending = [{"orderId": "e1", "clientOrderId": "BTCUSDT-1"}]
+    refused: list[str] = []
+
+    async def stubborn(symbol, order_id):
+        from core.weex.futures import WeexTradeError
+
+        # Первое снятие «не находит» заявку, второе - снимает.
+        if not refused:
+            refused.append(str(order_id))
+            raise WeexTradeError("order not exist", code="2040")
+        exchange.cancelled.append(str(order_id))
+        exchange.pending = []
+
+    exchange.cancel_order = stubborn  # type: ignore[assignment]
+
+    assert move(client, entry=80_000.0).status_code == 200
+    # Новая заявка встала, прежняя всё-таки снята - вторым заходом.
+    assert exchange.orders[-1]["price"] == "80000"
+    assert exchange.cancelled == ["e1"]
+    assert exchange.pending == []

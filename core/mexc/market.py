@@ -325,8 +325,26 @@ def _f(value: Any, default: float = 0.0) -> float:
 
 
 def _i(value: Any) -> int:
+    """Целое из ответа биржи - без потери точности на длинных числах.
+
+    Через `float` здесь идти нельзя. Номера заявок и позиций у MEXC
+    восемнадцатизначные, а в double умещается пятнадцать знаков: из сотни
+    подряд идущих номеров девяносто девять возвращались искажёнными, кратными
+    64. Биржа на такой номер честно отвечает «order not exist», и всё, что
+    адресуется номером, промахивалось мимо цели: снятие лимитки, снятие и
+    перенос защиты, постановка целей на позицию (`positionId`).
+    """
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    text = str(value).strip()
     try:
-        return int(float(value))
+        return int(text)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return int(float(text))
     except (TypeError, ValueError):
         return 0
 

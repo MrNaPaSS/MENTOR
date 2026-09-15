@@ -58,6 +58,7 @@ from core.models import LiveTrade, Student, utcnow
 from core.weex.futures import (
     WeexFutures,
     WeexTradeError,
+    order_gone,
     plan_order_id,
     public_price,
     round_to_tick,
@@ -304,7 +305,12 @@ async def _move_waiting(
         try:
             await client.cancel_order(live.symbol, old)
         except WeexTradeError as exc:
-            raise _fail(exc) from exc
+            # «Заявки нет» - это не отказ: снимать нечего, и перенос идёт
+            # дальше. MEXC отвечает так и на заявку, которая ещё висит в её
+            # же списке; лишнюю уберём после постановки новой.
+            if not order_gone(exc):
+                raise _fail(exc) from exc
+            logger.info("Прежняя лимитка %s уже снята биржей: %s", live.symbol, exc)
     else:
         # Номера нет: биржа не вернула нашу метку в списке заявок, и опознать
         # по нему заявку нечем. Снимаем по самой метке - её принимают MEXC,
@@ -317,6 +323,7 @@ async def _move_waiting(
     # повторный отклоняет. Наш собственный при этом не меняется - к нему
     # привязаны и метки заявок, и запись в журнале.
     live.replaces = (live.replaces or 0) + 1
+    fresh_mark = f"{live.client_id}-{live.replaces}"[:64]
     try:
         await client.place_order(
             symbol=live.symbol,
@@ -326,7 +333,7 @@ async def _move_waiting(
             order_type="LIMIT",
             price=_num(entry),
             sl_trigger=_num(stop),
-            client_order_id=f"{live.client_id}-{live.replaces}"[:64],
+            client_order_id=fresh_mark,
         )
     except WeexTradeError as exc:
         # Старой заявки уже нет, новая не встала - сказать об этом надо прямо:
@@ -340,6 +347,8 @@ async def _move_waiting(
     live.entry = entry
     live.initial_stop = stop
     live.current_stop = stop
+    # И убираем за собой: прежняя лимитка могла пережить снятие.
+    await _drop_old_entries(client, live, keep=fresh_mark)
     return {"entry": entry, "stop": stop, "takes": targets, "planned": True}
 
 
@@ -659,6 +668,40 @@ def _guard(side: str, entry: float, stop: float | None, take: float | None) -> N
             raise HTTPException(422, "Цель лонга должна стоять выше входа")
         if not long and take >= entry:
             raise HTTPException(422, "Цель шорта должна стоять ниже входа")
+
+
+async def _drop_old_entries(client: WeexFutures, live: LiveTrade, keep: str) -> int:
+    """Убрать за собой: прежние лимитки входа этой сделки, кроме только что поставленной.
+
+    Снятие перед постановкой не всегда доходит: биржа отвечает «заявки нет», а
+    в списке она ещё висит, или номер оказался не тот. Тогда на бирже остаются
+    две лимитки на один вход - то есть двойной объём, если исполнятся обе.
+    Поэтому после постановки проверяем список ещё раз и снимаем лишнее.
+    """
+    try:
+        orders = await client.open_orders(live.symbol)
+    except WeexTradeError as exc:
+        logger.warning("Заявки %s не перечитаны после переноса: %s", live.symbol, exc)
+        return 0
+
+    removed = 0
+    for order in orders:
+        mark = str(order.get("clientOrderId") or order.get("clientOid") or "")
+        if mark and mark == keep:
+            continue
+        if not client_matches(mark, live.client_id):
+            continue
+        order_id = str(order.get("orderId") or order.get("id") or "") or mark
+        try:
+            await client.cancel_order(live.symbol, order_id)
+        except WeexTradeError as exc:
+            if order_gone(exc):
+                continue
+            logger.warning("Прежняя лимитка %s не снята: %s", order_id, exc)
+            continue
+        removed += 1
+        logger.info("Прежняя лимитка %s снята после переноса %s", order_id, live.symbol)
+    return removed
 
 
 async def _cancel_by_mark(client: WeexFutures, live: LiveTrade) -> str:

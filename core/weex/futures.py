@@ -263,6 +263,30 @@ class WeexTradeError(Exception):
         self.retryable = retryable
 
 
+# Чем биржи говорят «такой заявки нет». Слова у каждой свои, коды тоже: MEXC
+# отвечает 2040 «order not exist», Binance -2011 «Unknown order sent», OKX
+# 51603. Для снятия это не беда, а ответ: снимать нечего. Беда - считать такой
+# отказ провалом и бросать начатое, не поставив ни новой заявки, ни защиты.
+GONE_WORDS = (
+    "not exist",
+    "does not exist",
+    "not found",
+    "unknown order",
+    "order state error",
+    "не найден",
+    "не существует",
+)
+GONE_CODES = {"2040", "-2011", "51603", "51400", "40109"}
+
+
+def order_gone(exc: WeexTradeError) -> bool:
+    """Отказ означает «заявки уже нет», а не «снять не вышло»."""
+    if str(getattr(exc, "code", "") or "") in GONE_CODES:
+        return True
+    words = str(exc).lower()
+    return any(one in words for one in GONE_WORDS)
+
+
 @dataclass(frozen=True)
 class Credentials:
     # Ключи не показываются в repr: первый же logger.exception с локальными
