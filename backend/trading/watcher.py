@@ -1916,6 +1916,24 @@ def entry_marks(client_id: str, replaces: int = 0) -> list[str]:
     return [m for m in marks if m]
 
 
+def same_mark(mark: str | None, ours: str | None) -> bool:
+    """Та же ли это заявка: метка с биржи против той, которой мы её ставили.
+
+    Не точным сравнением: OKX оставляет в метке только буквы и цифры
+    (`BTCUSDT-1789-1` возвращается как `BTCUSDT17891`), BingX переводит её в
+    строчные, а длинную режет до 32 знаков. Точное сравнение не узнавало только
+    что поставленную лимитку, и уборка после переноса входа снимала её как
+    прежнюю: сделка пропадала, новая заявка на бирже не появлялась.
+    """
+    theirs = _alnum(mark)
+    mine = _alnum(ours)
+    if not theirs or not mine:
+        return False
+    if theirs == mine:
+        return True
+    return len(theirs) >= 24 and mine.startswith(theirs)
+
+
 def client_matches(mark: str | None, client_id: str | None) -> bool:
     """Наша ли это заявка: идентификатор с биржи против идентификатора сделки.
 

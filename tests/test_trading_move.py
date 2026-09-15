@@ -753,3 +753,58 @@ def test_the_old_limit_is_swept_after_the_move(moving):
     assert exchange.orders[-1]["price"] == "80000"
     assert exchange.cancelled == ["e1"]
     assert exchange.pending == []
+
+
+def test_moving_a_limit_does_not_cancel_the_new_one_on_okx(moving):
+    """OKX убирает из метки дефисы - новую лимитку это не должно снимать.
+
+    Уборка после переноса узнавала новую заявку точным сравнением метки.
+    OKX возвращает `BTCUSDT-1-1` как `BTCUSDT11`: сравнение не сходилось, и
+    новая лимитка снималась как прежняя. Сделка пропадала, а новой заявки на
+    бирже не было.
+    """
+    client, exchange, session, live = moving
+    exchange.pending = [{"orderId": "e1", "clientOrderId": "BTCUSDT1"}]
+
+    async def okx_place(**kw):
+        exchange.orders.append(kw)
+        mark = "".join(ch for ch in kw["client_order_id"] if ch.isalnum())
+        exchange.pending = exchange.pending + [{"orderId": "new", "clientOrderId": mark}]
+        return {"orderId": "new", "clientOrderId": mark}
+
+    exchange.place_order = okx_place  # type: ignore[assignment]
+
+    assert move(client, entry=80_000.0).status_code == 200
+
+    assert "new" not in exchange.cancelled
+    assert any(o.get("orderId") == "new" for o in exchange.pending)
+    assert "e1" in exchange.cancelled
+
+
+def test_the_new_limit_is_spared_by_its_number_too(moving):
+    """Биржа вернула метку совсем другой - новую узнаём по номеру заявки."""
+    client, exchange, session, live = moving
+    exchange.pending = [{"orderId": "e1", "clientOrderId": "BTCUSDT-1"}]
+
+    async def place(**kw):
+        exchange.orders.append(kw)
+        exchange.pending = exchange.pending + [
+            {"orderId": "new", "clientOrderId": "BTCUSDT-1-zz"}
+        ]
+        return {"orderId": "new"}
+
+    exchange.place_order = place  # type: ignore[assignment]
+
+    assert move(client, entry=80_000.0).status_code == 200
+    assert "new" not in exchange.cancelled
+
+
+def test_same_mark_reads_marks_the_way_exchanges_return_them():
+    from backend.trading.watcher import same_mark
+
+    assert same_mark("BTCUSDT17895000000001", "BTCUSDT-1789500000000-1")  # OKX
+    assert same_mark("btcusdt-1789500000000-1", "BTCUSDT-1789500000000-1")  # BingX
+    assert same_mark("BTCUSDT-1789500000000-1", "BTCUSDT-1789500000000-1")
+    # Прежняя метка той же сделки - не новая.
+    assert not same_mark("BTCUSDT1789500000000", "BTCUSDT-1789500000000-1")
+    assert not same_mark("", "BTCUSDT-1")

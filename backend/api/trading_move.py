@@ -43,6 +43,7 @@ from backend.trading.watcher import (
     cancel_plan,
     client_matches,
     entry_marks,
+    same_mark,
     mark_price,
     order_marks,
     plan_alive,
@@ -325,7 +326,7 @@ async def _move_waiting(
     live.replaces = (live.replaces or 0) + 1
     fresh_mark = f"{live.client_id}-{live.replaces}"[:64]
     try:
-        await client.place_order(
+        placed = await client.place_order(
             symbol=live.symbol,
             side="BUY" if live.side == "long" else "SELL",
             position_side="LONG" if live.side == "long" else "SHORT",
@@ -348,7 +349,8 @@ async def _move_waiting(
     live.initial_stop = stop
     live.current_stop = stop
     # И убираем за собой: прежняя лимитка могла пережить снятие.
-    await _drop_old_entries(client, live, keep=fresh_mark)
+    fresh_id = str((placed or {}).get("orderId") or "") if isinstance(placed, dict) else ""
+    await _drop_old_entries(client, live, keep=fresh_mark, keep_id=fresh_id)
     return {"entry": entry, "stop": stop, "takes": targets, "planned": True}
 
 
@@ -670,7 +672,9 @@ def _guard(side: str, entry: float, stop: float | None, take: float | None) -> N
             raise HTTPException(422, "Цель шорта должна стоять ниже входа")
 
 
-async def _drop_old_entries(client: WeexFutures, live: LiveTrade, keep: str) -> int:
+async def _drop_old_entries(
+    client: WeexFutures, live: LiveTrade, keep: str, keep_id: str = ""
+) -> int:
     """Убрать за собой: прежние лимитки входа этой сделки, кроме только что поставленной.
 
     Снятие перед постановкой не всегда доходит: биржа отвечает «заявки нет», а
@@ -687,11 +691,16 @@ async def _drop_old_entries(client: WeexFutures, live: LiveTrade, keep: str) -> 
     removed = 0
     for order in orders:
         mark = str(order.get("clientOrderId") or order.get("clientOid") or "")
-        if mark and mark == keep:
+        order_id = str(order.get("orderId") or order.get("id") or "")
+        # Новую заявку щадим и по номеру, и по метке - сравнивая метку так, как
+        # её возвращает биржа: OKX убирает из неё дефисы, BingX переводит в
+        # строчные. Точное сравнение не узнавало новую, и она снималась как
+        # прежняя.
+        if (keep_id and order_id == keep_id) or same_mark(mark, keep):
             continue
         if not client_matches(mark, live.client_id):
             continue
-        order_id = str(order.get("orderId") or order.get("id") or "") or mark
+        order_id = order_id or mark
         try:
             await client.cancel_order(live.symbol, order_id)
         except WeexTradeError as exc:
