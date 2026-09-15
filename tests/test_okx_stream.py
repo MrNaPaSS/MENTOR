@@ -39,3 +39,77 @@ def test_login_is_signed_by_time_and_the_fixed_path():
         hmac.new(b"secret", f"{stamp}GET/users/self/verify".encode(), hashlib.sha256).digest()
     ).decode()
     assert login_sign("secret", stamp) == expected
+
+
+# ── готовность и позиции ─────────────────────────────────────────────────────
+
+import asyncio
+import json
+import time
+
+from core.okx.futures import Credentials
+from core.okx.stream import OkxPrivateStream
+
+
+class _OpenWs:
+    closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def _logged_in_stream(specs: dict | None = None) -> OkxPrivateStream:
+    async def load() -> dict:
+        return specs or {}
+
+    stream = OkxPrivateStream(Credentials("key", "secret", "pass"), load)
+    stream._ws = _OpenWs()  # type: ignore[assignment]
+    stream._logged_in.set()
+    stream.alive_at = time.monotonic()
+    return stream
+
+
+def _positions_message(rows: list) -> str:
+    return json.dumps({"arg": {"channel": "positions", "instType": "SWAP"}, "data": rows})
+
+
+def test_stream_is_not_ready_until_positions_arrive():
+    """Вход выполнен и соединение живо - но позиций ещё нет, и верить ему рано.
+
+    Поток считался готовым сразу после входа и отдавал пустой список. Свежий
+    вход по рынку в стакане не стоит, позиции «не было», и сопровождение через
+    пять обходов молча снимало запись: сделка пропадала с терминала, а позиция
+    на бирже жила.
+    """
+    stream = _logged_in_stream()
+    assert stream.ready is False
+
+    asyncio.run(stream._dispatch(stream._ws, _positions_message([])))
+    assert stream.ready is True
+
+
+def test_pong_alone_does_not_make_the_stream_ready():
+    """Ответ на ping подтверждает соединение, но не состояние счёта."""
+    stream = _logged_in_stream()
+    asyncio.run(stream._dispatch(stream._ws, "pong"))
+    assert stream.ready is False
+
+
+def test_a_break_forgets_the_snapshot():
+    """После обрыва снимок прежнего соединения не в счёт - ждём новый."""
+    stream = _logged_in_stream()
+    asyncio.run(stream._dispatch(stream._ws, _positions_message([])))
+    assert stream.ready is True
+    stream._down()
+    stream.alive_at = time.monotonic()
+    assert stream.ready is False
+
+
+def test_a_position_without_its_instrument_is_not_erased():
+    """Нет справочника по инструменту - это не закрытие позиции."""
+    stream = _logged_in_stream(specs={})
+    kept = {"symbol": "BTCUSDT", "positionSide": "LONG", "size": "0.01"}
+    stream._positions[("BTC-USDT-SWAP", "long")] = kept
+    row = {"instId": "BTC-USDT-SWAP", "pos": "1", "posSide": "long"}
+    asyncio.run(stream._dispatch(stream._ws, _positions_message([row])))
+    assert stream.positions() == [kept]

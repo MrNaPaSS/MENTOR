@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -52,6 +53,17 @@ from backend.ai_quota import AnalyzeQuota
 from backend.sources import binance as sources_binance, session as sources_session
 from backend.ratelimit import RateLimiter, AuthRateLimitMiddleware
 from backend.headers import SecurityHeaders
+
+
+# Решения сопровождения - в консоль стола.
+#
+# Своей настройки логов у сервера не было, и Python выводил только
+# предупреждения. «Позиция набрана», «ждущая сделка снята», «позиция закрыта»
+# пишутся информационными строками - и когда сделка пропадала с терминала, в
+# журнале стола не оставалось ни слова о том, кто и почему её снял. Торговые
+# строки выводим целиком, остальное - как раньше, с предупреждений.
+logging.basicConfig(level=logging.WARNING, format="%(message)s")
+logging.getLogger("nmnh.trading").setLevel(logging.INFO)
 
 
 def create_app(

@@ -22,6 +22,9 @@ def test_quiet_okx_stream_is_not_trusted():
     stream._ws = OpenSocket()
     stream._logged_in = asyncio.Event()
     stream._logged_in.set()
+    # Снимок позиций пришёл: без него поток не готов вовсе (test_okx_stream.py),
+    # а здесь проверяется другое - что замолчавшему потоку не верят.
+    stream._have_positions = True
 
     stream.alive_at = time.monotonic()
     assert stream.ready is True

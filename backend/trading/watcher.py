@@ -1330,7 +1330,9 @@ async def set_stop(
         client, trade, keep=fresh, market=market, fresh=trigger, spare=spare
     )
     logger.info(
-        "Стоп %s: было %s, стало %s (целей взято %d, рынок %s)",
+        # %s, а не %d: у записи, ещё не сохранённой в базу, число целей пустое,
+        # и %d ронял форматирование, как только торговые строки стали видны.
+        "Стоп %s: было %s, стало %s (целей взято %s, рынок %s)",
         trade.symbol,
         trade.current_stop,
         stop,
@@ -1339,7 +1341,7 @@ async def set_stop(
     )
     trade.sl_order_id = fresh
     logger.info(
-        "Стоп %s переставлен на %s после %d целей", trade.symbol, stop, trade.takes_hit
+        "Стоп %s переставлен на %s после %s целей", trade.symbol, stop, trade.takes_hit
     )
     return True
 

@@ -120,6 +120,9 @@ class OkxPrivateStream:
         # Когда поток последний раз подтверждал, что жив. По этому времени
         # решается, можно ли верить состоянию вместо запроса на биржу.
         self.alive_at = 0.0
+        # Пришёл ли снимок позиций в этом соединении. До него список позиций
+        # пуст не потому, что их нет, а потому, что биржа ещё не рассказала.
+        self._have_positions = False
 
     # ── состояние ───────────────────────────────────────────────────────────
 
@@ -133,10 +136,17 @@ class OkxPrivateStream:
         позиции - ни взятой цели, ни закрытия. Молчит дольше STALE_AFTER -
         потоку не верим, и позиции спрашиваются у биржи напрямую.
         """
+        # Снимок позиций - обязательно. Описание обещало его и раньше, но
+        # проверки не было: поток считался живым сразу после входа, отдавал
+        # пустой список, и сопровождение ему верило. Свежий вход по рынку не
+        # стоит в стакане, позиции «не было» - и через пять обходов запись
+        # снималась молча, без журнала, а позиция на бирже оставалась жить.
+        # Сделка пропадала с терминала после перезагрузки.
         return (
             bool(self._ws)
             and not self._ws.closed
             and self._logged_in.is_set()
+            and self._have_positions
             and time.monotonic() - self.alive_at < STALE_AFTER
         )
 
@@ -164,6 +174,7 @@ class OkxPrivateStream:
         if ping:
             ping.cancel()
         self._logged_in.clear()
+        self._have_positions = False
         if self._ws and not self._ws.closed:
             await self._ws.close()
         if self._session and not self._session.closed:
@@ -174,6 +185,7 @@ class OkxPrivateStream:
     def _down(self) -> None:
         """Соединения нет: состоянию верить нельзя, читаем биржу как раньше."""
         self._positions.clear()
+        self._have_positions = False
         self.alive_at = 0.0
         if self._on_down:
             try:
@@ -292,6 +304,8 @@ class OkxPrivateStream:
 
         if channel == "positions":
             await self._apply_positions(rows)
+            # Даже пустой список - это ответ биржи «позиций нет», а не молчание.
+            self._have_positions = True
         elif channel in ("orders", "orders-algo"):  # алго - если придёт с делового адреса
             self._ring(rows)
 
@@ -307,7 +321,14 @@ class OkxPrivateStream:
             if side not in ("long", "short"):
                 side = "long" if _f(row.get("pos")) >= 0 else "short"
             key = (name, side)
-            position = position_row(row, specs.get(name))
+            spec = specs.get(name)
+            if spec is None and _f(row.get("pos")) != 0:
+                # Справочника по инструменту нет - это не закрытие. Раньше такая
+                # строка стирала живую позицию: `position_row` без справочника
+                # отдаёт пусто, и сопровождение видело «позиции нет».
+                logger.warning("OKX: нет справочника по %s - позиция оставлена как была", name)
+                continue
+            position = position_row(row, spec)
             if position is None:
                 # Позиции больше нет - убираем, а не оставляем нулевую строку:
                 # сопровождение читает размер и приняло бы её за открытую.
