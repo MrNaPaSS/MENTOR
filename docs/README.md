@@ -11,6 +11,7 @@
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | **Отчёт о реализации** — что написано в коде, структура, запуск, все тесты |
 | [DECISIONS.md](DECISIONS.md) | **Реестр решений** — все принятые решения в одной таблице с обоснованием |
 | [audit/AUDIT.md](audit/AUDIT.md) | Аудит исходных ТЗ: находки, severity, рекомендации, статусы правок |
+| [architecture/database.md](architecture/database.md) | **База данных**: что есть сейчас, чем мешает SQLite, порядок переезда на Postgres |
 | [architecture/unified-core.md](architecture/unified-core.md) | Единая архитектура: общее ядро, модель данных, контракты, roadmap |
 | [tz/signal-bot-tz.md](tz/signal-bot-tz.md) | ТЗ NMNH Signal Bot (доработанное, v1.1) |
 | [tz/webapp-tz.md](tz/webapp-tz.md) | ТЗ NMNH Platform WebApp (доработанное, v2.1) |
