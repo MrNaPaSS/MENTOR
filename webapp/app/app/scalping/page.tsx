@@ -108,7 +108,7 @@ import Toasts, { type Toast } from "@/components/scalping/Toasts";
 import type { DragLevel } from "@/components/scalping/DragLevels";
 import type { OrderChip } from "@/components/scalping/OrderChip";
 import { draftAt, moveLevel, qtyOf, riskOf, type ManualDraft } from "@/lib/trade/manual";
-import { stopFromExchange } from "@/lib/trade/exchange";
+import { goneTakes, stopFromExchange } from "@/lib/trade/exchange";
 import { isVenueSwitch } from "@/lib/venueSwitch";
 import { createBalanceRefresher, type BalanceRefresher } from "@/lib/balanceRefresh";
 import { profileChanged } from "@/lib/profileEvent";
@@ -2575,9 +2575,7 @@ export default function ScalpingPage() {
           if (t.symbol !== symbol || t.status !== "open") return false;
           if (Date.now() - (movedRef.current.get(t.id) ?? 0) < MOVE_QUIET_MS) return false;
           const gone =
-            body.placed_takes > 0 && Array.isArray(body.take_prices)
-              ? t.targets.length - body.take_prices.length
-              : 0;
+            goneTakes(t.targets.length, body.placed_takes, body.take_prices);
           return gone > body.takes_hit;
         });
         if (lagging) nudge();
@@ -2596,9 +2594,7 @@ export default function ScalpingPage() {
         // дешевле, чем объявить цель, которой не было.
         const gaps = open.filter((t) => {
           const gone =
-            body.placed_takes > 0 && Array.isArray(body.take_prices)
-              ? t.targets.length - body.take_prices.length
-              : 0;
+            goneTakes(t.targets.length, body.placed_takes, body.take_prices);
           return gone > t.takesHit;
         });
         const standingNow = new Set<string>();
@@ -2630,9 +2626,8 @@ export default function ScalpingPage() {
             // Считаем так только когда лестница на бирже действительно была:
             // без неё «поставлено минус висит» врало и объявляло взятыми все.
             const gone =
-              body.placed_takes > 0 && Array.isArray(body.take_prices)
-                ? Math.max(0, t.targets.length - body.take_prices.length)
-                : 0;
+              // От вставших целей, а не от замысла: невставшая цель не взята.
+              goneTakes(t.targets.length, body.placed_takes, body.take_prices);
 
             // И только если дырка в лестнице держится. Перенос цели делается
             // заменой - прежняя заявка снимается, новая ставится, - и в этот

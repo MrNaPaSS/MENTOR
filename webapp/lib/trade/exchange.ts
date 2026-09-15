@@ -166,3 +166,25 @@ export function stopFromExchange(
   if (justMoved) return current;
   return fromExchange && fromExchange > 0 ? fromExchange : current;
 }
+
+/**
+ * Сколько целей ушло с биржи: исполнились или сняты.
+ *
+ * Лестница - это то, что реально встало, а не замысел. Цель, которую биржа не
+ * приняла при постановке, на бирже не стояла ни секунды, и считать её
+ * «пропавшей» значит объявить её взятой: у сделки с тремя целями в плане и
+ * двумя вставшими терминал писал «взята цель 1» сразу после входа.
+ *
+ * `placed` - сколько целей поставлено по монете, `standing` - сколько из них
+ * стоит сейчас. Лестницы не было вовсе (`placed` ноль) или биржа не назвала
+ * цены - считать нечего.
+ */
+export function goneTakes(
+  planned: number,
+  placed: number,
+  standing: readonly number[] | null | undefined,
+): number {
+  if (!(placed > 0) || !Array.isArray(standing)) return 0;
+  const ladder = Math.min(planned, placed);
+  return Math.max(0, ladder - standing.length);
+}
