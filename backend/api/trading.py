@@ -236,7 +236,9 @@ def _fail(exc: WeexTradeError) -> HTTPException:
 
     Оригинал остаётся в журнале целиком: трейдеру нужен ответ, а нам - причина.
     """
-    logger.warning("WEEX отказал: %s (код %s)", exc, exc.code)
+    # Подпись общая на все биржи: «WEEX отказал» на отказе OKX уводил разбор
+    # не на ту биржу.
+    logger.warning("Биржа отказала: %s (код %s)", exc, exc.code)
     status = 502 if exc.retryable else 400
     return HTTPException(status, explain(str(exc)))
 
@@ -1327,14 +1329,27 @@ async def close_position(
             # сокращающий ордер она на защищённой позиции отклоняет — «cannot set
             # reduce only». В боте заказчика закрытие идёт ровно так же, обычным
             # рыночным ордером в противоположную сторону.
-            order = await client.place_order(
-                symbol=symbol,
-                side="SELL" if long else "BUY",
-                position_side="LONG" if long else "SHORT",
-                quantity=_num(quantity),
-                order_type="MARKET",
-                client_order_id=body.client_order_id,
-            )
+            # Вся позиция - своей ручкой биржи, если она есть (OKX). Рыночный
+            # приказ «только сокращение» на позиции с висящими целями и стопом
+            # OKX отбивал кодом 51169, и закрыть сделку из терминала было нельзя.
+            # Часть позиции - как раньше, обычным приказом.
+            whole = max(0.0, size - quantity) < filters["min_qty"]
+            closer = getattr(client, "close_position", None)
+            if whole and callable(closer):
+                order = await closer(
+                    symbol=symbol,
+                    position_side="LONG" if long else "SHORT",
+                    client_order_id=body.client_order_id,
+                )
+            else:
+                order = await client.place_order(
+                    symbol=symbol,
+                    side="SELL" if long else "BUY",
+                    position_side="LONG" if long else "SHORT",
+                    quantity=_num(quantity),
+                    order_type="MARKET",
+                    client_order_id=body.client_order_id,
+                )
             order_id = _order_id(order)
 
             remaining = max(0.0, size - quantity)

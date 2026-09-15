@@ -1309,3 +1309,52 @@ def test_leverage_500_passes_the_field_check(app_and_exchange):
     )
     assert res.status_code == 200
     assert exchange.leverage == ("BTCUSDT", 500)
+
+
+def test_a_whole_close_goes_through_the_exchange_close_endpoint(app_and_exchange):
+    """Биржа умеет закрывать позицию своей ручкой - вся позиция уходит через неё.
+
+    На OKX рыночный приказ «только сокращение» на позиции с висящими целями и
+    стопом отбивался кодом 51169, и закрыть сделку из терминала было нельзя.
+    """
+    client, exchange, _ = app_and_exchange
+    exchange.position = {"symbol": "BTCUSDT", "total": "0.5"}
+    closed: list[dict] = []
+
+    async def close_position(**kw):
+        closed.append(kw)
+        return {"orderId": "c1"}
+
+    exchange.close_position = close_position  # type: ignore[attr-defined]
+
+    body = client.post(
+        "/api/trading/close", json={"symbol": "BTCUSDT", "side": "long", "share": 1}
+    ).json()
+
+    assert body["closed"] == 0.5
+    assert closed and closed[0]["position_side"] == "LONG"
+    assert exchange.orders == []
+
+
+def test_a_partial_close_stays_an_ordinary_order(app_and_exchange):
+    """Часть позиции ручкой закрытия не закрыть - она закрывает всё."""
+    client, exchange, _ = app_and_exchange
+    exchange.position = {"symbol": "BTCUSDT", "total": "0.5"}
+    closed: list[dict] = []
+
+    async def close_position(**kw):
+        closed.append(kw)
+        return {"orderId": "c1"}
+
+    exchange.close_position = close_position  # type: ignore[attr-defined]
+
+    client.post("/api/trading/close", json={"symbol": "BTCUSDT", "side": "long", "share": 0.5})
+
+    assert closed == []
+    assert exchange.orders and exchange.orders[-1]["order_type"] == "MARKET"
+
+
+def test_close_position_resets_the_read_memory():
+    from backend.trading.live_state import WRITES
+
+    assert "close_position" in WRITES

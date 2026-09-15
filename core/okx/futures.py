@@ -83,6 +83,7 @@ ENDPOINTS = {
     "cancel_algos": "/api/v5/trade/cancel-algos",
     "amend_algos": "/api/v5/trade/amend-algos",
     "algo_orders": "/api/v5/trade/orders-algo-pending",
+    "close_position": "/api/v5/trade/close-position",
 }
 
 # Пределы идентификаторов по правилам OKX: только буквы и цифры.
@@ -682,6 +683,63 @@ class OkxFutures:
         rows = await self._request("POST", ENDPOINTS["order"], data=data)
         first = (rows or [{}])[0] if isinstance(rows, list) and rows else {}
         return {"orderId": str(first.get("ordId") or ""), "clientOrderId": str(first.get("clOrdId") or "")}
+
+    async def close_position(
+        self,
+        *,
+        symbol: str,
+        position_side: str,
+        client_order_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Закрыть позицию целиком по рынку - своей ручкой биржи.
+
+        Обычный рыночный приказ «только сокращение» на позиции, где уже висят
+        цели и стоп, OKX отбивал кодом 51169 - «нет позиции в этом направлении
+        для сокращения»: закрыть сделку из терминала было нельзя, только в
+        приложении биржи. Ручка закрытия позиции закрывает весь объём, не
+        считаясь с висящими сокращающими заявками, а `autoCxl` снимает те, что
+        мешали бы.
+
+        Режим маржи берём у самой позиции: у OKX позиции в кросс- и
+        изолированной марже раздельные, и закрытие с чужим режимом биржа не
+        найдёт.
+        """
+        spec = await self._spec(symbol)
+        hedge = await self._hedge()
+        side = str(position_side or "").lower()
+        mode = "cross"
+        rows = await self._request(
+            "GET", ENDPOINTS["positions"], params={"instType": "SWAP", "instId": spec.inst_id}
+        )
+        for row in rows or []:
+            if not isinstance(row, dict) or _f(row.get("pos")) == 0:
+                continue
+            if hedge and str(row.get("posSide") or "").lower() != side:
+                continue
+            mode = str(row.get("mgnMode") or "cross")
+            break
+
+        data: dict[str, Any] = {"instId": spec.inst_id, "mgnMode": mode, "autoCxl": True}
+        if hedge and side in ("long", "short"):
+            data["posSide"] = side
+        mark = client_id(client_order_id)
+        if mark:
+            data["clOrdId"] = mark
+        if self.tag:
+            data["tag"] = self.tag
+        logger.info("OKX закрытие позиции %s %s (%s)", spec.inst_id, side or "net", mode)
+        await self._request("POST", ENDPOINTS["close_position"], data=data)
+
+        # Номер приказа ручка не возвращает, а итог сделки собирается по нему:
+        # без номера журнал мог бы посчитать результат раньше, чем в отчёт
+        # попадёт закрывающее исполнение. Узнаём его по нашей метке.
+        order_id = ""
+        if mark:
+            try:
+                order_id = str((await self.get_order(symbol, mark)).get("orderId") or "")
+            except WeexTradeError as exc:
+                logger.warning("Номер приказа закрытия %s не получен: %s", spec.inst_id, exc)
+        return {"orderId": order_id, "clientOrderId": mark}
 
     async def place_tp_sl(
         self,

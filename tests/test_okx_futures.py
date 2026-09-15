@@ -376,3 +376,73 @@ def test_rate_limit_is_retryable():
     with pytest.raises(WeexTradeError) as caught:
         run(client(session).positions())
     assert caught.value.retryable is True
+
+
+# ── закрытие позиции целиком ────────────────────────────────────────────────
+
+
+def _order_lookup(call):
+    """Номер приказа закрытия - по нашей метке, GET той же ручки заявок."""
+    return {"code": "0", "data": [{"ordId": "501", "clOrdId": "BTCUSDT1x1", "instId": "BTC-USDT-SWAP"}]}
+
+
+def test_closing_a_whole_position_uses_its_own_endpoint_in_hedge_mode():
+    """Рыночный приказ «только сокращение» OKX отбивал кодом 51169.
+
+    На позиции с висящими целями и стопом закрыть сделку из терминала было
+    нельзя. Ручка закрытия позиции закрывает весь объём, а режим маржи берётся
+    у самой позиции: изолированную позицию закрытие в кросс-режиме не найдёт.
+    """
+    session = FakeSession(
+        {
+            "/api/v5/account/positions": {
+                "code": "0",
+                "data": [
+                    {"instId": "BTC-USDT-SWAP", "posSide": "long", "pos": "5", "mgnMode": "cross"},
+                    {"instId": "BTC-USDT-SWAP", "posSide": "short", "pos": "3", "mgnMode": "isolated"},
+                ],
+            },
+            "/api/v5/trade/close-position": {"code": "0", "data": [{"instId": "BTC-USDT-SWAP", "posSide": "short"}]},
+            "/api/v5/trade/order": _order_lookup,
+        }
+    )
+    result = run(client(session).close_position(symbol="BTCUSDT", position_side="SHORT", client_order_id="BTCUSDT-1_x1"))
+
+    body = sent_to(session, "/api/v5/trade/close-position")["body"]
+    assert body["instId"] == "BTC-USDT-SWAP"
+    assert body["posSide"] == "short"
+    assert body["mgnMode"] == "isolated"
+    assert body["autoCxl"] is True
+    assert body["clOrdId"] == "BTCUSDT1x1"
+    assert body["tag"] == "NMNH"
+    # Номер приказа - для итога сделки в журнале.
+    assert result["orderId"] == "501"
+
+
+def test_closing_in_net_mode_has_no_position_side():
+    session = FakeSession(
+        {
+            "/api/v5/account/positions": {
+                "code": "0",
+                "data": [{"instId": "BTC-USDT-SWAP", "posSide": "net", "pos": "-30", "mgnMode": "cross"}],
+            },
+            "/api/v5/trade/close-position": {"code": "0", "data": [{"instId": "BTC-USDT-SWAP"}]},
+            "/api/v5/trade/order": _order_lookup,
+        },
+        mode="net_mode",
+    )
+    run(client(session).close_position(symbol="BTCUSDT", position_side="SHORT", client_order_id="BTCUSDT-1_x1"))
+    body = sent_to(session, "/api/v5/trade/close-position")["body"]
+    assert "posSide" not in body
+    assert body["mgnMode"] == "cross"
+
+
+def test_a_refused_close_is_an_error_not_silence():
+    session = FakeSession(
+        {
+            "/api/v5/account/positions": {"code": "0", "data": []},
+            "/api/v5/trade/close-position": {"code": "51169", "msg": "no position", "data": []},
+        }
+    )
+    with pytest.raises(WeexTradeError):
+        run(client(session).close_position(symbol="BTCUSDT", position_side="LONG"))
