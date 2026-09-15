@@ -110,6 +110,8 @@ import type { OrderChip } from "@/components/scalping/OrderChip";
 import { draftAt, moveLevel, qtyOf, riskOf, type ManualDraft } from "@/lib/trade/manual";
 import { stopFromExchange } from "@/lib/trade/exchange";
 import { isVenueSwitch } from "@/lib/venueSwitch";
+import { createBalanceRefresher, type BalanceRefresher } from "@/lib/balanceRefresh";
+import { profileChanged } from "@/lib/profileEvent";
 import Logo from "@/components/ui/Logo";
 import RadioChip from "@/components/app/RadioChip";
 import { api, API_URL } from "@/lib/api";
@@ -595,6 +597,29 @@ export default function ScalpingPage() {
   useEffect(() => {
     void loadBalance();
   }, [loadBalance]);
+
+  // Баланс после сделок.
+  //
+  // Раньше он освежался только при открытии терминала и кнопкой в профиле, и
+  // после входа и выхода окно заявки считало свободные деньги от устаревшей
+  // цифры: «больше 2 $ не пройдёт», когда деньги на счёте были. Теперь каждое
+  // событие, которое двигает деньги, просит обновление - одно на пачку, с
+  // паузой, чтобы биржа успела пересчитать маржу. Шапке говорим тем же
+  // сигналом, что и профиль: сумма в ней из того же места.
+  const balanceRefresh = useRef<BalanceRefresher | null>(null);
+  if (balanceRefresh.current === null) {
+    balanceRefresh.current = createBalanceRefresher(async () => {
+      const token = getAccessToken();
+      if (!token) return;
+      const fresh = await api.refreshBalance(token);
+      if (fresh) {
+        setBalance(fresh.balance_usdt ?? "0");
+        profileChanged();
+      }
+    });
+  }
+  useEffect(() => () => balanceRefresh.current?.cancel(), []);
+  const refreshBalanceSoon = useCallback(() => balanceRefresh.current?.request(), []);
 
   /**
    * Полный экран.
@@ -1249,6 +1274,7 @@ export default function ScalpingPage() {
       try {
         const result = await openPosition(next, true);
         if (!result) throw new Error(t.terminal.notes.orderRejected);
+        refreshBalanceSoon();
         setOrderNote({ text: t.chat.copied(base(shared.symbol)), bad: false });
       } catch (err) {
         // Та же осторожность, что и у своей заявки: биржа отказала - убираем и
@@ -1361,6 +1387,7 @@ export default function ScalpingPage() {
       setDraft(null);
       try {
         const result = await closePosition(current, share);
+        refreshBalanceSoon();
         if (result?.note) setOrderNote({ text: t.terminal.notes.exchangeNote(result.note), bad: false });
       } catch (err) {
         const text = err instanceof Error ? err.message : t.terminal.notes.closeFailed;
@@ -1381,6 +1408,7 @@ export default function ScalpingPage() {
     if (current.status !== "closed") {
       try {
         const result = await closePosition(current, share);
+        refreshBalanceSoon();
         if (result && typeof result.realized === "number") settled = result.realized;
         if (result && typeof result.fee === "number") charged = result.fee;
         setOrderNote({
@@ -1560,6 +1588,8 @@ export default function ScalpingPage() {
     setOrderNote({ text: t.terminal.notes.sendingLimit, bad: false });
     try {
       await openPosition(next, true);
+      // Лимитка держит маржу уже на бирже, до исполнения.
+      refreshBalanceSoon();
       setOrderNote({
         text: t.terminal.notes.limitPlaced(
           next.side === "long" ? t.terminal.events.long : t.terminal.events.short,
@@ -1782,6 +1812,7 @@ export default function ScalpingPage() {
       // окна и нажатием. Это отказ, а не тихий успех.
       if (!result) throw new Error(t.terminal.notes.orderRejected);
       record("order.placed", { id: next.id, warning: result.warning || undefined });
+      refreshBalanceSoon();
       const id =
         typeof result.entry === "object" && result.entry
           ? String((result.entry as Record<string, unknown>).orderId ?? "")
@@ -2255,6 +2286,8 @@ export default function ScalpingPage() {
         // поправит её настоящими числами с биржи в ближайшие секунды. Молчать
         // нельзя - если сервер до неё не дойдёт, сделка не попадёт в журнал
         // вовсе, а именно так и терялись закрытые по стопу.
+        // Позиция ушла - стопом, целью или руками на бирже: маржа вернулась.
+        refreshBalanceSoon();
         record("trade.closed", {
           id: trade.id,
           symbol: trade.symbol,
@@ -2330,6 +2363,8 @@ export default function ScalpingPage() {
           // Уведомление о входе поднимает наблюдение за состоянием сделки: оно
           // видит переход и по этой монете, и по любой другой, а опознаватель
           // события общий - второй заметивший ничего не добавит.
+          // Лимитка исполнилась - маржа перешла в позицию.
+          refreshBalanceSoon();
           record("trade.opened", {
             id: trade.id,
             symbol: trade.symbol,
