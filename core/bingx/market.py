@@ -343,7 +343,10 @@ class Instrument:
             "step": step,
             "tick": self.tick or DEFAULT_FILTERS["tick"],
             "min_qty": self.min_qty or step,
-            "max_leverage": self.max_leverage or DEFAULT_FILTERS["max_leverage"],
+            # Ноль - «биржа не сказала». В открытом справочнике BingX плеча
+            # нет вовсе, и запасные ×20 закрывали дорогу вопросу по ключу:
+            # терминал писал «макс ×20» там, где биржа пускает больше.
+            "max_leverage": self.max_leverage or 0.0,
             "taker_fee": taker_fee if taker_fee else (self.taker or DEFAULT_TAKER_FEE),
             # Потолка одной заявки и всей позиции справочник BingX не называет:
             # ноль здесь значит «биржа не сказала», а не «предела нет».

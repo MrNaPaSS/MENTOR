@@ -853,3 +853,31 @@ def test_rate_limit_is_retryable():
     with pytest.raises(WeexTradeError) as caught:
         run(client(session).positions())
     assert caught.value.retryable is True
+
+
+def test_leverage_ceiling_is_asked_by_the_key():
+    """Предел плеча - по ключу счёта, а не запасные ×20.
+
+    В открытом справочнике BingX плеча нет вовсе, и терминал писал «макс ×20»
+    по всем парам. Ручка плеча на GET отвечает наибольшим по сторонам.
+    """
+    from core.bingx import futures as bingx_futures
+
+    bingx_futures._LEVERAGE_CAPS.clear()
+    session = FakeSession(
+        {
+            "/openApi/swap/v2/trade/leverage": {
+                "code": 0,
+                "data": {"longLeverage": 10, "shortLeverage": 10, "maxLongLeverage": 150, "maxShortLeverage": 125},
+            }
+        }
+    )
+    assert run(client(session).max_leverage("BTCUSDT")) == 150
+    assert sent_to(session, "/openApi/swap/v2/trade/leverage")["method"] == "GET"
+
+
+def test_contract_without_leverage_does_not_invent_twenty():
+    """Нет поля в справочнике - ноль: «не знаем», и тогда спросят по ключу."""
+    spec = bingx_market.parse_instrument({**BTC, "maxLeverage": None, "maxLongLeverage": None})
+    assert spec is not None
+    assert spec.filters()["max_leverage"] == 0.0

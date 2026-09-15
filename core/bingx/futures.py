@@ -122,6 +122,10 @@ from core.bingx.market import _MODES, _SOURCE_SEEN
 
 logger = logging.getLogger("nmnh.bingx.futures")
 
+# Пределы плеча по ключу и паре: меняются редко, спрашивать на каждом окне незачем.
+LEVERAGE_CAP_TTL = 600.0
+_LEVERAGE_CAPS: dict[tuple[str, str], tuple[float, float]] = {}
+
 
 class BingxFutures:
     """Торговые операции одного пользователя на BingX.
@@ -397,6 +401,29 @@ class BingxFutures:
             if position is not None:
                 out.append(position)
         return out
+
+    async def max_leverage(self, symbol: str) -> float:
+        """Предел плеча пары по ключу счёта. Не узнали - ноль.
+
+        В открытом справочнике BingX плеча нет, а у пар оно разное. Та же ручка,
+        что ставит плечо, на GET отвечает текущим и наибольшим - по сторонам.
+        """
+        key = (self.creds.api_key, symbol_id(symbol))
+        cached = _LEVERAGE_CAPS.get(key)
+        if cached and time.monotonic() - cached[1] < LEVERAGE_CAP_TTL:
+            return cached[0]
+        try:
+            data = await self._request("GET", ENDPOINTS["leverage"], params={"symbol": symbol_id(symbol)})
+        except WeexTradeError as exc:
+            logger.debug("Предел плеча %s на BingX не получен: %s", symbol, exc)
+            return 0.0
+        row = data if isinstance(data, dict) else {}
+        if "maxLongLeverage" not in row and isinstance(row.get("data"), dict):
+            row = row["data"]
+        value = max(_f(row.get("maxLongLeverage")), _f(row.get("maxShortLeverage")))
+        if value > 0:
+            _LEVERAGE_CAPS[key] = (value, time.monotonic())
+        return value
 
     async def set_leverage(self, symbol: str, leverage: int, margin_coin: str = "USDT") -> Any:
         """Плечо по паре. В двустороннем режиме оно ставится каждой стороне.

@@ -647,3 +647,35 @@ def test_testnet_lives_on_its_own_address():
     run(one.positions())
     # Запрос ушёл именно туда.
     assert any(one.base_url in str(call) for call in [one.base_url])
+
+
+def test_leverage_is_read_from_the_row_of_its_own_pair():
+    """Предел плеча - из строки своей пары и по наибольшей ступени.
+
+    Бралась первая строка ответа и первая ступень в ней. Список уровней бывает
+    по всем парам сразу, и тогда у всех монет подряд стоял предел чужой первой
+    строки: терминал писал «макс ×10» там, где биржа пускает много выше.
+    """
+    session = FakeSession(
+        routes={
+            "/fapi/v1/leverageBracket": [
+                {"symbol": "ONDOUSDT", "brackets": [{"bracket": 1, "initialLeverage": 10}]},
+                {
+                    "symbol": "BTCUSDT",
+                    "brackets": [
+                        {"bracket": 2, "initialLeverage": 100},
+                        {"bracket": 1, "initialLeverage": 125},
+                    ],
+                },
+            ]
+        }
+    )
+    assert run(client(session).max_leverage("BTCUSDT")) == 125
+
+
+def test_leverage_of_a_single_pair_answer_without_a_name():
+    """Ответ по одной паре может прийти объектом без названия - он и есть наш."""
+    session = FakeSession(
+        routes={"/fapi/v1/leverageBracket": {"brackets": [{"bracket": 1, "initialLeverage": 75}]}}
+    )
+    assert run(client(session).max_leverage("ETHUSDT")) == 75

@@ -274,10 +274,23 @@ class BinanceFutures:
         except WeexTradeError as exc:
             logger.debug("Предел плеча %s на Binance не получен: %s", symbol, exc)
             return 0.0
+        wanted = symbol_id(symbol)
         rows = rows_of(data)
-        brackets = rows[0].get("brackets") if rows else None
-        first = brackets[0] if isinstance(brackets, list) and brackets else {}
-        value = _f(first.get("initialLeverage")) if isinstance(first, dict) else 0.0
+        # Строка своей монеты, а не первая попавшаяся: список уровней бывает и
+        # по всем парам сразу, и тогда первой шла чужая - с её пределом ×10 у
+        # всех монет подряд. Строка без названия - ответ по одной паре.
+        mine = [row for row in rows if str(row.get("symbol") or "").upper() in ("", wanted)]
+        brackets = mine[0].get("brackets") if mine else None
+        # Наибольшее плечо среди ступеней, а не первая по списку: порядок
+        # ступеней биржа не обещает, а предел пары - плечо самой малой позиции.
+        value = max(
+            (
+                _f(step.get("initialLeverage"))
+                for step in (brackets if isinstance(brackets, list) else [])
+                if isinstance(step, dict)
+            ),
+            default=0.0,
+        )
         if value > 0:
             _BRACKETS[key] = (value, time.monotonic())
         return value
