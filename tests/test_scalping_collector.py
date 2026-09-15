@@ -372,3 +372,74 @@ def test_a_deeper_snapshot_weighs_more():
     assert depth_weight(100) == 5
     assert depth_weight(500) == 10
     assert depth_weight(1000) == 20
+
+
+# ── бюджет и повторы снимков после обрыва потока ─────────────────────────────
+
+async def test_failed_snapshots_are_retried_spread_out():
+    """Обрыв потока ломает все книги разом - повторять их разом нельзя.
+
+    С ровной паузой полсотни монет повторяли снимки в одну секунду и снова
+    выбирали бюджет до дна: стакан стоял пустым минутами.
+    """
+    from backend.scalping.collector import RESYNC_COOLDOWN
+
+    c = make_collector(None, TICKERS)
+    symbols = [f"C{i}USDT" for i in range(12)]
+    now = time.monotonic()
+    for sym in symbols:
+        await c._resync(sym)
+    pauses = [c._cooldown[s] - now for s in symbols]
+    assert all(RESYNC_COOLDOWN - 1 <= p <= 2 * RESYNC_COOLDOWN + 1 for p in pauses)
+    assert len({round(p, 3) for p in pauses}) > 1
+
+
+async def test_failed_snapshot_waits_for_the_budget():
+    """Бюджет освободится через минуту - и повторять раньше незачем."""
+    c = make_collector(None, TICKERS)
+    c.rest.budget_free_in = lambda weight=10, background=True: 55.0  # type: ignore[attr-defined]
+    now = time.monotonic()
+    await c._resync("BTCUSDT")
+    assert c._cooldown["BTCUSDT"] - now >= 54
+
+
+def test_budget_free_in_is_zero_when_there_is_room():
+    from backend.scalping.binance import BinanceRest
+
+    rest = BinanceRest(lambda: None)  # type: ignore[arg-type]
+    assert rest.budget_free_in(10, background=True) == 0.0
+
+
+def test_budget_free_in_names_the_wait_when_exhausted():
+    from backend.scalping.binance import (
+        INTERACTIVE_RESERVE,
+        WEIGHT_BUDGET,
+        WEIGHT_WINDOW,
+        BinanceRest,
+    )
+
+    rest = BinanceRest(lambda: None)  # type: ignore[arg-type]
+    now = time.monotonic()
+    rest._spent.append((now - 10, WEIGHT_BUDGET - INTERACTIVE_RESERVE))
+    wait = rest.budget_free_in(10, background=True)
+    assert 0 < wait <= WEIGHT_WINDOW
+    assert wait == pytest.approx(WEIGHT_WINDOW - 10, abs=1)
+
+
+def test_background_refusals_are_reported_once_a_minute(caplog):
+    """Отказ бюджета больше не прячется в отладку - но и не шумит на каждый запрос."""
+    import logging
+
+    from backend.scalping.binance import INTERACTIVE_RESERVE, WEIGHT_BUDGET, BinanceRest
+
+    rest = BinanceRest(lambda: None)  # type: ignore[arg-type]
+    rest._spent.append((time.monotonic(), WEIGHT_BUDGET - INTERACTIVE_RESERVE))
+
+    async def refuse_many():
+        for _ in range(30):
+            assert await rest._reserve("/fapi/v1/depth", 10, background=True) is False
+
+    caplog.set_level(logging.WARNING)
+    asyncio.run(refuse_many())
+    lines = [r for r in caplog.records if "Бюджет запросов Binance исчерпан" in r.getMessage()]
+    assert len(lines) == 1

@@ -19,11 +19,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import time
 
 import aiohttp
 
-from backend.scalping.binance import BinanceRest, StreamClient
+from backend.scalping.binance import BinanceRest, StreamClient, depth_weight
 from backend.scalping.candles import LiveCandles
 from backend.scalping.clusters import ClusterHistory
 from backend.scalping.ladder import detect_tick
@@ -324,7 +325,18 @@ class ScalpingCollector:
                 # адрес, а бан продлевается каждой новой попыткой.
                 # Если биржа закрыта, ждём ровно до её срока: пробовать раньше
                 # бессмысленно, а каждая попытка во время бана продлевает его.
-                pause = max(RESYNC_COOLDOWN, self.rest.blocked_for)
+                # Пауза - вразброс, от одной до двух RESYNC_COOLDOWN. Обрыв потока
+                # ломает все книги в одну секунду, и с ровной паузой полсотни
+                # монет повторяли снимки тоже в одну секунду - раз за разом
+                # выбирая бюджет до дна. И не меньше, чем нужно бюджету, чтобы
+                # такой снимок в него уложился.
+                budget = getattr(self.rest, "budget_free_in", None)
+                wait = budget(depth_weight(limit), background=not pinned) if budget else 0.0
+                pause = max(
+                    RESYNC_COOLDOWN * (1 + random.random()),
+                    self.rest.blocked_for,
+                    wait,
+                )
                 self._cooldown[symbol] = time.monotonic() + pause
                 logger.warning(
                     "Снимок стакана %s не получен, следующая попытка через %.0f с",

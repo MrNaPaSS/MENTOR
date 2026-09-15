@@ -91,6 +91,9 @@ class BinanceRest:
         self._penalty = BAN_BACKOFF_MIN
         # Потраченный вес: (когда, сколько). Старше минуты выбрасывается.
         self._spent: deque[tuple[float, int]] = deque()
+        # Фоновые отказы бюджета за минуту - для одной сводной строки в журнале.
+        self._refused = 0
+        self._refused_logged = 0.0
 
     @property
     def blocked(self) -> bool:
@@ -123,14 +126,53 @@ class BinanceRest:
         spent = self._spent_weight(now)
         ceiling = WEIGHT_BUDGET - INTERACTIVE_RESERVE if background else WEIGHT_BUDGET
         if spent + weight > ceiling:
-            # Фоновый отказ - обычное дело при запуске, когда снимки берутся по
-            # всем монетам разом: сорок одинаковых строк в журнале ничего не
-            # говорят. Отказ трейдеру - повод для предупреждения.
-            log = logger.debug if background else logger.warning
-            log("Бюджет запросов исчерпан (%d из %d за минуту), %s отложен", spent, ceiling, path)
+            # Отказ трейдеру - предупреждение сразу. Фоновые отказы копятся и
+            # уходят одной строкой раз в минуту: сорок одинаковых строк ничего
+            # не говорят, а полная тишина прятала причину пустого стакана - в
+            # журнале было только «снимок не получен», и не видно почему.
+            if not background:
+                logger.warning(
+                    "Бюджет запросов исчерпан (%d из %d за минуту), %s отложен",
+                    spent,
+                    ceiling,
+                    path,
+                )
+            else:
+                self._refused += 1
+                if now - self._refused_logged >= WEIGHT_WINDOW:
+                    logger.warning(
+                        "Бюджет запросов Binance исчерпан: потрачено %d из %d за минуту, "
+                        "фоновых отказов %d",
+                        spent,
+                        ceiling,
+                        self._refused,
+                    )
+                    self._refused = 0
+                    self._refused_logged = now
             return False
         self._spent.append((now, weight))
         return True
+
+    def budget_free_in(self, weight: int = 10, background: bool = True) -> float:
+        """Через сколько секунд запрос такого веса уложится в бюджет. Ноль - уже.
+
+        Пауза «двадцать секунд на всё» при нехватке бюджета повторяла снимки
+        всей полусотни монет раньше, чем бюджет успевал освободиться: они снова
+        получали отказ и держали его исчерпанным. Ждать надо ровно столько,
+        сколько нужно окну, чтобы выпустить старые запросы.
+        """
+        now = time.monotonic()
+        spent = self._spent_weight(now)
+        ceiling = WEIGHT_BUDGET - INTERACTIVE_RESERVE if background else WEIGHT_BUDGET
+        need = spent + weight - ceiling
+        if need <= 0:
+            return 0.0
+        freed = 0
+        for at, used in self._spent:
+            freed += used
+            if freed >= need:
+                return max(0.0, at + WEIGHT_WINDOW - now)
+        return WEIGHT_WINDOW
 
     async def _get(
         self,
@@ -341,6 +383,7 @@ class StreamClient:
         async with self._session.ws_connect(url, heartbeat=30, max_msg_size=0) as ws:
             self._ws = ws
             self._connected.set()
+            opened = time.monotonic()
             logger.info("Поток Binance подключён, потоков: %d", len(initial))
 
             # Пока сокет поднимался, набор мог измениться — досылаем разницу.
@@ -357,10 +400,15 @@ class StreamClient:
             # цепочку обновлений у всех книг разом, и все они идут за снимком:
             # без причины в журнале не отличить штатный обрыв биржи от нашей
             # собственной ошибки.
+            # Сколько прожил и сколько вёз: частые обрывы короткоживущего
+            # соединения с сотней потоков и штатный суточный обрыв выглядят в
+            # журнале одинаково, а лечатся по-разному.
             logger.warning(
-                "Поток Binance закрыт: код %s, %s",
+                "Поток Binance закрыт: код %s, %s (жил %.0f с, потоков %d)",
                 ws.close_code,
                 ws.exception() or "без ошибки",
+                time.monotonic() - opened,
+                len(initial),
             )
         self._ws = None
 
