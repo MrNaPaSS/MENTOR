@@ -60,6 +60,20 @@ def _thread_topic(session, thread_id: int | None) -> int | None:
     ).scalar_one_or_none()
 
 
+def _shot_row(session, url: str) -> ChartShot | None:
+    """Запись о снимке по адресу из приложения к сообщению.
+
+    Идентификатор берём хвостом адреса: его собирает сам сервер снимков, и
+    ничего, кроме имени файла, там не бывает. Пусто - записи нет: так приходят
+    фотографии из форума, их у нас никто не заводил.
+    """
+    tail = (url or "").rstrip("/").rsplit("/", 1)[-1]
+    shot_id = tail.split(".", 1)[0].removesuffix("-raw")
+    if not shot_id or session is None:
+        return None
+    return session.get(ChartShot, shot_id)
+
+
 def _shot_symbol(session, url: str) -> str:
     """Монета снимка - по его же записи.
 
@@ -67,16 +81,22 @@ def _shot_symbol(session, url: str) -> str:
     картинке нарисовано, знает только запись о ней. Без монеты под сообщением
     в форуме не появлялась бы кнопка - и выложенный график оставался бы
     картинкой, из которой некуда идти.
-
-    Идентификатор берём хвостом адреса: его собирает сам сервер снимков, и
-    ничего, кроме имени файла, там не бывает.
     """
-    tail = (url or "").rstrip("/").rsplit("/", 1)[-1]
-    shot_id = tail.split(".", 1)[0].removesuffix("-raw")
-    if not shot_id:
-        return ""
-    row = session.get(ChartShot, shot_id)
+    row = _shot_row(session, url)
     return str(row.symbol) if row is not None else ""
+
+
+def _attached_picture(session, attach: dict | None) -> bool:
+    """Картинка, прикреплённая к разговору, а не снятая с графика.
+
+    Различает их запись о снимке: терминал кладёт снимок графика, а скрепка в
+    чате - фотографию (`kind` = `photo`). Для сообщения они выглядят одинаково,
+    и без записи отличить одно от другого нечем.
+    """
+    if not isinstance(attach, dict) or attach.get("kind") != "shot":
+        return False
+    row = _shot_row(session, str(attach.get("url", "")))
+    return row is not None and str(row.kind) == "photo"
 
 
 def _picture(attach: dict | None) -> str:
@@ -132,6 +152,16 @@ def _to_forum(request: Request, message: ChatMessage, author: Student, session) 
     # Слова, сказанные вместе с картинкой, уходят с ней: это подпись к
     # показанному, а не отдельная реплика.
     if not _shown(attach) and not message.signal_id:
+        return
+
+    # Картинка со скрепки остаётся на сайте. Снимок графика выкладывают
+    # нарочно - это показанное; картинку же прикрепляют по ходу разговора -
+    # скриншот настройки, фотография экрана, кусок переписки, - и в теме она
+    # оказывается без разговора, ради которого её показали.
+    #
+    # Вместе со словами, сказанными при ней: они подпись к картинке, и в форуме
+    # без неё читались бы как реплика ни о чём.
+    if _attached_picture(session, attach) and not message.signal_id:
         return
 
     who = _who(author)

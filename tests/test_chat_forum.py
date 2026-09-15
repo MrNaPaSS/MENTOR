@@ -431,6 +431,53 @@ def test_signal_goes_even_without_a_card():
     assert len(forum.jobs) == 1
 
 
+def test_attached_picture_stays_on_the_site(client):
+    """Картинка, прикреплённая в чате, в форум не уходит.
+
+    Снимок графика человек выкладывает нарочно - это показанное. Картинку же
+    прикрепляют по ходу разговора: скриншот настройки, фотография экрана,
+    кусок переписки, - и в теме форума она оказывается без разговора, ради
+    которого её показали.
+    """
+    with SessionLocal() as session:
+        session.add(ChartShot(id="pho00001", symbol="CHAT", interval="", kind="photo"))
+        session.commit()
+
+        forum = _Forum()
+        attach = json.dumps(
+            {"kind": "shot", "url": "https://s.nmnh.trade/pho00001",
+             "image": "https://s.nmnh.trade/pho00001.png"}
+        )
+        _to_forum(
+            _request(forum),
+            _said("посмотри", attach),
+            Student(id=1, tg_id=42, username="trader"),
+            session,
+        )
+        assert forum.jobs == []
+
+
+def test_terminal_shot_still_goes_to_the_forum(client):
+    """Снимок графика с терминала уходит как прежде: его показывают нарочно."""
+    with SessionLocal() as session:
+        session.add(ChartShot(id="shot0001", symbol="ETHUSDT", interval="5m"))
+        session.commit()
+
+        forum = _Forum()
+        attach = json.dumps(
+            {"kind": "shot", "url": "https://s.nmnh.trade/shot0001",
+             "image": "https://s.nmnh.trade/shot0001.png"}
+        )
+        _to_forum(
+            _request(forum),
+            _said("вот структура", attach),
+            Student(id=1, tg_id=42, username="trader"),
+            session,
+        )
+        assert len(forum.jobs) == 1
+        assert forum.jobs[0]["symbol"] == "ETHUSDT"
+
+
 def test_shot_button_takes_the_coin_from_the_record(client):
     """Монету под снимком берём из записи о нём: в приложении её нет."""
     with SessionLocal() as session:

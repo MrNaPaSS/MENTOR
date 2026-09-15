@@ -237,7 +237,10 @@ export async function uploadPhoto(file: File, symbol: string): Promise<ChatAttac
 
   const body = await authReq<{ id: string; url: string }>("/api/shots", token, {
     method: "POST",
-    body: JSON.stringify({ image: png, symbol: symbol || "CHAT", interval: "" }),
+    // `photo`, а не снимок графика: по этому виду сервер решает, что картинку
+    // не надо пересылать в тему форума. Для сообщения они одинаковы, и
+    // различить их можно только здесь, где известно, откуда картинка взялась.
+    body: JSON.stringify({ image: png, symbol: symbol || "CHAT", interval: "", kind: "photo" }),
   });
   if (!body) return null;
 

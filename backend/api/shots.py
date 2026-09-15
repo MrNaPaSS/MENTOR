@@ -93,12 +93,18 @@ JPEG_MAGIC = bytes([0xFF, 0xD8, 0xFF])
 
 
 class ShotIn(BaseModel):
-    """Снимок с терминала: картинка и то, что должно попасть в подпись."""
+    """Снимок с терминала: картинка и то, что должно попасть в подпись.
+
+    `kind` отделяет снимок графика от картинки, прикреплённой в чате скрепкой:
+    выглядят они одинаково, а живут по-разному - снимок уходит в форум, а
+    картинка остаётся на сайте (`backend/api/chat.py`).
+    """
 
     image: str = Field(min_length=64)
     symbol: str = Field(min_length=1, max_length=32)
     interval: str = Field(default="1m", max_length=8)
     note: str = Field(default="", max_length=140)
+    kind: str = Field(default="chart", pattern="^(chart|photo)$")
 
 
 @api_router.post("", status_code=201)
@@ -123,6 +129,7 @@ def save_shot(
             symbol=body.symbol.upper(),
             interval=body.interval,
             note=body.note.strip(),
+            kind=body.kind,
         )
     )
     session.commit()
