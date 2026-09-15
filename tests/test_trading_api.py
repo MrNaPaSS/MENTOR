@@ -1358,3 +1358,49 @@ def test_close_position_resets_the_read_memory():
     from backend.trading.live_state import WRITES
 
     assert "close_position" in WRITES
+
+
+def _binance_account(monkeypatch, signed):
+    """Подключённый счёт Binance: открытый справочник плеча не называет."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        trading_api, "active_account", lambda *_a: SimpleNamespace(exchange="binance", is_active=True)
+    )
+
+    async def public(session, symbol):
+        return {"step": 0.001, "tick": 0.1, "min_qty": 0.001, "max_leverage": 0.0}
+
+    monkeypatch.setattr(trading_api, "binance_public_filters", public)
+    monkeypatch.setattr(trading_api, "_client", lambda _row: signed)
+
+
+def test_binance_limits_show_the_leverage_of_the_account(app_and_exchange, monkeypatch):
+    """Предел плеча Binance - по ключу ученика, а не запасные ×20.
+
+    В открытом справочнике Binance плеча нет: оно приходит только подписанной
+    ручкой уровней. Терминал писал «максимум ×20», а биржа по BTC пускала ×150.
+    """
+    client, _, _ = app_and_exchange
+
+    class Signed:
+        async def max_leverage(self, symbol):
+            assert symbol == "BTCUSDT"
+            return 150.0
+
+    _binance_account(monkeypatch, Signed())
+    body = client.get("/api/trading/limits/btcusdt").json()
+    assert body["max_leverage"] == 150
+
+
+def test_limits_survive_a_silent_exchange(app_and_exchange, monkeypatch):
+    """Биржа не ответила по ключу - окно расчёта не ломается, предел прежний."""
+    client, _, _ = app_and_exchange
+
+    class Broken:
+        async def max_leverage(self, symbol):
+            raise RuntimeError("сеть")
+
+    _binance_account(monkeypatch, Broken())
+    body = client.get("/api/trading/limits/btcusdt").json()
+    assert body["max_leverage"] == 20

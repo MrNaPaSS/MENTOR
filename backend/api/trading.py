@@ -566,6 +566,26 @@ def _trigger_price(order: dict[str, Any]) -> float | None:
     return None
 
 
+async def _account_leverage(row, symbol: str) -> float:
+    """Предел плеча по ключу ученика - когда открытый справочник его не назвал.
+
+    Binance в открытом справочнике плеча не даёт вовсе: оно приходит только
+    подписанной ручкой уровней. Терминал показывал запасные ×20, хотя биржа по
+    BTC пускает до ×150. Нет ключа или биржа не ответила - ноль, и остаётся
+    прежний запасной предел.
+    """
+    if row is None or not row.is_active or not keystore.enabled():
+        return 0.0
+    try:
+        ask = getattr(_client(row), "max_leverage", None)
+        if ask is None:
+            return 0.0
+        return float(await ask(symbol) or 0.0)
+    except Exception as exc:  # noqa: BLE001 - предел не повод ломать окно расчёта
+        logger.debug("Предел плеча %s по ключу не получен: %s", symbol, exc)
+        return 0.0
+
+
 @router.get("/limits/{symbol}")
 async def limits(
     symbol: str,
@@ -593,6 +613,10 @@ async def limits(
     }
     source = by_exchange.get(row.exchange if row is not None else "", public_filters)
     filters = await source(await _get_session(), symbol.upper())
+    if not filters.get("max_leverage"):
+        cap = await _account_leverage(row, symbol.upper())
+        if cap > 0:
+            filters = {**filters, "max_leverage": cap}
     return {
         "symbol": symbol.upper(),
         "max_leverage": int(filters.get("max_leverage") or 20),
