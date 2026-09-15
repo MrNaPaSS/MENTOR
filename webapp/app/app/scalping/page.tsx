@@ -108,6 +108,7 @@ import Toasts, { type Toast } from "@/components/scalping/Toasts";
 import type { DragLevel } from "@/components/scalping/DragLevels";
 import type { OrderChip } from "@/components/scalping/OrderChip";
 import { draftAt, moveLevel, qtyOf, riskOf, type ManualDraft } from "@/lib/trade/manual";
+import { stopFromExchange } from "@/lib/trade/exchange";
 import Logo from "@/components/ui/Logo";
 import RadioChip from "@/components/app/RadioChip";
 import { api, API_URL } from "@/lib/api";
@@ -1647,6 +1648,8 @@ export default function ScalpingPage() {
     // исполнение. Отметку ставим до запроса и обновляем после ответа: круг
     // опроса мог уйти ещё до переноса, а вернуться уже после.
     movedRef.current.set(trade.id, Date.now());
+    // Перенос входа везёт стоп с собой - значит и он сейчас переезжает.
+    if (kind !== "take") stopMovedRef.current.set(trade.id, Date.now());
     record("level.move", { id: trade.id, kind, index, from: was, to: price });
     try {
       const body = await moveLevels({
@@ -1670,6 +1673,7 @@ export default function ScalpingPage() {
       });
       if (!body) throw new Error(t.terminal.notes.serverSilent);
       movedRef.current.set(trade.id, Date.now());
+      if (kind !== "take") stopMovedRef.current.set(trade.id, Date.now());
       record("level.moved", { id: trade.id, kind, entry: body.entry, stop: body.stop, takes: body.takes });
       if (kind === "take" && !body.planned) {
         applyTakes(trade, index, price, body.takes);
@@ -2035,6 +2039,10 @@ export default function ScalpingPage() {
   const buriedRef = useRef(new Map<string, number>());
   const goneRef = useRef(new Map<string, number>());
   const movedRef = useRef(new Map<string, number>());
+  // Когда этой сделке в последний раз двигали стоп. Отдельно от общего
+  // следа: перенос цели не повод не показывать стоп, который в это время
+  // переставило сопровождение.
+  const stopMovedRef = useRef(new Map<string, number>());
   // Цена монеты для записи о закрытии: по открытой - из стакана, по остальным -
   // из списка. Сделок несколько и монет у них несколько, а стакан всегда один.
   const screenerRef = useRef<ScreenerRow[]>([]);
@@ -2604,7 +2612,14 @@ export default function ScalpingPage() {
               t.targets.length,
               Math.max(t.takesHit, body.takes_hit, standing),
             );
-            const stop = at && at > 0 ? at : t.stop;
+            // Стоп с биржи - но не сразу после своего переноса: там ещё
+            // висит прежняя заявка, и линия возвращалась на старое место, а
+            // через пару секунд уезжала на новое.
+            const stop = stopFromExchange(
+              at,
+              t.stop,
+              Date.now() - (stopMovedRef.current.get(t.id) ?? 0) < MOVE_QUIET_MS,
+            );
 
             // Цены целей - тоже с биржи, а не по замыслу.
             //

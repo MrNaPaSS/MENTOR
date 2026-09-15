@@ -144,3 +144,25 @@ export function readBook(rows: Record<string, unknown>[]): PositionBook {
 
   return { byKey, total, rowsOf };
 }
+
+/**
+ * Где показывать стоп: цена биржи или та, что уже нарисована.
+ *
+ * Перенос стопа делается заменой заявки: прежняя снимается, новая ставится, и
+ * пока запрос в пути, список заявок на бирже ещё показывает прежнюю цену.
+ * Круг опроса, попавший в это окно, возвращал линию на старое место, а через
+ * пару секунд ответ сервера уводил её на новое - стоп «прыгал» у трейдера на
+ * глазах, и было непонятно, переехал он или нет.
+ *
+ * Поэтому сразу после своего переноса цену с биржи не берём: правду о нём
+ * знает ответ на сам перенос, и он её уже нарисовал. То же самое давно сделано
+ * для целей.
+ */
+export function stopFromExchange(
+  fromExchange: number | null | undefined,
+  current: number,
+  justMoved: boolean,
+): number {
+  if (justMoved) return current;
+  return fromExchange && fromExchange > 0 ? fromExchange : current;
+}
