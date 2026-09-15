@@ -102,6 +102,27 @@ class OkxPublicRest:
         )
         return [row for row in rows if isinstance(row, list)]
 
+    async def history_trades(
+        self, inst: str, after: str | int | None = None, by_time: bool = False, limit: int = 100
+    ) -> list[dict]:
+        """Сделки от новых к старым - раньше `after`.
+
+        `by_time` - `after` это время в миллисекундах, иначе номер сделки. По
+        времени удобно встать сразу в конец нужной свечи, а дальше идти номерами:
+        в одну миллисекунду попадает десяток сделок, и шаг по времени терял бы
+        их на каждой границе страниц.
+        """
+        rows = await self._get(
+            "/api/v5/market/history-trades",
+            {
+                "instId": inst,
+                "type": "2" if by_time else "1",
+                "after": after,
+                "limit": min(limit, 100),
+            },
+        )
+        return [row for row in rows if isinstance(row, dict)]
+
 
 class OkxStreamClient:
     """Одно публичное соединение и подписки поверх него.

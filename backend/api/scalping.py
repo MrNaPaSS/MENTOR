@@ -608,9 +608,14 @@ async def footprint(
             )
             return _foot_payload(sym, interval, shot, source="tape", exchange=venue)
 
-    # Своей ленты не хватило. Добрать сделки по REST мы умеем только у
-    # Binance: подставить её сделки под книгу другой биржи нельзя - это разные
-    # цены и разные объёмы, и профиль вышел бы чужим.
+    # Своей ленты не хватило. Сделки Binance под книгу другой биржи не
+    # подставить - это разные цены и разные объёмы, и профиль вышел бы чужим.
+    # Поэтому у OKX добираем её собственные сделки, а у остальных бирж честно
+    # отдаём пустую свечу до следующей, которую лента застанет целиком.
+    if venue == OKX_VENUE:
+        payload = await _okx_footprint(request, state, sym, interval, start, end, now)
+        if payload is not None:
+            return payload
     if venue != PRIMARY:
         shot = build_footprint({}, time=start, seconds=seconds, tick=0.0, partial=True)
         return _foot_payload(sym, interval, shot, source="tape", exchange=venue)
@@ -659,6 +664,84 @@ async def footprint(
     cells = collect(trades, tick)
     shot = build_footprint(cells, time=start, seconds=seconds, tick=tick, partial=partial)
     payload = _foot_payload(sym, interval, shot, source="exchange")
+    _foot_remember(key, payload)
+    return payload
+
+
+OKX_VENUE = "okx"
+# Страниц сделок OKX на одну свечу: по сотне в каждой. Предел открытой ручки -
+# двадцать запросов за две секунды, и одна свеча не должна выбирать его весь.
+_OKX_FOOT_PAGES = 8
+_OKX_PAGE = 100
+
+
+async def _load_okx_trades(
+    rest, spec, start_ms: int, end_ms: int
+) -> tuple[list[tuple[float, float, bool]], bool]:
+    """Сделки OKX за окно свечи: список и признак «окно неполно».
+
+    Первая страница - по времени конца свечи, чтобы не листать от сегодняшних
+    сделок к вчерашним. Дальше - по номеру самой старой сделки страницы.
+    Объём у OKX в контрактах; переводим в монеты, как это делает живая лента.
+    """
+    out: list[tuple[float, float, bool]] = []
+    after: str | int = end_ms
+    by_time = True
+    for _ in range(_OKX_FOOT_PAGES):
+        batch = await rest.history_trades(spec.inst_id, after=after, by_time=by_time)
+        if not batch:
+            return out, False
+        oldest = ""
+        done = False
+        for row in batch:
+            try:
+                ts = int(row["ts"])
+                oldest = str(row["tradeId"])
+                if ts >= end_ms:
+                    continue
+                if ts < start_ms:
+                    done = True
+                    continue
+                qty = spec.to_coins(float(row["sz"]))
+                # Сторона у OKX - сторона тейкера: buy - по рынку покупали.
+                out.append((float(row["px"]), qty, str(row.get("side") or "").lower() == "buy"))
+            except (KeyError, TypeError, ValueError):
+                continue
+        if done or len(batch) < _OKX_PAGE or not oldest:
+            return out, False
+        after, by_time = oldest, False
+    return out, True
+
+
+async def _okx_footprint(
+    request: Request, state, sym: str, interval: str, start: int, end: int, now: int
+) -> dict[str, Any] | None:
+    """Профиль свечи OKX её собственными сделками. `None` - добрать нечем."""
+    collector = get_market(request).collector(OKX_VENUE)
+    rest = getattr(collector, "rest", None)
+    if collector is None or rest is None or not hasattr(rest, "history_trades"):
+        return None
+
+    key = f"{OKX_VENUE}:{sym}:{interval}:{start}"
+    cached = _foot_cache.get(key)
+    ttl = _FOOT_LIVE_TTL if end > now else _FOOT_DONE_TTL
+    if cached and time.monotonic() - cached[0] < ttl:
+        _foot_cache.move_to_end(key)
+        return cached[1]
+
+    specs = await collector.specs()
+    spec = (specs or {}).get(inst_id(sym))
+    if spec is None:
+        return None
+
+    trades, partial = await _load_okx_trades(rest, spec, start * 1000, end * 1000)
+    seconds = FOOTPRINT_INTERVALS[interval]
+    tick = detect_tick(state.book) if state else 0.0
+    if tick <= 0:
+        tick = spec.tick_sz or (guess_tick([p for p, _, _ in trades]) if trades else 0.0)
+    cells = collect(trades, tick) if trades else {}
+    shot = build_footprint(cells, time=start, seconds=seconds, tick=tick, partial=partial)
+    payload = _foot_payload(sym, interval, shot, source="exchange", exchange=OKX_VENUE)
     _foot_remember(key, payload)
     return payload
 

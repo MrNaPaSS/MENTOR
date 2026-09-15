@@ -352,3 +352,113 @@ def test_live_footprint_gives_up_on_a_candle_the_tape_missed():
     state.clusters.add((start + 30) * 1000, 100.0, 1.0, True)
 
     assert _live_foot(state, "1m", start) is None
+
+
+# ── OKX: свеча своими сделками биржи ─────────────────────────────────────────
+
+from core.okx.futures import Instrument  # noqa: E402
+
+
+class StubOkxRest:
+    """Открытая ручка сделок OKX: страницы от новых к старым."""
+
+    def __init__(self, pages: list[list[dict]]):
+        self.pages = list(pages)
+        self.calls: list[tuple] = []
+
+    async def history_trades(self, inst, after=None, by_time=False, limit=100):
+        self.calls.append((inst, after, by_time))
+        return self.pages.pop(0) if self.pages else []
+
+
+class StubOkxCollector:
+    def __init__(self, rest: StubOkxRest, tick: float = 0.0001, ct_val: float = 100.0):
+        self.rest = rest
+        self.state = MarketState()
+        self.state.ensure("XRPUSDT")
+        self._spec = Instrument(
+            inst_id="XRP-USDT-SWAP", ct_val=ct_val, lot_sz=0.01, min_sz=0.01,
+            tick_sz=tick, max_leverage=50, max_limit_sz=1e6,
+        )
+
+    async def specs(self):
+        return {self._spec.inst_id: self._spec}
+
+
+def okx_trade(price: float, contracts: float, ts_ms: int, side: str, trade_id: int) -> dict:
+    return {"px": str(price), "sz": str(contracts), "ts": str(ts_ms), "side": side, "tradeId": str(trade_id)}
+
+
+def make_okx_app(rest: StubOkxRest):
+    from backend.scalping.market_hub import MarketHub
+
+    app, primary = make_app(StubRest())
+    hub = MarketHub(primary)
+    okx = StubOkxCollector(rest)
+    hub._collectors["okx"] = okx
+    app.state.market_hub = hub
+    return app
+
+
+def test_okx_candle_is_built_from_okx_trades_when_the_tape_came_too_late():
+    """Монету открыли посреди свечи - профиль берётся сделками самой OKX.
+
+    Раньше для OKX добирать было нечем, и до начала следующей свечи профиль
+    приходил пустым: на минутах - до минуты ожидания, на десяти - до десяти.
+    """
+    start = (int(time.time()) // 60) * 60 - 120  # закрытая свеча
+    end_ms = (start + 60) * 1000
+    page = [
+        okx_trade(1.2830, 1.0, end_ms + 50, "buy", 30),      # следующая свеча - мимо
+        okx_trade(1.2821, 2.0, start * 1000 + 900, "buy", 29),
+        okx_trade(1.2820, 3.0, start * 1000 + 100, "sell", 28),
+        okx_trade(1.2800, 5.0, start * 1000 - 10, "sell", 27),  # прошлая свеча - конец
+    ]
+    rest = StubOkxRest([page])
+    app = make_okx_app(rest)
+
+    with TestClient(app) as client:
+        body = client.get(
+            "/api/scalping/footprint/xrpusdt",
+            params={"interval": "1m", "time": start, "exchange": "okx"},
+        ).json()
+
+    assert body["exchange"] == "okx"
+    assert body["source"] == "exchange"
+    # Контракты переведены в монеты (ctVal 100) и посчитаны в деньгах.
+    assert body["buy"] == pytest.approx(1.2821 * 200)
+    assert body["sell"] == pytest.approx(1.2820 * 300)
+    # Первая страница - по времени конца свечи, чтобы не листать от сегодняшних.
+    assert rest.calls[0] == ("XRP-USDT-SWAP", end_ms, True)
+
+
+def test_okx_next_page_goes_by_trade_number():
+    """Дальше - номерами сделок: шаг по времени терял бы их на границах."""
+    start = (int(time.time()) // 60) * 60 - 120
+    first = [okx_trade(1.28, 1.0, start * 1000 + 50_000 - i, "buy", 1000 - i) for i in range(100)]
+    second = [okx_trade(1.28, 1.0, start * 1000 - 5, "sell", 800)]
+    rest = StubOkxRest([first, second])
+    app = make_okx_app(rest)
+
+    with TestClient(app) as client:
+        client.get(
+            "/api/scalping/footprint/xrpusdt",
+            params={"interval": "1m", "time": start, "exchange": "okx"},
+        )
+
+    assert rest.calls[1] == ("XRP-USDT-SWAP", "901", False)
+
+
+def test_okx_closed_candle_is_asked_once():
+    start = (int(time.time()) // 60) * 60 - 120
+    rest = StubOkxRest([[okx_trade(1.28, 1.0, start * 1000 + 10, "buy", 5)]])
+    app = make_okx_app(rest)
+
+    with TestClient(app) as client:
+        for _ in range(3):
+            client.get(
+                "/api/scalping/footprint/xrpusdt",
+                params={"interval": "1m", "time": start, "exchange": "okx"},
+            )
+
+    assert len(rest.calls) == 1
