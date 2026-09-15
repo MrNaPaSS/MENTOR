@@ -13,7 +13,8 @@
 // Сообщения, присутствие и история живут на сервере; здесь только показ и
 // отправка. Склад с живым каналом - в lib/chat/store.
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { isNearBottom } from "@/lib/chat/stickToBottom";
 import {
   Send,
   Crown,
@@ -464,9 +465,46 @@ export default function ChatRoom({
     };
   }, []);
 
+  // Лента держится у последнего сообщения, пока человек сам не ушёл вверх.
+  //
+  // Раньше при каждом обновлении шла плавная прокрутка к концу. При открытии
+  // панели она стартовала до того, как догрузились картинки и обложки ссылок:
+  // лента росла уже после прокрутки, и чат открывался посередине разговора.
+  // Теперь низ ставится сразу, а рост содержимого ленту за собой не уводит.
+  const feedRef = useRef<HTMLDivElement>(null);
+  const stackRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+  const lastSeenRef = useRef(0);
+
+  function pinBottom() {
+    const feed = feedRef.current;
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }
+
+  function onFeedScroll() {
+    const feed = feedRef.current;
+    if (feed) stickRef.current = isNearBottom(feed.scrollHeight, feed.scrollTop, feed.clientHeight);
+  }
+
+  useLayoutEffect(() => {
+    const last = state.messages[state.messages.length - 1];
+    // Своё отправленное сообщение опускает ленту вниз, даже если листали вверх:
+    // человек должен видеть, что оно ушло.
+    const mine = !!last && last.id !== lastSeenRef.current && state.me?.id === last.author.id;
+    lastSeenRef.current = last?.id ?? 0;
+    if (mine) stickRef.current = true;
+    if (stickRef.current) pinBottom();
+  }, [state.messages, state.me?.id]);
+
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [state.messages]);
+    const stack = stackRef.current;
+    if (!stack || typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(() => {
+      if (stickRef.current) pinBottom();
+    });
+    watch.observe(stack);
+    return () => watch.disconnect();
+  }, []);
 
   /**
    * Показать оригинал цитаты.
@@ -678,11 +716,11 @@ export default function ChatRoom({
         </div>
       )}
 
-      <div className={skin.feed}>
+      <div ref={feedRef} onScroll={onFeedScroll} className={skin.feed}>
         {/* Отступ сверху берёт на себя mt-auto: пока сообщений мало, они стоят
             у самого поля ввода. Разговор читают снизу вверх, и начинать его в
             середине пустого поля незачем. */}
-        <div className={skin.stack}>
+        <div ref={stackRef} className={skin.stack}>
         {state.more && (
           <button
             onClick={() => void older()}
