@@ -953,6 +953,7 @@ async def _ensure_leverage(client, symbol: str, leverage: int) -> None:
 @router.post("/open")
 async def open_position(
     body: OrderIn,
+    request: Request,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
@@ -970,158 +971,162 @@ async def open_position(
     long = body.side == "long"
     position_side = "LONG" if long else "SHORT"
 
-    # Объём и цены приводим к шагам инструмента до отправки. Биржа отклоняет
-    # ордер, если объём не кратен шагу лота: «order size must match stepSize».
-    filters = await client.symbol_filters(symbol)
-    # Биржа не отдала шаги инструмента - в ответе справочные. По ним цена
-    # округляется до сотой, и стоп на монете дешевле цента уезжал на десятки
-    # процентов или становился нулём. Вход по угаданным шагам не отправляем.
-    if filters.get("guessed"):
-        raise HTTPException(
-            503, "Биржа не отдала шаги инструмента - вход не отправлен. Попробуйте через минуту."
-        )
-    quantity = floor_to_step(body.quantity, filters["step"])
-    if quantity < filters["min_qty"]:
-        raise HTTPException(
-            422,
-            f"Объём {body.quantity:g} меньше минимального на бирже "
-            f"({filters['min_qty']:g} {symbol[:-4]}). Увеличьте сумму или плечо.",
-        )
-    entry_price = round_to_tick(body.entry, filters["tick"]) if body.entry else None
-    stop_price = round_to_tick(body.stop, filters["tick"])
-
-    # Предел позиции на этом плече, если биржа его уже называла. Проверяем до
-    # отправки: отказ «position exceed max size» после нажатия - это заявка,
-    # которую трейдер уже считал поставленной.
-    cap = leverage_caps.cap_at(leverage_caps.caps_for(session, symbol), body.leverage)
-    if cap is not None:
-        used = await _exposure(client, symbol)
-        if used is not None:
-            note = leverage_caps.room_note(
-                quantity=quantity, cap=cap, used=used, leverage=body.leverage,
-                coin=symbol[:-4] or symbol, step=filters["step"],
-            )
-            if note:
-                raise HTTPException(422, note)
-
-    # Вход и цели — два разных шага с разной ценой ошибки.
-    #
-    # Сорвался вход — не открылось ничего, и об этом надо сказать отказом.
-    # Сорвались цели при уже открытой позиции — сделка есть, и объявлять её
-    # неудачей нельзя: трейдер решит, что позиции нет, а она стоит на бирже.
-    try:
-        await _ensure_leverage(client, symbol, body.leverage)
-    except WeexTradeError as exc:
-        raise _fail(exc) from exc
-
-    try:
-        entry_order = await client.place_order(
-            symbol=symbol,
-            side="BUY" if long else "SELL",
-            position_side=position_side,
-            quantity=_num(quantity),
-            order_type="LIMIT" if entry_price else "MARKET",
-            price=_num(entry_price) if entry_price else None,
-            sl_trigger=_num(stop_price),
-            client_order_id=body.client_order_id,
-        )
-    except WeexTradeError as exc:
-        # Отказ по пределу называет точное число - запоминаем его, и терминал
-        # всех учеников ограничит сумму заранее.
-        found = max_size_in(str(exc))
-        if found:
-            leverage_caps.learn(session, symbol, found[1], found[0])
-        if exc.retryable and body.client_order_id:
-            # Биржа не ответила - это не отказ, а неизвестность: заявка могла
-            # встать и даже исполниться. Раньше записи для сопровождения не
-            # было, и исполнившийся вход оставался позицией, которую никто не
-            # ведёт (а у Binance - ещё и без стопа: он ставится вторым
-            # запросом). Теперь сделка встаёт под наблюдение как ждущая:
-            # появится позиция - сопровождение поставит стоп и цели само; нет
-            # ни заявки, ни позиции - снимет запись через несколько обходов.
-            _remember_live(
-                session,
-                student,
-                body,
-                symbol,
-                client,
-                entry_price=entry_price,
-                stop_price=stop_price,
-                quantity=quantity,
-                placed=[],
-            )
-            logger.warning(
-                "Вход %s (%s) без ответа биржи - взят под наблюдение: %s",
-                symbol,
-                body.client_order_id,
-                exc,
-            )
+    # Вход и стоп ставятся под замком счёта: тем же, под которым идёт обход
+    # сопровождения. Иначе оно в те же секунды двигает защиту соседней
+    # сделки на этой же позиции, и заявки двух переносов снимают друг друга.
+    async with account_lock(request, student.id, _exchange_of(client)):
+        # Объём и цены приводим к шагам инструмента до отправки. Биржа отклоняет
+        # ордер, если объём не кратен шагу лота: «order size must match stepSize».
+        filters = await client.symbol_filters(symbol)
+        # Биржа не отдала шаги инструмента - в ответе справочные. По ним цена
+        # округляется до сотой, и стоп на монете дешевле цента уезжал на десятки
+        # процентов или становился нулём. Вход по угаданным шагам не отправляем.
+        if filters.get("guessed"):
             raise HTTPException(
-                502,
-                "Биржа не ответила вовремя - неизвестно, встала ли заявка. Сделка "
-                "взята под наблюдение: если вход исполнился, сервер сам поставит "
-                "стоп и цели. Не нажимайте «Войти» ещё раз, пока не проверите позиции.",
-            ) from exc
-        raise _fail(exc) from exc
-
-    # Цели ставятся только когда позиция уже есть.
-    #
-    # Сокращающий ордер нечего сокращать, пока вход висит лимиткой, и биржа
-    # отвечает «cannot set reduce only, you must cancel some order». Поэтому
-    # при входе по рынку лестницу ставим сразу, а при лимитном входе её выставит
-    # наблюдатель — в тот момент, когда позиция появится.
-    takes: list[Any] = []
-    placed: list[dict[str, Any]] = []
-    warning = ""
-    # Доли целей неравные: первая снимает 30%, вторая 50%, последняя остаток.
-    # На маленькой позиции доля не набирает минимального объёма заявки, и
-    # мелкие доли копятся до первой проходящей: вместо трёх целей будет две или
-    # одна, но они будут - раньше сделка оставалась с одним стопом.
-    ladder = split_ladder(quantity, list(body.takes), filters["step"], filters["min_qty"])
-
-    if ladder and not entry_price:
-        for i, (price, size) in enumerate(ladder):
-            try:
-                order = await client.place_tp_sl(
-                    symbol=symbol,
-                    plan_type="TAKE_PROFIT",
-                    trigger_price=_num(round_to_tick(price, filters["tick"])),
-                    quantity=_num(size),
-                    position_side=position_side,
-                    client_algo_id=take_label(body.client_order_id or "", i),
-                )
-            except WeexTradeError as exc:
-                # Дальше по лестнице, а не наружу: отказ по одной цели не повод
-                # остаться без остальных. Цена могла уйти за первую - биржа
-                # такую заявку не примет, а вторая и третья ещё впереди.
-                logger.warning("Цель %d для %s не встала: %s", i + 1, symbol, exc)
-                warning = f"Цель {i + 1} не встала: {exc}"
-                continue
-            takes.append(order)
-            placed.append(
-                {"price": price, "order_id": plan_order_id(order), "filled": False}
+                503, "Биржа не отдала шаги инструмента - вход не отправлен. Попробуйте через минуту."
             )
+        quantity = floor_to_step(body.quantity, filters["step"])
+        if quantity < filters["min_qty"]:
+            raise HTTPException(
+                422,
+                f"Объём {body.quantity:g} меньше минимального на бирже "
+                f"({filters['min_qty']:g} {symbol[:-4]}). Увеличьте сумму или плечо.",
+            )
+        entry_price = round_to_tick(body.entry, filters["tick"]) if body.entry else None
+        stop_price = round_to_tick(body.stop, filters["tick"])
 
-    # Запись для фонового ведения: без неё переносить стоп в безубыток будет
-    # некому, как только трейдер закроет вкладку.
-    live = _remember_live(
-        session,
-        student,
-        body,
-        symbol,
-        client,
-        entry_price=entry_price,
-        stop_price=stop_price,
-        quantity=quantity,
-        placed=placed,
-    )
+        # Предел позиции на этом плече, если биржа его уже называла. Проверяем до
+        # отправки: отказ «position exceed max size» после нажатия - это заявка,
+        # которую трейдер уже считал поставленной.
+        cap = leverage_caps.cap_at(leverage_caps.caps_for(session, symbol), body.leverage)
+        if cap is not None:
+            used = await _exposure(client, symbol)
+            if used is not None:
+                note = leverage_caps.room_note(
+                    quantity=quantity, cap=cap, used=used, leverage=body.leverage,
+                    coin=symbol[:-4] or symbol, step=filters["step"],
+                )
+                if note:
+                    raise HTTPException(422, note)
 
-    return {
-        "entry": entry_order,
-        "takes": takes,
-        "watched": live.client_id,
-        "warning": warning,
-    }
+        # Вход и цели — два разных шага с разной ценой ошибки.
+        #
+        # Сорвался вход — не открылось ничего, и об этом надо сказать отказом.
+        # Сорвались цели при уже открытой позиции — сделка есть, и объявлять её
+        # неудачей нельзя: трейдер решит, что позиции нет, а она стоит на бирже.
+        try:
+            await _ensure_leverage(client, symbol, body.leverage)
+        except WeexTradeError as exc:
+            raise _fail(exc) from exc
+
+        try:
+            entry_order = await client.place_order(
+                symbol=symbol,
+                side="BUY" if long else "SELL",
+                position_side=position_side,
+                quantity=_num(quantity),
+                order_type="LIMIT" if entry_price else "MARKET",
+                price=_num(entry_price) if entry_price else None,
+                sl_trigger=_num(stop_price),
+                client_order_id=body.client_order_id,
+            )
+        except WeexTradeError as exc:
+            # Отказ по пределу называет точное число - запоминаем его, и терминал
+            # всех учеников ограничит сумму заранее.
+            found = max_size_in(str(exc))
+            if found:
+                leverage_caps.learn(session, symbol, found[1], found[0])
+            if exc.retryable and body.client_order_id:
+                # Биржа не ответила - это не отказ, а неизвестность: заявка могла
+                # встать и даже исполниться. Раньше записи для сопровождения не
+                # было, и исполнившийся вход оставался позицией, которую никто не
+                # ведёт (а у Binance - ещё и без стопа: он ставится вторым
+                # запросом). Теперь сделка встаёт под наблюдение как ждущая:
+                # появится позиция - сопровождение поставит стоп и цели само; нет
+                # ни заявки, ни позиции - снимет запись через несколько обходов.
+                _remember_live(
+                    session,
+                    student,
+                    body,
+                    symbol,
+                    client,
+                    entry_price=entry_price,
+                    stop_price=stop_price,
+                    quantity=quantity,
+                    placed=[],
+                )
+                logger.warning(
+                    "Вход %s (%s) без ответа биржи - взят под наблюдение: %s",
+                    symbol,
+                    body.client_order_id,
+                    exc,
+                )
+                raise HTTPException(
+                    502,
+                    "Биржа не ответила вовремя - неизвестно, встала ли заявка. Сделка "
+                    "взята под наблюдение: если вход исполнился, сервер сам поставит "
+                    "стоп и цели. Не нажимайте «Войти» ещё раз, пока не проверите позиции.",
+                ) from exc
+            raise _fail(exc) from exc
+
+        # Цели ставятся только когда позиция уже есть.
+        #
+        # Сокращающий ордер нечего сокращать, пока вход висит лимиткой, и биржа
+        # отвечает «cannot set reduce only, you must cancel some order». Поэтому
+        # при входе по рынку лестницу ставим сразу, а при лимитном входе её выставит
+        # наблюдатель — в тот момент, когда позиция появится.
+        takes: list[Any] = []
+        placed: list[dict[str, Any]] = []
+        warning = ""
+        # Доли целей неравные: первая снимает 30%, вторая 50%, последняя остаток.
+        # На маленькой позиции доля не набирает минимального объёма заявки, и
+        # мелкие доли копятся до первой проходящей: вместо трёх целей будет две или
+        # одна, но они будут - раньше сделка оставалась с одним стопом.
+        ladder = split_ladder(quantity, list(body.takes), filters["step"], filters["min_qty"])
+
+        if ladder and not entry_price:
+            for i, (price, size) in enumerate(ladder):
+                try:
+                    order = await client.place_tp_sl(
+                        symbol=symbol,
+                        plan_type="TAKE_PROFIT",
+                        trigger_price=_num(round_to_tick(price, filters["tick"])),
+                        quantity=_num(size),
+                        position_side=position_side,
+                        client_algo_id=take_label(body.client_order_id or "", i),
+                    )
+                except WeexTradeError as exc:
+                    # Дальше по лестнице, а не наружу: отказ по одной цели не повод
+                    # остаться без остальных. Цена могла уйти за первую - биржа
+                    # такую заявку не примет, а вторая и третья ещё впереди.
+                    logger.warning("Цель %d для %s не встала: %s", i + 1, symbol, exc)
+                    warning = f"Цель {i + 1} не встала: {exc}"
+                    continue
+                takes.append(order)
+                placed.append(
+                    {"price": price, "order_id": plan_order_id(order), "filled": False}
+                )
+
+        # Запись для фонового ведения: без неё переносить стоп в безубыток будет
+        # некому, как только трейдер закроет вкладку.
+        live = _remember_live(
+            session,
+            student,
+            body,
+            symbol,
+            client,
+            entry_price=entry_price,
+            stop_price=stop_price,
+            quantity=quantity,
+            placed=placed,
+        )
+
+        return {
+            "entry": entry_order,
+            "takes": takes,
+            "watched": live.client_id,
+            "warning": warning,
+        }
 
 
 def _remember_live(
@@ -1179,6 +1184,7 @@ def _remember_live(
 @router.post("/close")
 async def close_position(
     body: CloseIn,
+    request: Request,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
@@ -1197,155 +1203,160 @@ async def close_position(
     symbol = body.symbol.upper()
     long = body.side == "long"
 
-    try:
-        # Момент входа нужен, чтобы собрать все исполнения этой сделки, а не
-        # только последний ордер.
-        rows = session.execute(
-            select(LiveTrade)
-            .where(LiveTrade.student_id == student.id)
-            .where(LiveTrade.symbol == symbol)
-            .where(LiveTrade.status.in_(("waiting", "open")))
-            .order_by(LiveTrade.id.desc())
-        ).scalars().all()
-        # Сделку ищем по её идентификатору, а не берём последнюю: терминал
-        # умеет вести несколько сразу, и «последняя» - это чужая.
-        live = next((r for r in rows if r.client_id == body.trade_id), None)
-        if live is None:
-            # Идентификатор не назвали или он не сошёлся - берём сделку только
-            # тогда, когда она по этой монете и стороне одна. Выбирать наугад
-            # из нескольких значит снять защиту чужой: «первая в списке» - это
-            # не та, которую закрывают.
-            same = [r for r in rows if r.side == body.side]
-            live = same[0] if len(same) == 1 else None
+    # Момент входа нужен, чтобы собрать все исполнения этой сделки, а не
+    # только последний ордер.
+    rows = session.execute(
+        select(LiveTrade)
+        .where(LiveTrade.student_id == student.id)
+        .where(LiveTrade.symbol == symbol)
+        .where(LiveTrade.status.in_(("waiting", "open")))
+        .order_by(LiveTrade.id.desc())
+    ).scalars().all()
+    # Сделку ищем по её идентификатору, а не берём последнюю: терминал
+    # умеет вести несколько сразу, и «последняя» - это чужая.
+    live = next((r for r in rows if r.client_id == body.trade_id), None)
+    if live is None:
+        # Идентификатор не назвали или он не сошёлся - берём сделку только
+        # тогда, когда она по этой монете и стороне одна. Выбирать наугад
+        # из нескольких значит снять защиту чужой: «первая в списке» - это
+        # не та, которую закрывают.
+        same = [r for r in rows if r.side == body.side]
+        live = same[0] if len(same) == 1 else None
 
-        # Закрываем на той бирже, где сделка открыта. Сделку не опознали -
-        # на активной: там трейдер её и видит.
-        client = _require_client(session, student, live.exchange if live else None)
-        positions = await client.positions()
-        # Со стороной, а не просто по инструменту. При открытом шорте отмена
-        # ждущей лимитки в лонг уходила закрывать... шорт: терминал видел его
-        # объём и слал рыночный приказ с чужой стороной. Биржа отвечала
-        # «position side invalid» - и была права, а лимитка так и висела.
-        position = position_for(positions, symbol, body.side)
-        # Соседние сделки другой биржи к этой позиции отношения не имеют.
-        here = _exchange_of(client)
-        rows = [r for r in rows if trade_exchange(r.exchange) == here]
-        # Если позиция ещё не отмечена набранной, берём момент отправки входа:
-        # сопровождение проставляет opened_at раз в пятнадцать секунд, а закрыть
-        # руками можно и раньше. Без этого в итог попадал бы только последний
-        # ордер — и результат расходился с биржей в разы.
-        opened_at = (live.opened_at or live.created_at) if live else None
+    # Закрываем на той бирже, где сделка открыта. Сделку не опознали -
+    # на активной: там трейдер её и видит.
+    client = _require_client(session, student, live.exchange if live else None)
+    # Дальше идёт разговор с биржей - под замком счёта, тем же, под которым
+    # работает обход сопровождения. Иначе закрытие снимает защиту, а обход в
+    # те же секунды ставит новую: стоп остаётся висеть на закрытой позиции, и
+    # рынок, дойдя до его цены, открывает её заново.
+    async with account_lock(request, student.id, _exchange_of(client)):
+        try:
+            positions = await client.positions()
+            # Со стороной, а не просто по инструменту. При открытом шорте отмена
+            # ждущей лимитки в лонг уходила закрывать... шорт: терминал видел его
+            # объём и слал рыночный приказ с чужой стороной. Биржа отвечала
+            # «position side invalid» - и была права, а лимитка так и висела.
+            position = position_for(positions, symbol, body.side)
+            # Соседние сделки другой биржи к этой позиции отношения не имеют.
+            here = _exchange_of(client)
+            rows = [r for r in rows if trade_exchange(r.exchange) == here]
+            # Если позиция ещё не отмечена набранной, берём момент отправки входа:
+            # сопровождение проставляет opened_at раз в пятнадцать секунд, а закрыть
+            # руками можно и раньше. Без этого в итог попадал бы только последний
+            # ордер — и результат расходился с биржей в разы.
+            opened_at = (live.opened_at or live.created_at) if live else None
 
-        size = 0.0
-        for name in ("total", "size", "positionAmt", "available"):
-            try:
-                size = abs(float(position.get(name)))  # type: ignore[union-attr]
-                break
-            except (TypeError, ValueError, AttributeError):
-                continue
+            size = 0.0
+            for name in ("total", "size", "positionAmt", "available"):
+                try:
+                    size = abs(float(position.get(name)))  # type: ignore[union-attr]
+                    break
+                except (TypeError, ValueError, AttributeError):
+                    continue
 
-        # Снимаемая сделка ещё ждёт своего входа - это отмена заявки, а не
-        # закрытие позиции.
+            # Снимаемая сделка ещё ждёт своего входа - это отмена заявки, а не
+            # закрытие позиции.
+            #
+            # Позиция по этой монете и стороне может быть, но набрана она соседней
+            # сделкой: две лимитки на продажу, исполнилась нижняя. Раньше здесь
+            # смотрели только на объём позиции - и снятие верхней, ещё стоящей
+            # заявки уходило рыночным приказом закрывать чужую открытую позицию.
+            # Трейдер отменял одну, а закрывались обе.
+            waiting = await _entry_resting(client, live)
+            if size <= 0 or waiting:
+                # Заявки снимаем всегда: вход ещё не исполнился, а с ним висят стоп
+                # и цели. «Отменённая» сделка иначе откроется сама, стоило рынку
+                # дойти до уровня.
+                cancelled = await _cancel_trade(
+                    client, symbol, live, [r for r in rows if r is not live]
+                )
+                await _forget(session, student, symbol, live)
+                return {
+                    "closed": 0.0,
+                    # Позиция соседней сделки остаётся: терминал не должен решить,
+                    # что закрылось всё.
+                    "remaining": size if waiting else 0.0,
+                    "note": (
+                        f"заявка снята, позиция соседней сделки не тронута"
+                        if waiting and size > 0
+                        else f"позиции нет, снято заявок: {cancelled}"
+                        if cancelled
+                        else "позиции нет"
+                    ),
+                }
+
+            filters = await client.symbol_filters(symbol)
+            quantity = floor_to_step(size * body.share, filters["step"])
+            if quantity < filters["min_qty"]:
+                raise HTTPException(
+                    422,
+                    f"Доля {body.share:.0%} - это {quantity:g}, меньше минимального "
+                    f"объёма биржи. Закройте большую часть.",
+                )
+
+            # Без reduce_only: сторону позиции биржа и так знает из positionSide, а
+            # сокращающий ордер она на защищённой позиции отклоняет — «cannot set
+            # reduce only». В боте заказчика закрытие идёт ровно так же, обычным
+            # рыночным ордером в противоположную сторону.
+            order = await client.place_order(
+                symbol=symbol,
+                side="SELL" if long else "BUY",
+                position_side="LONG" if long else "SHORT",
+                quantity=_num(quantity),
+                order_type="MARKET",
+                client_order_id=body.client_order_id,
+            )
+            order_id = _order_id(order)
+
+            remaining = max(0.0, size - quantity)
+            if remaining < filters["min_qty"]:
+                # Позиции больше нет: снимаем стоп и цели. Осевшие заявки на
+                # несуществующий объём откроют позицию заново, стоило бы рынку
+                # дойти до их цены.
+                await _cancel_trade(client, symbol, live, [r for r in rows if r is not live])
+                await _forget(session, student, symbol, live)
+
+        except WeexTradeError as exc:
+            raise _fail(exc) from exc
+
+        # Настоящий результат берём у биржи, а не считаем сами.
         #
-        # Позиция по этой монете и стороне может быть, но набрана она соседней
-        # сделкой: две лимитки на продажу, исполнилась нижняя. Раньше здесь
-        # смотрели только на объём позиции - и снятие верхней, ещё стоящей
-        # заявки уходило рыночным приказом закрывать чужую открытую позицию.
-        # Трейдер отменял одну, а закрывались обе.
-        waiting = await _entry_resting(client, live)
-        if size <= 0 or waiting:
-            # Заявки снимаем всегда: вход ещё не исполнился, а с ним висят стоп
-            # и цели. «Отменённая» сделка иначе откроется сама, стоило рынку
-            # дойти до уровня.
-            cancelled = await _cancel_trade(
-                client, symbol, live, [r for r in rows if r is not live]
-            )
-            await _forget(session, student, symbol, live)
-            return {
-                "closed": 0.0,
-                # Позиция соседней сделки остаётся: терминал не должен решить,
-                # что закрылось всё.
-                "remaining": size if waiting else 0.0,
-                "note": (
-                    f"заявка снята, позиция соседней сделки не тронута"
-                    if waiting and size > 0
-                    else f"позиции нет, снято заявок: {cancelled}"
-                    if cancelled
-                    else "позиции нет"
-                ),
-            }
-
-        filters = await client.symbol_filters(symbol)
-        quantity = floor_to_step(size * body.share, filters["step"])
-        if quantity < filters["min_qty"]:
-            raise HTTPException(
-                422,
-                f"Доля {body.share:.0%} - это {quantity:g}, меньше минимального "
-                f"объёма биржи. Закройте большую часть.",
-            )
-
-        # Без reduce_only: сторону позиции биржа и так знает из positionSide, а
-        # сокращающий ордер она на защищённой позиции отклоняет — «cannot set
-        # reduce only». В боте заказчика закрытие идёт ровно так же, обычным
-        # рыночным ордером в противоположную сторону.
-        order = await client.place_order(
-            symbol=symbol,
-            side="SELL" if long else "BUY",
-            position_side="LONG" if long else "SHORT",
-            quantity=_num(quantity),
-            order_type="MARKET",
-            client_order_id=body.client_order_id,
+        # Наша цифра — это цена маркировки без комиссий: она совпадает с тем, что
+        # биржа показывает по открытой позиции, но не с тем, что приходит на счёт.
+        # Выход по рынку идёт по встречной стороне книги, и обе ноги платят
+        # комиссию. Разница видна сразу: было +37, пришло +5.
+        # Цену входа и сторону передаём затем, чтобы итог можно было посчитать и
+        # тогда, когда биржа не назвала его сама: в её отчёте об исполнениях поля с
+        # результатом может не быть вовсе - как не было поля с безубытком.
+        realized, fee, fill = await _settled(
+            client,
+            symbol,
+            order_id,
+            opened_at,
+            float(live.entry) if live else 0.0,
+            body.side,
         )
-        order_id = _order_id(order)
 
-        remaining = max(0.0, size - quantity)
-        if remaining < filters["min_qty"]:
-            # Позиции больше нет: снимаем стоп и цели. Осевшие заявки на
-            # несуществующий объём откроют позицию заново, стоило бы рынку
-            # дойти до их цены.
-            await _cancel_trade(client, symbol, live, [r for r in rows if r is not live])
-            await _forget(session, student, symbol, live)
+        # Закрытая руками сделка тоже идёт в журнал - и пишем её здесь.
+        #
+        # Сопровождение ведёт только те, что ещё живы: закрытую мы сами сняли с
+        # ведения строкой выше, и записывать её стало некому. Так и пропадали
+        # сделки, закрытые кнопкой в терминале: на бирже прибыль есть, в журнале
+        # сделки нет вовсе.
+        #
+        # Числа те же, что вернутся на экран: результат и комиссия с исполнений
+        # биржи, а не наша оценка.
+        if live is not None and remaining < filters["min_qty"]:
+            _journal(session, student, live, realized, fee, fill, quantity)
 
-    except WeexTradeError as exc:
-        raise _fail(exc) from exc
-
-    # Настоящий результат берём у биржи, а не считаем сами.
-    #
-    # Наша цифра — это цена маркировки без комиссий: она совпадает с тем, что
-    # биржа показывает по открытой позиции, но не с тем, что приходит на счёт.
-    # Выход по рынку идёт по встречной стороне книги, и обе ноги платят
-    # комиссию. Разница видна сразу: было +37, пришло +5.
-    # Цену входа и сторону передаём затем, чтобы итог можно было посчитать и
-    # тогда, когда биржа не назвала его сама: в её отчёте об исполнениях поля с
-    # результатом может не быть вовсе - как не было поля с безубытком.
-    realized, fee, fill = await _settled(
-        client,
-        symbol,
-        order_id,
-        opened_at,
-        float(live.entry) if live else 0.0,
-        body.side,
-    )
-
-    # Закрытая руками сделка тоже идёт в журнал - и пишем её здесь.
-    #
-    # Сопровождение ведёт только те, что ещё живы: закрытую мы сами сняли с
-    # ведения строкой выше, и записывать её стало некому. Так и пропадали
-    # сделки, закрытые кнопкой в терминале: на бирже прибыль есть, в журнале
-    # сделки нет вовсе.
-    #
-    # Числа те же, что вернутся на экран: результат и комиссия с исполнений
-    # биржи, а не наша оценка.
-    if live is not None and remaining < filters["min_qty"]:
-        _journal(session, student, live, realized, fee, fill, quantity)
-
-    return {
-        "closed": quantity,
-        "remaining": remaining,
-        "realized": realized,
-        "fee": fee,
-        "fill_price": fill,
-    }
+        return {
+            "closed": quantity,
+            "remaining": remaining,
+            "realized": realized,
+            "fee": fee,
+            "fill_price": fill,
+        }
 
 
 def _journal(

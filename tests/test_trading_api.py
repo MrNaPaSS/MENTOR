@@ -407,6 +407,77 @@ def test_breakeven_accounts_for_fees_and_moves_only_forward(app_and_exchange):
     assert len(exchange.modified) == 1
 
 
+class Watched:
+    """Сопровождение, которое отдаёт замок счёта и помнит, брали ли его."""
+
+    def __init__(self, events: list[str]):
+        self.events = events
+
+    def account_lock(self, student_id, exchange_name):
+        events = self.events
+
+        class Lock:
+            async def __aenter__(self):
+                events.append("взят")
+                return self
+
+            async def __aexit__(self, *exc):
+                events.append("отпущен")
+                return False
+
+        events.append(f"спрошен {exchange_name}")
+        return Lock()
+
+
+def test_open_goes_under_the_account_lock(app_and_exchange):
+    """Вход со стопом идёт под замком счёта.
+
+    Пока он шёл мимо, обход сопровождения мог в те же секунды двигать защиту
+    соседней сделки на этой же позиции, и заявки двух переносов снимали друг
+    друга.
+    """
+    client, exchange, _ = app_and_exchange
+    events: list[str] = []
+    client.app.state.position_watcher = Watched(events)
+
+    res = client.post(
+        "/api/trading/open",
+        json={
+            "symbol": "btcusdt",
+            "side": "long",
+            "quantity": 0.5,
+            "leverage": 10,
+            "stop": 79000,
+            "takes": [80000],
+        },
+    )
+    assert res.status_code == 200
+    assert events == ["спрошен weex", "взят", "отпущен"]
+    # Заявка ушла внутри замка, а не до него.
+    assert exchange.orders
+
+
+def test_close_goes_under_the_account_lock(app_and_exchange):
+    """Закрытие тоже под замком.
+
+    Иначе закрытие снимает защиту, а обход в те же секунды ставит новую: стоп
+    остаётся висеть на закрытой позиции, и рынок, дойдя до его цены, открывает
+    её заново.
+    """
+    client, exchange, _ = app_and_exchange
+    exchange.position = {"symbol": "BTCUSDT", "total": "0.5"}
+    events: list[str] = []
+    client.app.state.position_watcher = Watched(events)
+
+    body = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "long", "share": 1},
+    ).json()
+
+    assert body["closed"] == 0.5
+    assert events == ["спрошен weex", "взят", "отпущен"]
+
+
 def test_breakeven_goes_under_the_account_lock(app_and_exchange):
     """Служебный перенос берёт замок счёта - тот же, что и обход сопровождения.
 
