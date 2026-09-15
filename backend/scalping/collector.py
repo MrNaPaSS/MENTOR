@@ -24,7 +24,7 @@ import time
 
 import aiohttp
 
-from backend.scalping.binance import BinanceRest, StreamClient, depth_weight
+from backend.scalping.binance import BinanceRest, SplitStreamClient, depth_weight
 from backend.scalping.candles import LiveCandles
 from backend.scalping.clusters import ClusterHistory
 from backend.scalping.ladder import detect_tick
@@ -113,7 +113,9 @@ class ScalpingCollector:
 
         self._session: aiohttp.ClientSession | None = None
         self.rest = BinanceRest(self._get_session)
-        self.stream = StreamClient(self._on_message)
+        # Стаканы и лента - разными соединениями: обрыв тяжёлой ленты больше
+        # не ломает книги всех монет разом (binance.SplitStreamClient).
+        self.stream = SplitStreamClient(self._on_message)
 
         self._tracked: set[str] = set()             # инструменты под наблюдением
         self._pinned: dict[str, int] = {}           # символ → сколько клиентов смотрят стакан

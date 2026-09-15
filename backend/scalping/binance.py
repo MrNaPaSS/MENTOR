@@ -288,8 +288,11 @@ class StreamClient:
     Подписки меняются на лету — при переключении монеты пересоединяться не надо.
     """
 
-    def __init__(self, on_message: Callable[[str, dict], None]):
+    def __init__(self, on_message: Callable[[str, dict], None], name: str = ""):
         self._on_message = on_message
+        # Подпись соединения в журнале: «стаканы» или «лента», когда их два.
+        self._name = name
+        self._label = f" ({name})" if name else ""
         self._streams: set[str] = set()
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._task: asyncio.Task | None = None
@@ -307,7 +310,8 @@ class StreamClient:
 
     def start(self) -> None:
         if self._task is None or self._task.done():
-            self._task = asyncio.create_task(self._run(), name="binance-stream")
+            suffix = f"-{self._name}" if self._name else ""
+            self._task = asyncio.create_task(self._run(), name=f"binance-stream{suffix}")
 
     async def stop(self) -> None:
         task, self._task = self._task, None
@@ -363,7 +367,7 @@ class StreamClient:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Поток Binance оборвался: %s", exc)
+                logger.warning("Поток Binance%s оборвался: %s", self._label, exc)
             self._connected.clear()
             await asyncio.sleep(delay)
             delay = min(delay * 2, RECONNECT_MAX)
@@ -384,7 +388,7 @@ class StreamClient:
             self._ws = ws
             self._connected.set()
             opened = time.monotonic()
-            logger.info("Поток Binance подключён, потоков: %d", len(initial))
+            logger.info("Поток Binance%s подключён, потоков: %d", self._label, len(initial))
 
             # Пока сокет поднимался, набор мог измениться — досылаем разницу.
             async with self._lock:
@@ -404,7 +408,8 @@ class StreamClient:
             # соединения с сотней потоков и штатный суточный обрыв выглядят в
             # журнале одинаково, а лечатся по-разному.
             logger.warning(
-                "Поток Binance закрыт: код %s, %s (жил %.0f с, потоков %d)",
+                "Поток Binance%s закрыт: код %s, %s (жил %.0f с, потоков %d)",
+                self._label,
                 ws.close_code,
                 ws.exception() or "без ошибки",
                 time.monotonic() - opened,
@@ -425,3 +430,68 @@ class StreamClient:
             self._on_message(stream, data)
         except Exception:  # noqa: BLE001 — сбой обработчика не должен рвать поток
             logger.exception("Ошибка обработки события %s", stream)
+
+
+def is_depth_stream(name: str) -> bool:
+    """Поток стакана: `btcusdt@depth@500ms` и подобные."""
+    return "@depth" in str(name)
+
+
+class SplitStreamClient:
+    """Стаканы и лента сделок - в разных соединениях, с тем же интерфейсом.
+
+    В одном соединении лента давала около тысячи сообщений в секунду из тысячи
+    ста, а стаканы - девяносто. Обрыв такого соединения ломал книги всех
+    полусотни монет разом: каждая шла за снимком, бюджет веса выбирался до дна,
+    и скринер стоял пустым. Теперь обрыв ленты книг не трогает - лента просто
+    пропускает несколько секунд, а это ни одного запроса к бирже. И в журнале
+    видно, какое из соединений рвётся.
+
+    Сборщику это тот же клиент: подписка, отписка, запуск, остановка, список
+    потоков и признак подключения.
+    """
+
+    def __init__(self, on_message: Callable[[str, dict], None]):
+        self.depth = StreamClient(on_message, name="стаканы")
+        self.tape = StreamClient(on_message, name="лента")
+
+    @staticmethod
+    def _split(streams: set[str]) -> tuple[set[str], set[str]]:
+        depth = {s for s in streams if is_depth_stream(s)}
+        return depth, set(streams) - depth
+
+    @property
+    def streams(self) -> frozenset[str]:
+        return self.depth.streams | self.tape.streams
+
+    @property
+    def connected(self) -> bool:
+        # По соединению стаканов: от него зависят книги, а без ленты скринер
+        # лишь на несколько секунд теряет свежие сделки.
+        return self.depth.connected
+
+    @property
+    def tape_connected(self) -> bool:
+        return self.tape.connected
+
+    def start(self) -> None:
+        self.depth.start()
+        self.tape.start()
+
+    async def stop(self) -> None:
+        await self.depth.stop()
+        await self.tape.stop()
+
+    async def subscribe(self, streams: set[str]) -> None:
+        depth, tape = self._split(streams)
+        if depth:
+            await self.depth.subscribe(depth)
+        if tape:
+            await self.tape.subscribe(tape)
+
+    async def unsubscribe(self, streams: set[str]) -> None:
+        depth, tape = self._split(streams)
+        if depth:
+            await self.depth.unsubscribe(depth)
+        if tape:
+            await self.tape.unsubscribe(tape)
