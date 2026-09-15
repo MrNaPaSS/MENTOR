@@ -367,6 +367,9 @@ async def _move_waiting(
     await _drop_old_entries(client, live, keep=fresh_mark, keep_id=fresh_id)
     fresh_stop = str((placed or {}).get("slOrderId") or "") if isinstance(placed, dict) else ""
     if fresh_stop:
+        # Номер нового стопа нужен отмене сделки: без него стоп Binance остался
+        # бы на бирже, когда лимитку снимут.
+        live.sl_order_id = fresh_stop
         await _drop_waiting_stops(client, live, old_stops, previous_stop, fresh_stop, siblings)
     return {"entry": entry, "stop": stop, "takes": targets, "planned": True}
 

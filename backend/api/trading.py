@@ -1173,6 +1173,12 @@ async def open_position(
             stop_price=stop_price,
             quantity=quantity,
             placed=placed,
+            # Стоп, поставленный вместе со входом отдельной заявкой (Binance).
+            # Без его номера отмена сделки снимала лимитку, а стоп оставался на
+            # бирже: снимать его было нечем.
+            stop_order_id=str((entry_order or {}).get("slOrderId") or "")
+            if isinstance(entry_order, dict)
+            else "",
         )
 
         return {
@@ -1194,6 +1200,7 @@ def _remember_live(
     stop_price: float,
     quantity: float,
     placed: list[dict[str, Any]],
+    stop_order_id: str = "",
 ) -> LiveTrade:
     """Записать сделку для фонового ведения и сохранить.
 
@@ -1226,7 +1233,7 @@ def _remember_live(
     live.margin = quantity * (entry_price or 0.0) / max(1, body.leverage)
     live.takes_hit = 0
     live.status = "waiting"
-    live.sl_order_id = ""
+    live.sl_order_id = stop_order_id
     # Где открыта: сопровождать, закрывать и переносить её будут ключом этой
     # биржи, что бы трейдер ни выбрал потом.
     live.exchange = _exchange_of(client)

@@ -850,6 +850,9 @@ def test_the_old_separate_stop_of_a_waiting_limit_is_removed(moving):
     left = [order["algoId"] for order in exchange.plans_open]
     assert "old" not in left
     assert len(left) == 1 and left[0].startswith("sl")
+    # Номер нового стопа записан: по нему сделку снимут вместе с защитой.
+    session.refresh(live)
+    assert live.sl_order_id == left[0]
 
 
 def test_a_neighbours_stop_at_the_same_price_stays(moving):

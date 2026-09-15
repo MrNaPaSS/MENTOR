@@ -1404,3 +1404,40 @@ def test_limits_survive_a_silent_exchange(app_and_exchange, monkeypatch):
     _binance_account(monkeypatch, Broken())
     body = client.get("/api/trading/limits/btcusdt").json()
     assert body["max_leverage"] == 20
+
+
+def test_the_separate_stop_of_the_entry_is_remembered(app_and_exchange):
+    """Номер стопа, поставленного рядом со входом, записывается в сделку.
+
+    На Binance стоп приложить ко входу нельзя, он уходит отдельной заявкой.
+    Номер её терялся, и отмена сделки снимала лимитку, а стоп оставался на
+    бирже: рынок, дойдя до его цены, закрыл бы чужую позицию.
+    """
+    from core.models import LiveTrade
+
+    client, exchange, session = app_and_exchange
+    plain = exchange.place_order
+
+    async def place_order(**kw):
+        placed = await plain(**kw)
+        return {**placed, "slOrderId": "sl-77"} if kw.get("sl_trigger") else placed
+
+    exchange.place_order = place_order
+
+    res = client.post(
+        "/api/trading/open",
+        json={
+            "symbol": "btcusdt",
+            "side": "long",
+            "quantity": 0.5,
+            "leverage": 10,
+            "entry": 79500,
+            "stop": 79000,
+            "takes": [80000],
+        },
+    )
+    assert res.status_code == 200
+
+    live = session.query(LiveTrade).order_by(LiveTrade.id.desc()).first()
+    assert live is not None
+    assert live.sl_order_id == "sl-77"
