@@ -229,7 +229,7 @@ async def move_levels(
             raise _fail(exc) from exc
 
         if position is None:
-            result = await _move_waiting(client, live, body, tick)
+            result = await _move_waiting(client, live, body, tick, _siblings(session, live))
         else:
             # Цену спрашиваем отдельно: в ответе по позиции её нет вовсе - там
             # только объёмы, стоимости и комиссии. Без неё не понять, где стоп,
@@ -271,7 +271,11 @@ def _siblings(session, live: LiveTrade) -> list[LiveTrade]:
 
 
 async def _move_waiting(
-    client: WeexFutures, live: LiveTrade, body: MoveIn, tick: float
+    client: WeexFutures,
+    live: LiveTrade,
+    body: MoveIn,
+    tick: float,
+    siblings: list[LiveTrade] | None = None,
 ) -> dict[str, Any]:
     """Переставить ждущую лимитку: вход и стоп - вместе, целям хватит замысла."""
     targets: list[float] = json.loads(live.targets_json or "[]")
@@ -297,6 +301,16 @@ async def _move_waiting(
     if entry <= 0:
         raise HTTPException(409, "У этой заявки нет цены входа - переносить нечего")
     _guard(live.side, entry, stop, None)
+
+    # Стопы, что стоят на бирже до переноса. У бирж, где стоп приложен к самой
+    # заявке (WEEX, OKX), он уходит вместе с ней. Binance приложить его не даёт
+    # и ставит отдельной условной заявкой - и прежний стоп оставался висеть
+    # рядом с новым: после переноса на ждущей лимитке их было два.
+    previous_stop = float(live.current_stop or 0)
+    try:
+        _, old_stops = await _protection(client, live, siblings)
+    except HTTPException:
+        old_stops = []
 
     # Снимаем старую заявку и ставим новую. Именно в этом порядке: позиции нет,
     # окна без защиты не возникает, а две живые лимитки на один вход - это
@@ -351,7 +365,43 @@ async def _move_waiting(
     # И убираем за собой: прежняя лимитка могла пережить снятие.
     fresh_id = str((placed or {}).get("orderId") or "") if isinstance(placed, dict) else ""
     await _drop_old_entries(client, live, keep=fresh_mark, keep_id=fresh_id)
+    fresh_stop = str((placed or {}).get("slOrderId") or "") if isinstance(placed, dict) else ""
+    if fresh_stop:
+        await _drop_waiting_stops(client, live, old_stops, previous_stop, fresh_stop, siblings)
     return {"entry": entry, "stop": stop, "takes": targets, "planned": True}
+
+
+async def _drop_waiting_stops(
+    client: WeexFutures,
+    live: LiveTrade,
+    old_stops: list[dict[str, Any]],
+    previous_stop: float,
+    fresh_stop: str,
+    siblings: list[LiveTrade] | None,
+) -> None:
+    """Снять прежний отдельный стоп ждущей лимитки после её переноса.
+
+    Только тот, что стоял по прежней цене стопа этой сделки: у Binance стоп без
+    нашей метки, и узнать его можно лишь по цене. Новый щадим по номеру, стопы
+    соседних записей - по их меткам.
+    """
+    spare = spare_marks(siblings or [])
+    for order in old_stops:
+        marks = order_marks(order)
+        if fresh_stop in marks or marks & spare:
+            continue
+        trigger = _trigger(order)
+        if not (previous_stop > 0 and trigger > 0):
+            continue
+        if abs(trigger - previous_stop) > max(previous_stop, 1.0) * 1e-6:
+            continue
+        if await cancel_plan(client, live.symbol, order):
+            logger.info("Прежний стоп ждущей лимитки %s снят при переносе", live.symbol)
+        else:
+            logger.warning(
+                "Прежний стоп ждущей лимитки %s снять не удалось: их на бирже два",
+                live.symbol,
+            )
 
 
 async def _move_open(

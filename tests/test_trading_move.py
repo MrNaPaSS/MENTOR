@@ -808,3 +808,80 @@ def test_same_mark_reads_marks_the_way_exchanges_return_them():
     # Прежняя метка той же сделки - не новая.
     assert not same_mark("BTCUSDT1789500000000", "BTCUSDT-1789500000000-1")
     assert not same_mark("", "BTCUSDT-1")
+
+
+# ── Binance: стоп ждущей лимитки - отдельная условная заявка ────────────────
+
+
+def _separate_stop_exchange(exchange):
+    """Биржа, где стоп не прикладывается к заявке, а ставится рядом (Binance)."""
+    plain = exchange.place_order
+
+    async def place_order(**kw):
+        placed = await plain(**kw)
+        if kw.get("sl_trigger"):
+            stop_id = f"sl{len(exchange.orders)}"
+            exchange.plans_open.append(
+                {"algoId": stop_id, "orderId": stop_id, "planType": "STOP_LOSS",
+                 "positionSide": "LONG", "triggerPrice": kw["sl_trigger"]}
+            )
+            placed = {**placed, "slOrderId": stop_id}
+        return placed
+
+    exchange.place_order = place_order
+
+
+def test_the_old_separate_stop_of_a_waiting_limit_is_removed(moving):
+    """Перенос стопа ждущей лимитки на Binance не оставляет прежний стоп.
+
+    Стоп там стоит отдельной заявкой без нашей метки. Лимитка переставлялась
+    целиком, а прежний стоп никто не снимал - на бирже их оказывалось два.
+    """
+    client, exchange, session, live = moving
+    _separate_stop_exchange(exchange)
+    exchange.pending = [{"orderId": "e1", "clientOrderId": "BTCUSDT-1"}]
+    exchange.plans_open = [
+        {"algoId": "old", "orderId": "old", "planType": "STOP_LOSS",
+         "positionSide": "LONG", "triggerPrice": "79900"}
+    ]
+
+    assert move(client, stop=79_800.0).status_code == 200
+
+    left = [order["algoId"] for order in exchange.plans_open]
+    assert "old" not in left
+    assert len(left) == 1 and left[0].startswith("sl")
+
+
+def test_a_neighbours_stop_at_the_same_price_stays(moving):
+    """Стоп соседней сделки по той же цене - чужая защита, её не трогаем."""
+    client, exchange, session, live = moving
+    _separate_stop_exchange(exchange)
+    neighbour = LiveTrade(
+        student_id=live.student_id, client_id="BTCUSDT-2", symbol="BTCUSDT", side="long",
+        entry=80_100.0, initial_stop=79_900.0, current_stop=79_900.0,
+        targets_json="[]", qty=0.01, leverage=10, status="open", sl_order_id="theirs",
+    )
+    session.add(neighbour)
+    session.commit()
+    exchange.pending = [{"orderId": "e1", "clientOrderId": "BTCUSDT-1"}]
+    exchange.plans_open = [
+        {"algoId": "theirs", "orderId": "theirs", "planType": "STOP_LOSS",
+         "positionSide": "LONG", "triggerPrice": "79900"}
+    ]
+
+    # Сделок на монете две - какую двигаем, называем, как это делает терминал.
+    assert move(client, stop=79_800.0, trade_id="BTCUSDT-1").status_code == 200
+    assert "theirs" in [order["algoId"] for order in exchange.plans_open]
+
+
+def test_attached_stop_exchanges_do_not_touch_conditional_orders(moving):
+    """WEEX и OKX прикладывают стоп к заявке - снимать отдельно там нечего."""
+    client, exchange, session, live = moving
+    exchange.pending = [{"orderId": "e1", "clientOrderId": "BTCUSDT-1"}]
+    exchange.plans_open = [
+        {"algoId": "x", "orderId": "x", "planType": "STOP_LOSS",
+         "positionSide": "LONG", "triggerPrice": "79900"}
+    ]
+
+    assert move(client, stop=79_800.0).status_code == 200
+    assert exchange.algo_cancelled == []
