@@ -590,3 +590,79 @@ def test_other_side_target_is_never_moved(moving):
     assert "x1" not in exchange.algo_cancelled
     assert "p1" in exchange.algo_cancelled
     assert exchange.plans[-1]["quantity"] == "0.01"
+
+
+def test_a_neighbour_keeps_its_stop_when_we_move_ours(moving):
+    """Соседняя запись на ту же позицию остаётся со своим стопом.
+
+    По одной монете и стороне сделок бывает несколько, а позиция на бирже
+    одна. Снятие прежних стопов шло по стороне и цене - и стоп соседней сделки
+    попадал под него: трейдер двигал свой уровень, а без защиты оставалась
+    соседняя сделка.
+    """
+    client, exchange, session, live = moving
+    opened(session, live, exchange)
+
+    neighbour = LiveTrade(
+        student_id=live.student_id,
+        client_id="BTCUSDT-2",
+        symbol="BTCUSDT",
+        side="long",
+        entry=80_000.0,
+        initial_stop=79_800.0,
+        current_stop=79_800.0,
+        targets_json=json.dumps([80_500.0]),
+        qty=0.01,
+        leverage=10,
+        status="open",
+        sl_order_id="s2",
+    )
+    session.add(neighbour)
+    session.commit()
+
+    exchange.plans_open = exchange.plans_open + [
+        {"orderId": "s2", "planType": "STOP_LOSS", "triggerPrice": "79800", "quantity": "0.01"},
+    ]
+
+    move(client, stop=79_950.0, trade_id="BTCUSDT-1")
+
+    assert "s1" in exchange.algo_cancelled
+    assert "s2" not in exchange.algo_cancelled
+    assert any(o.get("orderId") == "s2" for o in exchange.plans_open)
+
+
+def test_the_move_goes_under_the_same_lock_as_the_watcher(moving):
+    """Ручной перенос берёт замок счёта сопровождения, а не идёт мимо него.
+
+    Сопровождение переставляет стоп в безубыток само. Два переноса, начатых в
+    одни и те же секунды, снимают заявки друг друга: на позиции остаётся то
+    два стопа, то ни одного, а в сделке записана цена, которой на бирже нет.
+    """
+    client, exchange, session, live = moving
+    opened(session, live, exchange)
+
+    asked: list[tuple] = []
+    events: list[str] = []
+
+    class Lock:
+        async def __aenter__(self):
+            events.append("взят")
+            return self
+
+        async def __aexit__(self, *exc):
+            events.append("отпущен")
+            return False
+
+    class Watcher:
+        def account_lock(self, student_id, exchange_name):
+            asked.append((student_id, exchange_name))
+            return Lock()
+
+    client.app.state.position_watcher = Watcher()
+
+    assert move(client, stop=79_950.0).status_code == 200
+
+    assert asked == [(live.student_id, "weex")]
+    assert events == ["взят", "отпущен"]
+    # И вся работа с биржей - внутри замка, а не после него.
+    assert "s1" in exchange.algo_cancelled

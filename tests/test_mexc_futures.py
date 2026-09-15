@@ -801,3 +801,82 @@ def test_balance_reads_only_the_margin_coin():
     )
     rows = run(client(session).balance())
     assert rows == [{"marginCoin": "USDT", "availableBalance": "9.5", "equity": "10"}]
+
+
+def test_previous_protection_returns_when_the_new_one_does_not_stand():
+    """Новая защита не встала - возвращаем прежнюю теми же ценами.
+
+    Перенос здесь идёт в два шага: снять и поставить. Между ними позиция стоит
+    без защиты вовсе, и отказ на втором шаге раньше означал сделку с открытым
+    убытком - молча, до первого взгляда трейдера на биржу.
+    """
+    def place(call):
+        if call["body"].get("stopLossPrice") == 79000:
+            return {"code": 1002, "message": "Insufficient position"}
+        return {"code": 0, "data": 902}
+
+    session = FakeSession(
+        {
+            "/api/v1/private/stoporder/list/orders": {
+                "code": 0,
+                "data": [
+                    {
+                        "id": 900,
+                        "symbol": "BTC_USDT",
+                        "positionId": 4242,
+                        "positionType": 1,
+                        "stopLossPrice": 78000,
+                        "takeProfitPrice": 82000,
+                        "vol": 100,
+                        "state": 1,
+                    }
+                ],
+            },
+            "/api/v1/private/stoporder/cancel": {"code": 0},
+            "/api/v1/private/stoporder/place": place,
+        }
+    )
+    with pytest.raises(WeexTradeError) as failed:
+        run(
+            client(session).modify_tp_sl(
+                symbol="BTCUSDT", order_id="900", trigger_price="79000"
+            )
+        )
+    assert "прежняя защита возвращена" in str(failed.value)
+
+    back = sent_to(session, "/api/v1/private/stoporder/place")["body"]
+    assert back["stopLossPrice"] == 78000
+    assert back["takeProfitPrice"] == 82000
+    assert back["positionId"] == 4242
+    assert back["vol"] == 100
+
+
+def test_a_failed_return_of_the_protection_is_said_out_loud():
+    """Прежняя тоже не встала - позиция голая, и это должно быть видно."""
+    session = FakeSession(
+        {
+            "/api/v1/private/stoporder/list/orders": {
+                "code": 0,
+                "data": [
+                    {
+                        "id": 900,
+                        "symbol": "BTC_USDT",
+                        "positionId": 4242,
+                        "positionType": 1,
+                        "stopLossPrice": 78000,
+                        "vol": 100,
+                        "state": 1,
+                    }
+                ],
+            },
+            "/api/v1/private/stoporder/cancel": {"code": 0},
+            "/api/v1/private/stoporder/place": {"code": 1002, "message": "нет позиции"},
+        }
+    )
+    with pytest.raises(WeexTradeError) as failed:
+        run(
+            client(session).modify_tp_sl(
+                symbol="BTCUSDT", order_id="900", trigger_price="79000"
+            )
+        )
+    assert "вернуть прежнюю не вышло" in str(failed.value)

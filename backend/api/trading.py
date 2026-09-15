@@ -204,6 +204,25 @@ def _exchange_of(client) -> str:
     return trade_exchange(getattr(client, "exchange", ""))
 
 
+def account_lock(request: Request, student_id: int, exchange: str | None) -> asyncio.Lock:
+    """Замок счёта: ручной перенос и обход сопровождения не идут разом.
+
+    Перенос стопа - это постановка нового и снятие прежнего, и два таких
+    переноса, начатых в одни и те же секунды, снимают заявки друг друга: на
+    позиции остаётся то два стопа, то ни одного, а в сделке записана цена,
+    которой на бирже нет. Сопровождение держит на каждый счёт свой замок -
+    берём его же, а не заводим второй: замки порознь ничего не стерегут.
+
+    Сопровождение не поднято (тесты, отдельный процесс) - отдаём свободный
+    замок: ручка работает как прежде, ждать ей некого.
+    """
+    watcher = getattr(request.app.state, "position_watcher", None)
+    lock = getattr(watcher, "account_lock", None)
+    if lock is None:
+        return asyncio.Lock()
+    return lock(int(student_id), trade_exchange(exchange))
+
+
 def _fail(exc: WeexTradeError) -> HTTPException:
     """Отказ биржи наружу - словами, по которым понятно, что делать.
 
@@ -1698,6 +1717,7 @@ async def _forget(
 @router.post("/breakeven")
 async def move_to_breakeven(
     body: StopIn,
+    request: Request,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
@@ -1721,12 +1741,15 @@ async def move_to_breakeven(
     if target is None or not should_move_stop(position, target):
         return {"moved": False, "stop": body.current_stop}
 
-    try:
-        await client.modify_tp_sl(
-            symbol=position.symbol, order_id=body.order_id, trigger_price=_num(target)
-        )
-    except WeexTradeError as exc:
-        raise _fail(exc) from exc
+    # Под тем же замком, что и обход сопровождения: оно переставляет стоп в
+    # безубыток само, и два переноса разом снимают заявки друг друга.
+    async with account_lock(request, student.id, _exchange_of(client)):
+        try:
+            await client.modify_tp_sl(
+                symbol=position.symbol, order_id=body.order_id, trigger_price=_num(target)
+            )
+        except WeexTradeError as exc:
+            raise _fail(exc) from exc
     return {"moved": True, "stop": target}
 
 

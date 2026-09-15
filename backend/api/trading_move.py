@@ -27,11 +27,17 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from backend.api.trading import _fail, _get_session, _num, _require_client
+from backend.api.trading import (
+    _fail,
+    _get_session,
+    _num,
+    _require_client,
+    account_lock,
+)
 from backend.deps import get_current_student, get_session
 from backend.trading.watcher import (
     cancel_plan,
@@ -43,6 +49,7 @@ from backend.trading.watcher import (
     moved_stop_label,
     moved_take_label,
     set_stop,
+    spare_marks,
     stop_label,
     take_label,
 )
@@ -193,6 +200,7 @@ async def _protection(
 @router.post("/move")
 async def move_levels(
     body: MoveIn,
+    request: Request,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):
@@ -207,26 +215,33 @@ async def move_levels(
     client = _require_client(session, student, live.exchange or None)
     tick = (await client.symbol_filters(live.symbol))["tick"]
 
-    try:
-        position = position_for(await client.positions(), live.symbol, live.side)
-    except WeexTradeError as exc:
-        raise _fail(exc) from exc
+    # Весь разговор с биржей - под замком счёта, тем же, под которым идёт обход
+    # сопровождения. Иначе перенос руками и перенос в безубыток начинаются в
+    # одни и те же секунды, каждый ставит свой стоп и снимает чужой как
+    # прежний, и что останется на позиции - решает случай.
+    async with account_lock(request, student.id, live.exchange or None):
+        try:
+            position = position_for(await client.positions(), live.symbol, live.side)
+        except WeexTradeError as exc:
+            raise _fail(exc) from exc
 
-    if position is None:
-        result = await _move_waiting(client, live, body, tick)
-    else:
-        # Цену спрашиваем отдельно: в ответе по позиции её нет вовсе - там
-        # только объёмы, стоимости и комиссии. Без неё не понять, где стоп, а
-        # где цель, и прежний стоп оставался висеть рядом с новым.
-        market = mark_price(position)
-        if market is None:
-            own = getattr(client, "last_price", None)
-            market = (
-                await own(live.symbol)
-                if own
-                else await public_price(await _get_session(), live.symbol)
+        if position is None:
+            result = await _move_waiting(client, live, body, tick)
+        else:
+            # Цену спрашиваем отдельно: в ответе по позиции её нет вовсе - там
+            # только объёмы, стоимости и комиссии. Без неё не понять, где стоп,
+            # а где цель, и прежний стоп оставался висеть рядом с новым.
+            market = mark_price(position)
+            if market is None:
+                own = getattr(client, "last_price", None)
+                market = (
+                    await own(live.symbol)
+                    if own
+                    else await public_price(await _get_session(), live.symbol)
+                )
+            result = await _move_open(
+                client, live, body, tick, market, _siblings(session, live)
             )
-        result = await _move_open(client, live, body, tick, market, _siblings(session, live))
 
     live.updated_at = utcnow()
     session.commit()
@@ -360,12 +375,18 @@ async def _move_open(
         live.replaces = (live.replaces or 0) + 1
         # Цену рынка передаём: стоп по ту сторону рынка биржа не принимает, и
         # постановка подведёт его к рынку сама, вместо отказа.
+        # Стопы соседних записей на эту же позицию - не «прежние наши».
+        # Снятие прежних идёт по стороне и цене, и стоп соседа попадал под
+        # него: трейдер двигал свой уровень, а без защиты оставалась соседняя
+        # сделка.
+        spare = spare_marks(siblings)
         moved = await set_stop(
             client,
             live,
             stop,
             market,
             label=moved_stop_label(live.client_id, live.replaces),
+            spare=spare,
         )
         if not moved:
             raise HTTPException(409, "Биржа не приняла новый стоп - прежний остался на месте")
@@ -384,6 +405,9 @@ async def _move_open(
         # cancel_plan перебирает их все.
         stale = {m for order in _stops for m in order_marks(order)}
         stale.discard(live.sl_order_id or "")
+        # Тем же списком щадим соседей и здесь: `_protection` собирает стопы по
+        # виду заявки, и стоп соседней записи попадает в тот же список.
+        stale -= spare
         if stale and await plan_alive(client, live.symbol, stale):
             left = [order for order in _stops if order_marks(order) & stale]
             done = True

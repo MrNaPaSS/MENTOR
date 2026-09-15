@@ -1496,9 +1496,181 @@ def test_one_broken_trade_does_not_stop_the_pass(monkeypatch):
     watcher = PositionWatcher(lambda: None, lambda: None)
     applied: list[str] = []
 
-    async def remember(session, client, row, decision, price):
+    async def remember(session, client, row, decision, price, neighbours=None):
         applied.append(row.client_id)
 
     watcher._apply = remember  # type: ignore[assignment]
     asyncio.run(watcher._handle_student(None, 1, [broken, good], "weex"))
     assert applied == ["good"]
+
+
+# ── повтор переноса после второй цели ────────────────────────────────────────
+
+def test_stop_is_moved_again_after_the_second_take():
+    """Перенос повторяется на любом числе взятых целей, а не только на первой.
+
+    Перенос после второй цели мог не встать - биржа промолчала или отказала, -
+    и до третьей цели стоп оставался там, куда его поставили после первой.
+    После третьей целей больше нет вовсе, и чинить было уже некому.
+    """
+    row = trade(takes_hit=2, current_stop=100.35, qty=0.2)
+    where = dict(position("0.2"))
+    where["breakEvenPrice"] = "101.0"
+
+    decision = decide(row, where, {"tp3"}, 101.5, 0)
+    assert decision.takes_hit == 2
+    assert decision.move_stop_to == 101.0
+
+
+def test_repeated_move_falls_back_to_our_rule_when_the_exchange_is_silent():
+    """Биржа не назвала свой ноль - считаем правилом «за предыдущей целью»."""
+    row = trade(takes_hit=2, current_stop=100.35, qty=0.2)
+
+    decision = decide(row, position("0.2"), {"tp3"}, 101.5, 0)
+    # Вторая цель взята - стоп прячется за первой, 101.0.
+    assert decision.move_stop_to == 101.0
+
+
+def test_repeated_move_still_goes_only_forward():
+    """Повтор не отменяет запрета двигать стоп назад."""
+    row = trade(takes_hit=2, current_stop=101.2, qty=0.2)
+    where = dict(position("0.2"))
+    where["breakEvenPrice"] = "100.4"
+    assert decide(row, where, {"tp3"}, 101.5, 0).move_stop_to is None
+
+
+def test_a_hand_set_stop_is_not_moved_after_the_second_take_either():
+    """Стоп, поставленный руками на этом же числе целей, расчётом не трогаем."""
+    row = trade(takes_hit=2, current_stop=100.35, qty=0.2, hand_stop=2)
+    where = dict(position("0.2"))
+    where["breakEvenPrice"] = "101.0"
+    assert decide(row, where, {"tp3"}, 101.5, 0).move_stop_to is None
+
+
+# ── снятие прежних стопов не трогает чужую защиту ────────────────────────────
+
+class Plans:
+    """Условные заявки биржи с памятью о снятых."""
+
+    def __init__(self, orders):
+        self.orders = orders
+        self.cancelled: list[str] = []
+
+    async def algo_orders(self, symbol):
+        return list(self.orders)
+
+    async def cancel_algo_order(self, symbol, order_id):
+        self.cancelled.append(str(order_id))
+        return {"ok": True}
+
+
+def test_the_opposite_side_keeps_its_stop():
+    """В хедже на монете две позиции, и стоп встречной - чужая защита.
+
+    Перенос стопа лонга снимал стоп шорта: вид заявки тот же, сторона рынка
+    для шорта «выше цены» тоже похожа на стоп. Встречная позиция оставалась
+    голой, и узнавал об этом трейдер уже по убытку.
+    """
+    import asyncio
+
+    from backend.trading.watcher import drop_old_stops
+
+    client = Plans([
+        {"orderId": "old", "planType": "STOP_LOSS", "positionSide": "LONG",
+         "triggerPrice": "99.0"},
+        {"orderId": "hedge", "planType": "STOP_LOSS", "positionSide": "SHORT",
+         "triggerPrice": "103.0"},
+    ])
+    asyncio.run(
+        drop_old_stops(client, trade(), keep="new", market=101.5, fresh=100.5)
+    )
+    assert client.cancelled == ["old"]
+
+
+def test_a_neighbour_trade_keeps_its_stop():
+    """Две записи об одной позиции: стоп соседней снимать нельзя.
+
+    Половина позиции ведётся соседней сделкой, и её стоп для нас - не «прежний
+    наш», а живая защита. Снятый, он оставлял эту половину без стопа.
+    """
+    import asyncio
+
+    from backend.trading.watcher import drop_old_stops, spare_marks, stop_label
+
+    neighbour = trade(client_id="c2", sl_order_id="nb")
+    client = Plans([
+        {"orderId": "old", "planType": "STOP_LOSS", "triggerPrice": "99.0"},
+        {"orderId": "nb", "planType": "STOP_LOSS", "triggerPrice": "98.5"},
+        {"clientAlgoId": stop_label("c2", 1), "planType": "STOP_LOSS",
+         "triggerPrice": "98.7"},
+    ])
+    asyncio.run(
+        drop_old_stops(
+            client,
+            trade(),
+            keep="new",
+            market=101.5,
+            fresh=100.5,
+            spare=spare_marks([neighbour]),
+        )
+    )
+    assert client.cancelled == ["old"]
+
+
+def test_spare_marks_know_the_hand_moved_stops_too():
+    """Соседняя сделка могла переставить стоп руками - метка там своя."""
+    from backend.trading.watcher import moved_stop_label, spare_marks, stop_label
+
+    neighbour = trade(client_id="c2", sl_order_id="nb", replaces=2)
+    marks = spare_marks([neighbour])
+    assert "nb" in marks
+    assert stop_label("c2", 0) in marks
+    assert moved_stop_label("c2", 1) in marks
+    assert moved_stop_label("c2", 2) in marks
+    assert "" not in marks
+
+
+def test_the_watcher_passes_the_neighbours_to_the_move():
+    """Обход знает о соседних сделках счёта и щадит их защиту при переносе.
+
+    Проверяем связку целиком: решение о переносе, постановка нового стопа и
+    снятие прежних. Иначе щажение соседей осталось бы правдой только внутри
+    `drop_old_stops`, а обход звал бы его без списка.
+    """
+    import asyncio
+
+    from backend.trading.watcher import PositionWatcher, Decision
+
+    class Exchange(Plans):
+        async def symbol_filters(self, symbol):
+            return {"step": 0.1, "tick": 0.01, "min_qty": 0.1}
+
+        async def place_tp_sl(self, **kw):
+            self.orders = self.orders + [
+                {"orderId": "new", "planType": "STOP_LOSS", "triggerPrice": kw["trigger_price"]}
+            ]
+            return {"orderId": "new"}
+
+    client = Exchange([
+        {"orderId": "old", "planType": "STOP_LOSS", "triggerPrice": "99.0"},
+        {"orderId": "nb", "planType": "STOP_LOSS", "triggerPrice": "98.5"},
+    ])
+    mine = trade(sl_order_id="old")
+    mine.id = 1
+    neighbour = trade(client_id="c2", sl_order_id="nb")
+    neighbour.id = 2
+
+    watcher = PositionWatcher(lambda: None, lambda: None)
+    asyncio.run(
+        watcher._apply(
+            None,
+            client,
+            mine,
+            Decision(1, move_stop_to=100.2, size=0.7),
+            101.5,
+            [neighbour],
+        )
+    )
+
+    assert client.cancelled == ["old"]
+    assert float(mine.current_stop) == 100.2

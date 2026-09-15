@@ -639,8 +639,38 @@ class MexcFutures:
         else:
             body["takeProfitPrice"] = _f(trigger_price)
 
+        # Прежние цены - на случай, если новая постановка не пройдёт. Между
+        # снятием и постановкой позиция стоит без защиты вовсе, и оставлять её
+        # так нельзя: биржа не умеет менять защиту, только снимать и ставить
+        # заново (проверено на живом счёте 14 сентября).
+        previous: dict[str, Any] = {
+            key: body[key] for key in ("symbol", "positionId", "vol") if key in body
+        }
+        if stop_price > 0:
+            previous["stopLossPrice"] = stop_price
+        if take_price > 0:
+            previous["takeProfitPrice"] = take_price
+
         await self.cancel_algo_order(symbol, str(record.get("id")))
-        data = await self._request("POST", ENDPOINTS["stop_place"], body=body)
+        try:
+            data = await self._request("POST", ENDPOINTS["stop_place"], body=body)
+        except WeexTradeError as exc:
+            # Возвращаем прежнюю защиту теми же ценами. Вышло - сделка осталась
+            # со старым стопом, и это честный отказ переноса. Не вышло - об этом
+            # надо кричать: позиция осталась голой.
+            back = "прежняя защита возвращена"
+            try:
+                await self._request("POST", ENDPOINTS["stop_place"], body=previous)
+            except WeexTradeError as second:
+                back = f"вернуть прежнюю не вышло: {second}"
+                logger.error(
+                    "MEXC %s: защита снята, новая не встала, прежняя не вернулась (%s)",
+                    symbol,
+                    second,
+                )
+            raise WeexTradeError(
+                f"{exc} ({back})", code=exc.code, retryable=exc.retryable
+            ) from exc
         new_id = str(data if isinstance(data, (str, int)) else (data or {}).get("id") or "")
         return {"orderId": new_id, "algoId": new_id, "clientAlgoId": ""}
 

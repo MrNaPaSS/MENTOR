@@ -407,6 +407,47 @@ def test_breakeven_accounts_for_fees_and_moves_only_forward(app_and_exchange):
     assert len(exchange.modified) == 1
 
 
+def test_breakeven_goes_under_the_account_lock(app_and_exchange):
+    """Служебный перенос берёт замок счёта - тот же, что и обход сопровождения.
+
+    Сопровождение двигает стоп в безубыток само. Начатые в одни и те же
+    секунды, два переноса снимают заявки друг друга, и что останется на
+    позиции - решает случай.
+    """
+    client, exchange, _ = app_and_exchange
+    events: list[str] = []
+
+    class Lock:
+        async def __aenter__(self):
+            events.append("взят")
+            return self
+
+        async def __aexit__(self, *exc):
+            events.append("отпущен")
+            return False
+
+    class Watcher:
+        def account_lock(self, student_id, exchange_name):
+            events.append(f"спрошен {exchange_name}")
+            return Lock()
+
+    client.app.state.position_watcher = Watcher()
+    moved = client.post(
+        "/api/trading/breakeven",
+        json={
+            "symbol": "BTCUSDT",
+            "side": "long",
+            "entry": 80000,
+            "quantity": 0.1,
+            "order_id": "sl-1",
+            "current_stop": 79000,
+            "mark_price": 80500,
+        },
+    ).json()
+    assert moved["moved"] is True
+    assert events == ["спрошен weex", "взят", "отпущен"]
+
+
 def test_numbers_never_go_to_exchange_in_exponent_form():
     # На PEPE цена уходит в 1e-07, и биржа такой записи не понимает.
     assert trading_api._num(0.0000001) == "0.0000001"

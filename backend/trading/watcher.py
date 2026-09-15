@@ -225,6 +225,7 @@ def decide(
         return Decision(trade.takes_hit, opened=False, size=size)
 
     takes: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
+    prices = [float(t.get("price") or 0) for t in takes]
 
     if size <= 0 and missing_streak >= MISSING_TOLERANCE:
         # Последняя цель закрывает позицию целиком, и считать по остатку в этот
@@ -298,8 +299,17 @@ def decide(
         # трогаем: трейдер видел рынок и решил сам, а безубыток - всего лишь
         # правило по умолчанию. Возьмёт следующую цель - правило вернётся.
         by_hand = int(getattr(trade, "hand_stop", -1) or -1) == trade.takes_hit
-        if trade.takes_hit == 1 and not by_hand:
+        # Любое число взятых целей, а не только первая. Перенос после второй
+        # цели мог не встать - биржа промолчала или отказала, - и повторить его
+        # было некому: до следующей цели стоп так и стоял на прежнем уровне, а
+        # после третьей целей больше не будет вовсе.
+        if trade.takes_hit >= 1 and not by_hand:
             fresh = exchange_breakeven(position, side=trade.side)
+            if fresh is None:
+                # Биржа молчит - считаем своим правилом, тем же, что и при
+                # свежей цели: после первой безубыток, дальше за предыдущей
+                # целью.
+                fresh = stop_after_take(state, trade.takes_hit, prices, mark_price)
             if (
                 fresh is not None
                 and abs(fresh - state.stop) > state.entry * BE_DRIFT
@@ -323,8 +333,6 @@ def decide(
         # Ни по идентификатору, ни по нашей метке заявки нет - значит сработала.
         if order_id not in open_plans and not (take_labels(trade.client_id, i) & open_plans):
             filled.append(order_id)
-
-    prices = [float(t.get('price') or 0) for t in takes]
 
     # После каждой цели стоп идёт в безубыток - тот, что считает биржа по своим
     # цифрам. Так это сделано и в боте заказчика: частичное закрытие меняет
@@ -418,6 +426,16 @@ class PositionWatcher:
         if key not in self._locks:
             self._locks[key] = asyncio.Lock()
         return self._locks[key]
+
+    def account_lock(self, student_id: int, exchange: str) -> asyncio.Lock:
+        """Замок счёта наружу: ручной перенос берёт тот же, что и обход.
+
+        Без него трейдер двигает стоп руками, а начавшийся раньше обход в те же
+        секунды двигает его в безубыток: каждый ставит свой и снимает чужой как
+        прежний, и чей останется - решает случай. В базе при этом остаётся
+        цена, которой на бирже уже нет.
+        """
+        return self._lock_for(int(student_id), str(exchange))
 
     async def _check_account(self, student_id: int, exchange: str) -> bool:
         """Обойти сделки одного счёта: своей сессией базы и под своим замком.
@@ -575,7 +593,8 @@ class PositionWatcher:
         # две ждущие лимитки не должны разобрать одну позицию на двоих.
         owned = {(t.symbol.upper(), t.side) for t in trades if t.status == "open"}
 
-        for trade in claim_order(trades):
+        ordered = claim_order(trades)
+        for trade in ordered:
             # Сбой одной сделки не останавливает обход остальных. Раньше
             # исключение, например от запроса цены по одной монете, выходило
             # из цикла, и соседние сделки этого счёта оставались без
@@ -614,7 +633,16 @@ class PositionWatcher:
                     resting,
                     taken=trade.status == "waiting" and key in owned,
                 )
-                await self._apply(session, client, trade, decision, price)
+                await self._apply(
+                    session,
+                    client,
+                    trade,
+                    decision,
+                    price,
+                    # Соседние записи того же счёта: их защиту перенос стопа
+                    # снимать не должен.
+                    [t for t in ordered if t.id != trade.id],
+                )
                 if trade.status == "open":
                     owned.add(key)
                 elif trade.status == "closed":
@@ -683,6 +711,7 @@ class PositionWatcher:
         trade: LiveTrade,
         decision: Decision,
         price: float | None = None,
+        neighbours: Iterable[LiveTrade] | None = None,
     ) -> None:
         changed = False
 
@@ -763,7 +792,12 @@ class PositionWatcher:
 
         if decision.move_stop_to is not None:
             if await self._set_stop(
-                client, trade, decision.move_stop_to, price, held=decision.size or None
+                client,
+                trade,
+                decision.move_stop_to,
+                price,
+                held=decision.size or None,
+                spare=spare_marks(neighbours or ()),
             ):
                 trade.current_stop = decision.move_stop_to
                 changed = True
@@ -894,8 +928,9 @@ class PositionWatcher:
         stop: float,
         market: float | None = None,
         held: float | None = None,
+        spare: set[str] | None = None,
     ) -> bool:
-        return await set_stop(client, trade, stop, market, held=held)
+        return await set_stop(client, trade, stop, market, held=held, spare=spare)
 
     async def _drop_old_stops(self, client: WeexFutures, trade: LiveTrade, keep: str) -> None:
         await drop_old_stops(client, trade, keep)
@@ -1197,6 +1232,7 @@ async def set_stop(
     market: float | None = None,
     label: str | None = None,
     held: float | None = None,
+    spare: set[str] | None = None,
 ) -> bool:
     """Поставить стоп на новую цену: снять старый и выставить новый.
 
@@ -1264,7 +1300,9 @@ async def set_stop(
         return False
 
     fresh = plan_order_id(placed)
-    await drop_old_stops(client, trade, keep=fresh, market=market, fresh=trigger)
+    await drop_old_stops(
+        client, trade, keep=fresh, market=market, fresh=trigger, spare=spare
+    )
     logger.info(
         "Стоп %s: было %s, стало %s (целей взято %d, рынок %s)",
         trade.symbol,
@@ -1345,6 +1383,7 @@ async def drop_old_stops(
     keep: str,
     market: float | None = None,
     fresh: float | None = None,
+    spare: set[str] | None = None,
 ) -> None:
     """Снять прежние стопы, оставив только что поставленный.
 
@@ -1366,6 +1405,11 @@ async def drop_old_stops(
     for i in range(len(recorded)):
         takes |= take_labels(trade.client_id, i)
     takes.discard("")
+    # Метки защиты соседних сделок. На бирже позиция по монете и стороне одна,
+    # а записей о ней у нас бывает несколько, и стоп соседней - такая же живая
+    # защита: снятый, он оставлял её половину позиции голой.
+    spared = {str(one) for one in (spare or ())}
+    spared.discard("")
     try:
         orders = await client.algo_orders(trade.symbol)
     except WeexTradeError as exc:
@@ -1379,7 +1423,24 @@ async def drop_old_stops(
         # задали, - и такие раньше пропускались молча. Прежний стоп оставался
         # висеть, а трейдеру предлагалось убрать его руками.
         order_id = str(order.get("orderId") or order.get("algoId") or order.get("id") or "")
-        if keep in marks or marks & takes:
+        if keep in marks or marks & takes or marks & spared:
+            continue
+
+        # Сторона решает не меньше вида заявки. В хедже на одной монете стоят
+        # обе позиции, и стоп встречной - чужая защита: перенос нашего стопа в
+        # безубыток снимал её, и встречная позиция оставалась без стопа. Своей
+        # стороны биржа не назвала (односторонний режим) - разбираем как
+        # раньше, там встречной позиции и не бывает.
+        held_side = str(
+            order.get("positionSide") or order.get("posSide") or order.get("holdSide") or ""
+        ).upper()
+        if held_side and held_side not in (trade.side.upper(), "BOTH", "NET"):
+            logger.info(
+                "Условная заявка %s оставлена: она защищает %s, а мы ведём %s",
+                order_id or sorted(marks),
+                held_side,
+                trade.side.upper(),
+            )
             continue
 
         trigger = _first(order, ("triggerPrice", "stopPrice", "triggerPx", "planPrice", "price"))
@@ -1749,6 +1810,25 @@ def take_labels(client_id: str, index: int) -> set[str]:
 def stop_labels(client_id: str, takes_hit: int) -> set[str]:
     """Все написания ярлыка стопа: нынешнее и прежнее."""
     return {stop_label(client_id, takes_hit), legacy_stop_label(client_id, takes_hit)}
+
+
+def spare_marks(trades: Iterable[LiveTrade]) -> set[str]:
+    """Чем опознаётся защита соседних сделок: номера их стопов и наши метки.
+
+    По этим меткам снятие прежних стопов узнаёт чужое и мимо него проходит.
+    Метки берём на все числа взятых целей и на все ручные переносы: соседняя
+    сделка могла переставить свой стоп раньше, и висит он под меткой того
+    числа целей или того по счёту переноса, на котором его поставили.
+    """
+    marks: set[str] = set()
+    for trade in trades:
+        marks.add(str(trade.sl_order_id or ""))
+        for hit in range(4):
+            marks |= stop_labels(trade.client_id, hit)
+        for nth in range(1, int(getattr(trade, "replaces", 0) or 0) + 1):
+            marks.add(moved_stop_label(trade.client_id, nth))
+    marks.discard("")
+    return marks
 
 
 def order_marks(order: dict[str, Any]) -> set[str]:
