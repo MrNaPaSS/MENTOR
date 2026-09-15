@@ -1455,3 +1455,50 @@ async def test_exchanges_that_clear_protection_themselves_are_not_touched():
 
     assert getattr(WeexFutures, "clears_protection_on_close", True) is True
     assert BinanceFutures.clears_protection_on_close is False
+
+
+def test_one_broken_trade_does_not_stop_the_pass(monkeypatch):
+    """Сбой одной сделки не оставляет без сопровождения соседние.
+
+    Раньше исключение, например от запроса цены по одной монете, выходило из
+    цикла обхода, и остальные сделки этого счёта не проверялись вовсе - и так
+    на каждом проходе, пока сбой не уйдёт.
+    """
+    import asyncio
+    from types import SimpleNamespace
+
+    from backend.trading import watcher as watcher_mod
+    from backend.trading.watcher import PositionWatcher
+
+    broken = trade(client_id="bad", symbol="BADUSDT")
+    broken.id = 1
+    good = trade(client_id="good", symbol="BTCUSDT")
+    good.id = 2
+
+    class Exchange:
+        async def positions(self):
+            # У сломанной монеты нет цены в позиции - за ней пойдут отдельно.
+            return [{"symbol": "BADUSDT", "total": "3"}, position()]
+
+        async def last_price(self, symbol):
+            raise RuntimeError("цены нет")
+
+        async def algo_orders(self, symbol):
+            return []
+
+        async def open_orders(self, symbol):
+            return []
+
+    monkeypatch.setattr(watcher_mod, "account_for", lambda *_a: SimpleNamespace(is_active=True))
+    monkeypatch.setattr(watcher_mod, "client_for", lambda *_a: Exchange())
+    monkeypatch.setattr(watcher_mod, "cached", lambda client, *_a: client)
+
+    watcher = PositionWatcher(lambda: None, lambda: None)
+    applied: list[str] = []
+
+    async def remember(session, client, row, decision, price):
+        applied.append(row.client_id)
+
+    watcher._apply = remember  # type: ignore[assignment]
+    asyncio.run(watcher._handle_student(None, 1, [broken, good], "weex"))
+    assert applied == ["good"]

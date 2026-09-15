@@ -344,7 +344,8 @@ class BingxFutures:
             spec = await self._spec(symbol)
         except WeexTradeError as exc:
             logger.warning("Шаги %s на BingX не получены: %s", symbol, exc)
-            return DEFAULT_FILTERS
+            # С пометкой: по угаданным шагам вход не отправляется.
+            return {**DEFAULT_FILTERS, "guessed": 1.0}
         return spec.filters(await self.taker_fee())
 
     async def last_price(self, symbol: str) -> float | None:

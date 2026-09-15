@@ -76,8 +76,18 @@ DEFAULT_FILTERS = {
     "max_position": 0.0,
 }
 
+# Шаги по умолчанию с пометкой «угаданы». Их возвращает клиент, когда биржа
+# справочник не отдала или монеты в нём нет: считать по ним можно, а ставить
+# вход - нет (backend/api/trading.py, открытие сделки).
+GUESSED_FILTERS = {**DEFAULT_FILTERS, "guessed": 1.0}
+
 # Кэш на процесс: состав инструментов меняется раз в месяцы, а запрос тяжёлый.
+# Но не навсегда: шаги у монет биржа всё же меняет, и процесс, живущий неделю,
+# торговал бы по устаревшим. Раз в шесть часов справочник перечитывается;
+# не ответила биржа - остаются прежние живые шаги.
 _FILTERS: dict[str, dict[str, float]] = {}
+_FILTERS_AT = 0.0
+FILTERS_TTL = 6 * 3600.0
 
 
 def floor_to_step(value: float, step: float) -> float:
@@ -427,15 +437,18 @@ class WeexFutures:
         и шаги у них меняются. Ответ кэшируется на процесс — состав меняется раз
         в месяцы, а запрос тяжёлый.
         """
+        global _FILTERS_AT
         sym = symbol.upper()
-        if sym in _FILTERS:
+        if sym in _FILTERS and time.monotonic() - _FILTERS_AT < FILTERS_TTL:
             return _FILTERS[sym]
 
         try:
             data = await self._request("GET", ENDPOINTS["exchange_info"])
         except WeexTradeError as exc:
             logger.warning("Шаги инструментов не получены: %s", exc)
-            return DEFAULT_FILTERS
+            # Прежние живые шаги лучше справочных: они были верны недавно.
+            # Справочные помечены - торговая ручка по ним вход не отправит.
+            return _FILTERS.get(sym) or GUESSED_FILTERS
 
         rows = data.get("symbols") if isinstance(data, dict) else data
         for row in rows or []:
@@ -445,8 +458,9 @@ class WeexFutures:
             parsed = _parse_filters(row)
             if name and parsed:
                 _FILTERS[name] = parsed
+        _FILTERS_AT = time.monotonic()
 
-        return _FILTERS.get(sym, DEFAULT_FILTERS)
+        return _FILTERS.get(sym, GUESSED_FILTERS)
 
     # ── ордера ──────────────────────────────────────────────────────────────
 

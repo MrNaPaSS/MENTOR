@@ -576,42 +576,56 @@ class PositionWatcher:
         owned = {(t.symbol.upper(), t.side) for t in trades if t.status == "open"}
 
         for trade in claim_order(trades):
-            position = position_for(positions, trade.symbol, trade.side)
-            streak = self._missing.get(trade.id, 0)
-            self._missing[trade.id] = streak + 1 if position_size(position) <= 0 else 0
+            # Сбой одной сделки не останавливает обход остальных. Раньше
+            # исключение, например от запроса цены по одной монете, выходило
+            # из цикла, и соседние сделки этого счёта оставались без
+            # сопровождения до следующего прохода - и так каждый проход.
+            # Отмена (таймаут прохода, остановка сервера) - не Exception и
+            # проходит насквозь, как и должна.
+            try:
+                position = position_for(positions, trade.symbol, trade.side)
+                streak = self._missing.get(trade.id, 0)
+                self._missing[trade.id] = streak + 1 if position_size(position) <= 0 else 0
 
-            price = mark_price(position)
-            if price is None:
-                sym = trade.symbol.upper()
-                if sym not in prices:
-                    # Фабрика сессии асинхронная: без ожидания в запрос уходил
-                    # не сеанс, а корутина - и обход сделок падал целиком,
-                    # оставляя позиции без сопровождения.
-                    # Цена той биржи, где открыта сделка: цены бирж расходятся,
-                    # а стоп подводится к рынку именно этой.
-                    own = getattr(client, "last_price", None)
-                    prices[sym] = (
-                        await own(sym) if own else await public_price(await self._http(), sym)
-                    )
-                price = prices[sym]
+                price = mark_price(position)
+                if price is None:
+                    sym = trade.symbol.upper()
+                    if sym not in prices:
+                        # Фабрика сессии асинхронная: без ожидания в запрос уходил
+                        # не сеанс, а корутина - и обход сделок падал целиком,
+                        # оставляя позиции без сопровождения.
+                        # Цена той биржи, где открыта сделка: цены бирж расходятся,
+                        # а стоп подводится к рынку именно этой.
+                        own = getattr(client, "last_price", None)
+                        prices[sym] = (
+                            await own(sym) if own else await public_price(await self._http(), sym)
+                        )
+                    price = prices[sym]
 
-            plans = await self._open_plans(client, trade)
-            resting = await self._resting(client, trade)
-            key = (trade.symbol.upper(), trade.side)
-            decision = decide(
-                trade,
-                position,
-                plans,
-                price,
-                self._missing[trade.id],
-                resting,
-                taken=trade.status == "waiting" and key in owned,
-            )
-            await self._apply(session, client, trade, decision, price)
-            if trade.status == "open":
-                owned.add(key)
-            elif trade.status == "closed":
-                owned.discard(key)
+                plans = await self._open_plans(client, trade)
+                resting = await self._resting(client, trade)
+                key = (trade.symbol.upper(), trade.side)
+                decision = decide(
+                    trade,
+                    position,
+                    plans,
+                    price,
+                    self._missing[trade.id],
+                    resting,
+                    taken=trade.status == "waiting" and key in owned,
+                )
+                await self._apply(session, client, trade, decision, price)
+                if trade.status == "open":
+                    owned.add(key)
+                elif trade.status == "closed":
+                    owned.discard(key)
+            except Exception as exc:  # noqa: BLE001 - одна сделка не держит остальные
+                logger.warning(
+                    "Сделка %s (%s) пропущена в этом проходе: %s",
+                    trade.client_id,
+                    trade.symbol,
+                    exc,
+                )
 
     async def _resting(self, client: WeexFutures, trade: LiveTrade) -> bool:
         """Стоит ли ещё вход этой сделки в заявках биржи.

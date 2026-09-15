@@ -930,3 +930,114 @@ def test_live_trades_carry_what_just_closed(app_and_exchange):
     assert one["exit_price"] == pytest.approx(2458.6)
     assert one["pnl"] == pytest.approx(-21.5)
     assert one["fee"] == pytest.approx(1.2)
+
+
+def _open_body(**over):
+    body = {
+        "symbol": "BTCUSDT",
+        "side": "long",
+        "quantity": 0.5,
+        "leverage": 10,
+        "stop": 79000,
+        "takes": [80000, 80500, 81000],
+        "client_order_id": "BTCUSDT-1",
+    }
+    body.update(over)
+    return body
+
+
+def test_entry_without_answer_is_watched(app_and_exchange):
+    """Биржа не ответила на вход - сделка встаёт под наблюдение, а не теряется.
+
+    Заявка могла исполниться: без записи для сопровождения такая позиция
+    оставалась без стопа и целей, а трейдер думал, что входа нет.
+    """
+    client, exchange, session = app_and_exchange
+    from core.models import LiveTrade
+    from core.weex.futures import WeexTradeError
+
+    async def silent(**kw):
+        exchange.orders.append(kw)
+        raise WeexTradeError("Биржа не ответила вовремя", retryable=True)
+
+    exchange.place_order = silent
+    res = client.post("/api/trading/open", json=_open_body())
+    assert res.status_code == 502
+    assert "наблюдение" in res.json()["detail"]
+
+    row = session.query(LiveTrade).one()
+    assert row.client_id == "BTCUSDT-1"
+    assert row.status == "waiting"
+    assert float(row.initial_stop) == 79000
+    assert json.loads(row.targets_json) == [80000, 80500, 81000]
+    # Целей по неизвестному входу не ставили: их выставит сопровождение.
+    assert exchange.plans == []
+
+
+def test_refused_entry_is_not_watched(app_and_exchange):
+    """Отказ биржи по существу - записи нет: следить не за чем."""
+    client, exchange, session = app_and_exchange
+    from core.models import LiveTrade
+    from core.weex.futures import WeexTradeError
+
+    async def refused(**kw):
+        raise WeexTradeError("insufficient margin")
+
+    exchange.place_order = refused
+    res = client.post("/api/trading/open", json=_open_body())
+    assert res.status_code == 400
+    assert session.query(LiveTrade).count() == 0
+
+
+def test_entry_is_not_sent_on_guessed_steps(app_and_exchange):
+    """Биржа не отдала шаги инструмента - вход по угаданным не уходит."""
+    client, exchange, _ = app_and_exchange
+
+    async def guessed(symbol):
+        return {"step": 0.001, "tick": 0.01, "min_qty": 0.001, "guessed": 1.0}
+
+    exchange.symbol_filters = guessed
+    res = client.post("/api/trading/open", json=_open_body())
+    assert res.status_code == 503
+    assert exchange.orders == []
+
+
+def test_live_lists_recently_finished_trades(app_and_exchange):
+    """Терминал узнаёт, какие сделки сервер уже завершил - за дни, а не минуты.
+
+    Ждущая лимитка, исполнившаяся и закрытая ночью, иначе висела на графике
+    «ждущей»: сервер о ней молчал, а похороны касаются только открытых сделок.
+    """
+    from datetime import timedelta
+
+    from core.models import LiveTrade, Student, utcnow
+
+    client, _, session = app_and_exchange
+    student = session.query(Student).first()
+
+    def row(client_id, status, closed_at=None):
+        return LiveTrade(
+            student_id=student.id,
+            client_id=client_id,
+            symbol="BTCUSDT",
+            side="long",
+            entry=100,
+            initial_stop=99,
+            current_stop=99,
+            qty=1,
+            status=status,
+            closed_at=closed_at,
+        )
+
+    session.add_all(
+        [
+            row("fresh", "closed", utcnow() - timedelta(hours=10)),
+            row("old", "closed", utcnow() - timedelta(days=10)),
+            row("live", "waiting"),
+        ]
+    )
+    session.commit()
+
+    body = client.get("/api/trading/live").json()
+    assert body["finished"] == ["fresh"]
+    assert [t["client_id"] for t in body["trades"]] == ["live"]

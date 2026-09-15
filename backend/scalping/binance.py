@@ -353,6 +353,15 @@ class StreamClient:
                 if msg.type is not aiohttp.WSMsgType.TEXT:
                     continue
                 self._dispatch(msg.data)
+            # Почему поток закрылся - в журнал. Каждое переподключение рвёт
+            # цепочку обновлений у всех книг разом, и все они идут за снимком:
+            # без причины в журнале не отличить штатный обрыв биржи от нашей
+            # собственной ошибки.
+            logger.warning(
+                "Поток Binance закрыт: код %s, %s",
+                ws.close_code,
+                ws.exception() or "без ошибки",
+            )
         self._ws = None
 
     def _dispatch(self, raw: str) -> None:

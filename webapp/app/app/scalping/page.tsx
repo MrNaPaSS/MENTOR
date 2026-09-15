@@ -1176,9 +1176,15 @@ export default function ScalpingPage() {
    * Плечо берём авторское: им задан характер сделки, и менять его значит
    * повторять не её.
    */
+  // Копия уже в пути: вторая до ответа биржи не уходит.
+  const copyingRef = useRef(false);
   const copyTrade = useCallback(
     async (shared: SharedTrade) => {
       if (!copyAllowed) return;
+      // Одна копия за раз. Кнопка «войти» в чате не прячется после нажатия, а
+      // номер заявки собирается из времени: двойной клик уходил на биржу двумя
+      // разными заявками и открывал две позиции.
+      if (copyingRef.current) return;
       if (!exchange?.connected) {
         setOrderNote({ text: t.terminal.notes.notConnected, bad: true });
         setExchangeOpen(true);
@@ -1209,6 +1215,7 @@ export default function ScalpingPage() {
       setTrades((list) => [...list, next]);
       setOrderNote({ text: t.terminal.notes.sendingOrder, bad: false });
 
+      copyingRef.current = true;
       try {
         const result = await openPosition(next, true);
         if (!result) throw new Error(t.terminal.notes.orderRejected);
@@ -1220,6 +1227,8 @@ export default function ScalpingPage() {
         // Отказ мог назвать предел позиции на плече - сервер его запомнил.
         setLimitsAsked((n) => n + 1);
         refuse(err instanceof Error ? err.message : t.terminal.notes.orderRejected);
+      } finally {
+        copyingRef.current = false;
       }
     },
     [copyAllowed, exchange?.connected, margin, refuse, symbol, selectSymbol, t],
@@ -2064,6 +2073,29 @@ export default function ScalpingPage() {
       // Только что закрытые - с настоящими ценой выхода и итогом. По ним
       // уведомление говорит, чем кончилась сделка, а не угадывает.
       const booked = new Map((mind?.closed ?? []).map((one) => [one.client_id, one]));
+      // Сделки, которые сопровождение уже завершило само, - за последние дни,
+      // а не только за четверть часа, как список закрытых выше.
+      const finished = new Set(all?.finished ?? []);
+
+      // Ждущая лимитка, которую сервер уже завершил: её сняли, или она
+      // исполнилась и закрылась по стопу или цели, пока вкладка была закрыта.
+      // Раньше такая разметка переживала ночь в браузере и висела на графике
+      // «ждущей» до тех пор, пока трейдер не снимал её руками: похороны по
+      // пустой позиции касаются только открытых сделок, а сервер о ней уже
+      // молчал. Расчёт, который на биржу не уходил, сервер не знает - его это
+      // не касается.
+      const withdrawn = watching.filter(
+        (t) => t.status === "planned" && finished.has(t.id) && !serverSays.has(t.id),
+      );
+      if (withdrawn.length > 0) {
+        const gone = new Set(withdrawn.map((t) => t.id));
+        for (const t of withdrawn) {
+          record("trade.withdrawn", { id: t.id, symbol: t.symbol, why: "сервер завершил сделку" });
+        }
+        setTrades((list) => list.filter((t) => !gone.has(t.id)));
+        // Исполнившаяся и закрытая сделка уже лежит в журнале - покажем её.
+        setJournalKey((n) => n + 1);
+      }
       // Ни на графике, ни у сервера ничего нет - биржу не тревожим.
       const knows = (mind?.trades ?? []).some((one) => one.status === "open");
       if (watching.length === 0 && !knows) {
@@ -2175,7 +2207,11 @@ export default function ScalpingPage() {
 
         // Хороним только при согласии биржи и сервера: пока сопровождение
         // сделку ведёт, пустой ответ был заминкой, а не закрытием.
-        if (!settled && !done && !shouldBury(miss, now, alive)) continue;
+        // Сервер сделку уже закрыл - это его решение по исполнениям, а не
+        // пустой ответ биржи; выдержка поверх него не нужна.
+        if (!settled && !done && !finished.has(trade.id) && !shouldBury(miss, now, alive)) {
+          continue;
+        }
         bury.add(trade.id);
         missingRef.current.delete(trade.id);
         // Пишем сделку сразу и своей оценкой: сопровождение на сервере
@@ -2598,9 +2634,24 @@ export default function ScalpingPage() {
       }
     }
 
-    check();
+    // Круг опроса - один за раз, как и проверка защиты. На медленном туннеле
+    // круг длится дольше трёх секунд, и два круга разом писали объёмы
+    // вперемешку: старый ответ затирал свежий, и следующий круг видел ложный
+    // переход «позиции не было - стала» и открывал соседнюю ждущую лимитку.
+    let checking = false;
+    async function tick() {
+      if (checking) return;
+      checking = true;
+      try {
+        await check();
+      } finally {
+        checking = false;
+      }
+    }
+
+    void tick();
     guard();
-    const id = setInterval(check, 3000);
+    const id = setInterval(tick, 3000);
     const watch = setInterval(guard, 4000);
     const rush = setInterval(rushTick, RUSH_POLL_MS);
     // Касание цели в стакане: позвать сервер и спросить биржу сразу.

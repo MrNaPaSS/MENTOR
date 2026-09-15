@@ -207,8 +207,21 @@ export type ExchangePlans = {
  * График рисует их по замыслу сделки. Когда биржа заявку не приняла, картинка
  * успокаивает вместо того, чтобы предупредить, - а на кону вся защита позиции.
  */
+// Вопросы о защите, которые сейчас в пути: круг опроса и проверка защиты
+// спрашивают одно и то же в одни и те же секунды, и второй запрос к бирже при
+// этом ничего не добавлял - только тратил её лимит. Одновременные вопросы по
+// монете получают один общий ответ; следующий вопрос после ответа идёт заново.
+const plansInFlight = new Map<string, Promise<ExchangePlans | null>>();
+
 export function plansOf(symbol: string) {
-  return request<ExchangePlans>(`/api/trading/plans/${symbol.toUpperCase()}`);
+  const sym = symbol.toUpperCase();
+  const pending = plansInFlight.get(sym);
+  if (pending) return pending;
+  const asked = request<ExchangePlans>(`/api/trading/plans/${sym}`).finally(() => {
+    plansInFlight.delete(sym);
+  });
+  plansInFlight.set(sym, asked);
+  return asked;
 }
 
 /**
@@ -445,5 +458,15 @@ export type ClosedTrade = {
 
 /** Живые сделки по всем монетам и только что закрытые. Память сервера, а не поход на биржу. */
 export function liveTrades() {
-  return request<{ trades: ServerTrade[]; closed?: ClosedTrade[] }>("/api/trading/live");
+  return request<{
+    trades: ServerTrade[];
+    closed?: ClosedTrade[];
+    /**
+     * Опознаватели сделок, которые сопровождение уже завершило за последние
+     * дни: закрытые позиции и снятые заявки. По ним терминал убирает разметку,
+     * пережившую ночь в браузере, - ждущую лимитку, которая исполнилась и
+     * закрылась, пока вкладка была закрыта.
+     */
+    finished?: string[];
+  }>("/api/trading/live");
 }

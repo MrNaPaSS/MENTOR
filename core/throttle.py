@@ -123,18 +123,21 @@ async def take(exchange: str, account: str, budgets: tuple[Budget, Budget] | Non
         lock = _locks[code] = asyncio.Lock()
 
     waited = 0.0
-    async with lock:
-        mine = _window((code, account), own)
-        all_of_them = _window((code,), shared)
-        while True:
+    while True:
+        # Под замком только проверка и запись. Спать под ним нельзя: ученик,
+        # выбравший свой бюджет, держал бы в очереди всех остальных на этой
+        # бирже - и их переносы стопов тоже, хотя их окна свободны.
+        async with lock:
+            mine = _window((code, account), own)
+            all_of_them = _window((code,), shared)
             now = time.monotonic()
             delay = max(mine.delay(now), all_of_them.delay(now))
             if delay <= 0:
                 mine.took(now)
                 all_of_them.took(now)
                 break
-            waited += delay
-            await asyncio.sleep(delay)
+        waited += delay
+        await asyncio.sleep(delay)
 
     if waited >= LOUD_WAIT:
         logger.warning("Очередь к %s: ждали %.2f с - бюджет запросов на пределе", code, waited)

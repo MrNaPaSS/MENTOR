@@ -6,8 +6,7 @@
 // клиент только говорит, какой инструмент открыт.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API_URL } from "./api";
-import { getAccessToken } from "./auth";
+import { API_URL, liveAccessToken } from "./api";
 
 export type ScreenerRow = {
   symbol: string;
@@ -149,13 +148,10 @@ export const SORT_KEYS: VisibleSortKey[] = [
 const RECONNECT_MIN = 500;
 const RECONNECT_MAX = 10_000;
 
-function wsUrl(): string {
+function wsUrl(token: string | null): string {
   const base = API_URL.replace(/^http/, "ws");
   // Токен - чтобы сервер знал купленные инструменты: глубину стакана, шаг ×25
   // и разбор свечи он отдаёт только по ним. Без токена - бесплатный уровень.
-  // Берётся при каждом подключении: переподключение после обновления токена
-  // уходит уже со свежим.
-  const token = getAccessToken();
   return `${base}/ws/scalping${token ? `?token=${encodeURIComponent(token)}` : ""}`;
 }
 
@@ -239,9 +235,14 @@ export function useScalpingFeed({
   useEffect(() => {
     let closed = false;
 
-    function connect() {
+    async function connect() {
       if (closed) return;
-      const ws = new WebSocket(wsUrl());
+      // Токен - живой, а не тот, что лежит в хранилище: после обрыва сети
+      // спустя четверть часа сокет переподключался с истёкшим, и сервер отдавал
+      // купившему глубину и разбор свечи только бесплатный уровень до F5.
+      const token = await liveAccessToken().catch(() => null);
+      if (closed) return;
+      const ws = new WebSocket(wsUrl(token));
       socketRef.current = ws;
 
       ws.onopen = () => {

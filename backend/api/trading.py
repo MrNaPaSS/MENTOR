@@ -284,7 +284,33 @@ async def live_trades(
             for row in rows
         ],
         "closed": _just_closed(session, student.id),
+        # Какие сделки сопровождение уже завершило за последние дни: закрытые
+        # позиции и снятые заявки. Одними опознавателями - терминалу этого
+        # хватает, чтобы убрать разметку, пережившую ночь в браузере.
+        "finished": _finished(session, student.id),
     }
+
+
+# Сколько дней помнить о завершённых сделках для терминала. Вкладку закрывают
+# на ночь и на выходные: трёх дней хватает, чтобы разметка вернувшегося
+# трейдера сошлась с тем, что было на бирже, а список оставался коротким.
+FINISHED_WINDOW = timedelta(days=3)
+FINISHED_LIMIT = 200
+
+
+def _finished(session, student_id: int) -> list[str]:
+    """Опознаватели сделок, которые сопровождение закрыло за последние дни."""
+    since = utcnow() - FINISHED_WINDOW
+    return list(
+        session.execute(
+            select(LiveTrade.client_id)
+            .where(LiveTrade.student_id == student_id)
+            .where(LiveTrade.status == "closed")
+            .where(LiveTrade.closed_at >= since)
+            .order_by(LiveTrade.id.desc())
+            .limit(FINISHED_LIMIT)
+        ).scalars()
+    )
 
 
 # Сколько закрытая сделка остаётся в ответе. Терминал хоронит сделку через
@@ -922,6 +948,13 @@ async def open_position(
     # Объём и цены приводим к шагам инструмента до отправки. Биржа отклоняет
     # ордер, если объём не кратен шагу лота: «order size must match stepSize».
     filters = await client.symbol_filters(symbol)
+    # Биржа не отдала шаги инструмента - в ответе справочные. По ним цена
+    # округляется до сотой, и стоп на монете дешевле цента уезжал на десятки
+    # процентов или становился нулём. Вход по угаданным шагам не отправляем.
+    if filters.get("guessed"):
+        raise HTTPException(
+            503, "Биржа не отдала шаги инструмента - вход не отправлен. Попробуйте через минуту."
+        )
     quantity = floor_to_step(body.quantity, filters["step"])
     if quantity < filters["min_qty"]:
         raise HTTPException(
@@ -953,7 +986,10 @@ async def open_position(
     # неудачей нельзя: трейдер решит, что позиции нет, а она стоит на бирже.
     try:
         await _ensure_leverage(client, symbol, body.leverage)
+    except WeexTradeError as exc:
+        raise _fail(exc) from exc
 
+    try:
         entry_order = await client.place_order(
             symbol=symbol,
             side="BUY" if long else "SELL",
@@ -970,6 +1006,37 @@ async def open_position(
         found = max_size_in(str(exc))
         if found:
             leverage_caps.learn(session, symbol, found[1], found[0])
+        if exc.retryable and body.client_order_id:
+            # Биржа не ответила - это не отказ, а неизвестность: заявка могла
+            # встать и даже исполниться. Раньше записи для сопровождения не
+            # было, и исполнившийся вход оставался позицией, которую никто не
+            # ведёт (а у Binance - ещё и без стопа: он ставится вторым
+            # запросом). Теперь сделка встаёт под наблюдение как ждущая:
+            # появится позиция - сопровождение поставит стоп и цели само; нет
+            # ни заявки, ни позиции - снимет запись через несколько обходов.
+            _remember_live(
+                session,
+                student,
+                body,
+                symbol,
+                client,
+                entry_price=entry_price,
+                stop_price=stop_price,
+                quantity=quantity,
+                placed=[],
+            )
+            logger.warning(
+                "Вход %s (%s) без ответа биржи - взят под наблюдение: %s",
+                symbol,
+                body.client_order_id,
+                exc,
+            )
+            raise HTTPException(
+                502,
+                "Биржа не ответила вовремя - неизвестно, встала ли заявка. Сделка "
+                "взята под наблюдение: если вход исполнился, сервер сам поставит "
+                "стоп и цели. Не нажимайте «Войти» ещё раз, пока не проверите позиции.",
+            ) from exc
         raise _fail(exc) from exc
 
     # Цели ставятся только когда позиция уже есть.
@@ -1012,6 +1079,45 @@ async def open_position(
 
     # Запись для фонового ведения: без неё переносить стоп в безубыток будет
     # некому, как только трейдер закроет вкладку.
+    live = _remember_live(
+        session,
+        student,
+        body,
+        symbol,
+        client,
+        entry_price=entry_price,
+        stop_price=stop_price,
+        quantity=quantity,
+        placed=placed,
+    )
+
+    return {
+        "entry": entry_order,
+        "takes": takes,
+        "watched": live.client_id,
+        "warning": warning,
+    }
+
+
+def _remember_live(
+    session,
+    student: Student,
+    body: OrderIn,
+    symbol: str,
+    client,
+    *,
+    entry_price: float | None,
+    stop_price: float,
+    quantity: float,
+    placed: list[dict[str, Any]],
+) -> LiveTrade:
+    """Записать сделку для фонового ведения и сохранить.
+
+    Одно место на оба случая: вход, который биржа приняла, и вход, на который
+    она не ответила. Во втором случае запись та же, что у лимитки до
+    исполнения: целей ещё нет, есть замысел, и сопровождение поставит их само,
+    когда позиция появится.
+    """
     client_id = body.client_order_id or f"{symbol}-{int(utcnow().timestamp() * 1000)}"
     live = session.execute(
         select(LiveTrade)
@@ -1042,13 +1148,7 @@ async def open_position(
     live.exchange = _exchange_of(client)
     live.updated_at = utcnow()
     session.commit()
-
-    return {
-        "entry": entry_order,
-        "takes": takes,
-        "watched": live.client_id,
-        "warning": warning,
-    }
+    return live
 
 
 @router.post("/close")

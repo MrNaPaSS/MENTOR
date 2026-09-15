@@ -129,8 +129,14 @@ class ScalpingCollector:
     # ── жизненный цикл ──────────────────────────────────────────────────────
 
     async def _get_session(self) -> aiohttp.ClientSession:
+        # С пределом ожидания. Без него aiohttp ждёт ответа пять минут, а
+        # монеты берутся под наблюдение по одной: один зависший снимок
+        # останавливал набор всего списка и обновление суточной сводки, и
+        # скринер стоял пустым. Снимок стакана биржа отдаёт за доли секунды -
+        # десяти секунд хватает с запасом. Этой же сессией ходят рыночные
+        # ручки (backend/sources/binance.py), им предел нужен не меньше.
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
         return self._session
 
     def start(self) -> None:
