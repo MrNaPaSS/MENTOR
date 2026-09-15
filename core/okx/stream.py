@@ -319,7 +319,20 @@ class OkxPrivateStream:
             name = str(row.get("instId") or "").upper()
             side = str(row.get("posSide") or "").lower()
             if side not in ("long", "short"):
-                side = "long" if _f(row.get("pos")) >= 0 else "short"
+                # Односторонний режим: позиция по монете одна, и строка биржи
+                # говорит о ней целиком. Прежнюю запись любой стороны убираем.
+                #
+                # Раньше сторона бралась по знаку объёма, и закрытие шорта -
+                # объём 0 - читалось как лонг: снималась запись лонга, которого
+                # не было, а шорт оставался в памяти навсегда. Сопровождение
+                # видело живую позицию и не закрывало сделку, а терминал, не
+                # найдя целей, объявлял «взята цель 3» при сработавшем стопе.
+                for gone in ("long", "short"):
+                    if self._positions.pop((name, gone), None) is not None:
+                        changed = True
+                if _f(row.get("pos")) == 0:
+                    continue
+                side = "long" if _f(row.get("pos")) > 0 else "short"
             key = (name, side)
             spec = specs.get(name)
             if spec is None and _f(row.get("pos")) != 0:

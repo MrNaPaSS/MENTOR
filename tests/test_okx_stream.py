@@ -113,3 +113,66 @@ def test_a_position_without_its_instrument_is_not_erased():
     row = {"instId": "BTC-USDT-SWAP", "pos": "1", "posSide": "long"}
     asyncio.run(stream._dispatch(stream._ws, _positions_message([row])))
     assert stream.positions() == [kept]
+
+
+# ── односторонний режим: закрытие и переворот ───────────────────────────────
+
+from core.okx.futures import Instrument  # noqa: E402
+
+
+def _btc_spec() -> dict:
+    spec = Instrument.__new__(Instrument)
+    return {"BTC-USDT-SWAP": spec}
+
+
+def _net_row(pos: str) -> dict:
+    return {"instId": "BTC-USDT-SWAP", "posSide": "net", "pos": pos, "avgPx": "80000"}
+
+
+def test_a_closed_net_short_leaves_no_ghost(monkeypatch):
+    """Стоп закрыл шорт - в памяти потока позиции больше нет.
+
+    Закрытие приходит объёмом 0, и сторона по знаку читалась как лонг:
+    снималась запись лонга, которого не было, а шорт оставался навсегда.
+    Сопровождение не закрывало сделку, терминал писал «взята цель 3».
+    """
+    from core.okx import stream as okx_stream
+
+    monkeypatch.setattr(okx_stream, "position_row", lambda row, spec: {"symbol": "BTCUSDT", "size": row["pos"]})
+    stream = _logged_in_stream(specs=_btc_spec())
+
+    asyncio.run(stream._dispatch(stream._ws, _positions_message([_net_row("-30")])))
+    assert len(stream.positions()) == 1
+
+    asyncio.run(stream._dispatch(stream._ws, _positions_message([_net_row("0")])))
+    assert stream.positions() == []
+
+
+def test_a_net_position_flip_keeps_only_the_new_side(monkeypatch):
+    from core.okx import stream as okx_stream
+
+    monkeypatch.setattr(okx_stream, "position_row", lambda row, spec: {"symbol": "BTCUSDT", "size": row["pos"]})
+    stream = _logged_in_stream(specs=_btc_spec())
+
+    asyncio.run(stream._dispatch(stream._ws, _positions_message([_net_row("-30")])))
+    asyncio.run(stream._dispatch(stream._ws, _positions_message([_net_row("20")])))
+    assert list(stream._positions) == [("BTC-USDT-SWAP", "long")]
+
+
+def test_hedge_closing_one_side_keeps_the_other(monkeypatch):
+    from core.okx import stream as okx_stream
+
+    monkeypatch.setattr(
+        okx_stream,
+        "position_row",
+        lambda row, spec: None if row["pos"] == "0" else {"symbol": "BTCUSDT", "size": row["pos"]},
+    )
+    stream = _logged_in_stream(specs=_btc_spec())
+    rows = [
+        {"instId": "BTC-USDT-SWAP", "posSide": "long", "pos": "5"},
+        {"instId": "BTC-USDT-SWAP", "posSide": "short", "pos": "3"},
+    ]
+    asyncio.run(stream._dispatch(stream._ws, _positions_message(rows)))
+    closed_short = [{"instId": "BTC-USDT-SWAP", "posSide": "short", "pos": "0"}]
+    asyncio.run(stream._dispatch(stream._ws, _positions_message(closed_short)))
+    assert list(stream._positions) == [("BTC-USDT-SWAP", "long")]
