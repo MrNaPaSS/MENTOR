@@ -67,10 +67,11 @@ echo   Config: !CFG!
 :: ============ 5. ZAPUSK ============
 echo [5/5] Zapusk komponentov...
 
-:: Sledim tolko za kodom. Bez --reload-dir uvicorn obhodit vsu papku,
-:: vklyuchaya .git: on derzhal pack-faily, i git pull ne mog ih udalit
-:: ("Unlink of file .git/objects/pack/... failed").
-start "MENTOR Backend" cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir backend --reload-dir core"
+:: Tolko 127.0.0.1: snaruzhi server viden cherez tunnel, i port 8000 na vseh
+:: interfejsah daval by put' v obhod Cloudflare. Bot i tunnel hodyat na 127.0.0.1.
+:: Bez --reload: on perezapuskal server posredi obhoda sdelok na kazhdom
+:: izmenenii fajla. Posle git pull okna zakryvayut i zapuskayut start.bat zanovo.
+start "MENTOR Backend" cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && uvicorn backend.main:app --host 127.0.0.1 --port 8000"
 start "MENTOR Bot"     cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && python -m bot.main"
 
 timeout /t 3 /nobreak >nul

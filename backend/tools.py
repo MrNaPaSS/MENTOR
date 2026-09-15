@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 
 from backend import entitlements
-from backend.security import TokenError, decode_token
+from backend.security import TokenError, decode_token, mentor_alive
 from core.db import SessionLocal
 
 logger = logging.getLogger("nmnh.tools")
@@ -44,7 +44,8 @@ def rights_from_token(token: str | None, secret: str) -> frozenset[str]:
     if payload.get("type") != "access":
         return frozenset()
     if payload.get("role") == "mentor":
-        return frozenset(entitlements.TOOLS)
+        # Отозванный вход наставника платного не открывает.
+        return frozenset(entitlements.TOOLS) if mentor_alive(payload) else frozenset()
     try:
         student_id = int(payload["sub"])
     except (KeyError, TypeError, ValueError):

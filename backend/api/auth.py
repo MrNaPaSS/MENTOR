@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import secrets
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from decimal import Decimal
@@ -29,6 +30,8 @@ from backend.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    mentor_alive,
+    mentor_mark,
     new_session_id,
     TokenError,
 )
@@ -336,6 +339,19 @@ def _aware(at: datetime | None) -> datetime:
     return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
 
 
+def _remember_code(cache: dict, tg_id: int, code: str, ttl: int) -> None:
+    """Запомнить живой пароль до конца его срока и забыть истёкшие.
+
+    Раньше пароли лежали в памяти без срока: ученик, раз попросивший пароль,
+    оставался в словаре до перезапуска сервера. Храним вместе с моментом
+    истечения и выметаем мёртвые на каждой записи - живых всегда немного.
+    """
+    now = time.time()
+    for key in [key for key, (_, until) in cache.items() if until <= now]:
+        cache.pop(key, None)
+    cache[tg_id] = (code, now + ttl)
+
+
 @router.post("/tg/code", response_model=TgCodeOut)
 async def tg_code(
     body: TgCodeIn,
@@ -402,7 +418,8 @@ async def tg_code(
     cache = getattr(request.app.state, "tg_code_cache", None)
     alive = repo.active_tg_code(session, body.tg_id)
     if alive is not None and cache is not None:
-        kept = cache.get(body.tg_id)
+        entry = cache.get(body.tg_id)
+        kept = entry[0] if entry and entry[1] > time.time() else None
         left = int((_aware(alive.expires_at) - _now()).total_seconds())
         if kept and _digest(kept) == alive.code_hash and left > 0:
             return TgCodeOut(code=_pretty(kept), expires_in=left)
@@ -410,7 +427,7 @@ async def tg_code(
     fresh = _make_code()
     repo.create_tg_code(session, body.tg_id, _digest(fresh), config.tg_code_ttl_seconds)
     if cache is not None:
-        cache[body.tg_id] = fresh
+        _remember_code(cache, body.tg_id, fresh, config.tg_code_ttl_seconds)
 
     logger.info("Пароль входа выдан ученику tg=%s", body.tg_id)
     return TgCodeOut(code=_pretty(fresh), expires_in=config.tg_code_ttl_seconds)
@@ -557,13 +574,19 @@ def refresh(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc))
     if payload.get("type") != "refresh":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Нужен refresh-токен")
-    sub = payload["sub"]
+    sub = payload.get("sub")
+    if not sub:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный refresh-токен")
     # У токенов, выданных до появления роли в refresh, её нет — определяем по sub.
     role = payload.get("role") or ("mentor" if sub == "mentor" else "student")
 
     sid = payload.get("sid")
     if role == "student":
-        student = session.get(StudentModel, int(sub))
+        try:
+            student_id = int(sub)
+        except (TypeError, ValueError):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный refresh-токен")
+        student = session.get(StudentModel, student_id)
         if student is None or not student.is_active:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Пользователь не найден")
         # Пустая метка в записи - вход, сделанный до появления правила: такой
@@ -572,13 +595,22 @@ def refresh(
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED, "Вход выполнен на другом устройстве"
             )
+    elif role == "mentor" and not mentor_alive(payload):
+        # Сменили пароль наставника или дёрнули рубильник: прежний refresh
+        # больше не выписывает себе свежих токенов (backend/security.py).
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "Вход наставника устарел: войдите заново"
+        )
 
+    # Отпечаток пароля наставника переносится в новую пару: обновление -
+    # продолжение того же входа.
+    pv = payload.get("pv")
     return TokenPair(
         access_token=create_access_token(
-            sub, role, config.jwt_secret, config.access_ttl_seconds, sid
+            sub, role, config.jwt_secret, config.access_ttl_seconds, sid, pv=pv
         ),
         refresh_token=create_refresh_token(
-            sub, config.jwt_secret, config.refresh_ttl_seconds, role, sid
+            sub, config.jwt_secret, config.refresh_ttl_seconds, role, sid, pv=pv
         ),
     )
 
@@ -615,11 +647,18 @@ def dev_login(config: BackendConfig = Depends(get_config), session=Depends(get_s
     record_login(session, student)
     session.commit()
 
+    # Отпечаток пароля наставника, если пароль задан: сменили его - и
+    # токены dev-входа отозваны вместе с остальными.
+    mark = mentor_mark(os.getenv("MENTOR_PASSWORD", "")) or None
     return DevLoginOut(
         mentor=DevTokens(
-            access_token=create_access_token("mentor", "mentor", config.jwt_secret, config.access_ttl_seconds),
+            access_token=create_access_token(
+                "mentor", "mentor", config.jwt_secret, config.access_ttl_seconds, pv=mark
+            ),
             # Ментору тоже нужен refresh: иначе админку выбрасывает через 15 минут.
-            refresh_token=create_refresh_token("mentor", config.jwt_secret, config.refresh_ttl_seconds, "mentor"),
+            refresh_token=create_refresh_token(
+                "mentor", config.jwt_secret, config.refresh_ttl_seconds, "mentor", pv=mark
+            ),
         ),
         student=DevTokens(
             access_token=create_access_token(
@@ -643,9 +682,20 @@ class MentorLoginBody(BaseModel):
 def mentor_login(body: MentorLoginBody, config: BackendConfig = Depends(get_config)):
     """Вход ментора по паролю (MVP). В проде — отдельные креды/2FA."""
     expected = os.getenv("MENTOR_PASSWORD", "")
-    if not expected or not secrets.compare_digest(body.password, expected):
+    # Байты, а не строки: compare_digest падает на не-ASCII в строке, и пароль
+    # с кириллицей давал 500 вместо отказа.
+    if not expected or not secrets.compare_digest(
+        body.password.encode("utf-8"), expected.encode("utf-8")
+    ):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный пароль")
+    # В токене - отпечаток пароля: смена MENTOR_PASSWORD отзывает все прежние
+    # токены наставника (backend/security.py, «Токены наставника»).
+    mark = mentor_mark(expected)
     return TokenPair(
-        access_token=create_access_token("mentor", "mentor", config.jwt_secret, config.access_ttl_seconds),
-        refresh_token=create_refresh_token("mentor", config.jwt_secret, config.refresh_ttl_seconds, "mentor"),
+        access_token=create_access_token(
+            "mentor", "mentor", config.jwt_secret, config.access_ttl_seconds, pv=mark
+        ),
+        refresh_token=create_refresh_token(
+            "mentor", config.jwt_secret, config.refresh_ttl_seconds, "mentor", pv=mark
+        ),
     )

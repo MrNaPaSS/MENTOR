@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from collections import OrderedDict
 from dataclasses import asdict
@@ -192,6 +193,25 @@ async def dom(
 _KLINE_TTL = 2.0
 _klines_cache: dict[str, tuple[float, list]] = {}
 
+# Сколько наборов свечей держать в памяти. Ручка открыта без входа, а ключ
+# кэша собирается из монеты, таймфрейма и глубины - перебором глубины от 2 до
+# 500 кэш раздувался без конца. Полтысячи наборов с запасом покрывают всех,
+# кто сейчас смотрит график; вытесняется самый давний.
+_KLINES_CACHE_MAX = 512
+
+# Символ монеты: буквы и цифры (у Binance бывают и иероглифы), подчёркивание
+# у квартальных контрактов. Остальное биржа всё равно отвергнет, а запрос
+# потратит её лимит на адрес сервера.
+_SYMBOL = re.compile(r"\w{2,40}")
+
+
+def _remember_klines(key: str, at: float, rows: list) -> None:
+    """Положить свечи в кэш, вытеснив самые давние сверх потолка."""
+    _klines_cache.pop(key, None)
+    _klines_cache[key] = (at, rows)
+    while len(_klines_cache) > _KLINES_CACHE_MAX:
+        _klines_cache.pop(next(iter(_klines_cache)))
+
 # Длительности интервалов биржи в секундах: нужны, чтобы собрать из них те,
 # которых у биржи нет.
 _INTERVAL_SECONDS = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600}
@@ -362,6 +382,8 @@ async def klines(
     if venue and venue not in get_market(request).exchanges:
         venue = ""
     sym = symbol.upper()
+    if not _SYMBOL.fullmatch(sym):
+        raise HTTPException(422, "Неверный символ монеты")
     key = f"{venue or PRIMARY}:{sym}:{interval}:{limit}"
 
     cached = _klines_cache.get(key)
@@ -421,7 +443,7 @@ async def klines(
         # Пустой ответ не кэшируем: иначе секундный сбой биржи замирает на
         # экране кэшем и прячет восстановление.
         if rows:
-            _klines_cache[key] = (now, rows)
+            _remember_klines(key, now, rows)
 
     if not rows:
         if not venue and collector.rest.blocked:

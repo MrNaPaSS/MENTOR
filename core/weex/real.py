@@ -12,9 +12,12 @@ import hashlib
 import hmac
 import logging
 import os
+import ssl
 import time
 from decimal import Decimal, InvalidOperation
 from typing import Optional
+
+import certifi
 
 from core.weex.base import WeexClient
 from core.weex.uid import clean_uid, looks_like_uid
@@ -90,6 +93,33 @@ def _safe_params(params: dict | None) -> str:
     return "?" + "&".join(f"{k}={v}" for k, v in params.items())
 
 
+# Дольше ждать партнёрку незачем: без предела зависший запрос держал бы один из
+# трёх слотов ограничителя (``_get_affiliate_sem``) пять минут - столько по
+# умолчанию ждёт aiohttp.
+PARTNER_TIMEOUT = 20
+
+
+def _partner_ssl() -> "ssl.SSLContext | bool":
+    """Проверка сертификата для партнёрского API.
+
+    Раньше она была выключена: на Windows Python не видит системное хранилище
+    корней и падал с «unable to get local issuer certificate». Лечится это не
+    отключением, а своими корнями - как у торгового клиента
+    (backend/api/trading.py): certifi или набор SSL_CERT_FILE, собранный
+    make_ca_bundle.py. В этих запросах ходят партнёрские ключи академии, а без
+    проверки их читает всякий, кто подменит сертификат по дороге.
+
+    WEEX_PARTNER_SSL_VERIFY=false возвращает прежнее поведение - на случай,
+    если на столе что-то перехватывает HTTPS и набор корней ещё не собран.
+    """
+    if os.getenv("WEEX_PARTNER_SSL_VERIFY", "true").strip().lower() == "false":
+        logger.warning(
+            "Проверка сертификата партнёрского API WEEX выключена (WEEX_PARTNER_SSL_VERIFY=false)"
+        )
+        return False
+    return ssl.create_default_context(cafile=os.environ.get("SSL_CERT_FILE") or certifi.where())
+
+
 class RealWeexClient(WeexClient):
     """Реальный клиент WEEX. Требует ключи; работает поверх aiohttp."""
 
@@ -104,7 +134,10 @@ class RealWeexClient(WeexClient):
     async def _get_session(self):
         if self._session is None:
             import aiohttp
-            self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False))
+            self._session = aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(ssl=_partner_ssl()),
+                timeout=aiohttp.ClientTimeout(total=PARTNER_TIMEOUT),
+            )
         return self._session
 
     def _signed_headers(self, method: str, path_with_query: str, *, affiliate: bool) -> dict:

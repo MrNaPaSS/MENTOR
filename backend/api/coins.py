@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import secrets
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -245,6 +245,7 @@ def sync_coins(
 # ── Служебная ручка для сервера академии ────────────────────────────────────
 
 def require_service_key(
+    request: Request,
     x_service_key: str = Header(default="", alias="X-Service-Key"),
     config: BackendConfig = Depends(get_config),
 ) -> None:
@@ -253,13 +254,26 @@ def require_service_key(
     Ходит сервер академии, а не браузер ученика, поэтому JWT здесь не подходит.
     Пустой SERVICE_API_KEY означает, что интеграцию не настраивали — ручку
     в этом случае держим закрытой, иначе любой смог бы начислять себе монеты.
+
+    Этот ключ открывает и выдачу пароля входа любому ученику, то есть его
+    кабинет и торговлю его ключами. Поэтому, если задан SERVICE_ALLOWED_IPS,
+    ключ принимается только с этих адресов: утёкший ключ без машины академии
+    ничего не даёт.
     """
     if not config.service_api_key:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Интеграция не настроена: SERVICE_API_KEY не задан",
         )
-    if not secrets.compare_digest(x_service_key, config.service_api_key):
+    if config.service_allowed_ips:
+        address = request.client.host if request.client else ""
+        if address not in config.service_allowed_ips:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Служебный вызов с чужого адреса")
+    # Байты, а не строки: compare_digest падает на не-ASCII в строке, и
+    # кириллица в заголовке давала бы 500 вместо отказа.
+    if not secrets.compare_digest(
+        x_service_key.encode("utf-8"), config.service_api_key.encode("utf-8")
+    ):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный служебный ключ")
 
 

@@ -11,7 +11,7 @@ from core import repo
 from core.db import SessionLocal
 from core.models import Student
 from backend.config import BackendConfig
-from backend.security import decode_token, TokenError
+from backend.security import decode_token, mentor_alive, TokenError
 
 
 def get_config(request: Request) -> BackendConfig:
@@ -71,7 +71,13 @@ def get_current_student(
     payload: dict = Depends(get_token_payload),
     session=Depends(get_session),
 ) -> Student:
-    student = session.get(Student, int(payload["sub"]))
+    # Номер ученика - число. Токен наставника (sub="mentor") в ученической
+    # ручке раньше ронял сервер на int() с ответом 500.
+    try:
+        student_id = int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Нужен вход ученика")
+    student = session.get(Student, student_id)
     if student is None or not student.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Пользователь не найден")
 
@@ -130,6 +136,10 @@ def touch_seen(session, student: Student) -> None:
 def get_current_mentor(payload: dict = Depends(get_token_payload)) -> dict:
     if payload.get("role") != "mentor":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Доступ только для ментора")
+    # Сменили пароль наставника или дёрнули рубильник - прежний токен больше
+    # не открывает админку (backend/security.py, «Токены наставника»).
+    if not mentor_alive(payload):
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "Вход наставника устарел: войдите заново"
+        )
     return payload
-
-

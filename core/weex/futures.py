@@ -29,7 +29,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Awaitable
 
 import aiohttp
@@ -255,9 +255,11 @@ class WeexTradeError(Exception):
 
 @dataclass(frozen=True)
 class Credentials:
-    api_key: str
-    secret_key: str
-    passphrase: str
+    # Ключи не показываются в repr: первый же logger.exception с локальными
+    # переменными или отладочный print напечатал бы доступ к деньгам ученика.
+    api_key: str = field(repr=False)
+    secret_key: str = field(repr=False)
+    passphrase: str = field(repr=False)
 
 
 def sign(secret: str, timestamp: str, method: str, path: str, query: str, body: str) -> str:

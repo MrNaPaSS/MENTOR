@@ -21,7 +21,7 @@ from sqlalchemy import select
 import logging
 
 from core.models import iso, CoinTransaction, ShopItem, ShopOrder, Student, utcnow
-from backend import entitlements, frames
+from backend import entitlements, frames, netguard
 from backend.deps import get_session, get_current_student, get_current_mentor, get_config, get_notifier
 from backend.config import BackendConfig
 from backend.schemas import (
@@ -84,29 +84,34 @@ async def _resolve_link_image(url: str) -> str | None:
     if not _is_public_host(parsed.hostname):
         return None
 
+    # Проверка хоста выше видит только первый адрес. Редирект с публичной
+    # страницы во внутреннюю сеть её обходил - поэтому сам поход идёт через
+    # netguard: он проверяет каждый шаг и адрес в момент подключения.
     try:
-        import aiohttp
-        timeout = aiohttp.ClientTimeout(total=6)
         headers = {"User-Agent": "Mozilla/5.0 (compatible; NMNHBot/1.0; +preview)"}
-        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-            async with session.get(url, allow_redirects=True, max_redirects=4) as resp:
-                if resp.status != 200:
-                    return None
-                ctype = resp.headers.get("Content-Type", "").lower()
-                if ctype.startswith("image/"):
-                    return url
-                if "html" not in ctype:
-                    return None
-                raw = await resp.content.read(524_288)  # максимум 512 КБ
-        html = raw.decode("utf-8", "ignore")
+        page = await netguard.fetch(
+            url,
+            limit=524_288,  # максимум 512 КБ
+            timeout=6,
+            headers=headers,
+            read_if=lambda kind: "html" in kind.lower(),
+        )
     except Exception as exc:
         logger.info("link-preview: не удалось загрузить %s: %s", url, exc)
         return None
+    if page is None:
+        return None
+    ctype = page.content_type.lower()
+    if ctype.startswith("image/"):
+        return url
+    if "html" not in ctype:
+        return None
+    html = page.body.decode("utf-8", "ignore")
 
     for pat in _OG_PATTERNS:
         mm = re.search(pat, html, re.IGNORECASE)
         if mm:
-            return urljoin(url, mm.group(1).strip())
+            return urljoin(page.url, mm.group(1).strip())
     return None
 
 

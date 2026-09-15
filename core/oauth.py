@@ -39,7 +39,7 @@ import json
 import logging
 import os
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlencode
 
@@ -191,12 +191,14 @@ def _first(payload: dict, names: tuple[str, ...]) -> str:
 class Grant:
     """Что биржа выдала в обмен на код."""
 
-    access_token: str
-    refresh_token: str
+    # Токены и ключи не показываются в repr - по той же причине, что и у
+    # Credentials (core/weex/futures.py): это доступ к счёту ученика.
+    access_token: str = field(repr=False)
+    refresh_token: str = field(repr=False)
     expires_in: int
-    api_key: str
-    secret_key: str
-    passphrase: str
+    api_key: str = field(repr=False)
+    secret_key: str = field(repr=False)
+    passphrase: str = field(repr=False)
     uid: str
 
     @property

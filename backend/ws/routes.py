@@ -93,8 +93,18 @@ async def ws_chat(websocket: WebSocket, token: str = Query(default="")):
 
     session = SessionLocal()
     try:
-        student = session.get(Student, int(payload["sub"]))
+        try:
+            student_id = int(payload["sub"])
+        except (KeyError, TypeError, ValueError):
+            await websocket.close(code=4401)
+            return
+        student = session.get(Student, student_id)
         if student is None or not student.is_active:
+            await websocket.close(code=4401)
+            return
+        # То же правило «один вход на ученика», что и у HTTP-ручек
+        # (backend/deps.py): вытесненное устройство не остаётся в комнате.
+        if student.session_key and payload.get("sid") != student.session_key:
             await websocket.close(code=4401)
             return
         # Подпись собирается тем же правилом, что и в ленте: наставник идёт

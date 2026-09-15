@@ -108,6 +108,15 @@ class BackendConfig:
     # from_env), а в тестах, где конфиг собирают руками, выключен: иначе каждое
     # поднятое приложение ходило бы в настоящие чужие источники.
     institutional_warm: bool = False
+    # Обновлений токена с одного адреса за окно RATE_LIMIT_WINDOW. Свой счёт,
+    # а не общий на вход: refresh зовёт каждый ученик раз в четверть часа, и
+    # общий предел в десять попыток клал кабинеты всех, кто сидит за одним
+    # адресом (backend/ratelimit.py).
+    refresh_rate_max: int = 120
+    # С каких адресов пускать служебные вызовы сервера академии (X-Service-Key).
+    # Пусто - с любых: ключ проверяется всё равно. Задан список - ключ,
+    # утёкший с чужой машины, без адреса академии не сработает.
+    service_allowed_ips: tuple = ()
 
 
     @staticmethod
@@ -164,7 +173,12 @@ class BackendConfig:
             ai_analyze_price=int(os.getenv("AI_ANALYZE_PRICE", "50") or "50"),
             institutional_warm=os.getenv("INSTITUTIONAL_WARM", "true").lower() != "false",
             allowed_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
-            # dev-вход включён, если явно DEV_LOGIN=true, либо мы на моках WEEX (=dev),
-            # и НЕ отключён явно DEV_LOGIN=false.
-            dev_login=(dev_login_env == "true") or (use_mock and dev_login_env != "false"),
+            # Dev-вход выдаёт токен наставника, поэтому включается только явно.
+            # Раньше он включался сам на моках WEEX, то есть при любой потере
+            # WEEX_USE_MOCK в .env боевого сервера админка открывалась всем.
+            dev_login=dev_login_env == "true",
+            refresh_rate_max=int(os.getenv("REFRESH_RATE_MAX", "120") or "120"),
+            service_allowed_ips=tuple(
+                ip.strip() for ip in os.getenv("SERVICE_ALLOWED_IPS", "").split(",") if ip.strip()
+            ),
         )

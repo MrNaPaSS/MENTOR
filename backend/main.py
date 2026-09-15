@@ -51,6 +51,7 @@ from backend.notify import get_notifier
 from backend.ai_quota import AnalyzeQuota
 from backend.sources import binance as sources_binance, session as sources_session
 from backend.ratelimit import RateLimiter, AuthRateLimitMiddleware
+from backend.headers import SecurityHeaders
 
 
 def create_app(
@@ -229,7 +230,17 @@ def create_app(
                 config.tg_verify_max, config.tg_verify_window
             )
         },
+        # Обновление токена - на своём, щедром счёте: его зовёт каждый ученик
+        # раз в четверть часа, и общий предел входа клал кабинеты всех, кто
+        # сидит за одним адресом.
+        own={
+            "/api/auth/refresh": RateLimiter(
+                config.refresh_rate_max, config.rate_limit_window
+            )
+        },
     )
+    # nosniff, запрет чужих фреймов и HSTS на каждый ответ (backend/headers.py).
+    app.add_middleware(SecurityHeaders)
 
     app.add_middleware(
         CORSMiddleware,

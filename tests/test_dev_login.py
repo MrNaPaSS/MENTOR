@@ -43,9 +43,17 @@ def test_dev_login_disabled_in_prod(tmp_path):
     assert client.post("/api/auth/dev-login").status_code == 403
 
 
-def test_config_dev_login_enabled_on_mock(monkeypatch):
+def test_config_dev_login_off_on_mock_without_flag(monkeypatch):
+    # Dev-вход выдаёт токен наставника: сам по себе, по одним лишь мокам WEEX,
+    # он больше не включается (backend/config.py).
     monkeypatch.setenv("WEEX_USE_MOCK", "true")
     monkeypatch.delenv("DEV_LOGIN", raising=False)
+    assert BackendConfig.from_env().dev_login is False
+
+
+def test_config_dev_login_on_by_explicit_flag(monkeypatch):
+    monkeypatch.setenv("WEEX_USE_MOCK", "true")
+    monkeypatch.setenv("DEV_LOGIN", "true")
     assert BackendConfig.from_env().dev_login is True
 
 

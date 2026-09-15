@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from backend import netguard
 from backend.mentor import is_mentor
 from backend.chat.format import caption_html, link_ranges, message_html
 from backend.deps import get_current_student, get_session
@@ -678,23 +679,25 @@ async def preview(
         raise HTTPException(400, "Ожидается http-ссылка")
 
     empty = {"title": "", "description": "", "image": ""}
+    # Адрес прислал человек, поэтому сервер идёт только в открытый интернет и
+    # проверяет каждый редирект (backend/netguard.py). Раньше превью открывало
+    # дорогу к самому серверу, метрикам туннеля и локальной сети стола.
     try:
-        timeout = aiohttp.ClientTimeout(total=PREVIEW_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
-            async with http.get(url, allow_redirects=True) as res:
-                if res.status >= 400:
-                    return empty
-                kind = res.headers.get("Content-Type", "")
-                if "html" not in kind.lower():
-                    return empty
-                head = await res.content.read(PREVIEW_BYTES)
+        fetched = await netguard.fetch(
+            url,
+            limit=PREVIEW_BYTES,
+            timeout=PREVIEW_TIMEOUT,
+            read_if=lambda kind: "html" in kind.lower(),
+        )
     except (aiohttp.ClientError, asyncio.TimeoutError, UnicodeDecodeError):
         return empty
     except Exception as exc:  # noqa: BLE001 - чужая страница может всё
         logger.info("Предпросмотр %s не собрался: %s", url, exc)
         return empty
+    if fetched is None or "html" not in fetched.content_type.lower():
+        return empty
 
-    page = head.decode("utf-8", errors="ignore")
+    page = fetched.body.decode("utf-8", errors="ignore")
     found = {name.lower(): unescape(value) for name, value in _META.findall(page)}
     if not found.get("title"):
         title = _TITLE.search(page)
