@@ -1286,3 +1286,26 @@ def test_the_leverage_is_read_for_the_side_of_the_entry(app_and_exchange):
 
     assert client.post("/api/trading/open", json=_short_body(10)).status_code == 200
     assert asked == [False]
+
+
+def test_leverage_500_passes_the_field_check(app_and_exchange):
+    """Плечо x500 - не ошибка проверки полей.
+
+    MEXC даёт x500, а модель входа держала потолок x400: вход отбивался 422 со
+    списком ошибок, и трейдер видел «[object Object]». Предел монеты проверяет
+    биржа и окно расчёта, а не форма запроса.
+    """
+    client, exchange, _ = app_and_exchange
+    res = client.post(
+        "/api/trading/open",
+        json={
+            "symbol": "BTCUSDT",
+            "side": "long",
+            "quantity": 0.5,
+            "leverage": 500,
+            "stop": 79000,
+            "takes": [80000],
+        },
+    )
+    assert res.status_code == 200
+    assert exchange.leverage == ("BTCUSDT", 500)

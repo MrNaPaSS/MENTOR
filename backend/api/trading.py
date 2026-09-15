@@ -140,7 +140,10 @@ class OrderIn(BaseModel):
     symbol: str = Field(min_length=1, max_length=32)
     side: str                       # long | short
     quantity: float = Field(gt=0)
-    leverage: int = Field(ge=1, le=400)
+    # Потолок - самый высокий среди бирж: MEXC даёт x500. Предел конкретной
+    # монеты проверяет биржа и окно расчёта; здесь x400 отбивал вход по x500
+    # ошибкой проверки полей, и трейдер видел «[object Object]».
+    leverage: int = Field(ge=1, le=500)
     entry: float | None = Field(default=None, gt=0)   # пусто — вход по рынку
     stop: float = Field(gt=0)
     takes: list[float] = Field(default_factory=list, max_length=5)

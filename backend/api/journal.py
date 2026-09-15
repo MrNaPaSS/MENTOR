@@ -150,7 +150,8 @@ class TradeIn(BaseModel):
     exit_price: float | None = Field(default=None, gt=0)
     qty: float = Field(gt=0)
     margin: float = Field(gt=0)
-    leverage: int = Field(ge=1, le=400)
+    # Как у входа: MEXC даёт x500, и такая сделка не записывалась в журнал.
+    leverage: int = Field(ge=1, le=500)
     takes_hit: int = Field(default=0, ge=0, le=10)
     # Комиссия обеих ног: по ней видно, почему на счёт пришло меньше.
     fee: float = Field(default=0, ge=0)

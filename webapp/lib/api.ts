@@ -198,6 +198,37 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
+/**
+ * Текст отказа сервера для человека.
+ *
+ * `detail` у FastAPI бывает строкой, а на проверке полей - списком объектов.
+ * Список уходил в `new Error(...)` как есть, и на экран выходило
+ * «[object Object]»: трейдер видел, что заявку не приняли, но не видел почему.
+ */
+export function errorText(body: unknown, status: number): string {
+  const detail = (body as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((one) => {
+        if (typeof one === "string") return one;
+        const item = (one ?? {}) as { msg?: unknown; loc?: unknown };
+        const where = Array.isArray(item.loc)
+          ? item.loc.filter((part) => part !== "body").join(".")
+          : "";
+        const msg = typeof item.msg === "string" ? item.msg : "";
+        return where && msg ? `${where}: ${msg}` : msg || where;
+      })
+      .filter(Boolean);
+    if (parts.length > 0) return parts.join("; ");
+  }
+  if (detail && typeof detail === "object") {
+    const message = (detail as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  }
+  return `HTTP ${status}`;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   let res = await send(path, init);
 
@@ -227,7 +258,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
-    throw new Error((detail as { detail?: string }).detail || `HTTP ${res.status}`);
+    throw new Error(errorText(detail, res.status));
   }
 
   // Ответ без тела - это удача, а не ошибка.
@@ -675,7 +706,7 @@ export const api = {
     });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
-      throw new Error((d as { detail?: string }).detail || `HTTP ${res.status}`);
+      throw new Error(errorText(d, res.status));
     }
     return res.json() as Promise<{ url: string }>;
   },
