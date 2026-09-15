@@ -170,6 +170,18 @@ BE_DRIFT = 0.0002
 
 
 
+def _fee(value: float | None) -> float:
+    """Ставка тейкера для безубытка: биржи сделки, а без неё - прежняя общая.
+
+    Безубыток считался комиссией WEEX для всех бирж. У MEXC она вчетверо ниже,
+    у OKX, Binance и BingX - меньше вдвое, и стоп после цели вставал не там,
+    где его показывает сама биржа.
+    """
+    if value is None or not (0 <= value < 1):
+        return DEFAULT_TAKER_FEE
+    return float(value)
+
+
 def decide(
     trade: LiveTrade,
     position: dict[str, Any] | None,
@@ -178,6 +190,7 @@ def decide(
     missing_streak: int,
     resting: bool = False,
     taken: bool = False,
+    taker_fee: float | None = None,
 ) -> Decision:
     """Решение по одной сделке. Только числа, никаких обращений наружу.
 
@@ -304,12 +317,14 @@ def decide(
         # было некому: до следующей цели стоп так и стоял на прежнем уровне, а
         # после третьей целей больше не будет вовсе.
         if trade.takes_hit >= 1 and not by_hand:
-            fresh = exchange_breakeven(position, side=trade.side)
+            fresh = exchange_breakeven(position, _fee(taker_fee), side=trade.side)
             if fresh is None:
                 # Биржа молчит - считаем своим правилом, тем же, что и при
                 # свежей цели: после первой безубыток, дальше за предыдущей
                 # целью.
-                fresh = stop_after_take(state, trade.takes_hit, prices, mark_price)
+                fresh = stop_after_take(
+                    state, trade.takes_hit, prices, mark_price, _fee(taker_fee)
+                )
             if (
                 fresh is not None
                 and abs(fresh - state.stop) > state.entry * BE_DRIFT
@@ -341,9 +356,9 @@ def decide(
     # Только вперёд: стоп, уже спрятанный за первой целью, не опускаем обратно
     # к нулю - это увеличение риска задним числом. Своя формула и правило «за
     # предыдущей целью» остаются запасными, на случай молчания биржи.
-    target = exchange_breakeven(position, side=trade.side)
+    target = exchange_breakeven(position, _fee(taker_fee), side=trade.side)
     if target is None:
-        target = stop_after_take(state, hit, prices, mark_price)
+        target = stop_after_take(state, hit, prices, mark_price, _fee(taker_fee))
     if target is not None and not should_move_stop(state, target):
         target = None
 
@@ -586,6 +601,9 @@ class PositionWatcher:
         # позиции её нет вовсе, а без неё стоп уезжает не на ту сторону рынка -
         # биржа такой отклоняет, и позиция остаётся со старым.
         prices: dict[str, float | None] = {}
+        # Ставка тейкера по монете - той биржи, где открыты сделки. Шаги
+        # инструмента клиенты держат в памяти, лишнего запроса это не стоит.
+        fees: dict[str, float | None] = {}
 
         # Кто уже ведёт позицию по инструменту и стороне. На бирже она одна, и
         # вторая сделка на неё претендовать не вправе - иначе в журнал уйдут две
@@ -624,6 +642,13 @@ class PositionWatcher:
                 plans = await self._open_plans(client, trade)
                 resting = await self._resting(client, trade)
                 key = (trade.symbol.upper(), trade.side)
+                sym = trade.symbol.upper()
+                if sym not in fees:
+                    try:
+                        rate = (await client.symbol_filters(trade.symbol)).get("taker_fee")
+                        fees[sym] = float(rate) if rate else None
+                    except Exception:  # noqa: BLE001 - без ставки считаем прежней
+                        fees[sym] = None
                 decision = decide(
                     trade,
                     position,
@@ -632,6 +657,7 @@ class PositionWatcher:
                     self._missing[trade.id],
                     resting,
                     taken=trade.status == "waiting" and key in owned,
+                    taker_fee=fees[sym],
                 )
                 await self._apply(
                     session,
@@ -1416,6 +1442,16 @@ async def drop_old_stops(
         logger.warning("Старые стопы %s не сняты: %s", trade.symbol, exc)
         return
 
+    # По цене щадим не больше одной заявки - и ни одной, если новый стоп виден
+    # в списке по номеру. Раньше щадилась любая заявка по цене нового стопа, и
+    # дубль переживал уборку: проход, оборванный после постановки, но до
+    # записи цены, ставил тот же стоп второй раз, и на позиции стояли два
+    # одинаковых.
+    listed: set[str] = set()
+    for order in orders:
+        listed |= order_marks(order)
+    by_price = not (keep and keep in listed)
+
     for order in orders:
         marks = order_marks(order)
         # Номер только для журнала. Снимать заявку он не нужен: у части заявок
@@ -1447,7 +1483,13 @@ async def drop_old_stops(
 
         # Только что поставленный стоп щадим и по цене: идентификатор в ответе
         # биржи приходит не всегда, и без этой проверки мы сняли бы его сам.
-        if fresh and trigger and abs(trigger - fresh) <= max(fresh, 1.0) * 1e-6:
+        if (
+            by_price
+            and fresh
+            and trigger
+            and abs(trigger - fresh) <= max(fresh, 1.0) * 1e-6
+        ):
+            by_price = False
             continue
 
         # Сторона решает: живой стоп лонга ниже рынка, живая цель выше.

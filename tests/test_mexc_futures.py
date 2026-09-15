@@ -1005,3 +1005,24 @@ def test_a_refused_leverage_is_not_remembered():
         run(one.set_leverage("BTCUSDT", 10))
     # Биржа своё плечо не меняла - и назвать надо её число, а не запрошенное.
     assert run(one.leverage_of("BTCUSDT", long=False)) == 20
+
+
+def test_the_entry_is_the_open_average_not_the_holding_one():
+    """Вход позиции - средняя цена открытия, а не удержания.
+
+    `holdAvgPrice` сдвигается забранной прибылью: после первой цели лонга она
+    опускалась, и безубыток, посчитанный от неё, вставал ровно на вход вместо
+    входа с комиссией.
+    """
+    session = FakeSession(
+        {
+            "/api/v1/private/position/open_positions": {
+                "code": 0,
+                "data": [{**LONG_POSITION, "openAvgPrice": 80000, "holdAvgPrice": 79500}],
+            }
+        }
+    )
+    rows = run(client(session).positions())
+    btc = next(row for row in rows if row["symbol"] == "BTCUSDT")
+    assert float(btc["averageOpenPrice"]) == 80000
+    assert float(btc["cumOpenValue"]) / float(btc["cumOpenSize"]) == pytest.approx(80000)

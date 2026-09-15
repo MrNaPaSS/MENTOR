@@ -1674,3 +1674,114 @@ def test_the_watcher_passes_the_neighbours_to_the_move():
 
     assert client.cancelled == ["old"]
     assert float(mine.current_stop) == 100.2
+
+
+# ── комиссия биржи в безубытке и дубль стопа ─────────────────────────────────
+
+def _money_position(size: str = "0.7", avg: float = 100.0) -> dict:
+    return {
+        "symbol": "BTCUSDT",
+        "total": size,
+        "markPrice": "101.5",
+        "cumOpenSize": size,
+        "cumOpenValue": str(avg * float(size)),
+    }
+
+
+def test_breakeven_uses_the_fee_of_the_exchange_of_the_trade():
+    """Безубыток считается комиссией биржи сделки, а не WEEX для всех.
+
+    У MEXC ставка вчетверо ниже, и стоп после цели вставал не там, где его
+    показывает сама биржа.
+    """
+    row = trade(takes_hit=1, current_stop=99.5, qty=0.7)
+    decision = decide(row, _money_position(), {"tp2", "tp3"}, 101.5, 0, taker_fee=0.0002)
+    assert decision.move_stop_to == pytest.approx(100 * 1.0002 / 0.9998)
+
+
+def test_without_the_fee_of_the_exchange_the_old_rate_stays():
+    """Биржа ставку не назвала - считаем прежней, а не нулём."""
+    from core.trading.position import DEFAULT_TAKER_FEE
+
+    row = trade(takes_hit=1, current_stop=99.5, qty=0.7)
+    decision = decide(row, _money_position(), {"tp2", "tp3"}, 101.5, 0)
+    rate = DEFAULT_TAKER_FEE
+    assert decision.move_stop_to == pytest.approx(100 * (1 + rate) / (1 - rate))
+
+
+def test_the_pass_hands_the_fee_of_the_exchange_to_the_decision(monkeypatch):
+    """Обход берёт ставку из шагов инструмента и передаёт её в решение."""
+    import asyncio
+
+    from backend.trading import watcher as watcher_mod
+    from backend.trading.watcher import PositionWatcher
+
+    one = trade(client_id="c1")
+    one.id = 1
+
+    class Exchange:
+        async def positions(self):
+            return [position()]
+
+        async def algo_orders(self, symbol):
+            return []
+
+        async def open_orders(self, symbol):
+            return []
+
+        async def symbol_filters(self, symbol):
+            return {"step": 0.1, "tick": 0.01, "min_qty": 0.1, "taker_fee": 0.0002}
+
+    seen: list = []
+    real = watcher_mod.decide
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs.get("taker_fee"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(watcher_mod, "decide", spy)
+    monkeypatch.setattr(watcher_mod, "account_for", lambda *_a: SimpleNamespace(is_active=True))
+    monkeypatch.setattr(watcher_mod, "client_for", lambda *_a: Exchange())
+    monkeypatch.setattr(watcher_mod, "cached", lambda client, *_a: client)
+
+    watcher = PositionWatcher(lambda: None, lambda: None)
+
+    async def skip(*_a, **_k):
+        return None
+
+    watcher._apply = skip  # type: ignore[assignment]
+    asyncio.run(watcher._handle_student(None, 1, [one], "weex"))
+    assert seen == [0.0002]
+
+
+def test_a_duplicate_at_the_price_of_the_new_stop_is_cancelled():
+    """Два стопа на одной цене - это дубль, а не новый стоп и его тень.
+
+    Проход, оборванный после постановки, но до записи цены, ставил тот же стоп
+    второй раз. Снятие щадило любую заявку по цене нового стопа, и на позиции
+    оставались два одинаковых.
+    """
+    import asyncio
+
+    from backend.trading.watcher import drop_old_stops
+
+    client = Plans([
+        {"orderId": "new", "planType": "STOP_LOSS", "triggerPrice": "100.5"},
+        {"orderId": "dup", "planType": "STOP_LOSS", "triggerPrice": "100.5"},
+    ])
+    asyncio.run(drop_old_stops(client, trade(), keep="new", market=101.5, fresh=100.5))
+    assert client.cancelled == ["dup"]
+
+
+def test_without_the_new_number_only_one_stop_at_its_price_survives():
+    """Номер нового стопа биржа не вернула - щадим по цене ровно один."""
+    import asyncio
+
+    from backend.trading.watcher import drop_old_stops
+
+    client = Plans([
+        {"orderId": "a", "planType": "STOP_LOSS", "triggerPrice": "100.5"},
+        {"orderId": "b", "planType": "STOP_LOSS", "triggerPrice": "100.5"},
+    ])
+    asyncio.run(drop_old_stops(client, trade(), keep="", market=101.5, fresh=100.5))
+    assert len(client.cancelled) == 1

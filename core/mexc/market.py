@@ -481,7 +481,11 @@ def position_row(row: dict[str, Any], spec: Instrument | None) -> dict[str, Any]
         return None
     side = "LONG" if _i(row.get("positionType")) == POSITION_LONG else "SHORT"
     size = spec.to_coins(contracts)
-    avg = _f(row.get("holdAvgPrice") or row.get("openAvgPrice"))
+    # Средняя цена открытия, а не удержания. `holdAvgPrice`, судя по поведению
+    # живого счёта, сдвигается забранной прибылью: после первой цели лонга
+    # она опускалась, и безубыток, посчитанный от неё, вставал ровно на вход
+    # вместо входа с комиссией. `openAvgPrice` - сама цена набора позиции.
+    avg = _f(row.get("openAvgPrice") or row.get("holdAvgPrice"))
     return {
         "symbol": symbol_of(name),
         "instId": name,
