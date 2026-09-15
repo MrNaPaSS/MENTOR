@@ -2356,11 +2356,20 @@ function PriceChart({
   }, []);
 
   // Точность ценовой шкалы - по шагу инструмента, а не по умолчанию в цент.
+  //
+  // Цена приходит несколько раз в секунду, а точность меняется разве что со
+  // сменой монеты. Перенастраивать шкалу на каждом тике - это пересчёт и
+  // перерисовка всей шкалы впустую: применяем, только когда формат другой.
+  const appliedFormatRef = useRef("");
   useEffect(() => {
     const series = candleRef.current;
     if (!series) return;
     const last = dataRef.current.at(-1)?.close ?? livePrice;
-    series.applyOptions({ priceFormat: { type: "price", ...priceFormat(tick ?? 0, last) } });
+    const format = priceFormat(tick ?? 0, last);
+    const key = JSON.stringify(format);
+    if (key === appliedFormatRef.current) return;
+    appliedFormatRef.current = key;
+    series.applyOptions({ priceFormat: { type: "price", ...format } });
   }, [tick, symbol, livePrice]);
 
   // Отметки на ценах — пунктиром через график.

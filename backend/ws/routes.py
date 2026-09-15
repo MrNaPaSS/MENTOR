@@ -8,7 +8,10 @@
 
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_in_threadpool
 
 from core.db import SessionLocal
 from core.models import Student
@@ -23,6 +26,10 @@ from backend.scalping.metrics import SHELF_MAX_LIMIT, SHELF_MIN_LIMIT, SHELF_MIN
 from backend.scalping.state import SORT_KEYS
 
 router = APIRouter()
+
+# Как долго помнить купленные инструменты в сокете стакана. Покупку в маркете
+# терминал увидит без переподключения - не позже чем через полминуты.
+RIGHTS_TTL = 30.0
 
 
 @router.websocket("/ws/prices")
@@ -164,11 +171,20 @@ async def ws_scalping(websocket: WebSocket, token: str = Query(default="")):
         await websocket.send_json(
             {"event": "hello", "payload": {"sorts": sorted(SORT_KEYS), "venues": venues}}
         )
+        rights: frozenset[str] = frozenset()
+        rights_at = float("-inf")
         while True:
             message = await websocket.receive_json()
-            # Права перечитываются на каждую команду: их немного, а покупку в
-            # маркете терминал должен увидеть без переподключения.
-            rights = tools.rights_from_token(token, websocket.app.state.config.jwt_secret)
+            # Права перечитываются, чтобы покупку в маркете терминал увидел без
+            # переподключения, - но не чаще раза в RIGHTS_TTL и не в цикле
+            # событий: это запрос в синхронную базу, и на каждой команде каждого
+            # клиента он держал весь сервер.
+            now = time.monotonic()
+            if now - rights_at >= RIGHTS_TTL:
+                rights = await run_in_threadpool(
+                    tools.rights_from_token, token, websocket.app.state.config.jwt_secret
+                )
+                rights_at = now
             await _handle_scalping_command(hub, websocket, message, rights)
     except WebSocketDisconnect:
         pass

@@ -184,6 +184,14 @@ type Options = {
 // секундной давности — для выбора инструмента этого достаточно, а живые цифры
 // приезжают следом.
 const SCREENER_CACHE = "nmnh.scalping.screener";
+/** Как часто переписывать кэш скринера: он нужен только первой отрисовке. */
+const SCREENER_CACHE_EVERY_MS = 5_000;
+
+/** Тот же ли состав у множества и списка - без оглядки на порядок. */
+function sameMembers(current: ReadonlySet<string>, next: string[]): boolean {
+  if (current.size !== next.length) return false;
+  return next.every((one) => current.has(one));
+}
 
 function cachedScreener(): ScreenerRow[] {
   try {
@@ -219,6 +227,8 @@ export function useScalpingFeed({
   // Настройки читаем из ref: пересоздавать соединение при смене шага сетки
   // незачем, достаточно отправить команду.
   const optsRef = useRef({ symbol, exchange, rows, agg, sort, shelf, interval, foot });
+  // Когда кэш скринера писали последний раз.
+  const cachedAtRef = useRef(0);
   optsRef.current = { symbol, exchange, rows, agg, sort, shelf, interval, foot };
 
   const send = useCallback((message: object) => {
@@ -279,11 +289,21 @@ export function useScalpingFeed({
           setScreener(payload.rows ?? []);
           // Поля нет вовсе, пока сервер не знает состава биржи: пометить весь
           // список чужим хуже, чем не пометить ничего.
-          setAbsent(new Set(payload.absent ?? []));
-          try {
-            sessionStorage.setItem(SCREENER_CACHE, JSON.stringify(payload.rows ?? []));
-          } catch {
-            // Приватное окно — переживём без кэша.
+          //
+          // Новое множество - только если состав сменился: каждое новое, даже
+          // с тем же содержимым, перерисовывало всю таблицу скринера.
+          const nextAbsent = payload.absent ?? [];
+          setAbsent((current) => (sameMembers(current, nextAbsent) ? current : new Set(nextAbsent)));
+          // Кэш списка нужен только для первой отрисовки после перезагрузки:
+          // писать его синхронно на каждое сообщение незачем.
+          const now = Date.now();
+          if (now - cachedAtRef.current >= SCREENER_CACHE_EVERY_MS) {
+            cachedAtRef.current = now;
+            try {
+              sessionStorage.setItem(SCREENER_CACHE, JSON.stringify(payload.rows ?? []));
+            } catch {
+              // Приватное окно - переживём без кэша.
+            }
           }
         } else if (message.event === "dom") {
           const frame = message.payload as DomFrame;

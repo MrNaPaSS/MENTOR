@@ -1178,6 +1178,29 @@ export default function ScalpingPage() {
    */
   // Копия уже в пути: вторая до ответа биржи не уходит.
   const copyingRef = useRef(false);
+
+  /**
+   * Цена монеты сделки, а не той, что открыта на экране.
+   *
+   * Окно закрытия можно открыть и по сделке с другой монеты - по уведомлению,
+   * по списку сделок. Цена из стакана на экране была бы ценой чужой монеты, и
+   * если биржа не вернула итог, в журнал ушёл бы выход по ней.
+   */
+  function priceFor(sym: string): number {
+    if (sym === symbol) return dom?.mid ?? 0;
+    return screenerRef.current.find((row) => row.symbol === sym)?.price ?? 0;
+  }
+
+  // Отложенные перечитывания журнала после закрытия сделки. Снимаются при уходе
+  // со страницы: иначе продолжали срабатывать на размонтированной странице.
+  const journalTimersRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    const timers = journalTimersRef.current;
+    return () => {
+      for (const id of timers) window.clearTimeout(id);
+      timers.clear();
+    };
+  }, []);
   const copyTrade = useCallback(
     async (shared: SharedTrade) => {
       if (!copyAllowed) return;
@@ -1326,7 +1349,7 @@ export default function ScalpingPage() {
     // заявки такой цены у ошибки нет, а не сорвалось - вернём на место и
     // скажем словами.
     if (current.status === "planned") {
-      const { remaining } = closePartially(current, share, dom?.mid ?? 0, Date.now());
+      const { remaining } = closePartially(current, share, priceFor(current.symbol), Date.now());
       setTrades((list) => list.map((t) => (t.id === current.id ? remaining : t)));
       setDraft(null);
       try {
@@ -1378,7 +1401,7 @@ export default function ScalpingPage() {
     const { remaining, recorded } = closePartially(
       current,
       share,
-      dom?.mid ?? 0,
+      priceFor(current.symbol),
       Date.now(),
     );
 
@@ -2236,8 +2259,16 @@ export default function ScalpingPage() {
         // покажет закрывающее исполнение, а она показывает его когда захочет:
         // бывает сразу, бывает через полминуты.
         for (const wait of JOURNAL_RETRIES) {
-          if (wait === 0) setJournalKey((n) => n + 1);
-          else window.setTimeout(() => setJournalKey((n) => n + 1), wait);
+          if (wait === 0) {
+            setJournalKey((n) => n + 1);
+            continue;
+          }
+          const timers = journalTimersRef.current;
+          const id = window.setTimeout(() => {
+            timers.delete(id);
+            setJournalKey((n) => n + 1);
+          }, wait);
+          timers.add(id);
         }
       }
 
@@ -4217,8 +4248,8 @@ export default function ScalpingPage() {
       {closeOpen && closing && (
         <CloseDialog
           trade={closing}
-          price={dom?.mid ?? 0}
-          tick={dom?.tick ?? 0}
+          price={priceFor(closing.symbol)}
+          tick={closing.symbol === symbol ? (dom?.tick ?? 0) : 0}
           onConfirm={applyClose}
           onCancel={() => {
             setCloseOpen(false);

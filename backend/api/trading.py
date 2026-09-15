@@ -218,8 +218,12 @@ def _fail(exc: WeexTradeError) -> HTTPException:
     return HTTPException(status, explain(str(exc)))
 
 
+# Обычная функция, а не корутина: ручка только читает базу, а терминал зовёт её
+# раз в три секунды у каждого ученика. Корутина ходила бы в синхронную базу
+# прямо в цикле событий и держала на это время весь сервер - стаканы, сокеты,
+# сопровождение. Обычную FastAPI уводит в пул потоков.
 @router.get("/live")
-async def live_trades(
+def live_trades(
     request: Request,
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
@@ -621,8 +625,10 @@ async def _exposure(client: WeexFutures, symbol: str) -> float | None:
     return held + sum(_order_left(order) for order in orders or [])
 
 
+# Обычная функция: только база, без похода на биржу - в пул потоков, а не в
+# цикл событий (см. live_trades).
 @router.get("/status")
-async def status(
+def status(
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
 ):

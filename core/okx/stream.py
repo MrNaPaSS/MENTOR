@@ -52,6 +52,8 @@ WS_PRIVATE_DEMO = "wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999"
 # Биржа рвёт молчащее соединение через тридцать секунд. Свой пинг - заметно
 # раньше: сетевая задержка не должна съедать запас.
 PING_INTERVAL = 20.0
+# Сколько поток может молчать и считаться живым: три пропущенных ответа на ping.
+STALE_AFTER = PING_INTERVAL * 3
 
 RECONNECT_MIN = 1.0
 RECONNECT_MAX = 30.0
@@ -123,8 +125,20 @@ class OkxPrivateStream:
 
     @property
     def ready(self) -> bool:
-        """Вход выполнен, снимок позиций получен, соединение живо."""
-        return bool(self._ws) and not self._ws.closed and self._logged_in.is_set()
+        """Вход выполнен, снимок позиций получен, соединение живо и отвечает.
+
+        «Отвечает» - значит присылало что-то недавно: на наш ping биржа отвечает
+        pong раз в PING_INTERVAL. Сокет, тихо оборвавшийся по дороге, открытым
+        себя считает ещё долго, и по нему сопровождение видело застывшие
+        позиции - ни взятой цели, ни закрытия. Молчит дольше STALE_AFTER -
+        потоку не верим, и позиции спрашиваются у биржи напрямую.
+        """
+        return (
+            bool(self._ws)
+            and not self._ws.closed
+            and self._logged_in.is_set()
+            and time.monotonic() - self.alive_at < STALE_AFTER
+        )
 
     def positions(self) -> list[dict]:
         return list(self._positions.values())
