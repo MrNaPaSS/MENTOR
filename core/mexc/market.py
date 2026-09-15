@@ -499,7 +499,11 @@ def position_row(row: dict[str, Any], spec: Instrument | None) -> dict[str, Any]
         # Цены пометки в ответе позиции биржа не даёт - оставляем пустой строкой,
         # а не нулём: ноль сопровождение приняло бы за настоящую цену.
         "markPrice": row.get("markPrice") or "",
-        "unrealizePnl": row.get("unrealised") or row.get("realised") or "0",
+        # Плавающий результат - только если биржа его назвала. Подставлять
+        # `realised` нельзя: это уже забранное, и у свежей позиции оно равно
+        # комиссии входа - терминал показывал «-0.02» при плюсе на бирже. Пусто
+        # - и терминал посчитает результат сам, от цены.
+        "unrealizePnl": row.get("unrealised") or "",
         "liquidatePrice": row.get("liquidatePrice") or "",
         "marginSize": row.get("im") or row.get("oim") or "",
         "averageOpenPrice": _num(avg) if avg > 0 else "",

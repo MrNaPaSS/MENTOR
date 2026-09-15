@@ -1026,3 +1026,39 @@ def test_the_entry_is_the_open_average_not_the_holding_one():
     btc = next(row for row in rows if row["symbol"] == "BTCUSDT")
     assert float(btc["averageOpenPrice"]) == 80000
     assert float(btc["cumOpenValue"]) / float(btc["cumOpenSize"]) == pytest.approx(80000)
+
+
+def test_the_realised_result_is_not_passed_off_as_the_floating_one():
+    """Забранное - не плавающее.
+
+    Своей плавающей прибыли MEXC в ответе по позиции не даёт, и вместо неё
+    подставлялось `realised`. У свежей позиции это ровно комиссия входа:
+    терминал показывал «SHORT -0.02» при плюсе на бирже, и расчёт от цены,
+    который включается при пустом поле, не срабатывал.
+    """
+    session = FakeSession(
+        {
+            "/api/v1/private/position/open_positions": {
+                "code": 0,
+                "data": [{**LONG_POSITION, "realised": -0.02}],
+            }
+        }
+    )
+    rows = run(client(session).positions())
+    btc = next(row for row in rows if row["symbol"] == "BTCUSDT")
+    assert btc["unrealizePnl"] in ("", None)
+
+
+def test_the_floating_result_is_taken_when_the_exchange_names_it():
+    """Назвала биржа плавающий результат - берём его."""
+    session = FakeSession(
+        {
+            "/api/v1/private/position/open_positions": {
+                "code": 0,
+                "data": [{**LONG_POSITION, "realised": -0.02, "unrealised": 0.9275}],
+            }
+        }
+    )
+    rows = run(client(session).positions())
+    btc = next(row for row in rows if row["symbol"] == "BTCUSDT")
+    assert float(btc["unrealizePnl"]) == pytest.approx(0.9275)

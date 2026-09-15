@@ -109,6 +109,7 @@ import type { DragLevel } from "@/components/scalping/DragLevels";
 import type { OrderChip } from "@/components/scalping/OrderChip";
 import { draftAt, moveLevel, qtyOf, riskOf, type ManualDraft } from "@/lib/trade/manual";
 import { stopFromExchange } from "@/lib/trade/exchange";
+import { isVenueSwitch } from "@/lib/venueSwitch";
 import Logo from "@/components/ui/Logo";
 import RadioChip from "@/components/app/RadioChip";
 import { api, API_URL } from "@/lib/api";
@@ -852,11 +853,16 @@ export default function ScalpingPage() {
   //
   // Только при смене, а не при первом появлении биржи: иначе запомненное
   // рабочее место затиралось бы биткоином на каждом открытии терминала.
+  //
+  // Пустую биржу не запоминаем. До ответа сервера по счёту она пустая, и
+  // пустое значение в памяти делало появление настоящей биржи «сменой»: после
+  // каждой перезагрузки терминал сам уходил на биткоин.
   const lastVenue = useRef<string | null>(null);
   useEffect(() => {
+    if (!venue) return;
     const was = lastVenue.current;
     lastVenue.current = venue;
-    if (was === null || was === venue || !venue) return;
+    if (!isVenueSwitch(was, venue)) return;
     setSymbol(DEFAULT_SYMBOL);
     setScreenerOpen(false);
   }, [venue]);
