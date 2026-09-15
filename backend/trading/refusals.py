@@ -33,6 +33,14 @@ _FUNDS = re.compile(r"insufficient|not\s+enough\s+(balance|margin)", re.IGNORECA
 
 _LEVERAGE = re.compile(r"leverage.*(not\s+support|invalid|exceed)", re.IGNORECASE)
 
+# Счёту закрыто открытие позиций (MEXC). Ставится проверками риска самой биржи
+# и снимается только её поддержкой: терминалу тут делать нечего.
+_RESTRICTED = re.compile(
+    r"position[\s-]?opening.*(restrict|forbidden|not\s+allowed)"
+    r"|restricted.*position[\s-]?opening",
+    re.IGNORECASE | re.DOTALL,
+)
+
 # Монета закрыта для страны счёта (OKX, код 51155). Терминал тут ни при чём:
 # биржа не даёт торговать эту пару по месту регистрации, и повтор не поможет.
 _COMPLIANCE = re.compile(r"compliance\s+restriction", re.IGNORECASE)
@@ -54,6 +62,13 @@ def explain(message: str) -> str:
     text = (message or "").strip()
     if not text:
         return "Биржа отказала без объяснения"
+
+    if _RESTRICTED.search(text):
+        return (
+            "Биржа закрыла вашему счёту открытие позиций. Это её решение, а не "
+            "отказ терминала: проверьте письмо и сообщения в приложении биржи, "
+            "снять ограничение может только её поддержка."
+        )
 
     if _COMPLIANCE.search(text):
         return (

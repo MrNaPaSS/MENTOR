@@ -40,6 +40,16 @@ def test_known_refusals_are_translated(answer, words):
     assert words in explain(answer)
 
 
+def test_a_restricted_account_is_explained_as_the_decision_of_the_exchange():
+    """MEXC закрыла счёту открытие позиций - это её решение, не отказ терминала."""
+    said = explain(
+        "Your futures position-opening has been restricted. Please check your email "
+        "or in-app message for details."
+    )
+    assert "открытие позиций" in said
+    assert "поддержка" in said
+
+
 def test_country_restriction_is_not_blamed_on_the_terminal():
     """OKX, код 51155: монета закрыта для страны счёта, повтор не поможет."""
     said = explain(
