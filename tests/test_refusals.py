@@ -40,6 +40,15 @@ def test_known_refusals_are_translated(answer, words):
     assert words in explain(answer)
 
 
+def test_country_restriction_is_not_blamed_on_the_terminal():
+    """OKX, код 51155: монета закрыта для страны счёта, повтор не поможет."""
+    said = explain(
+        "You can't trade this pair or borrow this crypto due to local compliance restrictions."
+    )
+    assert "страны" in said
+    assert "другую монету" in said
+
+
 def test_unknown_refusal_is_shown_as_is():
     """Выдумывать объяснение непонятому отказу хуже, чем показать оригинал."""
     said = explain("SOMETHING_NEW: try later")

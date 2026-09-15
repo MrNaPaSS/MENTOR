@@ -33,6 +33,10 @@ _FUNDS = re.compile(r"insufficient|not\s+enough\s+(balance|margin)", re.IGNORECA
 
 _LEVERAGE = re.compile(r"leverage.*(not\s+support|invalid|exceed)", re.IGNORECASE)
 
+# Монета закрыта для страны счёта (OKX, код 51155). Терминал тут ни при чём:
+# биржа не даёт торговать эту пару по месту регистрации, и повтор не поможет.
+_COMPLIANCE = re.compile(r"compliance\s+restriction", re.IGNORECASE)
+
 
 def max_size_in(message: str) -> tuple[float, int] | None:
     """Предел позиции и плечо из отказа биржи, если это отказ по пределу."""
@@ -50,6 +54,12 @@ def explain(message: str) -> str:
     text = (message or "").strip()
     if not text:
         return "Биржа отказала без объяснения"
+
+    if _COMPLIANCE.search(text):
+        return (
+            "Биржа закрыла эту монету для страны вашего счёта. Терминал тут ни при "
+            "чём, повтор не поможет - выберите другую монету."
+        )
 
     found = _MAX_SIZE.search(text)
     if found:
