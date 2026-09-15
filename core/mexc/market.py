@@ -593,6 +593,35 @@ def unwrap(payload: Any, status: int) -> Any:
     return data if data is not None else payload
 
 
+def check_cancelled(data: Any, what: str = "Заявка") -> None:
+    """Проверить, что биржа и вправду сняла заявку.
+
+    Отмена у MEXC пакетная, и отвечает она на неё дважды: общим кодом конверта
+    и разбором по каждой заявке - `{"orderId": 1, "errorCode": 0}`. Конверт при
+    этом приходит успешным, даже когда снять не удалось ни одной: причина
+    лежит внутри, в `errorCode`.
+
+    Пока разбора не было, снятая «успешно» заявка оставалась висеть, и об этом
+    не знал никто: терминал считал её снятой, а на бирже она ждала своей цены.
+    """
+    for row in rows_of(data):
+        if "errorCode" not in row:
+            continue
+        code = row.get("errorCode")
+        try:
+            failed = int(code) != 0
+        except (TypeError, ValueError):
+            failed = bool(code)
+        if not failed:
+            continue
+        message = str(row.get("errorMsg") or "").strip() or f"код {code}"
+        number = str(row.get("orderId") or row.get("stopPlanOrderId") or "")
+        raise WeexTradeError(
+            f"{what} {number} на MEXC не снята: {message}".replace("  ", " "),
+            code=code,
+        )
+
+
 def rows_of(data: Any, key: str = "") -> list[dict]:
     """Список строк из ответа: биржа кладёт их то списком, то под ключом."""
     if isinstance(data, list):

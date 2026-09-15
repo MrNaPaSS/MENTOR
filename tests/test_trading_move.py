@@ -666,3 +666,38 @@ def test_the_move_goes_under_the_same_lock_as_the_watcher(moving):
     assert events == ["взят", "отпущен"]
     # И вся работа с биржей - внутри замка, а не после него.
     assert "s1" in exchange.algo_cancelled
+
+
+def test_a_limit_without_our_mark_is_still_cancelled(moving):
+    """Биржа не вернула метку - заявку снимаем по ней самой.
+
+    На MEXC список заявок приходил без нашего имени: опознать прежнюю лимитку
+    в нём было нечем, и она оставалась висеть, а рядом вставала новая - тот же
+    вход стоял на бирже двойным объёмом.
+    """
+    client, exchange, session, live = moving
+    # Заявка есть, но без clientOrderId: по списку её нашей не признать.
+    exchange.pending = [{"orderId": "e1"}]
+
+    assert move(client, entry=80_000.0).status_code == 200
+
+    # Снята по метке, а не по номеру: номера у нас не было.
+    assert exchange.cancelled == ["BTCUSDT-1"]
+    assert exchange.orders[-1]["order_type"] == "LIMIT"
+    assert exchange.orders[-1]["price"] == "80000"
+
+
+def test_the_move_goes_on_when_there_is_nothing_to_cancel(moving):
+    """Заявки на бирже уже нет - перенос идёт дальше, а не падает отказом."""
+    client, exchange, session, live = moving
+    exchange.pending = []
+
+    async def refuse(symbol, order_id):
+        from core.weex.futures import WeexTradeError
+
+        raise WeexTradeError("order not exist")
+
+    exchange.cancel_order = refuse  # type: ignore[assignment]
+
+    assert move(client, entry=80_000.0).status_code == 200
+    assert exchange.orders[-1]["price"] == "80000"

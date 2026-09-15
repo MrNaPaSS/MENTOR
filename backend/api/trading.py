@@ -67,6 +67,7 @@ from core.weex import keys as keystore
 from backend.trading.rewards import award_trade_coins
 from backend.trading.watcher import (
     client_matches,
+    entry_marks,
     fill_time,
     order_marks,
     position_for,
@@ -1607,12 +1608,14 @@ async def _cancel_trade(
     mine.discard("")
 
     removed = 0
+    seen = False
     try:
         for order in await client.open_orders(symbol):
             order_id = str(order.get("orderId") or order.get("id") or "")
             client_id = str(order.get("clientOrderId") or order.get("clientOid") or "")
             if order_id not in mine and not client_matches(client_id, live.client_id):
                 continue
+            seen = True
             try:
                 await client.cancel_order(symbol, order_id)
                 removed += 1
@@ -1620,6 +1623,22 @@ async def _cancel_trade(
                 logger.warning("Заявка %s не снята: %s", order_id, exc)
     except WeexTradeError as exc:
         logger.warning("Список заявок %s не получен: %s", symbol, exc)
+
+    # Своих заявок в списке не нашлось. Это либо их и правда нет, либо биржа не
+    # вернула нашу метку - тогда опознать заявку в списке нечем, а снять её
+    # можно: по самой метке, которой мы её и ставили. Без этого снятая на
+    # словах лимитка оставалась висеть и открывала позицию заново, стоило рынку
+    # дойти до её цены.
+    if not seen:
+        for mark in entry_marks(live.client_id, live.replaces or 0):
+            try:
+                await client.cancel_order(symbol, mark)
+            except WeexTradeError as exc:
+                logger.debug("Заявка %s по метке не снята: %s", mark, exc)
+                continue
+            logger.info("Заявка %s снята по метке %s", symbol, mark)
+            removed += 1
+            break
 
     try:
         for order in await client.algo_orders(symbol):

@@ -880,3 +880,64 @@ def test_a_failed_return_of_the_protection_is_said_out_loud():
             )
         )
     assert "вернуть прежнюю не вышло" in str(failed.value)
+
+
+def test_a_refusal_inside_a_successful_answer_is_a_refusal():
+    """Отмена пакетная: конверт успешный, а отказ лежит внутри, по заявке.
+
+    Пока разбора не было, «снятая» лимитка оставалась висеть на бирже, и не
+    знал об этом никто: терминал считал её снятой, а она ждала своей цены.
+    """
+    session = FakeSession(
+        {
+            "/api/v1/private/order/cancel": {
+                "success": True,
+                "code": 0,
+                "data": [
+                    {"orderId": 5150, "errorCode": 2041, "errorMsg": "order state error"}
+                ],
+            }
+        }
+    )
+    with pytest.raises(WeexTradeError) as failed:
+        run(client(session).cancel_order("BTCUSDT", "5150"))
+    assert "5150" in str(failed.value)
+    assert "order state error" in str(failed.value)
+
+
+def test_a_clean_batch_answer_passes():
+    """Нулевой код по каждой заявке - это снятие, и мешать ему нечем."""
+    session = FakeSession(
+        {
+            "/api/v1/private/order/cancel": {
+                "code": 0,
+                "data": [{"orderId": 5150, "errorCode": 0, "errorMsg": "success"}],
+            }
+        }
+    )
+    run(client(session).cancel_order("BTCUSDT", "5150"))
+    assert sent_to(session, "/api/v1/private/order/cancel")["body"] == [5150]
+
+
+def test_an_answer_without_a_breakdown_is_still_a_success():
+    """Разбора в ответе нет - верим конверту, как верили раньше."""
+    session = FakeSession({"/api/v1/private/order/cancel": {"code": 0, "data": True}})
+    run(client(session).cancel_order("BTCUSDT", "5150"))
+
+
+def test_the_protection_refusal_is_heard_too():
+    """Та же пакетная отмена у защиты: отказ внутри - значит стоп остался."""
+    session = FakeSession(
+        {
+            "/api/v1/private/stoporder/cancel": {
+                "code": 0,
+                "data": [
+                    {"stopPlanOrderId": 900, "errorCode": 1002, "errorMsg": "not exist"}
+                ],
+            }
+        }
+    )
+    with pytest.raises(WeexTradeError) as failed:
+        run(client(session).cancel_algo_order("BTCUSDT", "900"))
+    assert "900" in str(failed.value)
+    assert "not exist" in str(failed.value)

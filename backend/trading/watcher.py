@@ -1854,6 +1854,24 @@ def _alnum(value: str | None) -> str:
     return "".join(ch for ch in str(value or "") if ch.isascii() and ch.isalnum()).lower()
 
 
+def entry_marks(client_id: str, replaces: int = 0) -> list[str]:
+    """Метки, которыми ставился вход этой сделки: свежая первой.
+
+    Первая заявка уходит под самим идентификатором сделки, каждый перенос
+    дописывает к нему свой номер. Нужны они затем, что снять заявку можно и по
+    метке, не зная её номера на бирже: MEXC, OKX, BingX и Binance принимают
+    отмену по нашему имени.
+
+    Это запасной путь для случая, когда биржа не вернула метку в списке
+    заявок: номера у нас тогда нет, и прежняя лимитка оставалась висеть, а
+    рядом вставала новая - тот же вход двойным объёмом.
+    """
+    nth = int(replaces or 0)
+    marks = [f"{client_id}-{n}"[:64] for n in range(nth, 0, -1)]
+    marks.append(str(client_id))
+    return [m for m in marks if m]
+
+
 def client_matches(mark: str | None, client_id: str | None) -> bool:
     """Наша ли это заявка: идентификатор с биржи против идентификатора сделки.
 

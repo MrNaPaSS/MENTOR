@@ -87,6 +87,7 @@ from core.mexc.market import (  # noqa: F401 - часть имён здесь р
     _num,
     body_string,
     clear_caches,
+    check_cancelled,
     client_id,
     clock_skew,
     is_clock_error,
@@ -719,20 +720,30 @@ class MexcFutures:
         поиска её номера.
         """
         if str(order_id).isdigit():
-            return await self._request("POST", ENDPOINTS["cancel"], body=[_i(order_id)])
-        return await self._request(
-            "POST",
-            ENDPOINTS["cancel_external"],
-            body={"symbol": symbol_id(symbol), "externalOid": client_id(order_id)},
-        )
+            data = await self._request("POST", ENDPOINTS["cancel"], body=[_i(order_id)])
+        else:
+            data = await self._request(
+                "POST",
+                ENDPOINTS["cancel_external"],
+                body={"symbol": symbol_id(symbol), "externalOid": client_id(order_id)},
+            )
+        # Конверт приходит успешным, даже когда снять не удалось: причина лежит
+        # внутри, по каждой заявке отдельно. Без разбора лимитка оставалась
+        # висеть, а терминал считал её снятой.
+        check_cancelled(data, "Заявка")
+        return data
 
     async def cancel_algo_order(self, symbol: str, order_id: str) -> Any:
         """Снять защиту. Ручка своя: обычная отмена такую заявку не знает."""
-        return await self._request(
+        data = await self._request(
             "POST",
             ENDPOINTS["stop_cancel"],
             body=[{"symbol": symbol_id(symbol), "stopPlanOrderId": _i(order_id)}],
         )
+        # Та же пакетная отмена, что и у обычных заявок, и тот же разбор: иначе
+        # перенос стопа снял бы прежний только на словах.
+        check_cancelled(data, "Защита")
+        return data
 
     async def cancel_all_algo(self, symbol: str) -> int:
         """Снять защиту пары - по одной заявке, а не все разом.

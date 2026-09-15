@@ -42,6 +42,7 @@ from backend.deps import get_current_student, get_session
 from backend.trading.watcher import (
     cancel_plan,
     client_matches,
+    entry_marks,
     mark_price,
     order_marks,
     plan_alive,
@@ -304,6 +305,13 @@ async def _move_waiting(
             await client.cancel_order(live.symbol, old)
         except WeexTradeError as exc:
             raise _fail(exc) from exc
+    else:
+        # Номера нет: биржа не вернула нашу метку в списке заявок, и опознать
+        # по нему заявку нечем. Снимаем по самой метке - её принимают MEXC,
+        # OKX, BingX и Binance, и знаем мы её точно: сами ставили. Без этого
+        # прежняя лимитка оставалась висеть, а рядом вставала новая, и тот же
+        # вход стоял на бирже двойным объёмом.
+        await _cancel_by_mark(client, live)
 
     # Идентификатор для биржи новый: снятый она помнит ещё некоторое время и
     # повторный отклоняет. Наш собственный при этом не меняется - к нему
@@ -651,6 +659,23 @@ def _guard(side: str, entry: float, stop: float | None, take: float | None) -> N
             raise HTTPException(422, "Цель лонга должна стоять выше входа")
         if not long and take >= entry:
             raise HTTPException(422, "Цель шорта должна стоять ниже входа")
+
+
+async def _cancel_by_mark(client: WeexFutures, live: LiveTrade) -> str:
+    """Снять вход по нашей метке. Возвращает сработавшую или пустую строку.
+
+    Заявки может уже не быть вовсе - исполнилась или снята руками, - и это не
+    беда: перенос идёт дальше. Поэтому отказ здесь только в журнал.
+    """
+    for mark in entry_marks(live.client_id, live.replaces or 0):
+        try:
+            await client.cancel_order(live.symbol, mark)
+        except WeexTradeError as exc:
+            logger.info("Вход %s по метке %s не снят: %s", live.symbol, mark, exc)
+            continue
+        logger.info("Прежний вход %s снят по метке %s", live.symbol, mark)
+        return mark
+    return ""
 
 
 async def _entry_order(client: WeexFutures, live: LiveTrade) -> str:

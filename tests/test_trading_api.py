@@ -15,7 +15,7 @@ from backend.api import trading as trading_api
 from backend.trading import connect as connect_mod
 from backend.deps import get_current_student, get_session, get_weex
 from core.db import Base
-from core.models import Student
+from core.models import LiveTrade, Student
 
 
 class FakeExchange:
@@ -1153,3 +1153,39 @@ def test_live_lists_recently_finished_trades(app_and_exchange):
     body = client.get("/api/trading/live").json()
     assert body["finished"] == ["fresh"]
     assert [t["client_id"] for t in body["trades"]] == ["live"]
+
+
+def test_a_forgotten_limit_is_cancelled_by_its_mark(app_and_exchange):
+    """Отмена сделки снимает лимитку и тогда, когда метки в списке нет.
+
+    Биржа возвращает наше имя заявки не всегда: на MEXC список приходил без
+    него. Опознать в таком списке свою заявку нечем, и она оставалась висеть -
+    рынок, дойдя до её цены, открыл бы позицию, о которой никто не знает.
+    """
+    client, exchange, session = app_and_exchange
+    session.add(
+        LiveTrade(
+            student_id=1,
+            client_id="BTCUSDT-7",
+            symbol="BTCUSDT",
+            side="long",
+            entry=80_000.0,
+            initial_stop=79_000.0,
+            current_stop=79_000.0,
+            targets_json="[80500]",
+            qty=0.5,
+            leverage=10,
+            status="waiting",
+        )
+    )
+    session.commit()
+    # Заявка на бирже есть, но без нашего имени.
+    exchange.pending = [{"orderId": "e9"}]
+
+    body = client.post(
+        "/api/trading/close",
+        json={"symbol": "BTCUSDT", "side": "long", "share": 1, "trade_id": "BTCUSDT-7"},
+    ).json()
+
+    assert body["closed"] == 0.0
+    assert exchange.cancelled == ["BTCUSDT-7"]
