@@ -641,6 +641,15 @@ class PositionWatcher:
 
                 plans = await self._open_plans(client, trade)
                 resting = await self._resting(client, trade)
+                if resting:
+                    # Пока вход стоит в стакане, позиции и не должно быть, и
+                    # такой обход в запас не идёт. Раньше счёт копился всё
+                    # ожидание: лимитка стояла дольше пяти обходов, исполнялась,
+                    # уходила из списка заявок раньше, чем позиция доезжала до
+                    # сервера, - и на первом же обходе после исполнения сделку
+                    # снимали как «заявки на бирже нет». Позиция на бирже
+                    # оставалась без целей и без сопровождения.
+                    self._missing[trade.id] = 0
                 key = (trade.symbol.upper(), trade.side)
                 sym = trade.symbol.upper()
                 if sym not in fees:

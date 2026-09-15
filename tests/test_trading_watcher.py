@@ -1785,3 +1785,92 @@ def test_without_the_new_number_only_one_stop_at_its_price_survives():
     ])
     asyncio.run(drop_old_stops(client, trade(), keep="", market=101.5, fresh=100.5))
     assert len(client.cancelled) == 1
+
+
+def _race_pass(monkeypatch, one, book):
+    """Обход одной ждущей сделки: `book` - что биржа отвечает на этом обходе."""
+    import asyncio
+
+    from backend.trading import watcher as watcher_mod
+
+    class Exchange:
+        async def positions(self):
+            return book["positions"]
+
+        async def algo_orders(self, symbol):
+            return []
+
+        async def open_orders(self, symbol):
+            return book["orders"]
+
+        async def symbol_filters(self, symbol):
+            return {"step": 0.1, "tick": 0.01, "min_qty": 0.1}
+
+        async def last_price(self, symbol):
+            return 100.0
+
+    decisions: list = []
+    real = watcher_mod.decide
+
+    def spy(*args, **kwargs):
+        made = real(*args, **kwargs)
+        decisions.append(made)
+        return made
+
+    monkeypatch.setattr(watcher_mod, "decide", spy)
+    monkeypatch.setattr(watcher_mod, "account_for", lambda *_a: SimpleNamespace(is_active=True))
+    monkeypatch.setattr(watcher_mod, "client_for", lambda *_a: Exchange())
+    monkeypatch.setattr(watcher_mod, "cached", lambda client, *_a: client)
+    return asyncio, decisions
+
+
+def test_a_long_wait_in_the_book_does_not_use_up_the_fill_margin(monkeypatch):
+    """Лимитка простояла долго и исполнилась - сделка не снимается.
+
+    Счёт обходов без позиции копился всё время, пока вход стоял в стакане. В
+    миг исполнения заявка уже ушла из списка, а позиция ещё не доехала, и
+    сделку снимали на первом же обходе: «заявки на бирже нет». Позиция XRP на
+    OKX осталась со стопом, но без целей и без сопровождения.
+    """
+    from backend.trading.watcher import PositionWatcher
+
+    one = trade(status="waiting", client_id="XRPUSDT-1789508854280")
+    one.id = 1
+    watcher = PositionWatcher(lambda: None, lambda: None)
+
+    async def skip(*_a, **_k):
+        return None
+
+    watcher._apply = skip  # type: ignore[assignment]
+
+    resting = {"positions": [], "orders": [{"clientOrderId": "XRPUSDT17895088542801"}]}
+    asyncio, decisions = _race_pass(monkeypatch, one, resting)
+    for _ in range(GONE_TOLERANCE + 3):
+        asyncio.run(watcher._handle_student(None, 1, [one], "okx"))
+
+    # Исполнилась: заявки уже нет, позиция ещё не пришла.
+    resting["orders"] = []
+    asyncio.run(watcher._handle_student(None, 1, [one], "okx"))
+
+    assert decisions and not any(d.cancelled for d in decisions)
+
+
+def test_after_the_fill_the_margin_still_ends(monkeypatch):
+    """Запас не бесконечный: без заявки и без позиции сделку всё же снимают."""
+    from backend.trading.watcher import PositionWatcher
+
+    one = trade(status="waiting", client_id="c1")
+    one.id = 1
+    watcher = PositionWatcher(lambda: None, lambda: None)
+
+    async def skip(*_a, **_k):
+        return None
+
+    watcher._apply = skip  # type: ignore[assignment]
+
+    gone = {"positions": [], "orders": []}
+    asyncio, decisions = _race_pass(monkeypatch, one, gone)
+    for _ in range(GONE_TOLERANCE + 1):
+        asyncio.run(watcher._handle_student(None, 1, [one], "okx"))
+
+    assert decisions[-1].cancelled is True
