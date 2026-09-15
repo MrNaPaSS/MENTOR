@@ -1201,3 +1201,88 @@ def test_a_forgotten_limit_is_cancelled_by_its_mark(app_and_exchange):
 
     assert body["closed"] == 0.0
     assert exchange.cancelled == ["BTCUSDT-7"]
+
+
+MEXC_LOCK = "Leverage adjustment unavailable while orders are open"
+
+
+def _short_body(leverage: int = 10) -> dict:
+    return {
+        "symbol": "BTCUSDT",
+        "side": "short",
+        "quantity": 0.5,
+        "leverage": leverage,
+        "entry": 81000,
+        "stop": 82000,
+        "takes": [80000],
+    }
+
+
+def test_mexc_leverage_lock_with_the_same_leverage_lets_the_entry_through(app_and_exchange):
+    """Плечо не меняется, пока висят заявки, - но менять его и не нужно.
+
+    MEXC пишет отказ словами в обратном порядке («orders are open»), и он не
+    узнавался: трейдер получал сырой текст биржи и думал, что лимитки в две
+    стороны запрещены. Запрещена только смена плеча - а если на бирже стоит
+    ровно запрошенное, вход уходит как задуман.
+    """
+    from core.weex.futures import WeexTradeError
+
+    client, exchange, _ = app_and_exchange
+
+    async def locked(symbol, leverage, margin_coin="USDT"):
+        raise WeexTradeError(MEXC_LOCK)
+
+    async def leverage_of(symbol, long=True):
+        return 10
+
+    exchange.set_leverage = locked  # type: ignore[assignment]
+    exchange.leverage_of = leverage_of  # type: ignore[attr-defined]
+
+    res = client.post("/api/trading/open", json=_short_body(10))
+    assert res.status_code == 200
+    assert exchange.orders and exchange.orders[-1]["side"] == "SELL"
+
+
+def test_mexc_leverage_lock_with_another_leverage_is_explained(app_and_exchange):
+    """Плечо на бирже другое - вход не уходит, а причина сказана словами."""
+    from core.weex.futures import WeexTradeError
+
+    client, exchange, _ = app_and_exchange
+
+    async def locked(symbol, leverage, margin_coin="USDT"):
+        raise WeexTradeError(MEXC_LOCK)
+
+    async def leverage_of(symbol, long=True):
+        return 20
+
+    exchange.set_leverage = locked  # type: ignore[assignment]
+    exchange.leverage_of = leverage_of  # type: ignore[attr-defined]
+
+    res = client.post("/api/trading/open", json=_short_body(10))
+    assert res.status_code == 409
+    detail = res.json()["detail"]
+    assert "x20" in detail and "x10" in detail
+    assert MEXC_LOCK not in detail
+    assert exchange.orders == []
+
+
+def test_the_leverage_is_read_for_the_side_of_the_entry(app_and_exchange):
+    """У MEXC плечо своё у лонга и шорта - спрашиваем сторону входа."""
+    from core.weex.futures import WeexTradeError
+
+    client, exchange, _ = app_and_exchange
+    asked: list[bool] = []
+
+    async def locked(symbol, leverage, margin_coin="USDT"):
+        raise WeexTradeError(MEXC_LOCK)
+
+    async def leverage_of(symbol, long=True):
+        asked.append(long)
+        return 10
+
+    exchange.set_leverage = locked  # type: ignore[assignment]
+    exchange.leverage_of = leverage_of  # type: ignore[attr-defined]
+
+    assert client.post("/api/trading/open", json=_short_body(10)).status_code == 200
+    assert asked == [False]

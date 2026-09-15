@@ -892,7 +892,18 @@ async def positions(
 # Слова в ответе у неё свои, поэтому узнаём отказ по признакам, а не по точному
 # тексту: важно не сообщение, а то, что менять плечо сейчас нельзя.
 _LEVERAGE_LOCKED = ("leverage", "плеч")
-_LEVERAGE_BUSY = ("open order", "position", "precondition", "заяв", "позиц")
+# MEXC пишет «Leverage adjustment unavailable while orders are open» - слова
+# те же, порядок обратный, и «open order» в этой строке не находилось: отказ
+# уходил трейдеру сырым, будто сделку запретили.
+_LEVERAGE_BUSY = (
+    "open order",
+    "orders are open",
+    "while orders",
+    "position",
+    "precondition",
+    "заяв",
+    "позиц",
+)
 
 
 def _leverage_locked(exc: Exception) -> bool:
@@ -900,8 +911,21 @@ def _leverage_locked(exc: Exception) -> bool:
     return any(w in text for w in _LEVERAGE_LOCKED) and any(w in text for w in _LEVERAGE_BUSY)
 
 
-async def _live_leverage(client, symbol: str) -> int | None:
-    """Какое плечо уже стоит на бирже по этой монете."""
+async def _live_leverage(client, symbol: str, long: bool = True) -> int | None:
+    """Какое плечо уже стоит на бирже по этой монете.
+
+    Биржа, которая умеет назвать плечо без позиции (MEXC, по стороне), отвечает
+    сама. Иначе по позициям - но их может и не быть: плечо держат висящие
+    лимитки, и тогда ответ «не знаю».
+    """
+    own = getattr(client, "leverage_of", None)
+    if own is not None:
+        try:
+            value = int(await own(symbol, long=long))
+        except Exception:  # noqa: BLE001 - не узнали, спросим позиции
+            value = 0
+        if value > 0:
+            return value
     try:
         rows = await client.positions()
     except Exception:
@@ -919,7 +943,7 @@ async def _live_leverage(client, symbol: str) -> int | None:
     return None
 
 
-async def _ensure_leverage(client, symbol: str, leverage: int) -> None:
+async def _ensure_leverage(client, symbol: str, leverage: int, long: bool = True) -> None:
     """Поставить плечо, а если биржа не даёт - объяснить это словами.
 
     «FAILED_PRECONDITION: You cannot adjust the leverage when there are open
@@ -939,7 +963,7 @@ async def _ensure_leverage(client, symbol: str, leverage: int) -> None:
         if not _leverage_locked(exc):
             raise
 
-    live = await _live_leverage(client, symbol)
+    live = await _live_leverage(client, symbol, long=long)
     if live is not None and live == int(leverage):
         return
 
@@ -1016,7 +1040,7 @@ async def open_position(
         # Сорвались цели при уже открытой позиции — сделка есть, и объявлять её
         # неудачей нельзя: трейдер решит, что позиции нет, а она стоит на бирже.
         try:
-            await _ensure_leverage(client, symbol, body.leverage)
+            await _ensure_leverage(client, symbol, body.leverage, long=long)
         except WeexTradeError as exc:
             raise _fail(exc) from exc
 

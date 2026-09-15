@@ -363,16 +363,15 @@ class MexcFutures:
         """
         name = symbol_id(symbol)
         value = int(leverage)
-        # Запоминаем до запроса: заявке плечо нужно тем же числом, каким его
-        # только что поставил терминал, и спрашивать его у биржи заново незачем.
-        self._leverage[name] = value
         position = await self._position_of(symbol, "")
         if position and position.get("positionId"):
-            return await self._request(
+            result = await self._request(
                 "POST",
                 ENDPOINTS["leverage"],
                 body={"positionId": _i(position["positionId"]), "leverage": value},
             )
+            self._leverage[name] = value
+            return result
         result = None
         for position_type in (1, 2):
             result = await self._request(
@@ -385,6 +384,11 @@ class MexcFutures:
                     "positionType": position_type,
                 },
             )
+        # Запоминаем только после ответа биржи. Раньше число ложилось в память
+        # до запроса, и отказ «плечо не меняется, пока висят заявки» оставлял
+        # в ней запрошенное плечо: заявка уходила с ним, а на бирже стояло
+        # другое, и проверка «плечо то же» врала в пользу входа.
+        self._leverage[name] = value
         return result
 
     async def leverage_of(self, symbol: str, long: bool = True) -> int:

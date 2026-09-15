@@ -975,3 +975,33 @@ def test_the_protection_number_reaches_the_exchange_unchanged():
     run(client(session).cancel_algo_order("BTCUSDT", "854902673092049031"))
     body = sent_to(session, "/api/v1/private/stoporder/cancel")["body"]
     assert body == [{"symbol": "BTC_USDT", "stopPlanOrderId": 854902673092049031}]
+
+
+def test_a_refused_leverage_is_not_remembered():
+    """Отказ смены плеча не оставляет в памяти запрошенное число.
+
+    Раньше плечо запоминалось до запроса. Биржа отвечала «плечо не меняется,
+    пока висят заявки», а в памяти оставалось запрошенное: заявка уходила с
+    ним, хотя на бирже стояло другое, и проверка «плечо то же» врала в пользу
+    входа.
+    """
+    session = FakeSession(
+        {
+            "/api/v1/private/position/change_leverage": {
+                "code": 2019,
+                "message": "Leverage adjustment unavailable while orders are open",
+            },
+            "/api/v1/private/position/leverage": {
+                "code": 0,
+                "data": [
+                    {"positionType": 1, "openType": 1, "leverage": 20},
+                    {"positionType": 2, "openType": 1, "leverage": 20},
+                ],
+            },
+        }
+    )
+    one = client(session)
+    with pytest.raises(WeexTradeError):
+        run(one.set_leverage("BTCUSDT", 10))
+    # Биржа своё плечо не меняла - и назвать надо её число, а не запрошенное.
+    assert run(one.leverage_of("BTCUSDT", long=False)) == 20
