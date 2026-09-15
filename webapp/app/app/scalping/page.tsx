@@ -472,6 +472,9 @@ function readWorkspace(): Partial<Workspace> | null {
 /** Монета, с которой терминал открывается после смены биржи: она есть у всех. */
 const DEFAULT_SYMBOL = "BTCUSDT";
 
+// Как часто переспрашивать состояние биржевого счёта, пока его не получили.
+const EXCHANGE_RETRY_MS = 5_000;
+
 export default function ScalpingPage() {
   const t = useT();
   const layerLabels = t.terminal.layers;
@@ -1019,6 +1022,16 @@ export default function ScalpingPage() {
   useEffect(() => {
     loadExchange();
   }, [loadExchange]);
+
+  // Пока состояние счёта не пришло, спрашиваем снова. Запрос один раз при
+  // открытии падал, если сервер в этот миг перезапускался, и терминал так и
+  // стоял без биржи: не вёл сделки и не подставлял её в графики до ручной
+  // перезагрузки страницы.
+  useEffect(() => {
+    if (exchangeKnown) return;
+    const timer = window.setInterval(loadExchange, EXCHANGE_RETRY_MS);
+    return () => window.clearInterval(timer);
+  }, [exchangeKnown, loadExchange]);
 
   /**
    * Отказ биржи - плашкой над графиком, а не строкой под ним.

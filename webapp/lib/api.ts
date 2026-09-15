@@ -79,6 +79,22 @@ if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", mark);
 }
 
+// Предел ожидания ответа на чтение. Без него запрос, ушедший в момент
+// перезапуска сервера, висел вечно: терминал ждал состояния биржи и так и
+// не начинал вести сделки, пока страницу не перезагрузят руками.
+//
+// Только чтения. Заявку обрывать нельзя: биржа могла её уже принять, и
+// трейдер, увидев ошибку, нажал бы «Войти» второй раз - вторая позиция.
+export const READ_TIMEOUT_MS = 20_000;
+
+export function readSignal(init?: RequestInit): AbortSignal | undefined {
+  if (init?.signal) return init.signal;
+  const method = String(init?.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") return undefined;
+  if (typeof AbortSignal === "undefined" || typeof AbortSignal.timeout !== "function") return undefined;
+  return AbortSignal.timeout(READ_TIMEOUT_MS);
+}
+
 // Пока обновление в полёте, параллельные запросы ждут его, а не плодят свои:
 // иначе десяток виджетов дашборда разом отправил бы десяток /auth/refresh.
 const refreshing: Partial<Record<TokenKind, Promise<Renewal>>> = {};
@@ -94,6 +110,8 @@ async function requestNewAccessToken(kind: TokenKind): Promise<Renewal> {
       method: "POST",
       headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1" },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      // Обновление ждут все запросы разом: зависшее, оно держало бы весь кабинет.
+      signal: readSignal(),
     });
   } catch {
     // Сеть, туннель или отмена запроса самой страницей. Токены целы.
@@ -172,6 +190,7 @@ setHealthProbe(async () => {
   const res = await fetch(`${API_URL}/api/health`, {
     cache: "no-store",
     headers: { "ngrok-skip-browser-warning": "1" },
+    signal: readSignal(),
   });
   return res.ok;
 });
@@ -182,6 +201,7 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     res = await fetch(`${API_URL}${path}`, {
       ...init,
       headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1", ...(init?.headers || {}) },
+      signal: readSignal(init),
     });
   } catch (error) {
     // До сервера не достучались вовсе. Отсюда виден только этот факт - что
