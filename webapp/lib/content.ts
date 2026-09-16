@@ -86,6 +86,7 @@ export const NAV_ANCHORS = [
   { key: "about", href: "#about" },
   { key: "terminal", href: "#terminal" },
   { key: "how", href: "#how" },
+  { key: "results", href: "#results" },
   { key: "faq", href: "#faq" },
 ] as const;
 

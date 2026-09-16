@@ -5,6 +5,7 @@ export const landing = {
     about: "About",
     terminal: "Terminal",
     how: "How it works",
+    results: "Results",
     faq: "FAQ",
   },
 
@@ -119,6 +120,48 @@ export const landing = {
       { title: "Connect the exchange", text: "Create an API key without withdrawal rights and paste it into the terminal - your account is live." },
       { title: "Trade from the terminal", text: "The size is already fitted to your deposit: hit “Enter” and the server runs the trade to the end." },
     ],
+  },
+
+  tradeCase: {
+    eyebrow: "A trade, step by step",
+    title: "Entry off a wall - by structure",
+    subtitle:
+      "An ETH short on WEEX, straight from the terminal: what it showed at entry, what happened next and how the trade ended.",
+    steps: [
+      {
+        title: "A wall at resistance",
+        text: "1.6M sitting at 2415 in the book - an order that does not get eaten, and the terminal says so in the header: «wall 1.6M · 2415.0 · resistance». The structure agrees: broken down, price back at the level. Short off the wall: entry 2415.22, stop 2425.12 behind it, three targets below.",
+      },
+      {
+        title: "Stop to break-even, first target taken",
+        text: "Price moved down, the first target was taken and the stop moved to break-even at 2411.36 - from here the trade cannot end in the red. The wall is now below price, at 2398: the same book, but as support.",
+      },
+      {
+        title: "Exit and the journal entry",
+        text: "Closed at 2396.03, without waiting for the third target. The terminal wrote the trade into the journal itself - entry, exit, targets, fee and result - and built the card from that entry.",
+      },
+    ],
+    prev: "Previous step",
+    next: "Next step",
+    cardOurs: "Terminal card",
+    cardTheirs: "The same trade on the exchange",
+  },
+
+  results: {
+    eyebrow: "Trade cards",
+    title: "Our own card, not an exchange screenshot",
+    subtitle:
+      "The same trade: on top - as the terminal draws it, below - as the exchange gives it out. The card is built from the exchange report, with the same numbers, and works the same on every connected exchange.",
+    own: [
+      "PnL cards for every exchange",
+      "Our own certificates",
+      "Our own charts",
+      "Our own journal reports",
+    ],
+    ours: "Terminal card",
+    theirs: "The same trade on the exchange",
+    imageAlt: "Terminal trade card",
+    exchangeAlt: "Exchange trade card",
   },
 
   faq: {

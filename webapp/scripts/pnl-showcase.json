@@ -3,19 +3,19 @@
   "exchange": "weex",
   "trades": [
     {
-      "file": "nmnh-01-xrpusdt",
+      "file": "01-xrpusdt",
       "symbol": "XRPUSDT",
       "side": "long",
       "leverage": 25,
       "variant": "bull",
       "roi": 316.29,
-      "pnl": 6140.3010,
+      "pnl": 6140.301,
       "entry": 1.1358,
       "exit": 1.2795,
       "at": "2026-06-15T19:22:09"
     },
     {
-      "file": "nmnh-02-jupusdt",
+      "file": "02-jupusdt",
       "symbol": "JUPUSDT",
       "side": "long",
       "leverage": 25,
@@ -27,7 +27,7 @@
       "at": "2026-06-15T18:18:54"
     },
     {
-      "file": "nmnh-03-taousdt",
+      "file": "03-taousdt",
       "symbol": "TAOUSDT",
       "side": "long",
       "leverage": 25,
@@ -39,7 +39,7 @@
       "at": "2026-06-13T12:03:32"
     },
     {
-      "file": "nmnh-04-jupusdt",
+      "file": "04-jupusdt",
       "symbol": "JUPUSDT",
       "side": "long",
       "leverage": 25,
@@ -51,7 +51,7 @@
       "at": "2026-06-12T17:14:35"
     },
     {
-      "file": "nmnh-05-injusdt",
+      "file": "05-injusdt",
       "symbol": "INJUSDT",
       "side": "short",
       "leverage": 25,
@@ -63,7 +63,7 @@
       "at": "2026-06-10T10:49:57"
     },
     {
-      "file": "nmnh-06-hypeusdt",
+      "file": "06-hypeusdt",
       "symbol": "HYPEUSDT",
       "side": "short",
       "leverage": 25,
@@ -75,19 +75,19 @@
       "at": "2026-06-09T16:11:19"
     },
     {
-      "file": "nmnh-07-wldusdt",
+      "file": "07-wldusdt",
       "symbol": "WLDUSDT",
       "side": "short",
       "leverage": 25,
       "variant": "graffiti-short",
-      "roi": 302.30,
-      "pnl": 1467.2700,
+      "roi": 302.3,
+      "pnl": 1467.27,
       "entry": 0.5437,
       "exit": 0.4795,
       "at": "2026-06-05T17:12:55"
     },
     {
-      "file": "nmnh-08-injusdt",
+      "file": "08-injusdt",
       "symbol": "INJUSDT",
       "side": "long",
       "leverage": 25,

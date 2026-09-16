@@ -1,10 +1,10 @@
 // Витрина «Реальные PnL» нашими карточками.
 //
-// В `public/pln` лежали скриншоты биржи: чужой логотип, чужой реферальный код
-// и обещание чужого бонуса на всю нижнюю панель. Показывать их со своего
-// лендинга - рекламировать биржу вместо терминала, поэтому те же сделки
-// перерисованы нашим бланком: цифры сделки остаются биржевыми, оформление -
-// наше.
+// В витрине лендинга лежали скриншоты биржи: чужой логотип, чужой реферальный
+// код и обещание чужого бонуса на всю нижнюю панель. Те же сделки перерисованы
+// нашим бланком и встали рядом с оригиналами: цифры одни и те же, разное -
+// оформление. Наши карточки - в `public/showcase/nmnh`, биржевые оригиналы
+// рядом, в `showcase/weex`, и общее имя файла держит пару вместе.
 //
 // Рисует не копия разметки, а тот самый модуль, которым карточку собирает
 // журнал (`lib/pnl/card.ts`). Копия однажды разошлась бы с оригиналом, и
@@ -25,7 +25,7 @@ import { chromium } from "@playwright/test";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "public");
-const OUT = path.join(PUBLIC, "pln");
+const OUT = path.join(PUBLIC, "showcase", "nmnh");
 const TMP = path.join(ROOT, ".pnl-build");
 
 /** Часовой пояс наставника: время на карточке подписано им же. */
@@ -159,9 +159,6 @@ async function main() {
   });
 
   await mkdir(OUT, { recursive: true });
-  // Старые скриншоты биржи уезжают целиком: витрина показывает папку как есть,
-  // и оставленный файл вернулся бы на лендинг вместе с новыми.
-  for (const name of await readdir(OUT)) await rm(path.join(OUT, name));
 
   const written = [];
   for (const trade of spec.trades) {
@@ -201,7 +198,7 @@ async function main() {
   await browser.close();
   server.close();
   await rm(TMP, { recursive: true, force: true });
-  console.log(`\nГотово: ${written.length} карточек в public/pln`);
+  console.log(`\nГотово: ${written.length} карточек в public/showcase/nmnh`);
 }
 
 main().catch((e) => {
