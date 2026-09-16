@@ -263,6 +263,62 @@ export const landing = {
     ],
   },
 
+  analytics: {
+    eyebrow: "Analytics and progress",
+    title: "The whole month at a glance",
+    subtitle:
+      "A calendar of trading days, monthly totals and a breakdown of every trade - inside your account, from exchange data. Not a separate service, not a spreadsheet export.",
+    points: [
+      "Every day of the month as a tile: result, volume and trade count. Tap it to see every trade of that day",
+      "The month in numbers: days in profit, best and worst day, turnover",
+      "The trader's path across volume milestones - you see how far the next one is",
+      "Monthly goals, activity streaks and achievements are counted for you",
+    ],
+    shotAlt: "NMNH account: calendar of trading days, monthly totals and the trader's path",
+    advTitle: "Metrics, not just the bottom line",
+    advText:
+      "Equity curve, trades distributed by R, weekdays, hours and trading sessions, coins, time in trade and streaks. You see not how much you made, but how exactly.",
+    advAlt: "NMNH advanced analytics: equity curve, R distribution, weekdays, hours and streaks",
+    detText:
+      "Deeper: profit factor and average R, drawdown, best and worst trades, longs against shorts, and how each trade ended - at target, at stop or closed by hand.",
+    detAlt: "NMNH detailed analytics: trade statistics, quality, trade types and breakdown by attribute",
+    dayTitle: "Tap a day and there it is",
+    dayText: "Every trade of that day: time, coin, side, entry, exit and the result of each.",
+    dayAlt: "Trading day breakdown in the NMNH account: trades with entry, exit and result",
+    cardTitle: "The day as a card",
+    cardText: "A day, a week or a month folds into a card - save it or send it without assembling screenshots by hand.",
+    cardAlt: "A trading day summary card built by the NMNH terminal",
+  },
+
+  showcase: {
+    eyebrow: "The product",
+    title: "Built so that you want to use it",
+    subtitle: "Six things you notice on day one.",
+    items: [
+      { value: "15 minutes", label: "From sign-up to your first trade. With a curator if you'd rather not do it alone" },
+      { value: "1 click", label: "Entry, stop and targets go to the exchange in a single operation" },
+      { value: "24/7", label: "The server runs the position: breakeven moves even with the tab closed" },
+      { value: "5 exchanges", label: "One workplace. The account stays yours, the money stays on the exchange" },
+      { value: "From reports", label: "Journal, metrics and cards are counted from the exchange, not from our word" },
+      { value: "No withdrawals", label: "The key is trade-only. Unlink it in one click" },
+    ],
+  },
+
+  cert: {
+    eyebrow: "Trader certificate",
+    title: "Issued by your trades, not by a course",
+    subtitle:
+      "Four goals. Two of them closed is bronze, three is silver, four is gold. The certificate carries your name and number.",
+    pillars: [
+      { title: "Knowledge", text: "Academy course completed" },
+      { title: "Practice", text: "50 trades through the terminal, confirmed by the exchange" },
+      { title: "Discipline", text: "20 trading days, with a stop on every trade" },
+      { title: "Growth", text: "A calendar month in profit, at least 10 trades" },
+    ],
+    note: "No goal can be closed with words: everything is counted from exchange reports.",
+    alt: "NMNH trader certificate template: knowledge, practice, discipline, growth",
+  },
+
   free: {
     eyebrow: "Price",
     title: "You are paying for this already",
@@ -275,40 +331,6 @@ export const landing = {
     ],
     kicker: "The terminal is not for sale. It comes with the account and stays yours while you trade.",
     cta: "What would come back from my volume",
-  },
-
-  cabinet: {
-    eyebrow: "Your account",
-    title: "What remains after the trade",
-    subtitle:
-      "Journal, metrics, the month's calendar and your certificate - in one account. All of it counted from exchange reports, not typed in by hand.",
-    shotAlt: "NMNH account: calendar of trading days, monthly totals and the trader's path",
-    tiles: [
-      {
-        title: "The day",
-        text: "Every trade of one day with entry, exit and result",
-        src: "/art/landing/analytics-day.webp",
-        alt: "Trading day breakdown in the NMNH account",
-      },
-      {
-        title: "Metrics",
-        text: "Profit factor, average R, hours and trading sessions",
-        src: "/art/landing/analytics-advanced.webp",
-        alt: "NMNH advanced analytics: equity curve, R distribution and streaks",
-      },
-      {
-        title: "The card",
-        text: "A day, a week or a month as one picture",
-        src: "/art/landing/analytics-card.webp",
-        alt: "A trading day summary card from the NMNH terminal",
-      },
-      {
-        title: "Certificate",
-        text: "Four pillars: the course, 50 trades, 20 days with a stop, a month in profit",
-        src: "/certificates/blank-gold.jpg",
-        alt: "NMNH trader certificate template",
-      },
-    ],
   },
 
   how: {

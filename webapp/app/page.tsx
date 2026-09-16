@@ -7,7 +7,9 @@ import Terminal from "@/components/landing/Terminal";
 import TradeCase from "@/components/landing/TradeCase";
 import TradeFlow from "@/components/landing/TradeFlow";
 import ValueStack from "@/components/landing/ValueStack";
-import Cabinet from "@/components/landing/Cabinet";
+import Analytics from "@/components/landing/Analytics";
+import Certificate from "@/components/landing/Certificate";
+import Showcase from "@/components/landing/Showcase";
 import WhyFree from "@/components/landing/WhyFree";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Faq from "@/components/landing/Faq";
@@ -41,7 +43,7 @@ export default function Home() {
           что это (Hero) -> кому верить (биржи) -> узнал ли себя (Problem) ->
           чем закрывается (Terminal) -> правда ли это работает (TradeCase) ->
           чем удобнее того, в чём торгую сейчас (TradeFlow) -> что ещё входит
-          (ValueStack) -> что остаётся после сделки (Cabinet) -> в чём подвох
+          (ValueStack) -> чем это подтверждается (Certificate) -> в чём подвох
           (WhyFree) -> с чего начать (HowItWorks).
 
           Блок «четыре части одной системы» (WhyUs) с главной убран: его работу
@@ -55,7 +57,9 @@ export default function Home() {
         <TradeCase />
         <TradeFlow />
         <ValueStack />
-        <Cabinet />
+        <Analytics />
+        <Certificate />
+        <Showcase />
         <WhyFree />
         <HowItWorks />
         <Faq />
