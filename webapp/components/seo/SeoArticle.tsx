@@ -3,6 +3,7 @@ import Header from "@/components/landing/Header";
 import PageBackdrop from "@/components/ui/PageBackdrop";
 import Footer from "@/components/landing/Footer";
 import JsonLd from "@/components/seo/JsonLd";
+import CardShowcase from "@/components/seo/CardShowcase";
 import { breadcrumbLd, faqLd, webPageLd } from "@/lib/seo/jsonLd";
 import type { SeoPage } from "@/lib/seo/pages/types";
 
@@ -95,6 +96,62 @@ export default function SeoArticle({ page }: { page: SeoPage }) {
               )}
             </section>
           ))}
+
+          {/* Разбор сделки снимками: страница объясняет словами, а это
+              показывает. Всё сразу, без листания - серверный HTML. */}
+          {page.example && (
+            <section id="case" className="mt-16">
+              <h2 className="text-h3 text-text-primary">{page.example.heading}</h2>
+              <p className="mt-4 leading-relaxed text-text-secondary">{page.example.intro}</p>
+
+              <div className="mt-8 space-y-12">
+                {page.example.steps.map((step, i) => (
+                  <div key={step.title}>
+                    <h3 className="flex items-start gap-3 text-lg font-bold text-text-primary">
+                      <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent-cyan/10 font-mono text-sm text-accent-cyan ring-1 ring-accent-cyan/30">
+                        {i + 1}
+                      </span>
+                      {step.title}
+                    </h3>
+                    <p className="mt-3 leading-relaxed text-text-secondary">{step.text}</p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {/* Снимок шире колонки текста: на графике важны и стакан,
+                        и разметка, и подписи целей - в ширину абзаца их
+                        приходилось разглядывать. */}
+                    <img
+                      src={step.src}
+                      alt={step.alt}
+                      loading="lazy"
+                      decoding="async"
+                      className="mt-5 w-[calc(100%+2rem)] max-w-none -translate-x-4 rounded-2xl border border-white/10 shadow-lg md:w-[calc(100%+6rem)] md:-translate-x-12 lg:w-[calc(100%+14rem)] lg:-translate-x-28"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {page.example.cards && (
+                <div className="mt-10 grid gap-5 sm:grid-cols-2">
+                  {page.example.cards.map((card) => (
+                    <figure key={card.src} className="m-0">
+                      <figcaption className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+                        {card.caption}
+                      </figcaption>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={card.src}
+                        alt={card.alt}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full rounded-2xl border border-border shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
+                      />
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {page.showcase && <CardShowcase copy={page.showcase} />}
 
           <section className="mt-16">
             <h2 className="text-h3 text-text-primary">Частые вопросы</h2>

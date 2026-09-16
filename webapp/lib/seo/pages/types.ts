@@ -14,6 +14,49 @@ export interface SeoLink {
   hint: string;
 }
 
+/** Шаг разбора со снимком терминала: что было видно и что из этого вышло. */
+export interface SeoStep {
+  title: string;
+  text: string;
+  src: string;
+  alt: string;
+}
+
+/**
+ * Разбор одной сделки снимками.
+ *
+ * Страница под запрос объясняет словами, а это показывает: те же снимки, что
+ * трейдер видел у себя. Шаги идут подряд и все сразу - ни листания, ни
+ * раскрытия по клику: текст и картинки, ради которых страницу находят, должны
+ * быть в исходном HTML.
+ */
+export interface SeoExample {
+  heading: string;
+  intro: string;
+  steps: readonly SeoStep[];
+  /** Чем сделка кончилась: карточка терминала и она же на бирже. */
+  cards?: readonly { src: string; alt: string; caption: string }[];
+}
+
+/**
+ * Витрина карточек сделок: наш бланк против биржевого.
+ *
+ * Сами сделки приходят из `lib/showcase` - того же списка, по которому
+ * нарисованы картинки. Здесь только слова вокруг них.
+ */
+export interface SeoShowcase {
+  heading: string;
+  intro: string;
+  /** Подписи чисел над витриной. */
+  statPnl: string;
+  statBest: string;
+  statVenues: string;
+  /** Оговорка про плечо: обещание доходности - то, за что перестают верить. */
+  honest: string;
+  /** Подпись под нашей карточкой в паре. */
+  theirs: string;
+}
+
 /**
  * Страница витрины, написанная под поисковый запрос.
  *
@@ -43,6 +86,10 @@ export interface SeoPage {
    */
   cover?: { src: string; alt: string };
   sections: readonly SeoSection[];
+  /** Разбор сделки снимками - там, где он к месту. Идёт после разделов. */
+  example?: SeoExample;
+  /** Витрина карточек сделок - там, где она к месту. Идёт после разбора. */
+  showcase?: SeoShowcase;
   faq: readonly FaqItem[];
   cta: { heading: string; text: string };
   /** Соседние страницы: обход сайта идёт по ссылкам, а не по угадыванию. */

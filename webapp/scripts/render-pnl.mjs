@@ -135,7 +135,6 @@ function workshop(faces, script) {
 }
 
 async function main() {
-  const spec = JSON.parse(await readFile(path.join(ROOT, "scripts", "pnl-showcase.json"), "utf8"));
   const [script, faces] = await Promise.all([bundle(), fontFaces()]);
 
   const server = serve(workshop(faces, script));
@@ -158,12 +157,20 @@ async function main() {
     await document.fonts.ready;
   });
 
+  // Список сделок лежит в том же модуле, что читает витрина: числа над лентой
+  // и карточки под ней обязаны быть об одних и тех же сделках.
+  const spec = await tab.evaluate(() => ({
+    owner: window.PnlCard.SHOWCASE_OWNER,
+    venue: window.PnlCard.SHOWCASE_VENUE,
+    trades: window.PnlCard.SHOWCASE_TRADES.map((t) => ({ ...t })),
+  }));
+
   await mkdir(OUT, { recursive: true });
 
   const written = [];
   for (const trade of spec.trades) {
     const shot = await tab.evaluate(
-      async ({ trade, owner, quality }) => {
+      async ({ trade, owner, venue, quality }) => {
         const { VARIANTS, render, price, stamped } = window.PnlCard;
         const variant = VARIANTS.find((v) => v.id === trade.variant);
         if (!variant) throw new Error(`нет заготовки ${trade.variant}`);
@@ -181,12 +188,12 @@ async function main() {
           footer: ["Дата и время", stamped(trade.at)],
           at: trade.at,
           owner,
-          venue: "WEEX Futures",
+          venue,
         };
         const canvas = await render(card, variant, true);
         return canvas.toDataURL("image/jpeg", quality);
       },
-      { trade, owner: spec.owner, quality: QUALITY },
+      { trade, owner: spec.owner, venue: spec.venue, quality: QUALITY },
     );
 
     const name = `${trade.file}.jpg`;

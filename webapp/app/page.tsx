@@ -5,8 +5,6 @@ import Terminal from "@/components/landing/Terminal";
 import Exchanges from "@/components/landing/Exchanges";
 import WhyUs from "@/components/landing/WhyUs";
 import HowItWorks from "@/components/landing/HowItWorks";
-import TradeCase from "@/components/landing/TradeCase";
-import PnlShowcase from "@/components/landing/PnlShowcase";
 import Faq from "@/components/landing/Faq";
 import Socials from "@/components/landing/Socials";
 import Footer from "@/components/landing/Footer";
@@ -40,8 +38,6 @@ export default function Home() {
         <Exchanges />
         <WhyUs />
         <HowItWorks />
-        <TradeCase />
-        <PnlShowcase />
         <Faq />
         <Socials />
       </main>
