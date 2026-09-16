@@ -61,7 +61,7 @@ export default function TradeCase() {
       {/* Карточки парой и не шире текста: во всю ширину страницы они
           превращаются в обои, а смысл пары в том, чтобы глаз сравнил числа. */}
       <Reveal delay={0.1}>
-        <div className="mx-auto mt-14 max-w-2xl">
+        <div className="mx-auto mt-20 max-w-2xl md:mt-24">
           <div className="grid grid-cols-2 gap-3 sm:gap-5">
             <figure className="m-0">
               <figcaption className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-accent-cyan sm:text-[11px] sm:tracking-[0.18em]">
@@ -90,7 +90,7 @@ export default function TradeCase() {
             </figure>
           </div>
 
-          <p className="mt-4 text-center text-sm leading-relaxed text-text-muted">{copy.cards.note}</p>
+          <p className="mt-8 text-center text-sm leading-relaxed text-text-muted">{copy.cards.note}</p>
         </div>
       </Reveal>
     </section>
