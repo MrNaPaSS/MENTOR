@@ -39,6 +39,26 @@ RECONNECT_MAX = 30.0
 # Управляющих сообщений биржа принимает не больше 10 в секунду.
 CONTROL_RATE_DELAY = 0.15
 
+# Сколько тишины считаем смертью соединения.
+#
+# Раньше живость сторожил сам aiohttp: свой ping раз в 30 секунд и обрыв, если
+# pong не пришёл за половину этого срока. На столе соединение жило 40 секунд и
+# рвалось кодом 1006 - сто восемьдесят раз за день, - а в журнале рядом стояло
+# «Cannot write to closing transport»: ping уходил в сокет, который уже
+# закрывался. Каждый такой обрыв ломал книги всех монет разом и выбирал бюджет
+# веса на пересборку.
+#
+# Своя проверка честнее: поток жив, пока по нему идут сообщения. Биржа шлёт
+# свой ping раз в три минуты, и aiohttp отвечает на него сам - соединение не
+# простаивает даже на спящей монете.
+#
+# Сроки разные: стаканы полусотни монет сыплют по нескольку сообщений в
+# секунду, и полминуты тишины там значит обрыв. Лента одной тихой монеты ночью
+# молчит и дольше, и рвать её по той же мерке значит переподключаться на
+# ровном месте.
+STALL_DEPTH = 30.0
+STALL_TAPE = 120.0
+
 # Пауза после отказа по лимиту. Растёт вдвое, пока биржа не ответит нормально:
 # 418 — это бан адреса, и каждый запрос во время бана продлевает его.
 BAN_BACKOFF_MIN = 30.0
@@ -294,8 +314,15 @@ class StreamClient:
     Подписки меняются на лету — при переключении монеты пересоединяться не надо.
     """
 
-    def __init__(self, on_message: Callable[[str, dict], None], name: str = ""):
+    def __init__(
+        self,
+        on_message: Callable[[str, dict], None],
+        name: str = "",
+        stall: float = STALL_DEPTH,
+    ):
         self._on_message = on_message
+        # Сколько тишины терпим, прежде чем считать соединение мёртвым.
+        self._stall = stall
         # Подпись соединения в журнале: «стаканы» или «лента», когда их два.
         self._name = name
         self._label = f" ({name})" if name else ""
@@ -390,7 +417,9 @@ class StreamClient:
             self._session = aiohttp.ClientSession()
 
         url = f"{WS_BASE}?streams={'/'.join(initial)}"
-        async with self._session.ws_connect(url, heartbeat=30, max_msg_size=0) as ws:
+        # Без своего heartbeat: он и рвал соединение (см. STALL_DEPTH выше).
+        # Отвечать на ping биржи aiohttp продолжает сам.
+        async with self._session.ws_connect(url, heartbeat=None, max_msg_size=0) as ws:
             self._ws = ws
             self._connected.set()
             opened = time.monotonic()
@@ -403,33 +432,58 @@ class StreamClient:
             if extra:
                 await self._control("SUBSCRIBE", extra)
 
-            async for msg in ws:
-                if msg.type is not aiohttp.WSMsgType.TEXT:
-                    continue
-                self._dispatch(msg.data)
-            # Почему поток закрылся - в журнал. Каждое переподключение рвёт
-            # цепочку обновлений у всех книг разом, и все они идут за снимком:
-            # без причины в журнале не отличить штатный обрыв биржи от нашей
-            # собственной ошибки.
-            # Сколько прожил и сколько вёз: частые обрывы короткоживущего
-            # соединения с сотней потоков и штатный суточный обрыв выглядят в
-            # журнале одинаково, а лечатся по-разному.
-            lived = time.monotonic() - opened
-            logger.warning(
-                "Поток Binance%s закрыт: код %s, %s (жил %.0f с, потоков %d)",
-                self._label,
-                ws.close_code,
-                ws.exception() or "без ошибки",
-                lived,
-                len(initial),
-            )
-            # И в приборную панель: по числу обрывов за пять минут видно,
-            # сеть это стола или наша ошибка (backend/trading/health.py).
-            health.note_stream("binance", up=False)
-            # Время жизни соединения - не задержка ответа: в панели оно шло бы
-            # в задержки и рисовало «ответ обычно 43 секунды».
-            health.note_call("binance", 0.0, False, health.STREAM, f"обрыв {ws.close_code}")
+            why = ""
+            try:
+                why = await self._read(ws)
+            finally:
+                # Почему поток закрылся - в журнал и в панель. Каждое
+                # переподключение рвёт цепочку обновлений у всех книг разом, и
+                # все они идут за снимком: без причины не отличить штатный обрыв
+                # биржи от нашей собственной ошибки. Пишем и при исключении -
+                # иначе обрыв по ошибке чтения не попадал бы в счёт вовсе.
+                lived = time.monotonic() - opened
+                logger.warning(
+                    "Поток Binance%s закрыт: %s, код %s, %s (жил %.0f с, потоков %d)",
+                    self._label,
+                    why or "чтение прервано",
+                    ws.close_code,
+                    ws.exception() or "без ошибки",
+                    lived,
+                    len(initial),
+                )
+                health.note_stream("binance", up=False)
+                # Время жизни соединения - не задержка ответа: в панели оно шло
+                # бы в задержки и рисовало «ответ обычно 43 секунды».
+                health.note_call(
+                    "binance", 0.0, False, health.STREAM, why or "чтение прервано"
+                )
         self._ws = None
+
+    async def _read(self, ws: aiohttp.ClientWebSocketResponse) -> str:
+        """Читать сообщения, пока поток жив. Возвращает причину остановки.
+
+        Своим ожиданием, а не `async for`: молчащее соединение иначе висит до
+        обрыва на той стороне, а его может и не быть - сокет, оборванный сетью
+        посередине, молчит вечно. Тишина дольше срока значит, что обновлений
+        нет и книги уже неверны: честнее переподключиться.
+        """
+        closing = (
+            aiohttp.WSMsgType.CLOSE,
+            aiohttp.WSMsgType.CLOSING,
+            aiohttp.WSMsgType.CLOSED,
+        )
+        while True:
+            try:
+                msg = await asyncio.wait_for(ws.receive(), timeout=self._stall)
+            except asyncio.TimeoutError:
+                return f"тишина {self._stall:.0f} с"
+            if msg.type in closing:
+                return f"обрыв {ws.close_code}"
+            if msg.type is aiohttp.WSMsgType.ERROR:
+                return f"ошибка {msg.data}"
+            if msg.type is not aiohttp.WSMsgType.TEXT:
+                continue
+            self._dispatch(msg.data)
 
     def _dispatch(self, raw: str) -> None:
         try:
@@ -466,8 +520,8 @@ class SplitStreamClient:
     """
 
     def __init__(self, on_message: Callable[[str, dict], None]):
-        self.depth = StreamClient(on_message, name="стаканы")
-        self.tape = StreamClient(on_message, name="лента")
+        self.depth = StreamClient(on_message, name="стаканы", stall=STALL_DEPTH)
+        self.tape = StreamClient(on_message, name="лента", stall=STALL_TAPE)
 
     @staticmethod
     def _split(streams: set[str]) -> tuple[set[str], set[str]]:

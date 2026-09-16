@@ -168,3 +168,18 @@ def test_an_answer_from_memory_is_not_a_visit_to_the_exchange():
 
     venue = health.snapshot()["venues"][0]
     assert venue["calls"] == 2 and venue["ms_median"] == 400.0
+
+
+def test_a_quick_pass_is_not_rounded_to_nothing():
+    """Обход в двадцать миллисекунд - это работа, а не ноль.
+
+    Задержки бирж считаны в миллисекундах, обход сопровождения - в секундах, и
+    общая точность в десятую долю писала «обычный занимает 0 мс» о живом
+    обходе.
+    """
+    for seconds in (0.018, 0.021, 0.024):
+        health.note_pass(seconds)
+
+    watcher = health.snapshot()["watcher"]
+    assert watcher["seconds_median"] == 0.021
+    assert watcher["seconds_worst"] == 0.024

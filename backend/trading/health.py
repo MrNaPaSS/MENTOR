@@ -84,13 +84,19 @@ def note_pass(seconds: float) -> None:
     _passes.append(float(seconds))
 
 
-def percentile(values: list[float], share: float) -> float:
-    """Значение, ниже которого лежит эта доля. Пусто - ноль."""
+def percentile(values: list[float], share: float, digits: int = 1) -> float:
+    """Значение, ниже которого лежит эта доля. Пусто - ноль.
+
+    Точность разная по смыслу числа. Задержки считаны в миллисекундах, и
+    десятой доли там хватает с запасом. Обход сопровождения считан в секундах,
+    и та же десятая доля округляла быстрый обход до нуля: панель писала
+    «обычный занимает 0 мс» о работе, которая идёт.
+    """
     if not values:
         return 0.0
     ordered = sorted(values)
     place = min(len(ordered) - 1, max(0, round((len(ordered) - 1) * share)))
-    return round(ordered[place], 1)
+    return round(ordered[place], digits)
 
 
 def snapshot(window: float = WINDOW, now: float | None = None) -> dict[str, Any]:
@@ -140,8 +146,8 @@ def snapshot(window: float = WINDOW, now: float | None = None) -> dict[str, Any]
         "venues": venues,
         "watcher": {
             "passes": len(passes),
-            "seconds_median": percentile(passes, 0.5),
-            "seconds_worst": percentile(passes, 0.95),
+            "seconds_median": percentile(passes, 0.5, digits=3),
+            "seconds_worst": percentile(passes, 0.95, digits=3),
         },
     }
 

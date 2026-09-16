@@ -9,6 +9,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
+
+import aiohttp
 
 from backend.scalping.binance import SplitStreamClient, StreamClient, is_depth_stream
 from backend.scalping.collector import ScalpingCollector
@@ -108,3 +111,74 @@ def test_the_real_collector_uses_two_connections():
     assert isinstance(collector.stream, SplitStreamClient)
     assert isinstance(collector.stream.depth, StreamClient)
     assert isinstance(collector.stream.tape, StreamClient)
+
+
+# ── живость соединения ───────────────────────────────────────────────────────
+#
+# Соединение рвалось кодом 1006 каждые сорок секунд: сто восемьдесят обрывов за
+# день, и каждый ломал книги всех монет разом. Сторожем живости был свой ping
+# aiohttp, и рядом в журнале стояло «Cannot write to closing transport». Теперь
+# живость мерится сообщениями: идут - поток жив, молчит дольше срока - мёртв.
+
+
+class FakeMessage:
+    def __init__(self, type_, data=""):
+        self.type = type_
+        self.data = data
+
+
+class FakeSocket:
+    """Сокет, который отдаёт заготовленные сообщения, а потом молчит."""
+
+    def __init__(self, messages, silence: bool = True):
+        self.queue = list(messages)
+        self.silence = silence
+        self.close_code = 1006
+
+    def exception(self):
+        return None
+
+    async def receive(self):
+        if self.queue:
+            return self.queue.pop(0)
+        if self.silence:
+            # Молчим, пока ждущий не устанет: ровно так ведёт себя сокет,
+            # оборванный сетью посередине, - закрытия с той стороны не будет.
+            await asyncio.sleep(3600)
+        return FakeMessage(aiohttp.WSMsgType.CLOSED)
+
+
+def read(client: StreamClient, socket: FakeSocket) -> str:
+    return asyncio.run(client._read(socket))
+
+
+def test_silence_longer_than_the_limit_is_a_dead_connection():
+    """Оборванный сетью сокет молчит вечно: ждать его нечего."""
+    client = StreamClient(lambda stream, data: None, name="стаканы", stall=0.05)
+    assert read(client, FakeSocket([])) == "тишина 0 с"
+
+
+def test_messages_keep_the_connection_alive():
+    """Пока сообщения идут, срок тишины не истекает - и книги живут."""
+    seen: list[str] = []
+    client = StreamClient(lambda stream, data: seen.append(stream), name="стаканы", stall=0.3)
+
+    payload = json.dumps({"stream": "btcusdt@trade", "data": {"e": "trade"}})
+    socket = FakeSocket([FakeMessage(aiohttp.WSMsgType.TEXT, payload)] * 3)
+
+    assert read(client, socket) == "тишина 0 с"
+    assert seen == ["btcusdt@trade"] * 3
+
+
+def test_the_close_of_the_exchange_is_named_by_its_code():
+    """Обрыв с той стороны отличаем от тишины: лечатся они по-разному."""
+    client = StreamClient(lambda stream, data: None, name="лента", stall=5.0)
+    socket = FakeSocket([FakeMessage(aiohttp.WSMsgType.CLOSED)], silence=False)
+
+    assert read(client, socket) == "обрыв 1006"
+
+
+def test_the_tape_is_allowed_to_be_quiet_longer_than_the_books():
+    """Стаканы полусотни монет молчать не могут, спящая монета - может."""
+    client = SplitStreamClient(lambda stream, data: None)
+    assert client.depth._stall < client.tape._stall
