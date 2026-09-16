@@ -152,7 +152,7 @@ export default function PnlCard({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-modal flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
       onClick={onClose}
       style={
         {

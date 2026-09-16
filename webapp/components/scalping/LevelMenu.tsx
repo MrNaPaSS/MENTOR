@@ -50,7 +50,7 @@ export default function LevelMenu({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
+      className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
       onClick={onCancel}
     >
       <div

@@ -99,7 +99,7 @@ export default function CertificateDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[75] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-modal flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div className="my-auto flex w-full max-w-[820px] flex-col gap-3" onClick={(e) => e.stopPropagation()}>
