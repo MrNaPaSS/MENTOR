@@ -115,22 +115,8 @@ export default function Terminal() {
         </Reveal>
       </div>
 
-      {/* Как он выглядит. Раздел рассказывает про рабочее место трейдера, и
-          показать его надо раньше, чем объяснять словами: человек решает по
-          картинке, читать ли дальше. Грузится лениво - первый экран выше. */}
-      <Reveal delay={0.05}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/art/seo/terminal-cover.webp"
-          alt={copy.shotAlt}
-          loading="lazy"
-          decoding="async"
-          className="mt-12 w-full rounded-2xl border border-white/[0.07] shadow-2xl"
-        />
-      </Reveal>
-
       {/* Возможности терминала */}
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((f, i) => {
           const a = ACCENTS[f.accent];
           const Icon = f.icon;

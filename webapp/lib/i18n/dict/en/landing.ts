@@ -10,25 +10,27 @@ export const landing = {
 
   hero: {
     eyebrow: "The trading terminal of the NMNH academy",
-    titleTop: "These aren't signals.",
-    titleAccent: "This is a trading terminal.",
+    titleTop: "NMNH.TRADE",
+    titleAccent: "This is your workplace.",
     lead: "A trader's ecosystem: a terminal with order book and chart, software wired to your exchange account, a live chat, a trade journal with activities and an in-platform token.",
     bullets: [
       "Free, no subscriptions",
       "Your money stays on your exchange",
       "API keys with withdrawals disabled",
     ],
+    oneClick:
+      "A trade opens in one click: the risk is calculated, stop and targets go to the exchange together with the entry, and from there the server runs the position.",
+    shotAlt: "NMNH terminal: chart, order book and order panel in one window",
     ctaTerminal: "Open the terminal",
     ctaWeex: "Open an exchange account",
   },
 
   terminal: {
     eyebrow: "The academy terminal",
-    titleTop: "NMNH.TRADE",
-    titleAccent: "This is your workstation.",
+    titleTop: "One window",
+    titleAccent: "instead of five tabs.",
     subtitle:
-      "A trade opens in one click: the risk is sized, stop and targets go to the exchange with your entry, and the server runs the position from there.",
-    shotAlt: "NMNH terminal: chart, order book and order panel in one window",
+      "Order book, clusters, screener and journal sit next to the chart: no more hunting for an entry in one tab and sizing the risk in another.",
     usTitle: "The NMNH terminal",
     usBadge: "Free",
     usGains: [
