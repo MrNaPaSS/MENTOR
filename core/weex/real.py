@@ -19,6 +19,8 @@ from typing import Optional
 
 import certifi
 
+from core.throttle import take as take_budget
+
 from core.weex.base import WeexClient
 from core.weex.uid import clean_uid, looks_like_uid
 
@@ -39,6 +41,38 @@ def _get_affiliate_sem():
     if _affiliate_sem is None:
         _affiliate_sem = _asyncio.Semaphore(3)
     return _affiliate_sem
+
+# Память партнёрских ответов: они меняются медленно, а спрашивают их пачками.
+AFFILIATE_TTL = 60.0
+_AFFILIATE_CACHE: dict = {}
+# Больше держать незачем: это память на минуту, а не хранилище.
+AFFILIATE_CACHE_MAX = 500
+
+
+def _affiliate_key(base: str, path: str, params: dict | None, who: str = "") -> str:
+    """Ключ памяти: адрес, запрос и чей ключ академии.
+
+    Без последнего два разных клиента делили бы один ответ - в тестах это видно
+    сразу, а в жизни аукнулось бы при второй академии.
+    """
+    query = "&".join(f"{k}={v}" for k, v in sorted((params or {}).items()))
+    return f"{who}|{base}{path}?{query}"
+
+
+def reset_affiliate_cache() -> None:
+    """Забыть партнёрские ответы. Нужно тестам и смене ключей."""
+    _AFFILIATE_CACHE.clear()
+
+
+def _affiliate_cached(key: str):
+    """Свежий ответ из памяти. `None` - спрашивать биржу."""
+    hit = _AFFILIATE_CACHE.get(key)
+    if hit and time.monotonic() - hit[0] < AFFILIATE_TTL:
+        return hit[1]
+    if len(_AFFILIATE_CACHE) > AFFILIATE_CACHE_MAX:
+        _AFFILIATE_CACHE.clear()
+    return None
+
 
 _PRICE_FIELDS = ("price", "last", "close", "markPrice", "lastPr")
 _BALANCE_FIELDS = (
@@ -184,6 +218,22 @@ class RealWeexClient(WeexClient):
 
     async def _get_raw(self, base: str, path: str, params: dict | None = None,
                        *, signed: bool = False, affiliate: bool = False) -> Optional[dict]:
+        # Партнёрские ручки считают вес на ключ академии, и он общий на всех
+        # учеников. Страница наставника спрашивает баланс по каждому рефералу,
+        # а открытая дважды - дважды; биржа отвечала «Too much request weight
+        # used» по всему списку. Память на минуту снимает повтор, а бюджет
+        # разводит остальное во времени (core/throttle.py).
+        key = (
+            _affiliate_key(base, path, params, str(self.affiliate.get("affiliate_key", "")))
+            if affiliate
+            else ""
+        )
+        if key:
+            fresh = _affiliate_cached(key)
+            if fresh is not None:
+                return fresh
+            await take_budget("weex", "affiliate")
+
         session = await self._get_session()
         headers = {}
         if signed:
@@ -202,7 +252,10 @@ class RealWeexClient(WeexClient):
                         _short(await resp.text()),
                     )
                     return None
-                return await resp.json(content_type=None)
+                answer = await resp.json(content_type=None)
+                if key:
+                    _AFFILIATE_CACHE[key] = (time.monotonic(), answer)
+                return answer
         except Exception as exc:  # noqa: BLE001
             logger.warning("WEEX запрос %s%s упал: %s", base, path, exc)
             return None

@@ -13,6 +13,18 @@ from core.weex import get_weex_client
 from core.weex.mock import MockWeexClient
 
 
+from core.weex.real import reset_affiliate_cache
+
+
+@pytest.fixture(autouse=True)
+def _forget_affiliate_cache():
+    """Память партнёрских ответов общая на процесс: между тестами её чистим."""
+    reset_affiliate_cache()
+    yield
+    reset_affiliate_cache()
+
+
+
 # ── Подпись ──
 
 def test_sign_matches_hmac():

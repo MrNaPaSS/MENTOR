@@ -12,6 +12,7 @@ import time
 import pytest
 
 from backend.scalping.collector import ScalpingCollector, top_symbols
+from backend.scalping.collector import SNAPSHOT_LIMIT, SNAPSHOT_LIMIT_PINNED
 
 
 class FakeStream:
@@ -183,9 +184,12 @@ async def test_pinned_symbol_gets_deeper_snapshot():
     await c.pin("BTCUSDT")
     assert c.rest.depth_calls[-1] == ("BTCUSDT", 1000)
 
+    # Фоновой монете хватает мелкого снимка: его вес впятеро ниже, а на
+    # пересборке после обрыва потока это решает, уложимся ли мы в бюджет биржи.
     c2 = make_collector(SNAPSHOT, TICKERS)
     await c2._track("ETHUSDT")
-    assert c2.rest.depth_calls[-1] == ("ETHUSDT", 500)
+    assert c2.rest.depth_calls[-1] == ("ETHUSDT", SNAPSHOT_LIMIT)
+    assert SNAPSHOT_LIMIT < SNAPSHOT_LIMIT_PINNED
 
 
 # ── суточная сводка ──────────────────────────────────────────────────────────
