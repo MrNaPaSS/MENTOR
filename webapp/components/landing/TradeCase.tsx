@@ -24,7 +24,7 @@ export default function TradeCase() {
   const copy = t.landing.proof;
 
   return (
-    <section id="proof" className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
+    <section id="proof" className="mx-auto max-w-6xl px-4 pb-10 pt-20 md:px-6 md:pb-14 md:pt-28">
       <SectionHeading eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.subtitle} />
 
       <div className="mt-14 space-y-8 md:space-y-14">

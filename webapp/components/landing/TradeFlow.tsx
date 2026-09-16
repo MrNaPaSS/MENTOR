@@ -26,7 +26,7 @@ export default function TradeFlow() {
   const copy = t.landing.flow;
 
   return (
-    <section id="flow" className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
+    <section id="flow" className="mx-auto max-w-6xl px-4 pb-20 pt-12 md:px-6 md:pb-28 md:pt-16">
       <SectionHeading eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.subtitle} />
 
       <div className="relative mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
