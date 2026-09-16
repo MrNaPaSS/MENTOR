@@ -26,17 +26,10 @@ export default function Certificate() {
 
   return (
     <section id="certificate" className="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
-      <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-14">
-        <Reveal>
-          <img
-            src="/certificates/blank-gold.jpg"
-            alt={copy.alt}
-            loading="lazy"
-            decoding="async"
-            className="w-full rounded-2xl border border-amber-500/20 shadow-[0_20px_60px_rgba(0,0,0,0.5)]"
-          />
-        </Reveal>
-
+      {/* Условия слева, бланк справа: соседний раздел ставит карточку слева, и
+          два вертикальных снимка подряд у одного края читались бы как колонка
+          картинок, а не как два разных разговора. */}
+      <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
         {/* Текст в панели, а не прямо на странице: за страницей живая сцена со
             свечами, и длинный абзац поверх неё читается с трудом - особенно на
             телефоне, где колонка во всю ширину. */}
@@ -71,6 +64,16 @@ export default function Certificate() {
           <p className="mt-8 border-l-2 border-amber-500/40 pl-4 text-sm leading-relaxed text-text-muted">
             {copy.note}
           </p>
+        </Reveal>
+
+        <Reveal>
+          <img
+            src="/certificates/blank-gold.jpg"
+            alt={copy.alt}
+            loading="lazy"
+            decoding="async"
+            className="w-full rounded-2xl border border-amber-500/20 shadow-[0_20px_60px_rgba(0,0,0,0.5)]"
+          />
         </Reveal>
       </div>
     </section>

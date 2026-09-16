@@ -66,6 +66,27 @@ export default function Analytics() {
         </Reveal>
       </div>
 
+      {/* День внутри месяца: текст слева, снимок справа - тем же порядком,
+          что и выше: сначала месяц целиком, сразу под ним - один его день. */}
+      <div className="mt-16 grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.45fr)] lg:gap-12">
+        <Reveal>
+          <h3 className="text-h3 text-text-primary">{copy.dayTitle}</h3>
+          <p className="mt-4 leading-relaxed text-text-secondary">{copy.dayText}</p>
+        </Reveal>
+
+        <Reveal delay={0.05}>
+          <img
+            src="/art/landing/analytics-day.webp"
+            alt={copy.dayAlt}
+            width={1200}
+            height={916}
+            loading="lazy"
+            decoding="async"
+            className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
+          />
+        </Reveal>
+      </div>
+
       {/* Метрики: тот же порядок - текст слева, снимок справа. Под ним вторым
           рядом идёт детальный разбор, уже без своего заголовка: это тот же
           разговор, только с более мелкими цифрами. */}
@@ -101,36 +122,12 @@ export default function Analytics() {
         />
       </Reveal>
 
-      {/* День внутри месяца: текст слева, снимок справа - тем же порядком,
-          что и выше, чтобы раздел читался одной колонкой сверху вниз. */}
-      <div className="mt-16 grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.45fr)] lg:gap-12">
+      {/* Карточка стоит слева, подпись справа - зеркально остальным рядам:
+          вертикальный снимок в правой колонке уводил взгляд за край страницы.
+          Доля ряда под него меньше: в ширину снимков выше карточка
+          растянулась бы на весь экран. */}
+      <div className="mt-16 grid items-center gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-12">
         <Reveal>
-          <h3 className="text-h3 text-text-primary">{copy.dayTitle}</h3>
-          <p className="mt-4 leading-relaxed text-text-secondary">{copy.dayText}</p>
-        </Reveal>
-
-        <Reveal delay={0.05}>
-          <img
-            src="/art/landing/analytics-day.webp"
-            alt={copy.dayAlt}
-            width={1200}
-            height={916}
-            loading="lazy"
-            decoding="async"
-            className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
-          />
-        </Reveal>
-      </div>
-
-      {/* Карточка стоит вертикально, и под неё отдана меньшая доля ряда: в
-          ширину снимка выше она растянулась бы на весь экран. */}
-      <div className="mt-16 grid items-center gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-12">
-        <Reveal>
-          <h3 className="text-h3 text-text-primary">{copy.cardTitle}</h3>
-          <p className="mt-4 leading-relaxed text-text-secondary">{copy.cardText}</p>
-        </Reveal>
-
-        <Reveal delay={0.05}>
           <img
             src="/art/landing/analytics-card.webp"
             alt={copy.cardAlt}
@@ -140,6 +137,11 @@ export default function Analytics() {
             decoding="async"
             className="mx-auto w-full max-w-sm rounded-2xl border border-white/[0.07] shadow-2xl"
           />
+        </Reveal>
+
+        <Reveal delay={0.05}>
+          <h3 className="text-h3 text-text-primary">{copy.cardTitle}</h3>
+          <p className="mt-4 leading-relaxed text-text-secondary">{copy.cardText}</p>
         </Reveal>
       </div>
 
