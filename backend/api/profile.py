@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 
 from core.weex.uid import clean_uid
 from core.referral import grant_referral_vip
+from core.db import DayKey, MonthKey
 from core.models import BalanceSnapshot, ScalpTrade, SignalDelivery, Student, iso
 from backend.trading.funds import trade_roi, trade_volume
 from backend.api.journal import _exchange_of, is_admin
@@ -139,12 +140,12 @@ async def analytics_calendar(
     # ── DB: сигналы ─────────────────────────────────────────────────────────
     deliveries = session.execute(
         select(
-            func.strftime("%Y-%m-%d", SignalDelivery.delivered_at).label("d"),
+            DayKey(SignalDelivery.delivered_at).label("d"),
             func.count().label("n"),
         )
         .where(SignalDelivery.student_id == student.id)
         .where(SignalDelivery.status == "sent")
-        .where(func.strftime("%Y-%m", SignalDelivery.delivered_at) == prefix)
+        .where(MonthKey(SignalDelivery.delivered_at) == prefix)
         .group_by("d")
     ).all()
     signals_by_date: dict[str, int] = {row.d: row.n for row in deliveries if row.d}

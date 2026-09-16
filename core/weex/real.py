@@ -117,7 +117,22 @@ def _partner_ssl() -> "ssl.SSLContext | bool":
             "Проверка сертификата партнёрского API WEEX выключена (WEEX_PARTNER_SSL_VERIFY=false)"
         )
         return False
-    return ssl.create_default_context(cafile=os.environ.get("SSL_CERT_FILE") or certifi.where())
+    return ssl.create_default_context(cafile=_ca_bundle())
+
+
+def _ca_bundle() -> str:
+    """Набор корней: свой из `SSL_CERT_FILE`, иначе `certifi`.
+
+    Путь из окружения проверяем на месте. Заданный, но потерянный файл ронял
+    каждый партнёрский запрос с «No such file or directory», и в журнале это
+    выглядело как отказ биржи, а не как наша же настройка.
+    """
+    own = (os.environ.get("SSL_CERT_FILE") or "").strip()
+    if own and os.path.exists(own):
+        return own
+    if own:
+        logger.warning("SSL_CERT_FILE указывает на %s, а файла нет - берём certifi", own)
+    return certifi.where()
 
 
 class RealWeexClient(WeexClient):

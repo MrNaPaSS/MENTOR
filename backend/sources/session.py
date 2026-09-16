@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import ssl
 
@@ -36,7 +37,17 @@ def roots() -> str:
     задан - берём его, иначе корни `certifi`. Проверку не отключаем ни в том,
     ни в другом случае.
     """
-    return os.environ.get("SSL_CERT_FILE") or certifi.where()
+    own = (os.environ.get("SSL_CERT_FILE") or "").strip()
+    if own and os.path.exists(own):
+        return own
+    if own:
+        # Заданный, но потерянный файл ронял каждый запрос к источнику с
+        # «No such file or directory»: в журнале это выглядело как отказ
+        # чужого сервиса, а причина была своя.
+        logging.getLogger("nmnh.sources").warning(
+            "SSL_CERT_FILE указывает на %s, а файла нет - берём certifi", own
+        )
+    return certifi.where()
 
 
 def _make(*, verify: bool) -> aiohttp.ClientSession:

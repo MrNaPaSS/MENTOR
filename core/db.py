@@ -9,12 +9,53 @@ from __future__ import annotations
 import logging
 import os
 
-from sqlalchemy import create_engine, event, inspect as sa_inspect, text
+from sqlalchemy import String, create_engine, event, func, inspect as sa_inspect, text
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.functions import FunctionElement
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class DayKey(FunctionElement):
+    """Дата столбца строкой `ГГГГ-ММ-ДД` - на любой СУБД.
+
+    SQLite считает такое через `strftime`, Postgres через `to_char`, и запрос,
+    написанный под одну, на другой падает с «function strftime does not
+    exist». Календарь аналитики на этом и сломался при переезде.
+    """
+
+    type = String()
+    inherit_cache = True
+
+
+class MonthKey(FunctionElement):
+    """То же, но `ГГГГ-ММ`."""
+
+    type = String()
+    inherit_cache = True
+
+
+@compiles(DayKey)
+def _day_sqlite(element, compiler, **kw):
+    return compiler.process(func.strftime("%Y-%m-%d", *element.clauses), **kw)
+
+
+@compiles(DayKey, "postgresql")
+def _day_postgres(element, compiler, **kw):
+    return compiler.process(func.to_char(*element.clauses, "YYYY-MM-DD"), **kw)
+
+
+@compiles(MonthKey)
+def _month_sqlite(element, compiler, **kw):
+    return compiler.process(func.strftime("%Y-%m", *element.clauses), **kw)
+
+
+@compiles(MonthKey, "postgresql")
+def _month_postgres(element, compiler, **kw):
+    return compiler.process(func.to_char(*element.clauses, "YYYY-MM"), **kw)
 
 
 def get_database_url() -> str:
