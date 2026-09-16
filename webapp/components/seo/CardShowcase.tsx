@@ -45,32 +45,51 @@ export default function CardShowcase({ copy }: { copy: SeoShowcase }) {
 
       <p className="mt-3 text-xs leading-relaxed text-text-muted">{copy.honest}</p>
 
-      {/* Сетка шире колонки текста: карточка - картинка, и в ширину абзаца
-          числа на ней приходится разглядывать. */}
-      <div className="mt-8 grid w-[calc(100%+2rem)] max-w-none -translate-x-4 gap-6 sm:grid-cols-2 md:w-[calc(100%+6rem)] md:-translate-x-12 lg:w-[calc(100%+14rem)] lg:-translate-x-28">
-        {SHOWCASE_TRADES.map((trade) => (
-          <figure key={trade.file} className="m-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`/showcase/nmnh/${trade.file}.jpg`}
-              alt={`Карточка сделки ${trade.symbol} из терминала NMNH`}
-              loading="lazy"
-              decoding="async"
-              className="w-full rounded-2xl border border-border bg-bg-deep shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
-            />
-            <figcaption className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-              {copy.theirs}
-            </figcaption>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`/showcase/weex/${trade.file}.jpg`}
-              alt={`Та же сделка ${trade.symbol} карточкой биржи`}
-              loading="lazy"
-              decoding="async"
-              // Биржевая приглушена: она здесь довод, а не вторая витрина.
-              className="mt-2 w-full rounded-2xl border border-border opacity-60 saturate-[0.75]"
-            />
-          </figure>
+      {/* Пара в строку: слева карточка терминала, справа та же сделка с
+          биржи. Друг под другом они читались как две разные ленты - глаз
+          сравнивает то, что стоит рядом.
+
+          Колонкой в две карточки и не шире текста: восемь пар во всю ширину
+          страницы превращали раздел в обои. На телефоне пара остаётся парой -
+          ради неё раздел и существует, - только уже. */}
+      <div className="mx-auto mt-8 max-w-xl space-y-6">
+        {SHOWCASE_TRADES.map((trade, i) => (
+          <div key={trade.file} className="grid grid-cols-2 gap-3 sm:gap-5">
+            <figure className="m-0">
+              {/* Подписи только у первой пары: дальше и так видно, где чьё, а
+                  восемь раз повторённая надпись - шум. */}
+              {i === 0 && (
+                <figcaption className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-accent-cyan sm:text-[11px] sm:tracking-[0.18em]">
+                  {copy.ours}
+                </figcaption>
+              )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/showcase/nmnh/${trade.file}.jpg`}
+                alt={`Карточка сделки ${trade.symbol} из терминала NMNH`}
+                loading="lazy"
+                decoding="async"
+                className="w-full rounded-2xl border border-border bg-bg-deep shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
+              />
+            </figure>
+
+            <figure className="m-0">
+              {i === 0 && (
+                <figcaption className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted sm:text-[11px] sm:tracking-[0.18em]">
+                  {copy.theirs}
+                </figcaption>
+              )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/showcase/weex/${trade.file}.jpg`}
+                alt={`Та же сделка ${trade.symbol} карточкой биржи`}
+                loading="lazy"
+                decoding="async"
+                // Биржевая приглушена: она здесь довод, а не вторая витрина.
+                className="w-full rounded-2xl border border-border opacity-60 saturate-[0.75]"
+              />
+            </figure>
+          </div>
         ))}
       </div>
     </section>
