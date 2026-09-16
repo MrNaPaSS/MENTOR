@@ -21,7 +21,10 @@ export default function Hero() {
       <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
       <div className="pointer-events-none absolute inset-0 bg-grid-faint [background-size:48px_48px] opacity-30 [mask-image:radial-gradient(70%_60%_at_50%_30%,black,transparent)]" />
 
-      <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:gap-12">
+      {/* Снимок рабочего места - главный аргумент первого экрана, и колонка
+          под него шире текстовой. Контейнер тоже шире обычного: по картинке
+          решают, читать ли дальше, и мелкой она этой работы не делает. */}
+      <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.35fr)] lg:gap-14">
         <div>
           <span className="eyebrow">
             <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-glow-cyan" />
