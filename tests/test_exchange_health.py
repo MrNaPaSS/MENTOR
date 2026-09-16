@@ -62,7 +62,23 @@ def test_streams_are_counted_up_and_down():
 
     health.note_stream("bingx", up=False)
     venue = health.snapshot()["venues"][0]
-    assert venue["streams"] == 0 and venue["stream_drops"] == 1
+    assert venue["streams"] == 0 and venue["stream_drops_total"] == 1
+
+
+def test_drops_are_counted_inside_the_window():
+    """Панель обещает пять минут: вчерашние обрывы в это число не входят.
+
+    Общий счёт с запуска остаётся рядом - по нему видно, часто ли рвётся
+    вообще, но пугать свежими он не должен.
+    """
+    health.note_stream("binance", up=False)
+    health.note_call("binance", 0.0, False, "поток", "обрыв 1006")
+
+    venue = health.snapshot()["venues"][0]
+    assert venue["stream_drops"] == 1 and venue["stream_drops_total"] == 1
+
+    old = health.snapshot(window=1.0, now=health.time.time() + 600)["venues"][0]
+    assert old["stream_drops"] == 0 and old["stream_drops_total"] == 1
 
 
 def test_the_pass_of_the_watcher_is_timed():

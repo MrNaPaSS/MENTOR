@@ -111,7 +111,10 @@ def snapshot(window: float = WINDOW, now: float | None = None) -> dict[str, Any]
                 "ms_worst": percentile(times, 0.95),
                 "codes": _top_codes(bad),
                 "streams": venue.streams_up,
-                "stream_drops": venue.stream_drops,
+                # Обрывы за окно и всего с запуска: рядом с «числа за 5 минут»
+                # общий счёт читался как недавние обрывы и пугал зря.
+                "stream_drops": sum(1 for call in fresh if call.what == "поток"),
+                "stream_drops_total": venue.stream_drops,
                 "stream_minutes": round((moment - venue.stream_since) / 60, 1)
                 if venue.stream_since and venue.streams_up
                 else 0.0,
@@ -173,6 +176,8 @@ def merge(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
                 ms_worst=max(have.get("ms_worst", 0), venue.get("ms_worst", 0)),
                 streams=int(have.get("streams", 0)) + int(venue.get("streams", 0)),
                 stream_drops=int(have.get("stream_drops", 0)) + int(venue.get("stream_drops", 0)),
+                stream_drops_total=int(have.get("stream_drops_total", 0))
+                + int(venue.get("stream_drops_total", 0)),
                 stream_minutes=max(have.get("stream_minutes", 0), venue.get("stream_minutes", 0)),
             )
             if venue.get("last_error") and not have.get("last_error"):

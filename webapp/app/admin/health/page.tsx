@@ -25,6 +25,7 @@ interface Venue {
   codes: { code: string; times: number }[];
   streams: number;
   stream_drops: number;
+  stream_drops_total?: number;
   stream_minutes: number;
   last_error: string;
   last_error_ago: number | null;
@@ -157,7 +158,15 @@ function VenueCard({ venue }: { venue: Venue }) {
               : "не поднят"
           }
         />
-        <Row label="Обрывов потока" value={String(venue.stream_drops)} alarm={venue.stream_drops > 5} />
+        <Row
+          label="Обрывов потока"
+          value={
+            venue.stream_drops_total && venue.stream_drops_total > venue.stream_drops
+              ? `${venue.stream_drops} (всего ${venue.stream_drops_total})`
+              : String(venue.stream_drops)
+          }
+          alarm={venue.stream_drops > 2}
+        />
       </dl>
 
       {venue.codes.length > 0 && (
