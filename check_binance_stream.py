@@ -58,6 +58,7 @@ STALL_TAPE = 120.0
 # (`backend/scalping/binance.py`, TAPE_SOCKETS). Четвёртым доводом можно
 # попросить одно соединение и увидеть разницу своими глазами.
 TAPE_SOCKETS = 8
+DEPTH_SOCKETS = 4
 
 # Как часто печатать сводку.
 REPORT_EVERY = 30.0
@@ -162,9 +163,18 @@ async def main() -> int:
         symbols = await top_symbols(session, count)
         print(f"Монет: {len(symbols)}, первые - {', '.join(symbols[:5])}\n")
 
-        depth = Socket(
-            "стаканы", [f"{s.lower()}@depth@{DEPTH_RATE}" for s in symbols], STALL_DEPTH
-        )
+        # Стаканы тоже по нескольким соединениям, как в бою: они легче ленты
+        # вдесятеро, но их обрыв дороже - книги всех монет соединения разом
+        # остаются без обновлений.
+        books = [
+            Socket(
+                f"стаканы {i + 1}/{DEPTH_SOCKETS}",
+                [f"{s.lower()}@depth@{DEPTH_RATE}" for s in symbols[i::DEPTH_SOCKETS]],
+                STALL_DEPTH,
+            )
+            for i in range(DEPTH_SOCKETS)
+            if symbols[i::DEPTH_SOCKETS]
+        ]
         # Лента по нескольким соединениям: толстый поток рвётся, тонкие живут.
         tapes = [
             Socket(
@@ -177,8 +187,7 @@ async def main() -> int:
         ]
 
         started = time.monotonic()
-        tasks = [asyncio.create_task(depth.run(session))]
-        tasks += [asyncio.create_task(one.run(session)) for one in tapes]
+        tasks = [asyncio.create_task(one.run(session)) for one in books + tapes]
         try:
             while True:
                 await asyncio.sleep(REPORT_EVERY)
@@ -186,8 +195,7 @@ async def main() -> int:
                 # Рамка простыми чертами: консоль Windows живёт в cp1251, и на
                 # символе рамки пробник падал бы прямо на первой сводке.
                 print(f"\n--- {spent / 60:.1f} мин ---")
-                print(depth.report(spent))
-                for one in tapes:
+                for one in books + tapes:
                     print(one.report(spent))
                 if limit and spent >= limit:
                     break
@@ -203,8 +211,7 @@ async def main() -> int:
 
         spent = time.monotonic() - started
         print("\n--- итог ---")
-        print(depth.report(spent))
-        for one in tapes:
+        for one in books + tapes:
             print(one.report(spent))
         print(
             "\nОбрывов нет, а на сервере есть - значит дело в нашем процессе: "

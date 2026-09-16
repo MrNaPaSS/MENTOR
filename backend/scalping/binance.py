@@ -68,6 +68,14 @@ STALL_TAPE = 120.0
 # сжатая лента (см. TAPE_STREAM в collector.py).
 TAPE_SOCKETS = 8
 
+# На сколько соединений раскладываются стаканы.
+#
+# Их поток легче ленты вдесятеро, и рвутся они куда реже: в живом замере два
+# обрыва за девять минут против шести за две с половиной у неразложенной ленты.
+# Но цена обрыва здесь выше - дыра в книгах всех монет соединения разом, и
+# каждая идёт за снимком. Четыре соединения делят эту цену вчетверо.
+DEPTH_SOCKETS = 4
+
 # Пауза после отказа по лимиту. Растёт вдвое, пока биржа не ответит нормально:
 # 418 — это бан адреса, и каждый запрос во время бана продлевает его.
 BAN_BACKOFF_MIN = 30.0
@@ -522,8 +530,8 @@ def is_depth_stream(name: str) -> bool:
     return "@depth" in str(name)
 
 
-class TapeFan:
-    """Лента, разложенная по нескольким соединениям.
+class StreamFan:
+    """Потоки, разложенные по нескольким соединениям.
 
     Живой замер на столе (`check_binance_stream.py`, процесс, который только
     читает и больше ничего не делает): лента полусотни монет - это две тысячи
@@ -537,14 +545,24 @@ class TapeFan:
     номера имени: на одном соединении остаётся десятая часть ленты, а обрыв
     уносит десятую часть монет на секунду, а не всю ленту целиком.
 
-    Снаружи это одна лента: подписка, отписка, запуск, остановка и список
+    Живая проверка на столе после правки: лента полусотни монет по восьми
+    соединениям - ни одного обрыва за девять минут против одного каждые
+    двадцать секунд в одном соединении.
+
+    Снаружи это один поток: подписка, отписка, запуск, остановка и список
     потоков - как у одного соединения.
     """
 
-    def __init__(self, on_message: Callable[[str, dict], None], sockets: int = TAPE_SOCKETS):
+    def __init__(
+        self,
+        on_message: Callable[[str, dict], None],
+        name: str = "лента",
+        sockets: int = TAPE_SOCKETS,
+        stall: float = STALL_TAPE,
+    ):
         count = max(1, int(sockets))
         self.sockets = [
-            StreamClient(on_message, name=f"лента {i + 1}", stall=STALL_TAPE)
+            StreamClient(on_message, name=f"{name} {i + 1}", stall=stall)
             for i in range(count)
         ]
         # Где какой поток. Раз выбранное соединение не меняется: перебрасывать
@@ -578,7 +596,7 @@ class TapeFan:
 
     @property
     def connected(self) -> bool:
-        """Жива ли лента. Хотя бы одно соединение из нескольких - уже лента."""
+        """Жив ли поток. Хотя бы одно соединение из нескольких - уже поток."""
         return any(socket.connected for socket in self.sockets)
 
     def start(self) -> None:
@@ -615,8 +633,17 @@ class SplitStreamClient:
     """
 
     def __init__(self, on_message: Callable[[str, dict], None]):
-        self.depth = StreamClient(on_message, name="стаканы", stall=STALL_DEPTH)
-        self.tape = TapeFan(on_message)
+        # Стаканы тоже по нескольким соединениям, хоть они и легче ленты
+        # вдесятеро. Дело не в весе, а в цене обрыва: он оставляет дыру в
+        # книгах всех монет соединения разом, и каждая идёт за снимком - на
+        # полусотне это бюджет веса до дна и пустой скринер. На четырёх
+        # соединениях такой обрыв уносит четверть монет.
+        self.depth = StreamFan(
+            on_message, name="стаканы", sockets=DEPTH_SOCKETS, stall=STALL_DEPTH
+        )
+        self.tape = StreamFan(
+            on_message, name="лента", sockets=TAPE_SOCKETS, stall=STALL_TAPE
+        )
 
     @staticmethod
     def _split(streams: set[str]) -> tuple[set[str], set[str]]:
