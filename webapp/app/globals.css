@@ -676,11 +676,16 @@
    Ручка ведёт маску по линии подписи с ровной скоростью, как пишет рука, -
    поэтому linear. Отрывы ручки в пути - это разрывы подпутей, дальше пера по
    ним маска не тянется. Когда подпись дописана, падает печать - тем же ударом,
-   что на карточке сделки, - и лист коротко вздрагивает. */
+   что на карточке сделки, - и лист коротко вздрагивает.
+
+   Всё вместе укладывается в полторы секунды. Прежде росчерк шёл две с
+   половиной, да ещё после паузы, и печать падала на четвёртой: человек успевал
+   решить, что окно зависло, и тянулся к кнопке. Подпись - это движение, а не
+   ожидание. */
 .cert-pen {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: cert-pen 2.4s linear 0.4s forwards;
+  animation: cert-pen 1.25s linear 0.2s forwards;
 }
 @keyframes cert-pen {
   to { stroke-dashoffset: 0; }
@@ -689,7 +694,7 @@
   transform: rotate(-8deg);
   opacity: 0.96;
   pointer-events: none;
-  animation: cert-slam 0.42s cubic-bezier(0.2, 1.5, 0.35, 1) 2.95s both;
+  animation: cert-slam 0.38s cubic-bezier(0.2, 1.5, 0.35, 1) 1.5s both;
 }
 @keyframes cert-slam {
   0% { transform: scale(2.3) rotate(-28deg); opacity: 0; }
@@ -697,7 +702,7 @@
   100% { transform: scale(1) rotate(-8deg); opacity: 0.96; }
 }
 .cert-sheet {
-  animation: pnl-shock 0.18s ease-out 3.2s;
+  animation: pnl-shock 0.18s ease-out 1.72s;
 }
 @media (prefers-reduced-motion: reduce) {
   .cert-pen {
