@@ -26,7 +26,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from backend.deps import get_current_student, get_session, get_weex
+from backend.deps import get_current_mentor, get_current_student, get_session, get_weex
+from backend.trading import health
 from backend.trading.live_state import cached
 from backend.trading.locks import account_guard
 from backend.trading.accounts import (
@@ -587,6 +588,23 @@ async def _account_leverage(row, symbol: str) -> float:
     except Exception as exc:  # noqa: BLE001 - предел не повод ломать окно расчёта
         logger.debug("Предел плеча %s по ключу не получен: %s", symbol, exc)
         return 0.0
+
+
+@router.get("/health", dependencies=[Depends(get_current_mentor)])
+def exchanges_health(session=Depends(get_session)):
+    """Приборная панель бирж: задержки, отказы, потоки, обходы сопровождения.
+
+    Раньше всё это жило строками в окне сервера, и разбор поломки начинался с
+    просьбы прислать лог - уже после того, как она стоила денег.
+
+    Процессов бывает два (`NMNH_SPLIT=1`), и каждый пишет свой снимок в базу:
+    у терминала свои запросы к бирже, у сопровождения свои. Здесь они
+    складываются, а свой снимок берётся живым, а не из базы.
+    """
+    own = health.snapshot()
+    own["role"] = health.role()
+    others = [shot for shot in health.published(session) if shot.get("role") != own["role"]]
+    return health.merge([own, *others])
 
 
 @router.get("/limits/{symbol}")

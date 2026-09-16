@@ -35,6 +35,8 @@ import logging
 import time
 from typing import Any, Awaitable, Callable
 
+from backend.trading import health
+
 logger = logging.getLogger("nmnh.trading.state")
 
 # Сколько живёт ответ. Меньше секунды смысла не имеет - опрос терминала реже,
@@ -128,6 +130,32 @@ async def read(key: tuple, fetch: Callable[[], Awaitable[Any]], ttl: float = TTL
         return value
 
 
+def _timed(exchange: str, what: str, call: Callable[..., Awaitable[Any]]):
+    """Тот же вызов, но с отметкой в приборной панели (`health`).
+
+    Считаем только настоящие походы на биржу: ответ из памяти чтений сюда не
+    попадает, иначе задержка на панели показывала бы нашу скорость, а не её.
+    """
+
+    async def measured(*args, **kwargs):
+        started = time.monotonic()
+        try:
+            answer = await call(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - отказ тоже число панели
+            health.note_call(
+                exchange,
+                (time.monotonic() - started) * 1000,
+                False,
+                what,
+                str(getattr(exc, "code", "") or type(exc).__name__),
+            )
+            raise
+        health.note_call(exchange, (time.monotonic() - started) * 1000, True, what)
+        return answer
+
+    return measured
+
+
 class Cached:
     """Клиент биржи с общей памятью чтений на счёт.
 
@@ -141,20 +169,29 @@ class Cached:
         self._account = tuple(account)
         self._ttl = ttl
 
+    @property
+    def _exchange(self) -> str:
+        return str(self._account[1]) if len(self._account) > 1 else "?"
+
     def __getattr__(self, name: str) -> Any:
         value = getattr(self._client, name)
-        if name in WRITES and callable(value):
+        if not asyncio.iscoroutinefunction(value):
+            return value
 
-            async def written(*args, **kwargs):
-                try:
-                    return await value(*args, **kwargs)
-                finally:
-                    # Сбрасываем и после отказа: биржа могла успеть применить
-                    # запрос и ответить ошибкой по дороге.
-                    forget(self._account)
+        timed = _timed(self._exchange, name, value)
+        if name not in WRITES:
+            # Чтения и всё прочее: только замер, память их не касается.
+            return timed
 
-            return written
-        return value
+        async def written(*args, **kwargs):
+            try:
+                return await timed(*args, **kwargs)
+            finally:
+                # Сбрасываем и после отказа: биржа могла успеть применить
+                # запрос и ответить ошибкой по дороге.
+                forget(self._account)
+
+        return written
 
     async def positions(self) -> Any:
         # Приватный поток биржи знает позиции точнее и раньше: он присылает их
@@ -163,20 +200,22 @@ class Cached:
         if live is not None:
             return live
         return await read(
-            (*self._account, "positions"), self._client.positions, self._ttl
+            (*self._account, "positions"),
+            _timed(self._exchange, "positions", self._client.positions),
+            self._ttl,
         )
 
     async def algo_orders(self, symbol: str) -> Any:
         return await read(
             (*self._account, "algo_orders", str(symbol).upper()),
-            lambda: self._client.algo_orders(symbol),
+            _timed(self._exchange, "algo_orders", lambda: self._client.algo_orders(symbol)),
             self._ttl,
         )
 
     async def open_orders(self, symbol: str) -> Any:
         return await read(
             (*self._account, "open_orders", str(symbol).upper()),
-            lambda: self._client.open_orders(symbol),
+            _timed(self._exchange, "open_orders", lambda: self._client.open_orders(symbol)),
             self._ttl,
         )
 

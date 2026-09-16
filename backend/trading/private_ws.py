@@ -40,7 +40,7 @@ import aiohttp
 
 from sqlalchemy import select
 
-from backend.trading import live_state
+from backend.trading import health, live_state
 from backend.trading.accounts import account_for, trade_exchange
 from core.models import LiveTrade
 from core.binance.futures import BinanceFutures
@@ -114,6 +114,7 @@ class PrivateStreams:
         # он сам считает себя живым (`ready`).
         live_state.attach(account, stream)
         stream.start()
+        health.note_stream(exchange, up=True)
         logger.info("Приватный поток %s включён для ученика %s", exchange, row.student_id)
 
     async def keep(self, accounts: set[tuple[int, str]]) -> None:
@@ -128,6 +129,7 @@ class PrivateStreams:
         if stream is None:
             return
         live_state.detach(account)
+        health.note_stream(str(exchange), up=False)
         await stream.stop()
         logger.info("Приватный поток %s выключен для ученика %s", exchange, student_id)
 
@@ -151,6 +153,9 @@ class PrivateStreams:
         def down() -> None:
             """Поток оборвался - память чтений этого счёта больше не верна."""
             live_state.forget(account)
+            # Обрыв - число панели: по нему видно, какая биржа рвёт соединение
+            # и как часто (backend/trading/health.py).
+            health.note_call(exchange, 0.0, False, "stream", "обрыв")
 
         if exchange == "okx":
             return OkxPrivateStream(
@@ -323,3 +328,11 @@ class StreamKeeper:
         finally:
             session.close()
         await sync_streams(self.streams, self._sessions, accounts)
+        # Свой снимок панели: у процесса терминала свои задержки и отказы.
+        session = self._sessions()
+        try:
+            health.publish(session, health.role())
+        except Exception as exc:  # noqa: BLE001 - панель не повод рвать круг
+            logger.debug("Снимок панели не записан: %s", exc)
+        finally:
+            session.close()

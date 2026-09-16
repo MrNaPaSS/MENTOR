@@ -19,6 +19,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 from datetime import timedelta, timezone
 from dataclasses import dataclass, field
 from typing import Any, Iterable
@@ -28,6 +29,7 @@ from sqlalchemy import select
 from backend.trading.accounts import account_for, client_for, trade_exchange
 from backend.trading.live_state import cached
 from backend.trading.locks import account_guard
+from backend.trading import health
 from backend.trading.private_ws import PrivateStreams, sync_streams
 from backend.trading.rewards import award_trade_coins
 from core.models import LiveTrade, ScalpTrade, utcnow
@@ -536,6 +538,26 @@ class PositionWatcher:
 
     async def _tick(self) -> None:
         """Один обход: счета параллельно, по одному запросу позиций на счёт."""
+        # Длительность обхода - число приборной панели: по нему видно, успевает
+        # ли сопровождение за пятисекундным кругом (backend/trading/health.py).
+        started = time.monotonic()
+        try:
+            await self._pass()
+        finally:
+            health.note_pass(time.monotonic() - started)
+            self._publish_health()
+
+    def _publish_health(self) -> None:
+        """Снимок панели в базу: процессов два, а панель одна."""
+        session = self._sessions()
+        try:
+            health.publish(session, health.role())
+        except Exception as exc:  # noqa: BLE001 - панель не повод ронять обход
+            logger.debug("Снимок панели не записан: %s", exc)
+        finally:
+            session.close()
+
+    async def _pass(self) -> None:
         session = self._sessions()
         try:
             accounts = sorted(
