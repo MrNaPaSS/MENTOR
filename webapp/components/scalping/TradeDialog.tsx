@@ -15,7 +15,7 @@
 // разметка остаётся на графике.
 
 import { useT } from "@/lib/i18n";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 import { computeTrade, sideForShelf, DEFAULT_TAKES } from "@/lib/trade/plan";
@@ -202,12 +202,32 @@ export default function TradeDialog({
    * график в этот момент под окном. Сдвинуть его - единственный способ видеть
    * оба; поэтому окно держится не на месте, а там, куда его увели.
    *
-   * Смещение живёт до закрытия: следующий расчёт снова открывается по центру.
-   * Запоминать место надолго нечего - оно зависит от того, где сегодня стоит
-   * цена, а не от привычки.
+   * Смещение живёт до закрытия: следующий расчёт снова открывается на своём
+   * месте слева от графика. Запоминать сдвиг надолго нечего - он зависит от
+   * того, где сегодня стоит цена, а не от привычки.
    */
   const [shift, setShift] = useState({ x: 0, y: 0 });
   const grab = useRef<{ x: number; y: number } | null>(null);
+  const card = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Открываемся слева от графика, а не поверх него.
+   *
+   * По центру экрана окно вставало ровно на цену, от которой его открыли:
+   * трейдер правит сумму и стоп, глядя на график, а график в этот момент под
+   * окном, и первым движением его каждый раз отодвигали. Считаем место от
+   * самого графика - панели таскают мышью, и его левый край у каждого свой.
+   * Не влезает слева (узкое окно, широкий стакан) - прижимаемся к краю
+   * экрана: перекрыть стакан лучше, чем то, ради чего окно открыто.
+   */
+  useLayoutEffect(() => {
+    const chart = document.querySelector("[data-chart-pane]")?.getBoundingClientRect();
+    const self = card.current?.getBoundingClientRect();
+    if (!chart || !self) return;
+    const gap = 8;
+    const left = Math.max(gap, chart.left - self.width - gap);
+    setShift({ x: Math.round(left - self.left), y: 0 });
+  }, []);
 
   function startDrag(event: React.PointerEvent<HTMLDivElement>) {
     // Тянут за шапку, но не за крестик: нажатие на него закрывает окно, и
@@ -256,6 +276,7 @@ export default function TradeDialog({
           оба свойства висели на одном элементе, окно не двигалось вовсе:
           смещение считалось, но до экрана не доезжало. */}
       <div
+        ref={card}
         onClick={(event) => event.stopPropagation()}
         style={{ transform: `translate(${shift.x}px, ${shift.y}px)` }}
         className="w-[520px] max-w-full"
