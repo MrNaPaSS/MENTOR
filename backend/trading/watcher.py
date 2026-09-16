@@ -824,9 +824,21 @@ class PositionWatcher:
                 if str(take.get("order_id") or "") in decision.filled_orders:
                     take["filled"] = True
             trade.tp_orders_json = json.dumps(takes, ensure_ascii=False)
+            was = int(trade.takes_hit or 0)
             trade.takes_hit = decision.takes_hit
             changed = True
-            logger.info("Цель взята: %s, всего %d", trade.symbol, trade.takes_hit)
+            if trade.takes_hit > was:
+                logger.info("Цель взята: %s, всего %d", trade.symbol, trade.takes_hit)
+            else:
+                # Заявки целей ушли с биржи вместе с позицией: так бывает на
+                # стопе и на закрытии руками. Цель при этом не взята, и счёт
+                # целей выше ветка закрытия намеренно не поднимает - а в
+                # журнале стояло «Цель взята, всего 0», и это сбивало разбор.
+                logger.info(
+                    "Заявки целей %s сняты вместе с позицией, взято по-прежнему %d",
+                    trade.symbol,
+                    trade.takes_hit,
+                )
 
         if decision.move_stop_to is not None:
             if await self._set_stop(
