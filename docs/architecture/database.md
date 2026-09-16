@@ -172,15 +172,18 @@ python backup_db.py --keep-days 30
 python backup_db.py --out D:\nmnh-backups
 ```
 
-Раз в сутки, задачей Windows. Путь к проекту подставьте свой, кавычки внутри
-экранируются обратным слэшем:
+Раз в сутки, задачей Windows. Заводится из PowerShell, путь к проекту свой.
+Через `schtasks` то же самое спотыкается на кавычках внутри команды:
 
-```
-schtasks /create /tn "NMNH backup" /sc daily /st 03:00 /rl highest /f /tr "\"C:\Users\Администратор\Desktop\WEEX\MENTOR\venv\Scripts\python.exe\" \"C:\Users\Администратор\Desktop\WEEX\MENTOR\backup_db.py\""
+```powershell
+$root = "C:\Users\Администратор\Desktop\WEEX\MENTOR"
+$action = New-ScheduledTaskAction -Execute "$root\venv\Scripts\python.exe" -Argument "`"$root\backup_db.py`"" -WorkingDirectory $root
+$trigger = New-ScheduledTaskTrigger -Daily -At 3:00am
+Register-ScheduledTask -TaskName "NMNH backup" -Action $action -Trigger $trigger -RunLevel Highest -Force
 ```
 
-Проверить, что задача заведена: `schtasks /query /tn "NMNH backup"`.
-Запустить сейчас, не дожидаясь ночи: `schtasks /run /tn "NMNH backup"`.
+Запустить сейчас, не дожидаясь ночи: `Start-ScheduledTask -TaskName "NMNH backup"`.
+Посмотреть состояние: `Get-ScheduledTaskInfo -TaskName "NMNH backup"`.
 
 Задача идёт из системной папки, поэтому скрипт сам находит и `.env`, и папку
 `backups` рядом с собой.
