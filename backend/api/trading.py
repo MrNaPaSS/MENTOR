@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 import ssl
 from collections.abc import Iterable, Sequence
@@ -389,6 +390,24 @@ def _just_closed(session, student_id: int) -> list[dict[str, Any]]:
     ]
 
 
+# Как часто жаловаться на непонятную условную заявку.
+#
+# Терминал спрашивает заявки несколько раз в секунду, и на каждый ответ
+# приходилась строка в журнале: полезное тонуло в ней целиком. Раз в пять минут
+# на монету - этого хватает, чтобы заметить и разобрать.
+UNKNOWN_EVERY = 300.0
+_unknown_at: dict[str, float] = {}
+
+
+def _say_unknown(symbol: str) -> bool:
+    """Пора ли снова написать о непонятных заявках этой монеты."""
+    now = time.monotonic()
+    if now - _unknown_at.get(symbol, 0.0) < UNKNOWN_EVERY:
+        return False
+    _unknown_at[symbol] = now
+    return True
+
+
 @router.get("/plans/{symbol}")
 async def plans(
     symbol: str,
@@ -446,7 +465,7 @@ async def plans(
     takes = 0
     stop_price: float | None = None
     take_prices: list[float] = []
-    unknown: list[str] = []
+    unknown: list[dict[str, Any]] = []
     for order in orders:
         marks = order_marks(order)
         kind = str(order.get("planType") or order.get("type") or "").lower()
@@ -469,12 +488,22 @@ async def plans(
         else:
             # Незнакомую заявку записываем в стопы: она чем-то да защищает, а
             # ложная тревога «целей нет» дороже незамеченной цели.
-            unknown.append(kind or "без вида")
+            unknown.append(order)
             stops += 1
             stop_price = trigger or stop_price
 
-    if unknown:
-        logger.info("Условные заявки %s неизвестного вида: %s", sym, ", ".join(unknown))
+    if unknown and _say_unknown(sym):
+        # Строку выкладываем целиком, а не разобранной по полям.
+        #
+        # Разобранная показывает только то, что мы уже умеем читать, - а
+        # непонятно как раз то, чего в нашем списке полей нет: у части бирж
+        # условная заявка приходит своими именами, и вид в ней не назван вовсе.
+        # По этим строкам и добавляются недостающие имена.
+        logger.warning(
+            "Условные заявки %s неизвестного вида: %d шт., считаем защитой", sym, len(unknown)
+        )
+        for one in unknown:
+            logger.warning("  заявка: %s", one)
 
     # Наши входы, которые всё ещё стоят и ждут своей цены.
     #
