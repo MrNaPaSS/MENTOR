@@ -116,8 +116,8 @@ export default function HealthPage() {
           <h2 className="text-sm font-semibold text-text-primary">Сопровождение сделок</h2>
           <p className="mt-1 text-sm text-text-secondary">
             Обходов: {health.watcher.passes}. Обычный занимает{" "}
-            {health.watcher.seconds_median?.toFixed(1)} с, самый долгий{" "}
-            {health.watcher.seconds_worst?.toFixed(1)} с.
+            {took(health.watcher.seconds_median)}, самый долгий{" "}
+            {took(health.watcher.seconds_worst)}.
           </p>
           <p className="mt-1 text-xs text-text-muted">
             Круг идёт раз в 5 секунд: если самый долгий подбирается к этому числу,
@@ -175,6 +175,12 @@ function VenueCard({ venue }: { venue: Venue }) {
       )}
     </section>
   );
+}
+
+/** Длительность словами: доли секунды читаются как «0.0 с» и выглядят нулём. */
+function took(seconds: number | undefined): string {
+  const value = seconds ?? 0;
+  return value < 1 ? `${Math.round(value * 1000)} мс` : `${value.toFixed(1)} с`;
 }
 
 function Row({ label, value, alarm }: { label: string; value: string; alarm?: boolean }) {

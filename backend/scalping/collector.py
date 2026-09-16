@@ -24,6 +24,7 @@ import time
 
 import aiohttp
 
+from backend.trading import health
 from backend.scalping.binance import BinanceRest, SplitStreamClient, depth_weight
 from backend.scalping.candles import LiveCandles
 from backend.scalping.clusters import ClusterHistory
@@ -349,6 +350,9 @@ class ScalpingCollector:
                     symbol,
                     pause,
                 )
+                # В панель: десятки таких отказов подряд означают, что бюджет
+                # биржи выбран, и скринер сейчас пуст (backend/trading/health.py).
+                health.note_call("binance", 0.0, False, "снимок стакана", "нет ответа")
                 return
             self._cooldown.pop(symbol, None)
             state.book.apply_snapshot(

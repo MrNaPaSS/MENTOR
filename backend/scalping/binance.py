@@ -24,6 +24,8 @@ from typing import Any, Awaitable, Callable
 
 import aiohttp
 
+from backend.trading import health
+
 logger = logging.getLogger("nmnh.scalping.binance")
 
 REST_BASE = "https://fapi.binance.com"
@@ -392,6 +394,7 @@ class StreamClient:
             self._ws = ws
             self._connected.set()
             opened = time.monotonic()
+            health.note_stream("binance", up=True)
             logger.info("Поток Binance%s подключён, потоков: %d", self._label, len(initial))
 
             # Пока сокет поднимался, набор мог измениться — досылаем разницу.
@@ -411,14 +414,19 @@ class StreamClient:
             # Сколько прожил и сколько вёз: частые обрывы короткоживущего
             # соединения с сотней потоков и штатный суточный обрыв выглядят в
             # журнале одинаково, а лечатся по-разному.
+            lived = time.monotonic() - opened
             logger.warning(
                 "Поток Binance%s закрыт: код %s, %s (жил %.0f с, потоков %d)",
                 self._label,
                 ws.close_code,
                 ws.exception() or "без ошибки",
-                time.monotonic() - opened,
+                lived,
                 len(initial),
             )
+            # И в приборную панель: по числу обрывов за пять минут видно,
+            # сеть это стола или наша ошибка (backend/trading/health.py).
+            health.note_stream("binance", up=False)
+            health.note_call("binance", lived * 1000, False, "поток", f"обрыв {ws.close_code}")
         self._ws = None
 
     def _dispatch(self, raw: str) -> None:
