@@ -18,6 +18,7 @@ import Link from "next/link";
 import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
 import JournalTable from "./JournalTable";
+import JournalCalendar from "./JournalCalendar";
 import { cardFromTrade } from "@/lib/pnl/data";
 import { useJournalExport } from "@/lib/journalExport";
 import {
@@ -31,22 +32,6 @@ import {
   type VenueSlice,
 } from "@/lib/journal";
 import { useVenuePick, venueLabel } from "@/lib/venuePick";
-
-/** Сетка месяца: понедельник первым, пустые клетки до первого числа. */
-function monthCells(year: number, month: number, days: JournalDay[]) {
-  const byDate = new Map(days.map((d) => [d.date, d]));
-  const first = new Date(Date.UTC(year, month - 1, 1));
-  const total = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  // getUTCDay(): воскресенье — ноль, а неделя у нас начинается с понедельника.
-  const lead = (first.getUTCDay() + 6) % 7;
-
-  const cells: (JournalDay | null | undefined)[] = Array(lead).fill(null);
-  for (let day = 1; day <= total; day++) {
-    const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    cells.push(byDate.get(key));
-  }
-  return cells;
-}
 
 export default function JournalPanel({
   symbol,
@@ -97,6 +82,10 @@ export default function JournalPanel({
   const [venues, setVenues] = useState<VenueSlice[]>([]);
   const [active, setActive] = useState("");
   const [days, setDays] = useState<JournalDay[]>([]);
+  // Выбранный в календаре день. Список справа показывает тогда только его
+  // сделки: по календарю ищут «что случилось в тот вторник», и добираться до
+  // ответа прокруткой всего периода человек не должен.
+  const [day, setDay] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -164,10 +153,24 @@ export default function JournalPanel({
     reload();
   }
 
+  // Сделки выбранного дня. День календаря считает сервер по своим суткам, и
+  // сравниваем по ним же - иначе вечерняя сделка попадёт в соседнюю клетку.
+  const shown = day === null ? trades : trades.filter((row) => row.closed_at.slice(0, 10) === day);
+
+  function toToday() {
+    const now = new Date();
+    setYear(now.getUTCFullYear());
+    setMonth(now.getUTCMonth() + 1);
+    setDay(null);
+  }
+
   function shiftMonth(delta: number) {
     const next = new Date(Date.UTC(year, month - 1 + delta, 1));
     setYear(next.getUTCFullYear());
     setMonth(next.getUTCMonth() + 1);
+    // Выбранный день остался в прошлом месяце: держать его фильтром значит
+    // показывать пустой список рядом с полным календарём.
+    setDay(null);
   }
 
   // Выгрузка журнала - инструмент маркета. Не куплена - на её месте замок,
@@ -298,60 +301,38 @@ export default function JournalPanel({
                 />
               </div>
             )}
-    
-            <div className="mb-3 rounded border border-[var(--pane-border)] p-2">
-              <div className="mb-2 flex items-center justify-between">
-                <button
-                  onClick={() => shiftMonth(-1)}
-                  className="px-1 text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
-                >
-                  ←
-                </button>
-                <span className="font-mono text-[11px] text-[var(--pane-text-2)]">
-                  {String(month).padStart(2, "0")}.{year} ·{" "}
-                  <span className={tone(total)}>{money(total)} $</span>
-                </span>
-                <button
-                  onClick={() => shiftMonth(1)}
-                  className="px-1 text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
-                >
-                  →
-                </button>
-              </div>
-    
-              <div className="grid grid-cols-7 gap-1 text-center">
-                {t.journal.weekdays.map((w) => (
-                  <span key={w} className="text-[10px] text-[var(--pane-muted)]">
-                    {w}
-                  </span>
-                ))}
-                {monthCells(year, month, days).map((cell, i) => (
-                  <div
-                    key={i}
-                    title={cell ? t.journal.cellTitle(cell.trades, money(cell.pnl)) : undefined}
-                    className={`rounded py-1 font-mono text-[10px] tabular-nums ${
-                      cell === null
-                        ? ""
-                        : cell === undefined
-                          ? "text-[var(--pane-muted)]"
-                          : cell.pnl >= 0
-                            ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]"
-                            : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
-                    }`}
-                  >
-                    {cell ? money(cell.pnl) : cell === undefined ? "·" : ""}
-                  </div>
-                ))}
-              </div>
-            </div>
+
+            <JournalCalendar
+              year={year}
+              month={month}
+              days={days}
+              total={total}
+              onShift={shiftMonth}
+              onToday={toToday}
+              picked={day}
+              onPickDay={setDay}
+            />
           </div>
 
           <div className="no-scrollbar lg:max-h-full lg:min-h-0 lg:overflow-auto">
-            {trades.length === 0 ? (
+            {/* Чип выбранного дня: видно, почему список короче обычного, и
+                чем его вернуть. */}
+            {day !== null && (
+              <button
+                onClick={() => setDay(null)}
+                title={t.journal.clearDay}
+                className="mb-2 inline-flex items-center gap-1 rounded bg-[var(--pane-accent-faint)] px-2 py-0.5 text-[10px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)]"
+              >
+                {t.journal.dayFilter(day.slice(8, 10) + "." + day.slice(5, 7))}
+                <X className="h-3 w-3" />
+              </button>
+            )}
+
+            {shown.length === 0 ? (
               <p className="py-6 text-center text-[var(--pane-muted)]">{t.journal.empty}</p>
             ) : (
               <JournalTable
-                rows={trades}
+                rows={shown}
                 onHover={onHover}
                 onPick={onPick}
                 onCard={setCard}
