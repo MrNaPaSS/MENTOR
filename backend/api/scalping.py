@@ -29,6 +29,8 @@ from backend.scalping.okx import OkxPublicRest
 from core.bingx.futures import symbol_id
 from core.mexc.futures import symbol_id as mexc_symbol_id
 from core.okx.futures import inst_id
+from core.bingx.market import symbol_id as bingx_symbol
+from core.mexc.market import symbol_id as mexc_symbol
 from backend.scalping.footprint import (
     build as build_footprint,
     collect,
@@ -616,6 +618,10 @@ async def footprint(
         payload = await _okx_footprint(request, state, sym, interval, start, end, now)
         if payload is not None:
             return payload
+    elif venue in RECENT_TRADES_VENUES:
+        payload = await _recent_trades_footprint(request, venue, state, sym, interval, start, end, now)
+        if payload is not None:
+            return payload
     if venue != PRIMARY:
         # Что успела застать лента - лучше, чем ничего. Монету открывают
         # посреди свечи, и до её конца профиль приходил пустым: на минуте это
@@ -749,6 +755,115 @@ async def _okx_footprint(
     cells = collect(trades, tick) if trades else {}
     shot = build_footprint(cells, time=start, seconds=seconds, tick=tick, partial=partial)
     payload = _foot_payload(sym, interval, shot, source="exchange", exchange=OKX_VENUE)
+    _foot_remember(key, payload)
+    return payload
+
+
+# Биржи, у которых открытая ручка отдаёт только последние сделки, без листания
+# вглубь. BingX даёт тысячу - это пара минут по BTC и куда больше по остальным
+# парам; MEXC сотню, то есть секунды. Поэтому профиль по ним строится только
+# когда последние сделки накрывают свечу целиком, а иначе остаётся лента.
+RECENT_TRADES_VENUES = ("bingx", "mexc")
+
+
+def _bingx_trades(rows: list[dict]) -> list[tuple[float, float, bool]]:
+    """Сделки BingX в наш вид. `isBuyerMaker` - по рынку продавали."""
+    out: list[tuple[float, float, bool]] = []
+    for row in rows:
+        try:
+            price = float(row["price"])
+            qty = float(row["qty"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if price <= 0 or qty <= 0:
+            continue
+        out.append((price, qty, not bool(row.get("isBuyerMaker"))))
+    return out
+
+
+def _mexc_trades(rows: list[dict], contract: float) -> list[tuple[float, float, bool]]:
+    """Сделки MEXC в наш вид: объём в контрактах, сторона числом (1 - покупка)."""
+    out: list[tuple[float, float, bool]] = []
+    for row in rows:
+        try:
+            price = float(row["p"])
+            contracts = float(row["v"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if price <= 0 or contracts <= 0:
+            continue
+        out.append((price, round(contracts * contract, 10), int(float(row.get("T", 1))) == 1))
+    return out
+
+
+def _within(rows: list[dict], key: str, start_ms: int, end_ms: int) -> tuple[list[dict], int]:
+    """Строки внутри свечи и время самой старой из полученных.
+
+    Самая старая нужна, чтобы понять, накрывают ли сделки начало свечи: если
+    биржа отдала только последнюю минуту, а свеча началась раньше, профиль по
+    ним вышел бы урезанным молча.
+    """
+    inside: list[dict] = []
+    oldest = 0
+    for row in rows:
+        try:
+            at = int(float(row.get(key) or 0))
+        except (TypeError, ValueError):
+            continue
+        if at <= 0:
+            continue
+        oldest = at if oldest == 0 else min(oldest, at)
+        if start_ms <= at < end_ms:
+            inside.append(row)
+    return inside, oldest
+
+
+async def _recent_trades_footprint(
+    request: Request, venue: str, state, sym: str, interval: str, start: int, end: int, now: int
+) -> dict[str, Any] | None:
+    """Профиль свечи по последним сделкам биржи. `None` - их не хватило.
+
+    Так же, как у OKX, только без листания вглубь: что биржа отдала одним
+    запросом, то и есть. Не накрыли начало свечи - решает лента, у неё хотя бы
+    часть (`_partial_from_tape`).
+    """
+    collector = get_market(request).collector(venue)
+    rest = getattr(collector, "rest", None)
+    if collector is None or rest is None:
+        return None
+
+    key = f"{venue}:{sym}:{interval}:{start}"
+    cached = _foot_cache.get(key)
+    ttl = _FOOT_LIVE_TTL if end > now else _FOOT_DONE_TTL
+    if cached and time.monotonic() - cached[0] < ttl:
+        _foot_cache.move_to_end(key)
+        return cached[1]
+
+    start_ms, end_ms = start * 1000, end * 1000
+    if venue == "bingx":
+        if not hasattr(rest, "trades"):
+            return None
+        rows, oldest = _within(await rest.trades(bingx_symbol(sym)), "time", start_ms, end_ms)
+        trades = _bingx_trades(rows)
+    else:
+        if not hasattr(rest, "deals"):
+            return None
+        rows, oldest = _within(await rest.deals(mexc_symbol(sym)), "t", start_ms, end_ms)
+        size = getattr(collector, "_contract_size", None)
+        trades = _mexc_trades(rows, float(size(sym)) if size else 1.0)
+
+    # Начало свечи не накрыто - профиль по этим сделкам был бы урезанным.
+    if not trades or oldest == 0 or oldest > start_ms:
+        return None
+
+    seconds = FOOTPRINT_INTERVALS[interval]
+    tick = detect_tick(state.book) if state else 0.0
+    if tick <= 0:
+        tick = guess_tick([p for p, _, _ in trades])
+    shot = build_footprint(
+        collect(trades, tick), time=start, seconds=seconds, tick=tick, partial=False
+    )
+    payload = _foot_payload(sym, interval, shot, source="exchange", exchange=venue)
     _foot_remember(key, payload)
     return payload
 

@@ -112,6 +112,19 @@ class MexcPublicRest:
         rows = data if isinstance(data, list) else []
         return [row for row in rows if isinstance(row, dict)]
 
+    async def deals(self, symbol: str, limit: int = 100) -> list[dict]:
+        """Последние сделки пары. Больше сотни биржа не отдаёт.
+
+        Листания вглубь у MEXC нет вовсе, и сотня сделок по живой паре - это
+        секунды. Свечу целиком отсюда не собрать; берут их только затем, чтобы
+        закрыть хвост, который не застала своя лента.
+        """
+        data = await self._get(
+            f"/api/v1/contract/deals/{symbol}", {"limit": min(limit, 100)}
+        )
+        rows = data if isinstance(data, list) else []
+        return [row for row in rows if isinstance(row, dict)]
+
     async def candles(self, symbol: str, interval: str = "Min1", limit: int = 300) -> list[dict]:
         """История свечей.
 

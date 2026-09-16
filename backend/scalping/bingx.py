@@ -128,6 +128,19 @@ class BingxPublicRest:
         rows = data if isinstance(data, list) else []
         return [row for row in rows if isinstance(row, dict)]
 
+    async def trades(self, symbol: str, limit: int = 1000) -> list[dict]:
+        """Последние сделки пары, от старых к новым в ответе биржи.
+
+        Листания вглубь у открытой ручки нет: тысяча последних сделок это
+        около двух минут по BTC и куда больше по остальным парам. Этого хватает
+        на текущую свечу, ради которой их и берут (кластерная свеча).
+        """
+        data = await self._get(
+            "/openApi/swap/v2/quote/trades", {"symbol": symbol, "limit": min(limit, 1000)}
+        )
+        rows = data if isinstance(data, list) else []
+        return [row for row in rows if isinstance(row, dict)]
+
     async def depth(self, symbol: str, limit: int = 1000) -> dict:
         """Глубина книги запросом. Нужна пробнику для сверки с потоком."""
         data = await self._get(

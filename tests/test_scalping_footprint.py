@@ -490,3 +490,108 @@ def test_a_late_tape_still_draws_the_part_it_saw():
     assert body["partial"] is True
     assert body["buy"] == pytest.approx(1.2821 * 100)
     assert body["sell"] == pytest.approx(1.2820 * 200)
+
+
+# ── BingX и MEXC: свеча по последним сделкам биржи ──────────────────────────
+
+
+class StubRecentRest:
+    """Открытая ручка сделок: отдаёт то, что положили, и помнит вопросы."""
+
+    def __init__(self, rows: list[dict]):
+        self.rows = rows
+        self.calls: list[tuple[str, str]] = []
+
+    async def trades(self, symbol, limit=1000):
+        self.calls.append(("trades", symbol))
+        return list(self.rows)
+
+    async def deals(self, symbol, limit=100):
+        self.calls.append(("deals", symbol))
+        return list(self.rows)
+
+
+class StubVenueCollector:
+    def __init__(self, rest, symbol: str, contract: float = 1.0):
+        self.rest = rest
+        self.state = MarketState()
+        self.state.ensure(symbol)
+        self._contract = contract
+
+    def _contract_size(self, _symbol: str) -> float:
+        return self._contract
+
+
+def make_venue_app(venue: str, rest, symbol: str = "BTCUSDT", contract: float = 1.0):
+    from backend.scalping.market_hub import MarketHub
+
+    app, primary = make_app(StubRest())
+    hub = MarketHub(primary)
+    hub._collectors[venue] = StubVenueCollector(rest, symbol, contract)
+    app.state.market_hub = hub
+    return app
+
+
+def test_bingx_candle_is_built_from_the_trades_of_the_exchange():
+    """Последние сделки накрыли свечу - профиль по ним, а не кусок ленты."""
+    start = (int(time.time()) // 60) * 60 - 120
+    rows = [
+        # Сделка до свечи: по ней видно, что начало накрыто.
+        {"time": start * 1000 - 500, "price": "75000", "qty": "0.1", "isBuyerMaker": True},
+        {"time": start * 1000 + 100, "price": "75010", "qty": "0.2", "isBuyerMaker": False},
+        {"time": start * 1000 + 200, "price": "75000", "qty": "0.3", "isBuyerMaker": True},
+        # И после свечи - она не наша.
+        {"time": (start + 60) * 1000 + 10, "price": "75020", "qty": "1.0", "isBuyerMaker": False},
+    ]
+    rest = StubRecentRest(rows)
+    app = make_venue_app("bingx", rest)
+
+    with TestClient(app) as client:
+        body = client.get(
+            "/api/scalping/footprint/btcusdt",
+            params={"interval": "1m", "time": start, "exchange": "bingx"},
+        ).json()
+
+    assert body["source"] == "exchange" and body["partial"] is False
+    assert body["buy"] == pytest.approx(75010 * 0.2)
+    assert body["sell"] == pytest.approx(75000 * 0.3)
+    assert rest.calls[0] == ("trades", "BTC-USDT")
+
+
+def test_mexc_contracts_become_coins():
+    """Объём MEXC в контрактах: у BTC контракт это 0.0001 монеты."""
+    start = (int(time.time()) // 60) * 60 - 120
+    rows = [
+        {"t": start * 1000 - 200, "p": 75000.0, "v": 10, "T": 1},
+        {"t": start * 1000 + 300, "p": 75000.0, "v": 100, "T": 1},
+        {"t": start * 1000 + 400, "p": 75000.5, "v": 20, "T": 2},
+    ]
+    rest = StubRecentRest(rows)
+    app = make_venue_app("mexc", rest, contract=0.0001)
+
+    with TestClient(app) as client:
+        body = client.get(
+            "/api/scalping/footprint/btcusdt",
+            params={"interval": "1m", "time": start, "exchange": "mexc"},
+        ).json()
+
+    assert body["buy"] == pytest.approx(75000 * 100 * 0.0001)
+    assert body["sell"] == pytest.approx(75000.5 * 20 * 0.0001)
+    assert rest.calls[0] == ("deals", "BTC_USDT")
+
+
+def test_trades_that_miss_the_start_leave_it_to_the_tape():
+    """Биржа отдала только хвост свечи - её профиль был бы урезан молча."""
+    start = (int(time.time()) // 60) * 60 - 120
+    rows = [{"time": start * 1000 + 30_000, "price": "75000", "qty": "0.5", "isBuyerMaker": True}]
+    app = make_venue_app("bingx", StubRecentRest(rows))
+
+    with TestClient(app) as client:
+        body = client.get(
+            "/api/scalping/footprint/btcusdt",
+            params={"interval": "1m", "time": start, "exchange": "bingx"},
+        ).json()
+
+    # Ленты в этом опыте нет вовсе: пустая свеча, но помеченная неполной.
+    assert body["partial"] is True
+    assert body["source"] == "tape"
