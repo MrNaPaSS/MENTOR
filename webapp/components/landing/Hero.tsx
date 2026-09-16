@@ -17,15 +17,17 @@ export default function Hero() {
   const copy = t.landing.hero;
 
   return (
-    <section id="about" className="relative overflow-hidden pb-16 pt-28 md:pb-24 md:pt-32">
+    <section id="about" className="relative overflow-hidden pb-16 pt-24 md:pb-20 md:pt-28">
       <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
       <div className="pointer-events-none absolute inset-0 bg-grid-faint [background-size:48px_48px] opacity-30 [mask-image:radial-gradient(70%_60%_at_50%_30%,black,transparent)]" />
 
-      {/* Снимок рабочего места - главный аргумент первого экрана, и колонка
-          под него шире текстовой. Контейнер тоже шире обычного: по картинке
-          решают, читать ли дальше, и мелкой она этой работы не делает. */}
-      <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.35fr)] lg:gap-14">
-        <div>
+      {/* Снимок рабочего места стоит под текстом, а не сбоку от него.
+          В две колонки картинка получала половину ширины и на первом экране
+          читалась как иллюстрация к тексту. Здесь она во всю ширину - то есть
+          вдвое с лишним крупнее, - и первым экраном становится сам терминал, а
+          текст над ним только называет, что это. */}
+      <div className="relative mx-auto max-w-7xl px-4 md:px-6">
+        <div className="max-w-3xl">
           <span className="eyebrow">
             <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-glow-cyan" />
             {copy.eyebrow}
@@ -76,10 +78,9 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* Снимок рабочего места и под ним - что происходит внутри.
-            Картинка первого экрана грузится сразу: отложенная, она въезжает
+        {/* Картинка первого экрана грузится сразу: отложенная, она въезжает
             на глазах у человека и дёргает раскладку. */}
-        <div>
+        <div className="mt-9 md:mt-10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/art/seo/terminal-cover.webp"
@@ -90,10 +91,13 @@ export default function Hero() {
             // @ts-expect-error - атрибут браузера, в типах React его ещё нет
             fetchpriority="high"
             decoding="async"
-            className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
+            className="w-full rounded-2xl border border-white/[0.07] shadow-2xl md:rounded-3xl"
           />
 
-          <div className="relative mt-4 overflow-hidden rounded-2xl border border-accent-cyan/25 bg-bg-panel/95 p-5 backdrop-blur-2xl">
+          {/* Подпись под снимком - половина ширины и справа: во всю ширину
+              строка в пять слов растянулась бы на весь экран и читалась бы
+              заголовком, которым она не является. */}
+          <div className="relative ml-auto mt-4 overflow-hidden rounded-2xl border border-accent-cyan/25 bg-bg-panel/95 p-5 backdrop-blur-2xl md:mt-5 md:max-w-2xl">
             <div
               aria-hidden
               className="pointer-events-none absolute inset-0"

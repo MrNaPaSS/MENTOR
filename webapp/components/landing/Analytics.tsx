@@ -13,9 +13,14 @@
 
 /* eslint-disable @next/next/no-img-element */
 
+import { CalendarDays, Flag, Target, TrendingUp, type LucideIcon } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
+import GlowCard, { CardIcon, type CardAccent } from "@/components/ui/GlowCard";
 import { useT } from "@/lib/i18n";
+
+const ICONS: LucideIcon[] = [CalendarDays, TrendingUp, Flag, Target];
+const ACCENTS: CardAccent[] = ["cyan", "green", "gold", "violet"];
 
 export default function Analytics() {
   const t = useT();
@@ -37,15 +42,23 @@ export default function Analytics() {
         />
       </Reveal>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
-        {copy.points.map((point, i) => (
-          <Reveal key={point} delay={0.08 * i}>
-            <div className="flex h-full gap-3 rounded-2xl border border-border bg-bg-panel/95 p-5 backdrop-blur-2xl">
-              <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-accent-cyan" />
-              <p className="text-sm leading-relaxed text-text-secondary">{point}</p>
-            </div>
-          </Reveal>
-        ))}
+      <div className="mt-8 grid gap-5 md:grid-cols-2">
+        {copy.points.map((point, i) => {
+          const Icon = ICONS[i % ICONS.length];
+          const accent = ACCENTS[i % ACCENTS.length];
+          return (
+            <Reveal key={point} delay={0.08 * i}>
+              <GlowCard accent={accent}>
+                <div className="flex gap-4">
+                  <CardIcon accent={accent}>
+                    <Icon className="h-6 w-6" />
+                  </CardIcon>
+                  <p className="flex-1 self-center text-sm leading-relaxed text-text-secondary">{point}</p>
+                </div>
+              </GlowCard>
+            </Reveal>
+          );
+        })}
       </div>
 
       <Reveal delay={0.3}>

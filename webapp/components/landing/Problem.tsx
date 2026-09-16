@@ -7,13 +7,14 @@
 // после того как узнал, оно читается как ответ. Ни одна из причин не про вход
 // в рынок: все три про исполнение, и все три закрывает терминал.
 //
-// Нумерация крупная и приглушённая, как в блоке шагов: три карточки в ряд без
-// счёта читаются как равнозначные пункты, а здесь важен порядок - от самой
-// частой ошибки к самой дорогой.
+// Нумерация крупная и приглушённая: три карточки в ряд без счёта читаются как
+// равнозначные пункты, а здесь важен порядок - от самой частой ошибки к самой
+// дорогой.
 
 import { Calculator, Receipt, Flame, type LucideIcon } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
+import GlowCard, { CardIcon } from "@/components/ui/GlowCard";
 import { useT } from "@/lib/i18n";
 
 const ICONS: LucideIcon[] = [Calculator, Receipt, Flame];
@@ -31,21 +32,25 @@ export default function Problem() {
           const Icon = ICONS[i % ICONS.length];
           return (
             <Reveal as="article" key={item.title} delay={i * 0.1}>
-              <div className="group relative h-full overflow-hidden rounded-2xl border border-border bg-bg-panel/95 p-6 backdrop-blur-2xl transition-all duration-500 hover:-translate-y-1">
+              <GlowCard accent="rose">
+                {/* Номер акцентным цветом и почти прозрачный: белым он был
+                    виден только на тёмной теме, а на светлой пропадал вовсе. */}
                 <span
-                  className="absolute right-4 top-2 select-none font-mono text-6xl font-black leading-none"
-                  style={{ color: "rgba(255,255,255,0.04)", WebkitTextStroke: "1px rgba(255,255,255,0.07)" }}
+                  aria-hidden
+                  className="absolute right-4 top-2 select-none font-mono text-6xl font-black leading-none text-rose-400 opacity-[0.16] transition-opacity duration-500 group-hover:opacity-30"
                 >
                   {`0${i + 1}`}
                 </span>
 
-                <span className="relative z-10 grid h-12 w-12 place-items-center rounded-2xl bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/25">
+                <CardIcon accent="rose">
                   <Icon className="h-6 w-6" />
-                </span>
+                </CardIcon>
 
-                <h3 className="relative z-10 mt-5 text-lg font-bold text-text-primary">{item.title}</h3>
-                <p className="relative z-10 mt-2.5 text-sm leading-relaxed text-text-secondary">{item.text}</p>
-              </div>
+                <h3 className="mt-5 text-lg font-bold text-text-primary">{item.title}</h3>
+                <p className="mt-2.5 flex-1 text-sm leading-relaxed text-text-secondary">{item.text}</p>
+
+                <div className="mt-5 h-0.5 w-8 rounded-full bg-rose-400/50 transition-all duration-500 group-hover:w-full group-hover:bg-rose-400/70" />
+              </GlowCard>
             </Reveal>
           );
         })}

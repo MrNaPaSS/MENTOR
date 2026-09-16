@@ -6,32 +6,33 @@
 // возможностей без возражений читается как ярмарка и вызывает не интерес, а
 // вопрос «в чём тогда подвох» - на который отвечает следующий раздел страницы.
 //
-// Возражение набрано кавычками и курсивом: это прямая речь человека, а не наша
-// формулировка, и выглядеть она должна чужой.
+// Возражение набрано кавычками и курсивом и отбито линией слева: это прямая
+// речь человека, а не наша формулировка, и выглядеть она должна чужой.
 
 import {
   BarChart3,
   BookOpen,
+  CalendarDays,
   Coins,
-  GraduationCap,
   IdCard,
   MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
+import GlowCard, { CardIcon, CARD_ACCENTS, type CardAccent } from "@/components/ui/GlowCard";
 import { useT } from "@/lib/i18n";
 
-const ICONS: LucideIcon[] = [BarChart3, BookOpen, Coins, MessagesSquare, IdCard, GraduationCap];
-
-const ACCENTS = [
-  { ring: "bg-cyan-500/10 ring-cyan-500/30", text: "text-cyan-400" },
-  { ring: "bg-purple-500/10 ring-purple-500/30", text: "text-purple-400" },
-  { ring: "bg-amber-500/10 ring-amber-500/30", text: "text-amber-400" },
-  { ring: "bg-emerald-500/10 ring-emerald-500/30", text: "text-emerald-400" },
-  { ring: "bg-cyan-500/10 ring-cyan-500/30", text: "text-cyan-400" },
-  { ring: "bg-purple-500/10 ring-purple-500/30", text: "text-purple-400" },
+const ICONS: LucideIcon[] = [
+  BarChart3,
+  BookOpen,
+  CalendarDays,
+  Coins,
+  MessagesSquare,
+  IdCard,
 ];
+
+const ACCENTS: CardAccent[] = ["cyan", "violet", "green", "gold", "cyan", "violet"];
 
 export default function ValueStack() {
   const t = useT();
@@ -45,19 +46,22 @@ export default function ValueStack() {
         {copy.items.map((item, i) => {
           const Icon = ICONS[i % ICONS.length];
           const accent = ACCENTS[i % ACCENTS.length];
+          const tone = CARD_ACCENTS[accent];
           return (
             <Reveal as="article" key={item.title} delay={i * 0.08}>
-              <div className="group h-full rounded-2xl border border-border bg-bg-panel/95 p-6 backdrop-blur-2xl transition-all duration-500 hover:-translate-y-1">
-                <span className={`grid h-12 w-12 place-items-center rounded-2xl ring-1 ${accent.ring} ${accent.text}`}>
+              <GlowCard accent={accent}>
+                <CardIcon accent={accent}>
                   <Icon className="h-6 w-6" />
-                </span>
+                </CardIcon>
 
                 <h3 className="mt-5 text-lg font-bold text-text-primary">{item.title}</h3>
 
-                <p className="mt-2 text-sm italic leading-relaxed text-text-muted">{item.objection}</p>
+                <p className={`mt-3 border-l-2 pl-3 text-sm italic leading-relaxed text-text-muted ${tone.quote}`}>
+                  {item.objection}
+                </p>
 
-                <p className="mt-3 text-sm leading-relaxed text-text-secondary">{item.text}</p>
-              </div>
+                <p className="mt-3 flex-1 text-sm leading-relaxed text-text-secondary">{item.text}</p>
+              </GlowCard>
             </Reveal>
           );
         })}

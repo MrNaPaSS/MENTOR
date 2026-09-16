@@ -181,16 +181,36 @@ export default function ScrollScene() {
     };
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+    // Сглаженная прокрутка: сцена идёт за ней, а не за колесом мыши.
+    //
+    // Раньше поворот сцены и рост свечей брали положение страницы напрямую, и
+    // сцена повторяла рывки прокрутки - одно движение колеса дёргало весь фон.
+    // Теперь между страницей и сценой стоит догоняющее значение: страница
+    // прыгает, сцена доезжает за доли секунды.
+    const view = { p: scrollP.current };
+    let last = 0;
+
+    // Догон, не зависящий от частоты кадров: на 60 и на 144 Гц сцена доезжает
+    // за одно и то же время, а не втрое быстрее.
+    const follow = (dt: number, rate: number) => 1 - Math.exp(-dt * rate);
+
     let raf = 0;
     function animate() {
       raf = requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
-      const p = scrollP.current;
+      // Кадр в фоновой вкладке может прийти через секунды - шаг ограничен,
+      // иначе сцена прыгнет разом на всю разницу.
+      const dt = Math.min(Math.max(t - last, 0.0001), 0.1);
+      last = t;
+
+      view.p += (scrollP.current - view.p) * follow(dt, 3.2);
+      const p = view.p;
+      const k = follow(dt, 2.6);
 
       // Камера: dolly внутрь + параллакс по курсору + лёгкий подъём
-      camera.position.x = lerp(camera.position.x, pointer.x * 0.9, 0.04);
-      camera.position.y = lerp(camera.position.y, 0.5 - pointer.y * 0.5 + p * 1.2, 0.04);
-      camera.position.z = lerp(camera.position.z, 8 - p * 3.2, 0.04);
+      camera.position.x = lerp(camera.position.x, pointer.x * 0.9, k);
+      camera.position.y = lerp(camera.position.y, 0.5 - pointer.y * 0.5 + p * 1.2, k);
+      camera.position.z = lerp(camera.position.z, 8 - p * 3.2, k);
       camera.lookAt(0, p * 0.6, 0);
 
       // Общий разворот сцены по скроллу
@@ -200,7 +220,9 @@ export default function ScrollScene() {
       // Свечи «вырастают» по мере скролла
       for (const c of candles) {
         const grow = smoothstep(c.reveal - 0.15, c.reveal + 0.2, p + 0.12);
-        const breathe = 1 + Math.sin(t * 1.5 + c.reveal * 10) * 0.04;
+        // Дыхание медленное и мелкое: заметное на глаз, оно превращает фон в
+        // мигающую гирлянду и тянет внимание на себя.
+        const breathe = 1 + Math.sin(t * 0.9 + c.reveal * 10) * 0.025;
         const h = Math.max(c.target * grow * breathe, 0.0001);
         c.body.scale.y = h;
         c.body.position.y = floorY + h / 2;

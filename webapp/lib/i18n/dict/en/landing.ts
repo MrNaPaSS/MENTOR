@@ -189,7 +189,7 @@ export const landing = {
   proof: {
     eyebrow: "What it looks like",
     title: "One trade from entry to journal entry",
-    subtitle: "An ETH short on WEEX. Screenshots from the terminal, nothing redrawn.",
+    subtitle: "An ETH short on WEEX. Three terminal screens: how it was entered, how it was managed, how it ended.",
     steps: [
       {
         title: "A wall at resistance",
@@ -221,7 +221,7 @@ export const landing = {
       oursAlt: "ETHUSDT trade card from the NMNH terminal",
       theirsAlt: "The same ETHUSDT trade as a WEEX exchange card",
       note:
-        "The numbers match on both cards because both are built from the same exchange report. All that differs is the logo in the header and the referral code at the bottom.",
+        "You can show your trade as a card instead of an exchange screenshot: the terminal builds it for you, from the same report.",
     },
   },
 
@@ -255,22 +255,16 @@ export const landing = {
           "A winning trade earns coins, a losing one takes them away, a streak of clean trades pays a bonus on top. On top of that: monthly goals, achievements and your level. Coins are spent on terminal tools. These are internal points: not a cryptocurrency, not tradable, not withdrawable.",
       },
       {
-        title: "Live chat inside the terminal",
+        title: "Community and academy",
         objection: "“There's no one to ask, and nobody around in the moment of doubt”",
         text:
-          "The trading floor and trade reviews live in the same window as your position. No switching to a messenger while a decision is being made.",
+          "The trading floor and trade reviews live in the same window as your position: no switching to a messenger while a decision is being made. Alongside it, training from the basics upwards and live trading sessions.",
       },
       {
         title: "Cards and reports",
         objection: "“Nothing to show but a screenshot with someone else's logo”",
         text:
           "The terminal turns a closed trade into a card itself, from the exchange report. Certificates, charts and journal reports come out on the same template.",
-      },
-      {
-        title: "Academy and reviews",
-        objection: "“I have the tool, but no idea what to do with it”",
-        text:
-          "Training from the basics to advanced, live trading sessions and trade reviews - in the same place where you trade.",
       },
     ],
   },
@@ -316,7 +310,7 @@ export const landing = {
       "Part of the fee comes back to your exchange account",
       "Your money stays on the exchange, the key has no withdrawal rights",
     ],
-    kicker: "We earn on volume, not on subscriptions. So it matters to us that you stay in the market.",
+    kicker: "The terminal is not for sale. It comes with the account and stays yours while you trade.",
     cta: "What would come back from my volume",
   },
 
@@ -334,13 +328,13 @@ export const landing = {
     guarantee: {
       title: "We'll connect it with you",
       text:
-        "Don't want to deal with API keys alone - a curator walks all four steps with you over a screen share, at a time that suits you. If something doesn't work out, we'll tell you straight what's in the way.",
+        "A call, a screen share - and in fifteen minutes we go through all of it: sign-up, UID, API key and the first trade. You don't need to know anything beforehand.",
       cta: "Connect with a curator",
     },
     haveAccount: {
-      title: "Already have an account on an exchange?",
+      title: "Already have an account?",
       text:
-        "Academy terms currently apply to accounts opened through our link: otherwise the exchange sees no connection and the volume is not credited. Message the bot - we'll look at your case and tell you what can be done.",
+        "You need one opened through our link - the terms only work on that account. Opening a second one takes a couple of minutes, and money moves inside the exchange. Don't want a new one - message the bot and we'll see what can be done with yours.",
       cta: "Message the bot",
     },
   },
