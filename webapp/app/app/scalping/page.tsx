@@ -944,16 +944,6 @@ export default function ScalpingPage() {
   // Заготовка живёт до нажатия «Выставить»: на бирже в это время ничего нет, и
   // трейдер волен тянуть уровни сколько угодно. Отдельно от расчёта по полке -
   // там первичен процент стопа, здесь цена уровня.
-  // Где на экране лежит разметка расчёта. Считает её график, а нужна она окну
-  // расчёта: оно затемняет страницу, и без этой рамки под затемнение уходило
-  // то самое место, ради которого окно открыто.
-  const [previewBox, setPreviewBox] = useState<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null>(null);
-
   const [manual, setManual] = useState<ManualDraft | null>(null);
   // Уведомления поверх терминала: сюда попадает то, что случилось само и не
   // на глазах у трейдера.
@@ -4173,7 +4163,6 @@ export default function ScalpingPage() {
                     с ней. Лишний поход стоит веса запросов, которого не
                     хватает снимкам стаканов. */}
                 <PriceChart
-                  onPreviewBox={setPreviewBox}
                   symbol={symbol}
                   venue={dom?.exchange && dom.exchange !== "binance" ? dom.exchange : ""}
                   interval={timeframe}
@@ -4421,7 +4410,6 @@ export default function ScalpingPage() {
 
       {dialogOpen && draft && (
         <TradeDialog
-          spotlight={previewBox}
           draft={draft}
           onChange={updateDraft}
           onConfirm={confirmTrade}

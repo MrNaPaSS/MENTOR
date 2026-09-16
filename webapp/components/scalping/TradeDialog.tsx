@@ -76,7 +76,6 @@ export default function TradeDialog({
   used = 0,
   free = 0,
   opposing = 0,
-  spotlight = null,
 }: {
   draft: TradeDraft;
   onChange: (next: TradeDraft) => void;
@@ -86,14 +85,6 @@ export default function TradeDialog({
   onCancel: () => void;
   /** Счёт подключён: подтверждение отправит заявку на биржу. */
   live?: boolean;
-  /**
-   * Где на экране лежит разметка сделки, которую окно рисует на графике.
-   *
-   * По ней в затемнении делается вырез: вход, стоп и цели - предмет расчёта, и
-   * гасить их вместе со всей страницей значит прятать то, ради чего окно
-   * открыто. Считает рамку сам график, окно про холст не знает.
-   */
-  spotlight?: { left: number; top: number; width: number; height: number } | null;
   /**
    * Монеты нет на бирже ученика: книга на экране подставлена с общей.
    *
@@ -284,29 +275,9 @@ export default function TradeDialog({
 
   return (
     <div
-      className={`fixed inset-0 z-modal grid animate-fade-in place-items-center p-4 motion-reduce:animate-none ${
-        spotlight ? "" : "bg-black/60"
-      }`}
+      className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
       onClick={onCancel}
     >
-      {/* Затемнение с вырезом по разметке сделки.
-          Сплошная подложка гасила и то место графика, ради которого окно
-          открыто: вход, стоп и цели - это и есть предмет расчёта, и смотреть
-          на них человек должен, не закрывая окна. Тень наружу от выреза
-          красит всё остальное, а сам вырез остаётся чистым. */}
-      {spotlight && (
-        <div
-          aria-hidden
-          style={{
-            left: spotlight.left,
-            top: spotlight.top,
-            width: spotlight.width,
-            height: spotlight.height,
-            boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.6)",
-          }}
-          className="pointer-events-none fixed rounded-sm ring-1 ring-[var(--pane-accent-soft)]"
-        />
-      )}
       {/* Два слоя, и это не лишний div.
           Смещение живёт снаружи, появление - внутри. Анимация появления задана
           с fill-mode both и в последнем кадре ставит transform: none, а

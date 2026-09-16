@@ -709,7 +709,6 @@ function PriceChart({
   preset,
   trades,
   preview,
-  onPreviewBox,
   movingStops = NO_MOVES,
   livePrice,
   liveCandle,
@@ -772,15 +771,6 @@ function PriceChart({
    * с закрытием окна и в журнал не попадает.
    */
   preview?: ActiveTrade | null;
-  /**
-   * Где на экране лежит разметка расчёта: вход, стоп и цели.
-   *
-   * Нужно окну расчёта: оно затемняет страницу, и без этой рамки под затемнение
-   * уходило то самое место графика, ради которого окно и открыто. Координаты -
-   * экранные, как у `getBoundingClientRect`: окно живёт в другом углу дерева и
-   * про холст не знает ничего.
-   */
-  onPreviewBox?: (box: { left: number; top: number; width: number; height: number } | null) => void;
   /** Последняя цена рынка: по ней считается плавающий результат. */
   livePrice: number;
   /**
@@ -928,11 +918,6 @@ function PriceChart({
   const axisRef = useRef(0);
   const onAxisHeightRef = useRef(onAxisHeight);
   onAxisHeightRef.current = onAxisHeight;
-  const onPreviewBoxRef = useRef(onPreviewBox);
-  onPreviewBoxRef.current = onPreviewBox;
-  // Последняя отданная рамка: покадровый цикл не должен дёргать React, пока
-  // разметка стоит на месте.
-  const previewBoxRef = useRef<string>("");
   // Читаем настройки из ref: загрузка данных не должна зависеть от
   // переключателей, иначе включение индикатора перезапрашивало бы свечи.
   const indicatorsRef = useRef(indicators);
@@ -1920,50 +1905,6 @@ function PriceChart({
       // Высота шкалы времени - наружу. По ней стакан равняет свой низ: обе
       // панели обязаны кончаться на одной линии, а высоту шкалы библиотека
       // считает сама, от шрифта, и заранее её не знает никто.
-      // Рамка разметки расчёта - окну, которое затемняет всё вокруг себя.
-      // Считаем от крайних цен плана: верх - самая высокая из них, низ - самая
-      // низкая, и обе прижаты к холсту, если уехали за его край.
-      const plan = previewRef.current;
-      const canvas = boxRef.current;
-      // Без открытого расчёта считать нечего: рамка уже сброшена, а замер
-      // холста каждый кадр стоит перерасчёта раскладки на пустом месте.
-      if (onPreviewBoxRef.current && canvas && (plan || previewBoxRef.current !== "")) {
-        let next: { left: number; top: number; width: number; height: number } | null = null;
-        if (plan) {
-          const prices = [plan.entry, plan.stop, ...plan.targets].filter(
-            (value) => Number.isFinite(value) && value > 0,
-          );
-          const ys: number[] = [];
-          for (const value of prices) {
-            const y = series.priceToCoordinate(value);
-            if (y !== null) ys.push(Number(y));
-          }
-          if (ys.length > 0) {
-            const rect = canvas.getBoundingClientRect();
-            const pad = 10;
-            const top = Math.max(0, Math.min(...ys) - pad);
-            const bottom = Math.min(rect.height, Math.max(...ys) + pad);
-            if (bottom > top) {
-              next = {
-                left: rect.left,
-                top: rect.top + top,
-                width: rect.width,
-                height: bottom - top,
-              };
-            }
-          }
-        }
-        // Сравниваем целыми точками: доли пикселя при каждом кадре меняют
-        // объект, но не картинку.
-        const key = next
-          ? `${Math.round(next.left)}:${Math.round(next.top)}:${Math.round(next.width)}:${Math.round(next.height)}`
-          : "";
-        if (key !== previewBoxRef.current) {
-          previewBoxRef.current = key;
-          onPreviewBoxRef.current(next);
-        }
-      }
-
       const axis = chartRef.current?.timeScale().height() ?? 0;
       if (axis > 0 && axis !== axisRef.current) {
         axisRef.current = axis;
