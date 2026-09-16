@@ -28,6 +28,7 @@ from sqlalchemy import select
 
 from backend.deps import get_current_student, get_session, get_weex
 from backend.trading.live_state import cached
+from backend.trading.locks import account_guard
 from backend.trading.accounts import (
     access_kind,
     account_for,
@@ -208,7 +209,7 @@ def _exchange_of(client) -> str:
     return trade_exchange(getattr(client, "exchange", ""))
 
 
-def account_lock(request: Request, student_id: int, exchange: str | None) -> asyncio.Lock:
+def account_lock(request: Request, student_id: int, exchange: str | None):
     """Замок счёта: ручной перенос и обход сопровождения не идут разом.
 
     Перенос стопа - это постановка нового и снятие прежнего, и два таких
@@ -221,10 +222,12 @@ def account_lock(request: Request, student_id: int, exchange: str | None) -> asy
     замок: ручка работает как прежде, ждать ей некого.
     """
     watcher = getattr(request.app.state, "position_watcher", None)
-    lock = getattr(watcher, "account_lock", None)
-    if lock is None:
-        return asyncio.Lock()
-    return lock(int(student_id), trade_exchange(exchange))
+    maker = getattr(watcher, "account_lock", None)
+    name = trade_exchange(exchange)
+    lock = maker(int(student_id), name) if maker is not None else None
+    # Поверх замка в памяти - замок базы: после разделения процессов память у
+    # каждого своя, и стеречь ей нечего (backend/trading/locks.py).
+    return account_guard(lock, int(student_id), name)
 
 
 def _fail(exc: WeexTradeError) -> HTTPException:

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -64,6 +65,28 @@ from backend.headers import SecurityHeaders
 # строки выводим целиком, остальное - как раньше, с предупреждений.
 logging.basicConfig(level=logging.WARNING, format="%(message)s")
 logging.getLogger("nmnh.trading").setLevel(logging.INFO)
+
+
+ROLES = ("all", "api", "watcher")
+
+
+def process_role(value: str | None = None) -> str:
+    """Роль процесса из окружения (`NMNH_ROLE`).
+
+    `all` - всё в одном процессе, как было и как работает на SQLite.
+    `api` - сайт, стаканы и ручки терминала без сопровождения сделок.
+    `watcher` - только сопровождение: ни сборщиков рынка, ни чата, ни рассылок.
+
+    Незнакомое значение не повод не запуститься: пишем в журнал и работаем как
+    `all`. Пустой сервер хуже сервера, делающего лишнее.
+    """
+    role = (value if value is not None else os.getenv("NMNH_ROLE", "all")).strip().lower()
+    if not role:
+        return "all"
+    if role not in ROLES:
+        logging.getLogger("nmnh").warning("Неизвестная роль процесса %s - работаем как all", role)
+        return "all"
+    return role
 
 
 def create_app(
@@ -129,6 +152,15 @@ def create_app(
     # знать не должен. Без адреса группы молчит и ничего не занимает.
     forum = ForumBridge(config.forum_bot_token, config.forum_chat_id, config.site_url)
 
+    # Роль процесса: `all` - как было, всё в одном; `api` - сайт, стаканы и
+    # ручки без сопровождения сделок; `watcher` - только сопровождение.
+    #
+    # Разделение включается после переезда на Postgres: замок счёта у процессов
+    # общий только там (backend/trading/locks.py, docs/architecture/database.md).
+    role = process_role()
+    runs_watcher = role in ("all", "watcher")
+    runs_market = role in ("all", "api")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Binance отвечает не из любой сети: часть регионов получает 451, а наш
@@ -143,13 +175,15 @@ def create_app(
             if config.institutional_warm
             else None
         )
-        collector.start()
-        balance_collector.start()
-        cashback_collector.start()
-        if scalping:
+        logging.getLogger("nmnh").info("Роль процесса: %s", role)
+        if runs_market:
+            collector.start()
+            balance_collector.start()
+            cashback_collector.start()
+        if scalping and runs_market:
             scalping.start()
         density_task = None
-        if density:
+        if density and runs_market:
             async def _post(text: str) -> None:
                 await notifier.send_message(
                     config.density_chat_id,
@@ -159,19 +193,26 @@ def create_app(
                 )
 
             density_task = asyncio.create_task(run_density_watcher(density, _post))
-        watcher.start()
-        await forum.start()
+        if runs_watcher:
+            watcher.start()
+        if runs_market:
+            await forum.start()
         # Оклик комнаты: без него список присутствующих врёт в большую сторону,
         # а молчащие соединения закрывает прокси.
-        presence_task = asyncio.create_task(app.state.chat_hub.watch(), name="chat-sweep")
+        presence_task = (
+            asyncio.create_task(app.state.chat_hub.watch(), name="chat-sweep")
+            if runs_market
+            else None
+        )
         try:
             yield
         finally:
-            presence_task.cancel()
-            try:
-                await presence_task
-            except asyncio.CancelledError:
-                pass
+            if presence_task:
+                presence_task.cancel()
+                try:
+                    await presence_task
+                except asyncio.CancelledError:
+                    pass
             if density_task:
                 density_task.cancel()
                 try:

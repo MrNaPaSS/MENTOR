@@ -27,6 +27,7 @@ from sqlalchemy import select
 
 from backend.trading.accounts import account_for, client_for, trade_exchange
 from backend.trading.live_state import cached
+from backend.trading.locks import account_guard
 from backend.trading.private_ws import PrivateStreams
 from backend.trading.rewards import award_trade_coins
 from core.models import LiveTrade, ScalpTrade, utcnow
@@ -459,7 +460,9 @@ class PositionWatcher:
         всех смешала бы их незаписанные изменения. `False` - на счёте нечего
         вести.
         """
-        async with self._lock_for(student_id, exchange):
+        # Замок счёта: в памяти процесса и в базе. Второй нужен, когда
+        # сопровождение живёт отдельным процессом от ручек терминала.
+        async with account_guard(self._lock_for(student_id, exchange), student_id, exchange):
             session = self._sessions()
             try:
                 trades = [

@@ -240,13 +240,18 @@ def test_hold_minutes(client, session):
 
 def test_by_day_groups_in_utc(client, session):
     row = student(session)
+    # Середина суток по UTC, а не «час назад»: у самой полуночи две сделки
+    # расходились по разным дням, и тест падал каждую ночь на ровном месте.
     now = datetime.now(timezone.utc)
-    trade(session, row.id, pnl=10.0, n=1, closed_at=now - timedelta(hours=2))
-    trade(session, row.id, pnl=-4.0, n=2, closed_at=now - timedelta(hours=1), outcome="stop")
+    noon = now.replace(hour=12, minute=0, second=0, microsecond=0)
+    if noon > now:
+        noon -= timedelta(days=1)
+    trade(session, row.id, pnl=10.0, n=1, closed_at=noon)
+    trade(session, row.id, pnl=-4.0, n=2, closed_at=noon + timedelta(hours=1), outcome="stop")
 
     days = summary(client)["by_day"]
     assert len(days) == 1
-    assert days[0]["date"] == now.strftime("%Y-%m-%d")
+    assert days[0]["date"] == noon.strftime("%Y-%m-%d")
     assert days[0]["pnl"] == pytest.approx(6.0)
     assert days[0]["trades"] == 2
     assert days[0]["wins"] == 1
