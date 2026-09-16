@@ -13,7 +13,6 @@
 
 import { useT } from "@/lib/i18n";
 import { money, tone } from "@/lib/journalFormat";
-import { useMedia } from "@/lib/useWide";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
@@ -83,8 +82,6 @@ export default function JournalPanel({
   onClose: () => void;
 }) {
   const t = useT();
-  // Две колонки сделок - только там, где они помещаются рядом с календарём.
-  const split = useMedia("(min-width: 1536px)");
   // Чья карточка открыта. Null - окна нет.
   const [card, setCard] = useState<JournalTrade | null>(null);
   const now = new Date();
@@ -166,14 +163,6 @@ export default function JournalPanel({
     await removeTrade(id);
     reload();
   }
-
-  // Половины списка: на широком окне сделки идут двумя колонками. Делим
-  // пополам с перевесом влево, чтобы при нечётном числе записей правая колонка
-  // не оказывалась длиннее левой. Узкому окну колонки не нужны - там список
-  // остаётся одним, целым: разрезанный пополам, он потерял бы половину записей
-  // вместе со скрытой колонкой.
-  const edge = split ? Math.ceil(trades.length / 2) : trades.length;
-  const half = { head: trades.slice(0, edge), tail: trades.slice(edge) };
 
   function shiftMonth(delta: number) {
     const next = new Date(Date.UTC(year, month - 1 + delta, 1));
@@ -283,24 +272,18 @@ export default function JournalPanel({
           {error}
         </p>
       ) : (
-        <div className="no-scrollbar min-h-0 flex-1 overflow-auto px-3 py-2 lg:grid lg:grid-cols-[26rem_minmax(0,1fr)] lg:items-start lg:gap-3 lg:overflow-hidden">
-          {/* Слева - итог и календарь, справа - сами сделки.
-              Панель журнала шире, чем нужно календарю: растянутый на всю
-              ширину, он отодвигал список вниз, и на невысокой панели сделок
-              было видно две строки. Плечом к плечу обе половины
-              отвечают на свои вопросы сразу: календарь - про дисциплину,
-              список - про конкретную сделку. Узкая панель (телефон, вторая
-              колонка терминала) остаётся столбиком: две колонки там не
-              разойдутся. */}
+        <div className="no-scrollbar min-h-0 flex-1 overflow-auto px-3 py-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:overflow-hidden">
+          {/* Ровно пополам: слева итог и календарь, справа сами сделки.
+              Растянутый на всю ширину календарь отодвигал список вниз, и на
+              невысокой панели от сделок было видно две строки. Плечом к плечу
+              обе половины отвечают на свои вопросы сразу: календарь - про
+              дисциплину, список - про конкретную сделку. Узкая панель
+              (телефон, вторая колонка терминала) остаётся столбиком: две
+              колонки там не разойдутся. */}
           <div className="no-scrollbar lg:max-h-full lg:min-h-0 lg:overflow-auto">
             {summary && (
-              <div className="mb-3 grid grid-cols-5 gap-2 font-mono tabular-nums lg:grid-cols-2">
-                <Stat
-                  label={t.journal.statPnl}
-                  value={money(summary.pnl)}
-                  tone={tone(summary.pnl)}
-                  wide
-                />
+              <div className="mb-3 grid grid-cols-5 gap-2 font-mono tabular-nums">
+                <Stat label={t.journal.statPnl} value={money(summary.pnl)} tone={tone(summary.pnl)} />
                 <Stat label={t.journal.statTrades} value={String(summary.count)} />
                 <Stat label={t.journal.statWinRate} value={`${summary.win_rate}%`} />
                 <Stat
@@ -367,28 +350,13 @@ export default function JournalPanel({
             {trades.length === 0 ? (
               <p className="py-6 text-center text-[var(--pane-muted)]">{t.journal.empty}</p>
             ) : (
-              /* На широком окне записи делятся пополам и идут двумя колонками:
-                 одна таблица растягивала шесть коротких чисел на всю ширину, а
-                 в видимую часть помещалось вдвое меньше сделок, чем могло бы.
-                 Свежие - в левой колонке, продолжение - в правой. */
-              <div className="grid gap-x-5 gap-y-2 2xl:grid-cols-2">
-                <JournalTable
-                  rows={half.head}
-                  onHover={onHover}
-                  onPick={onPick}
-                  onCard={setCard}
-                  onDrop={mentor ? drop : undefined}
-                />
-                {half.tail.length > 0 && (
-                  <JournalTable
-                    rows={half.tail}
-                    onHover={onHover}
-                    onPick={onPick}
-                    onCard={setCard}
-                    onDrop={mentor ? drop : undefined}
-                  />
-                )}
-              </div>
+              <JournalTable
+                rows={trades}
+                onHover={onHover}
+                onPick={onPick}
+                onCard={setCard}
+                onDrop={mentor ? drop : undefined}
+              />
             )}
           </div>
         </div>
@@ -401,22 +369,9 @@ export default function JournalPanel({
   );
 }
 
-function Stat({
-  label,
-  value,
-  tone,
-  wide,
-}: {
-  label: string;
-  value: string;
-  tone?: string;
-  /** Плитка во всю ширину, когда итоги стоят колонкой в две ячейки. */
-  wide?: boolean;
-}) {
+function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div
-      className={`rounded border border-[var(--pane-border)] px-2 py-1 ${wide ? "lg:col-span-2" : ""}`}
-    >
+    <div className="rounded border border-[var(--pane-border)] px-2 py-1">
       <div className="text-[10px] text-[var(--pane-muted)]">{label}</div>
       <div className={tone ?? "text-[var(--pane-text)]"}>{value}</div>
     </div>
