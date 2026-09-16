@@ -331,6 +331,15 @@ export type Indicators = {
 // Текущая свеча меняется постоянно, закрытые — нет. Пять секунд держат график
 // живым, не расходуя лимит запросов биржи впустую.
 const REFRESH_MS = 5000;
+// Крупные таймфреймы обновляем реже: свеча в двенадцать часов не меняется за
+// пять секунд настолько, чтобы ради этого ходить на биржу. Пять секунд там -
+// это сотни лишних запросов за торговый день без единой новой свечи.
+const SLOW_REFRESH_MS = 30_000;
+const SLOW_FROM_SECONDS = 3600;
+
+export function refreshFor(interval: string): number {
+  return (INTERVAL_SECONDS[interval] ?? 60) >= SLOW_FROM_SECONDS ? SLOW_REFRESH_MS : REFRESH_MS;
+}
 
 // Сколько свечей показываем сразу. Четыреста грузим ради индикаторов и
 // прокрутки назад, но в окне они превращаются в щётку — видно должно быть
@@ -429,6 +438,7 @@ const INTERVAL_SECONDS: Record<string, number> = {
   "30m": 1800,
   "1h": 3600,
   "4h": 14400,
+  "12h": 43200,
   "1d": 86400,
 };
 
@@ -1544,7 +1554,7 @@ function PriceChart({
     }
 
     load(true);
-    const timer = setInterval(() => load(false), REFRESH_MS);
+    const timer = setInterval(() => load(false), refreshFor(interval));
     return () => {
       cancelled = true;
       clearInterval(timer);

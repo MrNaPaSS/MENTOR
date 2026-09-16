@@ -216,7 +216,17 @@ def _remember_klines(key: str, at: float, rows: list) -> None:
 
 # Длительности интервалов биржи в секундах: нужны, чтобы собрать из них те,
 # которых у биржи нет.
-_INTERVAL_SECONDS = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600}
+_INTERVAL_SECONDS = {
+    "1m": 60,
+    "3m": 180,
+    "5m": 300,
+    "15m": 900,
+    "30m": 1800,
+    "1h": 3600,
+    "4h": 14400,
+    "12h": 43200,
+    "1d": 86400,
+}
 
 
 def fold_candles(rows: list[dict], seconds: int) -> list[dict]:
@@ -257,10 +267,32 @@ OKX_BARS = {
     "30m": "30m",
     "1h": "1H",
     "4h": "4H",
+    # Полдня и крупнее - от UTC: по гонконгскому времени уровни прошлого дня
+    # разъехались бы с теми, что рисует Binance.
+    "12h": "12Hutc",
     "1d": "1Dutc",
     "1w": "1Wutc",
     "1M": "1Mutc",
 }
+
+
+# Чего у биржи нет, то складываем из свечей помельче. Границы обязаны совпадать:
+# десять минут это ровно две пятиминутки от той же эпохи, полдня - три
+# четырёхчасовки. Иначе свечи разъедутся с теми, что биржа рисует сама.
+FOLD_PLANS: dict[tuple[str, str], tuple[str, int]] = {
+    # Десятиминуток нет ни у одной из наших бирж.
+    ("binance", "10m"): ("5m", 2),
+    ("okx", "10m"): ("5m", 2),
+    ("bingx", "10m"): ("5m", 2),
+    ("mexc", "10m"): ("5m", 2),
+    # У MEXC нет и двенадцатичасовки: есть Hour4, Hour8, Day1.
+    ("mexc", "12h"): ("4h", 3),
+}
+
+
+def fold_plan(venue: str, interval: str) -> tuple[str, int]:
+    """Из чего и по сколько складывать этот таймфрейм. Единица - брать как есть."""
+    return FOLD_PLANS.get((str(venue or "").lower(), interval), (interval, 1))
 
 
 async def okx_klines(request: Request, symbol: str, interval: str, limit: int) -> list[list]:
@@ -295,6 +327,7 @@ BINGX_BARS = {
     "30m": "30m",
     "1h": "1h",
     "4h": "4h",
+    "12h": "12h",
     "1d": "1d",
     "1w": "1w",
     "1M": "1M",
@@ -369,7 +402,7 @@ async def klines(
     symbol: str,
     # Дневные, недельные и месячные нужны не для отрисовки свечей, а ради
     # уровней прошлого периода: индикатор рисует их на любом таймфрейме.
-    interval: str = Query("1m", pattern=r"^(1m|3m|5m|10m|15m|30m|1h|4h|1d|1w|1M)$"),
+    interval: str = Query("1m", pattern=r"^(1m|3m|5m|10m|15m|30m|1h|4h|12h|1d|1w|1M)$"),
     limit: int = Query(240, ge=2, le=500),
     exchange: str = Query("", description="Биржа свечей; пусто - Binance"),
 ) -> dict[str, Any]:
@@ -406,10 +439,7 @@ async def klines(
     else:
         done = asyncio.get_running_loop().create_future()
         _klines_inflight[key] = done
-        # Десятиминуток у биржи нет: просим пятиминутки и складываем парами.
-        # Границы совпадают - десять минут это ровно две пятиминутки от той же
-        # эпохи, - поэтому свечи получаются те же, что были бы у биржи.
-        source, factor = ("5m", 2) if interval == "10m" else (interval, 1)
+        source, factor = fold_plan(venue, interval)
         try:
             if venue == "okx":
                 raw = await okx_klines(request, sym, source, limit * factor)

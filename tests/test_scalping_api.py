@@ -425,3 +425,42 @@ def test_folding_leaves_untouched_what_it_cannot_group():
     rows = [{"time": 600, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}]
     assert fold_candles(rows, 0) == rows
     assert fold_candles([], 600) == []
+
+
+# ── крупные таймфреймы ───────────────────────────────────────────────────────
+
+
+def test_half_day_and_day_are_asked_from_the_exchange_as_they_are():
+    """Полдня и сутки биржи умеют сами - складывать нечего."""
+    from backend.api.scalping import fold_plan
+
+    for venue in ("binance", "okx", "bingx"):
+        assert fold_plan(venue, "12h") == ("12h", 1)
+        assert fold_plan(venue, "1d") == ("1d", 1)
+
+
+def test_mexc_half_day_is_folded_from_four_hour_candles():
+    """У MEXC двенадцатичасовки нет: есть Hour4, Hour8, Day1.
+
+    Три четырёхчасовки дают ровно полдня от той же эпохи, поэтому свечи выходят
+    те же, что были бы у биржи.
+    """
+    from backend.api.scalping import fold_plan
+
+    assert fold_plan("mexc", "12h") == ("4h", 3)
+
+
+def test_ten_minute_candles_are_folded_everywhere():
+    from backend.api.scalping import fold_plan
+
+    for venue in ("binance", "okx", "bingx", "mexc"):
+        assert fold_plan(venue, "10m") == ("5m", 2)
+
+
+def test_half_day_is_a_known_interval_of_the_endpoint():
+    """Шаблон ручки: без него запрос двенадцати часов отвергался проверкой."""
+    from backend.api.scalping import _INTERVAL_SECONDS, BINGX_BARS, OKX_BARS
+
+    assert _INTERVAL_SECONDS["12h"] == 43_200
+    assert OKX_BARS["12h"].endswith("utc")
+    assert BINGX_BARS["12h"] == "12h"
