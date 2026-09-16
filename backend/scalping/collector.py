@@ -51,6 +51,28 @@ DEFAULT_TOP_N = 50
 # двух — в списке от них нужны плита и перевес, а не каждое движение.
 DEPTH_FAST = "100ms"
 DEPTH_SLOW = "500ms"
+
+# Какую ленту слушаем.
+#
+# Обычная (`trade`) везёт каждую сделку своим сообщением: живой замер пробником
+# (`check_binance_stream.py`) - пять монет дают 580 сообщений в секунду, на
+# полусотне это тысячи. Разбор перестаёт успевать, и биржа отключает того, кто
+# не читает: отсюда обрывы соединения раз в сорок секунд.
+#
+# Сжатая (`aggTrade`) шлёт все сделки одной заявки по одной цене одним
+# сообщением, и для наших чисел она равноценна: цена, объём и сторона те же, а
+# число сделок считается по номерам первой и последней (`_trades_in`). Тем же
+# `aggTrades` мы добираем и прошлое кластерной свечи.
+#
+# Но на проверке она молчала: соединение поднимается, а сообщений нет ни
+# одного - ни одиночным адресом, ни в общем потоке. Пустая лента убила бы
+# половину скринера, поэтому до живой проверки на самом столе остаёмся на
+# обычной. Проверяется одной командой:
+#
+#     python check_binance_stream.py 20 300 aggTrade
+#
+# Пошли сообщения - меняем это имя, и всё остальное уже готово.
+TAPE_STREAM = "trade"
 TICKER_INTERVAL = 10.0      # обновление суточной сводки, секунды
 ROTATE_INTERVAL = 300.0     # пересмотр состава топа, секунды
 PRUNE_INTERVAL = 30.0       # чистка книг от далёких уровней, секунды
@@ -247,7 +269,7 @@ class ScalpingCollector:
         """Потоки инструмента: стакан на своей скорости и лента сделок."""
         s = symbol.lower()
         rate = DEPTH_FAST if self._pinned.get(symbol.upper()) else DEPTH_SLOW
-        return {f"{s}@depth@{rate}", f"{s}@trade"}
+        return {f"{s}@depth@{rate}", f"{s}@{TAPE_STREAM}"}
 
     @staticmethod
     def _all_streams(symbol: str) -> set[str]:
@@ -257,7 +279,14 @@ class ScalpingCollector:
         неоткуда, а оставленный поток продолжал бы идти в никуда.
         """
         s = symbol.lower()
-        return {f"{s}@depth@{DEPTH_FAST}", f"{s}@depth@{DEPTH_SLOW}", f"{s}@trade"}
+        return {
+            f"{s}@depth@{DEPTH_FAST}",
+            f"{s}@depth@{DEPTH_SLOW}",
+            f"{s}@{TAPE_STREAM}",
+            # И прежнее имя ленты: после обновления сервера на бирже могла
+            # остаться подписка старого вида, а снимаем мы монету целиком.
+            f"{s}@trade",
+        }
 
     async def _set_depth_rate(self, symbol: str, fast: bool) -> None:
         """Переключить скорость стакана и пересобрать книгу.
@@ -390,13 +419,17 @@ class ScalpingCollector:
         if state is None:
             return
 
-        if stream.endswith("@trade"):
+        if stream.endswith("@aggTrade") or stream.endswith("@trade"):
             ts = int(data.get("T") or 0)
             price = _f(data.get("p"))
             qty = _f(data.get("q"))
             # m=true — покупатель стоял лимитом, значит по рынку бил продавец.
             is_buy = not bool(data.get("m", True))
-            state.tape.add(ts, price, qty, is_buy)
+            # Сколько настоящих сделок в этом сообщении. Сжатая лента везёт их
+            # пачкой - все сделки одной заявки по одной цене, - и номера первой
+            # и последней стоят рядом. Без этого «сделок в минуту» в скринере
+            # упало бы в разы на ровном месте.
+            state.tape.add(ts, price, qty, is_buy, trades=_trades_in(data))
             if state.candles is not None:
                 state.candles.add(ts, price, qty)
             if state.clusters is not None:
@@ -410,6 +443,18 @@ class ScalpingCollector:
                 state.update_book_ratio(BAND_BP)
             else:
                 self._schedule_resync(symbol)
+
+
+def _trades_in(data: dict) -> int:
+    """Сколько сделок биржа сжала в одно сообщение. Обычная лента - одну."""
+    first = data.get("f")
+    last = data.get("l")
+    if first is None or last is None:
+        return 1
+    try:
+        return max(1, int(last) - int(first) + 1)
+    except (TypeError, ValueError):
+        return 1
 
 
 def _f(value, default: float = 0.0) -> float:

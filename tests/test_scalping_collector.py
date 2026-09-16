@@ -12,7 +12,7 @@ import time
 import pytest
 
 from backend.scalping.collector import ScalpingCollector, top_symbols
-from backend.scalping.collector import SNAPSHOT_LIMIT, SNAPSHOT_LIMIT_PINNED
+from backend.scalping.collector import SNAPSHOT_LIMIT, SNAPSHOT_LIMIT_PINNED, TAPE_STREAM
 
 
 class FakeStream:
@@ -111,8 +111,8 @@ async def test_rotate_subscribes_top_and_drops_rest():
     # Списочные инструменты идут на медленном стакане: десять обновлений в
     # секунду с каждого — это нагрузка ради колонки «плита» в списке.
     assert c.stream.subscribed == {
-        "btcusdt@depth@500ms", "btcusdt@trade",
-        "ethusdt@depth@500ms", "ethusdt@trade",
+        "btcusdt@depth@500ms", f"btcusdt@{TAPE_STREAM}",
+        "ethusdt@depth@500ms", f"ethusdt@{TAPE_STREAM}",
     }
 
     # Обороты изменились — DOGE вытеснил ETH.
@@ -121,7 +121,7 @@ async def test_rotate_subscribes_top_and_drops_rest():
     shifted[2]["quoteVolume"] = "800"
     await c._rotate(shifted)
     assert c.tracked == {"BTCUSDT", "DOGEUSDT"}
-    assert "ethusdt@trade" not in c.stream.subscribed
+    assert f"ethusdt@{TAPE_STREAM}" not in c.stream.subscribed
     assert c.state.get("ETHUSDT") is None
 
 
@@ -447,3 +447,31 @@ def test_background_refusals_are_reported_once_a_minute(caplog):
     asyncio.run(refuse_many())
     lines = [r for r in caplog.records if "Бюджет запросов Binance исчерпан" in r.getMessage()]
     assert len(lines) == 1
+
+
+async def test_a_squeezed_message_counts_every_trade_in_it():
+    """Сжатая лента везёт пачку сделок: номера первой и последней стоят рядом.
+
+    Без них «сделок в минуту» в скринере упало бы в разы на ровном месте, а по
+    этой колонке ученик и выбирает, куда смотреть.
+    """
+    c = make_collector(SNAPSHOT, TICKERS)
+    await c._track("BTCUSDT")
+    c._on_message(
+        "btcusdt@aggTrade",
+        {"s": "BTCUSDT", "T": 5_000, "p": "100", "q": "3", "m": False, "f": 10, "l": 16},
+    )
+
+    m = c.state.get("BTCUSDT").tape.metrics(now_second=5, recent=60)
+    assert m.delta_notional == 300.0
+    # Семь сделок за минуту, а не одна.
+    assert m.trades_per_min == 7.0
+
+
+async def test_an_old_style_message_is_still_one_trade():
+    """Обычная лента без номеров считается по-прежнему: одно сообщение - сделка."""
+    c = make_collector(SNAPSHOT, TICKERS)
+    await c._track("BTCUSDT")
+    c._on_message("btcusdt@aggTrade", {"s": "BTCUSDT", "T": 5_000, "p": "100", "q": "3", "m": False})
+
+    assert c.state.get("BTCUSDT").tape.metrics(now_second=5, recent=60).trades_per_min == 1.0

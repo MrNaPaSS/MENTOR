@@ -34,13 +34,15 @@ class SecondBucket:
     high: float = 0.0
     low: float = 0.0
 
-    def add(self, price: float, qty: float, is_buy: bool) -> None:
+    def add(self, price: float, qty: float, is_buy: bool, trades: int = 1) -> None:
         notional = price * qty
         if is_buy:
             self.buy_notional += notional
         else:
             self.sell_notional += notional
-        self.trades += 1
+        # Сообщение сжатой ленты везёт сразу несколько сделок: считаем их все,
+        # иначе «сделок в минуту» в скринере упало бы в разы на ровном месте.
+        self.trades += max(1, int(trades))
         self.high = price if self.high == 0 else max(self.high, price)
         self.low = price if self.low == 0 else min(self.low, price)
 
@@ -72,7 +74,9 @@ class TapeWindow:
     window_seconds: int = WINDOW_SECONDS
     buckets: deque[SecondBucket] = field(default_factory=deque)
 
-    def add(self, ts_ms: int, price: float, qty: float, is_buy: bool) -> None:
+    def add(
+        self, ts_ms: int, price: float, qty: float, is_buy: bool, trades: int = 1
+    ) -> None:
         if price <= 0 or qty <= 0:
             return
         second = ts_ms // 1000
@@ -86,7 +90,7 @@ class TapeWindow:
         else:
             bucket = SecondBucket(second)
             self.buckets.append(bucket)
-        bucket.add(price, qty, is_buy)
+        bucket.add(price, qty, is_buy, trades)
         self._trim(second)
 
     def _trim(self, now_second: int) -> None:

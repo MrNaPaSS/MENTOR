@@ -291,6 +291,32 @@ def test_future_candle_is_refused():
     assert answer.status_code == 400
 
 
+def test_the_candle_about_to_start_is_answered_empty(monkeypatch):
+    """Часы браузера ушли вперёд на пару секунд - это не ошибка запроса.
+
+    Терминал спрашивал следующую минуту раньше нас и получал отказ, а получив,
+    повторял его каждую секунду до конца расхождения: журнал сервера был в
+    красных строках, а трейдер видел ошибку там, где просто ещё нет сделок.
+    """
+    rest = StubRest()
+    app, _ = make_app(rest)
+    # Минута вот-вот начнётся: до неё три секунды, ровно на столько браузер и
+    # опережает сервер.
+    soon = (int(time.time()) // 60) * 60 + 60
+    monkeypatch.setattr(scalping_api.time, "time", lambda: soon - 3)
+
+    with TestClient(app) as client:
+        answer = client.get(
+            "/api/scalping/footprint/btcusdt", params={"time": soon}
+        )
+
+    assert answer.status_code == 200
+    body = answer.json()
+    assert body["partial"] is True
+    assert body["levels"] == []
+    assert rest.calls == []
+
+
 def test_intervals_above_an_hour_are_not_served():
     """За сутки сделок миллионы — выкачивать их ради картинки нечестно."""
     rest = StubRest()
