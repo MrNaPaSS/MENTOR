@@ -25,6 +25,15 @@ import sys
 
 from sqlalchemy import func, select, text
 
+# Адрес нынешней базы лежит в `.env`, как и у сервера: без этого скрипт просил
+# бы `--from` там, где ответ уже записан рядом.
+try:  # pragma: no cover - без python-dotenv просто читаем окружение
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 from core.db import Base, make_engine
 
 # Регистрация моделей: без импорта в метаданных нет ни одной таблицы.
