@@ -23,7 +23,7 @@ import argparse
 import os
 import sys
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, inspect as sa_inspect, select, text
 
 # Адрес нынешней базы лежит в `.env`, как и у сервера: без этого скрипт просил
 # бы `--from` там, где ответ уже записан рядом.
@@ -46,14 +46,21 @@ def row_count(conn, table) -> int:
     return int(conn.execute(select(func.count()).select_from(table)).scalar_one())
 
 
-def copy_table(source, target, table, apply: bool) -> tuple[int, int]:
-    """Перенести одну таблицу. Возвращает «сколько было» и «сколько стало»."""
+def copy_table(source, target, table, apply: bool, ready: set[str]) -> tuple[int, int]:
+    """Перенести одну таблицу. Возвращает «сколько было» и «сколько стало».
+
+    `ready` - таблицы, которые на приёмнике уже есть. В показе схему там никто
+    не создавал, и считать строки в несуществующей таблице нечего: это ноль, а
+    не ошибка.
+    """
     with source.connect() as src:
         have = row_count(src, table)
         rows = [dict(row) for row in src.execute(select(table)).mappings()] if have else []
 
-    with target.connect() as dst:
-        already = row_count(dst, table)
+    already = 0
+    if table.name in ready:
+        with target.connect() as dst:
+            already = row_count(dst, table)
 
     if not apply or not rows:
         return have, already
@@ -112,9 +119,11 @@ def migrate(source_url: str, target_url: str, apply: bool, only: str = "") -> in
     # Непустой приёмник проверяем до записи, а не после: перенос в базу, где
     # уже есть строки, кладёт наши ключи поверх чужих, и разбирать это потом
     # будет нечем.
+    ready = set(sa_inspect(target).get_table_names())
+
     if apply:
         with target.connect() as dst:
-            busy_now = [t.name for t in tables if row_count(dst, t) > 0]
+            busy_now = [t.name for t in tables if t.name in ready and row_count(dst, t) > 0]
         if busy_now:
             print(
                 "На приёмнике уже есть строки: "
@@ -126,7 +135,7 @@ def migrate(source_url: str, target_url: str, apply: bool, only: str = "") -> in
     busy: list[str] = []
     moved: list[tuple[str, int, int]] = []
     for table in tables:
-        have, became = copy_table(source, target, table, apply)
+        have, became = copy_table(source, target, table, apply, ready)
         if apply and became != have:
             busy.append(table.name)
         moved.append((table.name, have, became))

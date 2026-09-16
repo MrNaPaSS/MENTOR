@@ -91,3 +91,15 @@ def test_one_table_can_be_moved_alone(tmp_path):
     assert tool.migrate(source, target, apply=True, only="students") == 0
     assert _rows(target, Student.__table__) == 2
     assert _rows(target, LiveTrade.__table__) == 0
+
+
+def test_a_dry_run_works_before_the_schema_exists(tmp_path):
+    """Показ не создаёт схему на приёмнике - и не должен на ней спотыкаться.
+
+    Живой запуск падал здесь: скрипт считал строки в таблице, которой на
+    приёмнике ещё нет, и вместо таблицы с числами трейдер видел разбор ошибки.
+    """
+    source = _source(tmp_path / "from.sqlite3")
+    target = f"sqlite:///{tmp_path / 'empty.sqlite3'}"
+
+    assert tool.migrate(source, target, apply=False) == 0
