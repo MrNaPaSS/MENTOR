@@ -11,11 +11,14 @@
 // на весь месяц и десять подряд выглядят одинаково в сумме и совершенно
 // по-разному на сетке.
 
-import { useIntlLocale, useT, type Dict } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
+import { money, tone } from "@/lib/journalFormat";
+import { useMedia } from "@/lib/useWide";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
+import JournalTable from "./JournalTable";
 import { cardFromTrade } from "@/lib/pnl/data";
 import { useJournalExport } from "@/lib/journalExport";
 import {
@@ -29,51 +32,6 @@ import {
   type VenueSlice,
 } from "@/lib/journal";
 import { useVenuePick, venueLabel } from "@/lib/venuePick";
-
-function money(value: number): string {
-  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
-  return `${sign}${Math.abs(value).toFixed(2)}`;
-}
-
-/**
- * Взятые цели точками: зелёная — сработала, пустая — нет.
- *
- * Одной строкой «1/3» это не показать: цвет достаётся всей ячейке, и сделка с
- * одной взятой целью читается как сделка, отработавшая все три.
- */
-function Takes({ trade }: { trade: JournalTrade }) {
-  if (trade.targets.length === 0) {
-    return <span className="text-[var(--pane-muted)]">-</span>;
-  }
-  return (
-    <span className="inline-flex items-center gap-0.5">
-      {trade.targets.map((_, i) => (
-        <span
-          key={i}
-          className={
-            i < trade.takes_hit ? "text-[var(--pane-up)]" : "text-[var(--pane-muted)] opacity-50"
-          }
-        >
-          {i < trade.takes_hit ? "●" : "○"}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-/** Полный список целей с отметкой взятых — в подсказке, чтобы не растить таблицу. */
-function takesHint(trade: JournalTrade, t: Dict): string {
-  if (trade.targets.length === 0) return t.journal.noTargets;
-  return trade.targets
-    .map((price, i) => t.journal.takeLine(i < trade.takes_hit ? "✓" : "·", i + 1, String(price)))
-    .join("\n");
-}
-
-function tone(value: number): string {
-  if (value > 0) return "text-[var(--pane-up)]";
-  if (value < 0) return "text-[var(--pane-down)]";
-  return "text-[var(--pane-muted)]";
-}
 
 /** Сетка месяца: понедельник первым, пустые клетки до первого числа. */
 function monthCells(year: number, month: number, days: JournalDay[]) {
@@ -125,7 +83,8 @@ export default function JournalPanel({
   onClose: () => void;
 }) {
   const t = useT();
-  const numbers = useIntlLocale();
+  // Две колонки сделок - только там, где они помещаются рядом с календарём.
+  const split = useMedia("(min-width: 1536px)");
   // Чья карточка открыта. Null - окна нет.
   const [card, setCard] = useState<JournalTrade | null>(null);
   const now = new Date();
@@ -207,6 +166,14 @@ export default function JournalPanel({
     await removeTrade(id);
     reload();
   }
+
+  // Половины списка: на широком окне сделки идут двумя колонками. Делим
+  // пополам с перевесом влево, чтобы при нечётном числе записей правая колонка
+  // не оказывалась длиннее левой. Узкому окну колонки не нужны - там список
+  // остаётся одним, целым: разрезанный пополам, он потерял бы половину записей
+  // вместе со скрытой колонкой.
+  const edge = split ? Math.ceil(trades.length / 2) : trades.length;
+  const half = { head: trades.slice(0, edge), tail: trades.slice(edge) };
 
   function shiftMonth(delta: number) {
     const next = new Date(Date.UTC(year, month - 1 + delta, 1));
@@ -398,113 +365,30 @@ export default function JournalPanel({
 
           <div className="no-scrollbar lg:max-h-full lg:min-h-0 lg:overflow-auto">
             {trades.length === 0 ? (
-              <p className="py-6 text-center text-[var(--pane-muted)]">
-                {t.journal.empty}
-              </p>
+              <p className="py-6 text-center text-[var(--pane-muted)]">{t.journal.empty}</p>
             ) : (
-              <table className="w-full font-mono text-[11px] tabular-nums">
-                {/* Шапка держится на месте: список теперь прокручивается сам,
-                    своей колонкой, и уехавшая шапка оставляла бы шесть колонок
-                    чисел без подписей. */}
-                <thead className="text-[10px] text-[var(--pane-muted)] [&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:z-10 [&>tr>th]:bg-[var(--pane-bg)]">
-                  <tr className="text-left">
-                    <th className="py-1">{t.journal.colDate}</th>
-                    <th>{t.journal.colCoin}</th>
-                    <th>{t.journal.colEntry}</th>
-                    <th>{t.journal.colExit}</th>
-                    <th>{t.journal.colTargets}</th>
-                    <th className="text-right">{t.journal.colResult}</th>
-                    <th />
-                    {mentor && <th />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {trades.map((row) => (
-                    <tr
-                      key={row.id}
-                      onMouseEnter={() => onHover?.(row)}
-                      onMouseLeave={() => onHover?.(null)}
-                      onClick={() => onPick?.(row)}
-                      title={t.journal.openChart}
-                      className={`border-t border-[var(--pane-border)] transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)] ${
-                        onPick ? "cursor-pointer" : "cursor-default"
-                      }`}
-                    >
-                      <td className="py-1 text-[var(--pane-muted)]">
-                        {new Date(row.closed_at).toLocaleString(numbers, {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </td>
-                      <td>
-                        <span className={row.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
-                          {row.symbol.replace(/USDT$/, "")}
-                        </span>{" "}
-                        <span className="text-[10px] text-[var(--pane-muted)]">
-                          ×{row.leverage} · {t.journal.reasons[row.outcome]}
-                          {/* Где сделка была открыта: биржи считаются порознь, и
-                              строка без биржи в общем списке ни о чём не говорит. */}
-                          {row.exchange && (
-                            <span className="ml-1 uppercase tracking-wide">{row.exchange}</span>
-                          )}
-                        </span>
-                      </td>
-                      <td className="text-[var(--pane-text-2)]">{row.entry}</td>
-                      <td className="text-[var(--pane-text-2)]">{row.exit_price ?? "-"}</td>
-                      <td title={takesHint(row, t)}>
-                        <Takes trade={row} />
-                      </td>
-                      <td
-                        className={`text-right ${tone(row.pnl)}`}
-                        title={
-                          row.fee
-                            ? t.journal.pnlWithFee(money(row.pnl), money(row.pnl + row.fee), row.fee.toFixed(2))
-                            : t.journal.pnlNet
-                        }
-                      >
-                        {money(row.pnl)}
-                        {row.fee > 0 && (
-                          <span className="ml-1 text-[10px] text-[var(--pane-muted)]">
-                            -{row.fee.toFixed(2)}
-                          </span>
-                        )}
-                      </td>
-                      {/* Карточка сделки: та самая, которой делятся в чате.
-                          Отдельной кнопкой, а не по строке - нажатие по строке
-                          уже занято графиком, и отбирать его нельзя: «почему
-                          так вышло» спрашивают чаще, чем «покажи всем». */}
-                      <td className="pl-2 text-right">
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setCard(row);
-                          }}
-                          title={t.journal.cardTitle}
-                          className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
-                        >
-                          <Share2 className="h-3 w-3" />
-                        </button>
-                      </td>
-                      {/* Убрать запись может только наставник: журнал - это
-                          статистика, и право стереть из неё неудачную сделку
-                          обесценивает её целиком. */}
-                      {mentor && (
-                        <td className="pl-2 text-right">
-                          <button
-                            onClick={() => drop(row.id)}
-                            title={t.journal.remove}
-                            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-down)]"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              /* На широком окне записи делятся пополам и идут двумя колонками:
+                 одна таблица растягивала шесть коротких чисел на всю ширину, а
+                 в видимую часть помещалось вдвое меньше сделок, чем могло бы.
+                 Свежие - в левой колонке, продолжение - в правой. */
+              <div className="grid gap-x-5 gap-y-2 2xl:grid-cols-2">
+                <JournalTable
+                  rows={half.head}
+                  onHover={onHover}
+                  onPick={onPick}
+                  onCard={setCard}
+                  onDrop={mentor ? drop : undefined}
+                />
+                {half.tail.length > 0 && (
+                  <JournalTable
+                    rows={half.tail}
+                    onHover={onHover}
+                    onPick={onPick}
+                    onCard={setCard}
+                    onDrop={mentor ? drop : undefined}
+                  />
+                )}
+              </div>
             )}
           </div>
         </div>
