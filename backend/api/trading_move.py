@@ -46,6 +46,7 @@ from backend.trading.watcher import (
     same_mark,
     mark_price,
     order_marks,
+    plan_kind,
     plan_alive,
     position_for,
     moved_stop_label,
@@ -147,7 +148,7 @@ def _mine(live: LiveTrade) -> tuple[set[str], set[str]]:
 
 
 def _kind(order: dict[str, Any]) -> str:
-    return str(order.get("planType") or order.get("type") or "").lower()
+    return plan_kind(order)
 
 
 def _id(order: dict[str, Any]) -> str:

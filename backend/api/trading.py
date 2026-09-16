@@ -73,6 +73,7 @@ from backend.trading.watcher import (
     entry_marks,
     fill_time,
     order_marks,
+    plan_kind,
     position_for,
     settle,
     split_ladder,
@@ -468,7 +469,7 @@ async def plans(
     unknown: list[dict[str, Any]] = []
     for order in orders:
         marks = order_marks(order)
-        kind = str(order.get("planType") or order.get("type") or "").lower()
+        kind = plan_kind(order)
         trigger = _trigger_price(order)
 
         if marks & mine_takes:

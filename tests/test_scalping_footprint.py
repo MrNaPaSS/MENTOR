@@ -280,6 +280,18 @@ def test_closed_candle_is_asked_from_the_exchange_once():
     assert len(rest.calls) == 1
 
 
+def test_a_candle_far_ahead_is_still_refused():
+    """Час вперёд - это уже не расхождение часов, а ошибка запроса."""
+    rest = StubRest()
+    app, _ = make_app(rest)
+    with TestClient(app) as client:
+        answer = client.get(
+            "/api/scalping/footprint/btcusdt",
+            params={"time": int(time.time()) + 600},
+        )
+    assert answer.status_code == 400
+
+
 def test_future_candle_is_refused():
     rest = StubRest()
     app, _ = make_app(rest)
@@ -300,10 +312,10 @@ def test_the_candle_about_to_start_is_answered_empty(monkeypatch):
     """
     rest = StubRest()
     app, _ = make_app(rest)
-    # Минута вот-вот начнётся: до неё три секунды, ровно на столько браузер и
-    # опережает сервер.
+    # Минута вот-вот начнётся: часы браузера ушли вперёд, и он просит её
+    # заранее. Полминуты - расхождение, какое видели на живом столе.
     soon = (int(time.time()) // 60) * 60 + 60
-    monkeypatch.setattr(scalping_api.time, "time", lambda: soon - 3)
+    monkeypatch.setattr(scalping_api.time, "time", lambda: soon - 30)
 
     with TestClient(app) as client:
         answer = client.get(

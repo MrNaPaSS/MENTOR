@@ -1039,7 +1039,7 @@ class PositionWatcher:
 
         side = trade.side.upper()
         for order in orders:
-            kind = str(order.get("planType") or order.get("type") or "").lower()
+            kind = plan_kind(order)
             if "stop" not in kind and "loss" not in kind:
                 continue
             if str(order.get("positionSide") or side).upper() in (side, ""):
@@ -1077,7 +1077,7 @@ class PositionWatcher:
         covered = 0.0
         seen = False
         for order in orders:
-            kind = str(order.get("planType") or order.get("type") or "").lower()
+            kind = plan_kind(order)
             if "stop" not in kind and "loss" not in kind and not kind.endswith("sl"):
                 continue
             if str(order.get("positionSide") or side).upper() not in (side, "", "BOTH", "NET"):
@@ -1125,7 +1125,7 @@ class PositionWatcher:
             # однажды снять чужую защиту вместо своей.
             if str(order.get("positionSide") or side).upper() not in (side, ""):
                 continue
-            kind = str(order.get("planType") or order.get("type") or "").lower()
+            kind = plan_kind(order)
             if "sl" in kind or "stop" in kind or "loss" in kind:
                 return order_id
         return ""
@@ -1598,7 +1598,7 @@ async def drop_old_stops(
             continue
 
         # Сторона решает: живой стоп лонга ниже рынка, живая цель выше.
-        kind = str(order.get("planType") or order.get("type") or "").lower()
+        kind = plan_kind(order)
         stop_like = "stop" in kind or "loss" in kind or kind.endswith("sl")
         if not stop_like and market and market > 0 and trigger:
             stop_like = trigger < market if trade.side == "long" else trigger > market
@@ -1976,6 +1976,30 @@ def spare_marks(trades: Iterable[LiveTrade]) -> set[str]:
             marks.add(moved_stop_label(trade.client_id, nth))
     marks.discard("")
     return marks
+
+
+# Как биржи называют поле с видом условной заявки.
+#
+# Живой счёт 16 сентября: стоп пришёл с `orderType: STOP_MARKET`, а мы читали
+# только `planType` и `type` - вид выходил пустым, и заявка попадала в
+# «неизвестную». Дальше её считали защитой наугад: угадали бы неверно - и стоп
+# на графике встал бы не там, где он на бирже.
+KIND_FIELDS = ("planType", "type", "orderType", "ordType", "strategyType")
+
+
+def plan_kind(order: dict[str, Any]) -> str:
+    """Вид условной заявки строчными: `stop_market`, `take_profit` и подобные.
+
+    Имя поля у каждой биржи своё, и пустой вид - это почти всегда не «биржа не
+    сказала», а «мы не там посмотрели».
+    """
+    for name in KIND_FIELDS:
+        value = str(order.get(name) or "").strip()
+        # `CONDITIONAL` и подобное - не вид, а сорт заявки: по нему не отличить
+        # стоп от цели, и брать его вместо настоящего имени нельзя.
+        if value and value.lower() not in ("conditional", "algo", "plan"):
+            return value.lower()
+    return ""
 
 
 def order_marks(order: dict[str, Any]) -> set[str]:

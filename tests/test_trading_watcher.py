@@ -1943,3 +1943,42 @@ async def test_the_stop_of_the_other_side_does_not_count():
     watcher = PositionWatcher(lambda: None, lambda: None)
 
     assert await watcher._stop_is_short(client, _live("long"), 1.0) is False
+
+
+# ── вид условной заявки ──────────────────────────────────────────────────────
+#
+# Живой счёт 16 сентября: стоп пришёл с `orderType: STOP_MARKET`, а читали мы
+# только `planType` и `type`. Вид выходил пустым, заявка попадала в
+# «неизвестную» и считалась защитой наугад - а в журнале сервера на каждый
+# опрос ложилась строка об этом.
+
+
+def test_the_kind_is_read_from_whatever_field_the_exchange_used():
+    from backend.trading.watcher import plan_kind
+
+    # Так эта заявка пришла с живого счёта, поля до последнего.
+    stop = {
+        "algoId": 795190167240442767,
+        "clientAlgoId": "BTCUSDT-1789588116461sl",
+        "algoType": "CONDITIONAL",
+        "orderType": "STOP_MARKET",
+        "positionSide": "SHORT",
+        "triggerPrice": "76328.3",
+        "reduceOnly": True,
+    }
+    assert plan_kind(stop) == "stop_market"
+
+    # И прежние имена, какими их зовут другие биржи.
+    assert plan_kind({"planType": "TAKE_PROFIT"}) == "take_profit"
+    assert plan_kind({"type": "STOP"}) == "stop"
+    assert plan_kind({"ordType": "conditional", "orderType": "TAKE_PROFIT_MARKET"}) == (
+        "take_profit_market"
+    )
+
+
+def test_a_sort_is_not_a_kind():
+    """`CONDITIONAL` говорит «условная», но не говорит, стоп это или цель."""
+    from backend.trading.watcher import plan_kind
+
+    assert plan_kind({"algoType": "CONDITIONAL"}) == ""
+    assert plan_kind({}) == ""
