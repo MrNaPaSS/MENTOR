@@ -22,6 +22,7 @@
     python check_binance_stream.py               # 50 монет, пока не остановят
     python check_binance_stream.py 20 600        # 20 монет, десять минут
     python check_binance_stream.py 20 600 aggTrade  # сжатая лента, для сравнения
+    python check_binance_stream.py 50 600 trade 1   # лента одним соединением
 """
 
 from __future__ import annotations
@@ -52,6 +53,11 @@ TAPE_STREAM = "trade"
 # спящая лента одной монеты может.
 STALL_DEPTH = 30.0
 STALL_TAPE = 120.0
+
+# На сколько соединений раскладывается лента: столько же, сколько в бою
+# (`backend/scalping/binance.py`, TAPE_SOCKETS). Четвёртым доводом можно
+# попросить одно соединение и увидеть разницу своими глазами.
+TAPE_SOCKETS = 8
 
 # Как часто печатать сводку.
 REPORT_EVERY = 30.0
@@ -147,6 +153,7 @@ async def main() -> int:
     count = int(sys.argv[1]) if len(sys.argv) > 1 else 50
     limit = float(sys.argv[2]) if len(sys.argv) > 2 else 0.0
     tape_stream = sys.argv[3] if len(sys.argv) > 3 else TAPE_STREAM
+    fan = max(1, int(sys.argv[4])) if len(sys.argv) > 4 else TAPE_SOCKETS
 
     print("Живучесть рыночного потока Binance")
     print("Ключи не нужны: рыночная половина биржи открыта всем.\n")
@@ -158,17 +165,20 @@ async def main() -> int:
         depth = Socket(
             "стаканы", [f"{s.lower()}@depth@{DEPTH_RATE}" for s in symbols], STALL_DEPTH
         )
-        tape = Socket(
-            f"лента {tape_stream}",
-            [f"{s.lower()}@{tape_stream}" for s in symbols],
-            STALL_TAPE,
-        )
+        # Лента по нескольким соединениям: толстый поток рвётся, тонкие живут.
+        tapes = [
+            Socket(
+                f"лента {tape_stream} {i + 1}/{fan}",
+                [f"{s.lower()}@{tape_stream}" for s in symbols[i::fan]],
+                STALL_TAPE,
+            )
+            for i in range(fan)
+            if symbols[i::fan]
+        ]
 
         started = time.monotonic()
-        tasks = [
-            asyncio.create_task(depth.run(session)),
-            asyncio.create_task(tape.run(session)),
-        ]
+        tasks = [asyncio.create_task(depth.run(session))]
+        tasks += [asyncio.create_task(one.run(session)) for one in tapes]
         try:
             while True:
                 await asyncio.sleep(REPORT_EVERY)
@@ -177,7 +187,8 @@ async def main() -> int:
                 # символе рамки пробник падал бы прямо на первой сводке.
                 print(f"\n--- {spent / 60:.1f} мин ---")
                 print(depth.report(spent))
-                print(tape.report(spent))
+                for one in tapes:
+                    print(one.report(spent))
                 if limit and spent >= limit:
                     break
         except KeyboardInterrupt:
@@ -185,12 +196,16 @@ async def main() -> int:
         finally:
             for task in tasks:
                 task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
+            # С пределом: закрытие сокета ждёт прощания с той стороны, а его от
+            # оборванного соединения можно не дождаться вовсе. Пробник не
+            # должен висеть после того, как всё уже посчитано.
+            await asyncio.wait(tasks, timeout=5)
 
         spent = time.monotonic() - started
         print("\n--- итог ---")
         print(depth.report(spent))
-        print(tape.report(spent))
+        for one in tapes:
+            print(one.report(spent))
         print(
             "\nОбрывов нет, а на сервере есть - значит дело в нашем процессе: "
             "скорее всего, разбор сообщений не успевает, и биржа отключает "

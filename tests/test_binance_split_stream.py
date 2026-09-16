@@ -13,7 +13,12 @@ import json
 
 import aiohttp
 
-from backend.scalping.binance import SplitStreamClient, StreamClient, is_depth_stream
+from backend.scalping.binance import (
+    SplitStreamClient,
+    StreamClient,
+    TapeFan,
+    is_depth_stream,
+)
 from backend.scalping.collector import ScalpingCollector
 
 
@@ -106,11 +111,13 @@ def test_depth_streams_are_recognised():
     assert not is_depth_stream("btcusdt@trade")
 
 
-def test_the_real_collector_uses_two_connections():
+def test_the_real_collector_uses_its_own_connections():
     collector = ScalpingCollector(top_n=2)
     assert isinstance(collector.stream, SplitStreamClient)
     assert isinstance(collector.stream.depth, StreamClient)
-    assert isinstance(collector.stream.tape, StreamClient)
+    # Лента - не одно соединение, а несколько: толстый поток рвётся.
+    assert isinstance(collector.stream.tape, TapeFan)
+    assert len(collector.stream.tape.sockets) > 1
 
 
 # ── живость соединения ───────────────────────────────────────────────────────
@@ -181,4 +188,47 @@ def test_the_close_of_the_exchange_is_named_by_its_code():
 def test_the_tape_is_allowed_to_be_quiet_longer_than_the_books():
     """Стаканы полусотни монет молчать не могут, спящая монета - может."""
     client = SplitStreamClient(lambda stream, data: None)
-    assert client.depth._stall < client.tape._stall
+    assert all(client.depth._stall < one._stall for one in client.tape.sockets)
+
+
+# ── лента по нескольким соединениям ─────────────────────────────────────────
+#
+# Живой замер на столе: лента полусотни монет - две тысячи сообщений в секунду
+# в одном соединении, и оно умирает каждые двадцать секунд обрывом без
+# прощания. Стаканы тех же монет - семьдесят сообщений - живут минутами. И
+# рвётся так же в пустом процессе, который только читает: дело не в разборе, а
+# в толщине потока.
+
+
+def test_the_tape_is_spread_over_several_connections():
+    """Полсотни монет ложатся не в одно соединение, и ни одно не пустует."""
+    fan = TapeFan(lambda stream, data: None, sockets=5)
+    streams = {f"coin{i}usdt@trade" for i in range(50)}
+    asyncio.run(fan.subscribe(streams))
+
+    assert fan.streams == frozenset(streams)
+    busy = [len(one.streams) for one in fan.sockets]
+    assert sum(busy) == 50
+    # Раскладка ровная до монеты: мы затем и делим ленту, чтобы толстых
+    # соединений не осталось ни одного.
+    assert max(busy) - min(busy) <= 1
+
+
+def test_a_coin_always_lands_on_the_same_connection():
+    """Иначе отписка искала бы монету не там, где та подписана."""
+    fan = TapeFan(lambda stream, data: None, sockets=5)
+    asyncio.run(fan.subscribe({"btcusdt@trade", "ethusdt@trade"}))
+    where = [i for i, one in enumerate(fan.sockets) if "btcusdt@trade" in one.streams]
+
+    asyncio.run(fan.unsubscribe({"btcusdt@trade"}))
+    asyncio.run(fan.subscribe({"btcusdt@trade"}))
+
+    assert [i for i, one in enumerate(fan.sockets) if "btcusdt@trade" in one.streams] == where
+
+
+def test_unsubscribing_reaches_the_right_connection():
+    fan = TapeFan(lambda stream, data: None, sockets=3)
+    asyncio.run(fan.subscribe({"btcusdt@trade", "ethusdt@trade"}))
+    asyncio.run(fan.unsubscribe({"btcusdt@trade"}))
+
+    assert fan.streams == frozenset({"ethusdt@trade"})

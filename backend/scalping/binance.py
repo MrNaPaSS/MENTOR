@@ -59,6 +59,15 @@ CONTROL_RATE_DELAY = 0.15
 STALL_DEPTH = 30.0
 STALL_TAPE = 120.0
 
+# На сколько соединений раскладывается лента.
+#
+# Восемь: на полусотне монет это по шесть-семь на соединение, то есть сотни
+# сообщений в секунду вместо двух тысяч. Мельче делить смысла мало - дальше
+# упрёмся в одну монету: лента BTC сама по себе это около пятисот сообщений в
+# секунду, и надвое её не разложить. Если рвать будет и на этом, останется
+# сжатая лента (см. TAPE_STREAM в collector.py).
+TAPE_SOCKETS = 8
+
 # Пауза после отказа по лимиту. Растёт вдвое, пока биржа не ответит нормально:
 # 418 — это бан адреса, и каждый запрос во время бана продлевает его.
 BAN_BACKOFF_MIN = 30.0
@@ -513,6 +522,84 @@ def is_depth_stream(name: str) -> bool:
     return "@depth" in str(name)
 
 
+class TapeFan:
+    """Лента, разложенная по нескольким соединениям.
+
+    Живой замер на столе (`check_binance_stream.py`, процесс, который только
+    читает и больше ничего не делает): лента полусотни монет - это две тысячи
+    сообщений в секунду в одном соединении, и оно умирает каждые двадцать
+    секунд кодом 1006, то есть обрывом без прощания. Стаканы тех же монет -
+    семьдесят сообщений в секунду - живут минутами. Разбор тут ни при чём:
+    пустой процесс рвался так же, как сервер.
+
+    Значит рвётся толстый поток, а не наш код, и лекарство - раскладывать его
+    тоньше. Монеты разводятся по соединениям раз и навсегда, по остатку от
+    номера имени: на одном соединении остаётся десятая часть ленты, а обрыв
+    уносит десятую часть монет на секунду, а не всю ленту целиком.
+
+    Снаружи это одна лента: подписка, отписка, запуск, остановка и список
+    потоков - как у одного соединения.
+    """
+
+    def __init__(self, on_message: Callable[[str, dict], None], sockets: int = TAPE_SOCKETS):
+        count = max(1, int(sockets))
+        self.sockets = [
+            StreamClient(on_message, name=f"лента {i + 1}", stall=STALL_TAPE)
+            for i in range(count)
+        ]
+        # Где какой поток. Раз выбранное соединение не меняется: перебрасывать
+        # монету между соединениями значит рвать её ленту на ровном месте.
+        self._where: dict[str, int] = {}
+
+    def _spread(self, streams: set[str]) -> dict[int, set[str]]:
+        """Разложить потоки по соединениям, ровно по числу монет.
+
+        Не по остатку от номера имени: на полусотне монет тот давал пятнадцать
+        на одном соединении против шести на другом, а мы затем и делим поток,
+        чтобы толстых не осталось.
+        """
+        out: dict[int, set[str]] = {}
+        counts = [len(one.streams) for one in self.sockets]
+        for stream in sorted(streams):
+            place = self._where.get(stream)
+            if place is None:
+                place = min(range(len(self.sockets)), key=lambda i: counts[i])
+                self._where[stream] = place
+                counts[place] += 1
+            out.setdefault(place, set()).add(stream)
+        return out
+
+    @property
+    def streams(self) -> frozenset[str]:
+        out: set[str] = set()
+        for socket in self.sockets:
+            out |= socket.streams
+        return frozenset(out)
+
+    @property
+    def connected(self) -> bool:
+        """Жива ли лента. Хотя бы одно соединение из нескольких - уже лента."""
+        return any(socket.connected for socket in self.sockets)
+
+    def start(self) -> None:
+        for socket in self.sockets:
+            socket.start()
+
+    async def stop(self) -> None:
+        for socket in self.sockets:
+            await socket.stop()
+
+    async def subscribe(self, streams: set[str]) -> None:
+        for place, part in self._spread(streams).items():
+            await self.sockets[place].subscribe(part)
+
+    async def unsubscribe(self, streams: set[str]) -> None:
+        for place, part in self._spread(streams).items():
+            await self.sockets[place].unsubscribe(part)
+        for stream in streams:
+            self._where.pop(stream, None)
+
+
 class SplitStreamClient:
     """Стаканы и лента сделок - в разных соединениях, с тем же интерфейсом.
 
@@ -529,7 +616,7 @@ class SplitStreamClient:
 
     def __init__(self, on_message: Callable[[str, dict], None]):
         self.depth = StreamClient(on_message, name="стаканы", stall=STALL_DEPTH)
-        self.tape = StreamClient(on_message, name="лента", stall=STALL_TAPE)
+        self.tape = TapeFan(on_message)
 
     @staticmethod
     def _split(streams: set[str]) -> tuple[set[str], set[str]]:
