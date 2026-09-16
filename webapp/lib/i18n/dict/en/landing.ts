@@ -193,22 +193,16 @@ export const landing = {
     steps: [
       {
         title: "A wall at resistance",
-        text:
-          "1.6M sitting at 2415 in the book - an order that does not get eaten, and the terminal says so in the header. Short from the wall: entry 2415.22, stop 2425.12 behind it, three targets below.",
         src: "/showcase/case/01-entry-v2.webp",
         alt: "NMNH terminal: a liquidity wall at resistance and a short order placed from it",
       },
       {
         title: "Target hit, stop at breakeven",
-        text:
-          "The first target is taken and the stop moved to 2411.36 - from here the trade cannot end in the red. The server moved it, not a browser tab.",
         src: "/showcase/case/02-run-v2.webp",
         alt: "NMNH terminal: stop moved to breakeven after the first target",
       },
       {
         title: "Exit and the journal entry",
-        text:
-          "Closed at 2396.03 without waiting for the third target. The terminal logged the trade itself - entry, exit, targets, fees and result - and built the card from that record.",
         src: "/showcase/case/03-exit-v2.webp",
         alt: "NMNH terminal: closed trade and its result in the journal",
       },
@@ -281,8 +275,14 @@ export const landing = {
       "Monthly goals, activity streaks and achievements are counted for you",
     ],
     shotAlt: "NMNH account: calendar of trading days, monthly totals and the trader's path",
+    dayTitle: "Tap a day and there it is",
+    dayText: "Every trade of that day: time, coin, side, entry, exit and the result of each.",
+    dayAlt: "Trading day breakdown in the NMNH account: trades with entry, exit and result",
+    cardTitle: "The day as a card",
+    cardText: "A day, a week or a month folds into a card - save it or send it without assembling screenshots by hand.",
+    cardAlt: "A trading day summary card built by the NMNH terminal",
     honest:
-      "A screenshot of the mentor's account. Account balances are hidden - they are personal data. Percentages are calculated against the margin of each trade at leverage up to 25x and are not a promise of returns: the same leverage works against you too.",
+      "Screenshots of the mentor's account. Account balances are hidden - they are personal data. Percentages are calculated against the margin of each trade at leverage up to 25x and are not a promise of returns: the same leverage works against you too.",
   },
 
   cert: {

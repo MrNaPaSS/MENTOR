@@ -30,7 +30,10 @@ export default function TradeCase() {
       <div className="mt-14 space-y-8 md:space-y-14">
         {copy.steps.map((step, i) => (
           <Reveal as="article" key={step.title} delay={0.05}>
-            <div className="grid items-center gap-6 md:grid-cols-2 md:gap-10">
+            {/* Под снимок отдана большая доля ряда: подпись - это номер и
+                название, объяснять шаг словами здесь нечего. Смотреть надо на
+                экран терминала, а не читать про него. */}
+            <div className="grid items-center gap-6 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] md:gap-10">
               <figure className={`m-0 ${i % 2 === 1 ? "md:order-2" : ""}`}>
                 <img
                   src={step.src}
@@ -42,9 +45,13 @@ export default function TradeCase() {
               </figure>
 
               <div className={i % 2 === 1 ? "md:order-1" : ""}>
-                <span className="font-mono text-sm font-bold text-accent-cyan">{`0${i + 1}`}</span>
-                <h3 className="mt-2 text-h3 text-text-primary">{step.title}</h3>
-                <p className="mt-3 leading-relaxed text-text-secondary">{step.text}</p>
+                <span
+                  aria-hidden
+                  className="block font-mono text-5xl font-black leading-none text-accent-cyan opacity-30"
+                >
+                  {`0${i + 1}`}
+                </span>
+                <h3 className="mt-3 text-h3 text-text-primary">{step.title}</h3>
               </div>
             </div>
           </Reveal>
