@@ -526,6 +526,12 @@ export interface TradeSummary {
   deposit_total: number;
   withdrawal_total: number;
   commission: number;
+  /**
+   * Откуда числа. `exchange` - отчёт биржи, он знает и пополнения, и вывод;
+   * `journal` - только то, что вёл терминал. Экран говорит об этом прямо,
+   * иначе пустые пополнения читались бы как «денег не вносил».
+   */
+  source?: "exchange" | "journal";
 }
 
 export interface DepositRecord {
@@ -683,8 +689,16 @@ export const api = {
   analyticsMe: (token: string) => authReq<AnalyticsMe>("/api/analytics/me", token),
   analyticsCalendar: (token: string, year: number, month: number) =>
     authReq<AnalyticsCalendar>(`/api/analytics/calendar?year=${year}&month=${month + 1}`, token),
-  tradesMe: (token: string, days: number = 30) =>
-    authReq<TradesResponse>(`/api/trades/me?days=${days}`, token),
+  /**
+   * Счёт и издержки. Биржа - та, что выбрана на экране: суммы двух счетов в
+   * одной строке отчёта не сходятся ни с одним из них. Пусто - всё сразу,
+   * так считаются вехи и уровень.
+   */
+  tradesMe: (token: string, days: number = 30, venue: string = "") =>
+    authReq<TradesResponse>(
+      `/api/trades/me?days=${days}${venue ? `&venue=${encodeURIComponent(venue)}` : ""}`,
+      token,
+    ),
   coins: (token: string) => authReq<CoinsBalance>("/api/coins", token),
   coinsSync: (token: string, body: CoinSyncIn) =>
     authReq<CoinSyncOut>("/api/coins/sync", token, { method: "POST", body: JSON.stringify(body) }),

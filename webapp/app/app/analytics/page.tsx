@@ -325,6 +325,11 @@ export default function AnalyticsPage() {
   const [owner, setOwner] = useState<string | null>(null);
   const [recentDeposits, setRecentDeposits] = useState<DepositRecord[]>([]);
   const [tradeSummary, setTradeSummary] = useState<TradeSummary | null>(null);
+  // Счёт выбранной биржи. Раздел «счёт и издержки» показывает один счёт: его
+  // строки ученик сверяет с приложением биржи, и сумма двух счетов не сходится
+  // там ни с одним из них. Награды, вехи и уровень рядом по-прежнему идут по
+  // всем биржам сразу - они про ученика академии, а не про его счёт.
+  const [venueSummary, setVenueSummary] = useState<TradeSummary | null>(null);
   const [currentBalance, setCurrentBalance] = useState<number | null>(null);
   const [coinsBalance, setCoinsBalance] = useState<number | null>(null);
   // Кто владелец: аватар и рамка - для панели уровня.
@@ -490,6 +495,26 @@ export default function AnalyticsPage() {
   // Календарь в разрезе одной биржи: клетки, карточка итога и список дня.
   // Всё, что ниже кормит награды и уровень, по-прежнему считается по calData -
   // по всем биржам сразу.
+  // Счёт выбранной биржи спрашиваем отдельно: сводка выше нужна вехам целиком.
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token || !venue) {
+      setVenueSummary(null);
+      return;
+    }
+    let cancelled = false;
+    api.tradesMe(token, 90, venue)
+      .then((r) => {
+        if (!cancelled) setVenueSummary(r.summary);
+      })
+      .catch(() => {
+        if (!cancelled) setVenueSummary(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venue]);
+
   const venueDays = useMemo(
     () => (venue ? calData.map((day) => dayOfVenue(day, venue)) : calData),
     [calData, venue],
@@ -545,12 +570,19 @@ export default function AnalyticsPage() {
 
   // ── Счёт и издержки ──
   //
-  // Цифры биржи за всё время: обороты по рынкам, комиссия и движение денег.
-  // Комиссия в долях от оборота - то единственное, что делает её сравнимой:
-  // сотня долларов на миллионе оборота и на десяти тысячах - разные истории.
-  const withdrawTotal = tradeSummary?.withdrawal_total ?? 0;
-  const commission = tradeSummary?.commission ?? 0;
-  const commissionPct = totalVolume > 0 ? (commission / totalVolume) * 100 : 0;
+  // Цифры выбранной биржи за всё время: обороты по рынкам, комиссия и движение
+  // денег. Комиссия в долях от оборота - то единственное, что делает её
+  // сравнимой: сотня долларов на миллионе оборота и на десяти тысячах - разные
+  // истории.
+  const account = venue ? venueSummary : tradeSummary;
+  // Про пополнения и вывод знает только сама биржа. Считать их по журналу
+  // нельзя, и ноль в этой строке читался бы как «денег не вносил».
+  const fromJournal = account?.source === "journal";
+  const accountVolume = account?.total_volume ?? 0;
+  const accountDeposit = venue ? account?.deposit_total ?? 0 : depositTotal;
+  const withdrawTotal = account?.withdrawal_total ?? 0;
+  const commission = account?.commission ?? 0;
+  const commissionPct = accountVolume > 0 ? (commission / accountVolume) * 100 : 0;
 
   // Цели месяца — работают даже без PnL снимков
   // Торговый день - тот, в который торговали. Прежде, когда оборот стоял нулём
@@ -732,13 +764,27 @@ export default function AnalyticsPage() {
               <div className="min-w-0">
               <div className="flex items-center gap-2 border-b border-[var(--pane-border)] px-3 pt-2.5 pb-2">
                 <BarChart2 className="h-4 w-4 text-[var(--pane-gold)]" />
-                <h2 className="text-[12px] font-semibold leading-none text-[var(--pane-text)]">
+                <h2 className="shrink-0 text-[12px] font-semibold leading-none text-[var(--pane-text)]">
                   {t.analytics.path.title}
                 </h2>
-                <span className="text-[10px] text-[var(--pane-muted)]">
-                  {t.analytics.path.subtitle}
-                </span>
-                <span className="ml-auto flex items-baseline gap-1.5">
+                {/* Что впереди - прямо в заголовке. Отдельной строкой под
+                    дорожкой она добавляла окну высоты, а сказать ей нужно одно
+                    короткое предложение. */}
+                {nextM && (
+                  <span className="min-w-0 truncate text-[10px] text-[var(--pane-text-2)]">
+                    {t.analytics.path.toNext}{" "}
+                    <span className="font-bold text-[var(--pane-gold)]">{nextM.label}</span>{" "}
+                    {t.analytics.path.left}{" "}
+                    <span className="font-mono tabular-nums text-[var(--pane-text)]">
+                      ${fmtDot(Math.round(nextM.vol - totalVolume))}
+                    </span>
+                    <span className="text-[var(--pane-muted)]">
+                      {" · "}
+                      {t.analytics.path.pctToNext((inLeg * 100).toFixed(1))}
+                    </span>
+                  </span>
+                )}
+                <span className="ml-auto flex shrink-0 items-baseline gap-1.5">
                   <span className="text-[10px] uppercase tracking-wider text-[var(--pane-muted)]">
                     {t.analytics.totalVolume}
                   </span>
@@ -793,21 +839,6 @@ export default function AnalyticsPage() {
                   })}
                 </div>
 
-                {/* Что впереди - одной строкой под дорожкой. */}
-                {nextM && (
-                  <p className="mt-2 text-[11px] text-[var(--pane-text-2)]">
-                    {t.analytics.path.toNext}{" "}
-                    <span className="font-bold text-[var(--pane-gold)]">{nextM.label}</span>{" "}
-                    {t.analytics.path.left}{" "}
-                    <span className="font-mono tabular-nums text-[var(--pane-text)]">
-                      ${fmtDot(Math.round(nextM.vol - totalVolume))}
-                    </span>
-                    <span className="text-[var(--pane-muted)]">
-                      {" · "}
-                      {t.analytics.path.pctToNext((inLeg * 100).toFixed(1))}
-                    </span>
-                  </p>
-                )}
               </div>
               </div>
 
@@ -1067,36 +1098,47 @@ export default function AnalyticsPage() {
                 {t.analytics.account.title}
               </h2>
               <span className="text-[10px] text-[var(--pane-muted)]">
-                {t.analytics.account.hint}
+                {fromJournal ? t.analytics.account.hintJournal : t.analytics.account.hint}
               </span>
             </div>
             <div className="flex flex-1">
             <dl className="flex min-w-0 flex-1 flex-col divide-y divide-[var(--pane-border)]">
                 <Metric
                   label={t.analytics.account.futures}
-                  value={tradeSummary ? `$${fmtVolShort(tradeSummary.futures_volume)}` : "-"}
+                  value={account ? `$${fmtVolShort(account.futures_volume)}` : "-"}
                 />
                 <Metric
                   label={t.analytics.account.spot}
-                  value={tradeSummary ? `$${fmtVolShort(tradeSummary.spot_volume)}` : "-"}
+                  value={account ? `$${fmtVolShort(account.spot_volume)}` : "-"}
                 />
                 <Metric
                   label={t.analytics.account.commission}
-                  value={tradeSummary ? `$${fmtDot(Math.round(commission))}` : "-"}
+                  value={account ? `$${fmtDot(Math.round(commission))}` : "-"}
                   note={commission > 0 ? t.analytics.account.ofVolume(commissionPct.toFixed(3)) : undefined}
                 />
+                {/* Движение денег - только со слов биржи: в журнале его нет. */}
                 <Metric
                   label={t.analytics.account.deposits}
-                  value={tradeSummary ? `$${fmtDot(Math.round(depositTotal))}` : "-"}
+                  value={account && !fromJournal ? `$${fmtDot(Math.round(accountDeposit))}` : "-"}
                 />
                 <Metric
                   label={t.analytics.account.withdrawals}
-                  value={tradeSummary ? `$${fmtDot(Math.round(withdrawTotal))}` : "-"}
+                  value={account && !fromJournal ? `$${fmtDot(Math.round(withdrawTotal))}` : "-"}
                 />
                 <Metric
                   label={t.analytics.account.net}
-                  value={tradeSummary ? `$${fmtDot(Math.round(depositTotal - withdrawTotal))}` : "-"}
-                  tone={tradeSummary ? (depositTotal - withdrawTotal >= 0 ? "up" : "down") : undefined}
+                  value={
+                    account && !fromJournal
+                      ? `$${fmtDot(Math.round(accountDeposit - withdrawTotal))}`
+                      : "-"
+                  }
+                  tone={
+                    account && !fromJournal
+                      ? accountDeposit - withdrawTotal >= 0
+                        ? "up"
+                        : "down"
+                      : undefined
+                  }
                 />
               </dl>
             <PanelArt src="/art/analytics/coin-stacks.webp" motto={t.analytics.mottos.account} layout="top" />

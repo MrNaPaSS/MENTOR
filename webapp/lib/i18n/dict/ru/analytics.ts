@@ -47,6 +47,10 @@ export const analytics = {
   account: {
     title: "Счёт и издержки",
     hint: "по данным биржи",
+    // Числа не с биржи, а из журнала терминала: так считается счёт биржи,
+    // у которой нет партнёрского отчёта. Молчать об этом нельзя.
+    hintJournal: "по журналу терминала",
+
     futures: "фьючерсы",
     spot: "спот",
     commission: "комиссия",
@@ -66,7 +70,6 @@ export const analytics = {
 
   path: {
     title: "Путь трейдера",
-    subtitle: "Суммарный объём на WEEX",
     toNext: "до",
     left: "осталось",
     pctToNext: (pct: string) => `${pct}% до следующей вехи`,

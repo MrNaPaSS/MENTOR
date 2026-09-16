@@ -335,9 +335,11 @@ test.describe("Analytics Page - Volume Milestones", () => {
     await expect(page.getByText("Путь трейдера")).toBeVisible({ timeout: 10000 });
   });
 
-  test("shows subtitle Суммарный объём на WEEX", async ({ page }) => {
+  // Подпись «Суммарный объём на WEEX» убрана: оборот давно считается по всем
+  // биржам, а на её месте стоит то, что важно видеть, - сколько до вехи.
+  test("shows how much is left to the next milestone", async ({ page }) => {
     await openPage(page);
-    await expect(page.getByText("Суммарный объём на WEEX")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("до следующей вехи")).toBeVisible({ timeout: 10000 });
   });
 
   test("shows all 7 milestone labels in the track", async ({ page }) => {

@@ -56,7 +56,7 @@ def _forget_uid(student_id: int) -> None:
 
 
 def _trade(student_id: int, client_id: str, qty: str, entry: str, exit_price: str,
-           fee: str = "0", days_ago: int = 1) -> None:
+           fee: str = "0", days_ago: int = 1, exchange: str = "") -> None:
     closed = datetime.now(timezone.utc) - timedelta(days=days_ago)
     with SessionLocal() as s:
         s.add(ScalpTrade(
@@ -64,6 +64,7 @@ def _trade(student_id: int, client_id: str, qty: str, entry: str, exit_price: st
             entry=Decimal(entry), stop=Decimal("80000"), exit_price=Decimal(exit_price),
             qty=Decimal(qty), margin=Decimal("100"), leverage=20,
             outcome="take", pnl=Decimal("10"), fee=Decimal(fee), closed_at=closed,
+            exchange=exchange,
         ))
         s.commit()
 
@@ -187,3 +188,33 @@ def test_partner_row_is_found_when_the_uid_carries_a_prefix(ctx):
     # Числа отчёта, а не пустой журнал: сделок в нём нет вовсе.
     assert summary["futures_volume"] > 0
     assert summary["deposit_total"] > 0
+
+
+def test_the_account_follows_the_chosen_exchange(ctx):
+    """Счёт на экране один: выбрана BingX - значит её оборот и её комиссия.
+
+    Раздел «счёт и издержки» показывал сумму по всем биржам сразу, и сойтись с
+    приложением биржи она не могла ни при каком выборе.
+    """
+    client = ctx
+    sid, h = _student(client)
+    _trade(sid, "b1", qty="1", entry="100", exit_price="100", fee="1", exchange="bingx")
+    _trade(sid, "o1", qty="5", entry="100", exit_price="100", fee="7", exchange="okx")
+
+    summary = client.get("/api/trades/me?days=90&venue=bingx", headers=h).json()["summary"]
+    assert summary["total_volume"] == pytest.approx(200.0)
+    assert summary["commission"] == pytest.approx(1.0)
+    # Числа из журнала: про пополнения и вывод чужой биржи мы не знаем ничего.
+    assert summary["source"] == "journal"
+
+
+def test_without_a_chosen_exchange_everything_counts(ctx):
+    """Вехи и уровень идут по всем биржам сразу: они про ученика, а не про счёт."""
+    client = ctx
+    sid, h = _student(client)
+    _trade(sid, "b1", qty="1", entry="100", exit_price="100", exchange="bingx")
+    _trade(sid, "o1", qty="5", entry="100", exit_price="100", exchange="okx")
+    _forget_uid(sid)
+
+    summary = client.get("/api/trades/me?days=90", headers=h).json()["summary"]
+    assert summary["total_volume"] == pytest.approx(1200.0)

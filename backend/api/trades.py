@@ -36,7 +36,9 @@ def _ts_to_iso(ts_ms: int | None) -> str | None:
         return None
 
 
-def _journal_summary(session, student: Student, since_ms: int) -> dict[str, float] | None:
+def _journal_summary(
+    session, student: Student, since_ms: int, venue: str = ""
+) -> dict[str, float] | None:
     """Оборот и комиссия по журналу терминала. `None` - сделок за срок нет.
 
     Запасной счёт на случай, когда биржа о торговле молчит: партнёрская ручка
@@ -46,11 +48,17 @@ def _journal_summary(session, student: Student, since_ms: int) -> dict[str, floa
     честное «сколько наторговал через нас», а не ноль.
     """
     since = datetime.fromtimestamp(since_ms / 1000, tz=timezone.utc)
-    rows = session.execute(
+    query = (
         select(ScalpTrade)
         .where(ScalpTrade.student_id == student.id)
         .where(ScalpTrade.closed_at >= since)
-    ).scalars().all()
+    )
+    # Счёт на экране всегда один: суммы двух бирж в одной строке не сходятся ни
+    # с одной из них. Пусто - считаем всё сразу: так идут вехи и уровень, они
+    # про ученика академии, а не про его счёт.
+    if venue:
+        query = query.where(ScalpTrade.exchange == venue)
+    rows = session.execute(query).scalars().all()
     if not rows:
         return None
 
@@ -67,18 +75,37 @@ def _journal_summary(session, student: Student, since_ms: int) -> dict[str, floa
         "deposit_total": 0.0,
         "withdrawal_total": 0.0,
         "commission": round(sum(float(t.fee or 0) for t in rows), 2),
+        # Откуда числа: биржа знает про счёт всё, журнал - только про то, что
+        # вёл терминал. Экран говорит об этом прямо, иначе пустые пополнения
+        # читались бы как «денег не вносил».
+        "source": "journal",
     }
 
 
 @router.get("/me")
 async def trades_me(
     days: int = Query(30, ge=1, le=365),
+    venue: str = Query("", max_length=16),
     student: Student = Depends(get_current_student),
     session=Depends(get_session),
     weex=Depends(get_weex),
 ):
     end_ms = int(time.time() * 1000)
     start_ms = end_ms - days * 86_400_000
+    picked = str(venue or "").strip().lower()
+
+    # Выбрана биржа, о которой партнёрская ручка WEEX ничего не знает. Спрашивать
+    # её незачем: она ответила бы про чужой счёт, и на экране «счёт и издержки»
+    # стояли бы пополнения одной биржи рядом с оборотом другой.
+    if picked and picked != "weex":
+        return {
+            "trades": [],
+            "summary": _journal_summary(session, student, start_ms, picked),
+            "deposits": [],
+            "withdrawals": [],
+            "transactions": [],
+            "needs_uid": False,
+        }
 
     # Без UID партнёрскую ручку спрашивать не о чем, но торговля у ученика
     # могла быть: терминал работает по ключам, а UID заводит наставник. Раньше
@@ -87,7 +114,7 @@ async def trades_me(
     if not student.weex_uid:
         return {
             "trades": [],
-            "summary": _journal_summary(session, student, start_ms),
+            "summary": _journal_summary(session, student, start_ms, picked),
             "deposits": [],
             "withdrawals": [],
             "transactions": [],
@@ -120,6 +147,7 @@ async def trades_me(
             "deposit_total": _to_float(user_row.get("depositAmount") or user_row.get("deposit") or 0),
             "withdrawal_total": withdrawal,
             "commission": _to_float(user_row.get("commission")),
+            "source": "exchange",
         }
 
         # Журнал - нижняя граница оборота, и она бывает выше отчёта.
@@ -132,7 +160,7 @@ async def trades_me(
         #
         # Заменяем только фьючерсный оборот: спот терминал не ведёт и знать о
         # нём не может, а пополнения с комиссией у биржи и без того точнее.
-        mine = _journal_summary(session, student, start_ms)
+        mine = _journal_summary(session, student, start_ms, picked)
         if mine and mine["futures_volume"] > futures_vol:
             summary["futures_volume"] = mine["futures_volume"]
             summary["total_volume"] = round(mine["futures_volume"] + spot_vol, 2)
@@ -140,7 +168,7 @@ async def trades_me(
         # Строки нет - оборот считаем по журналу, чтобы аналитика не обнулилась
         # целиком из-за молчания партнёрской ручки.
         logger.info("Trades uid=%s not found in channel_trade_asset", uid)
-        summary = _journal_summary(session, student, start_ms)
+        summary = _journal_summary(session, student, start_ms, picked)
 
     assets = await weex.get_agency_assert(uid)
 
