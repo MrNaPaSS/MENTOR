@@ -138,3 +138,33 @@ def test_a_stale_snapshot_is_not_shown(session):
     health.note_call("weex", 100.0, True, "positions")
     health.publish(session, "api", now=clock.time() - 3600)
     assert health.published(session) == []
+
+
+def test_a_broken_stream_does_not_spoil_the_latency():
+    """Обрыв потока - не запрос: в задержках и отказах бирже его нет.
+
+    Панель писала «ответ обычно 43 секунды» и «отказов 57%» на бирже, которая
+    отвечала за треть секунды: числом там было время жизни оборванного
+    соединения, а отказом сам обрыв. Разбирать по такой панели нечего.
+    """
+    for _ in range(3):
+        health.note_call("binance", 300.0, True, "depth")
+    for _ in range(4):
+        health.note_call("binance", 0.0, False, health.STREAM, "обрыв 1006")
+
+    venue = health.snapshot()["venues"][0]
+    assert venue["calls"] == 3 and venue["errors"] == 0
+    assert venue["error_share"] == 0.0
+    assert venue["ms_median"] == 300.0 and venue["ms_worst"] == 300.0
+    # Обрывы не исчезли - у них своя строка, и по ней видно беду.
+    assert venue["stream_drops"] == 4
+    assert "1006" in venue["last_error"]
+
+
+def test_an_answer_from_memory_is_not_a_visit_to_the_exchange():
+    """Мгновенный ответ клиента из памяти занижал бы задержку биржи вдвое."""
+    health.note_call("okx", 0.0, True, "symbols")
+    health.note_call("okx", 400.0, True, "positions")
+
+    venue = health.snapshot()["venues"][0]
+    assert venue["calls"] == 2 and venue["ms_median"] == 400.0

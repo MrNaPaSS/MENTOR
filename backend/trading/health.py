@@ -22,6 +22,8 @@ from typing import Any
 DEPTH = 1000
 # Окно, за которое считаются числа панели.
 WINDOW = 300.0
+# Как помечается событие потока, а не запроса.
+STREAM = "поток"
 
 
 @dataclass
@@ -99,21 +101,28 @@ def snapshot(window: float = WINDOW, now: float | None = None) -> dict[str, Any]
     venues = []
     for name, venue in sorted(_venues.items()):
         fresh = [call for call in venue.calls if call.at >= edge]
-        times = [call.ms for call in fresh]
-        bad = [call for call in fresh if not call.ok]
+        # Обрыв потока - не запрос: у него нет ни задержки, ни отказа биржи.
+        # Смешав их, панель показывала «ответ обычно 43 секунды» - это была
+        # длительность жизни оборванного соединения, а не ответ на запрос.
+        drops = [call for call in fresh if call.what == STREAM]
+        asked = [call for call in fresh if call.what != STREAM]
+        # Мгновенные вызовы в задержку не берём: это ответ из памяти клиента,
+        # а не поход на биржу, и он занижал бы её вдвое.
+        times = [call.ms for call in asked if call.ms > 0]
+        bad = [call for call in asked if not call.ok]
         venues.append(
             {
                 "exchange": name,
-                "calls": len(fresh),
+                "calls": len(asked),
                 "errors": len(bad),
-                "error_share": round(len(bad) / len(fresh), 3) if fresh else 0.0,
+                "error_share": round(len(bad) / len(asked), 3) if asked else 0.0,
                 "ms_median": percentile(times, 0.5),
                 "ms_worst": percentile(times, 0.95),
                 "codes": _top_codes(bad),
                 "streams": venue.streams_up,
                 # Обрывы за окно и всего с запуска: рядом с «числа за 5 минут»
                 # общий счёт читался как недавние обрывы и пугал зря.
-                "stream_drops": sum(1 for call in fresh if call.what == "поток"),
+                "stream_drops": len(drops),
                 "stream_drops_total": venue.stream_drops,
                 "stream_minutes": round((moment - venue.stream_since) / 60, 1)
                 if venue.stream_since and venue.streams_up

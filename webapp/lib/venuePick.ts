@@ -60,7 +60,11 @@ function write(saved: SavedPick): void {
  */
 export function freshChoice(saved: SavedPick | null, active?: string): string | null {
   if (!saved) return null;
-  if (!active || !saved.forActive) return saved.venue;
+  // Активной не знаем - показываем запомненное: спорить не с чем.
+  if (!active) return saved.venue;
+  // Запись прежнего вида, без пометки об активной бирже, активную не
+  // перебивает. Иначе выбор, сделанный до этой правки, держал бы журнал на
+  // старой бирже навсегда - ровно то, на что жаловался трейдер.
   return saved.forActive === active ? saved.venue : null;
 }
 

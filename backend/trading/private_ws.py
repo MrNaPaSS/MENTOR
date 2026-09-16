@@ -155,7 +155,7 @@ class PrivateStreams:
             live_state.forget(account)
             # Обрыв - число панели: по нему видно, какая биржа рвёт соединение
             # и как часто (backend/trading/health.py).
-            health.note_call(exchange, 0.0, False, "stream", "обрыв")
+            health.note_call(exchange, 0.0, False, health.STREAM, "обрыв")
 
         if exchange == "okx":
             return OkxPrivateStream(

@@ -426,7 +426,9 @@ class StreamClient:
             # И в приборную панель: по числу обрывов за пять минут видно,
             # сеть это стола или наша ошибка (backend/trading/health.py).
             health.note_stream("binance", up=False)
-            health.note_call("binance", lived * 1000, False, "поток", f"обрыв {ws.close_code}")
+            # Время жизни соединения - не задержка ответа: в панели оно шло бы
+            # в задержки и рисовало «ответ обычно 43 секунды».
+            health.note_call("binance", 0.0, False, health.STREAM, f"обрыв {ws.close_code}")
         self._ws = None
 
     def _dispatch(self, raw: str) -> None:
