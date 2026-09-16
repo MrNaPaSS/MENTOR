@@ -67,6 +67,25 @@ function save() {
 }
 
 /** Записать решение или действие. */
+/**
+ * Ошибка не нашей страницы, а расширения браузера.
+ *
+ * Такие сыпались десятками в минуту («postMessage on disconnected port» от
+ * дополнения Firefox) и выдавливали из журнала всё полезное: он держит тысячу
+ * записей, и сделки в них просто не оставалось. К терминалу они отношения не
+ * имеют: чинить их нам нечем, а читать мешают.
+ */
+export function fromExtension(source: string | null | undefined): boolean {
+  const where = String(source || "");
+  return (
+    where.startsWith("moz-extension://") ||
+    where.startsWith("chrome-extension://") ||
+    where.startsWith("safari-web-extension://") ||
+    where.startsWith("extension://")
+  );
+}
+
+
 export function record(kind: string, data?: Record<string, unknown>): void {
   restore();
   entries.push({ at: Date.now(), kind, data });
@@ -172,6 +191,7 @@ export function watchUi(): () => void {
   };
 
   const onError = (event: ErrorEvent) => {
+    if (fromExtension(event.filename)) return;
     record("ui.error", { message: event.message, source: `${event.filename}:${event.lineno}` });
   };
 
