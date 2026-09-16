@@ -179,12 +179,12 @@ export const analytics = {
   goalsTitle: "Цели месяца",
 
   goals: {
-    volume: { label: "Объём за месяц", unit: "USDT", reward: "💹 Активный трейдер" },
-    trading_days: { label: "Дней торговали", unit: "дней", reward: "📅 Дисциплина" },
-    profit: { label: "Прибыльных дней", unit: "дней в плюс", reward: "📈 Бычий режим" },
-    streak: { label: "Стрик активности", unit: "дней подряд", reward: "🔥 На волне" },
-    hot_day: { label: "Горячий день", unit: "дней 3%+", reward: "🌟 День охотника" },
-    month_profit: { label: "Месяц в плюс", unit: "", reward: "📈 Победный месяц" },
+    volume: { label: "Объём за месяц", unit: "USDT", reward: "Активный трейдер" },
+    trading_days: { label: "Дней торговали", unit: "дней", reward: "Дисциплина" },
+    profit: { label: "Прибыльных дней", unit: "дней в плюс", reward: "Бычий режим" },
+    streak: { label: "Стрик активности", unit: "дней подряд", reward: "На волне" },
+    hot_day: { label: "Горячий день", unit: "дней 3%+", reward: "День охотника" },
+    month_profit: { label: "Месяц в плюс", unit: "", reward: "Победный месяц" },
   },
 
   achievements: {

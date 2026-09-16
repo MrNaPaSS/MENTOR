@@ -308,14 +308,14 @@ export const landing = {
     eyebrow: "Trader certificate",
     title: "Issued by your trades, not by a course",
     subtitle:
-      "Four pillars. Two of them closed is bronze, three is silver, four is gold. The certificate carries your name and number.",
+      "Four goals. Two of them closed is bronze, three is silver, four is gold. The certificate carries your name and number.",
     pillars: [
       { title: "Knowledge", text: "Academy course completed" },
       { title: "Practice", text: "50 trades through the terminal, confirmed by the exchange" },
       { title: "Discipline", text: "20 trading days, with a stop on every trade" },
       { title: "Growth", text: "A calendar month in profit, at least 10 trades" },
     ],
-    note: "No pillar can be closed with words: everything is counted from exchange reports.",
+    note: "No goal can be closed with words: everything is counted from exchange reports.",
     alt: "NMNH trader certificate template: knowledge, practice, discipline, growth",
   },
 

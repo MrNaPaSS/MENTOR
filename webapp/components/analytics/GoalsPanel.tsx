@@ -47,31 +47,40 @@ export default function GoalsPanel({ goals }: { goals: Goal[] }) {
               }`}
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[var(--pane-text)]">
+                {/* Название цели и её награда - одной строкой.
+                    Награда стояла отдельной строкой под полосой, со смайликом
+                    впереди: смайлик повторял картинку цели, стоящую тут же
+                    справа, а лишняя строка растягивала карточку и отжимала
+                    полосу вверх. Рядом с названием она читается как его
+                    продолжение - «объём за месяц: активный трейдер», - и
+                    карточка стала на строку короче. */}
+                <div className="flex items-baseline gap-2">
+                  <span className="shrink-0 truncate text-[12px] font-semibold text-[var(--pane-text)]">
                     {copy.label}
                   </span>
+                  <span
+                    className={`min-w-0 flex-1 truncate text-[10px] ${
+                      goal.unlocked
+                        ? "text-[var(--pane-up)]"
+                        : "text-[color:color-mix(in_srgb,var(--pane-muted)_70%,transparent)]"
+                    }`}
+                  >
+                    {copy.reward}
+                  </span>
                   {goal.unlocked ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--pane-up)]" />
+                    <CheckCircle2 className="h-4 w-4 shrink-0 self-center text-[var(--pane-up)]" />
                   ) : (
                     <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--pane-muted)]">
                       {short(goal.current, numbers)}/{short(goal.target, numbers)}
                     </span>
                   )}
                 </div>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--pane-bg)]">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--pane-bg)]">
                   <div
                     className="h-full origin-left rounded-full transition-transform duration-700 ease-out"
                     style={{ transform: `scaleX(${pct / 100})`, background: goal.color }}
                   />
                 </div>
-                <p
-                  className={`mt-1 truncate text-[10px] ${
-                    goal.unlocked ? "text-[var(--pane-up)]" : "text-[color:color-mix(in_srgb,var(--pane-muted)_70%,transparent)]"
-                  }`}
-                >
-                  {copy.reward}
-                </p>
               </div>
               <img
                 src={goalArt(goal.id)}

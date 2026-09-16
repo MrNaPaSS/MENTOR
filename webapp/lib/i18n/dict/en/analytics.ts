@@ -159,12 +159,12 @@ export const analytics = {
   goalsTitle: "Goals for the month",
 
   goals: {
-    volume: { label: "Volume this month", unit: "USDT", reward: "💹 Active trader" },
-    trading_days: { label: "Days traded", unit: "days", reward: "📅 Discipline" },
-    profit: { label: "Profitable days", unit: "days up", reward: "📈 Bull mode" },
-    streak: { label: "Activity streak", unit: "days in a row", reward: "🔥 On a roll" },
-    hot_day: { label: "Hot day", unit: "days 3%+", reward: "🌟 Hunter's day" },
-    month_profit: { label: "Month in the green", unit: "", reward: "📈 Winning month" },
+    volume: { label: "Volume this month", unit: "USDT", reward: "Active trader" },
+    trading_days: { label: "Days traded", unit: "days", reward: "Discipline" },
+    profit: { label: "Profitable days", unit: "days up", reward: "Bull mode" },
+    streak: { label: "Activity streak", unit: "days in a row", reward: "On a roll" },
+    hot_day: { label: "Hot day", unit: "days 3%+", reward: "Hunter's day" },
+    month_profit: { label: "Month in the green", unit: "", reward: "Winning month" },
   },
 
   achievements: {

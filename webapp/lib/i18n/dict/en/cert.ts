@@ -6,8 +6,8 @@ export const cert = {
     silver: "Silver",
     gold: "Gold",
   },
-  need: (n: number) => `Pillars: ${n} of 4`,
-  left: (n: number) => `Pillars missing: ${n}`,
+  need: (n: number) => `Goals: ${n} of 4`,
+  left: (n: number) => `Goals missing: ${n}`,
   issued: (date: string) => `Issued ${date}`,
   open: "Open and claim",
   pillars: {
