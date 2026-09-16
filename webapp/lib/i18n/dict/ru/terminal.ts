@@ -466,7 +466,6 @@ export const journal = {
   today: "текущий",
   dayFilter: (date: string) => `${date} · только этот день`,
   clearDay: "Показать весь период",
-  weekTotal: "Итог недели",
   noTrades: "Сделок не было",
   winDays: "Дней в плюс",
   avgDay: "Средний день",

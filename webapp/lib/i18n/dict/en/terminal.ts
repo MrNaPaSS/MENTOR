@@ -441,7 +441,6 @@ export const journal = {
   today: "current",
   dayFilter: (date: string) => `${date} · this day only`,
   clearDay: "Show the whole period",
-  weekTotal: "Week total",
   noTrades: "No trades",
   winDays: "Green days",
   avgDay: "Average day",

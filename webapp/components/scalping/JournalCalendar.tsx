@@ -46,17 +46,6 @@ function monthCells(year: number, month: number, days: readonly JournalDay[]): C
   return cells;
 }
 
-/** Итог недели - суммой своих дней. Чужие дни в него не входят. */
-function weekTotal(week: readonly Cell[]): { pnl: number; trades: number } {
-  return week.reduce(
-    (sum, cell) =>
-      cell.kind === "own" && cell.entry
-        ? { pnl: sum.pnl + cell.entry.pnl, trades: sum.trades + cell.entry.trades }
-        : sum,
-    { pnl: 0, trades: 0 },
-  );
-}
-
 export interface JournalCalendarProps {
   year: number;
   month: number;
@@ -86,8 +75,6 @@ export default function JournalCalendar({
   const numbers = useIntlLocale();
 
   const cells = monthCells(year, month, days);
-  const weeks: Cell[][] = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
@@ -161,9 +148,7 @@ export default function JournalCalendar({
         </button>
       </div>
 
-      {/* Семь дней и колонка недельного итога: у скальпера неделя - рабочий
-          отрезок, и складывать её в уме по семи клеткам он не должен. */}
-      <div className="grid grid-cols-[repeat(7,minmax(0,1fr))_2.8rem] gap-1">
+      <div className="grid grid-cols-7 gap-1">
         {t.journal.weekdays.map((day, i) => (
           <span
             key={day}
@@ -174,94 +159,62 @@ export default function JournalCalendar({
             {day}
           </span>
         ))}
-        <span
-          title={t.journal.weekTotal}
-          className="pb-0.5 text-center text-[10px] text-[var(--pane-muted)] opacity-60"
-        >
-          Σ
-        </span>
 
-        {weeks.map((week, w) => (
-          <div
-            key={w}
-            className="col-span-full grid grid-cols-[repeat(7,minmax(0,1fr))_2.8rem] gap-1"
-          >
-            {week.map((cell, i) => {
-              if (cell.kind === "other") {
-                return (
-                  <div
-                    key={i}
-                    aria-hidden
-                    className="rounded px-1.5 py-1 text-[9px] leading-none text-[var(--pane-muted)] opacity-25"
-                  >
-                    {cell.day}
-                  </div>
-                );
-              }
+        {cells.map((cell, i) => {
+          if (cell.kind === "other") {
+            return (
+              <div
+                key={i}
+                aria-hidden
+                className="rounded px-1.5 py-1 text-[9px] leading-none text-[var(--pane-muted)] opacity-25"
+              >
+                {cell.day}
+              </div>
+            );
+          }
 
-              const entry = cell.entry;
-              const active = entry !== undefined && entry.trades > 0;
-              const up = active && entry.pnl >= 0;
-              const chosen = cell.date === picked;
-              return (
-                /* День с сделками - кнопка: нажатие оставляет в списке справа
-                   только его сделки. По календарю ищут «что случилось в тот
-                   вторник», и добираться до ответа прокруткой списка человек
-                   не должен. Пустой день нажимать незачем. */
-                <button
-                  key={i}
-                  type="button"
-                  disabled={!active}
-                  onClick={() => onPickDay(chosen ? null : cell.date)}
-                  title={
-                    active ? t.journal.cellTitle(entry.trades, money(entry.pnl)) : t.journal.noTrades
-                  }
-                  className={`flex min-h-[2.6rem] flex-col justify-between rounded px-1.5 py-1 text-left transition-colors duration-150 ease-out ${
-                    active
-                      ? up
-                        ? "bg-[var(--pane-up-soft)] hover:bg-[var(--pane-up-strong)]"
-                        : "bg-[var(--pane-down-soft)] hover:bg-[var(--pane-down-strong)]"
-                      : "bg-[var(--pane-hover)] opacity-50"
-                  } ${
-                    chosen
-                      ? "ring-1 ring-[var(--pane-text)]"
-                      : cell.date === today
-                        ? "ring-1 ring-[var(--pane-accent)]"
-                        : ""
+          const entry = cell.entry;
+          const active = entry !== undefined && entry.trades > 0;
+          const up = active && entry.pnl >= 0;
+          const chosen = cell.date === picked;
+          return (
+            /* День с сделками - кнопка: нажатие оставляет в списке справа
+               только его сделки. По календарю ищут «что случилось в тот
+               вторник», и добираться до ответа прокруткой списка человек не
+               должен. Пустой день нажимать незачем. */
+            <button
+              key={i}
+              type="button"
+              disabled={!active}
+              onClick={() => onPickDay(chosen ? null : cell.date)}
+              title={active ? t.journal.cellTitle(entry.trades, money(entry.pnl)) : t.journal.noTrades}
+              className={`flex min-h-[2.6rem] flex-col justify-between rounded px-1.5 py-1 text-left transition-colors duration-150 ease-out ${
+                active
+                  ? up
+                    ? "bg-[var(--pane-up-soft)] hover:bg-[var(--pane-up-strong)]"
+                    : "bg-[var(--pane-down-soft)] hover:bg-[var(--pane-down-strong)]"
+                  : "bg-[var(--pane-hover)] opacity-50"
+              } ${
+                chosen
+                  ? "ring-1 ring-[var(--pane-text)]"
+                  : cell.date === today
+                    ? "ring-1 ring-[var(--pane-accent)]"
+                    : ""
+              }`}
+            >
+              <span className="text-[9px] leading-none text-[var(--pane-muted)]">{cell.day}</span>
+              {active && (
+                <span
+                  className={`truncate text-right font-mono text-[10px] leading-none tabular-nums ${
+                    up ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
                   }`}
                 >
-                  <span className="text-[9px] leading-none text-[var(--pane-muted)]">
-                    {cell.day}
-                  </span>
-                  {active && (
-                    <span
-                      className={`truncate text-right font-mono text-[10px] leading-none tabular-nums ${
-                        up ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
-                      }`}
-                    >
-                      {money(entry.pnl)}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-
-            <div
-              title={t.journal.weekTotal}
-              className="flex min-h-[2.6rem] items-center justify-end rounded bg-[var(--pane-hover)] px-1 font-mono text-[10px] tabular-nums"
-            >
-              <span
-                className={
-                  weekTotal(week).trades > 0
-                    ? tone(weekTotal(week).pnl)
-                    : "text-[var(--pane-muted)] opacity-40"
-                }
-              >
-                {weekTotal(week).trades > 0 ? money(weekTotal(week).pnl) : "-"}
-              </span>
-            </div>
-          </div>
-        ))}
+                  {money(entry.pnl)}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Чем месяц кончился. Мелкой строкой под сеткой: это не итог панели, а
