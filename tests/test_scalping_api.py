@@ -451,9 +451,14 @@ def test_mexc_half_day_is_folded_from_four_hour_candles():
 
 
 def test_ten_minute_candles_are_folded_everywhere():
+    """В том числе когда биржу не назвали: пусто - это Binance.
+
+    На живом столе это стоило графика: ручка просила у Binance «10m», биржа
+    отвечала 400, а терминал писал «нет связи с сервером».
+    """
     from backend.api.scalping import fold_plan
 
-    for venue in ("binance", "okx", "bingx", "mexc"):
+    for venue in ("binance", "okx", "bingx", "mexc", "", None):
         assert fold_plan(venue, "10m") == ("5m", 2)
 
 

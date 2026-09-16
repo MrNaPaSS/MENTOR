@@ -279,20 +279,25 @@ OKX_BARS = {
 # Чего у биржи нет, то складываем из свечей помельче. Границы обязаны совпадать:
 # десять минут это ровно две пятиминутки от той же эпохи, полдня - три
 # четырёхчасовки. Иначе свечи разъедутся с теми, что биржа рисует сама.
-FOLD_PLANS: dict[tuple[str, str], tuple[str, int]] = {
-    # Десятиминуток нет ни у одной из наших бирж.
-    ("binance", "10m"): ("5m", 2),
-    ("okx", "10m"): ("5m", 2),
-    ("bingx", "10m"): ("5m", 2),
-    ("mexc", "10m"): ("5m", 2),
-    # У MEXC нет и двенадцатичасовки: есть Hour4, Hour8, Day1.
-    ("mexc", "12h"): ("4h", 3),
-}
+# Общее для всех бирж: десятиминуток нет ни у одной.
+FOLD_ANY: dict[str, tuple[str, int]] = {"10m": ("5m", 2)}
+
+# И особое по биржам: у MEXC нет двенадцатичасовки, есть Hour4, Hour8, Day1.
+FOLD_PLANS: dict[tuple[str, str], tuple[str, int]] = {("mexc", "12h"): ("4h", 3)}
 
 
 def fold_plan(venue: str, interval: str) -> tuple[str, int]:
-    """Из чего и по сколько складывать этот таймфрейм. Единица - брать как есть."""
-    return FOLD_PLANS.get((str(venue or "").lower(), interval), (interval, 1))
+    """Из чего и по сколько складывать этот таймфрейм. Единица - брать как есть.
+
+    Биржа приходит пустой, когда её не назвали: это Binance, и общее правило
+    обязано работать и для неё. Привязка десятиминутки к именам бирж стоила
+    графика: сервер просил у Binance «10m», которого у неё нет, и отвечал 502.
+    """
+    name = str(venue or "").lower()
+    special = FOLD_PLANS.get((name, interval))
+    if special:
+        return special
+    return FOLD_ANY.get(interval, (interval, 1))
 
 
 async def okx_klines(request: Request, symbol: str, interval: str, limit: int) -> list[list]:
