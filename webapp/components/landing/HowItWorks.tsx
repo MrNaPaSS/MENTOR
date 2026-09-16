@@ -1,9 +1,9 @@
 ﻿"use client";
 
-import { Wallet, Bot, KeyRound, TrendingUp, type LucideIcon } from "lucide-react";
+import { Wallet, Bot, KeyRound, TrendingUp, LifeBuoy, HelpCircle, type LucideIcon } from "lucide-react";
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
-import { HOW_STEPS } from "@/lib/content";
+import { HOW_STEPS, SOCIAL_LINKS } from "@/lib/content";
 import { useT } from "@/lib/i18n";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -89,6 +89,45 @@ export default function HowItWorks() {
             </Reveal>
           );
         })}
+      </div>
+
+      {/* Два ответа на то, из-за чего человек уходит именно здесь: «не хочу
+          разбираться с ключами сам» и «у меня уже есть счёт». Первое снимается
+          человеком, второе - честным ответом, а не молчанием. Оба ведут в бот
+          академии: это единственное место, где заявку видит живой куратор. */}
+      <div className="mt-8 grid gap-5 md:grid-cols-2">
+        {[
+          { copy: t.landing.how.guarantee, Icon: LifeBuoy, accent: "text-accent-cyan", primary: true },
+          { copy: t.landing.how.haveAccount, Icon: HelpCircle, accent: "text-text-muted", primary: false },
+        ].map(({ copy, Icon, accent, primary }) => (
+          <Reveal as="article" key={copy.title} delay={primary ? 0.1 : 0.2}>
+            <div
+              className={`flex h-full flex-col rounded-2xl border bg-bg-panel/95 p-6 backdrop-blur-2xl ${
+                primary ? "border-accent-cyan/30" : "border-border"
+              }`}
+            >
+              <span className={`inline-flex items-center gap-2 text-sm font-semibold ${accent}`}>
+                <Icon className="h-4 w-4" />
+                {copy.title}
+              </span>
+
+              <p className="mt-3 flex-1 text-sm leading-relaxed text-text-secondary">{copy.text}</p>
+
+              <a
+                href={SOCIAL_LINKS.academyBot}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`mt-5 inline-flex w-fit items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-[0.97] ${
+                  primary
+                    ? "bg-accent-cyan text-bg-deep hover:bg-accent-cyan/90"
+                    : "border border-border text-text-primary hover:bg-bg-panel/60"
+                }`}
+              >
+                {copy.cta}
+              </a>
+            </div>
+          </Reveal>
+        ))}
       </div>
     </section>
   );

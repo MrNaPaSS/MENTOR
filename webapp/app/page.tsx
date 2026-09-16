@@ -1,9 +1,15 @@
 import Header from "@/components/landing/Header";
 import ScrollSceneMount from "@/components/landing/ScrollSceneMount";
 import Hero from "@/components/landing/Hero";
-import Terminal from "@/components/landing/Terminal";
 import Exchanges from "@/components/landing/Exchanges";
-import WhyUs from "@/components/landing/WhyUs";
+import Problem from "@/components/landing/Problem";
+import Terminal from "@/components/landing/Terminal";
+import TradeCase from "@/components/landing/TradeCase";
+import TradeFlow from "@/components/landing/TradeFlow";
+import ValueStack from "@/components/landing/ValueStack";
+import Analytics from "@/components/landing/Analytics";
+import Certificate from "@/components/landing/Certificate";
+import WhyFree from "@/components/landing/WhyFree";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Faq from "@/components/landing/Faq";
 import Socials from "@/components/landing/Socials";
@@ -32,11 +38,27 @@ export default function Home() {
       />
       <ScrollSceneMount />
       <Header />
+      {/* Порядок разделов - порядок решения, а не порядок красоты:
+          что это (Hero) -> кому верить (биржи) -> узнал ли себя (Problem) ->
+          чем закрывается (Terminal) -> правда ли это работает (TradeCase) ->
+          чем удобнее того, в чём торгую сейчас (TradeFlow) -> что ещё входит
+          (ValueStack) -> чем это подтверждается (Certificate) -> в чём подвох
+          (WhyFree) -> с чего начать (HowItWorks).
+
+          Блок «четыре части одной системы» (WhyUs) с главной убран: его работу
+          теперь делают ValueStack и WhyFree, и рядом с ними он повторял уже
+          сказанное. Компонент остался в репозитории. */}
       <main>
         <Hero />
-        <Terminal />
         <Exchanges />
-        <WhyUs />
+        <Problem />
+        <Terminal />
+        <TradeCase />
+        <TradeFlow />
+        <ValueStack />
+        <Analytics />
+        <Certificate />
+        <WhyFree />
         <HowItWorks />
         <Faq />
         <Socials />

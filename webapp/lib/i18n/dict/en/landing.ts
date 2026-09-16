@@ -111,16 +111,238 @@ export const landing = {
     note: (pending: number) => `${pending} pending connection`,
   },
 
+  problem: {
+    eyebrow: "Why accounts blow up",
+    title: "Three reasons good trades end up losing",
+    subtitle: "None of them is about the entry. All three are about what happens after it.",
+    items: [
+      {
+        title: "Size calculated in your head",
+        text:
+          "The stop comes from the chart, the size comes from “about the same as last time”. On a tight stop you risk half of what you should, on a wide one you risk double. Winners end up small, losers end up big - and the win rate still looks great.",
+      },
+      {
+        title: "Fees you never see",
+        text:
+          "Over a month they add up to a number comparable to your result. Until you pull them out into a separate line, they stay smeared across a hundred trades.",
+      },
+      {
+        title: "Two evenings out of thirty",
+        text:
+          "The journal shows it: on two days you took three times your usual number of trades, and both followed a losing streak. Those two days eat the month.",
+      },
+    ],
+    note: "The terminal does not guess the price. It closes exactly these three holes.",
+  },
+
+  flow: {
+    eyebrow: "Scalping and day trading",
+    title: "What happens in one click",
+    subtitle:
+      "What takes four windows and mental arithmetic on an exchange interface is calculated for you here. And what cannot be done fast, the server does.",
+    steps: [
+      {
+        title: "See",
+        items: [
+          "Order book and clusters on one price scale: intent and fact read on a single line",
+          "Liquidity walls named outright: size, price, support or resistance",
+          "The book does not jitter - numbers change, row order does not",
+          "Depth of 60 and 100 rows, price step ×25 for small coins",
+          "Market screener, funding, trending coins and news in the same window",
+        ],
+      },
+      {
+        title: "Enter",
+        items: [
+          "A click on a wall opens the calculation, the side follows from the book",
+          "Lot step, leverage cap and the coin's fee are accounted for before entry",
+          "Change the leverage and see what happened to the risk immediately",
+          "Entry, stop and targets go to the exchange in one operation",
+          "The target ladder is placed at once, not added by hand later",
+        ],
+      },
+      {
+        title: "Manage",
+        items: [
+          "Drag the stop on the chart and the order on the exchange moves with it",
+          "Move the entry and the whole target ladder follows",
+          "A target is hit - the stop goes to breakeven, and the server does it",
+          "The order window is draggable and never covers the level you need",
+          "Prices can be typed where the mouse cannot catch them",
+        ],
+      },
+      {
+        title: "Count",
+        items: [
+          "A dozen fills are merged into one trade automatically",
+          "Fees are shown as a separate line",
+          "You see which hour and which weekday eats your month",
+          "Profit factor and average trade, not just the bottom line",
+          "Trade cards on your own template, with no one else's referral code",
+        ],
+      },
+    ],
+    note:
+      "Neither the terminal nor the risk calculation makes trading risk-free. They remove execution mistakes - the ones that come from haste and mental arithmetic. The rest is still on the trader.",
+  },
+
+  proof: {
+    eyebrow: "What it looks like",
+    title: "One trade from entry to journal entry",
+    subtitle: "An ETH short on WEEX. Screenshots from the terminal, nothing redrawn.",
+    steps: [
+      {
+        title: "A wall at resistance",
+        text:
+          "1.6M sitting at 2415 in the book - an order that does not get eaten, and the terminal says so in the header. Short from the wall: entry 2415.22, stop 2425.12 behind it, three targets below.",
+        src: "/showcase/case/01-entry-v2.webp",
+        alt: "NMNH terminal: a liquidity wall at resistance and a short order placed from it",
+      },
+      {
+        title: "Target hit, stop at breakeven",
+        text:
+          "The first target is taken and the stop moved to 2411.36 - from here the trade cannot end in the red. The server moved it, not a browser tab.",
+        src: "/showcase/case/02-run-v2.webp",
+        alt: "NMNH terminal: stop moved to breakeven after the first target",
+      },
+      {
+        title: "Exit and the journal entry",
+        text:
+          "Closed at 2396.03 without waiting for the third target. The terminal logged the trade itself - entry, exit, targets, fees and result - and built the card from that record.",
+        src: "/showcase/case/03-exit-v2.webp",
+        alt: "NMNH terminal: closed trade and its result in the journal",
+      },
+    ],
+    cards: {
+      ours: "Terminal card",
+      theirs: "The same trade on the exchange",
+      oursSrc: "/showcase/case/04-card-nmnh.jpg",
+      theirsSrc: "/showcase/case/05-card-weex.jpg",
+      oursAlt: "ETHUSDT trade card from the NMNH terminal",
+      theirsAlt: "The same ETHUSDT trade as a WEEX exchange card",
+      note:
+        "The numbers match on both cards because both are built from the same exchange report. All that differs is the logo in the header and the referral code at the bottom.",
+    },
+  },
+
+  stack: {
+    eyebrow: "The ecosystem",
+    title: "Separately, people charge a subscription for this",
+    subtitle: "Here it is one workplace, and it costs nothing.",
+    items: [
+      {
+        title: "Market data",
+        objection: "“I'll have to keep three services open at once”",
+        text:
+          "Order book with liquidity walls, cluster and volume candles, NMNH VISION markup, a market-wide screener, funding, trending coins and news - in one window.",
+      },
+      {
+        title: "Journal and metrics",
+        objection: "“A spreadsheet lies: it gets filled in at night, when you remember the trade the way you'd like to”",
+        text:
+          "Trades are assembled from exchange fills. Equity curve, profit factor, average R, drawdown and fees on a separate line. A breakdown by coin, side, weekday, hour and trading session - and most of all, how the trade ended: at target, at stop or closed by hand.",
+      },
+      {
+        title: "Calendar and trader's path",
+        objection: "“The month is over and I can't recall what was in it”",
+        text:
+          "Every day of the month as a tile with its result and volume; tap one and you see every trade of that day. Next to it, the trader's path across volume milestones: you see how far the next one is.",
+      },
+      {
+        title: "Coins and achievements",
+        objection: "“Motivation lasts about a week”",
+        text:
+          "A winning trade earns coins, a losing one takes them away, a streak of clean trades pays a bonus on top. On top of that: monthly goals, achievements and your level. Coins are spent on terminal tools. These are internal points: not a cryptocurrency, not tradable, not withdrawable.",
+      },
+      {
+        title: "Live chat inside the terminal",
+        objection: "“There's no one to ask, and nobody around in the moment of doubt”",
+        text:
+          "The trading floor and trade reviews live in the same window as your position. No switching to a messenger while a decision is being made.",
+      },
+      {
+        title: "Cards and reports",
+        objection: "“Nothing to show but a screenshot with someone else's logo”",
+        text:
+          "The terminal turns a closed trade into a card itself, from the exchange report. Certificates, charts and journal reports come out on the same template.",
+      },
+      {
+        title: "Academy and reviews",
+        objection: "“I have the tool, but no idea what to do with it”",
+        text:
+          "Training from the basics to advanced, live trading sessions and trade reviews - in the same place where you trade.",
+      },
+    ],
+  },
+
+  analytics: {
+    eyebrow: "Analytics and progress",
+    title: "The whole month at a glance",
+    subtitle:
+      "A calendar of trading days, monthly totals and a breakdown of every trade - inside your account, from exchange data. Not a separate service, not a spreadsheet export.",
+    points: [
+      "Every day of the month as a tile: result, volume and trade count. Tap it to see every trade of that day",
+      "The month in numbers: days in profit, best and worst day, turnover",
+      "The trader's path across volume milestones - you see how far the next one is",
+      "Monthly goals, activity streaks and achievements are counted for you",
+    ],
+    shotAlt: "NMNH account: calendar of trading days, monthly totals and the trader's path",
+    honest:
+      "A screenshot of the mentor's account. Account balances are hidden - they are personal data. Percentages are calculated against the margin of each trade at leverage up to 25x and are not a promise of returns: the same leverage works against you too.",
+  },
+
+  cert: {
+    eyebrow: "Trader certificate",
+    title: "Issued by your trades, not by a course",
+    subtitle:
+      "Four pillars. Two of them closed is bronze, three is silver, four is gold. The certificate carries your name and number.",
+    pillars: [
+      { title: "Knowledge", text: "Academy course completed" },
+      { title: "Practice", text: "50 trades through the terminal, confirmed by the exchange" },
+      { title: "Discipline", text: "20 trading days, with a stop on every trade" },
+      { title: "Growth", text: "A calendar month in profit, at least 10 trades" },
+    ],
+    note: "No pillar can be closed with words: everything is counted from exchange reports.",
+    alt: "NMNH trader certificate template: knowledge, practice, discipline, growth",
+  },
+
+  free: {
+    eyebrow: "Price",
+    title: "Why this costs nothing",
+    text:
+      "The exchange pays us a share of the fees you generate trading through us. Part of that goes back to you, the rest is our income. So it is in our interest that you trade for a long time and do not blow up your deposit - not that you buy a subscription and disappear.",
+    points: [
+      "No subscriptions and no tiers at all",
+      "Part of your own trading fee comes back to your exchange account",
+      "Your money stays on the exchange, the key has no withdrawal rights",
+    ],
+    kicker: "This is the only arrangement where our interest and yours line up.",
+    cta: "What would come back from my volume",
+  },
+
   how: {
-    eyebrow: "How it works",
-    title: "From sign-up to your first trade",
-    subtitle: "Four steps and the terminal trades on your exchange account. No payments, no applications.",
+    eyebrow: "Getting started",
+    title: "Up and running in 15 minutes",
+    subtitle:
+      "Four steps and the terminal trades on your exchange account. Don't want to work it out alone - we'll walk them with you over a screen share.",
     steps: [
       { title: "Sign up on an exchange", text: "Open an account through the partner link and fund it - it takes a couple of minutes." },
       { title: "Send your UID to the bot", text: "The academy confirms your account - and the exchange shows up in your settings." },
       { title: "Connect the exchange", text: "Create an API key without withdrawal rights and paste it into the terminal - your account is live." },
       { title: "Trade from the terminal", text: "The size is already fitted to your deposit: hit “Enter” and the server runs the trade to the end." },
     ],
+    guarantee: {
+      title: "We'll connect it with you",
+      text:
+        "Don't want to deal with API keys alone - a curator walks all four steps with you over a screen share, at a time that suits you. If something doesn't work out, we'll tell you straight what's in the way.",
+      cta: "Connect with a curator",
+    },
+    haveAccount: {
+      title: "Already have an account on an exchange?",
+      text:
+        "Academy terms currently apply to accounts opened through our link: otherwise the exchange sees no connection and the volume is not credited. Message the bot - we'll look at your case and tell you what can be done.",
+      cta: "Message the bot",
+    },
   },
 
   faq: {
