@@ -85,6 +85,11 @@ export function chooseVenue(
   chosen: string | null,
   active?: string,
 ): string {
+  // Списка ещё нет: раздел только открывается и первый запрос как раз за ним.
+  // Пустой список тут значит «не знаем», а не «бирж нет», и отвечать на него
+  // пустым выбором - значит сходить на сервер дважды: сперва без биржи, потом
+  // с запомненной. Журнал от этого открывался вдвое дольше.
+  if (available.length === 0) return chosen || active || "";
   if (available.length < 2) return "";
   if (chosen && available.includes(chosen)) return chosen;
   if (active && available.includes(active)) return active;
@@ -112,16 +117,23 @@ export type VenuePick = {
   pick: (code: string) => void;
   /** Есть ли из чего выбирать: переключатель рисуется только тогда. */
   many: boolean;
+  /**
+   * Память о выборе прочитана. До этого мига выбор ещё не известен, и запрос,
+   * посланный раньше, пришлось бы повторять с правильной биржей.
+   */
+  ready: boolean;
 };
 
 /** Выбранная биржа из тех, что встречаются в сделках, с памятью о выборе. */
 export function useVenuePick(available: readonly string[], active?: string): VenuePick {
   const [saved, setSaved] = useState<SavedPick | null>(null);
+  const [ready, setReady] = useState(false);
 
   // Хранилище читаем после отрисовки: на сервере страницы его нет, и разметка
   // разошлась бы с первой перерисовкой в браузере.
   useEffect(() => {
     setSaved(read());
+    setReady(true);
   }, []);
 
   const chosen = freshChoice(saved, active);
@@ -144,5 +156,5 @@ export function useVenuePick(available: readonly string[], active?: string): Ven
     [active],
   );
 
-  return { venue, pick, many: available.length > 1 };
+  return { venue, pick, many: available.length > 1, ready };
 }

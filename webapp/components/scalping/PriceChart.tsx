@@ -115,12 +115,13 @@ import DragLevels, { type DragLevel } from "./DragLevels";
 import OrderChipView, { type OrderChip } from "./OrderChip";
 import { loadTrades, type JournalTrade } from "@/lib/journal";
 import {
-  floatingAt,
+  carriedFloating,
   pendingTargets,
   pnlAt,
   riskBands,
   riskFree,
   type ActiveTrade,
+  type Floating,
 } from "@/lib/trade/position";
 
 // Лист графика и палитра свечей.
@@ -1161,6 +1162,29 @@ function PriceChart({
   const retryAfter = useRef(0);
   const livePriceRef = useRef(livePrice);
   livePriceRef.current = livePrice;
+
+  // Опора плавающего результата по каждой сделке: число биржи и цена, при
+  // которой оно пришло. Между ответами число едет своей ценой - иначе оно
+  // стоит по три секунды, пока в приложении биржи бежит.
+  const floatRef = useRef(new Map<string, Floating>());
+  useEffect(() => {
+    const anchors = floatRef.current;
+    const live = new Set<string>();
+    for (const row of trades) {
+      live.add(row.id);
+      if (row.status !== "open" || row.unrealized == null) {
+        anchors.delete(row.id);
+        continue;
+      }
+      const have = anchors.get(row.id);
+      if (!have || have.value !== row.unrealized) {
+        anchors.set(row.id, { value: row.unrealized, price: livePriceRef.current });
+      }
+    }
+    for (const id of [...anchors.keys()]) {
+      if (!live.has(id)) anchors.delete(id);
+    }
+  }, [trades]);
   // Сделка нужна и при загрузке свечей: бокс строится от последнего бара, а на
   // момент открытия сделки баров может ещё не быть.
   const tradeRef = useRef(trades);
@@ -2786,7 +2810,7 @@ function PriceChart({
           // Число биржи, когда оно есть: она считает от реальной средней и
           // своей цены маркировки, и спорить с ней своей арифметикой значит
           // показывать трейдеру не тот результат, что у него на счёте.
-          const floating = row.unrealized ?? floatingAt(row, livePrice);
+          const floating = carriedFloating(row, floatRef.current.get(row.id) ?? null, livePrice);
           const taken = row.realized;
           const total = pnlAt(row, livePrice);
           return (

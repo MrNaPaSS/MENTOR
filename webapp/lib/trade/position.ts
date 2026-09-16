@@ -213,6 +213,36 @@ export function floatingAt(trade: ActiveTrade, price: number): number {
 }
 
 /**
+ * Опора плавающего результата: число биржи и цена, при которой оно пришло.
+ *
+ * Биржа считает результат точно - от своей средней цены входа, своей цены
+ * маркировки и удержанной комиссии, - но приходит он раз в несколько секунд.
+ * На экране число стояло, пока в приложении биржи оно бежало.
+ */
+export type Floating = { value: number; price: number };
+
+/**
+ * Плавающий результат, который движется вместе с ценой.
+ *
+ * Число биржи берём опорой и несём дальше своей ценой: пришло новое - опора
+ * переставляется. Так на экране и точность биржи, и скорость стакана. Своим
+ * расчётом от начала считаем только пока биржа молчит: он не знает ни средней
+ * цены входа, ни комиссии, и расходится с приложением на её величину.
+ */
+export function carriedFloating(
+  trade: ActiveTrade,
+  anchor: Floating | null,
+  price: number,
+): number {
+  if (trade.status !== "open") return 0;
+  if (!anchor || !(price > 0) || !(anchor.price > 0)) {
+    return trade.unrealized ?? floatingAt(trade, price);
+  }
+  const move = trade.side === "long" ? price - anchor.price : anchor.price - price;
+  return anchor.value + move * trade.qty;
+}
+
+/**
  * Итог по сделке целиком: забранное по целям плюс плавающее по остатку.
  *
  * Это не то же самое, что показывает биржа. Она знает только открытую позицию,

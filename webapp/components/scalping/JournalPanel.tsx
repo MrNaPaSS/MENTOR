@@ -196,8 +196,12 @@ export default function JournalPanel({
   }, [year, month, onlySymbol, symbol, venue]);
 
   useEffect(() => {
+    // Ждём, пока прочитается запомненный выбор биржи. Один кадр против одного
+    // лишнего круга к серверу: без этого журнал спрашивал сделки сперва без
+    // биржи, а следом ещё раз - с ней.
+    if (!pick.ready) return;
     reload();
-  }, [reload, refreshKey]);
+  }, [reload, refreshKey, pick.ready]);
 
   async function drop(id: number) {
     await removeTrade(id);
