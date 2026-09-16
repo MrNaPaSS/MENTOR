@@ -475,6 +475,34 @@ const DEFAULT_SYMBOL = "BTCUSDT";
 // Как часто переспрашивать состояние биржевого счёта, пока его не получили.
 const EXCHANGE_RETRY_MS = 5_000;
 
+// Как часто писать сверку результата в журнал: чаще незачем, это не измерение
+// цены, а разбор расхождения на глаз.
+const PNL_SEEN_MS = 30_000;
+const pnlSeenAt = new Map<string, number>();
+
+function pnlSeen(
+  trade: { id: string; symbol: string; side: string; entry: number; qty: number; realized: number },
+  live: { size: number; entry: number | null; unrealized: number | null },
+  price: number,
+): void {
+  const now = Date.now();
+  if (now - (pnlSeenAt.get(trade.id) ?? 0) < PNL_SEEN_MS) return;
+  pnlSeenAt.set(trade.id, now);
+  const entry = live.entry && live.entry > 0 ? live.entry : trade.entry;
+  const size = live.size > 0 ? live.size : trade.qty;
+  const move = trade.side === "long" ? price - entry : entry - price;
+  record("pnl.seen", {
+    id: trade.id,
+    symbol: trade.symbol,
+    exchange: live.unrealized ?? null,
+    ours: Number((move * size).toFixed(4)),
+    taken: Number(trade.realized.toFixed(4)),
+    price,
+    entry,
+    size,
+  });
+}
+
 export default function ScalpingPage() {
   const t = useT();
   const layerLabels = t.terminal.layers;
@@ -2406,6 +2434,11 @@ export default function ScalpingPage() {
           Math.abs(trade.qty - one.size) > one.size * 0.01 ? one.size : trade.qty;
         const entry = one.entry && one.entry > 0 ? one.entry : trade.entry;
         const unrealized = one.unrealized ?? undefined;
+        // Сверка результата с биржей: пишем в журнал всё, из чего он считается.
+        // Расхождение с приложением биржи видно глазами, а по какой из причин -
+        // нет: то ли биржа считает от своей цены маркировки, то ли её число не
+        // дошло и на экране наша арифметика.
+        pnlSeen(trade, one, midRef.current);
         if (qty === trade.qty && entry === trade.entry && unrealized === trade.unrealized) {
           continue;
         }
