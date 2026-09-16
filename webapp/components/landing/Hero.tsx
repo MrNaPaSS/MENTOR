@@ -21,13 +21,14 @@ export default function Hero() {
       <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
       <div className="pointer-events-none absolute inset-0 bg-grid-faint [background-size:48px_48px] opacity-30 [mask-image:radial-gradient(70%_60%_at_50%_30%,black,transparent)]" />
 
-      {/* Снимок рабочего места стоит под текстом, а не сбоку от него.
-          В две колонки картинка получала половину ширины и на первом экране
-          читалась как иллюстрация к тексту. Здесь она во всю ширину - то есть
-          вдвое с лишним крупнее, - и первым экраном становится сам терминал, а
-          текст над ним только называет, что это. */}
-      <div className="relative mx-auto max-w-7xl px-4 md:px-6">
-        <div className="max-w-3xl">
+      {/* Снимок справа от текста, и колонка под него шире текстовой.
+          Пропорции разные по ширине экрана: на широком картинка забирает
+          полтора места к одному, а около 1280 колонки почти равны - иначе имя
+          терминала в заголовке не помещается в свою колонку и подлезает под
+          снимок. За край экрана снимок не уходит: правую часть баннера
+          занимает сам терминал, и обрезать надо что угодно, только не его. */}
+      <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-10 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.43fr)]">
+        <div>
           <span className="eyebrow">
             <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-glow-cyan" />
             {copy.eyebrow}
@@ -56,7 +57,7 @@ export default function Hero() {
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 rounded-full bg-accent-cyan px-7 py-3 text-[15px] font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-cyan/90 active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full bg-accent-cyan px-5 py-2.5 text-sm font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-cyan/90 active:scale-[0.97]"
             >
               {copy.ctaTerminal} <ArrowRight className="h-[15px] w-[15px]" />
             </Link>
@@ -64,14 +65,14 @@ export default function Hero() {
             {/* Счёт на бирже: какой именно - человек выбирает в окне. */}
             <SignupPicker
               label={copy.ctaWeex}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-7 py-3 text-[15px] font-semibold text-text-primary transition-all duration-200 hover:border-border hover:bg-bg-panel/60 active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-sm font-semibold text-text-primary transition-all duration-200 hover:border-border hover:bg-bg-panel/60 active:scale-[0.97]"
             />
 
             <a
               href="https://t.me/moneyhoney7_bot"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 text-[15px] font-semibold text-text-secondary transition-all duration-200 hover:border-border hover:bg-bg-panel/60 hover:text-text-primary active:scale-[0.97]"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-sm font-semibold text-text-secondary transition-all duration-200 hover:border-border hover:bg-bg-panel/60 hover:text-text-primary active:scale-[0.97]"
             >
               <Send className="h-4 w-4" /> Telegram
             </a>
@@ -80,7 +81,7 @@ export default function Hero() {
 
         {/* Картинка первого экрана грузится сразу: отложенная, она въезжает
             на глазах у человека и дёргает раскладку. */}
-        <div className="mt-9 md:mt-10">
+        <div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/art/seo/terminal-cover.webp"
@@ -91,13 +92,10 @@ export default function Hero() {
             // @ts-expect-error - атрибут браузера, в типах React его ещё нет
             fetchpriority="high"
             decoding="async"
-            className="w-full rounded-2xl border border-white/[0.07] shadow-2xl md:rounded-3xl"
+            className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
           />
 
-          {/* Подпись под снимком - половина ширины и справа: во всю ширину
-              строка в пять слов растянулась бы на весь экран и читалась бы
-              заголовком, которым она не является. */}
-          <div className="relative ml-auto mt-4 overflow-hidden rounded-2xl border border-accent-cyan/25 bg-bg-panel/95 p-5 backdrop-blur-2xl md:mt-5 md:max-w-2xl">
+          <div className="relative mt-4 overflow-hidden rounded-2xl border border-accent-cyan/25 bg-bg-panel/95 p-5 backdrop-blur-2xl">
             <div
               aria-hidden
               className="pointer-events-none absolute inset-0"
