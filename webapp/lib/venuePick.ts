@@ -17,21 +17,51 @@ import { NO_VENUE } from "./journal";
 /** Где помнится выбор. Один ключ на все разделы: биржа у ученика одна и та же. */
 const KEY = "nmnh.journal.venue";
 
-function read(): string | null {
+/**
+ * Запомненный выбор: биржа и та, что была активной в момент выбора.
+ *
+ * Вторая половина решает главное. Ученик переключает счёт в профиле, чтобы
+ * торговать на другой бирже, - и журнал обязан пойти за ним. Раньше выбор,
+ * сделанный однажды, перебивал активную биржу навсегда: подключив вторую и
+ * третью, ученик видел в журнале старую и считал это поломкой.
+ */
+export type SavedPick = { venue: string; forActive: string };
+
+function read(): SavedPick | null {
   try {
-    return localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return null;
+    if (raw.startsWith("{")) {
+      const saved = JSON.parse(raw) as Partial<SavedPick>;
+      return saved.venue ? { venue: saved.venue, forActive: saved.forActive ?? "" } : null;
+    }
+    // Прежнее написание: одна биржа строкой, без памяти об активной.
+    return { venue: raw, forActive: "" };
   } catch {
     // Хранилище закрыто настройками браузера: просто откроемся на активной.
     return null;
   }
 }
 
-function write(code: string): void {
+function write(saved: SavedPick): void {
   try {
-    localStorage.setItem(KEY, code);
+    localStorage.setItem(KEY, JSON.stringify(saved));
   } catch {
     // Не сохранилось - раздел работает и без памяти о выборе.
   }
+}
+
+/**
+ * Жив ли запомненный выбор при нынешней активной бирже.
+ *
+ * Сменилась активная - выбор уступает ей: переключение счёта в профиле это и
+ * есть «покажи мне эту биржу». Пока активная та же, держится ручной выбор:
+ * внутри раздела ученик волен смотреть любую, включая отключённую.
+ */
+export function freshChoice(saved: SavedPick | null, active?: string): string | null {
+  if (!saved) return null;
+  if (!active || !saved.forActive) return saved.venue;
+  return saved.forActive === active ? saved.venue : null;
 }
 
 /**
@@ -82,13 +112,15 @@ export type VenuePick = {
 
 /** Выбранная биржа из тех, что встречаются в сделках, с памятью о выборе. */
 export function useVenuePick(available: readonly string[], active?: string): VenuePick {
-  const [chosen, setChosen] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedPick | null>(null);
 
   // Хранилище читаем после отрисовки: на сервере страницы его нет, и разметка
   // разошлась бы с первой перерисовкой в браузере.
   useEffect(() => {
-    setChosen(read());
+    setSaved(read());
   }, []);
+
+  const chosen = freshChoice(saved, active);
 
   // Список приходит новым массивом на каждый ответ сервера: сравниваем по
   // содержимому, иначе биржа пересчитывалась бы на ровном месте.
@@ -99,10 +131,14 @@ export function useVenuePick(available: readonly string[], active?: string): Ven
     [key, chosen, active],
   );
 
-  const pick = useCallback((code: string) => {
-    setChosen(code);
-    write(code);
-  }, []);
+  const pick = useCallback(
+    (code: string) => {
+      const saving = { venue: code, forActive: active ?? "" };
+      setSaved(saving);
+      write(saving);
+    },
+    [active],
+  );
 
   return { venue, pick, many: available.length > 1 };
 }

@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { chooseVenue, venueLabel } from "@/lib/venuePick";
+import { chooseVenue, freshChoice, venueLabel } from "@/lib/venuePick";
 import { dayOfVenue, monthTradesOf } from "@/lib/venueDay";
 import type { CalendarDay } from "@/lib/api";
 
@@ -89,5 +89,36 @@ describe("клетка дня в разрезе биржи", () => {
   it("считает сделки биржи за месяц", () => {
     expect(monthTradesOf([day(), day({ date: "2026-09-13" })], "weex")).toBe(4);
     expect(monthTradesOf([day()], "bybit")).toBe(0);
+  });
+});
+
+
+// Ученик переключает счёт в профиле, чтобы торговать на другой бирже. Журнал,
+// календарь и аналитика обязаны пойти за ним: раньше выбор, сделанный однажды,
+// перебивал активную биржу навсегда, и на второй подключённой бирже трейдер
+// видел в журнале старую.
+
+describe("выбор уступает смене активной биржи", () => {
+  it("активная сменилась - запомненный выбор больше не в счёт", () => {
+    expect(freshChoice({ venue: "weex", forActive: "weex" }, "okx")).toBeNull();
+  });
+
+  it("активная та же - ручной выбор держится", () => {
+    expect(freshChoice({ venue: "weex", forActive: "okx" }, "okx")).toBe("weex");
+  });
+
+  it("прежнее написание памяти читается как есть", () => {
+    // Раньше хранилась одна строка, без памяти об активной бирже.
+    expect(freshChoice({ venue: "mexc", forActive: "" }, "okx")).toBe("mexc");
+  });
+
+  it("активной нет - показываем запомненное", () => {
+    expect(freshChoice({ venue: "mexc", forActive: "weex" }, undefined)).toBe("mexc");
+    expect(freshChoice(null, "okx")).toBeNull();
+  });
+
+  it("после смены активной экран показывает именно её", () => {
+    const stale = freshChoice({ venue: "weex", forActive: "weex" }, "binance");
+    expect(chooseVenue(["weex", "binance", "okx"], stale, "binance")).toBe("binance");
   });
 });
