@@ -71,7 +71,17 @@ echo [5/5] Zapusk komponentov...
 :: interfejsah daval by put' v obhod Cloudflare. Bot i tunnel hodyat na 127.0.0.1.
 :: Bez --reload: on perezapuskal server posredi obhoda sdelok na kazhdom
 :: izmenenii fajla. Posle git pull okna zakryvayut i zapuskayut start.bat zanovo.
-start "MENTOR Backend" cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && uvicorn backend.main:app --host 127.0.0.1 --port 8000"
+:: NMNH_SPLIT=1 v .env: sajt i soprovozhdenie sdelok idut raznymi processami.
+:: Perezapusk odnogo ne ostanavlivaet drugoj. Rabotaet tolko na Postgres:
+:: zamok scheta mezhdu processami derzhit on (docs/architecture/database.md).
+findstr /b /c:"NMNH_SPLIT=1" ".env" >nul 2>&1
+if errorlevel 1 (
+    start "MENTOR Backend" cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && uvicorn backend.main:app --host 127.0.0.1 --port 8000"
+) else (
+    echo   Rezhim: dva processa - api i watcher
+    start "MENTOR API"     cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && set NMNH_ROLE=api&& uvicorn backend.main:app --host 127.0.0.1 --port 8000"
+    start "MENTOR Watcher" cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && set NMNH_ROLE=watcher&& uvicorn backend.main:app --host 127.0.0.1 --port 8001"
+)
 start "MENTOR Bot"     cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && python -m bot.main"
 
 timeout /t 3 /nobreak >nul

@@ -72,3 +72,6 @@ ca-bundle.pem
 webapp/e2e/shots/
 webapp/test-results/
 webapp/playwright-report/
+
+# Копии базы: снимает backup_db.py, хранятся локально и в репозитории им не место.
+backups/
