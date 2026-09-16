@@ -308,15 +308,15 @@ export const landing = {
 
   free: {
     eyebrow: "Price",
-    title: "Why this costs nothing",
+    title: "You are paying for this already",
     text:
-      "The exchange pays us a share of the fees you generate trading through us. Part of that goes back to you, the rest is our income. So it is in our interest that you trade for a long time and do not blow up your deposit - not that you buy a subscription and disappear.",
+      "A fee leaves your account on every trade, and it will keep leaving wherever you trade. The only question is whether part of it comes back. Through us it does - and the workplace comes on top.",
     points: [
-      "No subscriptions and no tiers at all",
-      "Part of your own trading fee comes back to your exchange account",
+      "No subscriptions, no tiers, no access levels",
+      "Part of the fee comes back to your exchange account",
       "Your money stays on the exchange, the key has no withdrawal rights",
     ],
-    kicker: "This is the only arrangement where our interest and yours line up.",
+    kicker: "We earn on volume, not on subscriptions. So it matters to us that you stay in the market.",
     cta: "What would come back from my volume",
   },
 
