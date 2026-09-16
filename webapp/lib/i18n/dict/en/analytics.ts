@@ -71,6 +71,11 @@ export const analytics = {
     m5m: "NMNH legend",
     m10m: "To the stars",
     m25m: "Elite",
+    m50m: "Ocean",
+    m100m: "Volcano",
+    m250m: "Orbit",
+    m500m: "Galaxy",
+    m1b: "Billion",
   },
 
   rarity: {

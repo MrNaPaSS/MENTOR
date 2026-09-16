@@ -97,6 +97,12 @@ const config: Config = {
         // буквы это прощают, а точка направления - круг в шесть пикселей - на
         // таком сдвиге дрожит краями. translate3d, чтобы движение считала
         // видеокарта: она сдвигает готовый слой, а не перерисовывает его.
+        // Дорожка вех перелистнулась на следующий отрезок: новая въезжает
+        // справа, а не подменяется на месте.
+        "path-shift": {
+          "0%": { transform: "translate3d(18%, 0, 0)", opacity: "0" },
+          "100%": { transform: "translate3d(0, 0, 0)", opacity: "1" },
+        },
         marquee: {
           "0%": { transform: "translate3d(0, 0, 0)" },
           "100%": { transform: "translate3d(calc(var(--marquee-span, 50%) * -1), 0, 0)" },
@@ -126,6 +132,7 @@ const config: Config = {
         "fade-up": "fade-up 0.6s cubic-bezier(0.22,1,0.36,1) both",
         "slide-down": "slide-down 0.5s cubic-bezier(0.22,1,0.36,1) both",
         shimmer: "shimmer 1.6s linear infinite",
+        "path-shift": "path-shift 700ms cubic-bezier(0.22, 1, 0.36, 1)",
         marquee: "marquee 40s linear infinite",
         "pulse-glow": "pulse-glow 2.4s ease-in-out infinite",
         "price-flash": "price-flash 0.6s ease-out",

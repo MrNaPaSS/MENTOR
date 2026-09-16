@@ -49,7 +49,25 @@ const VOLUME_MILESTONES = [
   { vol: 5_000_000,  label: "5M",   emoji: "👑", key: "m5m"   as const, reward: "legendary" as const },
   { vol: 10_000_000, label: "10M",  emoji: "🚀", key: "m10m"  as const, reward: "legendary" as const },
   { vol: 25_000_000, label: "25M",  emoji: "⚡", key: "m25m"  as const, reward: "legendary" as const },
+  // Выше 25M путь продолжается: дорожка показывает не весь список сразу, а
+  // отрезок из семи вех, и 25M становится началом следующего.
+  { vol: 50_000_000,  label: "50M",  emoji: "🌊", key: "m50m"  as const, reward: "legendary" as const },
+  { vol: 100_000_000, label: "100M", emoji: "🌋", key: "m100m" as const, reward: "legendary" as const },
+  { vol: 250_000_000, label: "250M", emoji: "🛰", key: "m250m" as const, reward: "legendary" as const },
+  { vol: 500_000_000, label: "500M", emoji: "🌌", key: "m500m" as const, reward: "legendary" as const },
+  { vol: 1_000_000_000, label: "1B", emoji: "🪐", key: "m1b"   as const, reward: "legendary" as const },
 ];
+
+/**
+ * Сколько вех видно на дорожке разом и через сколько она перелистывается.
+ *
+ * Шаг на единицу меньше окна: последняя веха отрезка становится первой
+ * следующего. Взяв 25M, человек видит его же в начале нового пути - и сразу
+ * понимает, что дорога не кончилась, а началась заново с той точки, где он
+ * стоит.
+ */
+const PATH_SIZE = 7;
+const PATH_STEP = PATH_SIZE - 1;
 
 // Progressive XP levels: L2=200, L3=600, L4=1400, L5=3000, L6=6200...
 function xpToLevel(level: number): number {
@@ -746,19 +764,28 @@ export default function AnalyticsPage() {
             ещё не взят. Теперь это одна линия, на которой видно и пройденное, и
             где стоишь, и что впереди. */}
         {loaded && (() => {
-          const last = VOLUME_MILESTONES.length - 1;
           const nextIdx = VOLUME_MILESTONES.findIndex((m) => totalVolume < m.vol);
           const nextM = nextIdx >= 0 ? VOLUME_MILESTONES[nextIdx] : null;
           const prevM = nextIdx > 0 ? VOLUME_MILESTONES[nextIdx - 1] : null;
 
+          // Какой отрезок пути показываем. Взятая веха переносит дорожку на
+          // следующий отрезок и сама встаёт в его начало: путь не упирается в
+          // потолок, а начинается заново оттуда, где человек стоит.
+          const reached = nextIdx === -1 ? VOLUME_MILESTONES.length - 1 : Math.max(0, nextIdx - 1);
+          // К концу списка отрезок выходит короче семи вех - и пусть: взятая
+          // веха обязана стоять первой, даже если следующих осталось четыре.
+          const begin = PATH_STEP * Math.floor(reached / PATH_STEP);
+          const leg = VOLUME_MILESTONES.slice(begin, begin + PATH_SIZE);
+          const last = leg.length - 1;
+
           // Между вехами линия заполняется по-своему: вехи стоят на равном
           // расстоянии, а расстояние между ними в деньгах разное - от полусотни
-          // тысяч до пятнадцати миллионов. Считаем долю внутри своего отрезка.
+          // тысяч до сотен миллионов. Считаем долю внутри своего отрезка.
           const from = prevM ? prevM.vol : 0;
-          const to = nextM ? nextM.vol : VOLUME_MILESTONES[last].vol;
+          const to = nextM ? nextM.vol : VOLUME_MILESTONES[VOLUME_MILESTONES.length - 1].vol;
           const inLeg = to > from ? Math.min(1, Math.max(0, (totalVolume - from) / (to - from))) : 1;
-          const done = nextIdx === -1 ? last : Math.max(0, nextIdx - 1);
-          const at = nextIdx === -1 ? 1 : (done + inLeg) / last;
+          const done = nextIdx === -1 ? last : Math.max(0, nextIdx - 1 - begin);
+          const at = nextIdx === -1 ? 1 : Math.min(1, (done + inLeg) / last);
 
           return (
             <div className="overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]">
@@ -799,13 +826,16 @@ export default function AnalyticsPage() {
                 {/* Сама дорожка. Точки стоят по краям своих долей, поэтому
                     первая прижата к левому краю, последняя к правому - линия
                     начинается и кончается вехой, а не воздухом. */}
-                <div className="relative h-8">
+                {/* Ключ по началу отрезка: на новом отрезке дорожка не
+                    перерисовывается на месте, а въезжает справа - видно, что
+                    путь перелистнулся, а не сбросился. */}
+                <div key={begin} className="relative h-8 animate-path-shift motion-reduce:animate-none">
                   <div className="absolute inset-x-0 top-1.5 h-[3px] rounded-full bg-[var(--pane-hover)]" />
                   <div
                     className="absolute left-0 top-1.5 h-[3px] rounded-full bg-[var(--pane-gold)] transition-[width] duration-700"
                     style={{ width: `${at * 100}%` }}
                   />
-                  {VOLUME_MILESTONES.map((m, i) => {
+                  {leg.map((m, i) => {
                     const reached = totalVolume >= m.vol;
                     const target = nextIdx === i;
                     return (
