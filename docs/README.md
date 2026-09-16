@@ -29,6 +29,8 @@
 | [integrations/bingx-api.md](integrations/bingx-api.md) | BingX: подпись, заявки, книга потоком, приватный поток, метка брокера - до первой строки адаптера |
 | [integrations/academy.md](integrations/academy.md) | Связка с академией: монеты за учёбу, баланс, подтверждённые счета, общий секрет |
 | [integrations/academy-trading.md](integrations/academy-trading.md) | **Статистика торговли в мини-аппе академии**: ручка сводки, поля, пустые состояния, что показать на экране |
+| [marketing/growth-playbook.md](marketing/growth-playbook.md) | **План роста**: оффер, экономика трейдера, модель денег, каналы и аффилиаты - разбор Хормози под наш терминал |
+| [marketing/posting-kit.md](marketing/posting-kit.md) | Площадки для ручных публикаций и готовые тексты под каждую |
 | [worklog/2026-09-08-terminal.md](worklog/2026-09-08-terminal.md) | Журнал, комиссия, радио и разметка: что чинилось и почему |
 | [worklog/2026-09-08-journal-duplicates.md](worklog/2026-09-08-journal-duplicates.md) | Двойная запись в журнале, комиссия на три четверти, боксы на графике |
 | [worklog/2026-09-11-rewards-breakeven-caps.md](worklog/2026-09-11-rewards-breakeven-caps.md) | Награды с получением, стоп в б/у сразу после тейка, предел позиции по плечу, новый «Маркет» и функции за монеты |
