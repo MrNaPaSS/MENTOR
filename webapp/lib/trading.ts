@@ -242,6 +242,12 @@ export type LevelMove = {
   entry?: number;
   stop?: number;
   take?: number;
+  /**
+   * Вся лестница целей разом: перенос входа везёт её с собой. Одиночная цель
+   * двигается полем `take`, а здесь - весь замысел, чтобы на бирже он встал
+   * тем же, что нарисован на графике.
+   */
+  takes?: number[];
   take_index?: number;
   trade_id?: string;
 };

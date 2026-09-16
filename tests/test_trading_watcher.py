@@ -1874,3 +1874,72 @@ def test_after_the_fill_the_margin_still_ends(monkeypatch):
         asyncio.run(watcher._handle_student(None, 1, [one], "okx"))
 
     assert decisions[-1].cancelled is True
+
+
+# ── стоп и добор лимитки ─────────────────────────────────────────────────────
+#
+# Лимитка исполняется частями, и стоп ставится на то, что набрано в тот момент.
+# Сам он не растёт: позиция добирается, а прикрыта остаётся её первая половина.
+
+
+class _SizedStops:
+    """Биржа, которая называет объём своих условных заявок."""
+
+    def __init__(self, orders, step: float = 0.001):
+        self.orders = list(orders)
+        self.step = step
+
+    async def algo_orders(self, symbol: str):
+        return list(self.orders)
+
+    async def symbol_filters(self, symbol: str):
+        return {"step": self.step, "tick": 0.1, "min_qty": self.step}
+
+
+async def test_a_stop_smaller_than_the_position_is_noticed():
+    """Стоп на половину позиции - это половина позиции без защиты."""
+    from backend.trading.watcher import PositionWatcher
+
+    client = _SizedStops(
+        [{"orderId": "1", "planType": "STOP_LOSS", "positionSide": "LONG", "quantity": "0.5"}]
+    )
+    watcher = PositionWatcher(lambda: None, lambda: None)
+
+    assert await watcher._stop_is_short(client, _live("long"), 1.0) is True
+    # Дозаполнения не было - стоп прикрывает всё, что стоит.
+    assert await watcher._stop_is_short(client, _live("long"), 0.5) is False
+
+
+async def test_a_stop_on_the_whole_position_is_left_alone():
+    """У части бирж объёма в стопе нет вовсе: он закрывает позицию целиком."""
+    from backend.trading.watcher import PositionWatcher
+
+    client = _SizedStops(
+        [{"orderId": "1", "planType": "STOP_LOSS", "positionSide": "LONG", "quantity": ""}]
+    )
+    watcher = PositionWatcher(lambda: None, lambda: None)
+
+    assert await watcher._stop_is_short(client, _live("long"), 10.0) is False
+
+
+async def test_a_missing_stop_is_not_a_short_stop():
+    """Стопа нет вовсе - это забота `_ensure_stop`, второй отсюда был бы дублем."""
+    from backend.trading.watcher import PositionWatcher
+
+    client = _SizedStops([{"orderId": "2", "planType": "TAKE_PROFIT", "positionSide": "LONG",
+                           "quantity": "0.3"}])
+    watcher = PositionWatcher(lambda: None, lambda: None)
+
+    assert await watcher._stop_is_short(client, _live("long"), 1.0) is False
+
+
+async def test_the_stop_of_the_other_side_does_not_count():
+    """Встречная позиция прикрыта своим стопом: за наш он не считается."""
+    from backend.trading.watcher import PositionWatcher
+
+    client = _SizedStops(
+        [{"orderId": "1", "planType": "STOP_LOSS", "positionSide": "SHORT", "quantity": "1"}]
+    )
+    watcher = PositionWatcher(lambda: None, lambda: None)
+
+    assert await watcher._stop_is_short(client, _live("long"), 1.0) is False

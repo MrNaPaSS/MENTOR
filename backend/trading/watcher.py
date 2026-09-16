@@ -801,6 +801,22 @@ class PositionWatcher:
         if decision.size > float(trade.qty):
             trade.qty = decision.size
             changed = True
+            # Стоп ставился на то, что было набрано тогда, и на добор не растёт
+            # сам. Позиция росла - и защищённой оставалась её первая половина:
+            # на бирже это видно как стоп на объём меньше позиции.
+            if trade.status == "open" and await self._stop_is_short(
+                client, trade, decision.size
+            ):
+                logger.warning(
+                    "Стоп %s (%s) прикрывает меньше позиции (%s) - ставим на весь объём",
+                    trade.symbol,
+                    trade.client_id,
+                    num(decision.size),
+                )
+                if await self._set_stop(
+                    client, trade, float(trade.current_stop), price, held=decision.size
+                ):
+                    changed = True
 
         # Позиция без стопа - на биржах, где приложенный ко входу стоп ждёт
         # полного исполнения (OKX). Частичное исполнение там оставляло набранный
@@ -1037,6 +1053,50 @@ class PositionWatcher:
         )
         return await set_stop(client, trade, float(trade.current_stop), price, held=held)
 
+
+    async def _stop_is_short(
+        self, client: WeexFutures, trade: LiveTrade, size: float
+    ) -> bool:
+        """Прикрывает ли стоп меньше, чем стоит на бирже.
+
+        Спрашиваем биржу, а не считаем по памяти: стоп мог поставить и не
+        терминал - приложенный ко входу заводит сама биржа, и объём у него свой.
+
+        Молчание биржи и заявка без объёма значат «не знаем»: у части бирж стоп
+        закрывает всю позицию и объёма в нём нет вовсе (`closePosition` у
+        Binance). Переставлять такой значит менять стоп на всю позицию на стоп
+        с числом - хуже, чем было.
+        """
+        try:
+            orders = await client.algo_orders(trade.symbol)
+        except WeexTradeError as exc:
+            logger.debug("Объём стопа %s не проверен: %s", trade.symbol, exc)
+            return False
+
+        side = trade.side.upper()
+        covered = 0.0
+        seen = False
+        for order in orders:
+            kind = str(order.get("planType") or order.get("type") or "").lower()
+            if "stop" not in kind and "loss" not in kind and not kind.endswith("sl"):
+                continue
+            if str(order.get("positionSide") or side).upper() not in (side, "", "BOTH", "NET"):
+                continue
+            quantity = str(order.get("quantity") or order.get("size") or "").strip()
+            if not quantity or float(quantity or 0) <= 0:
+                # Стоп на всю позицию: объёма у него нет по устройству.
+                return False
+            seen = True
+            covered += float(quantity)
+
+        if not seen:
+            # Стопа на бирже нет вовсе - это не наш случай: его ставит
+            # `_ensure_stop`, и ставить второй отсюда значит завести дубль.
+            return False
+
+        filters = await client.symbol_filters(trade.symbol)
+        step = float(filters.get("step") or 0)
+        return covered + step < size
 
     async def _find_stop_order(self, client: WeexFutures, trade: LiveTrade) -> str:
         """Найти стоп этой позиции среди условных заявок.

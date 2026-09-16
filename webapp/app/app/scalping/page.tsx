@@ -1743,6 +1743,11 @@ export default function ScalpingPage() {
               entry: price,
               stop: trade.stop + (price - trade.entry),
               take: trade.targets[trade.takesHit] + (price - trade.entry),
+              // Вся лестница, а не первая цель. На графике вход тянет за собой
+              // все цели, а на сервер уезжала одна: остальные оставались на
+              // прежних ценах и вставали на бирже вразнобой, когда лимитка
+              // исполнялась.
+              takes: trade.targets.map((p) => p + (price - trade.entry)),
             }
           : kind === "stop"
             ? { stop: price }

@@ -888,3 +888,44 @@ def test_attached_stop_exchanges_do_not_touch_conditional_orders(moving):
 
     assert move(client, stop=79_800.0).status_code == 200
     assert exchange.algo_cancelled == []
+
+
+def test_moving_the_entry_carries_the_whole_ladder(moving):
+    """Вход переехал - переехали все цели, а не первая.
+
+    На графике вход тянет за собой всю лестницу, а на сервер уезжала одна
+    цель: остальные оставались на прежних ценах и вставали на бирже вразнобой,
+    когда лимитка исполнялась. Трейдер видел на экране один замысел, а на счёте
+    получал другой.
+    """
+    client, exchange, session, live = moving
+    live.targets_json = json.dumps([80_400.0, 80_800.0, 81_200.0])
+    session.commit()
+    exchange.pending = [{"orderId": "e1", "clientOrderId": "BTCUSDT-1"}]
+
+    body = move(
+        client,
+        entry=79_500.0,
+        stop=79_400.0,
+        take=79_900.0,
+        takes=[79_900.0, 80_300.0, 80_700.0],
+    ).json()
+
+    assert body["takes"] == [79_900.0, 80_300.0, 80_700.0]
+    session.refresh(live)
+    assert json.loads(live.targets_json) == [79_900.0, 80_300.0, 80_700.0]
+
+
+def test_a_target_on_the_wrong_side_is_refused(moving):
+    """Цель ниже входа у лонга биржа примет через час и оставит сделку без неё."""
+    client, exchange, session, live = moving
+    exchange.pending = [{"orderId": "e1", "clientOrderId": "BTCUSDT-1"}]
+
+    answer = move(
+        client, entry=79_500.0, stop=79_400.0, takes=[79_900.0, 79_100.0]
+    )
+
+    assert answer.status_code >= 400
+    session.refresh(live)
+    # Замысел остался прежним: половину лестницы записывать нельзя.
+    assert json.loads(live.targets_json) == [80_400.0]

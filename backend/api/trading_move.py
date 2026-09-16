@@ -77,6 +77,12 @@ class MoveIn(BaseModel):
     entry: float | None = Field(default=None, gt=0)
     stop: float | None = Field(default=None, gt=0)
     take: float | None = Field(default=None, gt=0)
+    # Вся лестница целей разом. Перенос входа везёт её с собой: расстояния до
+    # целей задал трейдер, и терять их при переносе заявки он не просил.
+    # Раньше отсюда уезжала только первая цель, остальные оставались на
+    # прежних ценах - на графике лестница ехала вся, а на бирже потом вставала
+    # вразнобой.
+    takes: list[float] | None = Field(default=None, max_length=5)
     # Какую именно цель двигаем, если их несколько. Счёт с нуля, по возрастанию
     # в сторону прибыли.
     take_index: int = Field(default=0, ge=0, le=4)
@@ -210,7 +216,7 @@ async def move_levels(
     """Перенести вход, стоп или цель на новую цену."""
     if body.side not in {"long", "short"}:
         raise HTTPException(422, "Сторона сделки: long или short")
-    if body.entry is None and body.stop is None and body.take is None:
+    if body.entry is None and body.stop is None and body.take is None and not body.takes:
         raise HTTPException(422, "Нечего переносить")
 
     live = _live(session, student, body)
@@ -279,6 +285,18 @@ async def _move_waiting(
 ) -> dict[str, Any]:
     """Переставить ждущую лимитку: вход и стоп - вместе, целям хватит замысла."""
     targets: list[float] = json.loads(live.targets_json or "[]")
+    if body.takes:
+        # Лестница переехала целиком - вместе со входом. Проверяем каждую цель
+        # так же строго, как одиночную: цель по ту сторону входа биржа примет
+        # не сейчас, а через час, когда лимитка исполнится, - и сделка окажется
+        # без неё.
+        entry = round_to_tick(body.entry, tick) if body.entry is not None else live.entry
+        moved = [round_to_tick(price, tick) for price in body.takes if price > 0]
+        for price in moved:
+            _guard(live.side, entry, None, price)
+        if moved:
+            targets = moved
+            live.targets_json = json.dumps(targets)
     if body.take is not None:
         take = round_to_tick(body.take, tick)
         # Замысел проверяем так же строго, как заявку на бирже. Цель по ту
