@@ -12,3 +12,6 @@ websockets>=12.0
 python-multipart>=0.0.9
 certifi>=2024.0
 cryptography>=42.0
+# Драйвер Postgres. На SQLite не нужен и не мешает; без него сервер не
+# подключится к базе после переезда (docs/architecture/database.md).
+psycopg[binary]>=3.1
