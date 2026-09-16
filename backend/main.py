@@ -84,7 +84,9 @@ def process_role(value: str | None = None) -> str:
     if not role:
         return "all"
     if role not in ROLES:
-        logging.getLogger("nmnh").warning("Неизвестная роль процесса %s - работаем как all", role)
+        logging.getLogger("nmnh.trading").warning(
+            "Неизвестная роль процесса %s - работаем как all", role
+        )
         return "all"
     return role
 
@@ -175,7 +177,7 @@ def create_app(
             if config.institutional_warm
             else None
         )
-        logging.getLogger("nmnh").info("Роль процесса: %s", role)
+        logging.getLogger("nmnh.trading").info("Роль процесса: %s", role)
         if runs_market:
             collector.start()
             balance_collector.start()
