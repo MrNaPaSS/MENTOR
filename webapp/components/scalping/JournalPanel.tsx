@@ -316,177 +316,197 @@ export default function JournalPanel({
           {error}
         </p>
       ) : (
-        <div className="no-scrollbar min-h-0 flex-1 overflow-auto px-3 py-2">
-          {summary && (
-            <div className="mb-3 grid grid-cols-5 gap-2 font-mono tabular-nums">
-              <Stat label={t.journal.statPnl} value={money(summary.pnl)} tone={tone(summary.pnl)} />
-              <Stat label={t.journal.statTrades} value={String(summary.count)} />
-              <Stat label={t.journal.statWinRate} value={`${summary.win_rate}%`} />
-              <Stat
-                label={t.journal.statBest}
-                value={summary.wins > 0 ? money(summary.best) : "-"}
-                tone={summary.wins > 0 ? tone(summary.best) : undefined}
-              />
-              <Stat
-                label={t.journal.statWorst}
-                value={summary.losses > 0 ? money(summary.worst) : "-"}
-                tone={summary.losses > 0 ? tone(summary.worst) : undefined}
-              />
-            </div>
-          )}
-
-          <div className="mb-3 rounded border border-[var(--pane-border)] p-2">
-            <div className="mb-2 flex items-center justify-between">
-              <button
-                onClick={() => shiftMonth(-1)}
-                className="px-1 text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
-              >
-                ←
-              </button>
-              <span className="font-mono text-[11px] text-[var(--pane-text-2)]">
-                {String(month).padStart(2, "0")}.{year} ·{" "}
-                <span className={tone(total)}>{money(total)} $</span>
-              </span>
-              <button
-                onClick={() => shiftMonth(1)}
-                className="px-1 text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
-              >
-                →
-              </button>
-            </div>
-
-            <div className="grid grid-cols-7 gap-1 text-center">
-              {t.journal.weekdays.map((w) => (
-                <span key={w} className="text-[10px] text-[var(--pane-muted)]">
-                  {w}
-                </span>
-              ))}
-              {monthCells(year, month, days).map((cell, i) => (
-                <div
-                  key={i}
-                  title={cell ? t.journal.cellTitle(cell.trades, money(cell.pnl)) : undefined}
-                  className={`rounded py-1 font-mono text-[10px] tabular-nums ${
-                    cell === null
-                      ? ""
-                      : cell === undefined
-                        ? "text-[var(--pane-muted)]"
-                        : cell.pnl >= 0
-                          ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]"
-                          : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
-                  }`}
+        <div className="no-scrollbar min-h-0 flex-1 overflow-auto px-3 py-2 lg:grid lg:grid-cols-[26rem_minmax(0,1fr)] lg:items-start lg:gap-3 lg:overflow-hidden">
+          {/* Слева - итог и календарь, справа - сами сделки.
+              Панель журнала шире, чем нужно календарю: растянутый на всю
+              ширину, он отодвигал список вниз, и на невысокой панели сделок
+              было видно две строки. Плечом к плечу обе половины
+              отвечают на свои вопросы сразу: календарь - про дисциплину,
+              список - про конкретную сделку. Узкая панель (телефон, вторая
+              колонка терминала) остаётся столбиком: две колонки там не
+              разойдутся. */}
+          <div className="no-scrollbar lg:max-h-full lg:min-h-0 lg:overflow-auto">
+            {summary && (
+              <div className="mb-3 grid grid-cols-5 gap-2 font-mono tabular-nums lg:grid-cols-2">
+                <Stat
+                  label={t.journal.statPnl}
+                  value={money(summary.pnl)}
+                  tone={tone(summary.pnl)}
+                  wide
+                />
+                <Stat label={t.journal.statTrades} value={String(summary.count)} />
+                <Stat label={t.journal.statWinRate} value={`${summary.win_rate}%`} />
+                <Stat
+                  label={t.journal.statBest}
+                  value={summary.wins > 0 ? money(summary.best) : "-"}
+                  tone={summary.wins > 0 ? tone(summary.best) : undefined}
+                />
+                <Stat
+                  label={t.journal.statWorst}
+                  value={summary.losses > 0 ? money(summary.worst) : "-"}
+                  tone={summary.losses > 0 ? tone(summary.worst) : undefined}
+                />
+              </div>
+            )}
+    
+            <div className="mb-3 rounded border border-[var(--pane-border)] p-2">
+              <div className="mb-2 flex items-center justify-between">
+                <button
+                  onClick={() => shiftMonth(-1)}
+                  className="px-1 text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
                 >
-                  {cell ? money(cell.pnl) : cell === undefined ? "·" : ""}
-                </div>
-              ))}
+                  ←
+                </button>
+                <span className="font-mono text-[11px] text-[var(--pane-text-2)]">
+                  {String(month).padStart(2, "0")}.{year} ·{" "}
+                  <span className={tone(total)}>{money(total)} $</span>
+                </span>
+                <button
+                  onClick={() => shiftMonth(1)}
+                  className="px-1 text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+                >
+                  →
+                </button>
+              </div>
+    
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {t.journal.weekdays.map((w) => (
+                  <span key={w} className="text-[10px] text-[var(--pane-muted)]">
+                    {w}
+                  </span>
+                ))}
+                {monthCells(year, month, days).map((cell, i) => (
+                  <div
+                    key={i}
+                    title={cell ? t.journal.cellTitle(cell.trades, money(cell.pnl)) : undefined}
+                    className={`rounded py-1 font-mono text-[10px] tabular-nums ${
+                      cell === null
+                        ? ""
+                        : cell === undefined
+                          ? "text-[var(--pane-muted)]"
+                          : cell.pnl >= 0
+                            ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]"
+                            : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
+                    }`}
+                  >
+                    {cell ? money(cell.pnl) : cell === undefined ? "·" : ""}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {trades.length === 0 ? (
-            <p className="py-6 text-center text-[var(--pane-muted)]">
-              {t.journal.empty}
-            </p>
-          ) : (
-            <table className="w-full font-mono text-[11px] tabular-nums">
-              <thead className="text-[10px] text-[var(--pane-muted)]">
-                <tr className="text-left">
-                  <th className="py-1">{t.journal.colDate}</th>
-                  <th>{t.journal.colCoin}</th>
-                  <th>{t.journal.colEntry}</th>
-                  <th>{t.journal.colExit}</th>
-                  <th>{t.journal.colTargets}</th>
-                  <th className="text-right">{t.journal.colResult}</th>
-                  <th />
-                  {mentor && <th />}
-                </tr>
-              </thead>
-              <tbody>
-                {trades.map((row) => (
-                  <tr
-                    key={row.id}
-                    onMouseEnter={() => onHover?.(row)}
-                    onMouseLeave={() => onHover?.(null)}
-                    onClick={() => onPick?.(row)}
-                    title={t.journal.openChart}
-                    className={`border-t border-[var(--pane-border)] transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)] ${
-                      onPick ? "cursor-pointer" : "cursor-default"
-                    }`}
-                  >
-                    <td className="py-1 text-[var(--pane-muted)]">
-                      {new Date(row.closed_at).toLocaleString(numbers, {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                    <td>
-                      <span className={row.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
-                        {row.symbol.replace(/USDT$/, "")}
-                      </span>{" "}
-                      <span className="text-[10px] text-[var(--pane-muted)]">
-                        ×{row.leverage} · {t.journal.reasons[row.outcome]}
-                        {/* Где сделка была открыта: биржи считаются порознь, и
-                            строка без биржи в общем списке ни о чём не говорит. */}
-                        {row.exchange && (
-                          <span className="ml-1 uppercase tracking-wide">{row.exchange}</span>
-                        )}
-                      </span>
-                    </td>
-                    <td className="text-[var(--pane-text-2)]">{row.entry}</td>
-                    <td className="text-[var(--pane-text-2)]">{row.exit_price ?? "-"}</td>
-                    <td title={takesHint(row, t)}>
-                      <Takes trade={row} />
-                    </td>
-                    <td
-                      className={`text-right ${tone(row.pnl)}`}
-                      title={
-                        row.fee
-                          ? t.journal.pnlWithFee(money(row.pnl), money(row.pnl + row.fee), row.fee.toFixed(2))
-                          : t.journal.pnlNet
-                      }
+          <div className="no-scrollbar lg:max-h-full lg:min-h-0 lg:overflow-auto">
+            {trades.length === 0 ? (
+              <p className="py-6 text-center text-[var(--pane-muted)]">
+                {t.journal.empty}
+              </p>
+            ) : (
+              <table className="w-full font-mono text-[11px] tabular-nums">
+                {/* Шапка держится на месте: список теперь прокручивается сам,
+                    своей колонкой, и уехавшая шапка оставляла бы шесть колонок
+                    чисел без подписей. */}
+                <thead className="text-[10px] text-[var(--pane-muted)] [&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:z-10 [&>tr>th]:bg-[var(--pane-bg)]">
+                  <tr className="text-left">
+                    <th className="py-1">{t.journal.colDate}</th>
+                    <th>{t.journal.colCoin}</th>
+                    <th>{t.journal.colEntry}</th>
+                    <th>{t.journal.colExit}</th>
+                    <th>{t.journal.colTargets}</th>
+                    <th className="text-right">{t.journal.colResult}</th>
+                    <th />
+                    {mentor && <th />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {trades.map((row) => (
+                    <tr
+                      key={row.id}
+                      onMouseEnter={() => onHover?.(row)}
+                      onMouseLeave={() => onHover?.(null)}
+                      onClick={() => onPick?.(row)}
+                      title={t.journal.openChart}
+                      className={`border-t border-[var(--pane-border)] transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)] ${
+                        onPick ? "cursor-pointer" : "cursor-default"
+                      }`}
                     >
-                      {money(row.pnl)}
-                      {row.fee > 0 && (
-                        <span className="ml-1 text-[10px] text-[var(--pane-muted)]">
-                          -{row.fee.toFixed(2)}
+                      <td className="py-1 text-[var(--pane-muted)]">
+                        {new Date(row.closed_at).toLocaleString(numbers, {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td>
+                        <span className={row.side === "long" ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}>
+                          {row.symbol.replace(/USDT$/, "")}
+                        </span>{" "}
+                        <span className="text-[10px] text-[var(--pane-muted)]">
+                          ×{row.leverage} · {t.journal.reasons[row.outcome]}
+                          {/* Где сделка была открыта: биржи считаются порознь, и
+                              строка без биржи в общем списке ни о чём не говорит. */}
+                          {row.exchange && (
+                            <span className="ml-1 uppercase tracking-wide">{row.exchange}</span>
+                          )}
                         </span>
-                      )}
-                    </td>
-                    {/* Карточка сделки: та самая, которой делятся в чате.
-                        Отдельной кнопкой, а не по строке - нажатие по строке
-                        уже занято графиком, и отбирать его нельзя: «почему
-                        так вышло» спрашивают чаще, чем «покажи всем». */}
-                    <td className="pl-2 text-right">
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setCard(row);
-                        }}
-                        title={t.journal.cardTitle}
-                        className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
+                      </td>
+                      <td className="text-[var(--pane-text-2)]">{row.entry}</td>
+                      <td className="text-[var(--pane-text-2)]">{row.exit_price ?? "-"}</td>
+                      <td title={takesHint(row, t)}>
+                        <Takes trade={row} />
+                      </td>
+                      <td
+                        className={`text-right ${tone(row.pnl)}`}
+                        title={
+                          row.fee
+                            ? t.journal.pnlWithFee(money(row.pnl), money(row.pnl + row.fee), row.fee.toFixed(2))
+                            : t.journal.pnlNet
+                        }
                       >
-                        <Share2 className="h-3 w-3" />
-                      </button>
-                    </td>
-                    {/* Убрать запись может только наставник: журнал - это
-                        статистика, и право стереть из неё неудачную сделку
-                        обесценивает её целиком. */}
-                    {mentor && (
+                        {money(row.pnl)}
+                        {row.fee > 0 && (
+                          <span className="ml-1 text-[10px] text-[var(--pane-muted)]">
+                            -{row.fee.toFixed(2)}
+                          </span>
+                        )}
+                      </td>
+                      {/* Карточка сделки: та самая, которой делятся в чате.
+                          Отдельной кнопкой, а не по строке - нажатие по строке
+                          уже занято графиком, и отбирать его нельзя: «почему
+                          так вышло» спрашивают чаще, чем «покажи всем». */}
                       <td className="pl-2 text-right">
                         <button
-                          onClick={() => drop(row.id)}
-                          title={t.journal.remove}
-                          className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-down)]"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setCard(row);
+                          }}
+                          title={t.journal.cardTitle}
+                          className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Share2 className="h-3 w-3" />
                         </button>
                       </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                      {/* Убрать запись может только наставник: журнал - это
+                          статистика, и право стереть из неё неудачную сделку
+                          обесценивает её целиком. */}
+                      {mentor && (
+                        <td className="pl-2 text-right">
+                          <button
+                            onClick={() => drop(row.id)}
+                            title={t.journal.remove}
+                            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-down)]"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
 
@@ -497,9 +517,22 @@ export default function JournalPanel({
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Stat({
+  label,
+  value,
+  tone,
+  wide,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+  /** Плитка во всю ширину, когда итоги стоят колонкой в две ячейки. */
+  wide?: boolean;
+}) {
   return (
-    <div className="rounded border border-[var(--pane-border)] px-2 py-1">
+    <div
+      className={`rounded border border-[var(--pane-border)] px-2 py-1 ${wide ? "lg:col-span-2" : ""}`}
+    >
       <div className="text-[10px] text-[var(--pane-muted)]">{label}</div>
       <div className={tone ?? "text-[var(--pane-text)]"}>{value}</div>
     </div>
