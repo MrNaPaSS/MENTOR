@@ -462,3 +462,31 @@ def test_okx_closed_candle_is_asked_once():
             )
 
     assert len(rest.calls) == 1
+
+
+def test_a_late_tape_still_draws_the_part_it_saw():
+    """Монету открыли посреди свечи - показываем собранный кусок, не пустоту.
+
+    Профиль приходил пустым до конца свечи: на минуте это до минуты ожидания,
+    на десятиминутке до десяти. Неполноту не прячем, она помечена.
+    """
+    start = (int(time.time()) // 60) * 60 - 120
+    rest = StubOkxRest([[]])  # биржа сделок не дала
+    app = make_okx_app(rest)
+
+    # Лента застала только вторую половину свечи.
+    hub = app.state.market_hub
+    state = hub.collector("okx").state.ensure("XRPUSDT")
+    state.clusters = ClusterHistory(tick=0.0001)
+    state.clusters.add((start + 40) * 1000, 1.2821, 100.0, True)
+    state.clusters.add((start + 50) * 1000, 1.2820, 200.0, False)
+
+    with TestClient(app) as client:
+        body = client.get(
+            "/api/scalping/footprint/xrpusdt",
+            params={"interval": "1m", "time": start, "exchange": "okx"},
+        ).json()
+
+    assert body["partial"] is True
+    assert body["buy"] == pytest.approx(1.2821 * 100)
+    assert body["sell"] == pytest.approx(1.2820 * 200)

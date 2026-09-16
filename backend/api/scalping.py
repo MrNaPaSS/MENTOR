@@ -617,7 +617,11 @@ async def footprint(
         if payload is not None:
             return payload
     if venue != PRIMARY:
-        shot = build_footprint({}, time=start, seconds=seconds, tick=0.0, partial=True)
+        # Что успела застать лента - лучше, чем ничего. Монету открывают
+        # посреди свечи, и до её конца профиль приходил пустым: на минуте это
+        # до минуты ожидания, на десяти - до десяти. Неполноту не прячем, она
+        # помечена и видна на экране.
+        shot = _partial_from_tape(live, start, end, seconds)
         return _foot_payload(sym, interval, shot, source="tape", exchange=venue)
 
     key = f"{sym}:{interval}:{start}"
@@ -735,6 +739,9 @@ async def _okx_footprint(
         return None
 
     trades, partial = await _load_okx_trades(rest, spec, start * 1000, end * 1000)
+    if not trades:
+        # Биржа сделок не дала: пусть решает лента - у неё хотя бы часть свечи.
+        return None
     seconds = FOOTPRINT_INTERVALS[interval]
     tick = detect_tick(state.book) if state else 0.0
     if tick <= 0:
@@ -744,6 +751,21 @@ async def _okx_footprint(
     payload = _foot_payload(sym, interval, shot, source="exchange", exchange=OKX_VENUE)
     _foot_remember(key, payload)
     return payload
+
+
+def _partial_from_tape(live, start: int, end: int, seconds: int):
+    """Профиль из той части ленты, что уже собрана. Неполный - так и помечаем.
+
+    Лента начинается с той секунды, когда монету открыли, и до конца свечи
+    остаётся кусок. Раньше такой кусок выбрасывался целиком: свеча приходила
+    пустой, и трейдер ждал начала следующей.
+    """
+    if live is None or live.tick <= 0:
+        return build_footprint({}, time=start, seconds=seconds, tick=0.0, partial=True)
+
+    columns = live.snapshot()
+    cells = from_columns(columns, start, end) if columns else {}
+    return build_footprint(cells, time=start, seconds=seconds, tick=live.tick, partial=True)
 
 
 def _foot_payload(
