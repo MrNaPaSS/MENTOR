@@ -13,6 +13,7 @@ import { useT } from "@/lib/i18n";
 import { useEffect } from "react";
 import { Bell, BellOff, Calculator } from "lucide-react";
 import { money, price as fmtPrice, type LadderRow } from "@/lib/scalping";
+import ModalPortal from "@/components/ui/ModalPortal";
 
 const ITEM =
   "flex w-full items-center gap-3 rounded-lg border border-[var(--pane-border)] px-3 py-2.5 text-left " +
@@ -49,69 +50,71 @@ export default function LevelMenu({
   const bid = row.bid > 0;
 
   return (
-    <div
-      className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
-      onClick={onCancel}
-    >
+    <ModalPortal>
       <div
-        onClick={(event) => event.stopPropagation()}
-        className="w-[320px] max-w-full animate-dialog-in overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+        className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
+        onClick={onCancel}
       >
-        <div className="border-b border-[var(--pane-border)] px-4 py-3">
-          <div className="flex items-baseline gap-2">
-            <span className="font-mono text-[17px] font-semibold text-[var(--pane-text)]">
-              {fmtPrice(row.price, tick)}
-            </span>
-            <span
-              className={`text-[11px] ${bid ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}
-            >
-              {money(row.notional)}
-            </span>
+        <div
+          onClick={(event) => event.stopPropagation()}
+          className="w-[320px] max-w-full animate-dialog-in overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+        >
+          <div className="border-b border-[var(--pane-border)] px-4 py-3">
+            <div className="flex items-baseline gap-2">
+              <span className="font-mono text-[17px] font-semibold text-[var(--pane-text)]">
+                {fmtPrice(row.price, tick)}
+              </span>
+              <span
+                className={`text-[11px] ${bid ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}`}
+              >
+                {money(row.notional)}
+              </span>
+            </div>
+            <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
+              {bid ? d.bidSide : d.askSide}
+            </p>
           </div>
-          <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
-            {bid ? d.bidSide : d.askSide}
-          </p>
-        </div>
 
-        <div className="flex flex-col gap-2 p-3">
-          <button onClick={onTrade} className={ITEM}>
-            <Calculator className="h-4 w-4 shrink-0 text-[var(--pane-accent)]" />
-            <span>
-              <span className="block text-[12px] font-semibold text-[var(--pane-text)]">
-                {d.tradeDraft}
+          <div className="flex flex-col gap-2 p-3">
+            <button onClick={onTrade} className={ITEM}>
+              <Calculator className="h-4 w-4 shrink-0 text-[var(--pane-accent)]" />
+              <span>
+                <span className="block text-[12px] font-semibold text-[var(--pane-text)]">
+                  {d.tradeDraft}
+                </span>
+                <span className="block text-[11px] text-[var(--pane-muted)]">
+                  {bid ? d.longFrom : d.shortFrom}
+                </span>
               </span>
-              <span className="block text-[11px] text-[var(--pane-muted)]">
-                {bid ? d.longFrom : d.shortFrom}
-              </span>
-            </span>
-          </button>
+            </button>
 
-          <button onClick={onAlert} className={ITEM}>
-            {alerted ? (
-              <BellOff className="h-4 w-4 shrink-0 text-[var(--pane-muted)]" />
-            ) : (
-              <Bell className="h-4 w-4 shrink-0 text-[var(--pane-gold)]" />
-            )}
-            <span>
-              <span className="block text-[12px] font-semibold text-[var(--pane-text)]">
-                {alerted ? d.removeAlert : d.addAlert}
+            <button onClick={onAlert} className={ITEM}>
+              {alerted ? (
+                <BellOff className="h-4 w-4 shrink-0 text-[var(--pane-muted)]" />
+              ) : (
+                <Bell className="h-4 w-4 shrink-0 text-[var(--pane-gold)]" />
+              )}
+              <span>
+                <span className="block text-[12px] font-semibold text-[var(--pane-text)]">
+                  {alerted ? d.removeAlert : d.addAlert}
+                </span>
+                <span className="block text-[11px] text-[var(--pane-muted)]">
+                  {alerted ? d.removeAlertSub : d.addAlertSub}
+                </span>
               </span>
-              <span className="block text-[11px] text-[var(--pane-muted)]">
-                {alerted ? d.removeAlertSub : d.addAlertSub}
-              </span>
-            </span>
-          </button>
-        </div>
+            </button>
+          </div>
 
-        <div className="flex justify-end border-t border-[var(--pane-border)] px-3 py-2">
-          <button
-            onClick={onCancel}
-            className="rounded-md px-3 py-1.5 text-[12px] text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-          >
-            {t.common.cancel}
-          </button>
+          <div className="flex justify-end border-t border-[var(--pane-border)] px-3 py-2">
+            <button
+              onClick={onCancel}
+              className="rounded-md px-3 py-1.5 text-[12px] text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+            >
+              {t.common.cancel}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

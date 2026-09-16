@@ -13,6 +13,7 @@
 import { useT } from "@/lib/i18n";
 import { useEffect } from "react";
 import { KeyRound, LogIn, X } from "lucide-react";
+import ModalPortal from "@/components/ui/ModalPortal";
 
 /** Чего именно не хватает: входа в кабинет или ключей биржи. */
 export type ConnectNeed = "login" | "keys";
@@ -45,61 +46,63 @@ export default function ConnectDialog({
   const login = need === "login";
 
   return (
-    <div
-      className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
-      onClick={onClose}
-    >
+    <ModalPortal>
       <div
-        onClick={(event) => event.stopPropagation()}
-        className="w-[380px] max-w-full animate-dialog-in rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+        className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
+        onClick={onClose}
       >
-        <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--pane-border)] text-[var(--pane-gold)]">
-              {login ? <LogIn className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
-            </div>
-            <div>
-              <div className="text-[13px] font-semibold text-[var(--pane-text)]">
-                {login ? d.needLogin : d.noAccount}
+        <div
+          onClick={(event) => event.stopPropagation()}
+          className="w-[380px] max-w-full animate-dialog-in rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+        >
+          <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--pane-border)] text-[var(--pane-gold)]">
+                {login ? <LogIn className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
               </div>
-              <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
-                {login
-                  ? d.needLoginSub
-                  : d.noAccountSub}
-              </p>
+              <div>
+                <div className="text-[13px] font-semibold text-[var(--pane-text)]">
+                  {login ? d.needLogin : d.noAccount}
+                </div>
+                <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
+                  {login
+                    ? d.needLoginSub
+                    : d.noAccountSub}
+                </p>
+              </div>
             </div>
+            <button
+              onClick={onClose}
+              title={t.common.close}
+              className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            title={t.common.close}
-            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
 
-        <div className="px-5 py-4">
-          <p className="text-[12px] leading-relaxed text-[var(--pane-text-2)]">
-            {login
-              ? d.loginText
-              : d.keysText}
-          </p>
+          <div className="px-5 py-4">
+            <p className="text-[12px] leading-relaxed text-[var(--pane-text-2)]">
+              {login
+                ? d.loginText
+                : d.keysText}
+            </p>
 
-          <button
-            onClick={onConnect}
-            className={`${BUTTON} mt-4 bg-[var(--pane-accent)] text-[var(--pane-deep)] hover:opacity-90`}
-          >
-            {login ? <LogIn className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
-            {login ? t.common.login : d.connect}
-          </button>
-          <button
-            onClick={onClose}
-            className={`${BUTTON} mt-2 text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}
-          >
-            {d.later}
-          </button>
+            <button
+              onClick={onConnect}
+              className={`${BUTTON} mt-4 bg-[var(--pane-accent)] text-[var(--pane-deep)] hover:opacity-90`}
+            >
+              {login ? <LogIn className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
+              {login ? t.common.login : d.connect}
+            </button>
+            <button
+              onClick={onClose}
+              className={`${BUTTON} mt-2 text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}
+            >
+              {d.later}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

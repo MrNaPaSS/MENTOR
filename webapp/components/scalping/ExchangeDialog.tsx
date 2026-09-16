@@ -26,6 +26,7 @@ import {
   type ExchangeAccount,
   type TradingStatus,
 } from "@/lib/trading";
+import ModalPortal from "@/components/ui/ModalPortal";
 
 /**
  * Доступный остаток из ответа биржи.
@@ -199,260 +200,262 @@ export default function ExchangeDialog({
   const isActive = connected && account?.exchange === active;
 
   return (
-    <div
-      className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
-      onClick={onClose}
-    >
+    <ModalPortal>
       <div
-        onClick={(event) => event.stopPropagation()}
-        className="w-[460px] max-w-full animate-dialog-in rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+        className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
+        onClick={onClose}
       >
-        <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
-          <div>
-            <p className="text-sm font-semibold text-[var(--pane-text)]">
-              {d.title}{" "}
-              <span className="font-mono text-[10px] font-normal text-[var(--pane-muted)]">{BUILD}</span>
-            </p>
-            <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
-              {connected ? d.keyTail(account.key_tail) : d.canPlace}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Биржи - вкладками. Точка - подключён ли счёт, подпись - на какой
-            из них сейчас ставятся сделки.
-
-            Имена короткие и ряд прокручивается: бирж пять, и «WEEX Futures»
-            пять раз подряд за край окна не помещались - последняя вкладка
-            обрезалась на середине слова. */}
-        {accounts.length > 1 && (
-          <div
-            className="flex gap-1 overflow-x-auto border-b border-[var(--pane-border)] px-3 py-2"
-            role="tablist"
-          >
-            {accounts.map((one) => {
-              const on = one.exchange === code;
-              return (
-                <button
-                  key={one.exchange}
-                  role="tab"
-                  aria-selected={on}
-                  onClick={() => setCode(one.exchange)}
-                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition-colors duration-150 ease-out ${
-                    on
-                      ? "bg-[var(--pane-accent-faint)] text-[var(--pane-text)]"
-                      : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      one.connected
-                        ? "bg-[var(--pane-up)]"
-                        : one.may_connect === false
-                          ? "bg-[var(--pane-border)] opacity-50"
-                          : "bg-[var(--pane-border)]"
-                    }`}
-                  />
-                  {venueName(one.exchange)}
-                  {one.connected && one.exchange === active && (
-                    <span className="rounded bg-[var(--pane-hover)] px-1 py-px text-[9px] font-medium text-[var(--pane-accent)]">
-                      {d.activeBadge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {!reachable ? (
-          <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
-            {d.unreachable}
-          </p>
-        ) : !status.enabled ? (
-          <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
-            {d.vaultOff}
-          </p>
-        ) : locked ? (
-          // Биржа открывается подтверждением академии. Поля ключей здесь были
-          // бы обманом: сервер такую заявку всё равно отклонит, а человек
-          // решил бы, что ошибся в ключах.
-          <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
-            {d.needsAcademy}
-          </p>
-        ) : connected && !replacing ? (
-          <div className="space-y-3 px-5 py-5">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-[var(--pane-up)]" />
-              <span className="text-[13px] font-semibold text-[var(--pane-text)]">
-                {d.connected}
-              </span>
+        <div
+          onClick={(event) => event.stopPropagation()}
+          className="w-[460px] max-w-full animate-dialog-in rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+        >
+          <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
+            <div>
+              <p className="text-sm font-semibold text-[var(--pane-text)]">
+                {d.title}{" "}
+                <span className="font-mono text-[10px] font-normal text-[var(--pane-muted)]">{BUILD}</span>
+              </p>
+              <p className="mt-0.5 text-[11px] text-[var(--pane-muted)]">
+                {connected ? d.keyTail(account.key_tail) : d.canPlace}
+              </p>
             </div>
+            <button
+              onClick={onClose}
+              className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
-            <div className="space-y-1 font-mono text-[12px] tabular-nums">
-              <div className="flex justify-between">
-                <span className="text-[var(--pane-muted)]">{d.key}</span>
-                <span className="text-[var(--pane-text-2)]">{account.key_tail}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[var(--pane-muted)]">{d.available}</span>
-                <span className="text-[var(--pane-text-2)]">
-                  {funds !== null ? `${funds} USDT` : checked ? "-" : d.asking}
+          {/* Биржи - вкладками. Точка - подключён ли счёт, подпись - на какой
+              из них сейчас ставятся сделки.
+
+              Имена короткие и ряд прокручивается: бирж пять, и «WEEX Futures»
+              пять раз подряд за край окна не помещались - последняя вкладка
+              обрезалась на середине слова. */}
+          {accounts.length > 1 && (
+            <div
+              className="flex gap-1 overflow-x-auto border-b border-[var(--pane-border)] px-3 py-2"
+              role="tablist"
+            >
+              {accounts.map((one) => {
+                const on = one.exchange === code;
+                return (
+                  <button
+                    key={one.exchange}
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => setCode(one.exchange)}
+                    className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition-colors duration-150 ease-out ${
+                      on
+                        ? "bg-[var(--pane-accent-faint)] text-[var(--pane-text)]"
+                        : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        one.connected
+                          ? "bg-[var(--pane-up)]"
+                          : one.may_connect === false
+                            ? "bg-[var(--pane-border)] opacity-50"
+                            : "bg-[var(--pane-border)]"
+                      }`}
+                    />
+                    {venueName(one.exchange)}
+                    {one.connected && one.exchange === active && (
+                      <span className="rounded bg-[var(--pane-hover)] px-1 py-px text-[9px] font-medium text-[var(--pane-accent)]">
+                        {d.activeBadge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {!reachable ? (
+            <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
+              {d.unreachable}
+            </p>
+          ) : !status.enabled ? (
+            <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
+              {d.vaultOff}
+            </p>
+          ) : locked ? (
+            // Биржа открывается подтверждением академии. Поля ключей здесь были
+            // бы обманом: сервер такую заявку всё равно отклонит, а человек
+            // решил бы, что ошибся в ключах.
+            <p className="px-5 py-6 text-center text-[12px] leading-relaxed text-[var(--pane-muted)]">
+              {d.needsAcademy}
+            </p>
+          ) : connected && !replacing ? (
+            <div className="space-y-3 px-5 py-5">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-[var(--pane-up)]" />
+                <span className="text-[13px] font-semibold text-[var(--pane-text)]">
+                  {d.connected}
                 </span>
               </div>
-              {account.updated_at && (
+
+              <div className="space-y-1 font-mono text-[12px] tabular-nums">
                 <div className="flex justify-between">
-                  <span className="text-[var(--pane-muted)]">{d.since}</span>
+                  <span className="text-[var(--pane-muted)]">{d.key}</span>
+                  <span className="text-[var(--pane-text-2)]">{account.key_tail}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--pane-muted)]">{d.available}</span>
                   <span className="text-[var(--pane-text-2)]">
-                    {new Date(account.updated_at).toLocaleString("ru", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {funds !== null ? `${funds} USDT` : checked ? "-" : d.asking}
                   </span>
                 </div>
+                {account.updated_at && (
+                  <div className="flex justify-between">
+                    <span className="text-[var(--pane-muted)]">{d.since}</span>
+                    <span className="text-[var(--pane-text-2)]">
+                      {new Date(account.updated_at).toLocaleString("ru", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Через академию счёт или свой: от этого зависят комиссия и
+                  кешбэк, и ученик должен видеть это там же, где ключ. */}
+              <p
+                className={`text-[11px] leading-snug ${
+                  account.access === "academy" ? "text-[var(--pane-accent)]" : "text-[var(--pane-muted)]"
+                }`}
+              >
+                {account.access === "academy" ? d.viaAcademy : d.ownAccount}
+              </p>
+
+              <p className="text-[11px] leading-snug text-[var(--pane-muted)]">
+                {isActive ? d.activeNote : d.liveNote}
+              </p>
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                {!isActive && (
+                  <button
+                    onClick={makeActive}
+                    disabled={busy}
+                    className="text-[11px] font-semibold text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] disabled:opacity-40"
+                  >
+                    {d.makeActive}
+                  </button>
+                )}
+                <button
+                  onClick={() => setReplacing(true)}
+                  className="text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+                >
+                  {d.replaceKeys}
+                </button>
+              </div>
+
+              {error && (
+                <p className="rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] text-[var(--pane-down)]">{error}</p>
               )}
             </div>
-
-            {/* Через академию счёт или свой: от этого зависят комиссия и
-                кешбэк, и ученик должен видеть это там же, где ключ. */}
-            <p
-              className={`text-[11px] leading-snug ${
-                account.access === "academy" ? "text-[var(--pane-accent)]" : "text-[var(--pane-muted)]"
-              }`}
-            >
-              {account.access === "academy" ? d.viaAcademy : d.ownAccount}
-            </p>
-
-            <p className="text-[11px] leading-snug text-[var(--pane-muted)]">
-              {isActive ? d.activeNote : d.liveNote}
-            </p>
-
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              {!isActive && (
-                <button
-                  onClick={makeActive}
-                  disabled={busy}
-                  className="text-[11px] font-semibold text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] disabled:opacity-40"
+          ) : (
+            <div className="space-y-3 px-5 py-4">
+              {/* Дорога к ключу - первой строкой, до полей. Пошаговая
+                  инструкция пока написана для WEEX; у остальных бирж ключ
+                  создаётся в разделе API их приложения. */}
+              {code === "weex" ? (
+                <Link
+                  href="/app/faq"
+                  onClick={onClose}
+                  className="block text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
                 >
-                  {d.makeActive}
+                  {d.howTo}
+                </Link>
+              ) : (
+                <p className="text-[11px] leading-snug text-[var(--pane-muted)]">{d.howToOther}</p>
+              )}
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">API Key</span>
+                <input
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  autoComplete="off"
+                  className={FIELD}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">Secret Key</span>
+                <input
+                  type="password"
+                  value={secret}
+                  onChange={(e) => setSecret(e.target.value)}
+                  autoComplete="new-password"
+                  className={FIELD}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">Passphrase</span>
+                <input
+                  type="password"
+                  value={passphrase}
+                  onChange={(e) => setPassphrase(e.target.value)}
+                  autoComplete="new-password"
+                  className={FIELD}
+                />
+              </label>
+
+              <p className="text-[11px] leading-snug text-[var(--pane-muted)]">
+                {d.keysNote}
+              </p>
+
+              {error && (
+                <p className="rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] text-[var(--pane-down)]">{error}</p>
+              )}
+            </div>
+          )}
+
+          {/* Все биржи и условия - отдельной страницей: здесь ключи одного счёта,
+              там выбор, где вообще заводить. */}
+          <div className="px-5 pb-1 pt-0">
+            <Link
+              href="/app/exchanges"
+              onClick={onClose}
+              className="text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+            >
+              {t.exchanges.title}
+            </Link>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-[var(--pane-border)] px-5 py-3">
+            {connected ? (
+              <button
+                onClick={disconnect}
+                disabled={busy}
+                className={`${BUTTON} text-[var(--pane-down)] hover:bg-[var(--pane-down-faint)] disabled:opacity-40`}
+              >
+                {d.disconnect}
+              </button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <button onClick={onClose} className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}>
+                {t.common.close}
+              </button>
+              {(!connected || replacing) && (
+                <button
+                  onClick={submit}
+                  disabled={busy || !reachable || !status.enabled || !apiKey || !secret || !passphrase}
+                  className={`${BUTTON} bg-[var(--pane-accent-faint)] text-[var(--pane-accent)] disabled:opacity-40`}
+                >
+                  {busy ? d.checking : t.common.connect}
                 </button>
               )}
-              <button
-                onClick={() => setReplacing(true)}
-                className="text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-              >
-                {d.replaceKeys}
-              </button>
             </div>
-
-            {error && (
-              <p className="rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] text-[var(--pane-down)]">{error}</p>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-3 px-5 py-4">
-            {/* Дорога к ключу - первой строкой, до полей. Пошаговая
-                инструкция пока написана для WEEX; у остальных бирж ключ
-                создаётся в разделе API их приложения. */}
-            {code === "weex" ? (
-              <Link
-                href="/app/faq"
-                onClick={onClose}
-                className="block text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-              >
-                {d.howTo}
-              </Link>
-            ) : (
-              <p className="text-[11px] leading-snug text-[var(--pane-muted)]">{d.howToOther}</p>
-            )}
-            <label className="block">
-              <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">API Key</span>
-              <input
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                autoComplete="off"
-                className={FIELD}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">Secret Key</span>
-              <input
-                type="password"
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                autoComplete="new-password"
-                className={FIELD}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[11px] text-[var(--pane-muted)]">Passphrase</span>
-              <input
-                type="password"
-                value={passphrase}
-                onChange={(e) => setPassphrase(e.target.value)}
-                autoComplete="new-password"
-                className={FIELD}
-              />
-            </label>
-
-            <p className="text-[11px] leading-snug text-[var(--pane-muted)]">
-              {d.keysNote}
-            </p>
-
-            {error && (
-              <p className="rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] text-[var(--pane-down)]">{error}</p>
-            )}
-          </div>
-        )}
-
-        {/* Все биржи и условия - отдельной страницей: здесь ключи одного счёта,
-            там выбор, где вообще заводить. */}
-        <div className="px-5 pb-1 pt-0">
-          <Link
-            href="/app/exchanges"
-            onClick={onClose}
-            className="text-[11px] text-[var(--pane-accent)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-          >
-            {t.exchanges.title}
-          </Link>
-        </div>
-
-        <div className="flex items-center justify-between border-t border-[var(--pane-border)] px-5 py-3">
-          {connected ? (
-            <button
-              onClick={disconnect}
-              disabled={busy}
-              className={`${BUTTON} text-[var(--pane-down)] hover:bg-[var(--pane-down-faint)] disabled:opacity-40`}
-            >
-              {d.disconnect}
-            </button>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            <button onClick={onClose} className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}>
-              {t.common.close}
-            </button>
-            {(!connected || replacing) && (
-              <button
-                onClick={submit}
-                disabled={busy || !reachable || !status.enabled || !apiKey || !secret || !passphrase}
-                className={`${BUTTON} bg-[var(--pane-accent-faint)] text-[var(--pane-accent)] disabled:opacity-40`}
-              >
-                {busy ? d.checking : t.common.connect}
-              </button>
-            )}
           </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

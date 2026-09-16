@@ -12,6 +12,7 @@ import type { CoinTx, Entitlement, ShopOrder } from "@/lib/api";
 import { useIntlLocale, useT } from "@/lib/i18n";
 import { rewardLabel } from "@/lib/rewardLabel";
 import { CHIP, CHIP_OFF, CHIP_ON, NUM, PaneScope } from "@/components/app/Pane";
+import ModalPortal from "@/components/ui/ModalPortal";
 
 type Tab = "access" | "history" | "orders";
 const TABS: Tab[] = ["access", "history", "orders"];
@@ -193,26 +194,28 @@ function ListDialog({
   }, [onClose]);
 
   return (
-    <PaneScope className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4">
-      <div className="absolute inset-0" onClick={onClose} aria-hidden />
-      <section
-        role="dialog"
-        aria-label={title}
-        className="relative w-full max-w-md animate-dialog-in overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
-      >
-        <header className="flex items-center justify-between border-b border-[var(--pane-border)] px-4 py-2.5">
-          <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t.common.cancel}
-            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </header>
-        <div className="max-h-[70vh] overflow-y-auto">{children}</div>
-      </section>
-    </PaneScope>
+    <ModalPortal>
+      <PaneScope className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4">
+        <div className="absolute inset-0" onClick={onClose} aria-hidden />
+        <section
+          role="dialog"
+          aria-label={title}
+          className="relative w-full max-w-md animate-dialog-in overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+        >
+          <header className="flex items-center justify-between border-b border-[var(--pane-border)] px-4 py-2.5">
+            <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">{title}</h2>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t.common.cancel}
+              className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </header>
+          <div className="max-h-[70vh] overflow-y-auto">{children}</div>
+        </section>
+      </PaneScope>
+    </ModalPortal>
   );
 }

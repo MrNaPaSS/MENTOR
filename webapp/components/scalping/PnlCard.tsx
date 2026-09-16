@@ -26,6 +26,7 @@ import {
   type CardData,
 } from "@/lib/pnl/card";
 import { copy, download, share } from "@/lib/pnl/share";
+import ModalPortal from "@/components/ui/ModalPortal";
 
 export default function PnlCard({
   data,
@@ -151,175 +152,177 @@ export default function PnlCard({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-modal flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
-      onClick={onClose}
-      style={
-        {
-          // Цвет печати - по знаку результата, а не по бланку.
-          //
-          // Здесь оттиск рисует разметка, а на скачиваемой картинке - холст, и
-          // это две разные реализации одной печати. Холст перевели на результат
-          // раньше, а разметка осталась на цвете заготовки: в окне терминала
-          // печать была зелёной у убыточной сделки, а по ссылке - красной.
-          "--pnl-accent": resultInk(variant.paper, data.pnl),
-          // Доли рамки печати - у каждой заготовки свои, и разметка ставит
-          // оттиск по тем же числам, что и холст.
-          "--pnl-x": `${variant.stamp.x * 100}%`,
-          "--pnl-y": `${variant.stamp.y * 100}%`,
-          "--pnl-w": `${variant.stamp.w * 100}%`,
-          "--pnl-h": `${variant.stamp.h * 100}%`,
-          // Оттиск на планете: место считает та же функция, что и для холста,
-          // а светится он цветом рамок заготовки - как на бланке сигнала.
-          "--pnl-seal-x": `${seal.x * 100}%`,
-          "--pnl-seal-y": `${seal.y * 100}%`,
-          "--pnl-seal-w": `${seal.w * 100}%`,
-          "--pnl-seal-h": `${seal.h * 100}%`,
-          "--pnl-glow": variant.ink,
-        } as React.CSSProperties
-      }
-    >
+    <ModalPortal>
       <div
-        className="my-auto flex w-full max-w-[420px] flex-col items-stretch gap-3 sm:max-w-[520px]"
-        onClick={(event) => event.stopPropagation()}
+        className="fixed inset-0 z-modal flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
+        onClick={onClose}
+        style={
+          {
+            // Цвет печати - по знаку результата, а не по бланку.
+            //
+            // Здесь оттиск рисует разметка, а на скачиваемой картинке - холст, и
+            // это две разные реализации одной печати. Холст перевели на результат
+            // раньше, а разметка осталась на цвете заготовки: в окне терминала
+            // печать была зелёной у убыточной сделки, а по ссылке - красной.
+            "--pnl-accent": resultInk(variant.paper, data.pnl),
+            // Доли рамки печати - у каждой заготовки свои, и разметка ставит
+            // оттиск по тем же числам, что и холст.
+            "--pnl-x": `${variant.stamp.x * 100}%`,
+            "--pnl-y": `${variant.stamp.y * 100}%`,
+            "--pnl-w": `${variant.stamp.w * 100}%`,
+            "--pnl-h": `${variant.stamp.h * 100}%`,
+            // Оттиск на планете: место считает та же функция, что и для холста,
+            // а светится он цветом рамок заготовки - как на бланке сигнала.
+            "--pnl-seal-x": `${seal.x * 100}%`,
+            "--pnl-seal-y": `${seal.y * 100}%`,
+            "--pnl-seal-w": `${seal.w * 100}%`,
+            "--pnl-seal-h": `${seal.h * 100}%`,
+            "--pnl-glow": variant.ink,
+          } as React.CSSProperties
+        }
       >
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-2.5 font-mono text-[12px] uppercase tracking-widest text-[var(--pane-muted)]">
-            {c.title}
-            {/* Точки: сколько заготовок есть и на которой стоим. Без них
-                стрелки предлагают выбор неизвестной длины - непонятно, две их
-                там или десять и докуда листать. */}
-            {choices.length > 1 && (
-              <span className="flex items-center gap-1.5">
-                {choices.map((one, i) => (
-                  <span
-                    key={one.id}
-                    aria-hidden
-                    className="h-1.5 w-1.5 rounded-full transition-colors duration-150"
-                    style={{
-                      background:
-                        one.id === variant.id
-                          ? "var(--pane-accent)"
-                          : "var(--pane-border)",
-                    }}
-                  />
-                ))}
-                <span className="sr-only">
-                  {c.variant(choices.indexOf(variant) + 1, choices.length)}
-                </span>
-              </span>
-            )}
-          </span>
-          <button
-            onClick={onClose}
-            title={t.common.close}
-            className="rounded p-1 text-[var(--pane-muted)] transition-colors hover:text-[var(--pane-text)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="pnl-slot mx-auto w-full max-w-[420px]" />
-        {/* Стрелки стоят сбоку от листа, а не на нём: карточку показывают
-            другим, и кнопка поверх неё читается как часть картинки. Место под
-            них есть на широком окне; на узком они уходят под лист - иначе
-            съели бы его ширину, а лист здесь главное. */}
-        <div className="flex items-center gap-2">
-          {choices.length > 1 && (
-            <Blank
-              side="left"
-              className="hidden sm:grid"
-              onClick={() => {
-                setStill(true);
-                setPick((now) => (now ?? here) - 1);
-              }}
-            />
-          )}
-        <div className={`pnl-window mx-auto w-full max-w-[420px]${still ? " pnl-still" : ""}`}>
-          {paper ? (
-            <div className="pnl-paper">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={paper} alt={`${data.title} ${data.subtitle}`} />
-              <div className="pnl-stamp">
-                <div className="pnl-ink">
-                  <span className="pnl-mark">
-                    NMNH<small>{c.stamp}</small>
+        <div
+          className="my-auto flex w-full max-w-[420px] flex-col items-stretch gap-3 sm:max-w-[520px]"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2.5 font-mono text-[12px] uppercase tracking-widest text-[var(--pane-muted)]">
+              {c.title}
+              {/* Точки: сколько заготовок есть и на которой стоим. Без них
+                  стрелки предлагают выбор неизвестной длины - непонятно, две их
+                  там или десять и докуда листать. */}
+              {choices.length > 1 && (
+                <span className="flex items-center gap-1.5">
+                  {choices.map((one, i) => (
+                    <span
+                      key={one.id}
+                      aria-hidden
+                      className="h-1.5 w-1.5 rounded-full transition-colors duration-150"
+                      style={{
+                        background:
+                          one.id === variant.id
+                            ? "var(--pane-accent)"
+                            : "var(--pane-border)",
+                      }}
+                    />
+                  ))}
+                  <span className="sr-only">
+                    {c.variant(choices.indexOf(variant) + 1, choices.length)}
                   </span>
-                  <span className="pnl-creed">TRADE · DISCIPLINE · PROFIT</span>
+                </span>
+              )}
+            </span>
+            <button
+              onClick={onClose}
+              title={t.common.close}
+              className="rounded p-1 text-[var(--pane-muted)] transition-colors hover:text-[var(--pane-text)]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="pnl-slot mx-auto w-full max-w-[420px]" />
+          {/* Стрелки стоят сбоку от листа, а не на нём: карточку показывают
+              другим, и кнопка поверх неё читается как часть картинки. Место под
+              них есть на широком окне; на узком они уходят под лист - иначе
+              съели бы его ширину, а лист здесь главное. */}
+          <div className="flex items-center gap-2">
+            {choices.length > 1 && (
+              <Blank
+                side="left"
+                className="hidden sm:grid"
+                onClick={() => {
+                  setStill(true);
+                  setPick((now) => (now ?? here) - 1);
+                }}
+              />
+            )}
+          <div className={`pnl-window mx-auto w-full max-w-[420px]${still ? " pnl-still" : ""}`}>
+            {paper ? (
+              <div className="pnl-paper">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={paper} alt={`${data.title} ${data.subtitle}`} />
+                <div className="pnl-stamp">
+                  <div className="pnl-ink">
+                    <span className="pnl-mark">
+                      NMNH<small>{c.stamp}</small>
+                    </span>
+                    <span className="pnl-creed">TRADE · DISCIPLINE · PROFIT</span>
+                  </div>
+                  {/* Биржа сделки - часть оттиска, падает вместе с печатью. */}
+                  {data.venue && <span className="pnl-venue">{data.venue}</span>}
                 </div>
-                {/* Биржа сделки - часть оттиска, падает вместе с печатью. */}
-                {data.venue && <span className="pnl-venue">{data.venue}</span>}
+                <div
+                  aria-hidden
+                  className="pnl-seal"
+                  data-paper={variant.paper}
+                  style={{ backgroundImage: `url(${MARK_SRC})` }}
+                />
               </div>
-              <div
-                aria-hidden
-                className="pnl-seal"
-                data-paper={variant.paper}
-                style={{ backgroundImage: `url(${MARK_SRC})` }}
+            ) : (
+              <div className="grid aspect-[640/852] place-items-center rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[12px] text-[var(--pane-muted)]">
+                {failed ? c.templateFailed : c.printing}
+              </div>
+            )}
+          </div>
+            {choices.length > 1 && (
+              <Blank
+                side="right"
+                className="hidden sm:grid"
+                onClick={() => {
+                  setStill(true);
+                  setPick((now) => (now ?? here) + 1);
+                }}
+              />
+            )}
+          </div>
+
+          {/* На узком окне стрелки перебираются под лист: там они не отнимают у
+              него ширину. */}
+          {choices.length > 1 && (
+            <div className="flex justify-center gap-3 sm:hidden">
+              <Blank
+                side="left"
+                onClick={() => {
+                  setStill(true);
+                  setPick((now) => (now ?? here) - 1);
+                }}
+              />
+              <Blank
+                side="right"
+                onClick={() => {
+                  setStill(true);
+                  setPick((now) => (now ?? here) + 1);
+                }}
               />
             </div>
-          ) : (
-            <div className="grid aspect-[640/852] place-items-center rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)] text-[12px] text-[var(--pane-muted)]">
-              {failed ? c.templateFailed : c.printing}
-            </div>
           )}
-        </div>
-          {choices.length > 1 && (
-            <Blank
-              side="right"
-              className="hidden sm:grid"
-              onClick={() => {
-                setStill(true);
-                setPick((now) => (now ?? here) + 1);
-              }}
-            />
-          )}
-        </div>
 
-        {/* На узком окне стрелки перебираются под лист: там они не отнимают у
-            него ширину. */}
-        {choices.length > 1 && (
-          <div className="flex justify-center gap-3 sm:hidden">
-            <Blank
-              side="left"
-              onClick={() => {
-                setStill(true);
-                setPick((now) => (now ?? here) - 1);
-              }}
-            />
-            <Blank
-              side="right"
-              onClick={() => {
-                setStill(true);
-                setPick((now) => (now ?? here) + 1);
-              }}
+          <div className="flex gap-2">
+            <Action icon={<Copy className="h-4 w-4" />} label={c.copy} onClick={onCopy} disabled={!paper} />
+            <Action icon={<Download className="h-4 w-4" />} label={c.download} onClick={onDownload} disabled={!paper} />
+            <Action
+              icon={<Link2 className="h-4 w-4" />}
+              label={busy ? c.preparing : c.link}
+              onClick={onShare}
+              disabled={!paper || busy}
             />
           </div>
-        )}
 
-        <div className="flex gap-2">
-          <Action icon={<Copy className="h-4 w-4" />} label={c.copy} onClick={onCopy} disabled={!paper} />
-          <Action icon={<Download className="h-4 w-4" />} label={c.download} onClick={onDownload} disabled={!paper} />
-          <Action
-            icon={<Link2 className="h-4 w-4" />}
-            label={busy ? c.preparing : c.link}
-            onClick={onShare}
-            disabled={!paper || busy}
-          />
+          {link && (
+            <input
+              readOnly
+              value={link}
+              onFocus={(event) => event.currentTarget.select()}
+              className="w-full rounded-md border border-[var(--pane-border)] bg-[var(--pane-deep)] px-2.5 py-2 font-mono text-[11px] text-[var(--pane-text)] outline-none"
+            />
+          )}
+          {note && (
+            <p className="text-center text-[11px] text-[var(--pane-muted)]">{note}</p>
+          )}
         </div>
-
-        {link && (
-          <input
-            readOnly
-            value={link}
-            onFocus={(event) => event.currentTarget.select()}
-            className="w-full rounded-md border border-[var(--pane-border)] bg-[var(--pane-deep)] px-2.5 py-2 font-mono text-[11px] text-[var(--pane-text)] outline-none"
-          />
-        )}
-        {note && (
-          <p className="text-center text-[11px] text-[var(--pane-muted)]">{note}</p>
-        )}
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 

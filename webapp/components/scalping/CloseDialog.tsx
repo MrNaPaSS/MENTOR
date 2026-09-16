@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { price as fmtPrice } from "@/lib/scalping";
 import { floatingAt, TAKER_FEE, type ActiveTrade } from "@/lib/trade/position";
+import ModalPortal from "@/components/ui/ModalPortal";
 
 const SHARES = [25, 50, 75, 100];
 
@@ -63,126 +64,128 @@ export default function CloseDialog({
   const fee = qty * trade.entry * TAKER_FEE * 2;
 
   return (
-    <div
-      className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
-      onClick={onCancel}
-    >
+    <ModalPortal>
       <div
-        onClick={(event) => event.stopPropagation()}
-        className="w-[420px] max-w-full animate-dialog-in rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+        className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
+        onClick={onCancel}
       >
-        <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span
-                className={`text-[11px] font-semibold uppercase ${
-                  long ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
-                }`}
-              >
-                {long ? d.long : d.short}
-              </span>
-              <span className="font-mono text-[17px] font-semibold text-[var(--pane-text)]">
-                {fmtPrice(trade.entry, tick)}
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-[var(--pane-muted)]">
-              {waiting
-                ? d.notEntered
-                : d.inPosition(trade.qty.toPrecision(4), fmtPrice(price, tick))}
-            </p>
-          </div>
-          <button
-            onClick={onCancel}
-            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {!waiting && (
-          <div className="px-5 py-4">
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-[11px] text-[var(--pane-muted)]">{d.partial}</span>
-              <span className="font-mono text-[17px] font-semibold text-[var(--pane-text)]">
-                {percent}%
-              </span>
-            </div>
-
-            <input
-              type="range"
-              min={1}
-              max={100}
-              step={1}
-              value={percent}
-              onChange={(e) => setPercent(Number(e.target.value))}
-              className="w-full accent-[var(--pane-accent)]"
-            />
-
-            <div className="mt-2 flex gap-1">
-              {SHARES.map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setPercent(value)}
-                  className={`rounded px-2 py-0.5 font-mono text-[11px] transition-colors duration-150 ease-out ${
-                    percent === value
-                      ? "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]"
-                      : "text-[var(--pane-muted)] hover:bg-[var(--pane-bg)] hover:text-[var(--pane-text)]"
+        <div
+          onClick={(event) => event.stopPropagation()}
+          className="w-[420px] max-w-full animate-dialog-in rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none"
+        >
+          <div className="flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4">
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className={`text-[11px] font-semibold uppercase ${
+                    long ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"
                   }`}
                 >
-                  {value}%
-                </button>
-              ))}
+                  {long ? d.long : d.short}
+                </span>
+                <span className="font-mono text-[17px] font-semibold text-[var(--pane-text)]">
+                  {fmtPrice(trade.entry, tick)}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-[var(--pane-muted)]">
+                {waiting
+                  ? d.notEntered
+                  : d.inPosition(trade.qty.toPrecision(4), fmtPrice(price, tick))}
+              </p>
             </div>
+            <button
+              onClick={onCancel}
+              className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
-            <div className="mt-4 space-y-1 border-t border-[var(--pane-border)] pt-3 font-mono text-[12px] tabular-nums">
-              <Line label={d.closing} value={qty.toPrecision(4)} />
-              <Line
-                label={d.remains}
-                value={percent >= 100 ? d.nothing : (trade.qty - qty).toPrecision(4)}
+          {!waiting && (
+            <div className="px-5 py-4">
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="text-[11px] text-[var(--pane-muted)]">{d.partial}</span>
+                <span className="font-mono text-[17px] font-semibold text-[var(--pane-text)]">
+                  {percent}%
+                </span>
+              </div>
+
+              <input
+                type="range"
+                min={1}
+                max={100}
+                step={1}
+                value={percent}
+                onChange={(e) => setPercent(Number(e.target.value))}
+                className="w-full accent-[var(--pane-accent)]"
               />
-              {trade.realized !== 0 && (
+
+              <div className="mt-2 flex gap-1">
+                {SHARES.map((value) => (
+                  <button
+                    key={value}
+                    onClick={() => setPercent(value)}
+                    className={`rounded px-2 py-0.5 font-mono text-[11px] transition-colors duration-150 ease-out ${
+                      percent === value
+                        ? "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]"
+                        : "text-[var(--pane-muted)] hover:bg-[var(--pane-bg)] hover:text-[var(--pane-text)]"
+                    }`}
+                  >
+                    {value}%
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 space-y-1 border-t border-[var(--pane-border)] pt-3 font-mono text-[12px] tabular-nums">
+                <Line label={d.closing} value={qty.toPrecision(4)} />
                 <Line
-                  label={d.alreadyTaken}
-                  value={`${trade.realized >= 0 ? "+" : "-"}${Math.abs(trade.realized).toFixed(2)} $`}
+                  label={d.remains}
+                  value={percent >= 100 ? d.nothing : (trade.qty - qty).toPrecision(4)}
+                />
+                {trade.realized !== 0 && (
+                  <Line
+                    label={d.alreadyTaken}
+                    value={`${trade.realized >= 0 ? "+" : "-"}${Math.abs(trade.realized).toFixed(2)} $`}
+                    tone="text-[var(--pane-muted)]"
+                  />
+                )}
+                <Line
+                  label={d.result}
+                  value={`${part >= 0 ? "+" : "-"}${Math.abs(part).toFixed(2)} $`}
+                  tone={part >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
+                />
+                <Line
+                  label={d.fee}
+                  value={`-${fee.toFixed(2)} $`}
                   tone="text-[var(--pane-muted)]"
                 />
-              )}
-              <Line
-                label={d.result}
-                value={`${part >= 0 ? "+" : "-"}${Math.abs(part).toFixed(2)} $`}
-                tone={part >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
-              />
-              <Line
-                label={d.fee}
-                value={`-${fee.toFixed(2)} $`}
-                tone="text-[var(--pane-muted)]"
-              />
-              <Line
-                label={d.toAccount}
-                value={`${part - fee >= 0 ? "+" : "-"}${Math.abs(part - fee).toFixed(2)} $`}
-                tone={part - fee >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
-              />
+                <Line
+                  label={d.toAccount}
+                  value={`${part - fee >= 0 ? "+" : "-"}${Math.abs(part - fee).toFixed(2)} $`}
+                  tone={part - fee >= 0 ? "text-[var(--pane-up)]" : "text-[var(--pane-down)]"}
+                />
+              </div>
+
+              <p className="mt-3 text-[11px] leading-snug text-[var(--pane-muted)]">
+                {d.note}
+              </p>
             </div>
+          )}
 
-            <p className="mt-3 text-[11px] leading-snug text-[var(--pane-muted)]">
-              {d.note}
-            </p>
+          <div className="flex items-center justify-end gap-2 border-t border-[var(--pane-border)] px-5 py-3">
+            <button onClick={onCancel} className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}>
+              {t.common.cancel}
+            </button>
+            <button
+              onClick={() => onConfirm(share)}
+              className={`${BUTTON} bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]`}
+            >
+              {waiting ? d.dropDraft : d.confirm}
+            </button>
           </div>
-        )}
-
-        <div className="flex items-center justify-end gap-2 border-t border-[var(--pane-border)] px-5 py-3">
-          <button onClick={onCancel} className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}>
-            {t.common.cancel}
-          </button>
-          <button
-            onClick={() => onConfirm(share)}
-            className={`${BUTTON} bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]`}
-          >
-            {waiting ? d.dropDraft : d.confirm}
-          </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 

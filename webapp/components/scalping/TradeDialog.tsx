@@ -21,6 +21,7 @@ import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 import { computeTrade, sideForShelf, DEFAULT_TAKES } from "@/lib/trade/plan";
 import { maxMargin } from "@/lib/trade/manual";
 import { TAKER_FEE } from "@/lib/trade/position";
+import ModalPortal from "@/components/ui/ModalPortal";
 
 export type TradeDraft = {
   shelf: Wall;
@@ -273,197 +274,199 @@ export default function TradeDialog({
   const tick = draft.tick;
 
   return (
-    <div
-      className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
-      onClick={onCancel}
-    >
-      {/* Два слоя, и это не лишний div.
-          Смещение живёт снаружи, появление - внутри. Анимация появления задана
-          с fill-mode both и в последнем кадре ставит transform: none, а
-          анимация в CSS сильнее строчного стиля - и держит его насовсем. Пока
-          оба свойства висели на одном элементе, окно не двигалось вовсе:
-          смещение считалось, но до экрана не доезжало. */}
+    <ModalPortal>
       <div
-        ref={card}
-        onClick={(event) => event.stopPropagation()}
-        style={{ transform: `translate(${shift.x}px, ${shift.y}px)` }}
-        className="w-[520px] max-w-full"
+        className="fixed inset-0 z-modal grid animate-fade-in place-items-center bg-black/60 p-4 motion-reduce:animate-none"
+        onClick={onCancel}
       >
-      <div className="animate-dialog-in overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none">
-        {/* Шапка: что за уровень и в какую сторону от него работаем.
-            Она же ручка окна - за неё его отодвигают от графика. */}
+        {/* Два слоя, и это не лишний div.
+            Смещение живёт снаружи, появление - внутри. Анимация появления задана
+            с fill-mode both и в последнем кадре ставит transform: none, а
+            анимация в CSS сильнее строчного стиля - и держит его насовсем. Пока
+            оба свойства висели на одном элементе, окно не двигалось вовсе:
+            смещение считалось, но до экрана не доезжало. */}
         <div
-          onPointerDown={startDrag}
-          onPointerMove={onDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          // touchAction: без него палец на телефоне прокручивает страницу
-          // вместо того, чтобы вести окно.
-          style={{ touchAction: "none" }}
-          className={`flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4 select-none ${
-            grab.current ? "cursor-grabbing" : "cursor-grab"
-          }`}
+          ref={card}
+          onClick={(event) => event.stopPropagation()}
+          style={{ transform: `translate(${shift.x}px, ${shift.y}px)` }}
+          className="w-[520px] max-w-full"
         >
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-[11px] font-semibold uppercase ${tone}`}>
-                {long ? d.long : d.short}
-              </span>
-              <span className="font-mono text-[19px] font-semibold text-[var(--pane-text)]">
-                {fmtPrice(draft.shelf.price, tick)}
-              </span>
-            </div>
-            {/* Откуда взялась цена. От полки в стакане - сколько там денег;
-                от плюсика на графике полки нет вовсе, и писать про заявки,
-                которых никто не ставил, значит выдумывать. */}
-            <p className="mt-1 text-[11px] text-[var(--pane-muted)]">
-              {draft.shelf.notional > 0
-                ? d.shelf(money(draft.shelf.notional)) + (long ? d.shelfLong : d.shelfShort)
-                : long
-                  ? d.fromPriceLong
-                  : d.fromPriceShort}
-            </p>
-          </div>
-          <button
-            onClick={onCancel}
-            title={d.cancelEsc}
-            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+        <div className="animate-dialog-in overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] shadow-2xl motion-reduce:animate-none">
+          {/* Шапка: что за уровень и в какую сторону от него работаем.
+              Она же ручка окна - за неё его отодвигают от графика. */}
+          <div
+            onPointerDown={startDrag}
+            onPointerMove={onDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            // touchAction: без него палец на телефоне прокручивает страницу
+            // вместо того, чтобы вести окно.
+            style={{ touchAction: "none" }}
+            className={`flex items-start justify-between border-b border-[var(--pane-border)] px-5 py-4 select-none ${
+              grab.current ? "cursor-grabbing" : "cursor-grab"
+            }`}
           >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 px-5 py-4">
-          <Field
-            label={d.amount}
-            value={draft.margin}
-            presets={margins}
-            format={(v) => String(v)}
-            onPick={(margin) => onChange({ ...draft, margin })}
-            max={ceiling > 0 ? ceiling : undefined}
-            maxTitle={d.maxTitle}
-          />
-          <Field
-            label={cap ? d.leverageCap(cap) : d.leverage}
-            value={draft.leverage}
-            presets={leverages}
-            format={(v) => `x${v}`}
-            onPick={(leverage) => onChange({ ...draft, leverage })}
-          />
-          <Field
-            label={d.stopPct}
-            value={draft.stopPct}
-            presets={STOPS}
-            columns={4}
-            format={(v) => String(v)}
-            onPick={(stopPct) => onChange({ ...draft, stopPct })}
-          />
-        </div>
-
-        {plan ? (
-          <div className="border-t border-[var(--pane-border)] bg-[color:color-mix(in_srgb,var(--pane-deep)_40%,transparent)] px-5 py-4">
-            <Row
-              label={d.entry}
-              price={fmtPrice(plan.entry, tick)}
-              note={`${money(plan.notional)} · ${plan.qty.toPrecision(4)}`}
-            />
-            <Row
-              label={d.stop}
-              price={fmtPrice(plan.stop, tick)}
-              note={d.stopNote(money(plan.risk), plan.riskPct.toFixed(1))}
-              tone="text-[var(--pane-down)]"
-            />
-            {plan.targets.map((target, i) => (
-              <Row
-                key={target.r}
-                label={d.take(i + 1)}
-                price={fmtPrice(target.price, tick)}
-                note={`+${money(target.profit)} · ${target.r}R`}
-                tone="text-[var(--pane-up)]"
-              />
-            ))}
-            <Row
-              label={d.fee}
-              price={money(plan.notional * (takerFee ?? TAKER_FEE) * 2)}
-              note={d.feeNote}
-              tone="text-[var(--pane-muted)]"
-            />
-            <Row
-              label={d.liquidation}
-              price={fmtPrice(plan.liquidation, tick)}
-              note={plan.liquidatedFirst ? d.liqCloser : ""}
-              tone={plan.liquidatedFirst ? "text-[var(--pane-down)]" : "text-[var(--pane-muted)]"}
-            />
-
-            {opposing > 0 && (
-              <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
-                {d.opposing(String(opposing))}
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-[11px] font-semibold uppercase ${tone}`}>
+                  {long ? d.long : d.short}
+                </span>
+                <span className="font-mono text-[19px] font-semibold text-[var(--pane-text)]">
+                  {fmtPrice(draft.shelf.price, tick)}
+                </span>
+              </div>
+              {/* Откуда взялась цена. От полки в стакане - сколько там денег;
+                  от плюсика на графике полки нет вовсе, и писать про заявки,
+                  которых никто не ставил, значит выдумывать. */}
+              <p className="mt-1 text-[11px] text-[var(--pane-muted)]">
+                {draft.shelf.notional > 0
+                  ? d.shelf(money(draft.shelf.notional)) + (long ? d.shelfLong : d.shelfShort)
+                  : long
+                    ? d.fromPriceLong
+                    : d.fromPriceShort}
               </p>
-            )}
-
-            {overLimit && (
-              <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
-                {d.capWarning(cap ?? 0, draft.leverage)}
-              </p>
-            )}
-
-            {/* Предел позиции на этом плече. Отказ «position exceed max size»
-                приходит после нажатия - сказать надо до. */}
-            {overSize && (
-              <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
-                {d.ceiling(ceiling.toFixed(0), draft.leverage)}
-              </p>
-            )}
-
-            {plan.liquidatedFirst && (
-              <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
-                {d.liqWarning}
-              </p>
-            )}
-          </div>
-        ) : (
-          <p className="border-t border-[var(--pane-border)] px-5 py-6 text-center text-[12px] text-[var(--pane-muted)]">
-            {d.fillHint}
-          </p>
-        )}
-
-        <div className="flex items-center justify-between border-t border-[var(--pane-border)] px-5 py-3">
-          <span className="text-[11px] text-[var(--pane-muted)]">
-            {live ? (
-              <span className="text-warning">{d.willGoLive}</span>
-            ) : (
-              // Разметка без счёта - это рисование на графике, а не торговля.
-              // Раньше окно её предлагало, и сделка выглядела открытой, хотя на
-              // бирже не было ничего.
-              <span className="text-[var(--pane-down)]">
-                {d.notConnected}
-              </span>
-            )}
-            {live && missing && (
-              <span className="text-[var(--pane-down)]">{d.notOnVenue}</span>
-            )}
-          </span>
-          <div className="flex gap-2">
+            </div>
             <button
               onClick={onCancel}
-              className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}
+              title={d.cancelEsc}
+              className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
             >
-              {t.common.cancel}
-            </button>
-            <button
-              onClick={onConfirm}
-              disabled={!plan || overLimit || overSize || !live || missing}
-              className={`${BUTTON} ${
-                long ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]" : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
-              } disabled:opacity-40`}
-            >
-              {t.common.login}
+              <X className="h-4 w-4" />
             </button>
           </div>
+
+          <div className="grid grid-cols-3 gap-4 px-5 py-4">
+            <Field
+              label={d.amount}
+              value={draft.margin}
+              presets={margins}
+              format={(v) => String(v)}
+              onPick={(margin) => onChange({ ...draft, margin })}
+              max={ceiling > 0 ? ceiling : undefined}
+              maxTitle={d.maxTitle}
+            />
+            <Field
+              label={cap ? d.leverageCap(cap) : d.leverage}
+              value={draft.leverage}
+              presets={leverages}
+              format={(v) => `x${v}`}
+              onPick={(leverage) => onChange({ ...draft, leverage })}
+            />
+            <Field
+              label={d.stopPct}
+              value={draft.stopPct}
+              presets={STOPS}
+              columns={4}
+              format={(v) => String(v)}
+              onPick={(stopPct) => onChange({ ...draft, stopPct })}
+            />
+          </div>
+
+          {plan ? (
+            <div className="border-t border-[var(--pane-border)] bg-[color:color-mix(in_srgb,var(--pane-deep)_40%,transparent)] px-5 py-4">
+              <Row
+                label={d.entry}
+                price={fmtPrice(plan.entry, tick)}
+                note={`${money(plan.notional)} · ${plan.qty.toPrecision(4)}`}
+              />
+              <Row
+                label={d.stop}
+                price={fmtPrice(plan.stop, tick)}
+                note={d.stopNote(money(plan.risk), plan.riskPct.toFixed(1))}
+                tone="text-[var(--pane-down)]"
+              />
+              {plan.targets.map((target, i) => (
+                <Row
+                  key={target.r}
+                  label={d.take(i + 1)}
+                  price={fmtPrice(target.price, tick)}
+                  note={`+${money(target.profit)} · ${target.r}R`}
+                  tone="text-[var(--pane-up)]"
+                />
+              ))}
+              <Row
+                label={d.fee}
+                price={money(plan.notional * (takerFee ?? TAKER_FEE) * 2)}
+                note={d.feeNote}
+                tone="text-[var(--pane-muted)]"
+              />
+              <Row
+                label={d.liquidation}
+                price={fmtPrice(plan.liquidation, tick)}
+                note={plan.liquidatedFirst ? d.liqCloser : ""}
+                tone={plan.liquidatedFirst ? "text-[var(--pane-down)]" : "text-[var(--pane-muted)]"}
+              />
+
+              {opposing > 0 && (
+                <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
+                  {d.opposing(String(opposing))}
+                </p>
+              )}
+
+              {overLimit && (
+                <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
+                  {d.capWarning(cap ?? 0, draft.leverage)}
+                </p>
+              )}
+
+              {/* Предел позиции на этом плече. Отказ «position exceed max size»
+                  приходит после нажатия - сказать надо до. */}
+              {overSize && (
+                <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
+                  {d.ceiling(ceiling.toFixed(0), draft.leverage)}
+                </p>
+              )}
+
+              {plan.liquidatedFirst && (
+                <p className="mt-3 rounded-md bg-[var(--pane-down-faint)] px-3 py-2 text-[11px] leading-snug text-[var(--pane-down)]">
+                  {d.liqWarning}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="border-t border-[var(--pane-border)] px-5 py-6 text-center text-[12px] text-[var(--pane-muted)]">
+              {d.fillHint}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between border-t border-[var(--pane-border)] px-5 py-3">
+            <span className="text-[11px] text-[var(--pane-muted)]">
+              {live ? (
+                <span className="text-warning">{d.willGoLive}</span>
+              ) : (
+                // Разметка без счёта - это рисование на графике, а не торговля.
+                // Раньше окно её предлагало, и сделка выглядела открытой, хотя на
+                // бирже не было ничего.
+                <span className="text-[var(--pane-down)]">
+                  {d.notConnected}
+                </span>
+              )}
+              {live && missing && (
+                <span className="text-[var(--pane-down)]">{d.notOnVenue}</span>
+              )}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={onCancel}
+                className={`${BUTTON} text-[var(--pane-muted)] hover:text-[var(--pane-text)]`}
+              >
+                {t.common.cancel}
+              </button>
+              <button
+                onClick={onConfirm}
+                disabled={!plan || overLimit || overSize || !live || missing}
+                className={`${BUTTON} ${
+                  long ? "bg-[var(--pane-up-soft)] text-[var(--pane-up)]" : "bg-[var(--pane-down-soft)] text-[var(--pane-down)]"
+                } disabled:opacity-40`}
+              >
+                {t.common.login}
+              </button>
+            </div>
+          </div>
+        </div>
         </div>
       </div>
-      </div>
-    </div>
+    </ModalPortal>
   );
 }
 
