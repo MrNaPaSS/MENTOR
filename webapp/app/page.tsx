@@ -39,10 +39,10 @@ export default function Home() {
       <Header />
       {/* Порядок разделов - порядок решения, а не порядок красоты:
           что это (Hero) -> кому верить (биржи) -> узнал ли себя (Problem) ->
-          чем закрывается (Terminal) -> правда ли это работает (TradeCase) ->
-          чем удобнее того, в чём торгую сейчас (TradeFlow) -> что ещё входит
-          (ValueStack) -> чем это подтверждается (Certificate) -> в чём подвох
-          (WhyFree) -> с чего начать (HowItWorks).
+          правда ли это работает (TradeCase) -> чем закрывается (Terminal) ->
+          чем удобнее того, в чём торгую сейчас (TradeFlow) -> что остаётся
+          после сделки (Analytics) -> что ещё входит (ValueStack) -> в чём
+          подвох (WhyFree) -> с чего начать (HowItWorks).
 
           Блок «четыре части одной системы» (WhyUs) с главной убран: его работу
           теперь делают ValueStack и WhyFree, и рядом с ними он повторял уже
@@ -51,11 +51,11 @@ export default function Home() {
         <Hero />
         <Exchanges />
         <Problem />
-        <Terminal />
         <TradeCase />
+        <Terminal />
         <TradeFlow />
-        <ValueStack />
         <Analytics />
+        <ValueStack />
         <WhyFree />
         <HowItWorks />
         <Faq />

@@ -36,12 +36,7 @@ export default function Analytics() {
       {/* Метрики: тот же порядок - текст слева, снимок справа. Под ним вторым
           рядом идёт детальный разбор, уже без своего заголовка: это тот же
           разговор, только с более мелкими цифрами. */}
-      <div className="mt-14 grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.45fr)] lg:gap-12">
-        <Reveal>
-          <p className="leading-relaxed text-text-secondary">{copy.advText}</p>
-          <p className="mt-4 leading-relaxed text-text-secondary">{copy.detText}</p>
-        </Reveal>
-
+      <div className="mt-14 grid items-center gap-10 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,0.9fr)] lg:gap-12">
         <Reveal delay={0.05}>
           <img
             src="/art/landing/analytics-advanced.webp"
@@ -52,6 +47,11 @@ export default function Analytics() {
             decoding="async"
             className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
           />
+        </Reveal>
+
+        <Reveal>
+          <p className="leading-relaxed text-text-secondary">{copy.advText}</p>
+          <p className="mt-4 leading-relaxed text-text-secondary">{copy.detText}</p>
         </Reveal>
       </div>
 

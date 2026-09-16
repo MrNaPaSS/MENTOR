@@ -113,7 +113,7 @@ export const landing = {
 
   problem: {
     eyebrow: "Why accounts blow up",
-    title: "Three reasons good trades end up losing",
+    title: "Three reasons winning setups end up losing",
     subtitle: "None of them is about the entry. All three are about what happens after it.",
     items: [
       {
