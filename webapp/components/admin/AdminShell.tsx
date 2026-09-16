@@ -4,6 +4,7 @@ import { useEffect, useState, createContext, useContext } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   LayoutDashboard,
   PlusCircle,
   ListOrdered,
@@ -29,6 +30,7 @@ const NAV = [
   { href: "/admin/signals", label: "Сигналы", icon: ListOrdered },
   { href: "/admin/shop", label: "Маркет", icon: ShoppingBag },
   { href: "/admin/students", label: "Ученики", icon: Users },
+  { href: "/admin/health", label: "Здоровье бирж", icon: Activity },
 ];
 
 const TokenCtx = createContext<string>("");
