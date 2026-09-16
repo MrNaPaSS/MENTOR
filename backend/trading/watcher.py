@@ -1334,7 +1334,14 @@ async def set_stop(
     except WeexTradeError as exc:
         # Не встал — старый остаётся на месте. Это хуже, чем хотелось, но
         # честнее, чем снять защиту и не поставить новую.
-        logger.warning("Стоп %s не поставлен: %s", trade.symbol, exc)
+        logger.warning(
+            "Стоп %s не поставлен: %s (код %s, цена %s, объём %s)",
+            trade.symbol,
+            exc,
+            exc.code,
+            num(trigger),
+            num(quantity),
+        )
         return False
 
     fresh = plan_order_id(placed)

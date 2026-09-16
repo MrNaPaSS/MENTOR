@@ -679,3 +679,56 @@ def test_leverage_of_a_single_pair_answer_without_a_name():
         routes={"/fapi/v1/leverageBracket": {"brackets": [{"bracket": 1, "initialLeverage": 75}]}}
     )
     assert run(client(session).max_leverage("ETHUSDT")) == 75
+
+
+def test_protection_falls_back_to_the_plain_endpoint():
+    """Условная ручка отказала - стоп уходит обычной, а не теряется.
+
+    Живой счёт: «Parameter validation failed» на каждом проходе, и позиция
+    оставалась без стопа. Обычная ручка принимала такие заявки до декабря 2025
+    и принимает их до сих пор; путь запасной, но позиция без защиты хуже.
+    """
+    session = FakeSession(
+        routes={
+            "/fapi/v1/algoOrder": {"code": -1102, "msg": "Parameter validation failed."},
+            "/fapi/v1/order": {"orderId": 99, "clientOrderId": "s0abcd1234"},
+        }
+    )
+    placed = run(
+        client(session).place_tp_sl(
+            symbol="BTCUSDT",
+            plan_type="STOP_LOSS",
+            trigger_price="75000",
+            quantity="0.01",
+            position_side="SHORT",
+            client_algo_id="s0abcd1234",
+        )
+    )
+    assert placed["orderId"] == "99"
+
+    sent = sent_to(session, "/fapi/v1/order")["query"]
+    assert sent["type"] == "STOP_MARKET"
+    assert sent["stopPrice"] == "75000"
+    # Полей условной ручки в обычной быть не должно.
+    assert "algoType" not in sent and "triggerPrice" not in sent
+
+
+def test_a_refusal_of_both_endpoints_is_told_as_the_first_one():
+    """Не приняла и обычная - наружу идёт отказ условной: он о деле."""
+    session = FakeSession(
+        routes={
+            "/fapi/v1/algoOrder": {"code": -1102, "msg": "Parameter validation failed."},
+            "/fapi/v1/order": {"code": -4120, "msg": "Order type not supported."},
+        }
+    )
+    with pytest.raises(WeexTradeError) as refusal:
+        run(
+            client(session).place_tp_sl(
+                symbol="BTCUSDT",
+                plan_type="STOP_LOSS",
+                trigger_price="75000",
+                quantity="0.01",
+                position_side="SHORT",
+            )
+        )
+    assert "Parameter validation" in str(refusal.value)

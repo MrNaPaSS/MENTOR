@@ -595,10 +595,48 @@ class BinanceFutures:
         if mark:
             params["clientAlgoId"] = mark
 
-        data = await self._request("POST", ENDPOINTS["algo_order"], params=params)
+        try:
+            data = await self._request("POST", ENDPOINTS["algo_order"], params=params)
+        except WeexTradeError as exc:
+            # Отказ ручки условных заявок называем полностью: код и поля. Без
+            # них «Parameter validation failed» не говорит ничего, а разбирать
+            # это приходится по живой позиции без стопа.
+            logger.warning(
+                "Binance отклонила условную заявку (%s, код %s): %s",
+                exc,
+                exc.code,
+                {k: v for k, v in params.items() if k != "clientAlgoId"},
+            )
+            return await self._plain_protection(params, mark, exc)
+
         row = data if isinstance(data, dict) else {}
         order_id = str(row.get("algoId") or row.get("orderId") or "")
         own = client_id(self.mark.untag(str(row.get("clientAlgoId") or mark)))
+        return {"orderId": order_id, "algoId": order_id, "clientAlgoId": own}
+
+    async def _plain_protection(
+        self, params: dict[str, Any], mark: str, refusal: WeexTradeError
+    ) -> dict[str, Any]:
+        """Защита обычной ручкой заявок - когда условная отказала.
+
+        До декабря 2025 стоп и цель ставились именно так, и ручка их всё ещё
+        принимает. Путь запасной: позиция без стопа хуже лишнего запроса. Не
+        приняла и она - отдаём первый отказ, он о деле.
+        """
+        plain = {k: v for k, v in params.items() if k not in ("algoType", "clientAlgoId")}
+        plain["stopPrice"] = plain.pop("triggerPrice", "")
+        if mark:
+            plain["newClientOrderId"] = mark
+        try:
+            data = await self._request("POST", ENDPOINTS["order"], params=plain)
+        except WeexTradeError as exc:
+            logger.warning("Binance: защита не встала и обычной ручкой: %s (код %s)", exc, exc.code)
+            raise refusal from exc
+
+        row = data if isinstance(data, dict) else {}
+        order_id = str(row.get("orderId") or "")
+        logger.info("Binance: защита %s поставлена обычной ручкой", plain.get("symbol"))
+        own = client_id(self.mark.untag(str(row.get("clientOrderId") or mark)))
         return {"orderId": order_id, "algoId": order_id, "clientAlgoId": own}
 
     async def modify_tp_sl(
