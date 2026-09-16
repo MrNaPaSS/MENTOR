@@ -81,13 +81,18 @@ export function weexFuturesUrl(symbol: string, locale: string): string {
 /**
  * Якоря лендинга. Подписи живут в словаре: разделы те же на любом языке,
  * меняется только то, как они названы.
+ *
+ * Адрес от корня, а не голый «#terminal»: та же шапка и тот же подвал стоят
+ * на калькуляторе и на страницах под запросы, а разделов лендинга там нет -
+ * голый якорь никуда не вёл, кнопка просто не работала. С «/#terminal»
+ * человек попадает на главную к нужному месту, а на самой главной браузер
+ * меняет только хвост адреса и никуда не уходит.
  */
 export const NAV_ANCHORS = [
-  { key: "about", href: "#about" },
-  { key: "terminal", href: "#terminal" },
-  { key: "how", href: "#how" },
-  { key: "results", href: "#results" },
-  { key: "faq", href: "#faq" },
+  { key: "about", href: "/#about" },
+  { key: "terminal", href: "/#terminal" },
+  { key: "how", href: "/#how" },
+  { key: "faq", href: "/#faq" },
 ] as const;
 
 export type NavAnchorKey = (typeof NAV_ANCHORS)[number]["key"];
