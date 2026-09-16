@@ -285,6 +285,20 @@ export const landing = {
       "Screenshots of the mentor's account. Account balances are hidden - they are personal data. Percentages are calculated against the margin of each trade at leverage up to 25x and are not a promise of returns: the same leverage works against you too.",
   },
 
+  showcase: {
+    eyebrow: "The product",
+    title: "Built so that you want to use it",
+    subtitle: "Six things you notice on day one.",
+    items: [
+      { value: "15 minutes", label: "From sign-up to your first trade. With a curator if you'd rather not do it alone" },
+      { value: "1 click", label: "Entry, stop and targets go to the exchange in a single operation" },
+      { value: "24/7", label: "The server runs the position: breakeven moves even with the tab closed" },
+      { value: "5 exchanges", label: "One workplace. The account stays yours, the money stays on the exchange" },
+      { value: "From reports", label: "Journal, metrics and cards are counted from the exchange, not from our word" },
+      { value: "No withdrawals", label: "The key is trade-only. Unlink it in one click" },
+    ],
+  },
+
   cert: {
     eyebrow: "Trader certificate",
     title: "Issued by your trades, not by a course",

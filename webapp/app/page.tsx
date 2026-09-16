@@ -9,6 +9,7 @@ import TradeFlow from "@/components/landing/TradeFlow";
 import ValueStack from "@/components/landing/ValueStack";
 import Analytics from "@/components/landing/Analytics";
 import Certificate from "@/components/landing/Certificate";
+import Showcase from "@/components/landing/Showcase";
 import WhyFree from "@/components/landing/WhyFree";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Faq from "@/components/landing/Faq";
@@ -58,6 +59,7 @@ export default function Home() {
         <ValueStack />
         <Analytics />
         <Certificate />
+        <Showcase />
         <WhyFree />
         <HowItWorks />
         <Faq />
