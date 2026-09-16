@@ -8,7 +8,7 @@
 // дальше, и показывать её стоит до объяснений.
 
 import Link from "next/link";
-import { ArrowRight, Check, Send, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Send } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import SignupPicker from "@/components/landing/SignupPicker";
 
@@ -27,7 +27,7 @@ export default function Hero() {
           терминала в заголовке не помещается в свою колонку и подлезает под
           снимок. За край экрана снимок не уходит: правую часть баннера
           занимает сам терминал, и обрезать надо что угодно, только не его. */}
-      <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-10 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.43fr)]">
+      <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 xl:max-w-[86rem] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-10 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.43fr)]">
         <div>
           <span className="eyebrow">
             <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-glow-cyan" />
@@ -95,22 +95,7 @@ export default function Hero() {
             className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
           />
 
-          <div className="relative mt-4 overflow-hidden rounded-2xl border border-accent-cyan/25 bg-bg-panel/95 p-5 backdrop-blur-2xl">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(ellipse at top right, rgba(6,182,212,0.12) 0%, transparent 60%)",
-              }}
-            />
-            <div className="relative flex items-start gap-3">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-accent-cyan/10 text-accent-cyan ring-1 ring-accent-cyan/30">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              <p className="text-sm leading-relaxed text-text-primary">{copy.oneClick}</p>
-            </div>
-          </div>
+          <p className="mt-5 max-w-3xl text-sm leading-relaxed text-text-muted">{copy.oneClick}</p>
         </div>
       </div>
     </section>
