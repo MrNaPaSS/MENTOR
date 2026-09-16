@@ -10,11 +10,9 @@
 // не случайный: сначала месяц целиком, потом один день внутри него, потом то,
 // во что этот день сворачивается.
 //
-// Снимки из боевого кабинета, поэтому суммы счёта на них затёрты или не
-// попали в кадр: это личные данные владельца, и показывать их ради красоты
-// нельзя. Подпись под разделом обязательна и убрана быть не может - проценты
-// в календаре считаются от залога сделки при большом плече, и человек должен
-// прочитать об этом там же, где увидел цифры.
+// Снимки из боевого кабинета, поэтому суммы счёта на них затёрты: это личные
+// данные владельца, и показывать их ради красоты нельзя. Оговорка про риск
+// торговли с плечом живёт в подвале сайта, одна на все страницы.
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -68,6 +66,41 @@ export default function Analytics() {
         </Reveal>
       </div>
 
+      {/* Метрики: тот же порядок - текст слева, снимок справа. Под ним вторым
+          рядом идёт детальный разбор, уже без своего заголовка: это тот же
+          разговор, только с более мелкими цифрами. */}
+      <div className="mt-16 grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.45fr)] lg:gap-12">
+        <Reveal>
+          <h3 className="text-h3 text-text-primary">{copy.advTitle}</h3>
+          <p className="mt-4 leading-relaxed text-text-secondary">{copy.advText}</p>
+          <p className="mt-4 leading-relaxed text-text-secondary">{copy.detText}</p>
+        </Reveal>
+
+        <Reveal delay={0.05}>
+          <img
+            src="/art/landing/analytics-advanced.webp"
+            alt={copy.advAlt}
+            width={1600}
+            height={901}
+            loading="lazy"
+            decoding="async"
+            className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
+          />
+        </Reveal>
+      </div>
+
+      <Reveal delay={0.05}>
+        <img
+          src="/art/landing/analytics-detail.webp"
+          alt={copy.detAlt}
+          width={1600}
+          height={901}
+          loading="lazy"
+          decoding="async"
+          className="mt-6 w-full rounded-2xl border border-white/[0.07] shadow-2xl"
+        />
+      </Reveal>
+
       {/* День внутри месяца: текст слева, снимок справа - тем же порядком,
           что и выше, чтобы раздел читался одной колонкой сверху вниз. */}
       <div className="mt-16 grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.45fr)] lg:gap-12">
@@ -110,9 +143,6 @@ export default function Analytics() {
         </Reveal>
       </div>
 
-      <Reveal delay={0.3}>
-        <p className="mx-auto mt-12 max-w-3xl text-center text-xs leading-relaxed text-text-muted">{copy.honest}</p>
-      </Reveal>
     </section>
   );
 }

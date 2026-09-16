@@ -275,14 +275,19 @@ export const landing = {
       "Monthly goals, activity streaks and achievements are counted for you",
     ],
     shotAlt: "NMNH account: calendar of trading days, monthly totals and the trader's path",
+    advTitle: "Metrics, not just the bottom line",
+    advText:
+      "Equity curve, trades distributed by R, weekdays, hours and trading sessions, coins, time in trade and streaks. You see not how much you made, but how exactly.",
+    advAlt: "NMNH advanced analytics: equity curve, R distribution, weekdays, hours and streaks",
+    detText:
+      "Deeper: profit factor and average R, drawdown, best and worst trades, longs against shorts, and how each trade ended - at target, at stop or closed by hand.",
+    detAlt: "NMNH detailed analytics: trade statistics, quality, trade types and breakdown by attribute",
     dayTitle: "Tap a day and there it is",
     dayText: "Every trade of that day: time, coin, side, entry, exit and the result of each.",
     dayAlt: "Trading day breakdown in the NMNH account: trades with entry, exit and result",
     cardTitle: "The day as a card",
     cardText: "A day, a week or a month folds into a card - save it or send it without assembling screenshots by hand.",
     cardAlt: "A trading day summary card built by the NMNH terminal",
-    honest:
-      "Screenshots of the mentor's account. Account balances are hidden - they are personal data. Percentages are calculated against the margin of each trade at leverage up to 25x and are not a promise of returns: the same leverage works against you too.",
   },
 
   showcase: {

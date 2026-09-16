@@ -2,14 +2,18 @@
 
 // Витрина продукта: качество, удобство и простота одной сводкой.
 //
-// Сознательно сделана иначе, чем остальные разделы главной. Там карточки с
-// иконками, подсветкой и цветом - здесь ничего этого нет: крупное значение,
-// строка под ним и тонкая сетка линий. Дорого выглядит не количество украшений,
-// а воздух между ними, поэтому единственное украшение раздела - размер цифр и
-// пустое место вокруг.
+// Плита намеренно тёмная в обеих темах и намеренно не похожа на остальные
+// разделы. На светлой странице чёрное с золотом читается как вставка из
+// другого, более дорогого материала - тот же приём, что на бланке сертификата
+// и на карточках сделок, то есть наш собственный, а не заимствованный.
 //
-// Сетка собрана границами ячеек, а не карточками: карточка отделяет пункт от
-// страницы, линия - соединяет пункты между собой. Для сводки нужно второе.
+// Никаких иконок и подсветок: крупное значение, тонкая золотая черта и строка
+// под ней. Дорого выглядит не количество украшений, а воздух между ними,
+// поэтому в ячейках много пустого места, а всё движение - в одной черте,
+// которая растёт при наведении.
+//
+// Цвета заданы числами, а не токенами темы: плита остаётся чёрной и когда
+// сайт переключают на светлую тему, иначе вставка теряет весь смысл.
 
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
@@ -24,30 +28,39 @@ export default function Showcase() {
       <SectionHeading eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.subtitle} />
 
       <Reveal delay={0.05}>
-        <div className="mt-14 overflow-hidden rounded-3xl border border-border bg-bg-panel/95 shadow-2xl backdrop-blur-2xl">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          className="relative mt-14 overflow-hidden rounded-[28px] border border-amber-400/20 bg-[#0B0B12] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.55)]"
+        >
+          {/* Два блика - тёплый сверху слева и холодный снизу справа. Плоская
+              заливка на такой площади выглядит как лист бумаги, а не как плита. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(60% 80% at 8% 0%, rgba(245,200,120,0.10) 0%, transparent 60%), radial-gradient(50% 70% at 100% 100%, rgba(120,180,255,0.07) 0%, transparent 60%)",
+            }}
+          />
+
+          <div className="relative grid sm:grid-cols-2 lg:grid-cols-3">
             {copy.items.map((item, i) => (
               <div
                 key={item.value}
-                // Линии только между ячейками: рамка по краю уже нарисована
-                // контейнером, и вторая по тем же местам даёт двойную черту.
-                className={`group relative px-7 py-10 transition-colors duration-500 hover:bg-bg-panel/80 md:px-9 md:py-12 ${
-                  i % 2 === 1 ? "sm:border-l sm:border-border" : ""
-                } ${i % 3 !== 0 ? "lg:border-l lg:border-border" : "lg:border-l-0"} ${
-                  i >= 2 ? "sm:border-t sm:border-border" : ""
-                } ${i >= 3 ? "lg:border-t lg:border-border" : "lg:border-t-0"} ${
-                  i > 0 ? "border-t border-border sm:border-t-0" : ""
+                className={`group relative px-8 py-12 transition-colors duration-500 hover:bg-white/[0.03] md:px-10 md:py-14 ${
+                  i > 0 ? "border-t border-white/[0.07] sm:border-t-0" : ""
+                } ${i % 2 === 1 ? "sm:border-l sm:border-white/[0.07]" : ""} ${
+                  i >= 2 ? "sm:border-t sm:border-white/[0.07]" : ""
+                } ${i % 3 !== 0 ? "lg:border-l lg:border-white/[0.07]" : "lg:border-l-0"} ${
+                  i >= 3 ? "lg:border-t lg:border-white/[0.07]" : "lg:border-t-0"
                 }`}
               >
-                <div className="font-mono text-3xl font-black tracking-tight text-text-primary md:text-4xl">
+                <div className="font-mono text-4xl font-black tracking-tight text-white md:text-[2.75rem] md:leading-none">
                   {item.value}
                 </div>
 
-                {/* Линия под значением - единственный акцентный цвет в разделе.
-                    Она же растёт на наведении: движение вместо подсветки. */}
-                <div className="mt-4 h-px w-10 bg-accent-cyan transition-all duration-500 group-hover:w-20" />
+                <div className="mt-5 h-px w-10 bg-amber-400/70 transition-all duration-500 group-hover:w-24" />
 
-                <p className="mt-4 text-sm leading-relaxed text-text-secondary">{item.label}</p>
+                <p className="mt-5 text-sm leading-relaxed text-white/55">{item.label}</p>
               </div>
             ))}
           </div>
