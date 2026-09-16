@@ -31,70 +31,14 @@ export default function Analytics() {
 
   return (
     <section id="analytics" className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28">
-      <SectionHeading eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.subtitle} />
-
-      <div className="mt-14 grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.45fr)] lg:gap-12">
-        <div className="grid gap-4">
-          {copy.points.map((point, i) => {
-            const Icon = ICONS[i % ICONS.length];
-            const accent = ACCENTS[i % ACCENTS.length];
-            return (
-              <Reveal key={point} delay={0.06 * i}>
-                <GlowCard accent={accent}>
-                  <div className="flex gap-4">
-                    <CardIcon accent={accent}>
-                      <Icon className="h-6 w-6" />
-                    </CardIcon>
-                    <p className="flex-1 self-center text-sm leading-relaxed text-text-secondary">{point}</p>
-                  </div>
-                </GlowCard>
-              </Reveal>
-            );
-          })}
-        </div>
-
-        <Reveal delay={0.05}>
-          <img
-            src="/art/landing/analytics.webp"
-            alt={copy.shotAlt}
-            width={1600}
-            height={903}
-            loading="lazy"
-            decoding="async"
-            className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
-          />
-        </Reveal>
-      </div>
-
-      {/* День внутри месяца, и здесь снимок слева: ряды чередуются сторонами,
-          иначе четыре одинаково сложенных разворота подряд глаз пролистывает
-          как один. */}
-      <div className="mt-16 grid items-center gap-10 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,0.9fr)] lg:gap-12">
-        <Reveal delay={0.05}>
-          <img
-            src="/art/landing/analytics-day.webp"
-            alt={copy.dayAlt}
-            width={1200}
-            height={916}
-            loading="lazy"
-            decoding="async"
-            className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
-          />
-        </Reveal>
-
-        <Reveal>
-          <h3 className="text-h3 text-text-primary">{copy.dayTitle}</h3>
-          <p className="mt-4 leading-relaxed text-text-secondary">{copy.dayText}</p>
-        </Reveal>
-      </div>
+      <SectionHeading eyebrow={copy.eyebrow} title={copy.advTitle} subtitle={copy.subtitle} />
 
       {/* Метрики: тот же порядок - текст слева, снимок справа. Под ним вторым
           рядом идёт детальный разбор, уже без своего заголовка: это тот же
           разговор, только с более мелкими цифрами. */}
-      <div className="mt-16 grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.45fr)] lg:gap-12">
+      <div className="mt-14 grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.45fr)] lg:gap-12">
         <Reveal>
-          <h3 className="text-h3 text-text-primary">{copy.advTitle}</h3>
-          <p className="mt-4 leading-relaxed text-text-secondary">{copy.advText}</p>
+          <p className="leading-relaxed text-text-secondary">{copy.advText}</p>
           <p className="mt-4 leading-relaxed text-text-secondary">{copy.detText}</p>
         </Reveal>
 
@@ -122,29 +66,6 @@ export default function Analytics() {
           className="mt-6 w-full rounded-2xl border border-white/[0.07] shadow-2xl"
         />
       </Reveal>
-
-      {/* Карточка стоит слева, подпись справа - зеркально остальным рядам:
-          вертикальный снимок в правой колонке уводил взгляд за край страницы.
-          Доля ряда под него меньше: в ширину снимков выше карточка
-          растянулась бы на весь экран. */}
-      <div className="mt-16 grid items-center gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-12">
-        <Reveal>
-          <img
-            src="/art/landing/analytics-card.webp"
-            alt={copy.cardAlt}
-            width={760}
-            height={1016}
-            loading="lazy"
-            decoding="async"
-            className="mx-auto w-full max-w-sm rounded-2xl border border-white/[0.07] shadow-2xl"
-          />
-        </Reveal>
-
-        <Reveal delay={0.05}>
-          <h3 className="text-h3 text-text-primary">{copy.cardTitle}</h3>
-          <p className="mt-4 leading-relaxed text-text-secondary">{copy.cardText}</p>
-        </Reveal>
-      </div>
 
     </section>
   );
