@@ -103,3 +103,20 @@ def test_a_dry_run_works_before_the_schema_exists(tmp_path):
     target = f"sqlite:///{tmp_path / 'empty.sqlite3'}"
 
     assert tool.migrate(source, target, apply=False) == 0
+
+
+def test_text_keys_are_left_alone(tmp_path):
+    """Нумерацию продолжаем только числовым ключам.
+
+    У `chart_shots` ключ строка, и на живом переносе шаг с последовательностями
+    падал на ней: «COALESCE types text and integer cannot be matched».
+    """
+    from core.db import make_engine as engine_of
+    from core.models import ChartShot
+
+    target = engine_of(f"sqlite:///{tmp_path / 'to.sqlite3'}")
+    Base.metadata.create_all(target)
+
+    # На SQLite последовательностей нет вовсе - список пуст, и это не ошибка.
+    assert tool.fix_sequences(target, [ChartShot.__table__]) == []
+    assert not isinstance(ChartShot.__table__.c.id.type, type(Student.__table__.c.id.type))

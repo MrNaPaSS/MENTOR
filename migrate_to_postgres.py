@@ -23,7 +23,7 @@ import argparse
 import os
 import sys
 
-from sqlalchemy import func, inspect as sa_inspect, select, text
+from sqlalchemy import Integer, func, inspect as sa_inspect, select, text
 
 # Адрес нынешней базы лежит в `.env`, как и у сервера: без этого скрипт просил
 # бы `--from` там, где ответ уже записан рядом.
@@ -87,6 +87,10 @@ def fix_sequences(target, tables) -> list[str]:
             keys = [c for c in table.primary_key.columns if c.autoincrement is not False]
             if len(keys) != 1:
                 continue
+            # Только числовой ключ: у части таблиц он строка (`chart_shots`),
+            # и последовательности за ним не стоит вовсе.
+            if not isinstance(keys[0].type, Integer):
+                continue
             name = keys[0].name
             conn.execute(
                 text(
@@ -99,7 +103,9 @@ def fix_sequences(target, tables) -> list[str]:
     return fixed
 
 
-def migrate(source_url: str, target_url: str, apply: bool, only: str = "") -> int:
+def migrate(
+    source_url: str, target_url: str, apply: bool, only: str = "", sequences_only: bool = False
+) -> int:
     source = make_engine(source_url)
     target = make_engine(target_url)
 
@@ -107,6 +113,14 @@ def migrate(source_url: str, target_url: str, apply: bool, only: str = "") -> in
     if not tables:
         print(f"Таблицы {only} нет в схеме")
         return 1
+
+    # Доделать только нумерацию: данные уже перенесены, а шаг с
+    # последовательностями оборвался. Повторять перенос ради него нельзя -
+    # приёмник больше не пуст.
+    if sequences_only:
+        fixed = fix_sequences(target, tables)
+        print(f"Последовательности продолжены: {len(fixed)} таблиц")
+        return 0
 
     if apply:
         Base.metadata.create_all(target)
@@ -169,12 +183,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--to", dest="target", required=True)
     parser.add_argument("--only", default="", help="перенести одну таблицу")
     parser.add_argument("--apply", action="store_true", help="записать, а не показать")
+    parser.add_argument(
+        "--sequences",
+        action="store_true",
+        help="только продолжить нумерацию на приёмнике, данные не трогать",
+    )
     args = parser.parse_args(argv)
 
     if not args.source:
         print("Источник не задан: --from или DATABASE_URL")
         return 2
-    return migrate(args.source, args.target, args.apply, args.only)
+    return migrate(args.source, args.target, args.apply, args.only, args.sequences)
 
 
 if __name__ == "__main__":
