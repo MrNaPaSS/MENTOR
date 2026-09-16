@@ -21,6 +21,7 @@ from core.db import init_engine, create_all, SessionLocal
 from core import repo
 from core.weex import get_weex_client
 from backend.config import BackendConfig
+from backend.trading.private_ws import StreamKeeper
 from backend.trading.watcher import PositionWatcher
 from backend.api import shots
 from backend.api import trading as trading_api
@@ -162,6 +163,10 @@ def create_app(
     role = process_role()
     runs_watcher = role in ("all", "watcher")
     runs_market = role in ("all", "api")
+    # Сопровождение держит приватные потоки бирж у себя. В роли `api` его нет,
+    # и терминал остался бы на опросе позиций по нескольку раз в секунду -
+    # поэтому здесь свой держатель тех же потоков (backend/trading/private_ws.py).
+    keeper = StreamKeeper(SessionLocal, trading_api._get_session) if role == "api" else None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -197,6 +202,8 @@ def create_app(
             density_task = asyncio.create_task(run_density_watcher(density, _post))
         if runs_watcher:
             watcher.start()
+        if keeper:
+            keeper.start()
         if runs_market:
             await forum.start()
         # Оклик комнаты: без него список присутствующих врёт в большую сторону,
@@ -222,6 +229,8 @@ def create_app(
                 except asyncio.CancelledError:
                     pass
             await watcher.stop()
+            if keeper:
+                await keeper.stop()
             await forum.stop()
             binance_probe.cancel()
             if institutional_warm:

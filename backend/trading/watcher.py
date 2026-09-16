@@ -28,7 +28,7 @@ from sqlalchemy import select
 from backend.trading.accounts import account_for, client_for, trade_exchange
 from backend.trading.live_state import cached
 from backend.trading.locks import account_guard
-from backend.trading.private_ws import PrivateStreams
+from backend.trading.private_ws import PrivateStreams, sync_streams
 from backend.trading.rewards import award_trade_coins
 from core.models import LiveTrade, ScalpTrade, utcnow
 from core.trading.position import (
@@ -565,22 +565,12 @@ class PositionWatcher:
         await asyncio.gather(*(one(s, e) for s, e in accounts))
 
     async def _sync_streams(self, accounts: set[tuple[int, str]]) -> None:
-        """Свести набор приватных потоков к счетам с живыми сделками."""
-        await self.streams.keep(accounts)
-        if not accounts:
-            return
-        session = self._sessions()
-        try:
-            for student_id, exchange in sorted(accounts):
-                if self.streams.has(student_id, exchange):
-                    continue
-                row = account_for(session, student_id, exchange)
-                if row is not None:
-                    await self.streams.ensure(row)
-        except Exception as exc:  # noqa: BLE001 - без потока сопровождение живо
-            logger.warning("Приватные потоки не подняты: %s", exc)
-        finally:
-            session.close()
+        """Свести набор приватных потоков к счетам с живыми сделками.
+
+        Тем же кодом, что и держатель потоков терминала: разойтись этим двум
+        нельзя (backend/trading/private_ws.py, `sync_streams`).
+        """
+        await sync_streams(self.streams, self._sessions, accounts)
 
     async def _handle_student(
         self,

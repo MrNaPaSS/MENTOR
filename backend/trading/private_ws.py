@@ -38,7 +38,11 @@ from typing import Any
 
 import aiohttp
 
+from sqlalchemy import select
+
 from backend.trading import live_state
+from backend.trading.accounts import account_for, trade_exchange
+from core.models import LiveTrade
 from core.binance.futures import BinanceFutures
 from core.binance.stream import BinancePrivateStream
 from core.bingx.futures import BingxFutures
@@ -227,3 +231,95 @@ def _binance_testnet() -> bool:
 def _bingx_demo() -> bool:
     """Демо-контур BingX (VST): свой адрес и у ручек, и у потока."""
     return os.getenv("BINGX_DEMO", "").strip().lower() in ("1", "true", "yes")
+
+
+# ── счета со сделками и сведение потоков ────────────────────────────────────
+
+
+def live_accounts(session) -> set[tuple[int, str]]:
+    """Счета, на которых прямо сейчас идут сделки терминала."""
+    return {
+        (int(student_id), trade_exchange(code))
+        for student_id, code in session.execute(
+            select(LiveTrade.student_id, LiveTrade.exchange).where(
+                LiveTrade.status.in_(("waiting", "open"))
+            )
+        ).all()
+    }
+
+
+async def sync_streams(streams: PrivateStreams, sessions, accounts: set[tuple[int, str]]) -> None:
+    """Свести набор потоков к этим счетам: лишние закрыть, недостающие поднять.
+
+    Одно место на обоих, кто держит потоки: сопровождение и процесс терминала
+    (`StreamKeeper`). Два похожих кода разошлись бы на первой же правке.
+    """
+    await streams.keep(accounts)
+    if not accounts:
+        return
+    session = sessions()
+    try:
+        for student_id, exchange in sorted(accounts):
+            if streams.has(student_id, exchange):
+                continue
+            row = account_for(session, student_id, exchange)
+            if row is not None:
+                await streams.ensure(row)
+    except Exception as exc:  # noqa: BLE001 - без потока работа идёт опросом
+        logger.warning("Приватные потоки не подняты: %s", exc)
+    finally:
+        session.close()
+
+
+class StreamKeeper:
+    """Приватные потоки в процессе, который сделок не ведёт.
+
+    Нужен в раздельном режиме (`NMNH_SPLIT=1`): сопровождение живёт своим
+    процессом и держит потоки у себя, а терминал обслуживает процесс `api` - и
+    без потока он спрашивал позиции у биржи по нескольку раз в секунду. Своё
+    соединение возвращает ему живые цифры и снимает эти запросы.
+
+    Будить здесь некого: сопровождения в этом процессе нет, поток нужен только
+    как источник позиций (`live_state`).
+    """
+
+    INTERVAL = 5.0
+
+    def __init__(self, sessions, http: SessionFactory, interval: float = INTERVAL):
+        self._sessions = sessions
+        self.streams = PrivateStreams(http)
+        self.interval = interval
+        self._task: asyncio.Task | None = None
+
+    def start(self) -> None:
+        if self._task is None or self._task.done():
+            self._task = asyncio.create_task(self._loop(), name="stream-keeper")
+            logger.info("Приватные потоки терминала включены, сверка раз в %.0f с", self.interval)
+
+    async def stop(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+        await self.streams.stop()
+
+    async def _loop(self) -> None:
+        while True:
+            try:
+                await self._tick()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - круг не должен обрываться
+                logger.warning("Сверка потоков терминала не удалась: %s", exc)
+            await asyncio.sleep(self.interval)
+
+    async def _tick(self) -> None:
+        session = self._sessions()
+        try:
+            accounts = live_accounts(session)
+        finally:
+            session.close()
+        await sync_streams(self.streams, self._sessions, accounts)
