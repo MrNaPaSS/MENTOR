@@ -506,3 +506,49 @@ async def test_an_old_style_message_is_still_one_trade():
     c._on_message("btcusdt@aggTrade", {"s": "BTCUSDT", "T": 5_000, "p": "100", "q": "3", "m": False})
 
     assert c.state.get("BTCUSDT").tape.metrics(now_second=5, recent=60).trades_per_min == 1.0
+
+
+def test_the_weight_budget_is_split_between_processes():
+    """Вес биржа считает по адресу: два процесса не могут брать по полному пределу.
+
+    Живой стол 17 сентября, сразу после выноса рыночных данных в свой процесс:
+    «потрачено 1690 из 1400 за минуту, фоновых отказов 21» - сборщик и сайт
+    считали каждый свои 1800, а биржа даёт 2400 на адрес.
+    """
+    from backend.scalping.binance import (
+        INTERACTIVE_RESERVE,
+        WEIGHT_BUDGET,
+        weight_budget,
+    )
+
+    # Один процесс - всё как было.
+    assert weight_budget("all", "") == (WEIGHT_BUDGET, INTERACTIVE_RESERVE)
+    assert weight_budget("api", "") == (WEIGHT_BUDGET, INTERACTIVE_RESERVE)
+
+    market, market_reserve = weight_budget("market", "1")
+    site, site_reserve = weight_budget("api", "1")
+
+    # Сборщику большая часть, сайту остаток, и вместе не больше прежнего.
+    assert market > site > 0
+    assert market + site <= WEIGHT_BUDGET
+    # Резерв трейдеру - той же долей, иначе фоновым не осталось бы ничего.
+    assert 0 < site_reserve < site
+    assert 0 < market_reserve < market
+
+
+def test_a_small_budget_still_leaves_room_for_background():
+    """У процесса с малой долей фоновые запросы не оказываются вне закона."""
+    import asyncio
+
+    from backend.scalping.binance import BinanceRest, weight_budget
+
+    async def session():
+        return None
+
+    rest = BinanceRest(session)
+    rest.budget, rest.reserve = weight_budget("api", "1")
+
+    async def take() -> bool:
+        return await rest._reserve("/fapi/v1/klines", 2, background=True)
+
+    assert asyncio.run(take()) is True

@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from collections import deque
 import json
@@ -91,11 +92,41 @@ BAN_BACKOFF_MAX = 600.0
 WEIGHT_BUDGET = 1800
 WEIGHT_WINDOW = 60.0
 
+# Доля бюджета процессу сайта, когда рыночные данные вынесены отдельно
+# (`NMNH_MARKET=1`).
+#
+# Вес биржа считает по адресу, а не по процессу: два счётчика по 1800 на одной
+# машине выбирают 3600 из 2400, которые даёт биржа. Живой стол 17 сентября,
+# сразу после разделения: «потрачено 1690 из 1400 за минуту, фоновых отказов
+# 21» - и половина стаканов без снимка.
+#
+# Сайту хватает малого: рыночные ручки редкие и с кэшем, а потоки, снимки
+# стаканов и свечи терминала живут в процессе рынка.
+SITE_SHARE = 0.2
+
 # Сколько веса фоновым запросам не достаётся никогда: его держим за запросами
 # трейдера - свечами графика и разбором свечи. После запуска сервер берёт
 # снимки стаканов по всем монетам скринера разом и выбирал бюджет до дна, а
 # график у трейдера в эту минуту отвечал 502: его свечи стояли в той же очереди.
 INTERACTIVE_RESERVE = 400
+
+
+def weight_budget(role: str | None = None, apart: str | None = None) -> tuple[int, int]:
+    """Сколько веса достаётся этому процессу: (весь бюджет, резерв трейдеру).
+
+    Один процесс - весь бюджет, как было. Рыночные данные вынесены отдельно -
+    сборщику большая часть, сайту остаток: считать порознь и каждому по полному
+    пределу значит выбрать чужой и получить бан на адрес.
+    """
+    name = (role if role is not None else os.getenv("NMNH_ROLE", "all")).strip().lower()
+    raw = apart if apart is not None else os.getenv("NMNH_MARKET", "")
+    if raw.strip().lower() not in ("1", "true", "yes"):
+        return WEIGHT_BUDGET, INTERACTIVE_RESERVE
+    site = int(WEIGHT_BUDGET * SITE_SHARE)
+    budget = WEIGHT_BUDGET - site if name == "market" else site
+    # Резерв трейдеру - той же долей: у процесса с малым бюджетом прежние
+    # четыреста не оставили бы фоновым ничего.
+    return budget, max(1, round(INTERACTIVE_RESERVE * budget / WEIGHT_BUDGET))
 
 # Вес известных запросов по документации биржи.
 WEIGHTS = {
@@ -134,6 +165,8 @@ class BinanceRest:
         self._penalty = BAN_BACKOFF_MIN
         # Потраченный вес: (когда, сколько). Старше минуты выбрасывается.
         self._spent: deque[tuple[float, int]] = deque()
+        # Свой предел: он зависит от того, один процесс ходит на биржу или два.
+        self.budget, self.reserve = weight_budget()
         # Фоновые отказы бюджета за минуту - для одной сводной строки в журнале.
         self._refused = 0
         self._refused_logged = 0.0
@@ -167,7 +200,7 @@ class BinanceRest:
         weight = weight or WEIGHTS.get(path, DEFAULT_WEIGHT)
         now = time.monotonic()
         spent = self._spent_weight(now)
-        ceiling = WEIGHT_BUDGET - INTERACTIVE_RESERVE if background else WEIGHT_BUDGET
+        ceiling = self.budget - self.reserve if background else self.budget
         if spent + weight > ceiling:
             # Отказ трейдеру - предупреждение сразу. Фоновые отказы копятся и
             # уходят одной строкой раз в минуту: сорок одинаковых строк ничего
@@ -206,7 +239,7 @@ class BinanceRest:
         """
         now = time.monotonic()
         spent = self._spent_weight(now)
-        ceiling = WEIGHT_BUDGET - INTERACTIVE_RESERVE if background else WEIGHT_BUDGET
+        ceiling = self.budget - self.reserve if background else self.budget
         need = spent + weight - ceiling
         if need <= 0:
             return 0.0
