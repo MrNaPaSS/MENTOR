@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select
 from fastapi.testclient import TestClient
 
 from backend.config import BackendConfig
@@ -297,3 +298,109 @@ def test_month_lists_the_exchanges_it_saw(ctx):
     body = client.get(f"/api/analytics/calendar?year={_Y}&month={_M}", headers=h).json()
     # Сначала та, где торговали больше: переключатель читается слева направо.
     assert body["exchanges"] == ["okx", "weex"]
+
+
+# ── снимок баланса идёт за днём ─────────────────────────────────────────────
+
+
+def test_the_daily_balance_follows_the_exchange(ctx, monkeypatch):
+    """Баланс дня обновляется каждым проходом, а не застывает утренним.
+
+    Снимок писался первым проходом после полуночи и до следующей ночи не
+    менялся: в календаре у дня стояла утренняя цифра, и рядом с оборотом дня в
+    полтора миллиона она читалась как ошибка. Живой стол 17 сентября: $180,47
+    при обороте $1.601.359.
+    """
+    import asyncio
+
+    from backend import balance_collector
+    from core.models import Student
+
+    sid, _headers = _student(ctx)
+    with SessionLocal() as s:
+        student = s.get(Student, sid)
+        student.is_active = True
+        s.commit()
+
+    today = balance_collector._today_utc()
+    said: list[Decimal] = [Decimal("180.47"), Decimal("1541.90")]
+
+    async def balance(session, student):
+        return said.pop(0)
+
+    monkeypatch.setattr(balance_collector, "balance_by_keys", balance)
+    monkeypatch.setattr(balance_collector, "keyed_students", lambda: {sid})
+
+    async def volume(session, student, day):
+        return None
+
+    monkeypatch.setattr(balance_collector, "futures_volume_by_keys", volume)
+
+    class Weex:
+        async def get_channel_trade_asset(self, start, end, page=1):
+            return []
+
+        async def get_affiliate_balance(self, uid):
+            return None
+
+    asyncio.run(balance_collector.snapshot_all(Weex()))
+    with SessionLocal() as s:
+        first = s.execute(
+            select(BalanceSnapshot).where(BalanceSnapshot.student_id == sid)
+        ).scalars().all()
+    assert len(first) == 1
+    assert Decimal(str(first[0].balance_usdt)) == Decimal("180.47")
+
+    # Следующий проход того же дня: цифра догоняет биржу, вторая строка не
+    # заводится.
+    asyncio.run(balance_collector.snapshot_all(Weex()))
+    with SessionLocal() as s:
+        rows = s.execute(
+            select(BalanceSnapshot).where(BalanceSnapshot.student_id == sid)
+        ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].date == today
+    assert Decimal(str(rows[0].balance_usdt)) == Decimal("1541.90")
+
+
+def test_a_silent_exchange_keeps_the_last_balance(ctx, monkeypatch):
+    """Биржа не ответила - остаётся прежняя цифра, а не пустая клетка."""
+    import asyncio
+
+    from backend import balance_collector
+    from core.models import Student
+
+    sid, _headers = _student(ctx)
+    with SessionLocal() as s:
+        student = s.get(Student, sid)
+        student.is_active = True
+        s.commit()
+
+    _snapshot(sid, balance_collector._today_utc(), "900.25")
+
+    async def silent(session, student):
+        return None
+
+    monkeypatch.setattr(balance_collector, "balance_by_keys", silent)
+    monkeypatch.setattr(balance_collector, "keyed_students", lambda: {sid})
+
+    async def volume(session, student, day):
+        return None
+
+    monkeypatch.setattr(balance_collector, "futures_volume_by_keys", volume)
+
+    class Weex:
+        async def get_channel_trade_asset(self, start, end, page=1):
+            return []
+
+        async def get_affiliate_balance(self, uid):
+            return None
+
+    asyncio.run(balance_collector.snapshot_all(Weex()))
+
+    with SessionLocal() as s:
+        rows = s.execute(
+            select(BalanceSnapshot).where(BalanceSnapshot.student_id == sid)
+        ).scalars().all()
+    assert len(rows) == 1
+    assert Decimal(str(rows[0].balance_usdt)) == Decimal("900.25")

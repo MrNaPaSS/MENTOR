@@ -88,38 +88,48 @@ async def snapshot_all(weex: WeexClient) -> int:
                 )
             ).scalar_one_or_none()
 
-            # Баланс — только если снимка ещё нет
-            if existing is None:
-                # Сначала свои ключи ученика: они дают ту же цифру, что он
-                # видит в приложении биржи. Партнёрская ручка по UID - взгляд
-                # со стороны, и она остаётся запасной.
-                source = "api_keys"
-                balance = await balance_by_keys(session, student)
+            # Баланс спрашиваем каждый проход, а не только раз в сутки.
+            #
+            # Прежде снимок писался первым проходом после полуночи и до
+            # следующей ночи не менялся: в календаре у дня стояла утренняя
+            # цифра, и рядом с оборотом дня в полтора миллиона она читалась как
+            # ошибка. Теперь запись дня обновляется ежечасно и к его концу
+            # показывает то, с чем день закончился.
+            #
+            # Сначала свои ключи ученика: они дают ту же цифру, что он видит в
+            # приложении биржи. Партнёрская ручка по UID - взгляд со стороны, и
+            # она остаётся запасной.
+            source = "api_keys"
+            balance = await balance_by_keys(session, student)
 
-                if balance is None and uid and not own:
-                    source = "affiliate_api"
-                    try:
-                        balance = await weex.get_affiliate_balance(uid)
-                    except Exception as exc:
-                        logger.warning("Не удалось получить баланс uid=%s: %s", uid, exc)
-                        continue
-                    if balance is not None:
-                        grant_referral_vip(student)
+            if balance is None and uid and not own:
+                source = "affiliate_api"
+                try:
+                    balance = await weex.get_affiliate_balance(uid)
+                except Exception as exc:
+                    logger.warning("Не удалось получить баланс uid=%s: %s", uid, exc)
+                    balance = None
+                if balance is not None:
+                    grant_referral_vip(student)
 
-                if balance is None:
-                    continue
-
-                existing = BalanceSnapshot(
-                    student_id=student.id,
-                    date=today,
-                    balance_usdt=balance,
-                    source=source,
-                )
-                session.add(existing)
+            # Не ответила биржа - оставляем то, что было: пустая клетка хуже
+            # цифры часовой давности, а перезаписать снимок нечем.
+            if balance is not None:
+                if existing is None:
+                    existing = BalanceSnapshot(
+                        student_id=student.id,
+                        date=today,
+                        balance_usdt=balance,
+                        source=source,
+                    )
+                    session.add(existing)
+                    saved += 1
+                else:
+                    existing.balance_usdt = balance
+                    existing.source = source
 
                 student.balance_usdt = balance
                 student.balance_source = source
-                saved += 1
 
             # Объём торгов — обновляем при каждом цикле (данные растут в течение дня)
             #
