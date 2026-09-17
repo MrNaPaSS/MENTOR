@@ -2,7 +2,7 @@
 // v8
 import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 import { maskValue, numbersHidden, rememberHidden } from "@/lib/analytics/hideNumbers";
-import { shotImage, shotPage } from "@/lib/journalShots";
+import { shotImage } from "@/lib/journalShots";
 import TradeShots from "@/components/scalping/TradeShots";
 import { useEffect, useMemo, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -1529,21 +1529,57 @@ export default function AnalyticsPage() {
                       </p>
                       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                         {pieces.map(({ one, shot }) => (
-                          <a
+                          <figure
                             key={shot.id}
-                            href={shotPage(shot)}
-                            target="_blank"
-                            rel="noreferrer"
-                            title={`${one.symbol} · ${shot.note || ""}`.trim()}
                             className="overflow-hidden rounded-lg border border-[var(--pane-border)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)]"
                           >
-                            <img
-                              src={shotImage(shot)}
-                              alt={shot.note || one.symbol}
-                              className="block h-20 w-full object-cover"
-                              loading="lazy"
-                            />
-                          </a>
+                            {/* Нажатие открывает разбор той сделки здесь же, а
+                                не уводит страницей: смотрят день целиком, и
+                                возвращаться в календарь ради каждой картинки
+                                незачем. */}
+                            <button
+                              onClick={() => setShotsOf(one.client_id)}
+                              title={`${one.symbol} · ${shot.note || ""}`.trim()}
+                              className="block w-full"
+                            >
+                              <img
+                                src={shotImage(shot)}
+                                alt={shot.note || one.symbol}
+                                className="block h-20 w-full object-cover"
+                                loading="lazy"
+                              />
+                            </button>
+                            {/* Подпись та же, что в галерее журнала: монета,
+                                время и итог. Без неё снимок не отличить от
+                                соседнего - графики похожи. */}
+                            <figcaption className="flex items-center gap-1 px-1.5 py-1 text-[9px]">
+                              <span className="font-mono text-[var(--pane-text-2)]">
+                                {one.symbol.replace(/USDT$/, "")}
+                              </span>
+                              <span className="text-[var(--pane-muted)]">
+                                {new Date(one.closed_at ?? one.opened_at ?? "").toLocaleString(
+                                  numbers,
+                                  {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )}
+                              </span>
+                              <div className="flex-1" />
+                              <span
+                                className={`font-mono ${
+                                  one.pnl >= 0
+                                    ? "text-[var(--pane-up)]"
+                                    : "text-[var(--pane-down)]"
+                                }`}
+                              >
+                                {one.pnl >= 0 ? "+" : "-"}
+                                {Math.abs(one.pnl).toFixed(2)}
+                              </span>
+                            </figcaption>
+                          </figure>
                         ))}
                       </div>
                     </div>
