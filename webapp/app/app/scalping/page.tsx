@@ -137,7 +137,7 @@ import {
   type SymbolLimits,
   type TradingStatus,
 } from "@/lib/trading";
-import { attachShot } from "@/lib/journalShots";
+import { attachShot, type ShotStage } from "@/lib/journalShots";
 import {
   journalAvailable,
   loadCalendar,
@@ -3462,13 +3462,16 @@ export default function ScalpingPage() {
       if (now - shotAtRef.current < AUTO_SHOT_GAP_MS) continue;
       shotAtRef.current = now;
 
-      const why =
-        trade.status === "closed"
-          ? t.terminal.autoShotClosed
-          : was.startsWith("planned")
-            ? t.terminal.autoShotOpened
-            : t.terminal.autoShotTake(trade.takesHit);
-      void autoShot(trade.id, why);
+      // Этап снимок знает сам: он снимает по событию, и называть его руками
+      // не нужно - в карточке позиции картинка сразу встаёт в свой ряд.
+      const closed = trade.status === "closed";
+      const opened = was.startsWith("planned");
+      const why = closed
+        ? t.terminal.autoShotClosed
+        : opened
+          ? t.terminal.autoShotOpened
+          : t.terminal.autoShotTake(trade.takesHit);
+      void autoShot(trade.id, why, closed ? "exit" : opened ? "entry" : "manage");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trades, autoShots, symbol]);
@@ -3514,6 +3517,9 @@ export default function ScalpingPage() {
       const done = await attachShot(
         trade.id,
         picture.toDataURL("image/jpeg", 0.9),
+        "",
+        // Сделка ещё ждёт входа - это снимок «до входа»; идёт - «ведение».
+        trade.status === "open" ? "manage" : "before",
       );
       setOrderNote({
         text: done
@@ -3528,7 +3534,7 @@ export default function ScalpingPage() {
   }
 
   /** Снять график и приложить к сделке. Молча: это не действие трейдера. */
-  async function autoShot(clientId: string, note: string) {
+  async function autoShot(clientId: string, note: string, stage: ShotStage) {
     const taken = shotRef.current?.();
     if (!taken || taken.source === "empty" || !symbol) return;
     try {
@@ -3538,7 +3544,7 @@ export default function ScalpingPage() {
         author: author ?? undefined,
         theme: paper,
       });
-      await attachShot(clientId, picture.toDataURL("image/jpeg", 0.9), note);
+      await attachShot(clientId, picture.toDataURL("image/jpeg", 0.9), note, stage);
       setJournalKey((n) => n + 1);
     } catch {
       // Снимок не сложился - разбор не важнее сделки, молчим.

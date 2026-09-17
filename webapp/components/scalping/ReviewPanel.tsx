@@ -19,6 +19,8 @@ import { Check, Loader2 } from "lucide-react";
 
 import { useIntlLocale, useT } from "@/lib/i18n";
 import { money, tone } from "@/lib/journalFormat";
+import { weekStats } from "@/lib/weekStats";
+import WeekReviewCard from "./WeekReviewCard";
 import { shotImage } from "@/lib/journalShots";
 import { isoWeek, loadPlan, savePlan } from "@/lib/weekPlan";
 import type { JournalRow } from "./JournalTable";
@@ -37,6 +39,8 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
   const [week, setWeek] = useState(() => isoWeek());
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Открыт ли разбор недели: собирается по кнопке, сам не лезет.
+  const [sum, setSum] = useState(false);
   // Что уже записано на сервере: по нему видно, есть ли что сохранять.
   const kept = useRef("");
 
@@ -87,6 +91,11 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
     return (trade: JournalRow) => map.get(trade.client_id) ?? 0;
   }, [folders]);
 
+  // Цифры недели: по закрытым сделкам той же недели, что и план. Сделки
+  // соседних недель в списке быть могут - период журнала шире, - и в итог
+  // недели они не попадают.
+  const stats = useMemo(() => weekStats(rows, week), [rows, week]);
+
   // Позиции по монетам: неделя - инструмент - позиция. Разбирают их так же:
   // сперва смотрят, что было по BTC, потом что по ETH.
   const byCoin = useMemo(() => {
@@ -109,6 +118,17 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
           <div className="flex-1" />
           {busy && <Loader2 className="h-3 w-3 animate-spin text-[var(--pane-muted)]" />}
           {saved && !busy && <Check className="h-3 w-3 text-[var(--pane-up)]" />}
+          {/* Заготовка подставляется только в пустой план: чужой текст поверх
+              написанного - потеря работы, а не помощь. */}
+          {plan.trim() === "" && (
+            <button
+              onClick={() => setPlan(t.journal.planTemplate)}
+              title={t.journal.planFillHint}
+              className="rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
+            >
+              {t.journal.planFill}
+            </button>
+          )}
         </div>
         <textarea
           value={plan}
@@ -117,6 +137,68 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
           spellCheck={false}
           className="min-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-[11px] leading-relaxed text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
         />
+
+        {/* Итог недели под планом. Каждое число подписано тем, откуда взято:
+            разбор, в котором не понять, что считалось, хуже отсутствия цифр. */}
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-[var(--pane-border)] px-2 py-1.5">
+          {stats.trades === 0 ? (
+            <span className="text-[10px] text-[var(--pane-muted)]">{t.journal.weekEmpty}</span>
+          ) : (
+            <>
+              <span
+                title={t.journal.weekTradesHint}
+                className="rounded bg-[var(--pane-hover)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--pane-text-2)]"
+              >
+                {t.journal.weekTrades(stats.marked, stats.trades)}
+              </span>
+              {stats.gain !== null && (
+                <span
+                  title={t.journal.weekGainHint}
+                  className={`rounded bg-[var(--pane-hover)] px-1.5 py-0.5 font-mono text-[10px] font-bold ${tone(stats.pnl)}`}
+                >
+                  {t.journal.weekGain(
+                    `${stats.gain > 0 ? "+" : ""}${stats.gain.toFixed(1)}%`,
+                  )}
+                </span>
+              )}
+              <span
+                title={t.journal.weekWinrateHint}
+                className="rounded bg-[var(--pane-hover)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--pane-text-2)]"
+              >
+                {t.journal.weekWinrate(
+                  `${Math.round((stats.winrate ?? 0) * 100)}%`,
+                )}
+              </span>
+              {/* Нарушения показываются, только если их отмечали: ноль
+                  нарушений у неразобранной недели - не заслуга, а пустота. */}
+              {stats.marked > 0 && (
+                <span
+                  title={t.journal.weekBreaksHint}
+                  className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                    stats.breaks > 0
+                      ? "bg-[var(--pane-down)]/15 text-[var(--pane-down)]"
+                      : "bg-[var(--pane-hover)] text-[var(--pane-up)]"
+                  }`}
+                >
+                  {t.journal.weekBreaks(stats.breaks)}
+                </span>
+              )}
+              <span className="font-mono text-[10px] text-[var(--pane-muted)]">
+                {money(stats.pnl)}
+              </span>
+              <div className="flex-1" />
+              {/* Разбор недели собирается из этих же цифр, но целиком: сессии,
+                  нарушения, поведение после убытка. Кнопка стоит рядом с
+                  итогом, потому что смотрят их подряд. */}
+              <button
+                onClick={() => setSum(true)}
+                className="rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
+              >
+                {t.journal.weekReviewMake}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="rounded-lg border border-[var(--pane-border)] p-2">
@@ -225,6 +307,8 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
           </div>
         )}
       </div>
+
+      {sum && <WeekReviewCard rows={rows} week={week} onClose={() => setSum(false)} />}
     </div>
   );
 }
