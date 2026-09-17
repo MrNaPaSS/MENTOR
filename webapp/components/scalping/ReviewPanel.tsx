@@ -14,16 +14,25 @@
 // Снимки берутся из тех же строк журнала, что и таблица: отдельного запроса
 // нет, и разбор не может разойтись со списком сделок.
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { useIntlLocale, useT } from "@/lib/i18n";
 import { money, tone } from "@/lib/journalFormat";
 import { weekStats } from "@/lib/weekStats";
+import PlanForm from "./PlanForm";
 import WeekReviewCard from "./WeekReviewCard";
 import { shotImage } from "@/lib/journalShots";
-import { isoWeek, loadPlan, savePlan } from "@/lib/weekPlan";
+import { isoWeek } from "@/lib/weekPlan";
 import type { JournalRow } from "./JournalTable";
+
+/**
+ * Сколько папок видно до раскрытия: два ряда по шесть.
+ *
+ * Два ряда - это ровно та порция, которую глаз охватывает не прокручивая.
+ * Монета с тридцатью позициями иначе вытесняет с экрана все остальные, и
+ * разбор недели превращается в разбор одной монеты.
+ */
+const PAGE = 12;
 
 export interface ReviewPanelProps {
   /** Строки журнала за период: и закрытые, и идущие. */
@@ -35,45 +44,11 @@ export interface ReviewPanelProps {
 export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
   const t = useT();
   const numbers = useIntlLocale();
-  const [plan, setPlan] = useState("");
   const [week, setWeek] = useState(() => isoWeek());
-  const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState(false);
   // Открыт ли разбор недели: собирается по кнопке, сам не лезет.
   const [sum, setSum] = useState(false);
-  // Что уже записано на сервере: по нему видно, есть ли что сохранять.
-  const kept = useRef("");
-
-  useEffect(() => {
-    let gone = false;
-    void loadPlan().then((body) => {
-      if (gone || !body) return;
-      setPlan(body.text);
-      setWeek(body.week);
-      kept.current = body.text;
-    });
-    return () => {
-      gone = true;
-    };
-  }, []);
-
-  // Сохраняем не на каждую букву: план пишут абзацами, и запрос на каждое
-  // нажатие клавиши - это десятки запросов на одну мысль.
-  useEffect(() => {
-    if (plan === kept.current) return;
-    const id = setTimeout(async () => {
-      setBusy(true);
-      const done = await savePlan(plan, week);
-      setBusy(false);
-      if (done) {
-        kept.current = done.text;
-        setSaved(true);
-        setTimeout(() => setSaved(false), 1500);
-      }
-    }, 1200);
-    return () => clearTimeout(id);
-  }, [plan, week]);
-
+  // Монеты, раскрытые целиком. Остальные показывают первые PAGE папок.
+  const [wide, setWide] = useState<readonly string[]>([]);
   // Сделки, у которых есть снимки: только они и попадают в разбор.
   const folders = useMemo(
     () => rows.filter((row) => (row.shots?.length ?? 0) > 0),
@@ -109,35 +84,7 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
 
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-      <div className="flex flex-col rounded-lg border border-[var(--pane-border)]">
-        <div className="flex items-center gap-2 border-b border-[var(--pane-border)] px-2 py-1.5">
-          <span className="text-[11px] font-semibold text-[var(--pane-text)]">
-            {t.journal.planTitle}
-          </span>
-          <span className="text-[10px] text-[var(--pane-muted)]">{week}</span>
-          <div className="flex-1" />
-          {busy && <Loader2 className="h-3 w-3 animate-spin text-[var(--pane-muted)]" />}
-          {saved && !busy && <Check className="h-3 w-3 text-[var(--pane-up)]" />}
-          {/* Заготовка подставляется только в пустой план: чужой текст поверх
-              написанного - потеря работы, а не помощь. */}
-          {plan.trim() === "" && (
-            <button
-              onClick={() => setPlan(t.journal.planTemplate)}
-              title={t.journal.planFillHint}
-              className="rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
-            >
-              {t.journal.planFill}
-            </button>
-          )}
-        </div>
-        <textarea
-          value={plan}
-          onChange={(event) => setPlan(event.target.value)}
-          placeholder={t.journal.planHint}
-          spellCheck={false}
-          className="min-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-[11px] leading-relaxed text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
-        />
-
+      <PlanForm week={week} onWeek={setWeek}>
         {/* Итог недели под планом. Каждое число подписано тем, откуда взято:
             разбор, в котором не понять, что считалось, хуже отсутствия цифр. */}
         <div className="flex flex-wrap items-center gap-1.5 border-t border-[var(--pane-border)] px-2 py-1.5">
@@ -165,9 +112,7 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
                 title={t.journal.weekWinrateHint}
                 className="rounded bg-[var(--pane-hover)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--pane-text-2)]"
               >
-                {t.journal.weekWinrate(
-                  `${Math.round((stats.winrate ?? 0) * 100)}%`,
-                )}
+                {t.journal.weekWinrate(`${Math.round((stats.winrate ?? 0) * 100)}%`)}
               </span>
               {/* Нарушения показываются, только если их отмечали: ноль
                   нарушений у неразобранной недели - не заслуга, а пустота. */}
@@ -188,8 +133,7 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
               </span>
               <div className="flex-1" />
               {/* Разбор недели собирается из этих же цифр, но целиком: сессии,
-                  нарушения, поведение после убытка. Кнопка стоит рядом с
-                  итогом, потому что смотрят их подряд. */}
+                  нарушения, поведение после убытка. */}
               <button
                 onClick={() => setSum(true)}
                 className="rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
@@ -199,7 +143,7 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
             </>
           )}
         </div>
-      </div>
+      </PlanForm>
 
       <div className="rounded-lg border border-[var(--pane-border)] p-2">
         {byCoin.length === 0 ? (
@@ -223,8 +167,8 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
                     одна вещь и выглядеть должна как одна вещь. Полосой во весь
                     экран одна сделка занимала столько же места, сколько целый
                     день работы. */}
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-                  {list.map((trade) => {
+                <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {(wide.includes(coin) ? list : list.slice(0, PAGE)).map((trade) => {
                     const cover = (trade.shots ?? [])[0];
                     return (
                       <button
@@ -254,7 +198,7 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 px-1.5 py-1">
+                        <div className="flex items-center gap-1 px-1 py-0.5">
                           <span className="font-mono text-[10px] text-[var(--pane-text-2)]">
                             {t.journal.positionNo(numberOf(trade))}
                           </span>
@@ -272,7 +216,7 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
                             {money(trade.pnl)}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1 px-1.5 pb-1 text-[9px] text-[var(--pane-muted)]">
+                        <div className="flex items-center gap-1 px-1 pb-0.5 text-[9px] text-[var(--pane-muted)]">
                           <span>
                             {new Date(
                               trade.closed_at ?? trade.opened_at ?? "",
@@ -302,6 +246,23 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
                     );
                   })}
                 </div>
+
+                {list.length > PAGE && (
+                  <button
+                    onClick={() =>
+                      setWide((was) =>
+                        was.includes(coin)
+                          ? was.filter((one) => one !== coin)
+                          : [...was, coin],
+                      )
+                    }
+                    className="mt-1 text-[10px] text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+                  >
+                    {wide.includes(coin)
+                      ? t.journal.foldersLess
+                      : t.journal.foldersMore(list.length - PAGE)}
+                  </button>
+                )}
               </section>
             ))}
           </div>
