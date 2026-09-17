@@ -7,10 +7,10 @@
 // он для трейдера является, а рядом его снимок: по картинке решают, читать ли
 // дальше, и показывать её стоит до объяснений.
 
-import Link from "next/link";
-import { ArrowRight, Check, Send } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import SignupPicker from "@/components/landing/SignupPicker";
+import { SOCIAL_LINKS } from "@/lib/content";
 
 export default function Hero() {
   const t = useT();
@@ -55,12 +55,14 @@ export default function Hero() {
           </ul>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link
-              href="/login"
+            <a
+              href={SOCIAL_LINKS.academy}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-full bg-accent-cyan px-5 py-2.5 text-sm font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-cyan/90 active:scale-[0.97]"
             >
               {copy.ctaTerminal} <ArrowRight className="h-[15px] w-[15px]" />
-            </Link>
+            </a>
 
             {/* Счёт на бирже: какой именно - человек выбирает в окне. */}
             <SignupPicker
@@ -68,14 +70,6 @@ export default function Hero() {
               className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-sm font-semibold text-text-primary transition-all duration-200 hover:border-border hover:bg-bg-panel/60 active:scale-[0.97]"
             />
 
-            <a
-              href="https://t.me/moneyhoney7_bot"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-sm font-semibold text-text-secondary transition-all duration-200 hover:border-border hover:bg-bg-panel/60 hover:text-text-primary active:scale-[0.97]"
-            >
-              <Send className="h-4 w-4" /> Telegram
-            </a>
           </div>
         </div>
 

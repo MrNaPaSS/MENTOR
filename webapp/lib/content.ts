@@ -7,6 +7,10 @@ export const SOCIAL_LINKS = {
   // Бот академии: он же выдаёт одноразовый пароль для входа на сайт. Это не
   // сигнальный бот - у них разные роли и разные записи об учениках.
   academyBot: "https://t.me/moneyhoney7_bot",
+  // Сама академия: мини-апп, куда ведёт главная кнопка первого экрана. Доступ
+  // к терминалу выдаётся оттуда, поэтому и путь человека начинается там, а не
+  // в форме входа.
+  academy: "https://academy.nmnh.trade",
   youtube: "https://youtube.com/@nmnh",
   tiktok: "https://tiktok.com/@nmnh",
   threads: "https://threads.net/@nmnh",
