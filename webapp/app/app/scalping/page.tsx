@@ -136,6 +136,7 @@ import {
   type SymbolLimits,
   type TradingStatus,
 } from "@/lib/trading";
+import { attachShot } from "@/lib/journalShots";
 import {
   journalAvailable,
   loadCalendar,
@@ -269,6 +270,10 @@ const GUARD_STREAMED_MS = 12_000;
 // Сколько после входа спрашивать позиции чаще обычного и с каким шагом. Шаг
 // меньше секунды не нужен: круг сам по себе столько и длится через туннель, а
 // лишние просьбы, пока он идёт, отбрасываются.
+// Не чаще этого снимаем график сами. Цель бывает взята частями, и десяток
+// одинаковых картинок разбору не помогает.
+const AUTO_SHOT_GAP_MS = 5_000;
+
 const OPEN_WATCH_MS = 12_000;
 const OPEN_WATCH_STEP_MS = 800;
 
@@ -482,6 +487,15 @@ type Workspace = {
    * на минуту. Включивший его находит его включённым и завтра.
    */
   foot?: boolean;
+  /**
+   * Снимать график самому, когда со сделкой что-то происходит.
+   *
+   * Снимок рисует браузер, а не сервер: картинка получится только пока
+   * терминал открыт и показывает ту же монету. Поэтому по умолчанию
+   * выключено - обещать разбор в картинках, половина которого не состоится,
+   * нельзя. Кому нужен - включит и знает, чего ждать.
+   */
+  autoShots?: boolean;
 };
 
 function readWorkspace(): Partial<Workspace> | null {
@@ -628,6 +642,8 @@ export default function ScalpingPage() {
   // Избранные монеты: свой раздел наверху и отдельный режим показа.
   const [favorites, setFavorites] = useState<string[]>([]);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
+  // Снимать график самому, когда со сделкой что-то происходит.
+  const [autoShots, setAutoShots] = useState(false);
   // Уровень, по которому нажали в стакане: спрашиваем, что с ним делать.
   const [level, setLevel] = useState<LadderRow | null>(null);
   // Способ снять холст графика: кладёт его сам график, пользуется кнопка.
@@ -1091,6 +1107,7 @@ export default function ScalpingPage() {
     }
     if (typeof saved.onlyFavorites === "boolean") setOnlyFavorites(saved.onlyFavorites);
     if (typeof saved.foot === "boolean") setFootOpen(saved.foot);
+    if (typeof saved.autoShots === "boolean") setAutoShots(saved.autoShots);
     if (Array.isArray(saved.alerts)) {
       setAlerts(
         saved.alerts.filter(
@@ -1248,6 +1265,7 @@ export default function ScalpingPage() {
       favorites,
       onlyFavorites,
       foot: footOpen,
+      autoShots,
     } satisfies Workspace;
 
     try {
@@ -1286,6 +1304,7 @@ export default function ScalpingPage() {
     favorites,
     onlyFavorites,
     footOpen,
+    autoShots,
   ]);
 
   /**
@@ -3410,6 +3429,64 @@ export default function ScalpingPage() {
     };
   }, [themeMenu]);
 
+  // ── снимок сам, по событиям сделки ────────────────────────────────────
+  //
+  // Снимок рисует браузер: картинка получится только пока терминал открыт и
+  // показывает ту же монету. Обещать большего нельзя, и мы не обещаем -
+  // событие без снимка проходит молча.
+  //
+  // Что считаем событием: сделка открылась, взяла цель, закрылась. По каждому
+  // - один снимок, и не чаще чем раз в несколько секунд: цель бывает взята
+  // частями, и десяток одинаковых картинок разбору не помогает.
+  const shotSeenRef = useRef(new Map<string, string>());
+  const shotAtRef = useRef(0);
+
+  useEffect(() => {
+    if (!autoShots || !symbol) return;
+
+    const seen = shotSeenRef.current;
+    for (const trade of trades) {
+      // Состояние сделки одной строкой: изменилась - значит что-то случилось.
+      const mark = `${trade.status}:${trade.takesHit}`;
+      const was = seen.get(trade.id);
+      seen.set(trade.id, mark);
+      if (was === undefined || was === mark) continue;
+      if (trade.symbol !== symbol) continue;
+      if (trade.status === "planned") continue;
+
+      const now = Date.now();
+      if (now - shotAtRef.current < AUTO_SHOT_GAP_MS) continue;
+      shotAtRef.current = now;
+
+      const why =
+        trade.status === "closed"
+          ? t.terminal.autoShotClosed
+          : was.startsWith("planned")
+            ? t.terminal.autoShotOpened
+            : t.terminal.autoShotTake(trade.takesHit);
+      void autoShot(trade.id, why);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trades, autoShots, symbol]);
+
+  /** Снять график и приложить к сделке. Молча: это не действие трейдера. */
+  async function autoShot(clientId: string, note: string) {
+    const taken = shotRef.current?.();
+    if (!taken || taken.source === "empty" || !symbol) return;
+    try {
+      const picture = await composeShot(taken.canvas, {
+        symbol,
+        interval: timeframe,
+        author: author ?? undefined,
+        theme: paper,
+      });
+      await attachShot(clientId, picture.toDataURL("image/jpeg", 0.9), note);
+      setJournalKey((n) => n + 1);
+    } catch {
+      // Снимок не сложился - разбор не важнее сделки, молчим.
+    }
+  }
+
   /**
    * Снимок графика: скачать, скопировать или получить ссылку.
    *
@@ -4053,6 +4130,24 @@ export default function ScalpingPage() {
                             {label}
                           </button>
                         ))}
+                        {/* Автоснимок - здесь же, под остальными: это про ту же
+                            камеру, только нажимает её терминал сам. */}
+                        <button
+                          onClick={() => setAutoShots((v) => !v)}
+                          title={t.terminal.autoShotHint}
+                          className="mt-1 flex w-full items-center gap-2 border-t border-[var(--pane-border)] px-3 py-1.5 text-left text-[11px] text-[var(--pane-text-2)] transition-colors hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+                        >
+                          <span
+                            className={`grid h-3 w-3 shrink-0 place-items-center rounded-[3px] border text-[8px] ${
+                              autoShots
+                                ? "border-[var(--pane-accent)] bg-[var(--pane-accent)] text-black"
+                                : "border-[var(--pane-border)]"
+                            }`}
+                          >
+                            {autoShots ? "✓" : ""}
+                          </span>
+                          {t.terminal.autoShot}
+                        </button>
                       </div>
                     )}
                   </div>
