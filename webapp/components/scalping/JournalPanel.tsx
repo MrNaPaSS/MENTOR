@@ -18,6 +18,7 @@ import Link from "next/link";
 import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
 import JournalTable, { type JournalRow } from "./JournalTable";
+import ReviewPanel from "./ReviewPanel";
 import TradeShots from "./TradeShots";
 import JournalCalendar from "./JournalCalendar";
 import { cardFromTrade } from "@/lib/pnl/data";
@@ -77,6 +78,10 @@ export default function JournalPanel({
   // в состоянии её снимок значило бы показывать в окне вчерашний список, а
   // закрывать окно после каждой картинки - мешать раскладывать разбор.
   const [shotsOf, setShotsOf] = useState<string | null>(null);
+  // Что показываем: список сделок или разбор - план недели и все снимки
+  // за период рядом. Разбор смотрят иначе, чем ведут журнал: там читают
+  // строки, здесь - картинки.
+  const [tab, setTab] = useState<"list" | "review">("list");
   const now = new Date();
   const [year, setYear] = useState(now.getUTCFullYear());
   const [month, setMonth] = useState(now.getUTCMonth() + 1);
@@ -273,6 +278,23 @@ export default function JournalPanel({
                 <Lock className="-ml-1 h-2.5 w-2.5" />
               </Link>
             ))}
+          {/* Список и разбор - две стороны одного журнала, поэтому
+              переключатель стоит в его же шапке. */}
+          <div className="mr-1 flex overflow-hidden rounded border border-[var(--pane-border)] text-[10px]">
+            {(["list", "review"] as const).map((name) => (
+              <button
+                key={name}
+                onClick={() => setTab(name)}
+                className={`px-2 py-0.5 transition-colors duration-150 ease-out ${
+                  tab === name
+                    ? "bg-[var(--pane-accent-faint)] text-[var(--pane-accent)]"
+                    : "text-[var(--pane-muted)] hover:text-[var(--pane-text)]"
+                }`}
+              >
+                {name === "list" ? t.journal.tabList : t.journal.tabReview}
+              </button>
+            ))}
+          </div>
           <button
             onClick={reload}
             title={t.journal.refresh}
@@ -294,6 +316,14 @@ export default function JournalPanel({
         <p className="grid flex-1 place-items-center px-4 text-center text-[var(--pane-muted)]">
           {error}
         </p>
+      ) : tab === "review" ? (
+        // Разбор: план недели и снимки за тот же период, что и список.
+        <div className="no-scrollbar min-h-0 flex-1 overflow-auto px-3 py-2">
+          <ReviewPanel
+            rows={[...live, ...shown]}
+            onPick={(row) => setShotsOf(row.client_id)}
+          />
+        </div>
       ) : (
         <div className="no-scrollbar min-h-0 flex-1 overflow-auto px-3 py-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:overflow-hidden">
           {/* Ровно пополам: слева итог и календарь, справа сами сделки.

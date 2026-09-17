@@ -2,6 +2,7 @@
 // v8
 import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 import { maskValue, numbersHidden, rememberHidden } from "@/lib/analytics/hideNumbers";
+import { shotImage, shotPage } from "@/lib/journalShots";
 import { useEffect, useMemo, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import Link from "next/link";
@@ -1478,6 +1479,43 @@ export default function AnalyticsPage() {
                     {t.analytics.trades.none}
                   </p>
                 ) : null}
+
+                {/* Снимки сделок этого дня.
+                    Цифры говорят, чем день кончился, а картинки - как он
+                    выглядел. Разбор дня начинается именно с них, и ходить за
+                    ними в терминал, стоя в календаре, незачем. */}
+                {(() => {
+                  const pieces = (dayTrades ?? []).flatMap((one) =>
+                    (one.shots ?? []).map((shot) => ({ one, shot })),
+                  );
+                  if (pieces.length === 0) return null;
+                  return (
+                    <div className="mt-3">
+                      <p className="mb-1.5 text-[10px] uppercase tracking-wider text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">
+                        {t.analytics.trades.shots}
+                      </p>
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                        {pieces.map(({ one, shot }) => (
+                          <a
+                            key={shot.id}
+                            href={shotPage(shot)}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`${one.symbol} · ${shot.note || ""}`.trim()}
+                            className="overflow-hidden rounded-lg border border-[var(--pane-border)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)]"
+                          >
+                            <img
+                              src={shotImage(shot)}
+                              alt={shot.note || one.symbol}
+                              className="block h-20 w-full object-cover"
+                              loading="lazy"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

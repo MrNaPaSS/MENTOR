@@ -122,6 +122,7 @@ export const analytics = {
     result: "Result",
     long: "long",
     short: "short",
+    shots: "Shots of the day",
     cardTitle: "Trade card: copy, download, share",
     none: "No trades on this day",
   },
