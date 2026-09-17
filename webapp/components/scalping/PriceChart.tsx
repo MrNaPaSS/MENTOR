@@ -2423,7 +2423,16 @@ function PriceChart({
     function onHover(event: PointerEvent) {
       // Высоту курсора запоминаем всегда, даже когда график тянут: перекрестие
       // едет вместе с мышью, и кнопка обязана ехать с ним.
-      if (!hoverHeldRef.current) hoverYRef.current = spot(event).y;
+      // Шкала цен справа - не поле графика. Курсор, уехавший на неё, тянет
+      // шкалу, а не выбирает уровень, и квадратик, оставшийся висеть у края,
+      // выглядит как забытая кнопка.
+      if (!hoverHeldRef.current) {
+        const at = spot(event);
+        const scaleW = chartRef.current?.priceScale("right").width() ?? 0;
+        const onField = at.x < box!.clientWidth - scaleW;
+        hoverYRef.current = onField ? at.y : null;
+        if (!onField) setHoverOn(false);
+      }
       if (event.buttons !== 0) return;
       // Ладонь над колонкой цены - её тянут; палец над объёмом - по нему
       // нажимают. Курсор здесь единственное, что об этом говорит заранее.

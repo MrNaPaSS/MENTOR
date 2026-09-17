@@ -490,6 +490,48 @@ def detach_shot(
     session.commit()
 
 
+class ShotNoteIn(BaseModel):
+    """Подпись к снимку и этап, к которому он относится."""
+
+    note: str = Field(default="", max_length=140)
+    stage: str = Field(default="")
+
+
+@router.put("/shots/{shot_row_id}")
+def write_shot_note(
+    shot_row_id: int,
+    body: ShotNoteIn,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Подписать снимок.
+
+    Подпись - половина разбора. Картинка без неё через месяц значит ровно
+    ничего: видно свечи, но не видно, что человек тогда думал. Пишется она
+    задним числом, когда сделку разбирают, поэтому и правится отдельно от
+    самого снимка.
+
+    Этап меняется здесь же: автоснимок ставит его сам, но ошибиться может и
+    он - цель, взятая на выходе, ложится в «ведение».
+    """
+    row = session.get(TradeShot, shot_row_id)
+    if row is None or row.student_id != student.id:
+        raise HTTPException(404, "Снимка нет")
+
+    row.note = body.note.strip()
+    # Незнакомый этап отбрасываем, а не отказываем: снимок важнее подписи.
+    if body.stage:
+        row.stage = body.stage if body.stage in STAGES else ""
+    session.commit()
+    session.refresh(row)
+    return {
+        "id": row.id,
+        "shot_id": row.shot_id,
+        "note": row.note,
+        "stage": row.stage or "",
+    }
+
+
 class ShotOrderIn(BaseModel):
     """Новый порядок снимков сделки: их номера от первого к последнему."""
 

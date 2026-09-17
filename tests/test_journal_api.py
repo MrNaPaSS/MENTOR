@@ -955,6 +955,52 @@ def test_a_shot_keeps_its_stage(client, tmp_path, monkeypatch):
     assert [s["stage"] for s in row["shots"]] == ["entry", ""]
 
 
+def test_a_shot_can_be_signed_later(client, tmp_path, monkeypatch):
+    """Подпись к снимку пишут на разборе, а не в момент съёмки.
+
+    В работе не до подписей: снимок делают одним движением и возвращаются к
+    нему через день. Поэтому подпись правится отдельно от картинки - и вместе
+    с ней этап, который автоснимок мог угадать неверно.
+    """
+    from backend.api import shots as shots_api
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path / "shots")
+    client.post("/api/journal/trades", json=trade(client_id="t-sign"))
+
+    made = client.post(
+        "/api/journal/trades/t-sign/shots",
+        json={"image": PNG_1PX, "stage": "manage"},
+    ).json()
+
+    signed = client.put(
+        f"/api/journal/shots/{made['id']}",
+        json={"note": "  плита на 76350  ", "stage": "exit"},
+    ).json()
+    assert signed["note"] == "плита на 76350"
+    assert signed["stage"] == "exit"
+
+    # Пустой этап не трогаем: подписывают чаще, чем переносят по этапам.
+    kept = client.put(
+        f"/api/journal/shots/{made['id']}",
+        json={"note": "стоп в безубытке"},
+    ).json()
+    assert kept["stage"] == "exit"
+    assert kept["note"] == "стоп в безубытке"
+
+    row = next(
+        t for t in client.get("/api/journal/trades").json()["trades"] if t["client_id"] == "t-sign"
+    )
+    assert row["shots"][0]["note"] == "стоп в безубытке"
+
+
+def test_a_stranger_shot_cannot_be_signed(client, tmp_path, monkeypatch):
+    """Чужой снимок не подписать: у него нет номера в твоём журнале."""
+    from backend.api import shots as shots_api
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path / "shots")
+    assert client.put("/api/journal/shots/999999", json={"note": "чужое"}).status_code == 404
+
+
 def test_the_trade_review_is_written_in_parts(client):
     """Разбор пишут в несколько заходов, и записанное раньше не теряется."""
     client.post("/api/journal/trades", json=trade(client_id="t-review"))

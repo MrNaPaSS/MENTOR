@@ -183,6 +183,32 @@ export async function orderShots(clientId: string, ids: number[]): Promise<boole
   }
 }
 
+/**
+ * Подписать снимок.
+ *
+ * Подпись - половина разбора: через месяц по картинке видно свечи, но не
+ * видно, что человек тогда думал. Пустой `stage` этап не трогает.
+ */
+export async function saveShotNote(
+  id: number,
+  note: string,
+  stage: ShotStage | "" = "",
+): Promise<boolean> {
+  const token = getAccessToken();
+  if (!token) return false;
+  try {
+    await authReq<unknown>(`/api/journal/shots/${id}`, token, {
+      method: "PUT",
+      body: JSON.stringify({ note, stage }),
+    });
+    return true;
+  } catch {
+    // Сервер старее этой возможности или отказал: подпись не сохранится, и об
+    // этом надо сказать, а не оставить поле с видом записанного.
+    return false;
+  }
+}
+
 /** Открепить снимок. Файл остаётся: на него могла уйти ссылка. */
 export async function detachShot(id: number): Promise<boolean> {
   const token = getAccessToken();

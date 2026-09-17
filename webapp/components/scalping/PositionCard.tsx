@@ -23,6 +23,7 @@ import {
   pastedImage,
   readImage,
   saveReview,
+  saveShotNote,
   shotImage,
   type ShotStage,
   type TradeShot,
@@ -286,6 +287,22 @@ export default function PositionCard({
                             >
                               <X className="h-3 w-3" />
                             </button>
+                            {/* Подпись под картинкой: что тут было видно и
+                                почему снимок сделан. Сохраняется по уходу из
+                                поля - пока пишут, запросы не нужны. */}
+                            <figcaption>
+                              <input
+                                defaultValue={shot.note}
+                                onBlur={async (event) => {
+                                  const body = event.target.value.trim();
+                                  if (body === shot.note) return;
+                                  if (await saveShotNote(shot.id, body)) onChange();
+                                }}
+                                placeholder={t.journal.shotNoteHint}
+                                maxLength={140}
+                                className="w-full bg-transparent px-1 py-0.5 text-[10px] text-[var(--pane-text-2)] outline-none placeholder:text-[var(--pane-muted)]"
+                              />
+                            </figcaption>
                           </figure>
                         ))}
                       </div>
