@@ -18,6 +18,7 @@ import Link from "next/link";
 import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
 import JournalTable, { type JournalRow } from "./JournalTable";
+import PositionCard from "./PositionCard";
 import ReviewPanel from "./ReviewPanel";
 import TradeShots from "./TradeShots";
 import JournalCalendar from "./JournalCalendar";
@@ -78,6 +79,8 @@ export default function JournalPanel({
   // в состоянии её снимок значило бы показывать в окне вчерашний список, а
   // закрывать окно после каждой картинки - мешать раскладывать разбор.
   const [shotsOf, setShotsOf] = useState<string | null>(null);
+  // Открытая позиция: её карточка со всеми этапами и разбором.
+  const [openPos, setOpenPos] = useState<{ id: string; number: number } | null>(null);
   // Что показываем: список сделок или разбор - план недели и все снимки
   // за период рядом. Разбор смотрят иначе, чем ведут журнал: там читают
   // строки, здесь - картинки.
@@ -321,7 +324,7 @@ export default function JournalPanel({
         <div className="no-scrollbar min-h-0 flex-1 overflow-auto px-3 py-2">
           <ReviewPanel
             rows={[...live, ...shown]}
-            onPick={(row) => setShotsOf(row.client_id)}
+            onPick={(row, number) => setOpenPos({ id: row.client_id, number })}
           />
         </div>
       ) : (
@@ -417,6 +420,21 @@ export default function JournalPanel({
       {card && (
         <PnlCard data={cardFromTrade(card, owner)} onClose={() => setCard(null)} />
       )}
+
+      {(() => {
+        const one = openPos
+          ? [...live, ...shown].find((row) => row.client_id === openPos.id)
+          : null;
+        if (!one || !openPos) return null;
+        return (
+          <PositionCard
+            trade={one}
+            number={openPos.number}
+            onClose={() => setOpenPos(null)}
+            onChange={() => void reload()}
+          />
+        );
+      })()}
 
       {shotsRow && (
         <TradeShots

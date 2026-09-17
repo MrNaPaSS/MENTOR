@@ -19,15 +19,15 @@ import { Check, Loader2 } from "lucide-react";
 
 import { useIntlLocale, useT } from "@/lib/i18n";
 import { money, tone } from "@/lib/journalFormat";
-import { shotImage, type TradeShot } from "@/lib/journalShots";
+import { shotImage } from "@/lib/journalShots";
 import { isoWeek, loadPlan, savePlan } from "@/lib/weekPlan";
 import type { JournalRow } from "./JournalTable";
 
 export interface ReviewPanelProps {
   /** Строки журнала за период: и закрытые, и идущие. */
   rows: readonly JournalRow[];
-  /** Нажали на снимок: открыть разбор этой сделки. */
-  onPick: (trade: JournalRow, shot: TradeShot) => void;
+  /** Нажали на папку: открыть позицию целиком. */
+  onPick: (trade: JournalRow, number: number) => void;
 }
 
 export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
@@ -76,6 +76,28 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
     [rows],
   );
 
+  // Номера позиций - сквозные по периоду, от самой ранней. По ним позицию и
+  // называют в разговоре: «посмотри вторую», а не «ту, что в 19:05».
+  const numberOf = useMemo(() => {
+    const order = [...folders].sort((a, b) =>
+      (a.opened_at ?? a.closed_at ?? "").localeCompare(b.opened_at ?? b.closed_at ?? ""),
+    );
+    const map = new Map<string, number>();
+    order.forEach((one, i) => map.set(one.client_id, i + 1));
+    return (trade: JournalRow) => map.get(trade.client_id) ?? 0;
+  }, [folders]);
+
+  // Позиции по монетам: неделя - инструмент - позиция. Разбирают их так же:
+  // сперва смотрят, что было по BTC, потом что по ETH.
+  const byCoin = useMemo(() => {
+    const map = new Map<string, JournalRow[]>();
+    for (const trade of folders) {
+      const coin = trade.symbol.replace(/USDT$/, "");
+      map.set(coin, [...(map.get(coin) ?? []), trade]);
+    }
+    return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
+  }, [folders]);
+
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
       <div className="flex flex-col rounded-lg border border-[var(--pane-border)]">
@@ -98,96 +120,105 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
       </div>
 
       <div className="rounded-lg border border-[var(--pane-border)] p-2">
-        {folders.length === 0 ? (
+        {byCoin.length === 0 ? (
           <p className="py-10 text-center text-[11px] text-[var(--pane-muted)]">
             {t.journal.galleryEmpty}
           </p>
         ) : (
-          <div className="grid gap-2">
-            {folders.map((trade) => (
-              <section
-                key={trade.client_id}
-                className="overflow-hidden rounded-lg border border-[var(--pane-border)]"
-              >
-                {/* Шапка папки: чья это сделка и чем кончилась. Ровно те же
-                    данные, что в строке списка, - разбор и список должны
-                    читаться одинаково. */}
-                <header className="flex items-center gap-2 border-b border-[var(--pane-border)] px-2 py-1">
-                  <span className="font-mono text-[11px] font-bold text-[var(--pane-text)]">
-                    {trade.symbol.replace(/USDT$/, "")}
-                  </span>
-                  <span
-                    className={`text-[10px] ${
-                      trade.side === "long"
-                        ? "text-[var(--pane-up)]"
-                        : "text-[var(--pane-down)]"
-                    }`}
-                  >
-                    {trade.side === "long" ? t.journal.long : t.journal.short}
-                  </span>
-                  <span className="text-[10px] text-[var(--pane-muted)]">×{trade.leverage}</span>
-                  {trade.targets.length > 0 && (
-                    <span className="inline-flex items-center gap-0.5">
-                      {trade.targets.map((_, i) => (
-                        <span
-                          key={i}
-                          className={`text-[9px] ${
-                            i < trade.takes_hit
-                              ? "text-[var(--pane-up)]"
-                              : "text-[var(--pane-muted)] opacity-50"
-                          }`}
-                        >
-                          {i < trade.takes_hit ? "●" : "○"}
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-[var(--pane-muted)]">
-                    {new Date(trade.closed_at ?? trade.opened_at ?? "").toLocaleString(numbers, {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  <span className="text-[10px] text-[var(--pane-muted)]">
-                    {t.journal.shotsIn(trade.shots?.length ?? 0)}
-                  </span>
-                  <div className="flex-1" />
-                  <span className={`font-mono text-[11px] font-bold ${tone(trade.pnl)}`}>
-                    {/* У идущей сделки это зафиксированное целями, как и в
-                        строке списка: точка говорит, что итог не окончателен. */}
-                    {trade.closed_at === null && (
-                      <span className="mr-1 text-[9px] opacity-60">●</span>
+          <div className="grid gap-3">
+            {byCoin.map(([coin, list]) => (
+              <section key={coin}>
+                <h3 className="mb-1.5 font-mono text-[11px] font-bold text-[var(--pane-text)]">
+                  {coin}
+                  <span className="ml-1.5 font-sans text-[10px] font-normal text-[var(--pane-muted)]">
+                    {t.journal.shotsIn(
+                      list.reduce((sum, one) => sum + (one.shots?.length ?? 0), 0),
                     )}
-                    {money(trade.pnl)}
                   </span>
-                </header>
+                </h3>
 
-                <div className="grid grid-cols-2 gap-1.5 p-1.5 md:grid-cols-3 xl:grid-cols-4">
-                  {(trade.shots ?? []).map((shot) => (
-                    <figure
-                      key={shot.id}
-                      className="overflow-hidden rounded border border-[var(--pane-border)]"
-                    >
-                      <button onClick={() => onPick(trade, shot)} className="block w-full">
-                        <img
-                          src={shotImage(shot)}
-                          alt={shot.note || trade.symbol}
-                          className="block h-24 w-full object-cover"
-                          loading="lazy"
-                        />
+                {/* Папки квадратами, а не полосами во всю ширину: позиция это
+                    одна вещь и выглядеть должна как одна вещь. Полосой во весь
+                    экран одна сделка занимала столько же места, сколько целый
+                    день работы. */}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                  {list.map((trade) => {
+                    const cover = (trade.shots ?? [])[0];
+                    return (
+                      <button
+                        key={trade.client_id}
+                        onClick={() => onPick(trade, numberOf(trade))}
+                        className="overflow-hidden rounded-lg border border-[var(--pane-border)] text-left transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)]"
+                      >
+                        {/* Обложка - первый снимок папки: по нему её узнают
+                            среди прочих, как книгу по корешку. */}
+                        <div className="relative aspect-[4/3] w-full bg-[var(--pane-hover)]">
+                          {cover && (
+                            <img
+                              src={shotImage(cover)}
+                              alt={trade.symbol}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          )}
+                          <span className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[9px] text-white/80">
+                            {trade.shots?.length ?? 0}
+                          </span>
+                          {/* Нарушение видно прямо на папке: разбор недели
+                              начинают с того, где не удержались. */}
+                          {trade.plan_ok === false && (
+                            <span className="absolute left-1 top-1 rounded bg-[var(--pane-down)] px-1 text-[9px] font-bold text-white">
+                              !
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 px-1.5 py-1">
+                          <span className="font-mono text-[10px] text-[var(--pane-text-2)]">
+                            {t.journal.positionNo(numberOf(trade))}
+                          </span>
+                          <span
+                            className={
+                              trade.side === "long"
+                                ? "text-[9px] text-[var(--pane-up)]"
+                                : "text-[9px] text-[var(--pane-down)]"
+                            }
+                          >
+                            {trade.side === "long" ? t.journal.long : t.journal.short}
+                          </span>
+                          <div className="flex-1" />
+                          <span className={`font-mono text-[10px] font-bold ${tone(trade.pnl)}`}>
+                            {money(trade.pnl)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 px-1.5 pb-1 text-[9px] text-[var(--pane-muted)]">
+                          <span>
+                            {new Date(
+                              trade.closed_at ?? trade.opened_at ?? "",
+                            ).toLocaleString(numbers, {
+                              day: "2-digit",
+                              month: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          {trade.targets.length > 0 && (
+                            <span className="inline-flex items-center gap-0.5">
+                              {trade.targets.map((_, i) => (
+                                <span
+                                  key={i}
+                                  className={
+                                    i < trade.takes_hit ? "text-[var(--pane-up)]" : "opacity-50"
+                                  }
+                                >
+                                  {i < trade.takes_hit ? "●" : "○"}
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                        </div>
                       </button>
-                      {/* Подпись - только своя: монета, время и итог стоят в
-                          шапке папки, и повторять их под каждой картинкой
-                          значит писать одно и то же по четыре раза. */}
-                      {shot.note && (
-                        <figcaption className="truncate px-1.5 py-0.5 text-[9px] text-[var(--pane-muted)]">
-                          {shot.note}
-                        </figcaption>
-                      )}
-                    </figure>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             ))}

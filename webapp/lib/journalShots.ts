@@ -20,7 +20,26 @@ export type TradeShot = {
   /** Опознаватель картинки: он же адрес её страницы. */
   shot_id: string;
   note: string;
+  /** Этап сделки, к которому относится снимок. Пусто - этап не назван. */
+  stage?: ShotStage | "";
 };
+
+/**
+ * Этап сделки, к которому относится снимок.
+ *
+ * Порядок здесь задаёт порядок на экране: до входа, вход, ведение, выход,
+ * разбор. Снимок, сделанный терминалом самим, знает свой этап без человека -
+ * он снимает по событию.
+ */
+export type ShotStage = "before" | "entry" | "manage" | "exit" | "review";
+
+export const STAGES: readonly ShotStage[] = [
+  "before",
+  "entry",
+  "manage",
+  "exit",
+  "review",
+];
 
 /** Адрес самой картинки. */
 export function shotImage(shot: { shot_id: string }): string {
@@ -42,6 +61,7 @@ export async function attachShot(
   clientId: string,
   image: string,
   note = "",
+  stage: ShotStage | "" = "",
 ): Promise<TradeShot | null> {
   const token = getAccessToken();
   if (!token) return null;
@@ -52,7 +72,7 @@ export async function attachShot(
     return await authReq<TradeShot>(
       `/api/journal/trades/${encodeURIComponent(clientId)}/shots`,
       token,
-      { method: "POST", body: JSON.stringify({ image, note }) },
+      { method: "POST", body: JSON.stringify({ image, note, stage }) },
     );
   } catch {
     return null;
@@ -138,3 +158,33 @@ export function readImage(file: File): Promise<string | null> {
     reader.readAsDataURL(file);
   });
 }
+
+/**
+ * Разбор сделки: слова, отметка дисциплины и нарушения.
+ *
+ * Поля необязательные: разбор пишут в несколько заходов - сперва отметил
+ * нарушение, через час дописал словами, - и присланное целиком затирало бы
+ * написанное раньше.
+ */
+export async function saveReview(
+  clientId: string,
+  body: { review?: string; plan_ok?: boolean | null; mistakes?: string[] },
+): Promise<boolean> {
+  const token = getAccessToken();
+  if (!token) return false;
+  try {
+    await authReq<unknown>(
+      `/api/journal/trades/${encodeURIComponent(clientId)}/review`,
+      token,
+      { method: "PUT", body: JSON.stringify(body) },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Нарушения правил: те же коды, что считает сервер. */
+export const MISTAKES = ["late", "risk", "session", "average", "fomo", "plan"] as const;
+
+export type Mistake = (typeof MISTAKES)[number];
