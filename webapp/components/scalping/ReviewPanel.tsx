@@ -1,13 +1,18 @@
 "use client";
 
-// Разбор: план недели и все снимки за период рядом.
+// Разбор: план недели и снимки сделок рядом.
 //
 // Слева то, что собирался делать, справа картинки того, что вышло. Разбор
 // недели получается на одном экране: правила написаны в понедельник, а к
 // пятнице видно, сколько раз они нарушены и как это выглядело на графике.
 //
+// Снимки собраны папками по сделкам, а не сплошной лентой. Лента врала глазу:
+// два снимка одной сделки - вход и выход - стояли рядом как две разные сделки
+// с одинаковым итогом, и складывалось впечатление, что заработано вдвое
+// больше. Папка отвечает на это сразу: одна сделка, её данные, её картинки.
+//
 // Снимки берутся из тех же строк журнала, что и таблица: отдельного запроса
-// нет, и галерея не может разойтись со списком сделок.
+// нет, и разбор не может разойтись со списком сделок.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Loader2 } from "lucide-react";
@@ -24,9 +29,6 @@ export interface ReviewPanelProps {
   /** Нажали на снимок: открыть разбор этой сделки. */
   onPick: (trade: JournalRow, shot: TradeShot) => void;
 }
-
-/** Снимок вместе со сделкой, которой он принадлежит. */
-type Piece = { trade: JournalRow; shot: TradeShot };
 
 export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
   const t = useT();
@@ -68,14 +70,11 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
     return () => clearTimeout(id);
   }, [plan, week]);
 
-  // Снимки за период, свежие первыми: разбор начинают с того, что было вчера.
-  const pieces = useMemo<Piece[]>(() => {
-    const out: Piece[] = [];
-    for (const trade of rows) {
-      for (const shot of trade.shots ?? []) out.push({ trade, shot });
-    }
-    return out;
-  }, [rows]);
+  // Сделки, у которых есть снимки: только они и попадают в разбор.
+  const folders = useMemo(
+    () => rows.filter((row) => (row.shots?.length ?? 0) > 0),
+    [rows],
+  );
 
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
@@ -99,38 +98,98 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
       </div>
 
       <div className="rounded-lg border border-[var(--pane-border)] p-2">
-        {pieces.length === 0 ? (
+        {folders.length === 0 ? (
           <p className="py-10 text-center text-[11px] text-[var(--pane-muted)]">
             {t.journal.galleryEmpty}
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
-            {pieces.map(({ trade, shot }) => (
-              <figure key={shot.id} className="overflow-hidden rounded border border-[var(--pane-border)]">
-                <button onClick={() => onPick(trade, shot)} className="block w-full">
-                  <img
-                    src={shotImage(shot)}
-                    alt={shot.note || trade.symbol}
-                    className="block h-24 w-full object-cover"
-                    loading="lazy"
-                  />
-                </button>
-                {/* Подпись говорит, чей это снимок: монета, когда и чем
-                    кончилось. Без неё галерея - просто куча картинок. */}
-                <figcaption className="flex items-center gap-1 px-1.5 py-1 text-[9px]">
-                  <span className="font-mono text-[var(--pane-text-2)]">
+          <div className="grid gap-2">
+            {folders.map((trade) => (
+              <section
+                key={trade.client_id}
+                className="overflow-hidden rounded-lg border border-[var(--pane-border)]"
+              >
+                {/* Шапка папки: чья это сделка и чем кончилась. Ровно те же
+                    данные, что в строке списка, - разбор и список должны
+                    читаться одинаково. */}
+                <header className="flex items-center gap-2 border-b border-[var(--pane-border)] px-2 py-1">
+                  <span className="font-mono text-[11px] font-bold text-[var(--pane-text)]">
                     {trade.symbol.replace(/USDT$/, "")}
                   </span>
-                  <span className="text-[var(--pane-muted)]">
-                    {new Date(trade.closed_at ?? trade.opened_at ?? "").toLocaleString(
-                      numbers,
-                      { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" },
-                    )}
+                  <span
+                    className={`text-[10px] ${
+                      trade.side === "long"
+                        ? "text-[var(--pane-up)]"
+                        : "text-[var(--pane-down)]"
+                    }`}
+                  >
+                    {trade.side === "long" ? t.journal.long : t.journal.short}
+                  </span>
+                  <span className="text-[10px] text-[var(--pane-muted)]">×{trade.leverage}</span>
+                  {trade.targets.length > 0 && (
+                    <span className="inline-flex items-center gap-0.5">
+                      {trade.targets.map((_, i) => (
+                        <span
+                          key={i}
+                          className={`text-[9px] ${
+                            i < trade.takes_hit
+                              ? "text-[var(--pane-up)]"
+                              : "text-[var(--pane-muted)] opacity-50"
+                          }`}
+                        >
+                          {i < trade.takes_hit ? "●" : "○"}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-[var(--pane-muted)]">
+                    {new Date(trade.closed_at ?? trade.opened_at ?? "").toLocaleString(numbers, {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                  <span className="text-[10px] text-[var(--pane-muted)]">
+                    {t.journal.shotsIn(trade.shots?.length ?? 0)}
                   </span>
                   <div className="flex-1" />
-                  <span className={`font-mono ${tone(trade.pnl)}`}>{money(trade.pnl)}</span>
-                </figcaption>
-              </figure>
+                  <span className={`font-mono text-[11px] font-bold ${tone(trade.pnl)}`}>
+                    {/* У идущей сделки это зафиксированное целями, как и в
+                        строке списка: точка говорит, что итог не окончателен. */}
+                    {trade.closed_at === null && (
+                      <span className="mr-1 text-[9px] opacity-60">●</span>
+                    )}
+                    {money(trade.pnl)}
+                  </span>
+                </header>
+
+                <div className="grid grid-cols-2 gap-1.5 p-1.5 md:grid-cols-3 xl:grid-cols-4">
+                  {(trade.shots ?? []).map((shot) => (
+                    <figure
+                      key={shot.id}
+                      className="overflow-hidden rounded border border-[var(--pane-border)]"
+                    >
+                      <button onClick={() => onPick(trade, shot)} className="block w-full">
+                        <img
+                          src={shotImage(shot)}
+                          alt={shot.note || trade.symbol}
+                          className="block h-24 w-full object-cover"
+                          loading="lazy"
+                        />
+                      </button>
+                      {/* Подпись - только своя: монета, время и итог стоят в
+                          шапке папки, и повторять их под каждой картинкой
+                          значит писать одно и то же по четыре раза. */}
+                      {shot.note && (
+                        <figcaption className="truncate px-1.5 py-0.5 text-[9px] text-[var(--pane-muted)]">
+                          {shot.note}
+                        </figcaption>
+                      )}
+                    </figure>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
