@@ -155,8 +155,9 @@ export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: 
             >
               {/* У идущей сделки это только зафиксированное взятыми целями:
                   плавающее по остатку живёт в строке позиции, и смешивать их
-                  в одном числе нельзя - оно читалось бы как итог. Слово «в
-                  работе» стоит в колонке монеты, и метки у числа не нужно. */}
+                  в одном числе нельзя - оно читалось бы как итог. Точка перед
+                  числом и говорит, что итог ещё не окончательный. */}
+              {isLive(row) && <span className="mr-1 text-[9px] opacity-60">●</span>}
               {money(row.pnl)}
               {!isLive(row) && row.fee > 0 && (
                 <span className="ml-1 text-[9px] text-[var(--pane-muted)]">
