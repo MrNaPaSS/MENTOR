@@ -2317,3 +2317,101 @@ def test_closing_turns_the_live_record_into_the_final_one():
     assert saved[0].outcome == "take"
     assert float(saved[0].pnl) == pytest.approx(7.0)
     assert float(saved[0].closed_qty) == pytest.approx(float(row.qty))
+
+
+def test_a_trade_already_open_gets_into_the_journal_too():
+    """Сделка была открыта до обновления - запись заводится на первом проходе.
+
+    Иначе идущая сделка попала бы в журнал только при закрытии, как раньше, и
+    трейдер не увидел бы уже зафиксированного.
+    """
+    import asyncio
+
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from backend.trading.watcher import Decision, PositionWatcher
+    from core.models import ScalpTrade
+
+    session, student = _journal_db()
+    row = trade(
+        student_id=student.id,
+        status="open",
+        takes_hit=2,
+        opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    session.add(row)
+    session.commit()
+
+    class Exchange:
+        async def user_trades(self, symbol, limit=100):
+            return [
+                {
+                    "time": 4102444800000,
+                    "realizedPnl": "20.0",
+                    "commission": "0.5",
+                    "price": "102",
+                    "side": "SELL",
+                    "qty": "0.8",
+                }
+            ]
+
+        async def symbol_filters(self, symbol):
+            return {"taker_fee": 0.0006}
+
+    watcher = PositionWatcher(lambda: session, lambda: None)
+    # Обычный проход: позиция стоит, ничего нового не случилось.
+    asyncio.run(
+        watcher._apply(
+            session, Exchange(), row, Decision(takes_hit=row.takes_hit, size=float(row.qty))
+        )
+    )
+    session.commit()
+
+    saved = session.execute(select(ScalpTrade)).scalar_one()
+    assert saved.closed_at is None
+    assert saved.takes_hit == 2
+    # Цели уже брались - зафиксированное спросили сразу, при заведении.
+    assert float(saved.pnl) == pytest.approx(19.5)
+
+
+def test_an_existing_record_is_not_re_asked_every_round():
+    """Запись уже есть - биржу на каждом проходе не спрашиваем."""
+    import asyncio
+
+    from datetime import datetime, timezone
+
+    from backend.trading.watcher import Decision, PositionWatcher
+
+    session, student = _journal_db()
+    row = trade(
+        student_id=student.id,
+        status="open",
+        takes_hit=1,
+        opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    session.add(row)
+    session.commit()
+
+    asked: list[str] = []
+
+    class Exchange:
+        async def user_trades(self, symbol, limit=100):
+            asked.append(symbol)
+            return []
+
+        async def symbol_filters(self, symbol):
+            return {"taker_fee": 0.0006}
+
+    watcher = PositionWatcher(lambda: session, lambda: None)
+    watcher._live_journal(session, row, pnl=7.0, closed_qty=0.3)
+    session.commit()
+
+    asyncio.run(
+        watcher._apply(
+            session, Exchange(), row, Decision(takes_hit=row.takes_hit, size=float(row.qty))
+        )
+    )
+
+    assert asked == []
