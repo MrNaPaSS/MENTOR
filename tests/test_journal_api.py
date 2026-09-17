@@ -923,3 +923,79 @@ def test_an_unnamed_shot_goes_last_and_strangers_are_ignored(client, tmp_path, m
         t for t in client.get("/api/journal/trades").json()["trades"] if t["client_id"] == "t-tail"
     )
     assert [s["note"] for s in row["shots"]] == ["третий", "первый", "второй"]
+
+
+def test_a_shot_keeps_its_stage(client, tmp_path, monkeypatch):
+    """Снимок помнит, к какому этапу сделки относится.
+
+    Ради этого всё и затевалось: картинка с этапом перестаёт быть картинкой и
+    становится точкой в истории - до входа, вход, ведение, выход, разбор.
+    """
+    from backend.api import shots as shots_api
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path / "shots")
+    client.post("/api/journal/trades", json=trade(client_id="t-stage"))
+
+    made = client.post(
+        "/api/journal/trades/t-stage/shots",
+        json={"image": PNG_1PX, "stage": "entry", "note": "вход"},
+    ).json()
+    assert made["stage"] == "entry"
+
+    # Незнакомый этап отбрасываем, а не отказываем: снимок важнее подписи.
+    other = client.post(
+        "/api/journal/trades/t-stage/shots",
+        json={"image": PNG_1PX, "stage": "выдумка"},
+    ).json()
+    assert other["stage"] == ""
+
+    row = next(
+        t for t in client.get("/api/journal/trades").json()["trades"] if t["client_id"] == "t-stage"
+    )
+    assert [s["stage"] for s in row["shots"]] == ["entry", ""]
+
+
+def test_the_trade_review_is_written_in_parts(client):
+    """Разбор пишут в несколько заходов, и записанное раньше не теряется."""
+    client.post("/api/journal/trades", json=trade(client_id="t-review"))
+
+    first = client.put(
+        "/api/journal/trades/t-review/review",
+        json={"plan_ok": False, "mistakes": ["risk", "late"]},
+    ).json()
+    assert first["plan_ok"] is False
+    assert first["mistakes"] == ["risk", "late"]
+
+    # Через час дописали словами - отметка и нарушения остались.
+    second = client.put(
+        "/api/journal/trades/t-review/review",
+        json={"review": "Вошёл в середине движения"},
+    ).json()
+    assert second["review"] == "Вошёл в середине движения"
+    assert second["plan_ok"] is False
+    assert second["mistakes"] == ["risk", "late"]
+
+    row = next(
+        t for t in client.get("/api/journal/trades").json()["trades"] if t["client_id"] == "t-review"
+    )
+    assert row["review"] == "Вошёл в середине движения"
+    assert row["plan_ok"] is False
+    assert row["mistakes"] == ["risk", "late"]
+
+
+def test_unknown_mistakes_are_dropped(client):
+    """Список нарушений закрытый: по выдуманным кодам считать нечего."""
+    client.post("/api/journal/trades", json=trade(client_id="t-codes"))
+
+    body = client.put(
+        "/api/journal/trades/t-codes/review",
+        json={"mistakes": ["risk", "чужое", "risk"]},
+    ).json()
+
+    # Своё осталось, чужое отброшено, повтор не удвоился.
+    assert body["mistakes"] == ["risk"]
+
+
+def test_a_review_needs_a_trade_of_your_own(client):
+    answer = client.put("/api/journal/trades/нет-такой/review", json={"review": "x"})
+    assert answer.status_code == 404

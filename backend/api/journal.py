@@ -254,6 +254,12 @@ def _row(
         **({"stop_now": stop_now} if stop_now else {}),
         # Снимки разбора: пусто - строка их не показывает.
         "shots": shots or [],
+        # Разбор сделки словами и отметка дисциплины.
+        "review": getattr(trade, "review", "") or "",
+        "plan_ok": getattr(trade, "plan_ok", None),
+        "mistakes": [
+            one for one in (getattr(trade, "mistakes", "") or "").split(",") if one
+        ],
         # Где открыта. У записей с биржи, сделанных до этого поля, - биржа
         # ключей: других тогда не было.
         "exchange": _exchange_of(trade),
@@ -361,6 +367,13 @@ async def export_journal(
 # картинок в ленте - это уже не разбор, а свалка.
 MAX_SHOTS = 6
 
+# Этапы сделки, к которым относят снимок.
+#
+# Порядок здесь не случайный: он же задаёт порядок на экране - до входа, вход,
+# ведение, выход, разбор. Пустой этап тоже законен: снимок могли приложить
+# просто так, и заставлять называть этап ради одной картинки незачем.
+STAGES = ("before", "entry", "manage", "exit", "review")
+
 
 class ShotAttachIn(BaseModel):
     """Что прикрепляют к сделке: новая картинка или уже готовый снимок."""
@@ -370,6 +383,8 @@ class ShotAttachIn(BaseModel):
     # Или опознаватель снимка, который уже лежит на сервере.
     shot_id: str | None = Field(default=None, max_length=22)
     note: str = Field(default="", max_length=140)
+    # Этап сделки: до входа, вход, ведение, выход, разбор.
+    stage: str = Field(default="", max_length=12)
 
 
 def _shot_rows(session, student_id: int, client_ids: list[str]) -> dict[str, list[dict]]:
@@ -385,7 +400,12 @@ def _shot_rows(session, student_id: int, client_ids: list[str]) -> dict[str, lis
     out: dict[str, list[dict]] = {}
     for row in rows:
         out.setdefault(str(row.client_id), []).append(
-            {"id": row.id, "shot_id": row.shot_id, "note": row.note}
+            {
+            "id": row.id,
+            "shot_id": row.shot_id,
+            "note": row.note,
+            "stage": row.stage or "",
+        }
         )
     return out
 
@@ -436,13 +456,20 @@ def attach_shot(
         client_id=client_id,
         shot_id=shot_id,
         note=body.note.strip(),
+        # Незнакомый этап отбрасываем, а не отказываем: снимок важнее подписи.
+        stage=body.stage if body.stage in STAGES else "",
         # Новый снимок встаёт последним: место ему потом назначит трейдер.
         position=int(have),
     )
     session.add(row)
     session.commit()
     session.refresh(row)
-    return {"id": row.id, "shot_id": row.shot_id, "note": row.note}
+    return {
+        "id": row.id,
+        "shot_id": row.shot_id,
+        "note": row.note,
+        "stage": row.stage or "",
+    }
 
 
 @router.delete("/shots/{shot_row_id}", status_code=204)
@@ -506,6 +533,62 @@ def order_shots(
 
     session.commit()
     return {"ids": [row.id for row in sorted(rows, key=lambda one: one.position)]}
+
+
+# ── разбор сделки ───────────────────────────────────────────────────────────
+
+# Нарушения правил: короткие коды, по которым считаются ошибки недели.
+#
+# Список закрытый и короткий намеренно. Свободная строка превратилась бы в
+# сто разных формулировок одного и того же, и посчитать по ним было бы нечего.
+MISTAKES = ("late", "risk", "session", "average", "fomo", "plan")
+
+
+class ReviewIn(BaseModel):
+    """Разбор сделки: слова, отметка дисциплины и нарушения."""
+
+    review: str | None = Field(default=None, max_length=4000)
+    # `true` - по плану, `false` - нарушение, `null` - не отмечал.
+    plan_ok: bool | None = None
+    mistakes: list[str] | None = Field(default=None, max_length=len(MISTAKES))
+
+
+@router.put("/trades/{client_id}/review")
+def write_review(
+    client_id: str,
+    body: ReviewIn,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Записать разбор сделки. Поля, которых нет в запросе, не трогаем.
+
+    Разбор пишут в несколько заходов: сперва отметил нарушение, через час
+    дописал словами. Присланное целиком затирало бы написанное раньше.
+    """
+    trade = session.execute(
+        select(ScalpTrade)
+        .where(ScalpTrade.student_id == student.id)
+        .where(ScalpTrade.client_id == client_id)
+    ).scalar_one_or_none()
+    if trade is None:
+        raise HTTPException(404, "Такой сделки нет")
+
+    if body.review is not None:
+        trade.review = body.review.strip()
+    if body.plan_ok is not None or "plan_ok" in body.model_fields_set:
+        trade.plan_ok = body.plan_ok
+    if body.mistakes is not None:
+        # Незнакомые коды отбрасываем: по ним всё равно нечего считать.
+        clean = [one for one in body.mistakes if one in MISTAKES]
+        trade.mistakes = ",".join(dict.fromkeys(clean))
+
+    session.commit()
+    session.refresh(trade)
+    return {
+        "review": trade.review or "",
+        "plan_ok": trade.plan_ok,
+        "mistakes": [one for one in (trade.mistakes or "").split(",") if one],
+    }
 
 
 # ── план на неделю ──────────────────────────────────────────────────────────
