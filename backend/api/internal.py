@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import logging
 
@@ -44,14 +45,41 @@ def _allowed(request: Request) -> None:
 
 @router.post("/bell")
 async def bell(request: Request, body: BellIn) -> dict:
-    """Сказать терминалам ученика, что на счёте что-то изменилось."""
+    """Сказать терминалам ученика, что на счёте что-то изменилось.
+
+    Отвечаем сразу, а рассылаем в фоне. Отправка в сокет идёт через туннель к
+    живому браузеру и на медленной сети занимает секунды: живой стол 17
+    сентября показал звонки по 2.5 секунды. Всё это время ждал процесс сайта,
+    за которым стоит поток биржи, - а ждать ему нечего, сообщение всё равно
+    уйдёт. Сорвалось - терминал узнает своим кругом опроса.
+    """
     _allowed(request)
     hub = getattr(request.app.state, "scalping_hub", None)
     if hub is None:
         # Рыночных данных в этом процессе нет - звонить некому и некого винить.
         return {"ok": False}
-    if body.streamed is not None:
-        await hub.streamed(body.student_id, tuple(sorted(body.streamed)))
-    if body.reason:
-        await hub.ring(body.student_id, body.reason)
+    _spawn(_deliver(hub, body))
     return {"ok": True}
+
+
+# Задачи рассылки: держим ссылки, иначе сборщик мусора может забрать задачу до
+# того, как она отработает.
+_sending: set[asyncio.Task] = set()
+
+
+def _spawn(work) -> None:
+    task = asyncio.create_task(work, name="bell")
+    _sending.add(task)
+    task.add_done_callback(_sending.discard)
+
+
+async def _deliver(hub, body: BellIn) -> None:
+    try:
+        if body.streamed is not None:
+            await hub.streamed(body.student_id, tuple(sorted(body.streamed)))
+        if body.reason:
+            await hub.ring(body.student_id, body.reason)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - звонок не повод падать
+        logger.debug("Звонок ученику %s не ушёл: %s", body.student_id, exc)

@@ -73,6 +73,48 @@ def test_bell_rings_the_hub():
     assert hub.rung == [(7, "order")]
 
 
+@pytest.mark.asyncio
+async def test_the_bell_does_not_wait_for_the_sockets():
+    """Ответ уходит сразу, рассылка идёт в фоне.
+
+    Отправка в сокет идёт через туннель к живому браузеру: на медленной сети
+    живой стол показал звонки по 2.5 секунды, и всё это время ждал процесс
+    сайта, за которым стоит поток биржи.
+    """
+    import asyncio
+
+    from backend.api.internal import BellIn, _deliver, _spawn
+
+    class SlowHub(FakeHub):
+        async def ring(self, student_id: int, reason: str = "order") -> None:
+            await asyncio.sleep(0.2)
+            await super().ring(student_id, reason)
+
+    hub = SlowHub()
+    started = asyncio.get_running_loop().time()
+    _spawn(_deliver(hub, BellIn(student_id=7, reason="order")))
+    # Возврат мгновенный, хотя сама отправка ещё идёт.
+    assert asyncio.get_running_loop().time() - started < 0.05
+    assert hub.rung == []
+
+    await asyncio.sleep(0.3)
+    assert hub.rung == [(7, "order")]
+
+
+@pytest.mark.asyncio
+async def test_a_broken_socket_does_not_leave_a_lost_task():
+    """Сбой рассылки гасится на месте, а не всплывает «задачей без хозяина»."""
+    import asyncio
+
+    from backend.api.internal import BellIn, _deliver
+
+    class BrokenHub(FakeHub):
+        async def ring(self, student_id: int, reason: str = "order") -> None:
+            raise RuntimeError("сокет закрыт")
+
+    await _deliver(BrokenHub(), BellIn(student_id=7, reason="order"))
+
+
 def test_bell_carries_the_streamed_exchanges():
     hub = FakeHub()
     with local(make_app(hub)) as client:
