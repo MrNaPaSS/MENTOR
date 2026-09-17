@@ -20,20 +20,22 @@ export type LivePosition = {
    */
   entry: number | null;
   /**
-   * Плавающий результат - за вычетом комиссии, удержанной на входе.
+   * Плавающий результат позиции - как его считает биржа, без нашего вычета.
    *
-   * `unrealizePnl` биржа отдаёт до неё, а в своём приложении показывает уже
-   * после: по шорту ETH на 20,225 по 2472,11 терминал писал +36,05, а биржа
-   * +28,05 - ровно на 8,00, уплаченные за вход.
+   * Комиссию входа терминал какое-то время вычитал отсюда: по шорту ETH
+   * приложение WEEX показывало ровно на неё меньше. Но на BTC вышло наоборот -
+   * у нас 7.37, у биржи 32, - и решение принято простое: живая строка
+   * показывает движение цены, а комиссия считается там, где считается итог.
+   * Итог закрытой сделки как брался, так и берётся по реальным исполнениям
+   * биржи, вместе с комиссией обеих ног (backend/trading/watcher.py, settle).
    */
   unrealized: number | null;
   /**
-   * То же число, как его прислала биржа, и сколько мы из него вычли.
+   * Комиссия, удержанная за вход, в доле на нынешний остаток позиции.
    *
-   * Нужны разбору расхождения с приложением биржи: по ним видно, спорим мы с
-   * биржей или с самим вычетом. Уходят в журнал строкой `pnl.seen`.
+   * В живом числе её нет намеренно, но знать её полезно: она уходит в журнал
+   * строкой `pnl.seen` и объясняет разницу между экраном и итогом сделки.
    */
-  raw: number | null;
   entry_fee: number;
   /** Цена безубытка по расчёту биржи. Пусто - она её не назвала. */
   breakeven: number | null;
@@ -94,8 +96,8 @@ export function readPosition(
     num(row, "averageOpenPrice", "entryPrice", "avgPrice") ??
     (openValue > 0 && openSize > 0 ? openValue / openSize : null);
 
-  // Комиссию входа вычитаем долей остатка: часть позиции, закрытая целями,
-  // свою долю уже унесла.
+  // Комиссию входа считаем долей остатка: часть позиции, закрытая целями,
+  // свою долю уже унесла. Из живого числа она не вычитается - см. `unrealized`.
   const raw = num(row, "unrealizePnl", "unrealizedPnl", "unrealizedProfit", "unrealisedPnl");
   const openFee = Math.abs(num(row, "cumOpenFee") ?? 0);
   const spent = openSize > 0 ? openFee * Math.min(1, size / openSize) : 0;
@@ -106,8 +108,7 @@ export function readPosition(
     position: {
       size,
       entry,
-      unrealized: raw === null ? null : raw - spent,
-      raw,
+      unrealized: raw,
       entry_fee: Number(spent.toFixed(6)),
       breakeven: num(row, "breakEvenPrice", "breakevenPrice", "breakEven", "bePrice"),
     },
@@ -146,7 +147,6 @@ export function readBook(rows: Record<string, unknown>[]): PositionBook {
             // первое число честнее среднего от двух неизвестно чего.
             entry: was.entry ?? read.position.entry,
             unrealized: (was.unrealized ?? 0) + (read.position.unrealized ?? 0),
-            raw: (was.raw ?? 0) + (read.position.raw ?? 0),
             entry_fee: was.entry_fee + read.position.entry_fee,
             breakeven: was.breakeven ?? read.position.breakeven,
           }

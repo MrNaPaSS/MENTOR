@@ -55,8 +55,11 @@ describe("позиция глазами биржи", () => {
     expect((await positionOf("BTCUSDT", "long"))?.size).toBe(0);
   });
 
-  it("плавающий результат - за вычетом комиссии входа, как в приложении биржи", async () => {
-    // Ровно этот случай: терминал писал +36,05, биржа +28,05.
+  it("плавающий результат - как считает биржа, без нашего вычета", async () => {
+    // Комиссию входа терминал какое-то время вычитал отсюда: на шорте ETH
+    // приложение WEEX показывало ровно на неё меньше. На BTC вышло наоборот -
+    // у нас 7.37, у биржи 32, - и решено так: живая строка показывает движение
+    // цены, а комиссия считается в итоге сделки, по реальным исполнениям.
     vi.stubGlobal(
       "fetch",
       answer([
@@ -71,10 +74,13 @@ describe("позиция глазами биржи", () => {
         },
       ]),
     );
-    expect((await positionOf("ETHUSDT", "short"))?.unrealized).toBeCloseTo(28.05, 6);
+    const one = await positionOf("ETHUSDT", "short");
+    expect(one?.unrealized).toBeCloseTo(36.05, 6);
+    // Саму комиссию знаем и кладём рядом: она уходит в журнал сверки.
+    expect(one?.entry_fee).toBeCloseTo(8, 6);
   });
 
-  it("после взятой цели вычитается только доля комиссии на остаток", async () => {
+  it("после взятой цели комиссия считается только на остаток", async () => {
     // 30% позиции закрыто первой целью: её доля комиссии ушла вместе с ней.
     vi.stubGlobal(
       "fetch",
@@ -90,7 +96,9 @@ describe("позиция глазами биржи", () => {
         },
       ]),
     );
-    expect((await positionOf("ETHUSDT", "short"))?.unrealized).toBeCloseTo(20 - 5.6, 6);
+    const rest = await positionOf("ETHUSDT", "short");
+    expect(rest?.unrealized).toBeCloseTo(20, 6);
+    expect(rest?.entry_fee).toBeCloseTo(5.6, 6);
   });
 });
 

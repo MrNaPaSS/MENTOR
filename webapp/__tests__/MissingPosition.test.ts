@@ -102,8 +102,9 @@ describe("снимок позиций отличает пустоту по мо�
     expect(book.byKey["BTCUSDT:short"].size).toBe(1.5);
   });
 
-  it("плавающий результат отдаёт за вычетом комиссии входа", () => {
-    // Биржа отдаёт его до неё, а в своём приложении показывает уже после.
+  it("плавающий результат отдаёт как есть, а комиссию входа кладёт рядом", () => {
+    // Живая строка показывает движение цены; комиссия считается в итоге
+    // сделки, по реальным исполнениям биржи.
     const book = readBook([
       {
         symbol: "ETHUSDT",
@@ -115,6 +116,7 @@ describe("снимок позиций отличает пустоту по мо�
         unrealizePnl: "20",
       },
     ]);
-    expect(book.byKey["ETHUSDT:short"].unrealized).toBeCloseTo(20 - 5.6, 6);
+    expect(book.byKey["ETHUSDT:short"].unrealized).toBeCloseTo(20, 6);
+    expect(book.byKey["ETHUSDT:short"].entry_fee).toBeCloseTo(5.6, 6);
   });
 });

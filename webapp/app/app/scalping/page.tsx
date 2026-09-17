@@ -494,7 +494,6 @@ function pnlSeen(
     size: number;
     entry: number | null;
     unrealized: number | null;
-    raw?: number | null;
     entry_fee?: number;
   },
   price: number,
@@ -512,9 +511,8 @@ function pnlSeen(
     // такого поля нет вовсе, и разбирать их расхождения надо иначе.
     venue,
     exchange: live.unrealized ?? null,
-    // Число биржи до нашего вычета и сам вычет: по ним видно, спорим мы с
-    // биржей или со своим вычетом комиссии входа.
-    raw: live.raw ?? null,
+    // Комиссия входа: в живом числе её нет, а в итоге сделки будет. По ней
+    // видно, на сколько экран разойдётся с записью в журнале.
     entryFee: live.entry_fee ?? 0,
     ours: Number((move * size).toFixed(4)),
     taken: Number(trade.realized.toFixed(4)),
