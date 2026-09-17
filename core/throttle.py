@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -65,6 +66,39 @@ BUDGETS: dict[str, tuple[Budget, Budget]] = {
 }
 
 DEFAULT = (Budget(8, 2.0), Budget(60, 2.0))
+
+# Доля бюджета процесса терминала, когда сервер разделён на два процесса.
+#
+# Счётчик живёт в памяти процесса, и с 16 сентября процессов на столе два:
+# терминал (`api`) и сопровождение (`watcher`). Каждый считал, что весь предел
+# биржи его, и вместе они выходили к ней вдвое чаще, чем мы себе разрешили.
+# Живой стол 17 сентября: WEEX не ответила сопровождению за 45 секунд, пока
+# терминалы трёх учеников опрашивали тот же счёт.
+#
+# Делим так, чтобы в сумме выходил прежний предел. Сопровождению - большая
+# часть: оно ставит стопы и цели, а терминал читает то, что сервер и так держит
+# в памяти секунду (backend/trading/live_state.py).
+API_SHARE = 0.4
+
+
+def role_limit(limit: int, role: str | None = None) -> int:
+    """Сколько из предела достаётся этому процессу. Один процесс - весь.
+
+    Доли считаются целыми запросами и в сумме дают ровно предел: у MEXC он
+    всего четыре заявки за две секунды, и округление в обе стороны подарило бы
+    бирже пятую.
+    """
+    name = (role if role is not None else os.getenv("NMNH_ROLE", "all")).strip().lower()
+    if name not in ("api", "watcher") or limit <= 1:
+        return limit
+    api = min(limit - 1, max(1, round(limit * API_SHARE)))
+    return api if name == "api" else limit - api
+
+
+def _shared(budget: Budget) -> Budget:
+    """Бюджет с учётом роли процесса."""
+    limit = role_limit(budget.limit)
+    return budget if limit == budget.limit else Budget(limit, budget.window)
 
 # Дольше этого не ждём: очередь длиной в секунды означает, что бюджет подобран
 # неверно, и молча тормозить стопы нельзя - лучше сказать об этом в журнал.
@@ -118,6 +152,9 @@ async def take(exchange: str, account: str, budgets: tuple[Budget, Budget] | Non
     """
     code = (exchange or "").lower() or "weex"
     own, shared = budgets or BUDGETS.get(code, DEFAULT)
+    # Свои доли, если процессов два: иначе оба выходят к бирже каждый на весь
+    # предел.
+    own, shared = _shared(own), _shared(shared)
     lock = _locks.get(code)
     if lock is None:
         lock = _locks[code] = asyncio.Lock()

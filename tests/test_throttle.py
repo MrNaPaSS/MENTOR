@@ -92,3 +92,31 @@ def test_known_exchanges_have_their_own_budgets():
     assert own.limit < 10 and own.window == 2.0
     assert shared.limit >= own.limit
     assert "weex" in throttle.BUDGETS
+
+
+# ── два процесса, один предел ────────────────────────────────────────────────
+#
+# С 16 сентября на столе два процесса: терминал и сопровождение. Счётчик живёт
+# в памяти процесса, и каждый считал весь предел биржи своим - вместе они
+# выходили к бирже вдвое чаще, чем мы себе разрешили.
+
+
+def test_two_processes_share_the_limit_without_going_over():
+    for limit in (4, 8, 10, 60):
+        api = throttle.role_limit(limit, "api")
+        watcher = throttle.role_limit(limit, "watcher")
+        assert api + watcher == limit
+        # Сопровождение ставит стопы - ему не меньше, чем терминалу.
+        assert watcher >= api >= 1
+
+
+def test_one_process_keeps_the_whole_limit():
+    assert throttle.role_limit(10, "all") == 10
+    assert throttle.role_limit(10, "") == 10
+
+
+def test_the_role_is_read_from_the_environment(monkeypatch):
+    monkeypatch.setenv("NMNH_ROLE", "api")
+    assert throttle.role_limit(10) == 4
+    monkeypatch.setenv("NMNH_ROLE", "watcher")
+    assert throttle.role_limit(10) == 6
