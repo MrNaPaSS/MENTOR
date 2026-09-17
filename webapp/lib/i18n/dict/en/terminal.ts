@@ -543,6 +543,8 @@ export const journal = {
   weekGainLabel: "On margin",
   weekWinrateLabel: "Winners",
   weekBreaksLabel: "Rule breaks",
+  tradesIn: (n: number) => `${n} tr.`,
+  backToCoins: "Coins",
   positionsIn: (n: number) => `${n} pos.`,
   weekEmpty: "No closed trades this week",
   foldersMore: (n: number) => `${n} more`,
