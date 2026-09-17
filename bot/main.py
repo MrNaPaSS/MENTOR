@@ -12,6 +12,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from backend import console
 from core.db import init_engine, create_all
 from core import repo
 from core.db import SessionLocal
@@ -112,6 +113,13 @@ async def run() -> None:
 
 
 def main() -> None:
+    # Окно бота - такая же консоль Windows, как окна сервера: выделишь в ней
+    # текст мышью, и процесс встаёт на паузу до Esc или правого клика. Живой
+    # стол 17 сентября: окно с заголовком «Выбрать MENTOR Bot» и пустым
+    # экраном - со стороны выглядело как «бот не запустился». Гасим режим
+    # выделения и пишем журнал ещё и в файл (logs/bot.log), чтобы присылать
+    # строки из файла, не трогая окно (backend/console.py).
+    console.prepare("bot")
     asyncio.run(run())
 
 

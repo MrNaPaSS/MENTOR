@@ -54,3 +54,21 @@ def test_the_log_goes_to_a_file_with_time_and_only_once(tmp_path):
             if handler not in before:
                 root.removeHandler(handler)
                 handler.close()
+
+
+def test_the_bot_window_is_prepared_too(monkeypatch):
+    """Окно бота гасит режим выделения так же, как окна сервера.
+
+    Живой стол 17 сентября: окно с заголовком «Выбрать MENTOR Bot» и пустым
+    экраном. Со стороны это выглядело как «бот не запустился», а на деле он
+    стоял на паузе - в консоли был выделен текст.
+    """
+    import bot.main as bot_main
+
+    prepared: list[str] = []
+    monkeypatch.setattr(bot_main.console, "prepare", lambda role: prepared.append(role))
+    monkeypatch.setattr(bot_main.asyncio, "run", lambda coro: coro.close())
+
+    bot_main.main()
+
+    assert prepared == ["bot"]
