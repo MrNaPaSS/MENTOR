@@ -13,6 +13,7 @@
 import { useEffect } from "react";
 import { X } from "lucide-react";
 
+import ModalPortal from "@/components/ui/ModalPortal";
 import { useT } from "@/lib/i18n";
 import type { ActiveTrade } from "@/lib/trade/position";
 
@@ -40,8 +41,11 @@ export default function PickTrade({ trades, onPick, onClose }: PickTradeProps) {
   }, [onClose]);
 
   return (
+    // В общий слой страницы: терминал завёрнут в свою стопку слоёв, и окно,
+    // нарисованное внутри него, не может подняться над шапкой сайта.
+    <ModalPortal>
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+      className="fixed inset-0 z-[60] grid place-items-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div
@@ -105,5 +109,6 @@ export default function PickTrade({ trades, onPick, onClose }: PickTradeProps) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

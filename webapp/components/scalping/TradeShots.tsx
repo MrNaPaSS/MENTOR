@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 
+import ModalPortal from "@/components/ui/ModalPortal";
 import { useT } from "@/lib/i18n";
 import {
   attachShot,
@@ -147,8 +148,12 @@ export default function TradeShots({
   const open = viewing !== null ? shots[viewing] : null;
 
   return (
+    // В общий слой страницы, а не внутрь раздела: окно разбора открывают и из
+    // журнала терминала, и поверх окна дня в аналитике. Нарисованное внутри
+    // раздела, оно оставалось под ним - на экране была видна половина.
+    <ModalPortal>
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+      className="fixed inset-0 z-[60] grid place-items-center bg-black/60 p-4"
       onClick={onClose}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
@@ -343,5 +348,6 @@ export default function TradeShots({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
