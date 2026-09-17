@@ -1066,8 +1066,16 @@ function PriceChart({
   // Плюсик у цены под курсором: квадратный, в отличие от круглого у текущей
   // цены. Меню у них одно и то же - отметка и вход лимиткой, - но цена разная:
   // здесь та, на которую показывают, а не та, по которой идёт рынок.
-  const [hoverAt, setHoverAt] = useState<{ y: number; price: number } | null>(null);
+  //
+  // Высоту кнопке ставим прямо в обработчике движения, а не состоянием: React
+  // успевает перерисовать позже следующего движения мыши, и кнопка плыла за
+  // курсором с запозданием. В состоянии - только «есть ли она вообще» и цена
+  // для меню.
+  const [hoverOn, setHoverOn] = useState(false);
+  const hoverPriceRef = useRef(0);
   const [hoverMenu, setHoverMenu] = useState(false);
+  // Цена, на которой открыли меню: пока выбирают пункт, курсор уже на меню.
+  const [hoverPicked, setHoverPicked] = useState(0);
   const [hoverUp, setHoverUp] = useState(false);
   // Пока курсор на кнопке или открыто её меню, кнопка стоит на месте: иначе
   // она едет за курсором и уходит из-под него ровно при попытке нажать.
@@ -1162,6 +1170,9 @@ function PriceChart({
   const [footRow, setFootRow] = useState<{ price: number; total: number } | null>(null);
   const footPrimRef = useRef<FootprintPrimitive | null>(null);
   const footLineRef = useRef<IPriceLine | null>(null);
+  // Линия цены, на которой открыли меню квадратного плюсика: пока выбирают
+  // пункт, видно, о какой именно цене речь.
+  const pickedLineRef = useRef<IPriceLine | null>(null);
   // Цвета для холста: переменных оформления он не понимает, ему нужны
   // значения, и снимать их можно только с живого узла страницы.
   const footSkinRef = useRef<FootprintSkin | null>(null);
@@ -2399,28 +2410,27 @@ function PriceChart({
       // Цена под курсором - для квадратного плюсика у его ярлыка.
       if (hoverHeldRef.current) return;
       const price = candleRef.current?.coordinateToPrice(at.y) ?? null;
-      if (!price || price <= 0) {
-        setHoverAt(null);
-        return;
-      }
       // Рядом с текущей ценой кнопку не показываем: там уже стоит круглая, и
       // две подряд спорили бы, какая из них про рынок.
       const live = candleRef.current?.priceToCoordinate(livePriceRef.current) ?? null;
-      if (live !== null && Math.abs(at.y - live) < 14) {
-        setHoverAt(null);
+      const close = live !== null && Math.abs(at.y - live) < 14;
+      if (!price || price <= 0 || close) {
+        hoverPriceRef.current = 0;
+        setHoverOn(false);
         return;
       }
-      // Перерисовываем не на каждое дрожание мыши: кнопка стоит на своей
-      // высоте, и пиксель туда-сюда её не двигает.
-      setHoverAt((now) =>
-        now && Math.abs(now.y - at.y) < 1 ? now : { y: at.y, price: Number(price) },
-      );
+      hoverPriceRef.current = Number(price);
+      // Высота - сразу в стиль узла: так кнопка стоит ровно на линии курсора,
+      // а не догоняет её следующим кадром React.
+      const node = hoverBoxRef.current;
+      if (node) node.style.top = `${Math.round(at.y) - 8}px`;
+      setHoverOn(true);
     }
 
     function onLeave() {
       footPrimRef.current?.setHover(null);
       setFootRow(null);
-      if (!hoverHeldRef.current) setHoverAt(null);
+      if (!hoverHeldRef.current) setHoverOn(false);
     }
 
     box.addEventListener("pointerdown", onDown, true);
@@ -2524,6 +2534,33 @@ function PriceChart({
       title: money(footRow.total),
     });
   }, [footRow, skin]);
+
+  // Цена, на которой открыли меню плюсика, - линией через весь график.
+  //
+  // Меню отходит от кнопки в сторону, курсор уезжает на него, и перекрестие
+  // уходит вместе с курсором: без линии выбирать «поставить отметку» приходится
+  // вслепую, вспоминая, на чём именно остановился.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+
+    if (pickedLineRef.current) {
+      series.removePriceLine(pickedLineRef.current);
+      pickedLineRef.current = null;
+    }
+    if (!hoverMenu || !(hoverPicked > 0)) return;
+
+    pickedLineRef.current = series.createPriceLine({
+      price: hoverPicked,
+      color: skinRef.current.crosshair,
+      lineWidth: 1,
+      // Пунктиром, как перекрестие: это выбранная цена, а не уровень, на
+      // котором стоят деньги.
+      lineStyle: 2,
+      axisLabelVisible: true,
+      title: "",
+    });
+  }, [hoverMenu, hoverPicked, skin]);
 
   // Сделка из журнала под курсором: как она шла и чем кончилась.
   //
@@ -3081,11 +3118,10 @@ function PriceChart({
           
           Квадратный, а не круглый, намеренно: две одинаковые кнопки на одной
           шкале спорили бы, какая из них про текущую цену. */}
-      {hoverAt && (
-        <div
+      <div
           ref={hoverBoxRef}
           className="absolute right-16 z-30"
-          style={{ top: Math.round(hoverAt.y) - 10 }}
+          style={{ top: 0, visibility: hoverOn ? "visible" : "hidden" }}
           onPointerEnter={() => {
             hoverHeldRef.current = true;
           }}
@@ -3098,6 +3134,7 @@ function PriceChart({
               setHoverMenu((v) => {
                 hoverHeldRef.current = !v;
                 if (!v) {
+                  setHoverPicked(hoverPriceRef.current);
                   const at = hoverBoxRef.current?.getBoundingClientRect();
                   const box = boxRef.current?.getBoundingClientRect();
                   setHoverUp(Boolean(at && box && at.bottom + PLUS_MENU_H > box.bottom));
@@ -3106,14 +3143,16 @@ function PriceChart({
               });
             }}
             title={hoverMenu ? undefined : t.terminal.chart.plusAtPrice}
-            className="pointer-events-auto grid h-5 w-5 place-items-center rounded-[3px] border shadow transition-colors duration-150 ease-out"
+            // Серый и мельче круглого: круглый - про текущую цену, он главный,
+            // а этот ходит за курсором и не должен перетягивать взгляд.
+            className="pointer-events-auto grid h-4 w-4 place-items-center rounded-[3px] border transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
             style={{
               borderColor: "var(--pane-border)",
-              background: "var(--pane-bg)",
-              color: "var(--pane-text-2)",
+              background: "var(--pane-hover)",
+              color: "var(--pane-muted)",
             }}
           >
-            <Plus className="h-3 w-3" />
+            <Plus className="h-2.5 w-2.5" />
           </button>
           {hoverMenu && (
             <div
@@ -3136,7 +3175,7 @@ function PriceChart({
                     hoverHeldRef.current = false;
                     // Цена та, что была под курсором в момент открытия меню:
                     // пока выбирают пункт, курсор уже ушёл на само меню.
-                    const at = hoverAt.price;
+                    const at = hoverPicked;
                     if (!(at > 0)) return;
                     if (action === "alert") alertAddRef.current?.(at);
                     else orderAddRef.current?.(at, currentAtr(dataRef.current), action);
@@ -3150,7 +3189,6 @@ function PriceChart({
             </div>
           )}
         </div>
-      )}
 
       {/* Подпись над лестницей объёма.
           
