@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -48,6 +49,26 @@ class Venue:
 
 
 _venues: dict[str, Venue] = {}
+
+# ── сам сервер: паузы и запросы ─────────────────────────────────────────────
+#
+# Биржи отвечают быстро, а терминал у учеников всё равно замирал и показывал
+# «сервер обновляется». Значит, замирал сам сервер: один процесс держит и
+# сайт, и терминалы всех учеников, и поток Binance в тысячи сообщений в
+# секунду. Здесь - насколько он замирает и кто его занимает.
+
+# Замирание дольше этого терминал уже видит: круг его опроса - три секунды.
+STALL_MS = 1000.0
+# Ответ дольше этого пишем в журнал поимённо.
+SLOW_MS = 2000.0
+# Замирание дольше этого пишем в журнал сразу, с ролью процесса.
+LOUD_STALL_MS = 2000.0
+
+# Пауза цикла событий: (когда, насколько опоздал проснуться, мс).
+_lags: deque[tuple[float, float]] = deque(maxlen=2 * DEPTH)
+# Все ответы за окно: (когда, ручка, мс). Пять минут при двадцати запросах в
+# секунду - шесть тысяч строк по три числа, это мало.
+_requests: deque[tuple[float, str, float]] = deque(maxlen=6 * DEPTH)
 # Длительность обходов сопровождения: не по биржам, а по всему кругу.
 _passes: deque[float] = deque(maxlen=DEPTH)
 
@@ -77,6 +98,101 @@ def note_stream(exchange: str, up: bool) -> None:
         return
     venue.streams_up = max(0, venue.streams_up - 1)
     venue.stream_drops += 1
+
+
+def note_lag(ms: float, at: float | None = None) -> None:
+    """Насколько цикл событий опоздал проснуться. Ноль - сервер свободен."""
+    _lags.append((at if at is not None else time.time(), max(0.0, float(ms))))
+
+
+def note_request(route: str, ms: float, at: float | None = None) -> None:
+    """Ответ на запрос: какая ручка и сколько занял."""
+    _requests.append((at if at is not None else time.time(), str(route or "?"), float(ms)))
+
+
+def server_snapshot(window: float = WINDOW, now: float | None = None) -> dict[str, Any]:
+    """Паузы процесса и нагрузка на его ручки за окно."""
+    moment = now if now is not None else time.time()
+    edge = moment - window
+    lags = [ms for at, ms in _lags if at >= edge]
+    asked = [(route, ms) for at, route, ms in _requests if at >= edge]
+
+    by_route: dict[str, list[float]] = {}
+    for route, ms in asked:
+        by_route.setdefault(route, []).append(ms)
+    minutes = window / 60 if window > 0 else 1.0
+    routes = [
+        {
+            "route": route,
+            "per_min": round(len(times) / minutes, 1),
+            "ms_median": percentile(times, 0.5),
+            "ms_worst": percentile(times, 1.0),
+        }
+        for route, times in by_route.items()
+    ]
+    busiest = sorted(routes, key=lambda row: row["per_min"], reverse=True)[:8]
+    slowest = sorted(
+        (row for row in routes if row["ms_worst"] >= SLOW_MS),
+        key=lambda row: row["ms_worst"],
+        reverse=True,
+    )[:5]
+    return {
+        "lag_worst_ms": percentile(lags, 1.0),
+        "lag_median_ms": percentile(lags, 0.5),
+        "stalls": sum(1 for ms in lags if ms >= STALL_MS),
+        "per_min": round(len(asked) / minutes, 1),
+        "busiest": busiest,
+        "slowest": slowest,
+    }
+
+
+async def watch_loop(role_name: str, step: float = 0.5) -> None:
+    """Сторож цикла событий: засыпает на полсекунды и меряет, насколько проспал.
+
+    Проспал - значит, всё это время процесс был занят чем-то одним и никому не
+    отвечал: ни терминалу, ни сопровождению. Долгое замирание пишем в журнал
+    сразу, с временем - по нему и разбираем.
+    """
+    import asyncio
+
+    loop = asyncio.get_running_loop()
+    log = logging.getLogger("nmnh.trading")
+    while True:
+        started = loop.time()
+        await asyncio.sleep(step)
+        lag = (loop.time() - started - step) * 1000
+        note_lag(lag)
+        if lag >= LOUD_STALL_MS:
+            log.warning("Сервер замер на %.1f с (роль %s)", lag / 1000, role_name)
+
+
+class RequestTimer:
+    """Меряет каждый ответ сервера и пишет его в панель под именем ручки.
+
+    Под именем ручки, а не адреса: `/api/scalping/klines/{symbol}` одна ручка,
+    сколько бы монет по ней ни спрашивали. Медленный ответ - сразу в журнал.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        started = time.monotonic()
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            ms = (time.monotonic() - started) * 1000
+            route = getattr(scope.get("route"), "path", None) or scope.get("path", "?")
+            method = scope.get("method", "")
+            if method != "OPTIONS":
+                note_request(f"{method} {route}", ms)
+                if ms >= SLOW_MS:
+                    logging.getLogger("nmnh.trading").warning(
+                        "Медленный ответ: %s %s - %.1f с", method, scope.get("path", "?"), ms / 1000
+                    )
 
 
 def note_pass(seconds: float) -> None:
@@ -143,6 +259,7 @@ def snapshot(window: float = WINDOW, now: float | None = None) -> dict[str, Any]
     passes = list(_passes)
     return {
         "window": window,
+        "server": server_snapshot(window, moment),
         "venues": venues,
         "watcher": {
             "passes": len(passes),
@@ -169,7 +286,7 @@ def merge(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
     одна: панель обязана показывать её целиком, а не половину.
     """
     if not snapshots:
-        return {"window": WINDOW, "venues": [], "watcher": {}}
+        return {"window": WINDOW, "venues": [], "watcher": {}, "processes": []}
 
     by_name: dict[str, dict[str, Any]] = {}
     for shot in snapshots:
@@ -207,10 +324,19 @@ def merge(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
             watcher = one
             break
 
+    # Сервер - по процессам, не складывая: замирает каждый сам по себе, и
+    # сумма пауз двух процессов не говорит ни о котором из них.
+    processes = [
+        {"role": str(shot.get("role") or "all"), **(shot.get("server") or {})}
+        for shot in snapshots
+        if shot.get("server")
+    ]
+
     return {
         "window": snapshots[0].get("window", WINDOW),
         "venues": sorted(by_name.values(), key=lambda row: str(row.get("exchange"))),
         "watcher": watcher,
+        "processes": sorted(processes, key=lambda row: row["role"]),
     }
 
 
@@ -218,6 +344,8 @@ def clear() -> None:
     """Забыть всё. Нужно тестам."""
     _venues.clear()
     _passes.clear()
+    _lags.clear()
+    _requests.clear()
 
 
 # ── снимок в базу: процессов два, панель одна ───────────────────────────────

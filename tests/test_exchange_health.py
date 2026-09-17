@@ -183,3 +183,61 @@ def test_a_quick_pass_is_not_rounded_to_nothing():
     watcher = health.snapshot()["watcher"]
     assert watcher["seconds_median"] == 0.021
     assert watcher["seconds_worst"] == 0.024
+
+
+# ── сам сервер: паузы и нагрузка ─────────────────────────────────────────────
+#
+# Биржи отвечали за треть секунды, а терминал у учеников замирал и показывал
+# «сервер обновляется». Замирал сам сервер - и панель должна это показывать.
+
+
+def test_stalls_of_the_server_are_counted():
+    for ms in (3.0, 5.0, 1400.0, 2600.0):
+        health.note_lag(ms)
+
+    server = health.snapshot()["server"]
+    assert server["stalls"] == 2
+    assert server["lag_worst_ms"] == 2600.0
+
+
+def test_the_busiest_and_the_slowest_routes_are_named():
+    for _ in range(30):
+        health.note_request("GET /api/scalping/klines/{symbol}", 120.0)
+    for _ in range(3):
+        health.note_request("GET /api/trading/positions", 400.0)
+    health.note_request("GET /api/journal/trades", 4200.0)
+
+    server = health.snapshot(window=60.0)["server"]
+    assert server["busiest"][0]["route"] == "GET /api/scalping/klines/{symbol}"
+    assert server["busiest"][0]["per_min"] == 30.0
+    assert [row["route"] for row in server["slowest"]] == ["GET /api/journal/trades"]
+
+
+def test_each_process_keeps_its_own_server_numbers():
+    """Паузы двух процессов не складываются: замирает каждый сам по себе."""
+    api = {"role": "api", "venues": [], "server": {"stalls": 4, "lag_worst_ms": 3100.0}}
+    watcher = {"role": "watcher", "venues": [], "server": {"stalls": 0, "lag_worst_ms": 12.0}}
+
+    both = health.merge([watcher, api])
+    assert [p["role"] for p in both["processes"]] == ["api", "watcher"]
+    assert both["processes"][0]["stalls"] == 4
+
+
+def test_the_route_template_is_recorded_not_the_address():
+    """Одна ручка - одна строка, сколько бы монет по ней ни спрашивали."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+
+    @app.get("/api/scalping/klines/{symbol}")
+    def klines(symbol: str):
+        return {"symbol": symbol}
+
+    app.add_middleware(health.RequestTimer)
+    client = TestClient(app)
+    client.get("/api/scalping/klines/BTCUSDT")
+    client.get("/api/scalping/klines/ETHUSDT")
+
+    busiest = health.snapshot()["server"]["busiest"]
+    assert busiest[0]["route"] == "GET /api/scalping/klines/{symbol}"

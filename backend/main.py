@@ -22,6 +22,7 @@ from core.db import init_engine, create_all, SessionLocal
 from core import repo
 from core.weex import get_weex_client
 from backend.config import BackendConfig
+from backend.trading import health as server_health
 from backend.trading.private_ws import StreamKeeper
 from backend.trading.watcher import PositionWatcher
 from backend.api import shots
@@ -184,6 +185,8 @@ def create_app(
             else None
         )
         logging.getLogger("nmnh.trading").info("Роль процесса: %s", role)
+        # Сторож цикла событий: насколько процесс замирает (health.watch_loop).
+        loop_watch = asyncio.create_task(server_health.watch_loop(role), name="loop-watch")
         if runs_market:
             collector.start()
             balance_collector.start()
@@ -217,6 +220,7 @@ def create_app(
         try:
             yield
         finally:
+            loop_watch.cancel()
             if presence_task:
                 presence_task.cancel()
                 try:
@@ -314,6 +318,9 @@ def create_app(
         allow_headers=["*"],
         allow_credentials=True,
     )
+    # Время каждого ответа - в панель здоровья, под именем ручки. Последним,
+    # то есть снаружи всех: меряем то, что ждёт терминал, а не половину пути.
+    app.add_middleware(server_health.RequestTimer)
 
     app.include_router(auth.router)
     app.include_router(market.router)

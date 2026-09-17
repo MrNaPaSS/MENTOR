@@ -31,10 +31,29 @@ interface Venue {
   last_error_ago: number | null;
 }
 
+interface RouteLoad {
+  route: string;
+  per_min: number;
+  ms_median: number;
+  ms_worst: number;
+}
+
+/** Сам процесс сервера: насколько замирает и чем занят. */
+interface ServerProcess {
+  role: string;
+  lag_worst_ms?: number;
+  lag_median_ms?: number;
+  stalls?: number;
+  per_min?: number;
+  busiest?: RouteLoad[];
+  slowest?: RouteLoad[];
+}
+
 interface Health {
   window: number;
   venues: Venue[];
   watcher: { passes?: number; seconds_median?: number; seconds_worst?: number };
+  processes?: ServerProcess[];
 }
 
 const REFRESH_MS = 10_000;
@@ -43,6 +62,15 @@ const REFRESH_MS = 10_000;
 const BAD_SHARE = 0.05;
 // Задержка, после которой ответ биржи считается медленным.
 const SLOW_MS = 1500;
+
+// Замирание процесса, которое терминал уже видит: круг его опроса - 3 секунды.
+const STALL_ALARM_MS = 1000;
+
+const ROLES: Record<string, string> = {
+  api: "Сайт и терминал (API)",
+  watcher: "Сопровождение сделок",
+  all: "Сервер",
+};
 
 const TITLES: Record<string, string> = {
   weex: "WEEX",
@@ -86,7 +114,7 @@ export default function HealthPage() {
       <header className="flex items-center gap-3">
         <Activity className="h-5 w-5 text-accent-cyan" />
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">Здоровье бирж</h1>
+          <h1 className="text-xl font-semibold text-text-primary">Здоровье бирж и сервера</h1>
           <p className="text-sm text-text-muted">
             Числа за последние {minutes} минут. Обновляются каждые 10 секунд.
           </p>
@@ -104,6 +132,16 @@ export default function HealthPage() {
           Запросов к биржам пока не было. Панель наливается, как только кто-то
           откроет терминал или пойдёт сделка.
         </p>
+      )}
+
+      {/* Сервер - первым: если замирает он сам, числа бирж ниже ничего не
+          объясняют - терминал висит не из-за них. */}
+      {(health?.processes ?? []).length > 0 && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {(health?.processes ?? []).map((process) => (
+            <ProcessCard key={process.role} process={process} />
+          ))}
+        </div>
       )}
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -187,6 +225,52 @@ function VenueCard({ venue }: { venue: Venue }) {
 }
 
 /** Длительность словами: доли секунды читаются как «0.0 с» и выглядят нулём. */
+function ProcessCard({ process }: { process: ServerProcess }) {
+  const worst = process.lag_worst_ms ?? 0;
+  const stalls = process.stalls ?? 0;
+  return (
+    <section className="rounded-xl border border-border bg-bg-panel/60 p-4">
+      <header className="mb-3 flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold text-text-primary">
+          {ROLES[process.role] ?? process.role}
+        </h2>
+        <span className="text-xs text-text-muted">запросов в минуту {process.per_min ?? 0}</span>
+      </header>
+      <dl className="space-y-1.5 text-sm">
+        <Row
+          label="Самая долгая пауза"
+          value={worst >= 1000 ? `${(worst / 1000).toFixed(1)} с` : `${Math.round(worst)} мс`}
+          alarm={worst >= STALL_ALARM_MS}
+        />
+        <Row label="Замираний дольше секунды" value={String(stalls)} alarm={stalls > 0} />
+      </dl>
+      {(process.busiest ?? []).length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1 text-xs text-text-muted">Чем занят (в минуту · обычно · худший)</p>
+          <ul className="space-y-0.5 text-xs text-text-secondary">
+            {(process.busiest ?? []).map((row) => (
+              <li key={row.route} className="flex justify-between gap-3">
+                <span className="truncate font-mono">{row.route}</span>
+                <span className="shrink-0 tabular-nums">
+                  {row.per_min} · {Math.round(row.ms_median)} мс · {Math.round(row.ms_worst)} мс
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {(process.slowest ?? []).length > 0 && (
+        <p className="mt-2 text-xs text-accent-red">
+          Медленные ответы:{" "}
+          {(process.slowest ?? [])
+            .map((row) => `${row.route} ${(row.ms_worst / 1000).toFixed(1)} с`)
+            .join(", ")}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function took(seconds: number | undefined): string {
   const value = seconds ?? 0;
   return value < 1 ? `${Math.round(value * 1000)} мс` : `${value.toFixed(1)} с`;
