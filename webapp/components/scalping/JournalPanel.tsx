@@ -22,6 +22,7 @@ import PositionCard from "./PositionCard";
 import ReviewPanel from "./ReviewPanel";
 import TradeShots from "./TradeShots";
 import JournalCalendar from "./JournalCalendar";
+import Stat from "./Stat";
 import { cardFromTrade } from "@/lib/pnl/data";
 import { useJournalExport } from "@/lib/journalExport";
 import {
@@ -324,6 +325,14 @@ export default function JournalPanel({
         <div className="no-scrollbar min-h-0 flex-1 overflow-auto px-3 py-2">
           <ReviewPanel
             rows={[...live, ...shown]}
+            year={year}
+            month={month}
+            days={days}
+            total={total}
+            onShift={shiftMonth}
+            onToday={toToday}
+            picked={day}
+            onPickDay={setDay}
             onPick={(row, number) => setOpenPos({ id: row.client_id, number })}
           />
         </div>
@@ -453,11 +462,4 @@ export default function JournalPanel({
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  return (
-    <div className="rounded border border-[var(--pane-border)] px-2 py-1">
-      <div className="text-[10px] text-[var(--pane-muted)]">{label}</div>
-      <div className={tone ?? "text-[var(--pane-text)]"}>{value}</div>
-    </div>
-  );
-}
+
