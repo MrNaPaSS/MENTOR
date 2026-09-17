@@ -2415,3 +2415,54 @@ def test_an_existing_record_is_not_re_asked_every_round():
     )
 
     assert asked == []
+
+
+def test_the_journal_does_not_pester_the_exchange():
+    """Журнал не спрашивает исполнения чаще раза в десять секунд на сделку.
+
+    Проход по счёту может оборваться до записи в базу - биржа не ответила,
+    процесс перезапустили, - и тогда следующий проход снова увидел бы сделку
+    без записи и снова пошёл на биржу. Бюджет запросов один на все стопы и
+    переносы, и журналу занимать его не положено.
+    """
+    import asyncio
+
+    from datetime import datetime, timezone
+
+    from backend.trading.watcher import PositionWatcher
+
+    session, student = _journal_db()
+    row = trade(
+        student_id=student.id,
+        status="open",
+        takes_hit=1,
+        opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    asked: list[str] = []
+
+    class Exchange:
+        async def user_trades(self, symbol, limit=100):
+            asked.append(symbol)
+            return [
+                {
+                    "time": 4102444800000,
+                    "realizedPnl": "5.0",
+                    "commission": "0.1",
+                    "price": "101",
+                    "side": "SELL",
+                    "qty": "0.5",
+                }
+            ]
+
+        async def symbol_filters(self, symbol):
+            return {"taker_fee": 0.0006}
+
+    watcher = PositionWatcher(lambda: session, lambda: None)
+
+    async def twice() -> None:
+        await watcher._live_journal_fills(session, Exchange(), row)
+        # Второй раз подряд - биржу не трогаем.
+        await watcher._live_journal_fills(session, Exchange(), row)
+
+    asyncio.run(twice())
+    assert len(asked) == 1
