@@ -345,6 +345,7 @@ export default function JournalPanel({
                   onPick={onPick}
                   onCard={setCard}
                   onDrop={mentor ? drop : undefined}
+                  dateLabel={t.journal.colLive}
                 />
               </div>
             )}

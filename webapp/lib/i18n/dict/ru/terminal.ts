@@ -482,6 +482,7 @@ export const journal = {
   statWorst: "Худшая",
   cellTitle: (trades: number, money: string) => `${trades} сделок · ${money} $`,
   empty: "Закрытых сделок за период нет. Идущая появится выше, как только откроется.",
+  colLive: "Активные",
   colDate: "Дата",
   colCoin: "Монета",
   colEntry: "Вход",

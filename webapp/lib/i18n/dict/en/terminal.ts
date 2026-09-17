@@ -457,6 +457,7 @@ export const journal = {
   statWorst: "Worst",
   cellTitle: (trades: number, money: string) => `${trades} trades · ${money} $`,
   empty: "No closed trades for this period. A running one shows up above.",
+  colLive: "Running",
   colDate: "Date",
   colCoin: "Coin",
   colEntry: "Entry",

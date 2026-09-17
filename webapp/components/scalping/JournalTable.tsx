@@ -78,9 +78,24 @@ export interface JournalTableProps {
   onCard?: (trade: JournalTrade) => void;
   /** Убрать запись. Пусто - права нет, и колонки не будет. */
   onDrop?: (id: number) => void;
+  /**
+   * Чем подписана первая колонка. По умолчанию «Дата».
+   *
+   * У раздела с идущими сделками там стоит «Активные»: дата у них одна и та
+   * же - время входа, - а вот то, что это раздел про идущие, сказать надо, и
+   * отдельной надписи над таблицей для этого заводить не пришлось.
+   */
+  dateLabel?: string;
 }
 
-export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: JournalTableProps) {
+export default function JournalTable({
+  rows,
+  onHover,
+  onPick,
+  onCard,
+  onDrop,
+  dateLabel,
+}: JournalTableProps) {
   const t = useT();
   const numbers = useIntlLocale();
 
@@ -103,7 +118,7 @@ export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: 
           уехавшая шапка оставляла бы шесть колонок чисел без подписей. */}
       <thead className="text-[9px] text-[var(--pane-muted)] [&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:z-10 [&>tr>th]:bg-[var(--pane-bg)]">
         <tr className="text-left">
-          <th className="py-1">{t.journal.colDate}</th>
+          <th className="py-1">{dateLabel ?? t.journal.colDate}</th>
           <th>{t.journal.colCoin}</th>
           <th>{t.journal.colEntry}</th>
           <th>{t.journal.colExit}</th>
