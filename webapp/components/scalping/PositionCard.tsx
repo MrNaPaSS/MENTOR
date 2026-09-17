@@ -143,7 +143,7 @@ export default function PositionCard({
   return (
     <ModalPortal>
       <div
-        className="fixed inset-0 z-[70] grid place-items-center bg-black/60 p-4"
+        className="fixed inset-0 z-modal grid place-items-center bg-black/60 p-4"
         onClick={onClose}
       >
         <div
@@ -260,7 +260,7 @@ export default function PositionCard({
                                 почему снимок сделан. Сохраняется по уходу из
                                 поля - пока пишут, запросы не нужны. */}
                             <figcaption>
-                              <textarea
+                              <input
                                 defaultValue={shot.note}
                                 onBlur={async (event) => {
                                   const body = event.target.value.trim();
@@ -268,10 +268,8 @@ export default function PositionCard({
                                   if (await saveShotNote(shot.id, body)) onChange();
                                 }}
                                 placeholder={t.journal.shotNoteHint}
-                                rows={2}
                                 maxLength={140}
-                                spellCheck={false}
-                                className="block w-full resize-none border-t border-[var(--pane-border)] bg-transparent px-1.5 py-1 text-[10px] leading-snug text-[var(--pane-text-2)] outline-none placeholder:text-[var(--pane-muted)]"
+                                className="block w-full border-t border-[var(--pane-border)] bg-transparent px-1.5 py-1 text-[10px] text-[var(--pane-text-2)] outline-none placeholder:text-[var(--pane-muted)]"
                               />
                             </figcaption>
                           </figure>

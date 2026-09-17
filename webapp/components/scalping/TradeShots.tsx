@@ -198,7 +198,7 @@ export default function TradeShots({
     // раздела, оно оставалось под ним - на экране была видна половина.
     <ModalPortal>
     <div
-      className="fixed inset-0 z-[70] grid place-items-center bg-black/60 p-4"
+      className="fixed inset-0 z-modal grid place-items-center bg-black/60 p-4"
       onClick={onClose}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
@@ -292,11 +292,6 @@ export default function TradeShots({
                 </button>
               </>
             )}
-            {shotBrief(open, trade, t) && (
-              <div className="px-3 pb-1 font-mono text-[10px] text-[var(--pane-muted)]">
-                {shotBrief(open, trade, t)}
-              </div>
-            )}
             {open.note && (
               <p className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded bg-black/60 px-2 py-0.5 text-[11px] text-white/80">
                 {open.note}
@@ -360,37 +355,27 @@ export default function TradeShots({
                         <MoveRight className="h-3 w-3" />
                       </button>
                     </div>
-                    <figcaption>
-                      {/* Цифры сделки, относящиеся к этапу снимка - одной
-                          тонкой строкой. Подробности живут в карточке позиции;
-                          здесь только то, что объясняет саму картинку. */}
-                      {shotBrief(shot, trade, t) && (
-                        <div className="border-t border-[var(--pane-border)] px-2 py-0.5 font-mono text-[9px] text-[var(--pane-muted)]">
-                          {shotBrief(shot, trade, t)}
-                        </div>
-                      )}
-                      {/* Комментарий пишут словами и не в одну строку: «вошёл
-                          на ретесте, стакан пустой сверху» в поле высотой в
-                          строку не помещается. */}
-                      <textarea
-                        defaultValue={shot.note}
-                        onBlur={async (event) => {
-                          const body = event.target.value.trim();
-                          if (body === shot.note) return;
-                          if (await saveShotNote(shot.id, body)) onChange();
-                        }}
-                        placeholder={t.journal.shotNoteHint}
-                        rows={2}
-                        maxLength={140}
-                        spellCheck={false}
-                        className="block w-full resize-none border-t border-[var(--pane-border)] bg-transparent px-2 py-1 text-[10px] leading-snug text-[var(--pane-text-2)] outline-none placeholder:text-[var(--pane-muted)]"
-                      />
-                    </figcaption>
+                    {/* В списке снимок подписан и только. Цифры и поле
+                        заметки живут в просмотре: в плитке они съедали саму
+                        картинку, ради которой список и открывают. */}
+                    {shot.note && (
+                      <figcaption className="px-2 py-1 text-[10px] text-[var(--pane-muted)]">
+                        {shot.note}
+                      </figcaption>
+                    )}
                   </figure>
                 ))}
               </div>
             )}
             {error && <p className="mt-2 text-[11px] text-[var(--pane-down)]">{error}</p>}
+          </div>
+        )}
+
+        {/* Цифры снимка идут прямо под ним, отдельной тонкой строкой: сторона
+            и цена на входе, взятые цели в ведении, закрытие и итог на выходе. */}
+        {open && shotBrief(open, trade, t) && (
+          <div className="border-t border-[var(--pane-border)] px-3 py-1 font-mono text-[10px] text-[var(--pane-text-2)]">
+            {shotBrief(open, trade, t)}
           </div>
         )}
 
@@ -417,6 +402,25 @@ export default function TradeShots({
             {busy ? t.journal.shotSaving : t.journal.shotPaste}
           </span>
         </div>
+
+        {/* Заметка своими словами - дело добровольное: снимок по событию
+            терминал подписывает сам, и пустое поле здесь ничего не значит. */}
+        {open && (
+          <textarea
+            key={open.id}
+            defaultValue={open.note}
+            onBlur={async (event) => {
+              const body = event.target.value.trim();
+              if (body === open.note) return;
+              if (await saveShotNote(open.id, body)) onChange();
+            }}
+            placeholder={t.journal.shotNoteHint}
+            rows={2}
+            maxLength={140}
+            spellCheck={false}
+            className="block w-full resize-none border-t border-[var(--pane-border)] bg-transparent px-3 py-1.5 text-[11px] leading-snug text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
+          />
+        )}
       </div>
     </div>
     </ModalPortal>

@@ -140,7 +140,7 @@ export default function WeekReviewCard({ rows, week, onClose }: WeekReviewCardPr
   return (
     <ModalPortal>
       <div
-        className="fixed inset-0 z-[60] grid place-items-center bg-black/60 p-4"
+        className="fixed inset-0 z-modal grid place-items-center bg-black/60 p-4"
         onClick={onClose}
       >
         <div
