@@ -41,6 +41,35 @@ export interface ReviewPanelProps {
   onPick: (trade: JournalRow, number: number) => void;
 }
 
+/** Строка итога: подпись слева, число справа. */
+function Line({
+  label,
+  value,
+  hint,
+  mood,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  mood?: number;
+}) {
+  return (
+    <div className="flex items-baseline gap-1.5 py-0.5" title={hint}>
+      <span className="text-[10px] text-[var(--pane-muted)]">{label}</span>
+      <div className="flex-1 border-b border-dashed border-[var(--pane-border)]" />
+      <span
+        className={`font-mono text-[10px] ${
+          mood === undefined || mood === 0
+            ? "text-[var(--pane-text-2)]"
+            : `font-bold ${tone(mood)}`
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
   const t = useT();
   const numbers = useIntlLocale();
@@ -83,60 +112,60 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
   }, [folders]);
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+    <div className="grid gap-3 lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
       <PlanForm week={week} onWeek={setWeek}>
-        {/* Итог недели под планом. Каждое число подписано тем, откуда взято:
-            разбор, в котором не понять, что считалось, хуже отсутствия цифр. */}
-        <div className="flex flex-wrap items-center gap-1.5 border-t border-[var(--pane-border)] px-2 py-1.5">
+        {/* Итог недели строками, а не в подбор: цифры разные по смыслу, и
+            в один ряд они читались как одно предложение. Подписи слева,
+            значения справа - глаз идёт по столбцу и сравнивает. */}
+        <div className="border-t border-[var(--pane-border)] px-2 py-1.5">
           {stats.trades === 0 ? (
-            <span className="text-[10px] text-[var(--pane-muted)]">{t.journal.weekEmpty}</span>
+            <p className="py-1 text-[10px] text-[var(--pane-muted)]">{t.journal.weekEmpty}</p>
           ) : (
             <>
-              <span
-                title={t.journal.weekTradesHint}
-                className="rounded bg-[var(--pane-hover)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--pane-text-2)]"
-              >
-                {t.journal.weekTrades(stats.marked, stats.trades)}
-              </span>
-              {stats.gain !== null && (
-                <span
-                  title={t.journal.weekGainHint}
-                  className={`rounded bg-[var(--pane-hover)] px-1.5 py-0.5 font-mono text-[10px] font-bold ${tone(stats.pnl)}`}
-                >
-                  {t.journal.weekGain(
-                    `${stats.gain > 0 ? "+" : ""}${stats.gain.toFixed(1)}%`,
-                  )}
+              <div className="mb-1 flex items-baseline gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--pane-muted)]">
+                  {t.journal.weekTotalsTitle}
                 </span>
+                <div className="flex-1" />
+                <span className={`font-mono text-[12px] font-bold ${tone(stats.pnl)}`}>
+                  {money(stats.pnl)}
+                </span>
+              </div>
+
+              <Line
+                label={t.journal.weekTradesLabel}
+                hint={t.journal.weekTradesHint}
+                value={`${stats.marked} / ${stats.trades}`}
+              />
+              {stats.gain !== null && (
+                <Line
+                  label={t.journal.weekGainLabel}
+                  hint={t.journal.weekGainHint}
+                  value={`${stats.gain > 0 ? "+" : ""}${stats.gain.toFixed(1)}%`}
+                  mood={stats.pnl}
+                />
               )}
-              <span
-                title={t.journal.weekWinrateHint}
-                className="rounded bg-[var(--pane-hover)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--pane-text-2)]"
-              >
-                {t.journal.weekWinrate(`${Math.round((stats.winrate ?? 0) * 100)}%`)}
-              </span>
+              <Line
+                label={t.journal.weekWinrateLabel}
+                hint={t.journal.weekWinrateHint}
+                value={`${Math.round((stats.winrate ?? 0) * 100)}%`}
+              />
               {/* Нарушения показываются, только если их отмечали: ноль
                   нарушений у неразобранной недели - не заслуга, а пустота. */}
               {stats.marked > 0 && (
-                <span
-                  title={t.journal.weekBreaksHint}
-                  className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
-                    stats.breaks > 0
-                      ? "bg-[var(--pane-down)]/15 text-[var(--pane-down)]"
-                      : "bg-[var(--pane-hover)] text-[var(--pane-up)]"
-                  }`}
-                >
-                  {t.journal.weekBreaks(stats.breaks)}
-                </span>
+                <Line
+                  label={t.journal.weekBreaksLabel}
+                  hint={t.journal.weekBreaksHint}
+                  value={String(stats.breaks)}
+                  mood={stats.breaks > 0 ? -1 : 0}
+                />
               )}
-              <span className="font-mono text-[10px] text-[var(--pane-muted)]">
-                {money(stats.pnl)}
-              </span>
-              <div className="flex-1" />
+
               {/* Разбор недели собирается из этих же цифр, но целиком: сессии,
                   нарушения, поведение после убытка. */}
               <button
                 onClick={() => setSum(true)}
-                className="rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
+                className="mt-1.5 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
               >
                 {t.journal.weekReviewMake}
               </button>
@@ -154,14 +183,27 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
           <div className="grid gap-3">
             {byCoin.map(([coin, list]) => (
               <section key={coin}>
-                <h3 className="mb-1.5 font-mono text-[11px] font-bold text-[var(--pane-text)]">
-                  {coin}
-                  <span className="ml-1.5 font-sans text-[10px] font-normal text-[var(--pane-muted)]">
+                {/* У монеты свой итог: неделя по BTC и неделя по ETH - разные
+                    недели, и складывать их глазом человек не должен. */}
+                <div className="mb-1.5 flex items-baseline gap-1.5">
+                  <h3 className="font-mono text-[11px] font-bold text-[var(--pane-text)]">
+                    {coin}
+                  </h3>
+                  <span className="text-[10px] text-[var(--pane-muted)]">
+                    {t.journal.positionsIn(list.length)} ·{" "}
                     {t.journal.shotsIn(
                       list.reduce((sum, one) => sum + (one.shots?.length ?? 0), 0),
                     )}
                   </span>
-                </h3>
+                  <div className="h-px flex-1 bg-[var(--pane-border)]" />
+                  <span
+                    className={`font-mono text-[11px] font-bold ${tone(
+                      list.reduce((sum, one) => sum + one.pnl, 0),
+                    )}`}
+                  >
+                    {money(list.reduce((sum, one) => sum + one.pnl, 0))}
+                  </span>
+                </div>
 
                 {/* Папки квадратами, а не полосами во всю ширину: позиция это
                     одна вещь и выглядеть должна как одна вещь. Полосой во весь

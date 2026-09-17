@@ -3,7 +3,7 @@
 import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 import { maskValue, numbersHidden, rememberHidden } from "@/lib/analytics/hideNumbers";
 import { shotImage } from "@/lib/journalShots";
-import TradeShots from "@/components/scalping/TradeShots";
+import PositionCard from "@/components/scalping/PositionCard";
 import { useEffect, useMemo, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import Link from "next/link";
@@ -1536,74 +1536,73 @@ export default function AnalyticsPage() {
                   </p>
                 ) : null}
 
-                {/* Снимки сделок этого дня.
+                {/* Снимки дня папками, по сделкам.
                     Цифры говорят, чем день кончился, а картинки - как он
-                    выглядел. Разбор дня начинается именно с них, и ходить за
-                    ними в терминал, стоя в календаре, незачем. */}
+                    выглядел. Лентой они врали глазу: вход и выход одной сделки
+                    стояли рядом как две разные сделки с одинаковым итогом.
+                    Папка отвечает на это сразу: одна сделка, её данные, её
+                    картинки. */}
                 {(() => {
-                  const pieces = (dayTrades ?? []).flatMap((one) =>
-                    (one.shots ?? []).map((shot) => ({ one, shot })),
+                  const folders = (dayTrades ?? []).filter(
+                    (one) => (one.shots?.length ?? 0) > 0,
                   );
-                  if (pieces.length === 0) return null;
+                  if (folders.length === 0) return null;
                   return (
                     <div className="mt-3">
                       <p className="mb-1.5 text-[10px] uppercase tracking-wider text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">
                         {t.analytics.trades.shots}
                       </p>
-                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                        {pieces.map(({ one, shot }) => (
-                          <figure
-                            key={shot.id}
-                            className="overflow-hidden rounded-lg border border-[var(--pane-border)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)]"
-                          >
-                            {/* Нажатие открывает разбор той сделки здесь же, а
-                                не уводит страницей: смотрят день целиком, и
-                                возвращаться в календарь ради каждой картинки
-                                незачем. */}
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+                        {folders.map((one) => {
+                          const cover = (one.shots ?? [])[0];
+                          return (
                             <button
+                              key={one.client_id}
                               onClick={() => setShotsOf(one.client_id)}
-                              title={`${one.symbol} · ${shot.note || ""}`.trim()}
-                              className="block w-full"
+                              className="overflow-hidden rounded-lg border border-[var(--pane-border)] text-left transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)]"
                             >
-                              <img
-                                src={shotImage(shot)}
-                                alt={shot.note || one.symbol}
-                                className="block h-20 w-full object-cover"
-                                loading="lazy"
-                              />
-                            </button>
-                            {/* Подпись та же, что в галерее журнала: монета,
-                                время и итог. Без неё снимок не отличить от
-                                соседнего - графики похожи. */}
-                            <figcaption className="flex items-center gap-1 px-1.5 py-1 text-[9px]">
-                              <span className="font-mono text-[var(--pane-text-2)]">
-                                {one.symbol.replace(/USDT$/, "")}
-                              </span>
-                              <span className="text-[var(--pane-muted)]">
-                                {new Date(one.closed_at ?? one.opened_at ?? "").toLocaleString(
-                                  numbers,
-                                  {
-                                    day: "2-digit",
-                                    month: "2-digit",
+                              {/* Обложка - первый снимок папки: по нему её
+                                  узнают среди прочих, как книгу по корешку. */}
+                              <div className="relative aspect-[4/3] w-full bg-[color:color-mix(in_srgb,var(--pane-text)_6%,transparent)]">
+                                {cover && (
+                                  <img
+                                    src={shotImage(cover)}
+                                    alt={one.symbol}
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                  />
+                                )}
+                                <span className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[9px] text-white/80">
+                                  {one.shots?.length ?? 0}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 px-1.5 py-1 text-[9px]">
+                                <span className="font-mono text-[var(--pane-text-2)]">
+                                  {one.symbol.replace(/USDT$/, "")}
+                                </span>
+                                <span className="text-[color:color-mix(in_srgb,var(--pane-text)_45%,transparent)]">
+                                  {new Date(
+                                    one.closed_at ?? one.opened_at ?? "",
+                                  ).toLocaleString(numbers, {
                                     hour: "2-digit",
                                     minute: "2-digit",
-                                  },
-                                )}
-                              </span>
-                              <div className="flex-1" />
-                              <span
-                                className={`font-mono ${
-                                  one.pnl >= 0
-                                    ? "text-[var(--pane-up)]"
-                                    : "text-[var(--pane-down)]"
-                                }`}
-                              >
-                                {one.pnl >= 0 ? "+" : "-"}
-                                {Math.abs(one.pnl).toFixed(2)}
-                              </span>
-                            </figcaption>
-                          </figure>
-                        ))}
+                                  })}
+                                </span>
+                                <div className="flex-1" />
+                                <span
+                                  className={`font-mono font-bold ${
+                                    one.pnl >= 0
+                                      ? "text-[var(--pane-up)]"
+                                      : "text-[var(--pane-down)]"
+                                  }`}
+                                >
+                                  {one.pnl >= 0 ? "+" : "-"}
+                                  {Math.abs(one.pnl).toFixed(2)}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   );
@@ -1618,16 +1617,16 @@ export default function AnalyticsPage() {
           своей больше не нужно. */}
       {card && <PnlCard data={card} onClose={() => setCard(null)} />}
 
-      {/* Снимки сделки - то же окно, что в журнале терминала: вставка из
-          буфера, перетаскивание, листание, порядок. */}
+      {/* Папка открывается позицией целиком - то же окно, что в разборе
+          журнала: данные сделки, снимки по этапам, подписи и отметки.
+          Прежде здесь открывалась голая галерея поверх окна дня, и разбирать
+          сделку приходилось в двух местах сразу. */}
       {(() => {
         const one = (dayTrades ?? []).find((row) => row.client_id === shotsOf);
         if (!one) return null;
         return (
-          <TradeShots
-            clientId={one.client_id}
-            symbol={one.symbol}
-            shots={one.shots ?? []}
+          <PositionCard
+            trade={one}
             onClose={() => setShotsOf(null)}
             onChange={() => setDayKey((n) => n + 1)}
           />
