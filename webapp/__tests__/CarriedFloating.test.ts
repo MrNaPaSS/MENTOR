@@ -33,13 +33,13 @@ describe("плавающий результат", () => {
   it("едет за ценой от числа биржи", () => {
     // Опора: биржа насчитала 331.53 при цене 2415. Цена ушла на доллар вниз -
     // шорт на десяти монетах заработал ещё десять.
-    const seen = carriedFloating(trade(), { value: 331.53, price: 2415 }, 2414);
+    const seen = carriedFloating(trade(), { value: 331.53, price: 2415, symbol: "ETHUSDT" }, 2414);
     expect(seen).toBeCloseTo(341.53, 6);
   });
 
   it("у лонга едет в другую сторону", () => {
     const row = trade({ side: "long", unrealized: 100 });
-    expect(carriedFloating(row, { value: 100, price: 2415 }, 2416)).toBeCloseTo(110, 6);
+    expect(carriedFloating(row, { value: 100, price: 2415, symbol: "ETHUSDT" }, 2416)).toBeCloseTo(110, 6);
   });
 
   it("без опоры показывает число биржи, а не свой расчёт", () => {
@@ -54,10 +54,30 @@ describe("плавающий результат", () => {
 
   it("закрытая сделка ничего не плавает", () => {
     const row = trade({ status: "closed" });
-    expect(carriedFloating(row, { value: 331.53, price: 2415 }, 2400)).toBe(0);
+    expect(carriedFloating(row, { value: 331.53, price: 2415, symbol: "ETHUSDT" }, 2400)).toBe(0);
   });
 
   it("цены нет - остаёмся при числе биржи", () => {
-    expect(carriedFloating(trade(), { value: 331.53, price: 2415 }, 0)).toBeCloseTo(331.53, 6);
+    expect(carriedFloating(trade(), { value: 331.53, price: 2415, symbol: "ETHUSDT" }, 0)).toBeCloseTo(331.53, 6);
+  });
+});
+
+describe("опора чужой монеты", () => {
+  it("не считает эфир по цене биткойна", () => {
+    // Переключение монеты приносит сделку эфира раньше, чем цену графика:
+    // опора записывалась с ценой биткойна, и на экране мелькали бредовые
+    // числа, пока не придёт следующий ответ сервера.
+    const row = trade({ unrealized: 331.53 });
+    const wrong = { value: 331.53, price: 76000, symbol: "BTCUSDT" };
+    expect(carriedFloating(row, wrong, 2414)).toBeCloseTo(331.53, 6);
+  });
+
+  it("не верит опоре, если цена ушла на десятую долю", () => {
+    // Такого движения за секунды не бывает: это опора, записанная не там.
+    const row = trade({ unrealized: 331.53 });
+    const stale = { value: 331.53, price: 2415, symbol: "ETHUSDT" };
+    expect(carriedFloating(row, stale, 2415 * 1.2)).toBeCloseTo(331.53, 6);
+    // А обычное движение цены по-прежнему несёт результат.
+    expect(carriedFloating(row, stale, 2414)).toBeCloseTo(341.53, 6);
   });
 });

@@ -219,7 +219,18 @@ export function floatingAt(trade: ActiveTrade, price: number): number {
  * маркировки и удержанной комиссии, - но приходит он раз в несколько секунд.
  * На экране число стояло, пока в приложении биржи оно бежало.
  */
-export type Floating = { value: number; price: number };
+export type Floating = { value: number; price: number; symbol: string };
+
+/**
+ * Насколько цена может отличаться от опорной, чтобы опора ещё считалась своей.
+ *
+ * Переключение монеты приносит сделку новой монеты раньше, чем цену графика:
+ * опора эфира записывалась с ценой биткойна, и следующий кадр считал «эфир
+ * сходил с 76000 до 2400» - на экране мелькали бредовые числа, пока не придёт
+ * следующий ответ сервера. Десятая доля цены за секунды не проходится ни на
+ * одной монете, а если бы прошлась - показать число биржи не беда.
+ */
+export const FLOAT_SANE = 0.1;
 
 /**
  * Плавающий результат, который движется вместе с ценой.
@@ -235,9 +246,13 @@ export function carriedFloating(
   price: number,
 ): number {
   if (trade.status !== "open") return 0;
-  if (!anchor || !(price > 0) || !(anchor.price > 0)) {
-    return trade.unrealized ?? floatingAt(trade, price);
-  }
+  const fromExchange = trade.unrealized ?? floatingAt(trade, price);
+  if (!anchor || !(price > 0) || !(anchor.price > 0)) return fromExchange;
+  // Опора чужой монеты - не опора. Проверяем и имя, и саму цену: имя защищает
+  // от переключения монеты, цена - от опоры, записанной до того, как график
+  // догнал новую монету.
+  if (anchor.symbol !== trade.symbol) return fromExchange;
+  if (Math.abs(price - anchor.price) > anchor.price * FLOAT_SANE) return fromExchange;
   const move = trade.side === "long" ? price - anchor.price : anchor.price - price;
   return anchor.value + move * trade.qty;
 }

@@ -1173,19 +1173,25 @@ function PriceChart({
     const live = new Set<string>();
     for (const row of trades) {
       live.add(row.id);
-      if (row.status !== "open" || row.unrealized == null) {
+      // Опору ставим только сделке открытой монеты: при переключении на
+      // экране на мгновение оказывается сделка новой монеты и цена прежней.
+      if (row.status !== "open" || row.unrealized == null || row.symbol !== symbol) {
         anchors.delete(row.id);
         continue;
       }
       const have = anchors.get(row.id);
       if (!have || have.value !== row.unrealized) {
-        anchors.set(row.id, { value: row.unrealized, price: livePriceRef.current });
+        anchors.set(row.id, {
+          value: row.unrealized,
+          price: livePriceRef.current,
+          symbol: row.symbol,
+        });
       }
     }
     for (const id of [...anchors.keys()]) {
       if (!live.has(id)) anchors.delete(id);
     }
-  }, [trades]);
+  }, [trades, symbol]);
   // Сделка нужна и при загрузке свечей: бокс строится от последнего бара, а на
   // момент открытия сделки баров может ещё не быть.
   const tradeRef = useRef(trades);
