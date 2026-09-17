@@ -113,6 +113,7 @@ import { money, price as fmtPrice, priceFormat, type Wall } from "@/lib/scalping
 import { snapshot, type ShotResult } from "@/lib/shotFrame";
 import DragLevels, { type DragLevel } from "./DragLevels";
 import OrderChipView, { type OrderChip } from "./OrderChip";
+import { onTabBack, tabIdle } from "@/lib/idleTab";
 import { loadTrades, type JournalTrade } from "@/lib/journal";
 import {
   carriedFloating,
@@ -1578,10 +1579,16 @@ function PriceChart({
     }
 
     load(true);
-    const timer = setInterval(() => load(false), refreshFor(interval));
+    // Вкладку давно не видно - свечи не спрашиваем: смотреть на них некому, а
+    // у каждого терминала это запрос раз в пять секунд. Вернулись - сразу.
+    const timer = setInterval(() => {
+      if (!tabIdle()) load(false);
+    }, refreshFor(interval));
+    const offBack = onTabBack(() => load(false));
     return () => {
       cancelled = true;
       clearInterval(timer);
+      offBack();
     };
   }, [symbol, venue, interval]);
 
@@ -2144,8 +2151,9 @@ function PriceChart({
     void load();
     timer = setInterval(() => {
       // Живой профиль приходит восемь раз в секунду и считается из той же
-      // ленты - спрашивать сервер поверх него значит греть биржу впустую.
-      if (Date.now() - liveFootAt.current > FOOTPRINT_LIVE_MS) void load();
+      // ленты - спрашивать сервер поверх него значит греть биржу впустую. И в
+      // простаивающей вкладке не спрашиваем вовсе.
+      if (Date.now() - liveFootAt.current > FOOTPRINT_LIVE_MS && !tabIdle()) void load();
       // Свеча закрылась - следующий запрос уже ничего не изменит. Один после
       // закрытия всё же делаем: последние сделки минуты приходят в неё же.
       if (timer && Date.now() / 1000 > openBar + seconds + 2) {

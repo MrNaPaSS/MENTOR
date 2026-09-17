@@ -11,6 +11,7 @@
 // таймфрейм и индикаторы у графика. Прошлая версия начиналась с семи
 // переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
+import { onTabBack, tabIdle } from "@/lib/idleTab";
 import { useT } from "@/lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -2819,7 +2820,9 @@ export default function ScalpingPage() {
     // переход «позиции не было - стала» и открывал соседнюю ждущую лимитку.
     let checking = false;
     async function tick() {
-      if (checking) return;
+      // Вкладку давно не видно - позиции не спрашиваем: сделки ведёт сервер,
+      // а экран без зрителя обновлять незачем. Вернулись - круг сразу.
+      if (checking || tabIdle()) return;
       checking = true;
       try {
         await check();
@@ -2831,8 +2834,16 @@ export default function ScalpingPage() {
     void tick();
     guard();
     const id = setInterval(tick, 3000);
-    const watch = setInterval(guard, 4000);
-    const rush = setInterval(rushTick, RUSH_POLL_MS);
+    const watch = setInterval(() => {
+      if (!tabIdle()) guard();
+    }, 4000);
+    const rush = setInterval(() => {
+      if (!tabIdle()) rushTick();
+    }, RUSH_POLL_MS);
+    const offBack = onTabBack(() => {
+      void tick();
+      guard();
+    });
     // Касание цели в стакане: позвать сервер и спросить биржу сразу.
     kickRef.current = () => {
       nudge();
@@ -2841,6 +2852,7 @@ export default function ScalpingPage() {
     checkNowRef.current = () => void tick();
     return () => {
       cancelled = true;
+      offBack();
       clearInterval(id);
       clearInterval(watch);
       clearInterval(rush);

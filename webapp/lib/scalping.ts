@@ -5,6 +5,7 @@
 // так выглядела прошлая версия раздела. Сервер сам решает, когда слать кадр;
 // клиент только говорит, какой инструмент открыт.
 
+import { onTabBack, onTabIdle } from "./idleTab";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_URL, liveAccessToken } from "./api";
 
@@ -244,14 +245,17 @@ export function useScalpingFeed({
 
   useEffect(() => {
     let closed = false;
+    // Вкладку давно не видно: канал закрыт намеренно, переподключаться не
+    // надо, пока человек не вернётся (lib/idleTab.ts).
+    let paused = false;
 
     async function connect() {
-      if (closed) return;
+      if (closed || paused) return;
       // Токен - живой, а не тот, что лежит в хранилище: после обрыва сети
       // спустя четверть часа сокет переподключался с истёкшим, и сервер отдавал
       // купившему глубину и разбор свечи только бесплатный уровень до F5.
       const token = await liveAccessToken().catch(() => null);
-      if (closed) return;
+      if (closed || paused) return;
       const ws = new WebSocket(wsUrl(token));
       socketRef.current = ws;
 
@@ -314,7 +318,7 @@ export function useScalpingFeed({
       ws.onclose = () => {
         setConnected(false);
         socketRef.current = null;
-        if (closed) return;
+        if (closed || paused) return;
         timerRef.current = setTimeout(connect, retryRef.current);
         retryRef.current = Math.min(retryRef.current * 2, RECONNECT_MAX);
       };
@@ -323,8 +327,26 @@ export function useScalpingFeed({
     }
 
     connect();
+
+    // Вкладку не видно дольше минуты - канал закрываем: сервер перестаёт
+    // собирать для неё кадр стакана восемь раз в секунду. Вернулись -
+    // подключаемся сразу, без выжидания паузы переподключения.
+    const offIdle = onTabIdle(() => {
+      paused = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      socketRef.current?.close();
+    });
+    const offBack = onTabBack(() => {
+      if (!paused) return;
+      paused = false;
+      retryRef.current = RECONNECT_MIN;
+      void connect();
+    });
+
     return () => {
       closed = true;
+      offIdle();
+      offBack();
       if (timerRef.current) clearTimeout(timerRef.current);
       socketRef.current?.close();
     };
