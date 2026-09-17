@@ -489,7 +489,13 @@ const pnlSeenAt = new Map<string, number>();
 
 function pnlSeen(
   trade: { id: string; symbol: string; side: string; entry: number; qty: number; realized: number },
-  live: { size: number; entry: number | null; unrealized: number | null },
+  live: {
+    size: number;
+    entry: number | null;
+    unrealized: number | null;
+    raw?: number | null;
+    entry_fee?: number;
+  },
   price: number,
 ): void {
   const now = Date.now();
@@ -502,6 +508,10 @@ function pnlSeen(
     id: trade.id,
     symbol: trade.symbol,
     exchange: live.unrealized ?? null,
+    // Число биржи до нашего вычета и сам вычет: по ним видно, спорим мы с
+    // биржей или со своим вычетом комиссии входа.
+    raw: live.raw ?? null,
+    entryFee: live.entry_fee ?? 0,
     ours: Number((move * size).toFixed(4)),
     taken: Number(trade.realized.toFixed(4)),
     price,

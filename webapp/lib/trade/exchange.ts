@@ -27,6 +27,14 @@ export type LivePosition = {
    * +28,05 - ровно на 8,00, уплаченные за вход.
    */
   unrealized: number | null;
+  /**
+   * То же число, как его прислала биржа, и сколько мы из него вычли.
+   *
+   * Нужны разбору расхождения с приложением биржи: по ним видно, спорим мы с
+   * биржей или с самим вычетом. Уходят в журнал строкой `pnl.seen`.
+   */
+  raw: number | null;
+  entry_fee: number;
   /** Цена безубытка по расчёту биржи. Пусто - она её не назвала. */
   breakeven: number | null;
 };
@@ -99,6 +107,8 @@ export function readPosition(
       size,
       entry,
       unrealized: raw === null ? null : raw - spent,
+      raw,
+      entry_fee: Number(spent.toFixed(6)),
       breakeven: num(row, "breakEvenPrice", "breakevenPrice", "breakEven", "bePrice"),
     },
   };
@@ -136,6 +146,8 @@ export function readBook(rows: Record<string, unknown>[]): PositionBook {
             // первое число честнее среднего от двух неизвестно чего.
             entry: was.entry ?? read.position.entry,
             unrealized: (was.unrealized ?? 0) + (read.position.unrealized ?? 0),
+            raw: (was.raw ?? 0) + (read.position.raw ?? 0),
+            entry_fee: was.entry_fee + read.position.entry_fee,
             breakeven: was.breakeven ?? read.position.breakeven,
           }
         : read.position;
