@@ -248,6 +248,12 @@ const NUDGE_EVERY_MS = 2100;
 const RUSH_MS = 15000;
 const RUSH_POLL_MS = 700;
 
+// Сколько после входа спрашивать позиции чаще обычного и с каким шагом. Шаг
+// меньше секунды не нужен: круг сам по себе столько и длится через туннель, а
+// лишние просьбы, пока он идёт, отбрасываются.
+const OPEN_WATCH_MS = 12_000;
+const OPEN_WATCH_STEP_MS = 800;
+
 // Высота рабочей области: всё окно за вычетом шапки приложения. Заголовок
 // раздела убран — он занимал полсотни пикселей и не нёс ничего, чего не видно
 // по самим панелям. Стакан и график получают одинаковую высоту и заканчиваются
@@ -536,6 +542,30 @@ export default function ScalpingPage() {
   );
   // Спросить биржу о защите сейчас, не дожидаясь круга. Живёт в круге опроса.
   const kickRef = useRef<(() => void) | null>(null);
+  // Круг опроса позиций вне очереди. Нужен сразу после входа: ждать обычного
+  // круга значит показывать трейдеру «ждущую» сделку, которая уже открыта.
+  const checkNowRef = useRef<(() => void) | null>(null);
+
+  /**
+   * Спрашивать позиции чаще обычного, пока только что поставленная сделка не
+   * откроется, - но не дольше срока.
+   *
+   * Вход уходит лимиткой по цене расчёта и обычно исполняется сразу, а
+   * «открытой» сделка становится только тогда, когда круг опроса увидит
+   * позицию. Круг идёт раз в три секунды, и бокс открытой сделки появлялся
+   * через пять секунд после «заявка принята». Лимитка, которая осталась ждать
+   * цены, перестаёт спрашиваться сама, как выйдет срок.
+   */
+  function checkUntilOpen(id: string) {
+    const until = Date.now() + OPEN_WATCH_MS;
+    const step = () => {
+      const trade = tradesRef.current.find((one) => one.id === id);
+      if (!trade || trade.status !== "planned" || Date.now() > until) return;
+      checkNowRef.current?.();
+      window.setTimeout(step, OPEN_WATCH_STEP_MS);
+    };
+    step();
+  }
   // Чей стоп сейчас едет в безубыток: на графике у него своя подпись.
   const [movingStops, setMovingStops] = useState<ReadonlySet<string>>(() => new Set());
   const syncMoving = useCallback(() => {
@@ -1315,6 +1345,7 @@ export default function ScalpingPage() {
       try {
         const result = await openPosition(next, true);
         if (!result) throw new Error(t.terminal.notes.orderRejected);
+        checkUntilOpen(next.id);
         refreshBalanceSoon();
         setOrderNote({ text: t.chat.copied(base(shared.symbol)), bad: false });
       } catch (err) {
@@ -1858,6 +1889,7 @@ export default function ScalpingPage() {
       // окна и нажатием. Это отказ, а не тихий успех.
       if (!result) throw new Error(t.terminal.notes.orderRejected);
       record("order.placed", { id: next.id, warning: result.warning || undefined });
+      checkUntilOpen(next.id);
       refreshBalanceSoon();
       const id =
         typeof result.entry === "object" && result.entry
@@ -2162,6 +2194,20 @@ export default function ScalpingPage() {
       //
       // Это память сервера, а не поход на биржу: спрашивать её каждый круг
       // дёшево.
+      // Три вопроса круга - разом, а не по очереди.
+      //
+      // По очереди это сумма трёх походов через туннель: память сервера, потом
+      // позиции, потом заявки. На столе круг выходил в полторы-две секунды, и
+      // вместе с ожиданием следующего круга бокс открытой сделки появлялся
+      // через пять секунд после входа. Биржу по-прежнему не тревожим, когда
+      // на графике нечего вести: тогда позиции спросим ниже, только если о
+      // сделке знает сервер.
+      const early = watching.length > 0;
+      const bookAsk = early ? openBook().catch(() => null) : null;
+      const plansAsk = early && symbol ? plansOf(symbol) : null;
+      // Отказ разбираем там же, где раньше, - а здесь только не даём браузеру
+      // назвать его необработанным, пока до него не дошла очередь.
+      plansAsk?.catch(() => undefined);
       const all = await liveTrades().catch(() => null);
       if (cancelled) return;
       // Только сделки той биржи, что открыта сейчас. Сопровождение ведёт
@@ -2218,7 +2264,7 @@ export default function ScalpingPage() {
       }
 
       // Один снимок на круг - на все сделки сразу.
-      const book = await openBook().catch(() => null);
+      const book = await (bookAsk ?? openBook().catch(() => null));
       if (cancelled || !book) return;
 
       // Объёмы прошлого круга: без «до» переход «не было - стало» не отличить
@@ -2242,7 +2288,7 @@ export default function ScalpingPage() {
       const opened = new Map<string, number>();
       if (symbol) {
         try {
-          const body = await plansOf(symbol);
+          const body = await (plansAsk ?? plansOf(symbol));
           if (cancelled) return;
           if (body) {
             resting = new Set(body.resting);
@@ -2792,12 +2838,14 @@ export default function ScalpingPage() {
       nudge();
       void guard();
     };
+    checkNowRef.current = () => void tick();
     return () => {
       cancelled = true;
       clearInterval(id);
       clearInterval(watch);
       clearInterval(rush);
       kickRef.current = null;
+      checkNowRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, symbol, watchKey]);
