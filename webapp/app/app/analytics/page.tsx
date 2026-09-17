@@ -3,6 +3,7 @@
 import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 import { maskValue, numbersHidden, rememberHidden } from "@/lib/analytics/hideNumbers";
 import { shotImage, shotPage } from "@/lib/journalShots";
+import TradeShots from "@/components/scalping/TradeShots";
 import { useEffect, useMemo, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import Link from "next/link";
@@ -28,7 +29,17 @@ import GoalsPanel from "@/components/analytics/GoalsPanel";
 import AchievementsPanel from "@/components/analytics/AchievementsPanel";
 import AdvancedPanel from "@/components/analytics/advanced/AdvancedPanel";
 import type { Achievement, Goal } from "@/lib/analytics/rewards";
-import { X, Trophy, Calendar, BarChart2, Gauge, Share2, Eye, EyeOff } from "lucide-react";
+import {
+  X,
+  Trophy,
+  Calendar,
+  BarChart2,
+  Gauge,
+  Share2,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
+} from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
 function fmtDot(n: number, dec = 0): string {
@@ -330,6 +341,12 @@ export default function AnalyticsPage() {
   // undefined - спрашиваем, null - спросить не вышло, [] - сделок в этот день
   // не было. Три разных случая, и путать их нельзя.
   const [dayTrades, setDayTrades] = useState<JournalTrade[] | null | undefined>(null);
+  // Перечитать сделки дня: снимки приходят в их строках, и после добавления
+  // список дня должен показать их сам.
+  const [dayKey, setDayKey] = useState(0);
+  // Чьи снимки разбираем. Ищем сделку в свежем списке дня, а не помним
+  // строкой: она обновляется после каждой прикреплённой картинки.
+  const [shotsOf, setShotsOf] = useState<string | null>(null);
   // Чья карточка открыта. Null - окна нет.
   // Карточкой делятся и одной сделкой, и итогом срока - окно одно, а
   // колонку для него собирают в lib/pnl/data.
@@ -506,7 +523,7 @@ export default function AnalyticsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDay, venue]);
+  }, [selectedDay, venue, dayKey]);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -1416,6 +1433,7 @@ export default function AnalyticsPage() {
                           <th className="py-1 text-right font-medium">{t.analytics.trades.exit}</th>
                           <th className="py-1 text-right font-medium">{t.analytics.trades.result}</th>
                           <th className="py-1" />
+                          <th className="py-1" />
                         </tr>
                       </thead>
                       <tbody className="font-mono tabular-nums">
@@ -1460,6 +1478,21 @@ export default function AnalyticsPage() {
                                 Здесь она нужна не меньше: аналитику открывают,
                                 чтобы посмотреть на свой день, и хорошим днём
                                 делятся ровно оттуда, где его увидели. */}
+                            {/* Снимки сделки - те же, что в журнале: разбор
+                                дня начинается с картинки, а не с числа. */}
+                            <td className="py-1 pl-2 text-right">
+                              <button
+                                onClick={() => setShotsOf(one.client_id)}
+                                title={t.analytics.trades.shots}
+                                className={`transition-colors duration-150 ease-out hover:text-[var(--pane-accent)] ${
+                                  (one.shots?.length ?? 0) > 0
+                                    ? "text-[var(--pane-accent)]"
+                                    : "text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]"
+                                }`}
+                              >
+                                <ImageIcon className="h-3.5 w-3.5" />
+                              </button>
+                            </td>
                             <td className="py-1 pl-2 text-right">
                               <button
                                 onClick={() => setCard(cardFromTrade(one, owner ?? undefined))}
@@ -1525,6 +1558,22 @@ export default function AnalyticsPage() {
       {/* Карточка сделки. Палитру панелей ей приносит общая обёртка страницы -
           своей больше не нужно. */}
       {card && <PnlCard data={card} onClose={() => setCard(null)} />}
+
+      {/* Снимки сделки - то же окно, что в журнале терминала: вставка из
+          буфера, перетаскивание, листание, порядок. */}
+      {(() => {
+        const one = (dayTrades ?? []).find((row) => row.client_id === shotsOf);
+        if (!one) return null;
+        return (
+          <TradeShots
+            clientId={one.client_id}
+            symbol={one.symbol}
+            shots={one.shots ?? []}
+            onClose={() => setShotsOf(null)}
+            onChange={() => setDayKey((n) => n + 1)}
+          />
+        );
+      })()}
     </PaneScope>
   );
 }
