@@ -8,6 +8,10 @@
 //
 // Сохраняется само, с задержкой: план пишут абзацами, и запрос на каждое
 // нажатие клавиши - это десятки запросов на одну мысль.
+//
+// Сейчас в разборе не выведен: план нужен раз в понедельник, а место
+// занимал постоянно и упирался в него каждый заход за картинками. Сам план
+// на сервере лежит и никуда не делся - вернуть его на экран это одна строка.
 
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2 } from "lucide-react";
@@ -84,7 +88,7 @@ export default function PlanForm({ week, onWeek, children }: PlanFormProps) {
         onChange={(event) => setPlan(event.target.value)}
         placeholder={t.journal.planHint}
         spellCheck={false}
-        className="min-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-[11px] leading-relaxed text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
+        className="min-h-24 flex-1 resize-none bg-transparent px-2 py-2 text-[11px] leading-relaxed text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
       />
 
       {children}

@@ -1552,7 +1552,12 @@ export default function AnalyticsPage() {
                       <p className="mb-1.5 text-[10px] uppercase tracking-wider text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">
                         {t.analytics.trades.shots}
                       </p>
-                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+                      <div
+                        className="grid gap-2"
+                        style={{
+                          gridTemplateColumns: "repeat(auto-fill, minmax(132px, 1fr))",
+                        }}
+                      >
                         {folders.map((one) => {
                           const cover = (one.shots ?? [])[0];
                           return (

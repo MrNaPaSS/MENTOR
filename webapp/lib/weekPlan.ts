@@ -60,3 +60,36 @@ export async function savePlan(text: string, week = ""): Promise<WeekPlan | null
     return null;
   }
 }
+
+/** Понедельник недели по ISO-номеру `2026-W38`. Пусто - номер испорчен. */
+export function weekStart(week: string): Date | null {
+  const parts = /^(\d{4})-W(\d{2})$/.exec(week);
+  if (!parts) return null;
+  const year = Number(parts[1]);
+  const number = Number(parts[2]);
+  // Четвёртое января всегда лежит в первой неделе года - от него и считаем.
+  const fourth = new Date(Date.UTC(year, 0, 4));
+  const shift = (fourth.getUTCDay() + 6) % 7;
+  const first = new Date(fourth);
+  first.setUTCDate(fourth.getUTCDate() - shift);
+  first.setUTCDate(first.getUTCDate() + (number - 1) * 7);
+  return first;
+}
+
+/** Соседняя неделя: `-1` - прошлая, `1` - следующая. */
+export function weekShift(week: string, step: number): string {
+  const start = weekStart(week);
+  if (!start) return week;
+  const moved = new Date(start);
+  moved.setUTCDate(moved.getUTCDate() + step * 7);
+  return isoWeek(moved);
+}
+
+/** Первый и последний день недели: их показывают рядом с номером. */
+export function weekRange(week: string): { from: Date; to: Date } | null {
+  const from = weekStart(week);
+  if (!from) return null;
+  const to = new Date(from);
+  to.setUTCDate(to.getUTCDate() + 6);
+  return { from, to };
+}

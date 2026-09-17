@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { isoWeek } from "@/lib/weekPlan";
+import { isoWeek, weekRange, weekShift, weekStart } from "@/lib/weekPlan";
 
 const utc = (iso: string) => new Date(`${iso}T12:00:00Z`);
 
@@ -35,5 +35,33 @@ describe("номер недели", () => {
 
   it("номер всегда двузначный: по нему сортируют строками", () => {
     expect(isoWeek(utc("2026-01-08"))).toBe("2026-W02");
+  });
+});
+
+describe("листание недель", () => {
+  it("понедельник недели считается по её номеру", () => {
+    expect(weekStart("2026-W38")?.toISOString().slice(0, 10)).toBe("2026-09-14");
+  });
+
+  it("соседняя неделя находится в обе стороны", () => {
+    expect(weekShift("2026-W38", -1)).toBe("2026-W37");
+    expect(weekShift("2026-W38", 1)).toBe("2026-W39");
+  });
+
+  it("через границу года номер не ломается", () => {
+    expect(weekShift("2026-W53", 1)).toBe("2027-W01");
+    expect(weekShift("2026-W01", -1)).toBe("2025-W52");
+  });
+
+  it("испорченный номер оставляем как есть, а не выдумываем неделю", () => {
+    expect(weekShift("что-то", 1)).toBe("что-то");
+    expect(weekStart("2026-38")).toBeNull();
+    expect(weekRange("2026-38")).toBeNull();
+  });
+
+  it("неделя это семь дней от понедельника до воскресенья", () => {
+    const span = weekRange("2026-W38");
+    expect(span?.from.toISOString().slice(0, 10)).toBe("2026-09-14");
+    expect(span?.to.toISOString().slice(0, 10)).toBe("2026-09-20");
   });
 });

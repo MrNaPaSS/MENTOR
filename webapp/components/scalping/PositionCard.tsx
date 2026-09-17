@@ -142,7 +142,7 @@ export default function PositionCard({
   return (
     <ModalPortal>
       <div
-        className="fixed inset-0 z-[60] grid place-items-center bg-black/60 p-4"
+        className="fixed inset-0 z-[70] grid place-items-center bg-black/60 p-4"
         onClick={onClose}
       >
         <div
@@ -197,41 +197,6 @@ export default function PositionCard({
           </div>
 
           <div className="no-scrollbar flex-1 overflow-auto p-3">
-            {/* Цифры сделки: замысел и то, чем он кончился. Всё это уже есть
-                в журнале - здесь оно просто собрано в одном месте. */}
-            <div className="mb-3 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[11px] sm:grid-cols-4">
-              <Fact label={t.journal.colEntry} value={String(trade.entry)} />
-              <Fact label={t.journal.cardStop} value={String(trade.stop)} />
-              <Fact
-                label={t.journal.cardTargets}
-                value={trade.targets.length > 0 ? trade.targets.join(" · ") : "-"}
-              />
-              <Fact
-                label={t.journal.cardRR}
-                value={rr > 0 ? `1 : ${rr.toFixed(1)}` : "-"}
-              />
-              <Fact
-                label={t.journal.cardExit}
-                value={trade.exit_price ? String(trade.exit_price) : "-"}
-              />
-              <Fact label={t.journal.cardQty} value={String(trade.qty)} />
-              <Fact label={t.journal.cardLeverage} value={`×${trade.leverage}`} />
-              <Fact
-                label={t.journal.cardSession}
-                value={t.journal.sessions[sessionOf(trade.opened_at)]}
-              />
-              <Fact
-                label={t.journal.cardFee}
-                value={trade.fee > 0 ? `-${trade.fee.toFixed(2)}` : "-"}
-              />
-              {/* Время в сделке: у идущей оно набегает, и подпись об этом
-                  говорит прямо - иначе цифра выглядит окончательной. */}
-              <Fact
-                label={trade.closed_at ? t.journal.cardHeld : t.journal.cardHeldLive}
-                value={heldLabel(heldSeconds(trade), t.journal.heldUnits)}
-              />
-            </div>
-
             {/* Снимки по этапам: пустой этап тоже показываем - по нему видно,
                 чего в разборе не хватает. */}
             <div className="grid gap-2">
@@ -310,6 +275,42 @@ export default function PositionCard({
                   </div>
                 );
               })}
+            </div>
+
+            {/* Цифры сделки под снимками: разбор начинают с картинки - что было
+                видно на графике, - и только потом сверяются с числами. Сверху
+                они отодвигали снимки за край экрана. */}
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[11px] sm:grid-cols-4">
+              <Fact label={t.journal.colEntry} value={String(trade.entry)} />
+              <Fact label={t.journal.cardStop} value={String(trade.stop)} />
+              <Fact
+                label={t.journal.cardTargets}
+                value={trade.targets.length > 0 ? trade.targets.join(" · ") : "-"}
+              />
+              <Fact
+                label={t.journal.cardRR}
+                value={rr > 0 ? `1 : ${rr.toFixed(1)}` : "-"}
+              />
+              <Fact
+                label={t.journal.cardExit}
+                value={trade.exit_price ? String(trade.exit_price) : "-"}
+              />
+              <Fact label={t.journal.cardQty} value={String(trade.qty)} />
+              <Fact label={t.journal.cardLeverage} value={`×${trade.leverage}`} />
+              <Fact
+                label={t.journal.cardSession}
+                value={t.journal.sessions[sessionOf(trade.opened_at)]}
+              />
+              <Fact
+                label={t.journal.cardFee}
+                value={trade.fee > 0 ? `-${trade.fee.toFixed(2)}` : "-"}
+              />
+              {/* Время в сделке: у идущей оно набегает, и подпись об этом
+                  говорит прямо - иначе цифра выглядит окончательной. */}
+              <Fact
+                label={trade.closed_at ? t.journal.cardHeld : t.journal.cardHeldLive}
+                value={heldLabel(heldSeconds(trade), t.journal.heldUnits)}
+              />
             </div>
 
             <input
