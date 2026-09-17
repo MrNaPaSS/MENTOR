@@ -747,3 +747,117 @@ def test_a_closed_exchange_record_still_wins_over_the_screen(client):
 
     body = client.get("/api/journal/trades").json()
     assert [t["pnl"] for t in body["trades"]] == [50.0]
+
+
+# ── снимки разбора и план недели ────────────────────────────────────────────
+
+# Однопиксельный PNG: короче настоящего снимка, но проверки проходит так же.
+PNG_1PX = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQ"
+    "AAAABJRU5ErkJggg=="
+)
+
+
+def test_a_shot_is_attached_to_a_trade(client, tmp_path, monkeypatch):
+    """Снимок прикрепляется к своей сделке и приходит в её строке журнала."""
+    from backend.api import shots as shots_api
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path / "shots")
+    client.post("/api/journal/trades", json=trade(client_id="t-shot"))
+
+    answer = client.post(
+        "/api/journal/trades/t-shot/shots",
+        json={"image": PNG_1PX, "note": "вход по плану"},
+    )
+    assert answer.status_code == 201
+    assert answer.json()["note"] == "вход по плану"
+
+    row = next(
+        t for t in client.get("/api/journal/trades").json()["trades"] if t["client_id"] == "t-shot"
+    )
+    assert len(row["shots"]) == 1
+    assert row["shots"][0]["note"] == "вход по плану"
+    # Картинка легла файлом: строка журнала ссылается на неё опознавателем.
+    assert list((tmp_path / "shots").glob("*.png"))
+
+
+def test_a_shot_needs_a_trade_of_your_own(client, tmp_path, monkeypatch):
+    """К чужой или несуществующей сделке снимок не прикрепить."""
+    from backend.api import shots as shots_api
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path / "shots")
+
+    answer = client.post(
+        "/api/journal/trades/нет-такой/shots", json={"image": PNG_1PX}
+    )
+    assert answer.status_code == 404
+
+
+def test_shots_per_trade_are_capped(client, tmp_path, monkeypatch):
+    """Снимков на сделку столько, сколько нужно разбору, а не сколько влезет."""
+    from backend.api import shots as shots_api
+    from backend.api.journal import MAX_SHOTS
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path / "shots")
+    client.post("/api/journal/trades", json=trade(client_id="t-many"))
+
+    for _ in range(MAX_SHOTS):
+        assert (
+            client.post(
+                "/api/journal/trades/t-many/shots", json={"image": PNG_1PX}
+            ).status_code
+            == 201
+        )
+
+    over = client.post("/api/journal/trades/t-many/shots", json={"image": PNG_1PX})
+    assert over.status_code == 409
+
+
+def test_a_shot_can_be_detached(client, tmp_path, monkeypatch):
+    """Снимок можно убрать из разбора - сам файл при этом остаётся.
+
+    На него могла уйти ссылка в чат, и обрывать её из-за того, что картинку
+    убрали из разбора, незачем.
+    """
+    from backend.api import shots as shots_api
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path / "shots")
+    client.post("/api/journal/trades", json=trade(client_id="t-drop"))
+    made = client.post(
+        "/api/journal/trades/t-drop/shots", json={"image": PNG_1PX}
+    ).json()
+
+    assert client.delete(f"/api/journal/shots/{made['id']}").status_code == 204
+
+    row = next(
+        t for t in client.get("/api/journal/trades").json()["trades"] if t["client_id"] == "t-drop"
+    )
+    assert row["shots"] == []
+    assert list((tmp_path / "shots").glob("*.png"))
+
+
+def test_the_week_plan_is_written_and_read(client):
+    """План недели: одна запись на неделю, её правят, а не плодят."""
+    empty = client.get("/api/journal/plan").json()
+    assert empty["text"] == ""
+    assert empty["week"].count("-W") == 1
+
+    written = client.put(
+        "/api/journal/plan", json={"text": "Только BTC и ETH, три сделки в день"}
+    ).json()
+    assert written["text"] == "Только BTC и ETH, три сделки в день"
+
+    again = client.put("/api/journal/plan", json={"text": "Плюс ETH на откате"}).json()
+    assert again["text"] == "Плюс ETH на откате"
+    assert again["week"] == written["week"]
+
+    assert client.get("/api/journal/plan").json()["text"] == "Плюс ETH на откате"
+
+
+def test_a_past_week_keeps_its_own_plan(client):
+    """У каждой недели свой план: прошлую неделю новая не переписывает."""
+    client.put("/api/journal/plan", json={"week": "2026-W37", "text": "прошлая"})
+    client.put("/api/journal/plan", json={"week": "2026-W38", "text": "нынешняя"})
+
+    assert client.get("/api/journal/plan?week=2026-W37").json()["text"] == "прошлая"
+    assert client.get("/api/journal/plan?week=2026-W38").json()["text"] == "нынешняя"

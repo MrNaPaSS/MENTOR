@@ -107,15 +107,22 @@ class ShotIn(BaseModel):
     kind: str = Field(default="chart", pattern="^(chart|photo)$")
 
 
-@api_router.post("", status_code=201)
-def save_shot(
-    body: ShotIn,
-    request: Request,
-    student: Student = Depends(get_current_student),
-    session=Depends(get_session),
-):
-    """Сохранить снимок и вернуть ссылку на него."""
-    data, ext = _picture(body.image)
+def keep_picture(
+    session,
+    image: str,
+    symbol: str,
+    interval: str = "1m",
+    note: str = "",
+    kind: str = "chart",
+) -> str:
+    """Положить картинку на диск и завести запись. Возвращает её опознаватель.
+
+    Одно место на всех, кто принимает картинки с экрана: снимок графика,
+    карточка сделки, снимок, прикреплённый к сделке в журнале
+    (`backend/api/journal.py`). Второй такой код разошёлся бы с этим на первой
+    же правке - например, на проверке размера.
+    """
+    data, ext = _picture(image)
 
     # Идентификатор короткий и непредсказуемый: по порядковому номеру чужие
     # снимки перебирались бы один за другим.
@@ -126,11 +133,30 @@ def save_shot(
     session.add(
         ChartShot(
             id=shot_id,
-            symbol=body.symbol.upper(),
-            interval=body.interval,
-            note=body.note.strip(),
-            kind=body.kind,
+            symbol=symbol.upper(),
+            interval=interval,
+            note=note.strip(),
+            kind=kind,
         )
+    )
+    return shot_id
+
+
+@api_router.post("", status_code=201)
+def save_shot(
+    body: ShotIn,
+    request: Request,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Сохранить снимок и вернуть ссылку на него."""
+    shot_id = keep_picture(
+        session,
+        body.image,
+        body.symbol,
+        body.interval,
+        body.note,
+        body.kind,
     )
     session.commit()
     return {"id": shot_id, "url": f"{shot_origin(request)}/{shot_id}"}

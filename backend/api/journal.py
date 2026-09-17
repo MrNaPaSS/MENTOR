@@ -28,8 +28,11 @@ from core.models import (
     ScalpTrade,
     ScalpWorkspace,
     Student,
+    TradeShot,
+    WeekPlan,
     utcnow,
 )
+from backend.api.shots import keep_picture
 from backend.config import BackendConfig
 from backend.deps import get_config, get_current_student, get_session
 
@@ -218,7 +221,11 @@ def _live_stops(session, student_id: int, client_ids: list[str]) -> dict[str, fl
     return {str(client_id): float(stop or 0) for client_id, stop in rows}
 
 
-def _row(trade: ScalpTrade, stop_now: float | None = None) -> dict[str, Any]:
+def _row(
+    trade: ScalpTrade,
+    stop_now: float | None = None,
+    shots: list[dict] | None = None,
+) -> dict[str, Any]:
     return {
         "id": trade.id,
         "client_id": trade.client_id,
@@ -245,6 +252,8 @@ def _row(trade: ScalpTrade, stop_now: float | None = None) -> dict[str, Any]:
         # Стоп, который стоит на бирже сейчас. Есть только у идущей: у
         # закрытой в `stop` записан тот, с которым она задумывалась.
         **({"stop_now": stop_now} if stop_now else {}),
+        # Снимки разбора: пусто - строка их не показывает.
+        "shots": shots or [],
         # Где открыта. У записей с биржи, сделанных до этого поля, - биржа
         # ключей: других тогда не было.
         "exchange": _exchange_of(trade),
@@ -339,6 +348,183 @@ async def export_journal(
     return {"trades": [_row(t) for t in trades], "quota": _quota(session, student.id)}
 
 
+# ── снимки сделки ───────────────────────────────────────────────────────────
+#
+# Разбор сделки задним числом - это разговор о картинке: где был вход, что
+# стояло в стакане, как выглядел график до и после. Снимки уже умели жить на
+# сервере (`backend/api/shots.py`), не хватало связи со сделкой.
+
+# Сколько снимков держим на одну сделку.
+#
+# Шести хватает на разбор: до входа, вход, в позиции, выход и пара мест по
+# дороге. Потолок нужен не ради диска, а ради самого разбора: два десятка
+# картинок в ленте - это уже не разбор, а свалка.
+MAX_SHOTS = 6
+
+
+class ShotAttachIn(BaseModel):
+    """Что прикрепляют к сделке: новая картинка или уже готовый снимок."""
+
+    # Картинка с экрана: снимок графика или вставленный из буфера обмена.
+    image: str | None = Field(default=None, min_length=64)
+    # Или опознаватель снимка, который уже лежит на сервере.
+    shot_id: str | None = Field(default=None, max_length=22)
+    note: str = Field(default="", max_length=140)
+
+
+def _shot_rows(session, student_id: int, client_ids: list[str]) -> dict[str, list[dict]]:
+    """Снимки по сделкам: сделка - список снимков, свежие последними."""
+    if not client_ids:
+        return {}
+    rows = session.execute(
+        select(TradeShot)
+        .where(TradeShot.student_id == student_id)
+        .where(TradeShot.client_id.in_(client_ids))
+        .order_by(TradeShot.id.asc())
+    ).scalars().all()
+    out: dict[str, list[dict]] = {}
+    for row in rows:
+        out.setdefault(str(row.client_id), []).append(
+            {"id": row.id, "shot_id": row.shot_id, "note": row.note}
+        )
+    return out
+
+
+@router.post("/trades/{client_id}/shots", status_code=201)
+def attach_shot(
+    client_id: str,
+    body: ShotAttachIn,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Прикрепить снимок к сделке - своей, и только к ней.
+
+    Сделку ищем и среди записей журнала, и среди живых: снимок делают в
+    работе, а не после закрытия, и ждать конца сделки, чтобы его приложить,
+    было бы странно.
+    """
+    known = session.execute(
+        select(ScalpTrade.id)
+        .where(ScalpTrade.student_id == student.id)
+        .where(ScalpTrade.client_id == client_id)
+    ).scalar_one_or_none()
+    if known is None:
+        known = session.execute(
+            select(LiveTrade.id)
+            .where(LiveTrade.student_id == student.id)
+            .where(LiveTrade.client_id == client_id)
+        ).scalar_one_or_none()
+    if known is None:
+        raise HTTPException(404, "Такой сделки нет")
+
+    have = session.execute(
+        select(func.count(TradeShot.id))
+        .where(TradeShot.student_id == student.id)
+        .where(TradeShot.client_id == client_id)
+    ).scalar_one()
+    if have >= MAX_SHOTS:
+        raise HTTPException(409, f"К сделке уже прикреплено {MAX_SHOTS} снимков")
+
+    shot_id = (body.shot_id or "").strip()
+    if body.image:
+        shot_id = keep_picture(session, body.image, symbol="TRADE", kind="photo")
+    if not shot_id:
+        raise HTTPException(400, "Нужна картинка или опознаватель снимка")
+
+    row = TradeShot(
+        student_id=student.id,
+        client_id=client_id,
+        shot_id=shot_id,
+        note=body.note.strip(),
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return {"id": row.id, "shot_id": row.shot_id, "note": row.note}
+
+
+@router.delete("/shots/{shot_row_id}", status_code=204)
+def detach_shot(
+    shot_row_id: int,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Открепить снимок от сделки.
+
+    Сам файл остаётся: на него могла уйти ссылка в чат, и обрывать её из-за
+    того, что картинку убрали из разбора, незачем.
+    """
+    row = session.get(TradeShot, shot_row_id)
+    if row is None or row.student_id != student.id:
+        raise HTTPException(404, "Снимка нет")
+    session.delete(row)
+    session.commit()
+
+
+# ── план на неделю ──────────────────────────────────────────────────────────
+
+
+def week_of(at: datetime) -> str:
+    """Неделя по ISO: `2026-W38`.
+
+    Не датой начала: неделя у разных стран начинается по-разному, а
+    ISO-номер один и тот же везде.
+    """
+    year, number, _day = at.isocalendar()
+    return f"{year:04d}-W{number:02d}"
+
+
+class WeekPlanIn(BaseModel):
+    """План на неделю: что торгуем и по каким правилам."""
+
+    week: str = Field(default="", pattern=r"^$|^\d{4}-W\d{2}$")
+    text: str = Field(default="", max_length=4000)
+
+
+@router.get("/plan")
+def read_plan(
+    week: str = Query("", pattern=r"^$|^\d{4}-W\d{2}$"),
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """План трейдера на неделю. Пусто - значит ещё не писал."""
+    key = week or week_of(utcnow())
+    row = session.execute(
+        select(WeekPlan)
+        .where(WeekPlan.student_id == student.id)
+        .where(WeekPlan.week == key)
+    ).scalar_one_or_none()
+    return {
+        "week": key,
+        "text": row.text if row else "",
+        "updated_at": _iso(row.updated_at) if row else None,
+    }
+
+
+@router.put("/plan")
+def write_plan(
+    body: WeekPlanIn,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Записать план недели. Одна запись на неделю - её правят, а не плодят."""
+    key = body.week or week_of(utcnow())
+    row = session.execute(
+        select(WeekPlan)
+        .where(WeekPlan.student_id == student.id)
+        .where(WeekPlan.week == key)
+    ).scalar_one_or_none()
+    text = body.text.strip()
+    if row is None:
+        row = WeekPlan(student_id=student.id, week=key, text=text)
+        session.add(row)
+    else:
+        row.text = text
+    session.commit()
+    session.refresh(row)
+    return {"week": key, "text": row.text, "updated_at": _iso(row.updated_at)}
+
+
 @router.get("/trades")
 async def list_trades(
     days: int = Query(90, ge=1, le=365),
@@ -402,12 +588,20 @@ async def list_trades(
     # риск, - а карточке нужен тот, что стоит на бирже сейчас. Переехавший в
     # безубыток стоп это первое, что на ней хотят видеть.
     stops = _live_stops(session, student.id, [t.client_id for t in live])
+    # Снимки разбора: и у закрытых, и у идущих. Ими сделку и разбирают потом.
+    shots = _shot_rows(
+        session,
+        student.id,
+        [t.client_id for t in trades] + [t.client_id for t in live],
+    )
 
     return {
-        "trades": [_row(t) for t in trades],
+        "trades": [_row(t, shots=shots.get(t.client_id)) for t in trades],
         # Сделки в работе: журнал показывает их первыми строками, и в итоги
         # периода они не входят.
-        "live": [_row(t, stops.get(t.client_id)) for t in live],
+        "live": [
+            _row(t, stops.get(t.client_id), shots.get(t.client_id)) for t in live
+        ],
         "by_exchange": _by_venue(session, *scope),
         # Биржа, на которую уходят новые сделки: с неё страница и открывается,
         # когда ученик ещё ничего не выбирал.

@@ -444,6 +444,63 @@ class ScalpTrade(Base):
     student: Mapped["Student"] = relationship()
 
 
+class TradeShot(Base):
+    """Снимок, прикреплённый к сделке журнала.
+
+    Сама картинка лежит там же, где снимки графика (`ChartShot` и файл в
+    `uploads/shots`), здесь только связь: чья сделка, какая и что за снимок.
+    Разбор сделки задним числом - это разговор о картинке: где был вход, что
+    стояло в стакане, как выглядел график до и после.
+
+    Снимков на сделку бывает несколько: до входа, в позиции, после закрытия.
+    """
+
+    __tablename__ = "trade_shots"
+    __table_args__ = (
+        # Снимки одной сделки: по этому ключу их и спрашивают.
+        Index("ix_trade_shots_student_client", "student_id", "client_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    # Сделка: тот же идентификатор, что у записи журнала и у разметки графика.
+    client_id: Mapped[str] = mapped_column(String(64))
+    # Снимок: короткий идентификатор файла, он же адрес страницы снимка.
+    shot_id: Mapped[str] = mapped_column(String(22))
+    # Подпись трейдера: зачем этот снимок здесь.
+    note: Mapped[str] = mapped_column(String(140), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    student: Mapped["Student"] = relationship()
+
+
+class WeekPlan(Base):
+    """План трейдера на неделю: что торгуем и по каким правилам.
+
+    Пишет его сам трейдер, себе. Лежит рядом с журналом, потому что смотрят
+    его вместе: в понедельник записал правила, к пятнице видно, сколько раз их
+    нарушил. Одна запись на неделю - её правят, а не заводят новую.
+    """
+
+    __tablename__ = "week_plans"
+    __table_args__ = (
+        UniqueConstraint("student_id", "week", name="uq_week_plan"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    # Неделя по ISO: `2026-W38`. Не датой начала - неделя у разных стран
+    # начинается по-разному, а ISO-номер один и тот же везде.
+    week: Mapped[str] = mapped_column(String(8))
+    text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    student: Mapped["Student"] = relationship()
+
+
 class ChartShot(Base):
     """Снимок графика, которым делятся ссылкой.
 
