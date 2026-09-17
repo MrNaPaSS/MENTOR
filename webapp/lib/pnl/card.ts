@@ -480,8 +480,13 @@ export function paint(
 
   // Подпись слева, число в колонке: так их сравнивают глазами, а не
   // выискивают в строке.
-  data.rows.slice(0, 2).forEach(([label, value], i) => {
-    const y = head + room * (0.79 + i * 0.055);
+  // Строк бывает две у закрытой сделки и три у идущей: к входу и стопу
+  // добавляются взятые цели. Три начинаем выше - иначе последняя легла бы на
+  // черту над подписью.
+  const lines = data.rows.slice(0, 3);
+  const firstLine = lines.length > 2 ? 0.735 : 0.79;
+  lines.forEach(([label, value], i) => {
+    const y = head + room * (firstLine + i * 0.055);
     ctx.fillStyle = muted;
     ctx.font = face(w * 0.028, 500);
     ctx.fillText(label, x, y);

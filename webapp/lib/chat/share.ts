@@ -48,6 +48,8 @@ export function fromActive(trade: ActiveTrade): SharedTrade {
     // пока сообщение читают, он уже другой - и это честнее, чем цифра, которая
     // молча меняется в чужой ленте.
     pnl: trade.status === "open" ? (trade.unrealized ?? null) : null,
+    // А это уже не снимок: деньги, взятые целями, останутся взятыми.
+    locked: trade.status === "open" ? trade.realized : null,
   };
 }
 

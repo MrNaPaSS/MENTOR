@@ -525,6 +525,13 @@ export const pnlCard = {
   entryPrice: "Цена входа",
   exitPrice: "Цена выхода",
   stopPrice: "Стоп",
+  /** Стоп уже за входом: сделка не может кончиться убытком. */
+  stopBreakeven: "б/у",
+  targetsRow: "Цели",
+  ofTargets: (hit: number, total: number) => `${hit} из ${total}`,
+  /** Идущая сделка: взято целями и сколько сейчас по остатку. */
+  lockedRow: "Забрано",
+  floatingRow: "Сейчас в позиции",
   stamped: "Дата и время",
   trades: "Сделок",
   tradeWord: (n: number): string => (n % 10 === 1 && n % 100 !== 11 ? "сделка" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "сделки" : "сделок"),

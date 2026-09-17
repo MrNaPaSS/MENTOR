@@ -64,26 +64,64 @@ export function cardFromTrade(trade: JournalTrade, owner?: string): CardData {
 export function cardFromShared(trade: SharedTrade, at: string, owner?: string): CardData {
   const t = dict().pnlCard;
   const side = trade.side === "long" ? t.long : t.short;
-  const pnl = Number(trade.pnl ?? 0);
+  const floating = Number(trade.pnl ?? 0);
   const margin = Number(trade.margin ?? 0);
+  const running = trade.state === "open";
+  const locked = trade.locked == null ? null : Number(trade.locked);
+  // У идущей сделки крупным - забранное целями, а не плавающее по остатку.
+  // Карточка живёт в чужой ленте часами: плавающее к тому времени уже
+  // неправда, а взятые деньги взяты.
+  const main = running && locked !== null ? locked : floating;
 
   return {
     title: trade.symbol,
     subtitle: `${side}   |   ${trade.leverage}x`,
     side: trade.side as CardSide,
-    roi: margin > 0 ? (pnl / margin) * 100 : 0,
-    pnl,
-    rows: [
-      [t.entryPrice, price(trade.entry)],
-      // У идущей сделки выхода ещё нет: показываем стоп - то, чем она
-      // ограничена снизу, а не выдуманную цену закрытия.
-      [trade.state === "closed" ? t.exitPrice : t.stopPrice, price(trade.stop)],
-    ],
+    roi: margin > 0 ? (main / margin) * 100 : 0,
+    pnl: main,
+    rows: sharedRows(trade, t),
     footer: [t.stamped, stamped(at)],
     at,
     owner: owner || undefined,
     venue: venueTitle(trade.exchange) || undefined,
   };
+}
+
+/**
+ * Строки карточки: вход, стоп и - у идущей сделки - взятые цели.
+ *
+ * Стоп за входом подписан «б/у», а не ценой: цифра сама по себе не говорит,
+ * что сделка уже не может кончиться убытком, а это первое, что хотят видеть.
+ */
+function sharedRows(
+  trade: SharedTrade,
+  t: ReturnType<typeof dict>["pnlCard"],
+): [string, string][] {
+  if (trade.state === "closed") {
+    return [
+      [t.entryPrice, price(trade.entry)],
+      [t.exitPrice, price(trade.stop)],
+    ];
+  }
+  const rows: [string, string][] = [
+    [t.entryPrice, price(trade.entry)],
+    [t.stopPrice, breakeven(trade) ? t.stopBreakeven : price(trade.stop)],
+  ];
+  const targets = trade.targets?.length ?? 0;
+  if (targets > 0) {
+    rows.push([t.targetsRow, t.ofTargets(trade.takesHit ?? 0, targets)]);
+  }
+  return rows;
+}
+
+/** Стоп уже за входом: сделка не может кончиться убытком. */
+export function breakeven(trade: {
+  side: string;
+  entry: number;
+  stop: number;
+}): boolean {
+  if (!(trade.entry > 0) || !(trade.stop > 0)) return false;
+  return trade.side === "long" ? trade.stop >= trade.entry : trade.stop <= trade.entry;
 }
 
 /** Итог за срок: день, неделя, месяц. */
