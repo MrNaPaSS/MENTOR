@@ -16,6 +16,7 @@ import { Copy, X } from "lucide-react";
 import ModalPortal from "@/components/ui/ModalPortal";
 import { useT, type Dict } from "@/lib/i18n";
 import { money, tone } from "@/lib/journalFormat";
+import { heldLabel } from "@/lib/tradeTime";
 import { weekReview, type WeekReview } from "@/lib/weekReview";
 import type { JournalRow } from "./JournalTable";
 
@@ -53,6 +54,12 @@ export function reviewText(review: WeekReview, t: Dict): string {
   if (review.worst && review.worst !== review.best) {
     lines.push(
       `${t.journal.weekReviewWorst}: ${coin(review.worst.symbol)} ${money(review.worst.pnl)}`,
+    );
+  }
+
+  if (review.held > 0) {
+    lines.push(
+      `${t.journal.weekReviewHeld}: ${heldLabel(review.held, t.journal.heldUnits)}`,
     );
   }
 
@@ -188,6 +195,12 @@ export default function WeekReviewCard({ rows, week, onClose }: WeekReviewCardPr
                     )}
                     value={t.journal.weekTrades(stats.marked, stats.trades)}
                   />
+                  {review.held > 0 && (
+                    <Row
+                      label={t.journal.weekReviewHeld}
+                      value={heldLabel(review.held, t.journal.heldUnits)}
+                    />
+                  )}
                   {review.best && (
                     <Row
                       label={t.journal.weekReviewBest}

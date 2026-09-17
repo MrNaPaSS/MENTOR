@@ -91,6 +91,7 @@ export const terminal = {
   shotToTradeEmpty: "Открытых сделок нет - снимок класть некуда",
   shotToTradeOpen: (hit: number, all: number) => `в работе, целей ${hit} из ${all}`,
   shotToTradeWaiting: "ждёт входа",
+  shotQueued: "Сеть пропала - снимок отложен и уйдёт сам",
   shotToTradeDone: (symbol: string) => `Снимок приложен к сделке ${symbol}`,
   shotToTradeFailed: "Снимок к сделке не приложился",
   shotDownload: "Скачать картинкой",
@@ -520,6 +521,10 @@ export const journal = {
   cardQty: "Объём",
   cardLeverage: "Плечо",
   cardSession: "Сессия",
+  cardExit: "Выход",
+  cardHeld: "В сделке",
+  cardHeldLive: "Идёт",
+  heldUnits: { h: "ч", m: "мин", s: "с" },
   cardFee: "Комиссия",
   sessions: { asia: "Азия", london: "Лондон", newYork: "Нью-Йорк", evening: "Вечер" },
   stages: {
@@ -600,6 +605,7 @@ export const journal = {
   weekReviewMistakes: "Нарушения по вашим отметкам",
   weekReviewNoMarks: "Отметок «по плану / нарушение» на этой неделе нет - дисциплину посчитать не из чего",
   weekReviewClean: "Отмеченных нарушений нет",
+  weekReviewHeld: "Среднее время в сделке",
   weekReviewSessions: "По сессиям",
   weekReviewAfterLoss: "Сразу после убытка",
   weekReviewAfterLossLine: (n: number, minutes: number) =>

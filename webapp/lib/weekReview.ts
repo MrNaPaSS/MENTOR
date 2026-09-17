@@ -13,6 +13,7 @@ import type { JournalRow } from "@/components/scalping/JournalTable";
 import { sessionOf } from "@/components/scalping/PositionCard";
 import { weekStats, type WeekStats } from "./weekStats";
 import { isoWeek } from "./weekPlan";
+import { heldSeconds } from "./tradeTime";
 
 /** Сколько минут после убытка считаются «сразу после». */
 export const REVENGE_MINUTES = 15;
@@ -38,6 +39,8 @@ export interface WeekReview {
   sessions: SessionLine[];
   /** Что было открыто в четверть часа после убыточной сделки. */
   revenge: { trades: number; pnl: number; minutes: number };
+  /** Сколько сделка держалась в среднем, секунды. Ноль - считать не из чего. */
+  held: number;
 }
 
 function at(row: JournalRow): number {
@@ -121,9 +124,18 @@ export function weekReview(rows: readonly JournalRow[], week: string): WeekRevie
     }
   }
 
+  // Среднее время в сделке: цифра, которую никто не помнит, а она делит
+  // неделю надвое - скальп это был или пересиживание.
+  const times = mine.map((row) => heldSeconds(row)).filter((one) => one > 0);
+  const held =
+    times.length > 0
+      ? Math.round(times.reduce((sum, one) => sum + one, 0) / times.length)
+      : 0;
+
   return {
     week,
     stats: weekStats(rows, week),
+    held,
     best,
     worst,
     mistakes,

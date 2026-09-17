@@ -12,6 +12,7 @@
 
 import { API_URL, authReq } from "./api";
 import { getAccessToken } from "./auth";
+import { flushShots, keepShot, type QueuedShot } from "./shotQueue";
 
 /** Снимок в строке журнала. */
 export type TradeShot = {
@@ -69,14 +70,74 @@ export async function attachShot(
   // делает, и человек решает, что сломался экран. Возвращаем пустоту - о ней
   // окно скажет словами.
   try {
-    return await authReq<TradeShot>(
-      `/api/journal/trades/${encodeURIComponent(clientId)}/shots`,
-      token,
-      { method: "POST", body: JSON.stringify({ image, note, stage }) },
-    );
+    return await sendShot({ clientId, image, note, stage, at: Date.now() });
   } catch {
     return null;
   }
+}
+
+/** Отправить снимок как есть. Бросает: вызывающий решает, что делать дальше. */
+async function sendShot(shot: Omit<QueuedShot, "id">): Promise<TradeShot | null> {
+  const token = getAccessToken();
+  if (!token) return null;
+  return await authReq<TradeShot>(
+    `/api/journal/trades/${encodeURIComponent(shot.clientId)}/shots`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify({ image: shot.image, note: shot.note, stage: shot.stage }),
+    },
+  );
+}
+
+/** Сеть легла, а не сервер отказал: `fetch` в этом случае бросает `TypeError`. */
+function networkDown(error: unknown): boolean {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  return error instanceof TypeError;
+}
+
+/**
+ * Прикрепить снимок, а если сети нет - отложить до её возвращения.
+ *
+ * Момент снимка не повторяется: цена ушла, и тот же экран через минуту уже не
+ * снять. Поэтому обрыв связи не должен стоить картинки - она ложится в очередь
+ * и уходит сама, когда сеть вернётся, хоть бы и после перезагрузки страницы.
+ *
+ * Отказ сервера - другое дело: не картинка, нет такой сделки, кончилось место.
+ * Повторять такой снимок бессмысленно, и в очередь он не попадает.
+ */
+export async function attachShotSafe(
+  clientId: string,
+  image: string,
+  note = "",
+  stage: ShotStage | "" = "",
+): Promise<"sent" | "queued" | "failed"> {
+  const shot = { clientId, image, note, stage, at: Date.now() };
+  try {
+    const done = await sendShot(shot);
+    return done ? "sent" : "failed";
+  } catch (error: unknown) {
+    if (!networkDown(error)) return "failed";
+    return (await keepShot(shot)) ? "queued" : "failed";
+  }
+}
+
+/**
+ * Отправить отложенные снимки.
+ *
+ * Зовётся при возвращении сети и при открытии терминала. Снимок, который
+ * сервер отверг по существу, из очереди убирается: держать его вечно значит
+ * запереть за ним все остальные.
+ */
+export async function flushPendingShots(): Promise<number> {
+  return await flushShots(async (shot) => {
+    try {
+      await sendShot(shot);
+      return true;
+    } catch (error: unknown) {
+      return !networkDown(error);
+    }
+  });
 }
 
 /** Прикрепить снимок, который уже лежит на сервере. */

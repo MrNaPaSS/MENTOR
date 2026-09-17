@@ -28,6 +28,7 @@ import {
   type TradeShot,
 } from "@/lib/journalShots";
 import ModalPortal from "@/components/ui/ModalPortal";
+import { heldLabel, heldSeconds } from "@/lib/tradeTime";
 import type { JournalRow } from "./JournalTable";
 
 export interface PositionCardProps {
@@ -208,6 +209,10 @@ export default function PositionCard({
                 label={t.journal.cardRR}
                 value={rr > 0 ? `1 : ${rr.toFixed(1)}` : "-"}
               />
+              <Fact
+                label={t.journal.cardExit}
+                value={trade.exit_price ? String(trade.exit_price) : "-"}
+              />
               <Fact label={t.journal.cardQty} value={String(trade.qty)} />
               <Fact label={t.journal.cardLeverage} value={`×${trade.leverage}`} />
               <Fact
@@ -217,6 +222,12 @@ export default function PositionCard({
               <Fact
                 label={t.journal.cardFee}
                 value={trade.fee > 0 ? `-${trade.fee.toFixed(2)}` : "-"}
+              />
+              {/* Время в сделке: у идущей оно набегает, и подпись об этом
+                  говорит прямо - иначе цифра выглядит окончательной. */}
+              <Fact
+                label={trade.closed_at ? t.journal.cardHeld : t.journal.cardHeldLive}
+                value={heldLabel(heldSeconds(trade), t.journal.heldUnits)}
               />
             </div>
 

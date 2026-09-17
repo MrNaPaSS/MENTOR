@@ -137,7 +137,12 @@ import {
   type SymbolLimits,
   type TradingStatus,
 } from "@/lib/trading";
-import { attachShot, type ShotStage } from "@/lib/journalShots";
+import {
+  attachShot,
+  attachShotSafe,
+  flushPendingShots,
+  type ShotStage,
+} from "@/lib/journalShots";
 import {
   journalAvailable,
   loadCalendar,
@@ -3533,6 +3538,20 @@ export default function ScalpingPage() {
     }
   }
 
+  // Отложенные снимки: терминал открылся или сеть вернулась - досылаем.
+  //
+  // Без этого снимок, сделанный в обрыве связи, лежал бы в браузере до
+  // следующего события по той же сделке, то есть, возможно, никогда.
+  useEffect(() => {
+    async function flush() {
+      const gone = await flushPendingShots();
+      if (gone > 0) setJournalKey((n) => n + 1);
+    }
+    void flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, []);
+
   /** Снять график и приложить к сделке. Молча: это не действие трейдера. */
   async function autoShot(clientId: string, note: string, stage: ShotStage) {
     const taken = shotRef.current?.();
@@ -3544,8 +3563,16 @@ export default function ScalpingPage() {
         author: author ?? undefined,
         theme: paper,
       });
-      await attachShot(clientId, picture.toDataURL("image/jpeg", 0.9), note, stage);
-      setJournalKey((n) => n + 1);
+      // Через очередь: обрыв связи не должен стоить снимка, снятого по
+      // событию. Не ушёл сейчас - уйдёт, когда сеть вернётся.
+      const how = await attachShotSafe(
+        clientId,
+        picture.toDataURL("image/jpeg", 0.9),
+        note,
+        stage,
+      );
+      if (how === "queued") setOrderNote({ text: t.terminal.shotQueued, bad: false });
+      if (how === "sent") setJournalKey((n) => n + 1);
     } catch {
       // Снимок не сложился - разбор не важнее сделки, молчим.
     }

@@ -83,6 +83,7 @@ export const terminal = {
   shotToTradeEmpty: "No open trades - nowhere to put the shot",
   shotToTradeOpen: (hit: number, all: number) => `running, ${hit} of ${all} targets`,
   shotToTradeWaiting: "waiting for entry",
+  shotQueued: "Network is down - the shot is queued and will be sent",
   shotToTradeDone: (symbol: string) => `Shot attached to ${symbol}`,
   shotToTradeFailed: "The shot was not attached",
   shotDownload: "Download as an image",
@@ -495,6 +496,10 @@ export const journal = {
   cardQty: "Size",
   cardLeverage: "Leverage",
   cardSession: "Session",
+  cardExit: "Exit",
+  cardHeld: "Time in trade",
+  cardHeldLive: "Running",
+  heldUnits: { h: "h", m: "m", s: "s" },
   cardFee: "Fee",
   sessions: { asia: "Asia", london: "London", newYork: "New York", evening: "Evening" },
   stages: {
@@ -575,6 +580,7 @@ export const journal = {
   weekReviewMistakes: "Rule breaks by your own marks",
   weekReviewNoMarks: "No kept/broken marks this week - discipline cannot be counted",
   weekReviewClean: "No marked rule breaks",
+  weekReviewHeld: "Average time in trade",
   weekReviewSessions: "By session",
   weekReviewAfterLoss: "Right after a loss",
   weekReviewAfterLossLine: (n: number, minutes: number) =>
