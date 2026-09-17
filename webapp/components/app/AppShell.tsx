@@ -222,10 +222,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   const balance = parseFloat(profile?.balance_usdt || "0");
+  // Чей это баланс на самом деле.
+  //
+  // Ключи дают ту же цифру, что ученик видит в приложении биржи. Партнёрская
+  // ручка по UID - взгляд со стороны: приходит с задержкой и считает не то,
+  // чем торгуют. Показывать её как «мой счёт» значит врать человеку о его
+  // деньгах, поэтому в шапке живёт только цифра по ключам.
+  const ownBalance = profile?.balance_source === "api_keys";
   const mode = profile?.mode || "moderate";
   // Ключей нет - и это точно известно: хранилище на сервере настроено, а счёт
   // не подключён. Сервер промолчал - ничего не обещаем и показываем баланс.
-  const needsKeys = Boolean(trading?.enabled) && trading?.connected === false;
+  const needsKeys =
+    (Boolean(trading?.enabled) && trading?.connected === false) ||
+    (profile !== null && !ownBalance);
 
   return (
     <div className="min-h-screen bg-bg-deep">

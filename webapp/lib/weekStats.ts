@@ -54,8 +54,17 @@ function weekOf(row: JournalRow): string {
  * неделю.
  */
 export function weekStats(rows: readonly JournalRow[], week: string): WeekStats {
-  const mine = rows.filter((row) => row.closed_at !== null && weekOf(row) === week);
+  return sumUp(rows.filter((row) => row.closed_at !== null && weekOf(row) === week));
+}
 
+/**
+ * Свести любой отобранный кусок журнала в те же цифры.
+ *
+ * Неделя - не единственный способ смотреть: день разбирают вечером, месяц раз
+ * в месяц. Считается всё одинаково, меняется только отбор, поэтому подсчёт и
+ * живёт отдельно от него.
+ */
+export function sumUp(mine: readonly JournalRow[]): WeekStats {
   const marked = mine.filter((row) => row.plan_ok === true || row.plan_ok === false);
   const planned = marked.filter((row) => row.plan_ok === true).length;
   const wins = mine.filter((row) => row.pnl > 0).length;

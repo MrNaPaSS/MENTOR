@@ -30,7 +30,6 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
-import { hasPrice, keepView, readView, viewFits } from "@/lib/chartView";
 import { getAccessToken } from "@/lib/auth";
 import { visibleOn } from "@/lib/indicator/ink";
 import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
@@ -1078,10 +1077,6 @@ function PriceChart({
   // график тянут и масштабируют мышью, и цена под тем же местом экрана в это
   // время меняется - кнопка, посчитанная один раз, отрывается от линии.
   const hoverYRef = useRef<number | null>(null);
-  // Трогал ли человек график руками: только его движения и запоминаются.
-  const movedRef = useRef(false);
-  // Положение уже возвращали: второй раз - это спор с рукой трейдера.
-  const restoredRef = useRef(false);
   const [hoverMenu, setHoverMenu] = useState(false);
   // Цена, на которой открыли меню: пока выбирают пункт, курсор уже на меню.
   const [hoverPicked, setHoverPicked] = useState(0);
@@ -1478,68 +1473,6 @@ function PriceChart({
     };
   }, []);
 
-  // Где стоит график - помним между заходами.
-  //
-  // Пишем только то, что человек подвинул сам. Это важнее, чем кажется: свечи
-  // приезжают каждые несколько секунд, и если запоминать любое шевеление
-  // диапазона, терминал начинает спорить сам с собой - восстановил одно, тут
-  // же записал другое, на следующем заходе прыгнул в третье.
-  useEffect(() => {
-    const chart = chartRef.current;
-    const box = boxRef.current;
-    if (!chart || !box) return;
-    const scale = chart.timeScale();
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    function remember() {
-      if (!movedRef.current) return;
-      try {
-        const span = scale.getVisibleRange();
-        if (!span) return;
-        const prices = chart!.priceScale("right").getVisibleRange();
-        keepView(
-          symbol,
-          interval,
-          Number(span.from),
-          Number(span.to),
-          prices ? prices.from : 0,
-          prices ? prices.to : 0,
-        );
-      } catch {
-        // График уже снят - запоминать нечего.
-      }
-    }
-
-    function later() {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(remember, 400);
-    }
-
-    // Рука на графике: перетаскивание, колесо, щипок. Всё остальное - это
-    // терминал сам себе рисует новые свечи, и памяти о положении это не меняет.
-    function touched() {
-      movedRef.current = true;
-      later();
-    }
-
-    box.addEventListener("pointerdown", touched, { passive: true });
-    box.addEventListener("wheel", touched, { passive: true });
-    box.addEventListener("touchstart", touched, { passive: true });
-    scale.subscribeVisibleTimeRangeChange(later);
-    return () => {
-      if (timer) clearTimeout(timer);
-      box.removeEventListener("pointerdown", touched);
-      box.removeEventListener("wheel", touched);
-      box.removeEventListener("touchstart", touched);
-      try {
-        scale.unsubscribeVisibleTimeRangeChange(later);
-      } catch {
-        // График снят раньше этой отписки - она уже не нужна.
-      }
-      remember();
-    };
-  }, [symbol, interval]);
-
   // Свечи: первая загрузка при смене монеты или таймфрейма, дальше обновление.
   useEffect(() => {
     let cancelled = false;
@@ -1667,38 +1600,6 @@ function PriceChart({
       if (!chart) return;
       chart.priceScale("right").applyOptions({ autoScale: true });
 
-      // Сначала - туда, где график оставили. Перезагрузка страницы и заход в
-      // аналитику за цифрой не должны стоить трейдеру найденного участка: он
-      // отматывал его руками и возвращается к той же мысли.
-      //
-      // Один раз на монету и таймфрейм: если возвращать положение при каждой
-      // подгонке, терминал будет дёргать график туда-сюда, отменяя движение
-      // руки. Первый заход - вернули, дальше распоряжается человек.
-      const seen = restoredRef.current ? null : readView(symbol, interval);
-      restoredRef.current = true;
-      const first = dataRef.current[0]?.time ?? 0;
-      const last = dataRef.current.at(-1)?.time ?? 0;
-      if (seen && first > 0 && viewFits(seen, first, last)) {
-        try {
-          chart.timeScale().setVisibleRange({
-            from: seen.from as UTCTimestamp,
-            to: seen.to as UTCTimestamp,
-          });
-          // Цена - вторая половина положения: те же свечи в другом масштабе
-          // цены это другая картинка.
-          if (hasPrice(seen)) {
-            const scale = chart.priceScale("right");
-            scale.setAutoScale(false);
-            scale.setVisibleRange({ from: seen.low!, to: seen.high! });
-          }
-          // Дальше график наш только до первого движения руки.
-          movedRef.current = false;
-          return;
-        } catch {
-          // Библиотека не смогла лечь на этот участок - показываем свежие
-          // свечи, это всегда верно.
-        }
-      }
       // Пустое поле справа - часть окна, а не добавка к нему: иначе те же сто
       // пятьдесят свечей просто сжались бы, чтобы освободить место, и вместо
       // читаемого графика получилась бы щётка со свободным полем.
@@ -2073,7 +1974,14 @@ function PriceChart({
         // Рядом с текущей ценой кнопку не показываем: там уже стоит круглая,
         // и две подряд спорили бы, какая из них про рынок.
         const close = cursorY !== null && live !== null && Math.abs(cursorY - live) < 14;
-        if (cursorY === null || !price || price <= 0 || close) {
+        // И на плите не показываем: у неё своя жёлтая метка на шкале, по
+        // которой и нажимают, а квадратик вставал ровно поверх неё - выходило,
+        // что курсор наведён на плиту, а нажимается кнопка цены.
+        const wallY = wallRef.current
+          ? series.priceToCoordinate(wallRef.current.price)
+          : null;
+        const onWall = cursorY !== null && wallY !== null && Math.abs(cursorY - wallY) < 12;
+        if (cursorY === null || !price || price <= 0 || close || onWall) {
           if (!hoverHeldRef.current) square.style.visibility = "hidden";
         } else {
           hoverPriceRef.current = Number(price);
