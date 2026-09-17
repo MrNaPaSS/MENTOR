@@ -169,6 +169,9 @@ export const market = {
     quietTitle: "По этой монете поток молчит",
     quiet: "тихо",
     notInList: "Такой монеты в списке нет",
+    notInTop: (symbol: string) =>
+      `${symbol} нет среди самых оборотных монет. Откройте её в терминале - сервер возьмёт её под наблюдение, и она появится в скринере.`,
+    openOutside: (symbol: string) => `Открыть ${symbol}`,
     waitingFrame: "Ждём первый кадр от сервера...",
     noStream: "Нет связи с потоком биржи",
     cols: {

@@ -17,7 +17,7 @@
 import { useT, type Dict } from "@/lib/i18n";
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDown, Search } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Search } from "lucide-react";
 import {
   base,
   money,
@@ -53,6 +53,27 @@ const COLUMNS: Column[] = [
   { key: "spread", text: "spread", align: "right", wide: true },
   { key: null, text: "trades", align: "right", wide: true },
 ];
+
+/** Котировка, к которой сервер собирает пары. */
+const QUOTE = "USDT";
+
+/** Так монета выглядит в адресе терминала (lib/openSymbol). */
+const SYMBOL_SHAPE = /^[A-Z0-9]{2,20}$/;
+
+/**
+ * Пара, которую ищут, но которой нет в списке.
+ *
+ * Скринер показывает не весь рынок, а только монеты с наибольшим суточным
+ * оборотом (SCALPING_TOP_N на сервере). Монета за его чертой на бирже есть,
+ * просто сервер за ней не следит. Терминал берёт под наблюдение любую
+ * открытую в нём пару, поэтому из поиска её достаточно туда отправить.
+ */
+function outsidePair(needle: string, rows: ScreenerRow[]): string | null {
+  if (!needle) return null;
+  const symbol = needle.endsWith(QUOTE) ? needle : `${needle}${QUOTE}`;
+  if (!SYMBOL_SHAPE.test(symbol) || symbol === QUOTE) return null;
+  return rows.some((r) => r.symbol === symbol) ? null : symbol;
+}
 
 /** Перевес стакана словом и цветом: цифра 1.8 сама по себе ничего не значит. */
 function Imbalance({ ratio }: { ratio: number }) {
@@ -121,11 +142,13 @@ export default function MarketScreener() {
     foot: 0,
   });
 
+  const needle = query.trim().toUpperCase();
   const rows = useMemo(() => {
-    const needle = query.trim().toUpperCase();
     if (!needle) return screener;
     return screener.filter((r) => r.symbol.includes(needle));
-  }, [screener, query]);
+  }, [screener, needle]);
+  // Пока поток не пришёл, список пуст у всех монет - звать в терминал рано.
+  const outside = connected && screener.length > 0 ? outsidePair(needle, screener) : null;
 
   return (
     <section className="overflow-hidden rounded-lg border border-[var(--pane-border)] bg-[var(--pane-bg)]">
@@ -150,6 +173,22 @@ export default function MarketScreener() {
           <LiveBadge live={connected} label={connected ? t.market.screener.streamOn : t.market.screener.streamOff} />
         </div>
       </header>
+
+      {outside && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--pane-border)] bg-[var(--pane-deep)] px-3 py-2">
+          <p className="text-[11px] text-[var(--pane-text-2)]">
+            {t.market.screener.notInTop(base(outside))}
+          </p>
+          <Link
+            href={`/app/scalping?symbol=${outside}`}
+            onClick={() => askSymbol(outside)}
+            className="inline-flex items-center gap-1 rounded border border-[var(--pane-border)] px-2 py-1 font-mono text-[11px] font-semibold text-[var(--pane-chip)] hover:bg-[var(--pane-hover)]"
+          >
+            {t.market.screener.openOutside(outside)}
+            <ArrowUpRight className="h-3 w-3" />
+          </Link>
+        </div>
+      )}
 
       <div className="max-h-[70vh] overflow-auto">
         <table className="w-full border-collapse">
@@ -272,7 +311,7 @@ export default function MarketScreener() {
           </tbody>
         </table>
 
-        {rows.length === 0 && (
+        {rows.length === 0 && !outside && (
           <p className="py-10 text-center text-[11px] text-[var(--pane-muted)]">
             {connected
               ? query

@@ -166,6 +166,9 @@ export const market = {
     quietTitle: "The stream is silent on this coin",
     quiet: "quiet",
     notInList: "That coin isn't in the list",
+    notInTop: (symbol: string) =>
+      `${symbol} is not among the highest-volume coins. Open it in the terminal - the server will start tracking it and it will show up in the screener.`,
+    openOutside: (symbol: string) => `Open ${symbol}`,
     waitingFrame: "Waiting for the first frame from the server...",
     noStream: "No connection to the exchange stream",
     cols: {
