@@ -98,3 +98,49 @@ describe("окно расчёта сделки", () => {
     expect(onChange).not.toHaveBeenCalledWith(expect.objectContaining({ stopPct: 0 }));
   });
 });
+
+describe("место окна расчёта", () => {
+  it("встаёт в левой части графика, а не посреди экрана", () => {
+    // Окна живут в отдельном слое, который поднимается кадром позже самого
+    // окна. Расчёт места при первом кадре окна не находил, тихо пропускался -
+    // и окно открывалось посреди экрана, ровно поверх цены, от которой его
+    // открыли.
+    const pane = document.createElement("div");
+    pane.setAttribute("data-chart-pane", "");
+    document.body.appendChild(pane);
+
+    const box = (left: number, top: number, width: number, height: number) =>
+      ({
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+        x: left,
+        y: top,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    const spy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: Element) {
+        // График: слева 300, ширина 1000, сверху 100, высота 600. Окно стоит
+        // посередине экрана, как его ставит сетка слоя.
+        return this.hasAttribute("data-chart-pane")
+          ? box(300, 100, 1000, 600)
+          : box(500, 300, 520, 400);
+      });
+
+    try {
+      render(
+        <TradeDialog draft={draft} onChange={() => {}} onConfirm={() => {}} onCancel={() => {}} />,
+      );
+      const card = document.querySelector<HTMLElement>('[style*="translate"]');
+      // Отступ 6% ширины графика от его левого края, по высоте - середина.
+      expect(card?.style.transform).toBe("translate(-140px, -100px)");
+    } finally {
+      spy.mockRestore();
+      pane.remove();
+    }
+  });
+});

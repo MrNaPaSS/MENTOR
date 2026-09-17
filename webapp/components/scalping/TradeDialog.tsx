@@ -15,7 +15,7 @@
 // разметка остаётся на графике.
 
 import { useT } from "@/lib/i18n";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { money, price as fmtPrice, type Wall } from "@/lib/scalping";
 import { computeTrade, sideForShelf, DEFAULT_TAKES } from "@/lib/trade/plan";
@@ -224,10 +224,19 @@ export default function TradeDialog({
    * границы у каждого свои. Не помещается - прижимаемся к краю, но за экран не
    * уходим: окно, половина которого срезана, хуже окна поверх графика.
    */
-  useLayoutEffect(() => {
+  //
+  // Считаем в момент, когда окно появилось на странице, а не при первом кадре
+  // компонента. Окна живут в отдельном слое в конце страницы (`ModalPortal`),
+  // и слой этот поднимается кадром позже: расчёт при первом кадре не находил
+  // окна, тихо пропускался - и окно снова открывалось посреди экрана.
+  const placed = useRef(false);
+  const attach = useCallback((node: HTMLDivElement | null) => {
+    card.current = node;
+    if (!node || placed.current) return;
     const chart = document.querySelector("[data-chart-pane]")?.getBoundingClientRect();
-    const self = card.current?.getBoundingClientRect();
-    if (!chart || !self) return;
+    if (!chart) return;
+    placed.current = true;
+    const self = node.getBoundingClientRect();
     const gap = 8;
     // Отступ долей ширины, а не числом точек: на узком графике сотня точек -
     // это его треть, на широком - едва заметный сдвиг от края.
@@ -286,7 +295,7 @@ export default function TradeDialog({
             оба свойства висели на одном элементе, окно не двигалось вовсе:
             смещение считалось, но до экрана не доезжало. */}
         <div
-          ref={card}
+          ref={attach}
           onClick={(event) => event.stopPropagation()}
           style={{ transform: `translate(${shift.x}px, ${shift.y}px)` }}
           className="w-[520px] max-w-full"
