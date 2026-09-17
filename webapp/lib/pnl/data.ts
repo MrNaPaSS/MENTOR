@@ -9,7 +9,7 @@
 import { venueTitle } from "@/lib/exchanges";
 import { dict } from "@/lib/i18n";
 import type { SharedTrade } from "@/lib/chat/api";
-import type { JournalTrade } from "@/lib/journal";
+import type { JournalTrade, LiveJournalTrade } from "@/lib/journal";
 
 import { price, stamped, type CardData, type CardSide } from "./card";
 
@@ -21,16 +21,22 @@ import { price, stamped, type CardData, type CardSide } from "./card";
  * двести процентов на залог, и меньшая цифра выглядела бы обманом в обратную
  * сторону.
  */
-export function roiOf(trade: JournalTrade): number {
+export function roiOf(trade: JournalTrade | LiveJournalTrade): number {
   const margin = Number(trade.margin);
   if (!Number.isFinite(margin) || margin <= 0) return 0;
   return (Number(trade.pnl) / margin) * 100;
 }
 
-/** Запись журнала - в карточку. */
-export function cardFromTrade(trade: JournalTrade, owner?: string): CardData {
+/** Запись журнала - в карточку. Идущая сделка тоже: у неё свои строки. */
+export function cardFromTrade(
+  trade: JournalTrade | LiveJournalTrade,
+  owner?: string,
+): CardData {
   const t = dict().pnlCard;
   const side = trade.side === "long" ? t.long : t.short;
+  // Идущую сделку заверяем временем входа: даты закрытия у неё ещё нет, а
+  // выдумывать её нельзя.
+  const at = trade.closed_at ?? trade.opened_at ?? new Date().toISOString();
   return {
     title: trade.symbol,
     subtitle: `${side}   |   ${trade.leverage}x`,
@@ -40,21 +46,30 @@ export function cardFromTrade(trade: JournalTrade, owner?: string): CardData {
     // обещала бы больше, чем пришло на счёт.
     pnl: Number(trade.pnl),
     rows: journalRows(trade, t),
-    footer: [t.stamped, stamped(trade.closed_at)],
-    at: trade.closed_at,
+    footer: [t.stamped, stamped(at)],
+    at,
     owner: owner || undefined,
     venue: venueTitle(trade.exchange) || undefined,
   };
 }
 
-/** Строки карточки из журнала: вход, выход и сколько целей отработало. */
+/** Строки карточки из журнала: вход, выход или стоп, и сколько целей взято. */
 function journalRows(
-  trade: JournalTrade,
+  trade: JournalTrade | LiveJournalTrade,
   t: ReturnType<typeof dict>["pnlCard"],
 ): [string, string][] {
+  // У идущей сделки выхода ещё нет - на его месте стоп, тот, что стоит на
+  // бирже сейчас, а не тот, с которым сделка задумывалась.
+  const live = trade.closed_at === null;
+  const now = live
+    ? Number((trade as LiveJournalTrade).stop_now ?? trade.stop)
+    : Number(trade.stop);
+  const safe = breakeven({ side: trade.side, entry: Number(trade.entry), stop: now });
   const rows: [string, string][] = [
     [t.entryPrice, price(Number(trade.entry))],
-    [t.exitPrice, trade.exit_price === null ? "-" : price(Number(trade.exit_price))],
+    live
+      ? [stopLabel(t, safe), price(now)]
+      : [t.exitPrice, trade.exit_price === null ? "-" : price(Number(trade.exit_price))],
   ];
   if (trade.targets.length > 0) {
     rows.push([t.targetsRow, t.ofTargets(trade.takes_hit, trade.targets.length)]);
@@ -114,15 +129,7 @@ function sharedRows(
     [t.entryPrice, price(trade.entry)],
     closed
       ? [t.exitPrice, price(trade.stop)]
-      : [
-          t.stopPrice,
-          // Стоп за входом: и метка, и сама цена. Одна метка не говорит, где
-          // именно он стоит, а одна цена не говорит, что сделка уже не может
-          // кончиться убытком.
-          breakeven(trade)
-            ? `${t.stopBreakeven} ${price(trade.stop)}`
-            : price(trade.stop),
-        ],
+      : [stopLabel(t, breakeven(trade)), price(trade.stop)],
   ];
   // Взятые цели - и у закрытой тоже: по ним видно, как сделка шла, а не
   // только чем кончилась. Целей не ставили вовсе - строки нет.
@@ -131,6 +138,16 @@ function sharedRows(
     rows.push([t.targetsRow, t.ofTargets(trade.takesHit ?? 0, targets)]);
   }
   return rows;
+}
+
+/**
+ * Подпись строки стопа: «Стоп» или «Стоп б/у».
+ *
+ * Метка стоит у слова, а не у числа: в колонке значений живут одни цены, и
+ * приписка перед ценой ломала их ряд.
+ */
+function stopLabel(t: ReturnType<typeof dict>["pnlCard"], safe: boolean): string {
+  return safe ? `${t.stopPrice} ${t.stopBreakeven}` : t.stopPrice;
 }
 
 /** Стоп уже за входом: сделка не может кончиться убытком. */

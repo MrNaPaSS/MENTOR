@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import { breakeven, cardFromShared } from "@/lib/pnl/data";
+import { breakeven, cardFromShared, cardFromTrade } from "@/lib/pnl/data";
 import type { SharedTrade } from "@/lib/chat/api";
 
 const AT = "2026-09-17T16:28:00Z";
@@ -46,10 +46,9 @@ describe("карточка идущей сделки", () => {
     expect(card.rows).toContainEqual(["Цели", "2 из 3"]);
   });
 
-  it("стоп за входом подписан «б/у» и своей ценой", () => {
+  it("стоп за входом: метка у подписи, цена остаётся ценой", () => {
     const card = cardFromShared(running({ stop: 77000 }), AT);
-    const stop = card.rows.find(([label]) => label === "Стоп");
-    expect(stop?.[1]).toBe("б/у 77000,00");
+    expect(card.rows).toContainEqual(["Стоп б/у", "77000,00"]);
   });
 
   it("стоп в убытке показывается одной ценой, без метки", () => {
@@ -108,5 +107,77 @@ describe("безубыток", () => {
   it("без цен ничего не выдумывает", () => {
     expect(breakeven({ side: "long", entry: 0, stop: 100 })).toBe(false);
     expect(breakeven({ side: "long", entry: 100, stop: 0 })).toBe(false);
+  });
+});
+
+
+describe("карточка из журнала", () => {
+  it("у идущей сделки на месте выхода стоит стоп, и он может быть в б/у", () => {
+    const card = cardFromTrade({
+      id: 1,
+      client_id: "t-1",
+      symbol: "BTCUSDT",
+      side: "short",
+      entry: 77000,
+      // В журнале записан стоп, с которым сделка задумывалась: по нему риск.
+      stop: 77600,
+      // А на бирже он уже за входом.
+      stop_now: 77000,
+      exit_price: null,
+      qty: 0.5,
+      margin: 500,
+      leverage: 200,
+      takes_hit: 2,
+      fee: 0,
+      targets: [76500, 76200, 75800],
+      outcome: "open",
+      pnl: 1139.24,
+      live: true,
+      closed_qty: 0.3,
+      opened_at: "2026-09-17T16:28:00Z",
+      closed_at: null,
+      note: "в работе",
+      exchange: "weex",
+    });
+
+    expect(card.pnl).toBe(1139.24);
+    expect(card.rows).toEqual([
+      ["Цена входа", "77000,00"],
+      ["Стоп б/у", "77000,00"],
+      ["Цели", "2 из 3"],
+    ]);
+    // Заверяем временем входа: даты закрытия у неё ещё нет.
+    expect(card.at).toBe("2026-09-17T16:28:00Z");
+  });
+
+  it("закрытая сделка из журнала - как была, плюс цели", () => {
+    const card = cardFromTrade({
+      id: 2,
+      client_id: "t-2",
+      symbol: "ETHUSDT",
+      side: "long",
+      entry: 2428.88,
+      stop: 2400,
+      exit_price: 2441.71,
+      qty: 1,
+      margin: 200,
+      leverage: 200,
+      takes_hit: 3,
+      fee: 28.51,
+      targets: [2435, 2440, 2445],
+      outcome: "take",
+      pnl: 927.65,
+      opened_at: "2026-09-17T14:00:00Z",
+      closed_at: "2026-09-17T14:11:00Z",
+      note: "биржа",
+      exchange: "weex",
+    });
+
+    expect(card.rows).toEqual([
+      ["Цена входа", "2428,88"],
+      ["Цена выхода", "2441,71"],
+      ["Цели", "3 из 3"],
+    ]);
+    expect(card.at).toBe("2026-09-17T14:11:00Z");
   });
 });

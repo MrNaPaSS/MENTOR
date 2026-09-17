@@ -74,8 +74,8 @@ export interface JournalTableProps {
   onHover?: (trade: JournalRow | null) => void;
   /** Нажали на строку: разметка сделки ложится на график. */
   onPick?: (trade: JournalRow) => void;
-  /** Открыть карточку сделки. Идущим не предлагается: сделка не кончилась. */
-  onCard?: (trade: JournalTrade) => void;
+  /** Открыть карточку сделки - и по идущей тоже: у неё свои строки. */
+  onCard?: (trade: JournalRow) => void;
   /** Убрать запись. Пусто - права нет, и колонки не будет. */
   onDrop?: (id: number) => void;
   /**
@@ -198,7 +198,7 @@ export default function JournalTable({
                 и отбирать его нельзя: «почему так вышло» спрашивают чаще, чем
                 «покажи всем». */}
             <td className="pl-2 text-right">
-              {onCard && !isLive(row) && (
+              {onCard && (
                 <button
                   onClick={(event) => {
                     event.stopPropagation();

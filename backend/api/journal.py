@@ -21,7 +21,15 @@ from sqlalchemy import and_, case, func, or_, select
 
 from backend import entitlements
 from core.exchanges import KEYS_EXCHANGE, TITLES
-from core.models import iso, JournalExport, ScalpTrade, ScalpWorkspace, Student, utcnow
+from core.models import (
+    iso,
+    JournalExport,
+    LiveTrade,
+    ScalpTrade,
+    ScalpWorkspace,
+    Student,
+    utcnow,
+)
 from backend.config import BackendConfig
 from backend.deps import get_config, get_current_student, get_session
 
@@ -197,7 +205,20 @@ def _iso(value: datetime | None) -> str | None:
     return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).isoformat()
 
 
-def _row(trade: ScalpTrade) -> dict[str, Any]:
+def _live_stops(session, student_id: int, client_ids: list[str]) -> dict[str, float]:
+    """Где стоит стоп прямо сейчас - по сделкам, которые ведёт сопровождение."""
+    if not client_ids:
+        return {}
+    rows = session.execute(
+        select(LiveTrade.client_id, LiveTrade.current_stop)
+        .where(LiveTrade.student_id == student_id)
+        .where(LiveTrade.client_id.in_(client_ids))
+        .where(LiveTrade.status.in_(("waiting", "open")))
+    ).all()
+    return {str(client_id): float(stop or 0) for client_id, stop in rows}
+
+
+def _row(trade: ScalpTrade, stop_now: float | None = None) -> dict[str, Any]:
     return {
         "id": trade.id,
         "client_id": trade.client_id,
@@ -221,6 +242,9 @@ def _row(trade: ScalpTrade) -> dict[str, Any]:
         # целями, а плавающее по остатку живёт в терминале.
         "live": trade.closed_at is None,
         "closed_qty": float(getattr(trade, "closed_qty", 0) or 0),
+        # Стоп, который стоит на бирже сейчас. Есть только у идущей: у
+        # закрытой в `stop` записан тот, с которым она задумывалась.
+        **({"stop_now": stop_now} if stop_now else {}),
         # Где открыта. У записей с биржи, сделанных до этого поля, - биржа
         # ключей: других тогда не было.
         "exchange": _exchange_of(trade),
@@ -374,12 +398,16 @@ async def list_trades(
     if venue:
         live_query = live_query.where(_venue_clause(venue))
     live = session.execute(live_query.limit(MAX_LIVE)).scalars().all()
+    # Текущий стоп идущих сделок: в журнале записан первый - по нему считается
+    # риск, - а карточке нужен тот, что стоит на бирже сейчас. Переехавший в
+    # безубыток стоп это первое, что на ней хотят видеть.
+    stops = _live_stops(session, student.id, [t.client_id for t in live])
 
     return {
         "trades": [_row(t) for t in trades],
         # Сделки в работе: журнал показывает их первыми строками, и в итоги
         # периода они не входят.
-        "live": [_row(t) for t in live],
+        "live": [_row(t, stops.get(t.client_id)) for t in live],
         "by_exchange": _by_venue(session, *scope),
         # Биржа, на которую уходят новые сделки: с неё страница и открывается,
         # когда ученик ещё ничего не выбирал.

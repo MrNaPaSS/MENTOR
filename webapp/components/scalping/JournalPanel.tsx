@@ -69,7 +69,7 @@ export default function JournalPanel({
 }) {
   const t = useT();
   // Чья карточка открыта. Null - окна нет.
-  const [card, setCard] = useState<JournalTrade | null>(null);
+  const [card, setCard] = useState<JournalRow | null>(null);
   const now = new Date();
   const [year, setYear] = useState(now.getUTCFullYear());
   const [month, setMonth] = useState(now.getUTCMonth() + 1);

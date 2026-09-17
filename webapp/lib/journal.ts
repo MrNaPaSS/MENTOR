@@ -51,6 +51,14 @@ export type LiveJournalTrade = Omit<JournalTrade, "closed_at" | "outcome"> & {
   outcome: "open";
   live: true;
   closed_qty: number;
+  /**
+   * Стоп, который стоит на бирже сейчас.
+   *
+   * В `stop` у записи журнала - тот, с которым сделка задумывалась: по нему
+   * считается риск, и менять его нельзя. А карточке нужен нынешний: стоп,
+   * переехавший в безубыток, это первое, что на ней хотят видеть.
+   */
+  stop_now?: number;
 };
 
 export type JournalSummary = {
