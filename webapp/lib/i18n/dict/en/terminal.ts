@@ -214,6 +214,7 @@ export const terminal = {
     pnlToday: "PnL today ",
     ordersTitle: "Orders waiting to fill · open positions, across all coins",
     plusTitle: "An alert or a trade at this price",
+    plusAtPrice: "Alert or entry at this price",
     plusAlert: "Add an alert",
     plusLong: "Open a long from here",
     plusShort: "Open a short from here",

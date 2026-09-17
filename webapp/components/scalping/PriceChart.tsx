@@ -1063,6 +1063,16 @@ function PriceChart({
   // Цена меняется восемь раз в секунду, и кнопка, едущая вместе с ней, уходит
   // из-под курсора ровно в тот момент, когда по ней целятся.
   const plusHeldRef = useRef(false);
+  // Плюсик у цены под курсором: квадратный, в отличие от круглого у текущей
+  // цены. Меню у них одно и то же - отметка и вход лимиткой, - но цена разная:
+  // здесь та, на которую показывают, а не та, по которой идёт рынок.
+  const [hoverAt, setHoverAt] = useState<{ y: number; price: number } | null>(null);
+  const [hoverMenu, setHoverMenu] = useState(false);
+  const [hoverUp, setHoverUp] = useState(false);
+  // Пока курсор на кнопке или открыто её меню, кнопка стоит на месте: иначе
+  // она едет за курсором и уходит из-под него ровно при попытке нажать.
+  const hoverHeldRef = useRef(false);
+  const hoverBoxRef = useRef<HTMLDivElement>(null);
   // Почему на графике нет свежих свечей. Пусто — всё в порядке.
   const [dataError, setDataError] = useState<string | null>(null);
   // Раскрытая свеча. Раскрыта всегда одна: две колонки на минутном графике
@@ -2385,11 +2395,32 @@ function PriceChart({
       setFootRow((now) =>
         now?.price === row?.price && now?.total === row?.total ? now : row,
       );
+
+      // Цена под курсором - для квадратного плюсика у его ярлыка.
+      if (hoverHeldRef.current) return;
+      const price = candleRef.current?.coordinateToPrice(at.y) ?? null;
+      if (!price || price <= 0) {
+        setHoverAt(null);
+        return;
+      }
+      // Рядом с текущей ценой кнопку не показываем: там уже стоит круглая, и
+      // две подряд спорили бы, какая из них про рынок.
+      const live = candleRef.current?.priceToCoordinate(livePriceRef.current) ?? null;
+      if (live !== null && Math.abs(at.y - live) < 14) {
+        setHoverAt(null);
+        return;
+      }
+      // Перерисовываем не на каждое дрожание мыши: кнопка стоит на своей
+      // высоте, и пиксель туда-сюда её не двигает.
+      setHoverAt((now) =>
+        now && Math.abs(now.y - at.y) < 1 ? now : { y: at.y, price: Number(price) },
+      );
     }
 
     function onLeave() {
       footPrimRef.current?.setHover(null);
       setFootRow(null);
+      if (!hoverHeldRef.current) setHoverAt(null);
     }
 
     box.addEventListener("pointerdown", onDown, true);
@@ -2781,6 +2812,19 @@ function PriceChart({
     return () => document.removeEventListener("mousedown", away);
   }, [plusMenu]);
 
+  // То же самое для плюсика у курсора: нажали мимо - меню закрылось, и кнопка
+  // снова следует за курсором.
+  useEffect(() => {
+    if (!hoverMenu) return;
+    function away(event: MouseEvent) {
+      if (hoverBoxRef.current?.contains(event.target as Node)) return;
+      setHoverMenu(false);
+      hoverHeldRef.current = false;
+    }
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [hoverMenu]);
+
   const priceToY = useCallback(
     (value: number) => candleRef.current?.priceToCoordinate(value) ?? null,
     [],
@@ -3027,6 +3071,86 @@ function PriceChart({
           </div>
         )}
       </div>
+
+      {/* Квадратный плюсик у цены под курсором.
+          
+          Тот же набор действий, что у круглого на текущей цене, но цена своя -
+          та, на которую показывают. Раньше поставить отметку или лимитку выше
+          рынка можно было только перетаскиванием уровня: сам ярлык цены под
+          курсором ничего не предлагал.
+          
+          Квадратный, а не круглый, намеренно: две одинаковые кнопки на одной
+          шкале спорили бы, какая из них про текущую цену. */}
+      {hoverAt && (
+        <div
+          ref={hoverBoxRef}
+          className="absolute right-16 z-30"
+          style={{ top: Math.round(hoverAt.y) - 10 }}
+          onPointerEnter={() => {
+            hoverHeldRef.current = true;
+          }}
+          onPointerLeave={() => {
+            hoverHeldRef.current = hoverMenu;
+          }}
+        >
+          <button
+            onClick={() => {
+              setHoverMenu((v) => {
+                hoverHeldRef.current = !v;
+                if (!v) {
+                  const at = hoverBoxRef.current?.getBoundingClientRect();
+                  const box = boxRef.current?.getBoundingClientRect();
+                  setHoverUp(Boolean(at && box && at.bottom + PLUS_MENU_H > box.bottom));
+                }
+                return !v;
+              });
+            }}
+            title={hoverMenu ? undefined : t.terminal.chart.plusAtPrice}
+            className="pointer-events-auto grid h-5 w-5 place-items-center rounded-[3px] border shadow transition-colors duration-150 ease-out"
+            style={{
+              borderColor: "var(--pane-border)",
+              background: "var(--pane-bg)",
+              color: "var(--pane-text-2)",
+            }}
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+          {hoverMenu && (
+            <div
+              className={`pointer-events-auto absolute right-6 w-44 overflow-hidden rounded-lg border shadow-xl ${
+                hoverUp ? "bottom-0" : "top-0"
+              }`}
+              style={{ borderColor: "var(--pane-border)", background: "var(--pane-bg)" }}
+            >
+              {(
+                [
+                  ["alert", t.terminal.chart.plusAlert, "var(--pane-text-2)"],
+                  ["long", t.terminal.chart.plusLong, "var(--pane-up)"],
+                  ["short", t.terminal.chart.plusShort, "var(--pane-down)"],
+                ] as const
+              ).map(([action, label, color]) => (
+                <button
+                  key={action}
+                  onClick={() => {
+                    setHoverMenu(false);
+                    hoverHeldRef.current = false;
+                    // Цена та, что была под курсором в момент открытия меню:
+                    // пока выбирают пункт, курсор уже ушёл на само меню.
+                    const at = hoverAt.price;
+                    if (!(at > 0)) return;
+                    if (action === "alert") alertAddRef.current?.(at);
+                    else orderAddRef.current?.(at, currentAtr(dataRef.current), action);
+                  }}
+                  className="block w-full px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-[var(--pane-hover)]"
+                  style={{ color }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Подпись над лестницей объёма.
           
