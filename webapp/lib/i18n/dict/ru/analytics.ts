@@ -58,6 +58,8 @@ export const analytics = {
     deposits: "пополнено",
     withdrawals: "выведено",
     net: "чистый ввод",
+    hideNumbers: "Скрыть цифры счёта",
+    showNumbers: "Показать цифры счёта",
     empty: "Биржа ещё не отдала цифры по счёту",
   },
 

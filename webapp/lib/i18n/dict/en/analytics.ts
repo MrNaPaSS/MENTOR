@@ -46,6 +46,8 @@ export const analytics = {
     deposits: "deposited",
     withdrawals: "withdrawn",
     net: "net in",
+    hideNumbers: "Hide account numbers",
+    showNumbers: "Show account numbers",
     empty: "The exchange has not returned account numbers yet",
   },
 

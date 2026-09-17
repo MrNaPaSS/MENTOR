@@ -1,6 +1,7 @@
 ﻿"use client";
 // v8
 import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
+import { maskValue, numbersHidden, rememberHidden } from "@/lib/analytics/hideNumbers";
 import { useEffect, useMemo, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import Link from "next/link";
@@ -26,7 +27,7 @@ import GoalsPanel from "@/components/analytics/GoalsPanel";
 import AchievementsPanel from "@/components/analytics/AchievementsPanel";
 import AdvancedPanel from "@/components/analytics/advanced/AdvancedPanel";
 import type { Achievement, Goal } from "@/lib/analytics/rewards";
-import { X, Trophy, Calendar, BarChart2, Gauge, Share2 } from "lucide-react";
+import { X, Trophy, Calendar, BarChart2, Gauge, Share2, Eye, EyeOff } from "lucide-react";
 
 // Форматирование с точкой как разделителем тысяч: 23384 → "23.384"
 function fmtDot(n: number, dec = 0): string {
@@ -332,6 +333,15 @@ export default function AnalyticsPage() {
   // Карточкой делятся и одной сделкой, и итогом срока - окно одно, а
   // колонку для него собирают в lib/pnl/data.
   const [card, setCard] = useState<CardData | null>(null);
+  // Цифры счёта под звёздочками: разбор в трансляции, экран на созвоне,
+  // скриншот в чат. Выбор запоминается в браузере (lib/analytics/hideNumbers).
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    // Читаем после первой отрисовки: на сервере хранилища нет, и значение
+    // оттуда разошлось бы с тем, что отрисовал сервер.
+    setHidden(numbersHidden());
+  }, []);
+  const mask = (value: string) => maskValue(value, hidden);
   /**
    * Что показываем: итоги или награды.
    *
@@ -1131,40 +1141,68 @@ export default function AnalyticsPage() {
               <span className="text-[10px] text-[var(--pane-muted)]">
                 {fromJournal ? t.analytics.account.hintJournal : t.analytics.account.hint}
               </span>
+              <div className="flex-1" />
+              <button
+                onClick={() => {
+                  const next = !hidden;
+                  setHidden(next);
+                  rememberHidden(next);
+                }}
+                title={hidden ? t.analytics.account.showNumbers : t.analytics.account.hideNumbers}
+                aria-label={
+                  hidden ? t.analytics.account.showNumbers : t.analytics.account.hideNumbers
+                }
+                className="self-center text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
+              >
+                {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
             </div>
             <div className="flex flex-1">
             <dl className="flex min-w-0 flex-1 flex-col divide-y divide-[var(--pane-border)]">
                 <Metric
                   label={t.analytics.account.futures}
-                  value={account ? `$${fmtVolShort(account.futures_volume)}` : "-"}
+                  value={mask(account ? `$${fmtVolShort(account.futures_volume)}` : "-")}
                 />
                 <Metric
                   label={t.analytics.account.spot}
-                  value={account ? `$${fmtVolShort(account.spot_volume)}` : "-"}
+                  value={mask(account ? `$${fmtVolShort(account.spot_volume)}` : "-")}
                 />
                 <Metric
                   label={t.analytics.account.commission}
-                  value={account ? `$${fmtDot(Math.round(commission))}` : "-"}
-                  note={commission > 0 ? t.analytics.account.ofVolume(commissionPct.toFixed(3)) : undefined}
+                  value={mask(account ? `$${fmtDot(Math.round(commission))}` : "-")}
+                  // Доля от оборота - тоже цифра счёта: по ней и обороту
+                  // считается сумма комиссии, и прятать одно без другого
+                  // бессмысленно.
+                  note={
+                    !hidden && commission > 0
+                      ? t.analytics.account.ofVolume(commissionPct.toFixed(3))
+                      : undefined
+                  }
                 />
                 {/* Движение денег - только со слов биржи: в журнале его нет. */}
                 <Metric
                   label={t.analytics.account.deposits}
-                  value={account && !fromJournal ? `$${fmtDot(Math.round(accountDeposit))}` : "-"}
+                  value={mask(
+                    account && !fromJournal ? `$${fmtDot(Math.round(accountDeposit))}` : "-",
+                  )}
                 />
                 <Metric
                   label={t.analytics.account.withdrawals}
-                  value={account && !fromJournal ? `$${fmtDot(Math.round(withdrawTotal))}` : "-"}
+                  value={mask(
+                    account && !fromJournal ? `$${fmtDot(Math.round(withdrawTotal))}` : "-",
+                  )}
                 />
                 <Metric
                   label={t.analytics.account.net}
-                  value={
+                  value={mask(
                     account && !fromJournal
                       ? `$${fmtDot(Math.round(accountDeposit - withdrawTotal))}`
-                      : "-"
-                  }
+                      : "-",
+                  )}
+                  // Под звёздочками цвета нет: зелёное «*****» говорило бы о
+                  // счёте ровно то, что прячут.
                   tone={
-                    account && !fromJournal
+                    !hidden && account && !fromJournal
                       ? accountDeposit - withdrawTotal >= 0
                         ? "up"
                         : "down"
