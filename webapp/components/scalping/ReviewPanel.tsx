@@ -202,6 +202,24 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
   const here = day !== null ? inDay : month !== null ? inMonth : inYear;
   const stats = useMemo(() => sumUp(here.filter((row) => row.closed_at !== null)), [here]);
 
+  // Первая сделка трейдера: до неё архива нет, и пустые месяцы показывать
+  // незачем - терминал не стоял без дела, его просто ещё не было.
+  const started = useMemo(() => {
+    const times = rows.map(timeOf).filter((one) => one > 0);
+    return times.length > 0 ? new Date(Math.min(...times)) : null;
+  }, [rows]);
+
+  // Какие месяцы этого года вообще показывать: от первого месяца торговли до
+  // нынешнего. Будущие месяцы - это не архив, а пустые квадраты.
+  const months = useMemo(() => {
+    const now = new Date();
+    const first =
+      started && started.getFullYear() === year ? started.getMonth() : 0;
+    const last = year === now.getFullYear() ? now.getMonth() : 11;
+    if (started && year < started.getFullYear()) return [];
+    return Array.from({ length: Math.max(0, last - first + 1) }, (_, i) => first + i);
+  }, [started, year]);
+
   const monthNames = useMemo(
     () =>
       Array.from({ length: 12 }, (_, i) =>
@@ -262,8 +280,9 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
               setYear((was) => was - 1);
               toYear();
             }}
+            disabled={started !== null && year <= started.getFullYear()}
             title={t.journal.spanPrev}
-            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] disabled:opacity-30 disabled:hover:text-[var(--pane-muted)]"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
@@ -275,8 +294,9 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
               setYear((was) => was + 1);
               toYear();
             }}
+            disabled={year >= new Date().getFullYear()}
             title={t.journal.spanNext}
-            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] disabled:opacity-30 disabled:hover:text-[var(--pane-muted)]"
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
@@ -388,8 +408,14 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
         </div>
 
         {month === null ? (
+          months.length === 0 ? (
+            <p className="py-10 text-center text-[11px] text-[var(--pane-muted)]">
+              {t.journal.galleryEmpty}
+            </p>
+          ) : (
           <div className="grid gap-2" style={{ gridTemplateColumns: cells }}>
-            {monthNames.map((name, i) => {
+            {months.map((i) => {
+              const name = monthNames[i];
               const list = inYear.filter((row) => new Date(timeOf(row)).getMonth() === i);
               const days = new Set(list.map((row) => new Date(timeOf(row)).getDate())).size;
               return (
@@ -411,6 +437,7 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
               );
             })}
           </div>
+          )
         ) : day === null ? (
           (() => {
             const byDay = new Map<number, JournalRow[]>();
