@@ -434,7 +434,15 @@ export const journal = {
     take: "target",
     stop: "stop",
     manual: "manual",
+    open: "running",
   },
+  liveTitle: "Running",
+  liveHint: (taken: number, all: number, part: string) =>
+    `Trade is still running: ${taken} of ${all} targets taken, ${part} of the size closed. ` +
+    `Only locked-in money is shown here - the floating part is in the position row.`,
+  liveLocked: (money: string) => `locked in ${money}`,
+  liveNone: "Trade is running, no targets taken yet",
+  lockedLabel: "Locked in",
   weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
   prevMonth: "Previous month",
   nextMonth: "Next month",

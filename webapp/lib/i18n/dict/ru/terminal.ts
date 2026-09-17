@@ -459,7 +459,15 @@ export const journal = {
     take: "цель",
     stop: "стоп",
     manual: "руками",
+    open: "в работе",
   },
+  liveTitle: "В работе",
+  liveHint: (taken: number, all: number, part: string) =>
+    `Сделка идёт: взято целей ${taken} из ${all}, закрыто ${part} объёма. ` +
+    `Показано только зафиксированное - текущее по остатку смотрите в строке позиции.`,
+  liveLocked: (money: string) => `зафиксировано ${money}`,
+  liveNone: "Сделка идёт, целей пока не взято",
+  lockedLabel: "Зафиксировано",
   weekdays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
   prevMonth: "Предыдущий месяц",
   nextMonth: "Следующий месяц",

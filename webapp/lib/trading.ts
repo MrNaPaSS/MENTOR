@@ -439,6 +439,13 @@ export type ServerTrade = {
   leverage: number;
   margin: number;
   takes_hit: number;
+  /**
+   * Уже зафиксировано взятыми целями - число с биржи, из журнала сервера.
+   *
+   * Живая строка результата считает по оставшемуся объёму: после двух взятых
+   * целей она показывала плюс семь там, где на счёте уже лежало тридцать.
+   */
+  locked?: number;
   created_at: string | null;
   opened_at: string | null;
 };

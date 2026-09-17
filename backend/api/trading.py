@@ -291,6 +291,7 @@ def live_trades(
     # вместе с журналом экрану незачем.
     watcher = getattr(request.app.state, "position_watcher", None)
     closing = getattr(watcher, "closing", None)
+    locked = _locked_in(session, student.id, [row.client_id for row in rows])
 
     return {
         "trades": [
@@ -313,6 +314,11 @@ def live_trades(
                 "leverage": row.leverage,
                 "margin": float(row.margin),
                 "takes_hit": row.takes_hit,
+                # Уже зафиксировано взятыми целями - число с биржи, из
+                # журнала. Живая строка результата считает по оставшемуся
+                # объёму, и после двух взятых целей она показывала плюс семь
+                # там, где на счёте уже лежало тридцать.
+                "locked": locked.get(row.client_id, 0.0),
                 "created_at": _iso(row.created_at),
                 "opened_at": _iso(row.opened_at),
             }
@@ -324,6 +330,24 @@ def live_trades(
         # хватает, чтобы убрать разметку, пережившую ночь в браузере.
         "finished": _finished(session, student.id),
     }
+
+
+def _locked_in(session, student_id: int, client_ids: list[str]) -> dict[str, float]:
+    """Сколько по каждой идущей сделке уже зафиксировано.
+
+    Считает не терминал: числа приходят с биржи и лежат в журнале, который
+    ведёт сопровождение (`backend/trading/watcher.py`). Здесь только чтение
+    памяти сервера - похода на биржу нет.
+    """
+    if not client_ids:
+        return {}
+    rows = session.execute(
+        select(ScalpTrade.client_id, ScalpTrade.pnl)
+        .where(ScalpTrade.student_id == student_id)
+        .where(ScalpTrade.client_id.in_(client_ids))
+        .where(ScalpTrade.closed_at.is_(None))
+    ).all()
+    return {str(client_id): float(pnl or 0) for client_id, pnl in rows}
 
 
 # Сколько дней помнить о завершённых сделках для терминала. Вкладку закрывают

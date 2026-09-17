@@ -25,12 +25,32 @@ export type JournalTrade = {
   /** Цели, с которыми сделка задумывалась: по ним она рисуется на графике. */
   targets: number[];
   outcome: "stop" | "take" | "manual";
+  /** Итог сделки за вычетом комиссии. */
   pnl: number;
+  /** Сделка ещё идёт. У закрытой - `false` или поля нет вовсе. */
+  live?: boolean;
+  /** Сколько объёма закрыто: «взято две цели» и «закрыто 60%» - разное. */
+  closed_qty?: number;
   opened_at: string | null;
   closed_at: string;
   note: string;
   /** Биржа сделки: код из lib/exchanges.ts. Пусто - сделка без биржи. */
   exchange?: string;
+};
+
+/**
+ * Сделка, которая идёт прямо сейчас.
+ *
+ * Та же строка журнала, только без даты закрытия, а `pnl` в ней - лишь
+ * зафиксированное взятыми целями. Плавающего по остатку здесь нет намеренно:
+ * журнал показывает деньги, которые уже на счёте, а текущая цена живёт в
+ * терминале.
+ */
+export type LiveJournalTrade = Omit<JournalTrade, "closed_at" | "outcome"> & {
+  closed_at: null;
+  outcome: "open";
+  live: true;
+  closed_qty: number;
 };
 
 export type JournalSummary = {
@@ -86,6 +106,15 @@ export function journalAvailable(): boolean {
 
 export type TradeListing = {
   trades: JournalTrade[];
+  /**
+   * Сделки, которые идут прямо сейчас.
+   *
+   * Отдельным списком, а не вместе с закрытыми: их результат ещё изменится, и
+   * в итогах периода - сумме, проценте прибыльных - им места нет.
+   */
+  live?: LiveJournalTrade[];
+  /** Сколько по ним уже зафиксировано. */
+  live_pnl?: number;
   summary: JournalSummary;
   /** Разрез по биржам за тот же период: по нему рисуется переключатель. */
   by_exchange: VenueSlice[];

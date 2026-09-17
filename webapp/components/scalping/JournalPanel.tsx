@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
-import JournalTable from "./JournalTable";
+import JournalTable, { type JournalRow } from "./JournalTable";
 import JournalCalendar from "./JournalCalendar";
 import { cardFromTrade } from "@/lib/pnl/data";
 import { useJournalExport } from "@/lib/journalExport";
@@ -29,6 +29,7 @@ import {
   type JournalDay,
   type JournalSummary,
   type JournalTrade,
+  type LiveJournalTrade,
   type VenueSlice,
 } from "@/lib/journal";
 import { useVenuePick, venueLabel } from "@/lib/venuePick";
@@ -46,7 +47,7 @@ export default function JournalPanel({
   /** Меняется, когда терминал записал новую сделку: повод перечитать. */
   refreshKey: number;
   /** Сделка под курсором: её разметка показывается на графике. */
-  onHover?: (trade: JournalTrade | null) => void;
+  onHover?: (trade: JournalRow | null) => void;
   /**
    * Нажали на строку: разметка сделки ложится на график.
    *
@@ -61,7 +62,7 @@ export default function JournalPanel({
    * таблице отвечает на вопрос «сколько», а на вопрос «почему» отвечает
    * только сам график.
    */
-  onPick?: (trade: JournalTrade) => void;
+  onPick?: (trade: JournalRow) => void;
   /** Имя владельца: печать на карточке заверяет чью-то сделку, а не ничью. */
   owner?: string;
   onClose: () => void;
@@ -75,6 +76,10 @@ export default function JournalPanel({
   const [onlySymbol, setOnlySymbol] = useState(false);
 
   const [trades, setTrades] = useState<JournalTrade[]>([]);
+  // Сделки, которые идут прямо сейчас: показываются сверху, отдельно от
+  // закрытых, и в итоги периода не входят - их результат ещё изменится.
+  const [live, setLive] = useState<LiveJournalTrade[]>([]);
+  const [livePnl, setLivePnl] = useState(0);
   const [summary, setSummary] = useState<JournalSummary | null>(null);
   // Биржи, встречающиеся в сделках за период, и та, на которую уходят новые.
   // По ним рисуется переключатель: журнал показывает один счёт за раз, потому
@@ -122,6 +127,8 @@ export default function JournalPanel({
       ]);
       if (list) {
         setTrades(list.trades);
+        setLive(list.live ?? []);
+        setLivePnl(list.live_pnl ?? 0);
         setSummary(list.summary);
         // Разрез приходит полным и с выбранной биржей: переключатель не должен
         // терять биржу, которую только что отфильтровали.
@@ -326,6 +333,22 @@ export default function JournalPanel({
                 {t.journal.dayFilter(day.slice(8, 10) + "." + day.slice(5, 7))}
                 <X className="h-3 w-3" />
               </button>
+            )}
+
+            {/* Сделки в работе - первыми: трейдер смотрит журнал как раз
+                затем, чтобы увидеть, что уже зафиксировано. */}
+            {live.length > 0 && (
+              <div className="mb-3">
+                <div className="mb-1 flex items-baseline justify-between text-[10px]">
+                  <span className="text-[var(--pane-muted)]">
+                    {t.journal.liveTitle} · {live.length}
+                  </span>
+                  <span className={tone(livePnl)}>
+                    {t.journal.liveLocked(money(livePnl))}
+                  </span>
+                </div>
+                <JournalTable rows={live} onHover={onHover} onPick={onPick} />
+              </div>
             )}
 
             {shown.length === 0 ? (

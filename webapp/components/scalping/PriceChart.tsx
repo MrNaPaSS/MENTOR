@@ -2895,6 +2895,23 @@ function PriceChart({
                   {Math.abs(floating).toFixed(2)} USD
                 </span>
               )}
+              {/* Забранное взятыми целями - отдельным числом рядом.
+                  Главная цифра считается по открытому остатку, как и на
+                  бирже: после двух взятых целей она показывала плюс семь
+                  там, где на счёте уже лежало тридцать. Складывать их в одно
+                  число нельзя - оно разойдётся с приложением биржи. */}
+              {row.status !== "planned" && taken !== 0 && (
+                <span
+                  className="text-[10px] text-[var(--pane-muted)]"
+                  title={t.terminal.chart.pnlWithTaken(
+                    `${taken >= 0 ? "+" : "-"}${Math.abs(taken).toFixed(2)}`,
+                    `${total >= 0 ? "+" : "-"}${Math.abs(total).toFixed(2)}`,
+                  )}
+                >
+                  ●{taken >= 0 ? "+" : "-"}
+                  {Math.abs(taken).toFixed(2)}
+                </span>
+              )}
               <button
                 onClick={() => onCloseTrade?.(row)}
                 title={t.terminal.chart.closeTrade}

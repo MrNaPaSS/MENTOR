@@ -65,6 +65,7 @@ import {
 } from "@/lib/indicator/presets";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
+import type { JournalRow } from "@/components/scalping/JournalTable";
 import { hasFootprint } from "@/lib/indicator/footprint";
 import {
   allowedAgg,
@@ -777,11 +778,11 @@ export default function ScalpingPage() {
   // и показывать ему чужой ноль незачем.
   const [todayPnl, setTodayPnl] = useState<number | null>(null);
   // Сделка из журнала под курсором: её разметка показывается на графике.
-  const [hovered, setHovered] = useState<JournalTrade | null>(null);
+  const [hovered, setHovered] = useState<JournalRow | null>(null);
   // Сделка, открытая из журнала нажатием. Наведение показывает разметку, пока
   // курсор на строке; нажатие оставляет её на графике и увозит его к тому
   // времени, когда сделка шла.
-  const [picked, setPicked] = useState<JournalTrade | null>(null);
+  const [picked, setPicked] = useState<JournalRow | null>(null);
 
   // Разметка из журнала живёт вместе с журналом.
   //
@@ -2559,6 +2560,19 @@ export default function ScalpingPage() {
         });
       }
 
+      // Зафиксированное взятыми целями - числом сервера, а не нашим расчётом.
+      //
+      // Свой расчёт идёт по замыслу целей: цена цели минус вход, умножить на
+      // долю. Он не знает ни проскальзывания, ни комиссии, а сервер берёт
+      // исполнения с биржи и кладёт их в журнал. Эта же цифра стоит рядом с
+      // живым результатом на графике.
+      for (const trade of watching) {
+        const locked = serverSays.get(trade.id)?.locked;
+        if (typeof locked !== "number" || locked === 0) continue;
+        if (Math.abs(locked - trade.realized) < 0.005) continue;
+        patch.set(trade.id, { ...(patch.get(trade.id) ?? {}), realized: locked });
+      }
+
       // Сделка, которую ведёт сервер и показывает биржа, а на графике её нет.
       //
       // Разметка живёт в браузере, и потерять её можно по-разному: другая
@@ -4303,7 +4317,10 @@ export default function ScalpingPage() {
                   journalKey={journalKey}
                   ghost={(() => {
                     const one = picked ?? hovered;
-                    return one && one.symbol === symbol ? one : null;
+                    // Идущую сделку призраком не рисуем: она уже на графике
+                    // живой разметкой, и вторая поверх неё только путает.
+                    if (!one || one.closed_at === null) return null;
+                    return one.symbol === symbol ? one : null;
                   })()}
                   hoverLevel={levelHint}
                   shot={shotRef}

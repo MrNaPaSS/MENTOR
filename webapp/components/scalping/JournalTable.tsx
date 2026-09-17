@@ -11,7 +11,21 @@ import { Share2, Trash2 } from "lucide-react";
 
 import { useIntlLocale, useT, type Dict } from "@/lib/i18n";
 import { money, tone } from "@/lib/journalFormat";
-import type { JournalTrade } from "@/lib/journal";
+import type { JournalTrade, LiveJournalTrade } from "@/lib/journal";
+
+/**
+ * Строка таблицы: закрытая сделка или идущая.
+ *
+ * Обе рисуются одной таблицей намеренно - это один и тот же журнал, и
+ * заводить для идущих отдельный вид значило бы держать две разметки одного
+ * списка. Отличия точечные: дата берётся у открытия, результат подписан как
+ * зафиксированный, и карточкой такой сделкой не делятся - она не кончилась.
+ */
+export type JournalRow = JournalTrade | LiveJournalTrade;
+
+function isLive(row: JournalRow): row is LiveJournalTrade {
+  return row.closed_at === null;
+}
 
 /**
  * Взятые цели точками: зелёная - сработала, пустая - нет.
@@ -19,7 +33,7 @@ import type { JournalTrade } from "@/lib/journal";
  * Одной строкой «1/3» это не показать: цвет достаётся всей ячейке, и сделка с
  * одной взятой целью читается как сделка, отработавшая все три.
  */
-function Takes({ trade }: { trade: JournalTrade }) {
+function Takes({ trade }: { trade: JournalRow }) {
   if (trade.targets.length === 0) {
     return <span className="text-[var(--pane-muted)]">-</span>;
   }
@@ -40,21 +54,28 @@ function Takes({ trade }: { trade: JournalTrade }) {
 }
 
 /** Полный список целей с отметкой взятых - в подсказке, чтобы не растить таблицу. */
-function takesHint(trade: JournalTrade, t: Dict): string {
+function takesHint(trade: JournalRow, t: Dict): string {
   if (trade.targets.length === 0) return t.journal.noTargets;
   return trade.targets
     .map((price, i) => t.journal.takeLine(i < trade.takes_hit ? "✓" : "·", i + 1, String(price)))
     .join("\n");
 }
 
+/** Что показывает подсказка у идущей сделки: сколько взято и сколько закрыто. */
+function liveHint(row: LiveJournalTrade, t: Dict): string {
+  if (row.takes_hit === 0) return t.journal.liveNone;
+  const part = row.qty > 0 ? `${Math.round((row.closed_qty / row.qty) * 100)}%` : "-";
+  return t.journal.liveHint(row.takes_hit, row.targets.length, part);
+}
+
 export interface JournalTableProps {
-  rows: readonly JournalTrade[];
+  rows: readonly JournalRow[];
   /** Сделка под курсором: её разметка показывается на графике. */
-  onHover?: (trade: JournalTrade | null) => void;
+  onHover?: (trade: JournalRow | null) => void;
   /** Нажали на строку: разметка сделки ложится на график. */
-  onPick?: (trade: JournalTrade) => void;
-  /** Открыть карточку сделки. */
-  onCard: (trade: JournalTrade) => void;
+  onPick?: (trade: JournalRow) => void;
+  /** Открыть карточку сделки. Идущим не предлагается: сделка не кончилась. */
+  onCard?: (trade: JournalTrade) => void;
   /** Убрать запись. Пусто - права нет, и колонки не будет. */
   onDrop?: (id: number) => void;
 }
@@ -92,7 +113,8 @@ export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: 
             }`}
           >
             <td className="py-1 text-[var(--pane-muted)]">
-              {new Date(row.closed_at).toLocaleString(numbers, {
+              {/* У идущей сделки даты закрытия нет - показываем, когда вошли. */}
+              {new Date(row.closed_at ?? row.opened_at ?? "").toLocaleString(numbers, {
                 day: "2-digit",
                 month: "2-digit",
                 hour: "2-digit",
@@ -120,13 +142,23 @@ export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: 
             <td
               className={`text-right ${tone(row.pnl)}`}
               title={
-                row.fee
-                  ? t.journal.pnlWithFee(money(row.pnl), money(row.pnl + row.fee), row.fee.toFixed(2))
-                  : t.journal.pnlNet
+                isLive(row)
+                  ? liveHint(row, t)
+                  : row.fee
+                    ? t.journal.pnlWithFee(
+                        money(row.pnl),
+                        money(row.pnl + row.fee),
+                        row.fee.toFixed(2),
+                      )
+                    : t.journal.pnlNet
               }
             >
+              {/* У идущей сделки это только зафиксированное взятыми целями:
+                  плавающее по остатку живёт в строке позиции, и смешивать их
+                  в одном числе нельзя - оно читалось бы как итог. */}
+              {isLive(row) && <span className="mr-1 text-[9px] opacity-60">●</span>}
               {money(row.pnl)}
-              {row.fee > 0 && (
+              {!isLive(row) && row.fee > 0 && (
                 <span className="ml-1 text-[9px] text-[var(--pane-muted)]">
                   -{row.fee.toFixed(2)}
                 </span>
@@ -137,16 +169,18 @@ export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: 
                 и отбирать его нельзя: «почему так вышло» спрашивают чаще, чем
                 «покажи всем». */}
             <td className="pl-2 text-right">
-              <button
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onCard(row);
-                }}
-                title={t.journal.cardTitle}
-                className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
-              >
-                <Share2 className="h-3 w-3" />
-              </button>
+              {onCard && !isLive(row) && (
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onCard(row);
+                  }}
+                  title={t.journal.cardTitle}
+                  className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
+                >
+                  <Share2 className="h-3 w-3" />
+                </button>
+              )}
             </td>
             {/* Убрать запись может только наставник: журнал - это статистика, и
                 право стереть из неё неудачную сделку обесценивает её целиком. */}
