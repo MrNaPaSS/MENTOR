@@ -17,7 +17,12 @@ import { useT } from "@/lib/i18n";
 import type { ActiveTrade } from "@/lib/trade/position";
 
 export interface PickTradeProps {
-  /** Сделки, в которые можно положить снимок: идущие и ждущие входа. */
+  /**
+   * Сделки, в которые можно положить снимок.
+   *
+   * Порядок задаёт вызывающий: открытые первыми, ждущие заявки под ними.
+   * Снимок кладут в то, что идёт сейчас, а заявка - это ещё замысел.
+   */
   trades: readonly ActiveTrade[];
   onPick: (trade: ActiveTrade) => void;
   onClose: () => void;
@@ -63,11 +68,17 @@ export default function PickTrade({ trades, onPick, onClose }: PickTradeProps) {
               {t.terminal.shotToTradeEmpty}
             </p>
           ) : (
-            trades.map((trade) => (
+            trades.map((trade, i) => (
               <button
                 key={trade.id}
                 onClick={() => onPick(trade)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)]"
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)] ${
+                  // Черта перед первой ждущей заявкой: открытые сделки и
+                  // замыслы - разные вещи, и в одном списке их надо разделить.
+                  trade.status === "planned" && trades[i - 1]?.status === "open"
+                    ? "border-t border-[var(--pane-border)]"
+                    : ""
+                } ${trade.status === "planned" ? "opacity-70" : ""}`}
               >
                 <span
                   className={`font-mono text-[11px] font-bold ${

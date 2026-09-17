@@ -3480,13 +3480,17 @@ export default function ScalpingPage() {
    * единственный, значит мешать посреди работы. Несколько - показываем выбор.
    */
   function shotToTrade() {
-    const live = tradesRef.current.filter((one) => one.status !== "closed");
-    if (live.length === 0) {
+    const open = tradesRef.current.filter((one) => one.status === "open");
+    const waiting = tradesRef.current.filter((one) => one.status === "planned");
+    if (open.length === 0 && waiting.length === 0) {
       setOrderNote({ text: t.terminal.shotToTradeEmpty, bad: true });
       return;
     }
-    if (live.length === 1) {
-      void shotInto(live[0]);
+    // Без вопросов кладём только в единственную открытую сделку. Ждущую
+    // лимитку молча не берём вовсе: снимок делают по тому, что на рынке
+    // происходит сейчас, а заявка ещё не сделка - и человек имел в виду не её.
+    if (open.length === 1 && waiting.length === 0) {
+      void shotInto(open[0]);
       return;
     }
     setPickShot(true);
@@ -4695,7 +4699,12 @@ export default function ScalpingPage() {
 
       {pickShot && (
         <PickTrade
-          trades={trades.filter((one) => one.status !== "closed")}
+          // Открытые сделки первыми, ждущие заявки под ними: снимок кладут в
+          // то, что идёт сейчас, а заявка - это ещё замысел.
+          trades={[
+            ...trades.filter((one) => one.status === "open"),
+            ...trades.filter((one) => one.status === "planned"),
+          ]}
           onPick={(one) => void shotInto(one)}
           onClose={() => setPickShot(false)}
         />
