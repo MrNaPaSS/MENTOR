@@ -573,6 +573,7 @@ export const journal = {
   heatTrades: (n: number) => `${n} сд.`,
   heatLess: "реже",
   heatMore: "чаще",
+  wholeMonth: "Весь месяц",
   totalsDay: "Итог дня",
   totalsMonth: "Итог месяца",
   totalsYear: "Итог года",

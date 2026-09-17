@@ -2,10 +2,13 @@
 
 // Разбор: тот же месяц, что и в списке, но картинками.
 //
-// Вкладки журнала показывают одно и то же с двух сторон, поэтому и выглядеть
-// должны одинаково: сверху те же карточки итогов, слева тот же календарь
-// месяца. Отличается правая половина - вместо строк сделок там папки: монеты
-// дня, а внутри монеты её позиции со снимками.
+// Сверху те же карточки итогов, что и в списке: цифры одни, и рамки вокруг
+// них должны быть одни. А вот календарь здесь не повторяется - он уже есть в
+// соседней вкладке, и второй такой же занимал бы половину экрана, ничего не
+// добавляя. Его место заняли цифры разбора и карта торговли: день выбирают
+// клеткой карты, а выбранный день у вкладок общий.
+//
+// Правая половина - папки: монеты дня, внутри монеты её позиции со снимками.
 //
 // Разбирают именно так, сверху вниз: сперва выбирают день в календаре, потом
 // монету, и только потом смотрят картинки одной позиции. Всё сразу на одном
@@ -23,9 +26,7 @@ import { money, tone } from "@/lib/journalFormat";
 import { shotImage } from "@/lib/journalShots";
 import { isoWeek } from "@/lib/weekPlan";
 import { sumUp } from "@/lib/weekStats";
-import type { JournalDay } from "@/lib/journal";
 import ActivityHeat from "./ActivityHeat";
-import JournalCalendar from "./JournalCalendar";
 import Stat from "./Stat";
 import WeekReviewCard from "./WeekReviewCard";
 import type { JournalRow } from "./JournalTable";
@@ -36,13 +37,9 @@ const PAGE = 12;
 export interface ReviewPanelProps {
   /** Строки журнала за период: и закрытые, и идущие. */
   rows: readonly JournalRow[];
-  /** Месяц календаря - общий со списком: журнал у обеих вкладок один. */
+  /** Месяц, выбранный в списке: журнал у обеих вкладок один. */
   year: number;
   month: number;
-  days: readonly JournalDay[];
-  total: number;
-  onShift: (delta: number) => void;
-  onToday: () => void;
   /** Выбранный день, `2026-09-17`. Пусто - показываем месяц целиком. */
   picked: string | null;
   onPickDay: (date: string | null) => void;
@@ -64,6 +61,35 @@ function dayOf(row: JournalRow): string {
   const month = String(at.getMonth() + 1).padStart(2, "0");
   const day = String(at.getDate()).padStart(2, "0");
   return `${at.getFullYear()}-${month}-${day}`;
+}
+
+/** Строка цифр: подпись слева, число справа, пунктир между ними. */
+function Line({
+  label,
+  value,
+  hint,
+  mood,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  mood?: number;
+}) {
+  return (
+    <div className="flex items-baseline gap-1.5 py-0.5" title={hint}>
+      <span className="text-[10px] text-[var(--pane-muted)]">{label}</span>
+      <div className="flex-1 border-b border-dashed border-[var(--pane-border)]" />
+      <span
+        className={`font-mono text-[10px] ${
+          mood === undefined || mood === 0
+            ? "text-[var(--pane-text-2)]"
+            : `font-bold ${tone(mood)}`
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
 }
 
 /** Папка разбора: обложка, имя поверх неё, ярлык и итог снизу. */
@@ -131,10 +157,6 @@ export default function ReviewPanel({
   rows,
   year,
   month,
-  days,
-  total,
-  onShift,
-  onToday,
   picked,
   onPickDay,
   onPick,
@@ -242,51 +264,85 @@ export default function ReviewPanel({
       </div>
 
       <div className="grid items-start gap-3 lg:grid-cols-2">
-        <div>
-          {/* Тот же календарь, что в списке: выбранный день общий для обеих
-              вкладок, и переключение между ними не теряет место. */}
-          <JournalCalendar
-            year={year}
-            month={month}
-            days={days}
-            total={total}
-            onShift={(delta) => {
-              onShift(delta);
-              setCoin(null);
-            }}
-            onToday={() => {
-              onToday();
-              setCoin(null);
-            }}
-            picked={picked}
-            onPickDay={(date) => {
-              onPickDay(date);
+        <div className="rounded-lg border border-[var(--pane-border)]">
+          {/* Цифры разбора: сколько из сделок разобрано, сколько нарушений.
+              Это не повтор итогов сверху - там деньги, здесь дисциплина. */}
+          <div className="px-2 py-1.5">
+            <div className="mb-1 flex items-baseline gap-1.5">
+              <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+                {picked ? t.journal.totalsDay : t.journal.totalsMonth}
+              </span>
+              <div className="flex-1" />
+              {/* Выбран день - показываем, чем из него выйти обратно в месяц. */}
+              {picked && (
+                <button
+                  onClick={() => {
+                    onPickDay(null);
+                    setCoin(null);
+                  }}
+                  className="rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[9px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
+                >
+                  {t.journal.wholeMonth}
+                </button>
+              )}
+            </div>
+
+            {stats.trades === 0 ? (
+              <p className="py-1 text-[10px] text-[var(--pane-muted)]">{t.journal.weekEmpty}</p>
+            ) : (
+              <>
+                <Line
+                  label={t.journal.weekTradesLabel}
+                  hint={t.journal.weekTradesHint}
+                  value={`${stats.marked} / ${stats.trades}`}
+                />
+                {stats.gain !== null && (
+                  <Line
+                    label={t.journal.weekGainLabel}
+                    hint={t.journal.weekGainHint}
+                    value={`${stats.gain > 0 ? "+" : ""}${stats.gain.toFixed(1)}%`}
+                    mood={stats.pnl}
+                  />
+                )}
+                <Line
+                  label={t.journal.weekWinrateLabel}
+                  hint={t.journal.weekWinrateHint}
+                  value={`${Math.round((stats.winrate ?? 0) * 100)}%`}
+                />
+                {/* Нарушения показываются, только если их отмечали: ноль
+                    нарушений у неразобранного дня - не заслуга, а пустота. */}
+                {stats.marked > 0 && (
+                  <Line
+                    label={t.journal.weekBreaksLabel}
+                    hint={t.journal.weekBreaksHint}
+                    value={String(stats.breaks)}
+                    mood={stats.breaks > 0 ? -1 : 0}
+                  />
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Карта торговли: по ней виден режим работы - где подряд, а где
+              неделя тишины. Нажали на клетку - открылся тот день. */}
+          <ActivityHeat
+            rows={rows}
+            active={picked ?? undefined}
+            onPick={(at) => {
+              const one = String(at.getMonth() + 1).padStart(2, "0");
+              const two = String(at.getDate()).padStart(2, "0");
+              onPickDay(`${at.getFullYear()}-${one}-${two}`);
               setCoin(null);
             }}
           />
 
-          <div className="mt-3 rounded-lg border border-[var(--pane-border)]">
-            {/* Карта торговли: по ней виден режим работы - где подряд, а где
-                неделя тишины. Нажали на клетку - открылся тот день. */}
-            <ActivityHeat
-              rows={rows}
-              active={picked ?? undefined}
-              onPick={(at) => {
-                const one = String(at.getMonth() + 1).padStart(2, "0");
-                const two = String(at.getDate()).padStart(2, "0");
-                onPickDay(`${at.getFullYear()}-${one}-${two}`);
-                setCoin(null);
-              }}
-            />
-
-            <div className="border-t border-[var(--pane-border)] px-2 py-1.5">
-              <button
-                onClick={() => setSum(true)}
-                className="w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
-              >
-                {t.journal.weekReviewMake}
-              </button>
-            </div>
+          <div className="border-t border-[var(--pane-border)] px-2 py-1.5">
+            <button
+              onClick={() => setSum(true)}
+              className="w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+            >
+              {t.journal.weekReviewMake}
+            </button>
           </div>
         </div>
 

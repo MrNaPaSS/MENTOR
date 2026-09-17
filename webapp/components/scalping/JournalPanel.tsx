@@ -327,10 +327,6 @@ export default function JournalPanel({
             rows={[...live, ...shown]}
             year={year}
             month={month}
-            days={days}
-            total={total}
-            onShift={shiftMonth}
-            onToday={toToday}
             picked={day}
             onPickDay={setDay}
             onPick={(row, number) => setOpenPos({ id: row.client_id, number })}

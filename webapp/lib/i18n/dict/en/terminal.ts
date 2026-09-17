@@ -544,6 +544,7 @@ export const journal = {
   heatTrades: (n: number) => `${n} tr.`,
   heatLess: "less",
   heatMore: "more",
+  wholeMonth: "Whole month",
   totalsDay: "Day total",
   totalsMonth: "Month total",
   totalsYear: "Year total",
