@@ -22,7 +22,9 @@ import { useIntlLocale, useT } from "@/lib/i18n";
 import { money, tone } from "@/lib/journalFormat";
 import { shotImage } from "@/lib/journalShots";
 import { isoWeek } from "@/lib/weekPlan";
+import { dayKey } from "@/lib/activity";
 import { sumUp } from "@/lib/weekStats";
+import ActivityHeat from "./ActivityHeat";
 import WeekReviewCard from "./WeekReviewCard";
 import type { JournalRow } from "./JournalTable";
 
@@ -337,6 +339,23 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
             </>
           )}
         </div>
+
+        {/* Карта торговли: по ней видно режим работы и по ней же ходят.
+            Нажали на клетку - архив открылся на этом дне. */}
+        <ActivityHeat
+          rows={rows}
+          active={
+            day !== null && month !== null
+              ? dayKey(new Date(year, month, day))
+              : undefined
+          }
+          onPick={(at) => {
+            setYear(at.getFullYear());
+            setMonth(at.getMonth());
+            setDay(at.getDate());
+            setCoin(null);
+          }}
+        />
       </div>
 
       <div className="rounded-lg border border-[var(--pane-border)] p-2">
