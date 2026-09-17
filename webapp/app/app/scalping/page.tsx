@@ -489,6 +489,7 @@ const pnlSeenAt = new Map<string, number>();
 
 function pnlSeen(
   trade: { id: string; symbol: string; side: string; entry: number; qty: number; realized: number },
+  venue: string,
   live: {
     size: number;
     entry: number | null;
@@ -507,6 +508,9 @@ function pnlSeen(
   record("pnl.seen", {
     id: trade.id,
     symbol: trade.symbol,
+    // Биржа сделки: вычет комиссии входа бывает только у WEEX, у остальных
+    // такого поля нет вовсе, и разбирать их расхождения надо иначе.
+    venue,
     exchange: live.unrealized ?? null,
     // Число биржи до нашего вычета и сам вычет: по ним видно, спорим мы с
     // биржей или со своим вычетом комиссии входа.
@@ -2500,7 +2504,7 @@ export default function ScalpingPage() {
         // Расхождение с приложением биржи видно глазами, а по какой из причин -
         // нет: то ли биржа считает от своей цены маркировки, то ли её число не
         // дошло и на экране наша арифметика.
-        pnlSeen(trade, one, midRef.current);
+        pnlSeen(trade, venue, one, midRef.current);
         if (qty === trade.qty && entry === trade.entry && unrealized === trade.unrealized) {
           continue;
         }
