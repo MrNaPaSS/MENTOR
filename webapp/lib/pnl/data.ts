@@ -39,15 +39,27 @@ export function cardFromTrade(trade: JournalTrade, owner?: string): CardData {
     // Итог тот же, что в журнале: после комиссии. Карточка с доходом до неё
     // обещала бы больше, чем пришло на счёт.
     pnl: Number(trade.pnl),
-    rows: [
-      [t.entryPrice, price(Number(trade.entry))],
-      [t.exitPrice, trade.exit_price === null ? "-" : price(Number(trade.exit_price))],
-    ],
+    rows: journalRows(trade, t),
     footer: [t.stamped, stamped(trade.closed_at)],
     at: trade.closed_at,
     owner: owner || undefined,
     venue: venueTitle(trade.exchange) || undefined,
   };
+}
+
+/** Строки карточки из журнала: вход, выход и сколько целей отработало. */
+function journalRows(
+  trade: JournalTrade,
+  t: ReturnType<typeof dict>["pnlCard"],
+): [string, string][] {
+  const rows: [string, string][] = [
+    [t.entryPrice, price(Number(trade.entry))],
+    [t.exitPrice, trade.exit_price === null ? "-" : price(Number(trade.exit_price))],
+  ];
+  if (trade.targets.length > 0) {
+    rows.push([t.targetsRow, t.ofTargets(trade.takes_hit, trade.targets.length)]);
+  }
+  return rows;
 }
 
 /**
@@ -97,16 +109,23 @@ function sharedRows(
   trade: SharedTrade,
   t: ReturnType<typeof dict>["pnlCard"],
 ): [string, string][] {
-  if (trade.state === "closed") {
-    return [
-      [t.entryPrice, price(trade.entry)],
-      [t.exitPrice, price(trade.stop)],
-    ];
-  }
+  const closed = trade.state === "closed";
   const rows: [string, string][] = [
     [t.entryPrice, price(trade.entry)],
-    [t.stopPrice, breakeven(trade) ? t.stopBreakeven : price(trade.stop)],
+    closed
+      ? [t.exitPrice, price(trade.stop)]
+      : [
+          t.stopPrice,
+          // Стоп за входом: и метка, и сама цена. Одна метка не говорит, где
+          // именно он стоит, а одна цена не говорит, что сделка уже не может
+          // кончиться убытком.
+          breakeven(trade)
+            ? `${t.stopBreakeven} ${price(trade.stop)}`
+            : price(trade.stop),
+        ],
   ];
+  // Взятые цели - и у закрытой тоже: по ним видно, как сделка шла, а не
+  // только чем кончилась. Целей не ставили вовсе - строки нет.
   const targets = trade.targets?.length ?? 0;
   if (targets > 0) {
     rows.push([t.targetsRow, t.ofTargets(trade.takesHit ?? 0, targets)]);

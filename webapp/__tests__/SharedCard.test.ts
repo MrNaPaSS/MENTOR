@@ -46,16 +46,16 @@ describe("карточка идущей сделки", () => {
     expect(card.rows).toContainEqual(["Цели", "2 из 3"]);
   });
 
-  it("стоп за входом подписан «б/у»", () => {
+  it("стоп за входом подписан «б/у» и своей ценой", () => {
     const card = cardFromShared(running({ stop: 77000 }), AT);
     const stop = card.rows.find(([label]) => label === "Стоп");
-    expect(stop?.[1]).toBe("б/у");
+    expect(stop?.[1]).toBe("б/у 77000,00");
   });
 
-  it("стоп в убытке показывается ценой", () => {
+  it("стоп в убытке показывается одной ценой, без метки", () => {
     const card = cardFromShared(running(), AT);
     const stop = card.rows.find(([label]) => label === "Стоп");
-    expect(stop?.[1]).not.toBe("б/у");
+    expect(stop?.[1]).toBe("76500,00");
   });
 
   it("без взятых целей и без забранного карточка остаётся честной", () => {
@@ -71,12 +71,23 @@ describe("карточка идущей сделки", () => {
     expect(card.pnl).toBe(122.19);
   });
 
-  it("у закрытой сделки всё как было: итог и цена выхода", () => {
+  it("у закрытой сделки крупным итог, а цели видно так же", () => {
     const card = cardFromShared(
-      running({ state: "closed", pnl: 1500, locked: 900, stop: 78500 }),
+      running({ state: "closed", pnl: 1500, locked: 900, stop: 78500, takesHit: 3 }),
       AT,
     );
+    // Итог закрытой - её собственный, забранное по целям в него уже входит.
     expect(card.pnl).toBe(1500);
+    expect(card.rows).toEqual([
+      ["Цена входа", "77000,00"],
+      ["Цена выхода", "78500,00"],
+      // По целям видно, как сделка шла, а не только чем кончилась.
+      ["Цели", "3 из 3"],
+    ]);
+  });
+
+  it("сделка без целей обходится без пустой строки", () => {
+    const card = cardFromShared(running({ state: "closed", targets: [] }), AT);
     expect(card.rows.map(([label]) => label)).toEqual(["Цена входа", "Цена выхода"]);
   });
 });
