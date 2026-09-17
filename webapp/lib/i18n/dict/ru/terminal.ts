@@ -484,7 +484,7 @@ export const journal = {
   statBest: "Лучшая",
   statWorst: "Худшая",
   cellTitle: (trades: number, money: string) => `${trades} сделок · ${money} $`,
-  empty: "Пока пусто. Закрытая сделка попадёт сюда сама.",
+  empty: "Закрытых сделок за период нет. Идущая появится выше, как только откроется.",
   colDate: "Дата",
   colCoin: "Монета",
   colEntry: "Вход",
