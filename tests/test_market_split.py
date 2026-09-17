@@ -154,3 +154,33 @@ def test_without_a_config_the_script_says_so_and_changes_nothing(tmp_path, monke
 
     assert enable_market.main([]) == 1
     assert "NMNH_MARKET" not in env.read_text(encoding="utf-8")
+
+
+def test_the_user_config_is_found_too(tmp_path, monkeypatch):
+    """На столе конфиг может лежать не рядом со скриптом, а в профиле."""
+    import enable_market
+
+    home = tmp_path / "profile"
+    (home / ".cloudflared").mkdir(parents=True)
+    config = home / ".cloudflared" / "config.yml"
+    config.write_text(PLAIN, encoding="utf-8")
+    monkeypatch.setattr(enable_market, "LOCAL_CFG", tmp_path / "нет.yml")
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+    assert enable_market.tunnel_config() == config
+
+
+def test_a_ready_config_is_left_alone(tmp_path, monkeypatch):
+    """Правила уже стоят - конфиг не трогаем и копию не плодим."""
+    import enable_market
+
+    config = tmp_path / "cloudflared-config.yml"
+    config.write_text(with_market(PLAIN), encoding="utf-8")
+    env = tmp_path / ".env"
+    env.write_text("DATABASE_URL=postgresql://x\n", encoding="utf-8")
+    monkeypatch.setattr(enable_market, "LOCAL_CFG", config)
+    monkeypatch.setattr(enable_market, "ENV", env)
+
+    assert enable_market.main([]) == 0
+    assert not (tmp_path / "cloudflared-config.yml.bak").exists()
+    assert "NMNH_MARKET=1" in env.read_text(encoding="utf-8")
