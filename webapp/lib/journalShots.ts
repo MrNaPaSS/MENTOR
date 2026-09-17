@@ -67,6 +67,24 @@ export async function attachExisting(
   );
 }
 
+/**
+ * Переставить снимки: весь порядок целиком, от первого к последнему.
+ *
+ * Не «поменяй эти два местами»: список короткий, а обмен парами расходится с
+ * экраном на первой же гонке - две перестановки подряд оставляли снимки не
+ * там, куда их положили.
+ */
+export async function orderShots(clientId: string, ids: number[]): Promise<boolean> {
+  const token = getAccessToken();
+  if (!token) return false;
+  const done = await authReq<unknown>(
+    `/api/journal/trades/${encodeURIComponent(clientId)}/shots/order`,
+    token,
+    { method: "PUT", body: JSON.stringify({ ids }) },
+  );
+  return done !== null;
+}
+
 /** Открепить снимок. Файл остаётся: на него могла уйти ссылка. */
 export async function detachShot(id: number): Promise<boolean> {
   const token = getAccessToken();

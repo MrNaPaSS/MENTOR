@@ -861,3 +861,65 @@ def test_a_past_week_keeps_its_own_plan(client):
 
     assert client.get("/api/journal/plan?week=2026-W37").json()["text"] == "прошлая"
     assert client.get("/api/journal/plan?week=2026-W38").json()["text"] == "нынешняя"
+
+
+def test_shots_keep_the_order_the_trader_set(client, tmp_path, monkeypatch):
+    """Снимки идут в том порядке, в каком их положил трейдер.
+
+    Складывают их не в том порядке, в каком снимали: сперва прикрепили выход,
+    потом нашли снимок входа - и он должен встать первым.
+    """
+    from backend.api import shots as shots_api
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path / "shots")
+    client.post("/api/journal/trades", json=trade(client_id="t-order"))
+
+    made = [
+        client.post(
+            "/api/journal/trades/t-order/shots",
+            json={"image": PNG_1PX, "note": note},
+        ).json()
+        for note in ("выход", "вход", "в позиции")
+    ]
+    # По умолчанию - в порядке добавления.
+    row = next(
+        t for t in client.get("/api/journal/trades").json()["trades"] if t["client_id"] == "t-order"
+    )
+    assert [s["note"] for s in row["shots"]] == ["выход", "вход", "в позиции"]
+
+    # Переставляем: вход, в позиции, выход.
+    order = [made[1]["id"], made[2]["id"], made[0]["id"]]
+    assert (
+        client.put("/api/journal/trades/t-order/shots/order", json={"ids": order}).status_code
+        == 200
+    )
+
+    row = next(
+        t for t in client.get("/api/journal/trades").json()["trades"] if t["client_id"] == "t-order"
+    )
+    assert [s["note"] for s in row["shots"]] == ["вход", "в позиции", "выход"]
+
+
+def test_an_unnamed_shot_goes_last_and_strangers_are_ignored(client, tmp_path, monkeypatch):
+    """Не названный в порядке снимок уходит в конец, чужой номер пропускаем."""
+    from backend.api import shots as shots_api
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path / "shots")
+    client.post("/api/journal/trades", json=trade(client_id="t-tail"))
+    made = [
+        client.post(
+            "/api/journal/trades/t-tail/shots", json={"image": PNG_1PX, "note": note}
+        ).json()
+        for note in ("первый", "второй", "третий")
+    ]
+
+    # Называем только третий, да ещё и с чужим номером в списке.
+    client.put(
+        "/api/journal/trades/t-tail/shots/order",
+        json={"ids": [made[2]["id"], 999999]},
+    )
+
+    row = next(
+        t for t in client.get("/api/journal/trades").json()["trades"] if t["client_id"] == "t-tail"
+    )
+    assert [s["note"] for s in row["shots"]] == ["третий", "первый", "второй"]

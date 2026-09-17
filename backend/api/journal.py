@@ -380,7 +380,7 @@ def _shot_rows(session, student_id: int, client_ids: list[str]) -> dict[str, lis
         select(TradeShot)
         .where(TradeShot.student_id == student_id)
         .where(TradeShot.client_id.in_(client_ids))
-        .order_by(TradeShot.id.asc())
+        .order_by(TradeShot.position.asc(), TradeShot.id.asc())
     ).scalars().all()
     out: dict[str, list[dict]] = {}
     for row in rows:
@@ -436,6 +436,8 @@ def attach_shot(
         client_id=client_id,
         shot_id=shot_id,
         note=body.note.strip(),
+        # Новый снимок встаёт последним: место ему потом назначит трейдер.
+        position=int(have),
     )
     session.add(row)
     session.commit()
@@ -459,6 +461,51 @@ def detach_shot(
         raise HTTPException(404, "Снимка нет")
     session.delete(row)
     session.commit()
+
+
+class ShotOrderIn(BaseModel):
+    """Новый порядок снимков сделки: их номера от первого к последнему."""
+
+    ids: list[int] = Field(min_length=1, max_length=MAX_SHOTS)
+
+
+@router.put("/trades/{client_id}/shots/order")
+def order_shots(
+    client_id: str,
+    body: ShotOrderIn,
+    student: Student = Depends(get_current_student),
+    session=Depends(get_session),
+):
+    """Переставить снимки разбора.
+
+    Принимаем весь порядок целиком, а не «поменяй эти два местами»: список
+    короткий, а обмен парами расходится с экраном на первой же гонке - две
+    перестановки подряд оставляли снимки не там, куда их положили.
+
+    Чужие и посторонние номера молча пропускаем: переставить можно только свои
+    снимки этой сделки.
+    """
+    rows = session.execute(
+        select(TradeShot)
+        .where(TradeShot.student_id == student.id)
+        .where(TradeShot.client_id == client_id)
+    ).scalars().all()
+    by_id = {row.id: row for row in rows}
+
+    place = 0
+    for shot_row_id in body.ids:
+        row = by_id.pop(shot_row_id, None)
+        if row is None:
+            continue
+        row.position = place
+        place += 1
+    # Не названные в списке уходят в конец, сохраняя прежний порядок.
+    for row in sorted(by_id.values(), key=lambda one: (one.position, one.id)):
+        row.position = place
+        place += 1
+
+    session.commit()
+    return {"ids": [row.id for row in sorted(rows, key=lambda one: one.position)]}
 
 
 # ── план на неделю ──────────────────────────────────────────────────────────

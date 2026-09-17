@@ -469,6 +469,10 @@ class TradeShot(Base):
     shot_id: Mapped[str] = mapped_column(String(22))
     # Подпись трейдера: зачем этот снимок здесь.
     note: Mapped[str] = mapped_column(String(140), default="")
+    # Место в разборе. Снимки складывают не в том порядке, в каком снимали:
+    # сперва прикрепили выход, потом нашли снимок входа - и он должен встать
+    # первым. Одинаковые значения разбираются по номеру записи.
+    position: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     student: Mapped["Student"] = relationship()
