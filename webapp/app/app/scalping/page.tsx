@@ -519,6 +519,10 @@ const DEFAULT_SYMBOL = "BTCUSDT";
 // Как часто переспрашивать состояние биржевого счёта, пока его не получили.
 const EXCHANGE_RETRY_MS = 5_000;
 
+// Сколько ждать перед автоснимком, чтобы кадр собрался целиком: объёмный
+// профиль и кластеры рисуются следом за свечами, а не вместе с ними.
+const AUTO_SHOT_WAIT_MS = 500;
+
 // Как часто писать сверку результата в журнал: чаще незачем, это не измерение
 // цены, а разбор расхождения на глаз.
 const PNL_SEEN_MS = 30_000;
@@ -3554,6 +3558,17 @@ export default function ScalpingPage() {
 
   /** Снять график и приложить к сделке. Молча: это не действие трейдера. */
   async function autoShot(clientId: string, note: string, stage: ShotStage) {
+    // Даём кадру дорисоваться.
+    //
+    // Событие приходит раньше картинки: цель взята - и снимок уходил в тот же
+    // миг, когда объёмный профиль справа ещё не был нарисован. В журнале
+    // оставался график с пустой колонкой, то есть без половины того, ради чего
+    // снимок и делают. Полсекунды на минутном графике не стоят ничего, а кадр
+    // за это время успевает собраться целиком.
+    await new Promise<void>((done) => setTimeout(done, AUTO_SHOT_WAIT_MS));
+    await new Promise<void>((done) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => done())),
+    );
     const taken = shotRef.current?.();
     if (!taken || taken.source === "empty" || !symbol) return;
     try {
