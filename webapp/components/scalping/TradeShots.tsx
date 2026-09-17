@@ -53,6 +53,14 @@ export interface TradeShotsProps {
    * то, что относится к этому этапу.
    */
   trade?: JournalRow;
+  /**
+   * Открыться сразу на этом снимке.
+   *
+   * Снимки сделки бывают уже показаны там, откуда окно открывают - в дне
+   * календаря, например. Показывать их второй раз списком незачем: человек
+   * нажал на конкретную картинку и хочет увидеть её крупно.
+   */
+  openAt?: number;
   onClose: () => void;
   /** Список изменился: журнал перечитывает строки. */
   onChange: () => void;
@@ -95,6 +103,7 @@ export default function TradeShots({
   symbol,
   shots,
   trade,
+  openAt,
   onClose,
   onChange,
 }: TradeShotsProps) {
@@ -104,7 +113,7 @@ export default function TradeShots({
   const [over, setOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Какой снимок открыт во весь экран. Ноль - тоже снимок, поэтому null.
-  const [viewing, setViewing] = useState<number | null>(null);
+  const [viewing, setViewing] = useState<number | null>(openAt ?? null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const add = useCallback(

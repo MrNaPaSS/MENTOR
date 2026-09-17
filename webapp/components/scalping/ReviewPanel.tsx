@@ -2,11 +2,10 @@
 
 // Разбор: тот же месяц, что и в списке, но картинками.
 //
-// Сверху те же карточки итогов, что и в списке: цифры одни, и рамки вокруг
-// них должны быть одни. А вот календарь здесь не повторяется - он уже есть в
-// соседней вкладке, и второй такой же занимал бы половину экрана, ничего не
-// добавляя. Его место заняли цифры разбора и карта торговли: день выбирают
-// клеткой карты, а выбранный день у вкладок общий.
+// Ни итогов, ни календаря здесь нет: и то и другое уже есть в списке, а
+// вторая копия занимает половину экрана, ничего не добавляя. Слева - цифры
+// самого разбора: сколько сделок разобрано и сколько нарушений отмечено, - и
+// карта торговли: день выбирают её клеткой, а выбранный день у вкладок общий.
 //
 // Правая половина - папки: монеты дня, внутри монеты её позиции со снимками.
 //
@@ -27,7 +26,6 @@ import { shotImage } from "@/lib/journalShots";
 import { isoWeek } from "@/lib/weekPlan";
 import { sumUp } from "@/lib/weekStats";
 import ActivityHeat from "./ActivityHeat";
-import Stat from "./Stat";
 import WeekReviewCard from "./WeekReviewCard";
 import type { JournalRow } from "./JournalTable";
 
@@ -221,14 +219,6 @@ export default function ReviewPanel({
     [rows, picked, year, month],
   );
   const stats = useMemo(() => sumUp(all), [all]);
-  const best = useMemo(
-    () => all.reduce((top, row) => Math.max(top, row.pnl), Number.NEGATIVE_INFINITY),
-    [all],
-  );
-  const worst = useMemo(
-    () => all.reduce((low, row) => Math.min(low, row.pnl), Number.POSITIVE_INFINITY),
-    [all],
-  );
 
   function coverOf(list: readonly JournalRow[]): string | undefined {
     const first = [...list].sort((a, b) => timeOf(a) - timeOf(b))[0];
@@ -242,27 +232,6 @@ export default function ReviewPanel({
 
   return (
     <div>
-      {/* Те же карточки итогов, что и в списке: цифры одни, и рамки вокруг них
-          должны быть одни. */}
-      <div className="mb-3 grid grid-cols-2 gap-2 font-mono tabular-nums sm:grid-cols-5">
-        <Stat label={t.journal.statPnl} value={money(stats.pnl)} tone={tone(stats.pnl)} />
-        <Stat label={t.journal.statTrades} value={String(stats.trades)} />
-        <Stat
-          label={t.journal.statWinRate}
-          value={`${Math.round((stats.winrate ?? 0) * 100)}%`}
-        />
-        <Stat
-          label={t.journal.statBest}
-          value={stats.wins > 0 ? money(best) : "-"}
-          tone={stats.wins > 0 ? tone(best) : undefined}
-        />
-        <Stat
-          label={t.journal.statWorst}
-          value={stats.trades > stats.wins ? money(worst) : "-"}
-          tone={stats.trades > stats.wins ? tone(worst) : undefined}
-        />
-      </div>
-
       <div className="grid items-start gap-3 lg:grid-cols-2">
         <div className="rounded-lg border border-[var(--pane-border)]">
           {/* Цифры разбора: сколько из сделок разобрано, сколько нарушений.

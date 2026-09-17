@@ -2,7 +2,7 @@
 // v8
 import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 import { maskValue, numbersHidden, rememberHidden } from "@/lib/analytics/hideNumbers";
-import { shotImage } from "@/lib/journalShots";
+import { shotImage, stageOf } from "@/lib/journalShots";
 import TradeShots from "@/components/scalping/TradeShots";
 import { useEffect, useMemo, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -349,6 +349,10 @@ export default function AnalyticsPage() {
   const [shotsOf, setShotsOf] = useState<string | null>(null);
   // Открытая монета в снимках дня. Пусто - показываем папки монет.
   const [dayCoin, setDayCoin] = useState<string | null>(null);
+  // Открытая сделка: её снимки показываются тут же, веткой, а не новым окном.
+  const [dayTrade, setDayTrade] = useState<string | null>(null);
+  // Снимок, открытый крупно. Вот тут уже окно - картинку смотрят во весь экран.
+  const [bigShot, setBigShot] = useState<number | null>(null);
   // Чья карточка открыта. Null - окна нет.
   // Карточкой делятся и одной сделкой, и итогом срока - окно одно, а
   // колонку для него собирают в lib/pnl/data.
@@ -1577,16 +1581,81 @@ export default function AnalyticsPage() {
                           <>
                             <span className={`font-mono text-[10px] ${muted}`}>/</span>
                             <button
-                              onClick={() => setDayCoin(null)}
+                              onClick={() => {
+                                setDayCoin(null);
+                                setDayTrade(null);
+                              }}
                               className={`font-mono text-[10px] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] ${muted}`}
                             >
                               {dayCoin}
                             </button>
                           </>
                         )}
+                        {dayTrade && (
+                          <>
+                            <span className={`font-mono text-[10px] ${muted}`}>/</span>
+                            <button
+                              onClick={() => setDayTrade(null)}
+                              className={`font-mono text-[10px] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] ${muted}`}
+                            >
+                              {(() => {
+                                const one = folders.find(
+                                  (row) => row.client_id === dayTrade,
+                                );
+                                return one
+                                  ? new Date(
+                                      one.closed_at ?? one.opened_at ?? "",
+                                    ).toLocaleTimeString(numbers, {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })
+                                  : "";
+                              })()}
+                            </button>
+                          </>
+                        )}
                       </div>
 
-                      {dayCoin === null ? (
+                      {dayTrade !== null ? (
+                        // Снимки сделки прямо здесь: открывать ради них ещё
+                        // одно окно поверх дня незачем - их всего несколько, и
+                        // они помещаются в тот же ряд.
+                        (() => {
+                          const one = folders.find((row) => row.client_id === dayTrade);
+                          const list = one?.shots ?? [];
+                          return (
+                            <div
+                              className="grid gap-2"
+                              style={{
+                                gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))",
+                              }}
+                            >
+                              {list.map((shot, i) => (
+                                <button
+                                  key={shot.id}
+                                  onClick={() => {
+                                    setShotsOf(dayTrade);
+                                    setBigShot(i);
+                                  }}
+                                  className="group overflow-hidden rounded-lg border border-[var(--pane-border)] text-left transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)]"
+                                >
+                                  <img
+                                    src={shotImage(shot)}
+                                    alt={shot.note || one!.symbol}
+                                    className="block aspect-[4/3] w-full object-cover transition duration-200 ease-out group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                                    loading="lazy"
+                                  />
+                                  <div className="px-1.5 py-1 text-[9px]">
+                                    <span className={muted}>
+                                      {shot.note || t.journal.stages[stageOf(shot.stage, shot.note)]}
+                                    </span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()
+                      ) : dayCoin === null ? (
                         <div
                           className="grid gap-2"
                           style={{
@@ -1653,7 +1722,7 @@ export default function AnalyticsPage() {
                             return (
                               <button
                                 key={one.client_id}
-                                onClick={() => setShotsOf(one.client_id)}
+                                onClick={() => setDayTrade(one.client_id)}
                                 className="group overflow-hidden rounded-lg border border-[var(--pane-border)] text-left transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)]"
                               >
                                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-[color:color-mix(in_srgb,var(--pane-text)_6%,transparent)]">
@@ -1732,7 +1801,11 @@ export default function AnalyticsPage() {
             symbol={one.symbol}
             shots={one.shots ?? []}
             trade={one}
-            onClose={() => setShotsOf(null)}
+            openAt={bigShot ?? undefined}
+            onClose={() => {
+              setShotsOf(null);
+              setBigShot(null);
+            }}
             onChange={() => setDayKey((n) => n + 1)}
           />
         );
