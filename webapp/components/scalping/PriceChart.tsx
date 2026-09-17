@@ -30,6 +30,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { API_URL } from "@/lib/api";
+import { keepView, readView, viewFits } from "@/lib/chartView";
 import { getAccessToken } from "@/lib/auth";
 import { visibleOn } from "@/lib/indicator/ink";
 import { computeSmc, type SmcResult } from "@/lib/indicator/smc";
@@ -1473,6 +1474,44 @@ function PriceChart({
     };
   }, []);
 
+  // Где стоит график - помним между заходами.
+  //
+  // Трейдер отматывает график к утреннему движению, уходит в аналитику за
+  // цифрой и возвращается: место должно остаться тем же. Пишем с задержкой -
+  // при перетаскивании диапазон меняется десятки раз в секунду, и писать на
+  // каждое движение значит писать в хранилище вместо рисования графика.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const scale = chart.timeScale();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    function remember() {
+      try {
+        const span = scale.getVisibleRange();
+        if (span) keepView(symbol, interval, Number(span.from), Number(span.to));
+      } catch {
+        // График уже снят - запоминать нечего.
+      }
+    }
+
+    function onMove() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(remember, 400);
+    }
+
+    scale.subscribeVisibleTimeRangeChange(onMove);
+    return () => {
+      if (timer) clearTimeout(timer);
+      try {
+        scale.unsubscribeVisibleTimeRangeChange(onMove);
+      } catch {
+        // График снят раньше этой отписки - она уже не нужна.
+      }
+      remember();
+    };
+  }, [symbol, interval]);
+
   // Свечи: первая загрузка при смене монеты или таймфрейма, дальше обновление.
   useEffect(() => {
     let cancelled = false;
@@ -1599,6 +1638,25 @@ function PriceChart({
       const chart = chartRef.current;
       if (!chart) return;
       chart.priceScale("right").applyOptions({ autoScale: true });
+
+      // Сначала - туда, где график оставили. Перезагрузка страницы и заход в
+      // аналитику за цифрой не должны стоить трейдеру найденного участка: он
+      // отматывал его руками и возвращается к той же мысли.
+      const seen = readView(symbol, interval);
+      const first = dataRef.current[0]?.time ?? 0;
+      const last = dataRef.current.at(-1)?.time ?? 0;
+      if (seen && first > 0 && viewFits(seen, first, last)) {
+        try {
+          chart.timeScale().setVisibleRange({
+            from: seen.from as UTCTimestamp,
+            to: seen.to as UTCTimestamp,
+          });
+          return;
+        } catch {
+          // Библиотека не смогла лечь на этот участок - показываем свежие
+          // свечи, это всегда верно.
+        }
+      }
       // Пустое поле справа - часть окна, а не добавка к нему: иначе те же сто
       // пятьдесят свечей просто сжались бы, чтобы освободить место, и вместо
       // читаемого графика получилась бы щётка со свободным полем.
