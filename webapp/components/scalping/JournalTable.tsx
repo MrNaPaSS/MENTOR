@@ -85,7 +85,20 @@ export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: 
   const numbers = useIntlLocale();
 
   return (
-    <table className="w-full font-mono text-[10px] tabular-nums">
+    // Ширины колонок заданы жёстко, а не по содержимому: таблиц на экране две
+    // - идущие сделки сверху, закрытые под ними, - и колонки, разъезжающиеся
+    // по длине чисел, читались бы как два разных списка.
+    <table className="w-full table-fixed font-mono text-[10px] tabular-nums">
+      <colgroup>
+        <col className="w-[13%]" />
+        <col className="w-[29%]" />
+        <col className="w-[12%]" />
+        <col className="w-[13%]" />
+        <col className="w-[10%]" />
+        <col className="w-[23%]" />
+        <col className="w-6" />
+        {onDrop && <col className="w-6" />}
+      </colgroup>
       {/* Шапка держится на месте: список прокручивается сам, своей колонкой, и
           уехавшая шапка оставляла бы шесть колонок чисел без подписей. */}
       <thead className="text-[9px] text-[var(--pane-muted)] [&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:z-10 [&>tr>th]:bg-[var(--pane-bg)]">
@@ -108,7 +121,7 @@ export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: 
             onMouseLeave={() => onHover?.(null)}
             onClick={() => onPick?.(row)}
             title={t.journal.openChart}
-            className={`border-t border-[var(--pane-border)] transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)] ${
+            className={`whitespace-nowrap border-t border-[var(--pane-border)] transition-colors duration-150 ease-out hover:bg-[var(--pane-hover)] ${
               onPick ? "cursor-pointer" : "cursor-default"
             }`}
           >

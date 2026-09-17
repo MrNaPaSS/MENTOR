@@ -162,9 +162,6 @@ export default function JournalPanel({
   // сравниваем по ним же - иначе вечерняя сделка попадёт в соседнюю клетку.
   const shown = day === null ? trades : trades.filter((row) => row.closed_at.slice(0, 10) === day);
 
-  // Что показываем: идущие сделки первыми строками, следом закрытые. Выбран
-  // день календаря - идущие прячем: они ещё никакому дню не принадлежат.
-  const rows: JournalRow[] = day === null ? [...live, ...shown] : shown;
 
   function toToday() {
     const now = new Date();
@@ -337,14 +334,28 @@ export default function JournalPanel({
               </button>
             )}
 
-            {/* Одна таблица на всё: идущие сделки идут первыми строками, а не
-                своим блоком со своей шапкой. Две шапки подряд читались как два
-                разных списка, хотя это один журнал. */}
-            {rows.length === 0 ? (
-              <p className="py-6 text-center text-[var(--pane-muted)]">{t.journal.empty}</p>
+            {/* Идущие сделки - своим разделом сверху, ровно того же вида, что
+                список ниже: те же колонки и те же ширины. Нет идущих - нет и
+                раздела, лишней пустой шапки на экране не висит. */}
+            {live.length > 0 && day === null && (
+              <div className="mb-3">
+                <JournalTable
+                  rows={live}
+                  onHover={onHover}
+                  onPick={onPick}
+                  onCard={setCard}
+                  onDrop={mentor ? drop : undefined}
+                />
+              </div>
+            )}
+
+            {shown.length === 0 ? (
+              live.length === 0 || day !== null ? (
+                <p className="py-6 text-center text-[var(--pane-muted)]">{t.journal.empty}</p>
+              ) : null
             ) : (
               <JournalTable
-                rows={rows}
+                rows={shown}
                 onHover={onHover}
                 onPick={onPick}
                 onCard={setCard}
