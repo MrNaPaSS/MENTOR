@@ -58,11 +58,25 @@ export interface BarsProps {
 }
 
 /** Поля: слева под подписи сумм, снизу под названия столбиков. */
-const PAD = { top: 14, right: 4, bottom: 16, left: 40 };
+// Верхних точек двадцать, а не четырнадцать: над лучшим столбиком стоит
+// подпись его значения, и при четырнадцати она упиралась в самый верх окна -
+// у ряда сверху не было воздуха вовсе, хотя снизу он оставался.
+const PAD = { top: 20, right: 4, bottom: 16, left: 40 };
+
+// Ряду с полосами сессий верх нужен просторнее.
+//
+// Наверху стоят их названия - «Азия», «Европа», «Америка», - а значение
+// подписывается над столбиком. У высокого столбика подпись доезжала до
+// названия и ложилась прямо на него: «8 сделок» поверх «Америки». Лишние
+// шестнадцать точек опускают весь ряд ниже подписей, и сталкиваться им
+// больше негде.
+const PAD_TOP_BANDS = 30;
 /** Сколько линий сетки рисуем по каждую сторону от нуля. */
 const LINES = 2;
 
 export default function Bars({ items, height, format, onPick, short, back, bands }: BarsProps) {
+  // Верхний отступ зависит от того, есть ли над рядом подписи сессий.
+  const padTop = bands && bands.length > 0 ? PAD_TOP_BANDS : PAD.top;
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<string | null>(null);
@@ -82,8 +96,8 @@ export default function Bars({ items, height, format, onPick, short, back, bands
     const hasLoss = items.some((item) => item.value < 0);
     // Шкала ровная в обе стороны от нуля, когда минусы есть: иначе столбик
     // вниз на ту же сумму выглядит вдвое меньше столбика вверх.
-    const innerH = Math.max(1, height - PAD.top - PAD.bottom);
-    const zeroY = PAD.top + (hasLoss ? innerH / 2 : innerH);
+    const innerH = Math.max(1, height - padTop - PAD.bottom);
+    const zeroY = padTop + (hasLoss ? innerH / 2 : innerH);
     const scale = (hasLoss ? innerH / 2 : innerH) / peak;
 
     const best = items.reduce((top, item) => (item.value > top.value ? item : top), items[0]);
@@ -97,7 +111,7 @@ export default function Bars({ items, height, format, onPick, short, back, bands
     }
 
     return { peak, hasLoss, zeroY, scale, grid, best, worst, innerH };
-  }, [items, height]);
+  }, [items, height, padTop]);
 
   const label = short ?? format;
 
