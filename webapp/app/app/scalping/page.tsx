@@ -3523,8 +3523,8 @@ export default function ScalpingPage() {
         trade.id,
         picture.toDataURL("image/jpeg", 0.9),
         "",
-        // Сделка ещё ждёт входа - это снимок «до входа»; идёт - «ведение».
-        trade.status === "open" ? "manage" : "before",
+        // Сделка идёт - это ведение; ждёт исполнения заявки - это ещё вход.
+        trade.status === "open" ? "manage" : "entry",
       );
       setOrderNote({
         text: done

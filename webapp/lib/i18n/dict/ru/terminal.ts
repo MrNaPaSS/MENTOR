@@ -528,11 +528,14 @@ export const journal = {
   cardFee: "Комиссия",
   sessions: { asia: "Азия", london: "Лондон", newYork: "Нью-Йорк", evening: "Вечер" },
   stages: {
-    before: "До входа",
     entry: "Вход",
     manage: "Ведение",
     exit: "Выход",
-    review: "Разбор",
+  },
+  stageWhat: {
+    entry: "как выглядел график, когда входили",
+    manage: "взятые цели и переносы стопа",
+    exit: "последняя цель, безубыток или стоп",
   },
   stageAdd: "Добавить снимок в этот этап",
   stageEmpty: "снимков нет",

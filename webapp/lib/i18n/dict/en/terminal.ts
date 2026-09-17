@@ -503,11 +503,14 @@ export const journal = {
   cardFee: "Fee",
   sessions: { asia: "Asia", london: "London", newYork: "New York", evening: "Evening" },
   stages: {
-    before: "Before entry",
     entry: "Entry",
     manage: "Management",
     exit: "Exit",
-    review: "Review",
+  },
+  stageWhat: {
+    entry: "what the chart looked like at entry",
+    manage: "targets taken and stop moves",
+    exit: "last target, breakeven or stop",
   },
   stageAdd: "Add a shot to this stage",
   stageEmpty: "no shots",

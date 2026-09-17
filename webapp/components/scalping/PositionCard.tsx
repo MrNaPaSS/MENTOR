@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, Plus, X } from "lucide-react";
 
 import { useIntlLocale, useT } from "@/lib/i18n";
-import { money, tone } from "@/lib/journalFormat";
+import { money, priceText, tone } from "@/lib/journalFormat";
 import {
   MISTAKES,
   STAGES,
@@ -24,6 +24,7 @@ import {
   readImage,
   saveReview,
   saveShotNote,
+  stageOf,
   shotImage,
   type ShotStage,
   type TradeShot,
@@ -73,7 +74,7 @@ export default function PositionCard({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [review, setReview] = useState(trade.review ?? "");
-  const [stage, setStage] = useState<ShotStage>("before");
+  const [stage, setStage] = useState<ShotStage>("entry");
   const fileRef = useRef<HTMLInputElement>(null);
   const kept = useRef(trade.review ?? "");
 
@@ -201,12 +202,15 @@ export default function PositionCard({
                 чего в разборе не хватает. */}
             <div className="grid gap-2">
               {STAGES.map((one) => {
-                const mine = shots.filter((shot) => (shot.stage || "") === one);
+                const mine = shots.filter((shot) => stageOf(shot.stage) === one);
                 return (
                   <div key={one}>
                     <div className="mb-1 flex items-center gap-2">
-                      <span className="text-[10px] uppercase tracking-wider text-[var(--pane-muted)]">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--pane-text-2)]">
                         {t.journal.stages[one]}
+                      </span>
+                      <span className="text-[9px] text-[var(--pane-muted)]">
+                        {t.journal.stageWhat[one]}
                       </span>
                       <button
                         onClick={() => {
@@ -281,19 +285,15 @@ export default function PositionCard({
                 видно на графике, - и только потом сверяются с числами. Сверху
                 они отодвигали снимки за край экрана. */}
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[11px] sm:grid-cols-4">
-              <Fact label={t.journal.colEntry} value={String(trade.entry)} />
-              <Fact label={t.journal.cardStop} value={String(trade.stop)} />
-              <Fact
-                label={t.journal.cardTargets}
-                value={trade.targets.length > 0 ? trade.targets.join(" · ") : "-"}
-              />
+              <Fact label={t.journal.colEntry} value={priceText(trade.entry)} />
+              <Fact label={t.journal.cardStop} value={priceText(trade.stop)} />
               <Fact
                 label={t.journal.cardRR}
                 value={rr > 0 ? `1 : ${rr.toFixed(1)}` : "-"}
               />
               <Fact
                 label={t.journal.cardExit}
-                value={trade.exit_price ? String(trade.exit_price) : "-"}
+                value={trade.exit_price ? priceText(trade.exit_price) : "-"}
               />
               <Fact label={t.journal.cardQty} value={String(trade.qty)} />
               <Fact label={t.journal.cardLeverage} value={`×${trade.leverage}`} />
@@ -324,6 +324,29 @@ export default function PositionCard({
                 if (file) await add(await readImage(file));
               }}
             />
+
+            {/* Цели отдельной строкой, а не ячейкой в ряду: в ячейке они
+                обрезались на третьей, и как раз третья - та, ради которой
+                сделку держали. Взятая цель отмечена цветом. */}
+            {trade.targets.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1">
+                <span className="text-[10px] text-[var(--pane-muted)]">
+                  {t.journal.cardTargets}
+                </span>
+                {trade.targets.map((price, i) => (
+                  <span
+                    key={i}
+                    className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                      i < trade.takes_hit
+                        ? "bg-[color:color-mix(in_srgb,var(--pane-up)_15%,transparent)] font-bold text-[var(--pane-up)]"
+                        : "bg-[var(--pane-hover)] text-[var(--pane-text-2)]"
+                    }`}
+                  >
+                    TP{i + 1} {priceText(price)}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {/* Дисциплина: отмечает человек, потому что система видит цифры, а
                 не намерение. Без отметки процент дисциплины был бы выдумкой. */}
