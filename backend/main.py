@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
 
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -374,6 +375,13 @@ def create_app(
 
     return app
 
+
+# Окно сервера на столе: не замирает, если в нём выделили текст мышью, и пишет
+# журнал ещё и в файл (backend/console.py). В тестах окна нет и файла не надо.
+if "pytest" not in sys.modules:  # pragma: no cover - только на живом сервере
+    from backend import console
+
+    console.prepare(process_role())
 
 app = create_app()
 
