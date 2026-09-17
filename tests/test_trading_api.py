@@ -1441,3 +1441,41 @@ def test_the_separate_stop_of_the_entry_is_remembered(app_and_exchange):
     live = session.query(LiveTrade).order_by(LiveTrade.id.desc()).first()
     assert live is not None
     assert live.sl_order_id == "sl-77"
+
+
+
+def test_plans_asks_the_exchange_for_both_lists_at_once(app_and_exchange):
+    """Защита и ждущие заявки спрашиваются разом, а не по очереди.
+
+    Это два похода на биржу примерно по четверти секунды, и терминал ждал их
+    сумму: в панели здоровья эта ручка была самой долгой из частых - 658 мс
+    обычно при ответе биржи в 250.
+    """
+    import asyncio
+    import time
+
+    client, exchange, _session = app_and_exchange
+    began: list[float] = []
+
+    async def slow_algo(symbol):
+        began.append(time.perf_counter())
+        await asyncio.sleep(0.2)
+        return []
+
+    async def slow_open(symbol):
+        began.append(time.perf_counter())
+        await asyncio.sleep(0.2)
+        return []
+
+    exchange.algo_orders = slow_algo
+    exchange.open_orders = slow_open
+
+    started = time.perf_counter()
+    answer = client.get("/api/trading/plans/BTCUSDT")
+    spent = time.perf_counter() - started
+
+    assert answer.status_code == 200
+    assert len(began) == 2
+    # Оба ушли почти одновременно, и ручка уложилась в один поход, а не в два.
+    assert began[1] - began[0] < 0.1
+    assert spent < 0.35

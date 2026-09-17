@@ -423,9 +423,14 @@ async def plans(
     """
     client = _require_client(session, student)
     sym = symbol.upper()
+    # Оба списка спрашиваем разом, а не по очереди. Это два похода на биржу по
+    # четверти секунды каждый, и терминал ждал их сумму: в панели здоровья эта
+    # ручка была самой долгой из частых (658 мс обычно).
+    resting_ask = asyncio.ensure_future(client.open_orders(sym))
     try:
         orders = await client.algo_orders(sym)
     except WeexTradeError as exc:
+        resting_ask.cancel()
         raise _fail(exc) from exc
 
     # Только сделки этой биржи: заявки другой биржи в её списке не стоят, и
@@ -514,7 +519,7 @@ async def plans(
     # зацепило верхнюю, а на графике открылись обе.
     waiting = [row.client_id for row in live if row.status == "waiting"]
     try:
-        orders = await client.open_orders(sym)
+        orders = await resting_ask
     except WeexTradeError as exc:
         # Не спросили - считаем, что стоят все: объявить заявку исполненной,
         # не зная этого, дороже, чем показать её ждущей на пару секунд дольше.

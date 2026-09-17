@@ -19,7 +19,7 @@ from typing import Optional
 
 import certifi
 
-from core.throttle import take as take_budget
+from core.throttle import Budget, take as take_budget
 
 from core.weex.base import WeexClient
 from core.weex.uid import clean_uid, looks_like_uid
@@ -41,6 +41,20 @@ def _get_affiliate_sem():
     if _affiliate_sem is None:
         _affiliate_sem = _asyncio.Semaphore(3)
     return _affiliate_sem
+
+# Очередь партнёрских запросов - своя, отдельно от торговых.
+#
+# Это другой адрес биржи (`api-spot.weex.com`) со своими пределами: WEEX
+# закрывает доступ примерно на десяти запросах в секунду по всем партнёрским
+# ручкам разом. Восемь за две секунды - четыре в секунду, вдвое ниже порога.
+#
+# Отдельная очередь нужна в обе стороны. Страница наставника листает всех
+# рефералов по запросу на страницу, и в общей очереди она занимала места,
+# которых ждали стопы и цели. А после деления бюджета между двумя процессами
+# ей самой досталась четверть прежнего, и первая загрузка растянулась на
+# сорок семь секунд (панель здоровья, 17 сентября). Делить её между процессами
+# тоже незачем: партнёрские ручки живут только в процессе сайта.
+AFFILIATE_BUDGET = (Budget(8, 2.0), Budget(8, 2.0))
 
 # Память партнёрских ответов: они меняются медленно, а спрашивают их пачками.
 AFFILIATE_TTL = 60.0
@@ -232,7 +246,9 @@ class RealWeexClient(WeexClient):
             fresh = _affiliate_cached(key)
             if fresh is not None:
                 return fresh
-            await take_budget("weex", "affiliate")
+            await take_budget(
+                "weex-affiliate", "affiliate", AFFILIATE_BUDGET, split=False
+            )
 
         session = await self._get_session()
         headers = {}

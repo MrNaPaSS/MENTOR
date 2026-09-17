@@ -120,3 +120,23 @@ def test_the_role_is_read_from_the_environment(monkeypatch):
     assert throttle.role_limit(10) == 4
     monkeypatch.setenv("NMNH_ROLE", "watcher")
     assert throttle.role_limit(10) == 6
+
+
+async def test_affiliate_queue_is_separate_from_trading():
+    """Страница наставника не занимает очередь, которой ждут стопы и цели.
+
+    Партнёрские ручки живут на другом адресе биржи со своими пределами, а
+    листают они всех рефералов по запросу на страницу. В общей очереди эта
+    пачка вставала перед торговлей, а после деления бюджета между двумя
+    процессами сама растянулась на сорок семь секунд (панель здоровья,
+    17 сентября).
+    """
+    from core.weex.real import AFFILIATE_BUDGET
+
+    throttle.clear()
+    # Партнёрская очередь выбрана до дна.
+    for _ in range(AFFILIATE_BUDGET[0].limit):
+        assert await take("weex-affiliate", "affiliate", AFFILIATE_BUDGET, split=False) == 0
+
+    # Торговый запрос уходит сразу же.
+    assert await take("weex", "ключ-ученика") == 0
