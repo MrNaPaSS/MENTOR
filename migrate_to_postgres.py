@@ -124,6 +124,14 @@ def migrate(
 
     if apply:
         Base.metadata.create_all(target)
+        # Схема создана сегодняшними моделями - это и есть последняя ревизия.
+        # Без отметки `migrate_db.py` принял бы базу за созданную до миграций,
+        # пометил первой и попытался бы добавить поля, которые уже есть.
+        from alembic import command
+
+        from core.migrations import alembic_config
+
+        command.stamp(alembic_config(target_url), "head")
 
     print(f"Источник:  {source_url}")
     print(f"Приёмник:  {target_url}")

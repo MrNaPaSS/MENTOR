@@ -12,6 +12,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -380,7 +381,13 @@ class ScalpTrade(Base):
     """
 
     __tablename__ = "scalp_trades"
-    __table_args__ = (UniqueConstraint("student_id", "client_id", name="uq_scalp_trade_client"),)
+    __table_args__ = (
+        UniqueConstraint("student_id", "client_id", name="uq_scalp_trade_client"),
+        # Журнал: свои сделки за период, свежие первыми. Объявлен здесь, а не
+        # досоздаётся при запуске: схему ведут миграции, и указатель, которого
+        # нет в модели, первая же сверка предложила бы удалить.
+        Index("ix_scalp_trades_student_closed", "student_id", "closed_at"),
+    )
 
     id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
@@ -686,7 +693,11 @@ class LiveTrade(Base):
     """
 
     __tablename__ = "live_trades"
-    __table_args__ = (UniqueConstraint("student_id", "client_id", name="uq_live_trade_client"),)
+    __table_args__ = (
+        UniqueConstraint("student_id", "client_id", name="uq_live_trade_client"),
+        # Обход сопровождения и список живых сделок терминала.
+        Index("ix_live_trades_student_status", "student_id", "status"),
+    )
 
     id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)

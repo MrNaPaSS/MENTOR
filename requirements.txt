@@ -1,6 +1,7 @@
 # NMNH — runtime dependencies (бот + бэкенд)
 aiogram>=3.4
 SQLAlchemy>=2.0
+alembic>=1.13
 APScheduler>=3.10
 python-dotenv>=1.0
 aiohttp>=3.9

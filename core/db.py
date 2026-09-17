@@ -125,13 +125,28 @@ def get_engine():
 
 
 def create_all() -> None:
-    """Создать таблицы (для dev/тестов; в проде — миграции)."""
+    """Подготовить базу к работе: схема и данные справочников.
+
+    Схему на SQLite создаём сами, на Postgres только сверяем с миграциями
+    (`core/migrations.py`). Шаги с данными - каталог магазина, темы чата,
+    перенос ключей - идут в обоих случаях: они повторяемы и схему не меняют.
+    """
     from core import models  # noqa: F401 — регистрация моделей
 
     engine = get_engine()
-    Base.metadata.create_all(engine)
-    _ensure_indexes(engine)
-    _migrate_add_columns(engine)
+    if engine.dialect.name == "sqlite":
+        # Разработка и тесты: таблицы создаём сами, беречь тут нечего.
+        Base.metadata.create_all(engine)
+        _ensure_indexes(engine)
+        _migrate_add_columns(engine)
+    else:
+        # Боевая база: схему ведут миграции (`migrate_db.py`, его зовёт
+        # start.bat). Сами её здесь не трогаем - только проверяем, что она
+        # доведена до последней ревизии, иначе сервер упал бы на первом
+        # запросе к новому полю посреди торговли.
+        from core.migrations import require_current
+
+        require_current(engine)
     _move_weex_keys(engine)
     _seed_chat_threads(engine)
     _seed_shop_items(engine)

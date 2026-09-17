@@ -67,6 +67,16 @@ echo   Config: !CFG!
 :: ============ 5. ZAPUSK ============
 echo [5/5] Zapusk komponentov...
 
+:: Shema bazy - do zapuska okon servera. Oba processa (API i soprovozhdenie)
+:: startuyut na uzhe gotovoj baze i ne sporyat, kto ee obnovlyaet. Ne vyshlo -
+:: server ne podnimaem: on vse ravno upal by na pervom zaprose k novomu polyu.
+python migrate_db.py
+if errorlevel 1 (
+    echo.
+    echo   OSHIBKA: shema bazy ne obnovlena - vyvod vyshe prishlite razrabotchiku.
+    pause & exit /b 1
+)
+
 :: Tolko 127.0.0.1: snaruzhi server viden cherez tunnel, i port 8000 na vseh
 :: interfejsah daval by put' v obhod Cloudflare. Bot i tunnel hodyat na 127.0.0.1.
 :: Bez --reload: on perezapuskal server posredi obhoda sdelok na kazhdom
