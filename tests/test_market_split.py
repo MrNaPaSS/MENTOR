@@ -228,3 +228,59 @@ def test_the_script_fixes_localhost_while_turning_it_on(tmp_path, monkeypatch):
     assert "localhost" not in out
     assert "service: http://127.0.0.1:8000" in out
     assert f"127.0.0.1:{MARKET_PORT}" in out
+
+
+def test_a_second_run_says_nothing_needs_doing(tmp_path, monkeypatch, capsys):
+    """Второй запуск не должен звать перезапускать сервер: менять нечего.
+
+    Живой стол 17 сентября: скрипт поправил одну строку в конфиге, а в конце
+    напечатал «закрой все окна и запусти start.bat» - и это была неправда,
+    хватило бы перезапуска туннеля.
+    """
+    import enable_market
+
+    config = tmp_path / "cloudflared-config.yml"
+    config.write_text(with_market(PLAIN), encoding="utf-8")
+    env = tmp_path / ".env"
+    env.write_text("NMNH_MARKET=1\n", encoding="utf-8")
+    monkeypatch.setattr(enable_market, "LOCAL_CFG", config)
+    monkeypatch.setattr(enable_market, "ENV", env)
+
+    assert enable_market.main([]) == 0
+    said = capsys.readouterr().out
+    assert "менять нечего" in said
+    assert "start.bat" not in said
+
+
+def test_fixing_the_config_asks_only_for_the_tunnel(tmp_path, monkeypatch, capsys):
+    """Поменялись только правила - перезапускать надо туннель, не сервер."""
+    import enable_market
+
+    config = tmp_path / "cloudflared-config.yml"
+    config.write_text(
+        with_market(PLAIN).replace("127.0.0.1:8000", "localhost:8000"), encoding="utf-8"
+    )
+    env = tmp_path / ".env"
+    env.write_text("NMNH_MARKET=1\n", encoding="utf-8")
+    monkeypatch.setattr(enable_market, "LOCAL_CFG", config)
+    monkeypatch.setattr(enable_market, "ENV", env)
+
+    assert enable_market.main([]) == 0
+    said = capsys.readouterr().out
+    assert "cloudflared tunnel" in said
+    assert "Окна API, Watcher и Market продолжают работать" in said
+
+
+def test_the_first_time_asks_for_a_full_restart(tmp_path, monkeypatch, capsys):
+    """Первое включение: сервер должен перечитать .env, тут без start.bat никак."""
+    import enable_market
+
+    config = tmp_path / "cloudflared-config.yml"
+    config.write_text(PLAIN, encoding="utf-8")
+    env = tmp_path / ".env"
+    env.write_text("DATABASE_URL=postgresql://x\n", encoding="utf-8")
+    monkeypatch.setattr(enable_market, "LOCAL_CFG", config)
+    monkeypatch.setattr(enable_market, "ENV", env)
+
+    assert enable_market.main([]) == 0
+    assert "start.bat" in capsys.readouterr().out

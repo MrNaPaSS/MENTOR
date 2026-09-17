@@ -103,12 +103,18 @@ def main(argv: list[str]) -> int:
         print("уйти на ::1, куда сервер не слушает.")
         text = fixed
 
-    if has_market(text):
+    # Что делать человеку потом, зависит от того, что мы тут поменяли:
+    # впервые включили - перезапускать сервер целиком; поправили только
+    # правила - хватит туннеля; не тронули ничего - ничего и не надо.
+    was_on = has_market(text)
+    touched_config = False
+    if was_on:
         print(f"Правила пути на порт {MARKET_PORT} в конфиге уже есть.")
         if fixed != text:
             backup = config.with_suffix(config.suffix + ".bak")
             shutil.copy2(config, backup)
             config.write_text(fixed, encoding="utf-8")
+            touched_config = True
             print("В конфиге localhost заменён на 127.0.0.1 (копия - "
                   f"{backup.name}).")
     else:
@@ -126,18 +132,38 @@ def main(argv: list[str]) -> int:
             print(f"  {said}")
             return 1
         print(f"Конфиг туннеля: правила пути добавлены, копия - {backup.name}")
+        touched_config = True
         if said:
             print(f"  {said}")
 
+    env_was_on = env_on(env) == env
     ENV.write_text(env_on(env), encoding="utf-8")
-    print("В .env добавлена строка NMNH_MARKET=1")
+    if not env_was_on:
+        print("В .env добавлена строка NMNH_MARKET=1")
     print()
-    print("Дальше - руками:")
-    print("  1. Закрой окна MENTOR API, MENTOR Watcher, MENTOR Bot и окно туннеля.")
-    print("  2. Запусти start.bat - поднимется ещё одно окно, MENTOR Market.")
-    print("  3. Открой терминал и проверь стакан: он идёт с порта 8002.")
-    print()
-    print("Вернуть как было: python enable_market.py --off и снова start.bat")
+
+    if not was_on or not env_was_on:
+        # Первое включение: сервер должен перечитать .env, а туннель - правила.
+        print("Дальше - руками:")
+        print("  1. Закрой окна MENTOR API, MENTOR Watcher, MENTOR Bot и окно туннеля.")
+        print("  2. Запусти start.bat - поднимется ещё одно окно, MENTOR Market.")
+        print("  3. Открой терминал и проверь стакан: он идёт с порта 8002.")
+        print()
+        print("Вернуть как было: python enable_market.py --off и снова start.bat")
+        return 0
+
+    if touched_config:
+        # Менялся только конфиг туннеля: окна сервера трогать незачем.
+        print("Разделение уже включено, поменялись только правила туннеля.")
+        print("Перезапусти одно окно - то, где идёт туннель:")
+        print("  1. Ctrl+C в окне туннеля (там, где шёл start.bat).")
+        print("  2. В нём же:")
+        print(f'     cloudflared tunnel --config "{config}" run nmnh-api')
+        print()
+        print("Окна API, Watcher и Market продолжают работать - их не трогай.")
+        return 0
+
+    print("Всё уже настроено, менять нечего.")
     return 0
 
 
