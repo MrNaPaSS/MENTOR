@@ -7,6 +7,7 @@
 import { authReq } from "./api";
 import { getAccessToken } from "./auth";
 import type { ActiveTrade } from "./trade/position";
+import type { TradeShot } from "./journalShots";
 
 export type JournalTrade = {
   id: number;
@@ -29,6 +30,8 @@ export type JournalTrade = {
   pnl: number;
   /** Сделка ещё идёт. У закрытой - `false` или поля нет вовсе. */
   live?: boolean;
+  /** Снимки разбора: чем сделка обросла после того, как её разбирали. */
+  shots?: TradeShot[];
   /** Сколько объёма закрыто: «взято две цели» и «закрыто 60%» - разное. */
   closed_qty?: number;
   opened_at: string | null;

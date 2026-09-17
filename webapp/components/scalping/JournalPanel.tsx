@@ -18,6 +18,7 @@ import Link from "next/link";
 import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
 import JournalTable, { type JournalRow } from "./JournalTable";
+import TradeShots from "./TradeShots";
 import JournalCalendar from "./JournalCalendar";
 import { cardFromTrade } from "@/lib/pnl/data";
 import { useJournalExport } from "@/lib/journalExport";
@@ -70,6 +71,8 @@ export default function JournalPanel({
   const t = useT();
   // Чья карточка открыта. Null - окна нет.
   const [card, setCard] = useState<JournalRow | null>(null);
+  // Чью сделку разбираем снимками. Сами снимки приходят в строке журнала.
+  const [shotsOf, setShotsOf] = useState<JournalRow | null>(null);
   const now = new Date();
   const [year, setYear] = useState(now.getUTCFullYear());
   const [month, setMonth] = useState(now.getUTCMonth() + 1);
@@ -345,6 +348,7 @@ export default function JournalPanel({
                   onPick={onPick}
                   onCard={setCard}
                   onDrop={mentor ? drop : undefined}
+                  onShots={setShotsOf}
                   dateLabel={t.journal.colLive}
                 />
               </div>
@@ -361,6 +365,7 @@ export default function JournalPanel({
                 onPick={onPick}
                 onCard={setCard}
                 onDrop={mentor ? drop : undefined}
+                onShots={setShotsOf}
                 resultLabel={t.journal.colResultFee}
               />
             )}
@@ -370,6 +375,21 @@ export default function JournalPanel({
 
       {card && (
         <PnlCard data={cardFromTrade(card, owner)} onClose={() => setCard(null)} />
+      )}
+
+      {shotsOf && (
+        <TradeShots
+          clientId={shotsOf.client_id}
+          symbol={shotsOf.symbol}
+          shots={shotsOf.shots ?? []}
+          onClose={() => setShotsOf(null)}
+          onChange={() => {
+            // Перечитываем журнал: снимки приходят в строках, и после
+            // добавления окно должно показать их сразу.
+            void reload();
+            setShotsOf(null);
+          }}
+        />
       )}
     </div>
   );

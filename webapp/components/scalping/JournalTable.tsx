@@ -7,7 +7,7 @@
 // растягивала шесть коротких чисел на полтора метра экрана, а в видимую часть
 // помещалось вдвое меньше сделок, чем могло бы.
 
-import { Share2, Trash2 } from "lucide-react";
+import { Image as ImageIcon, Share2, Trash2 } from "lucide-react";
 
 import { useIntlLocale, useT, type Dict } from "@/lib/i18n";
 import { money, tone } from "@/lib/journalFormat";
@@ -94,6 +94,8 @@ export interface JournalTableProps {
    * между собой. У идущих комиссии в строке нет - там остаётся «Итог».
    */
   resultLabel?: string;
+  /** Открыть снимки разбора сделки: разбор задним числом - разговор о картинке. */
+  onShots?: (trade: JournalRow) => void;
 }
 
 export default function JournalTable({
@@ -102,6 +104,7 @@ export default function JournalTable({
   onPick,
   onCard,
   onDrop,
+  onShots,
   dateLabel,
   resultLabel,
 }: JournalTableProps) {
@@ -120,6 +123,7 @@ export default function JournalTable({
         <col className="w-[13%]" />
         <col className="w-[10%]" />
         <col className="w-[23%]" />
+        {onShots && <col className="w-6" />}
         <col className="w-6" />
         {onDrop && <col className="w-6" />}
       </colgroup>
@@ -133,6 +137,7 @@ export default function JournalTable({
           <th>{t.journal.colExit}</th>
           <th>{t.journal.colTargets}</th>
           <th className="text-right">{resultLabel ?? t.journal.colResult}</th>
+          {onShots && <th />}
           <th />
           {onDrop && <th />}
         </tr>
@@ -206,6 +211,24 @@ export default function JournalTable({
                 кнопкой, а не по строке - нажатие по строке уже занято графиком,
                 и отбирать его нельзя: «почему так вышло» спрашивают чаще, чем
                 «покажи всем». */}
+            {onShots && (
+              <td className="pl-2 text-right">
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onShots(row);
+                  }}
+                  title={t.journal.shotsOpen}
+                  className={`transition-colors duration-150 ease-out hover:text-[var(--pane-accent)] ${
+                    (row.shots?.length ?? 0) > 0
+                      ? "text-[var(--pane-accent)]"
+                      : "text-[var(--pane-muted)]"
+                  }`}
+                >
+                  <ImageIcon className="h-3 w-3" />
+                </button>
+              </td>
+            )}
             <td className="pl-2 text-right">
               {onCard && (
                 <button
