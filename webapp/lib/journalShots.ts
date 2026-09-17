@@ -45,11 +45,18 @@ export async function attachShot(
 ): Promise<TradeShot | null> {
   const token = getAccessToken();
   if (!token) return null;
-  return authReq<TradeShot>(
-    `/api/journal/trades/${encodeURIComponent(clientId)}/shots`,
-    token,
-    { method: "POST", body: JSON.stringify({ image, note }) },
-  );
+  // Отказ сервера прилетает исключением: без перехвата кнопка молча ничего не
+  // делает, и человек решает, что сломался экран. Возвращаем пустоту - о ней
+  // окно скажет словами.
+  try {
+    return await authReq<TradeShot>(
+      `/api/journal/trades/${encodeURIComponent(clientId)}/shots`,
+      token,
+      { method: "POST", body: JSON.stringify({ image, note }) },
+    );
+  } catch {
+    return null;
+  }
 }
 
 /** Прикрепить снимок, который уже лежит на сервере. */
@@ -60,11 +67,15 @@ export async function attachExisting(
 ): Promise<TradeShot | null> {
   const token = getAccessToken();
   if (!token) return null;
-  return authReq<TradeShot>(
-    `/api/journal/trades/${encodeURIComponent(clientId)}/shots`,
-    token,
-    { method: "POST", body: JSON.stringify({ shot_id: shotId, note }) },
-  );
+  try {
+    return await authReq<TradeShot>(
+      `/api/journal/trades/${encodeURIComponent(clientId)}/shots`,
+      token,
+      { method: "POST", body: JSON.stringify({ shot_id: shotId, note }) },
+    );
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -77,22 +88,30 @@ export async function attachExisting(
 export async function orderShots(clientId: string, ids: number[]): Promise<boolean> {
   const token = getAccessToken();
   if (!token) return false;
-  const done = await authReq<unknown>(
-    `/api/journal/trades/${encodeURIComponent(clientId)}/shots/order`,
-    token,
-    { method: "PUT", body: JSON.stringify({ ids }) },
-  );
-  return done !== null;
+  try {
+    await authReq<unknown>(
+      `/api/journal/trades/${encodeURIComponent(clientId)}/shots/order`,
+      token,
+      { method: "PUT", body: JSON.stringify({ ids }) },
+    );
+    return true;
+  } catch {
+    // Сервер старее этой возможности или отказал: порядок не поменяется, и об
+    // этом надо сказать, а не оставить кнопку без ответа.
+    return false;
+  }
 }
 
 /** Открепить снимок. Файл остаётся: на него могла уйти ссылка. */
 export async function detachShot(id: number): Promise<boolean> {
   const token = getAccessToken();
   if (!token) return false;
-  const done = await authReq<unknown>(`/api/journal/shots/${id}`, token, {
-    method: "DELETE",
-  });
-  return done !== null;
+  try {
+    await authReq<unknown>(`/api/journal/shots/${id}`, token, { method: "DELETE" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

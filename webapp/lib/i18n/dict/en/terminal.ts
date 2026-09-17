@@ -483,6 +483,8 @@ export const journal = {
   shotOpenPage: "Open as a page - that is the link to share",
   shotLeft: "Move left",
   shotRight: "Move right",
+  shotOrderFailed: "The order was not saved - update the desk server",
+  shotRemoveFailed: "The shot was not removed",
   shotsTitle: "Review shots",
   shotsHint: "paste with Ctrl+V, drop a file or pick one",
   shotsEmpty: "No shots yet. Paste a picture from the clipboard - it stays with the trade.",

@@ -132,7 +132,11 @@ export default function TradeShots({
     if (to < 0 || to >= shots.length) return;
     const ids = shots.map((one) => one.id);
     [ids[index], ids[to]] = [ids[to], ids[index]];
+    setError(null);
     if (await orderShots(clientId, ids)) onChange();
+    // Молчащая кнопка читается как сломанный экран: сервер может быть старее
+    // этой возможности, и сказать об этом надо словами.
+    else setError(t.journal.shotOrderFailed);
   }
 
   async function drop(files: FileList | null) {
@@ -271,7 +275,9 @@ export default function TradeShots({
                     </button>
                     <button
                       onClick={async () => {
+                        setError(null);
                         if (await detachShot(shot.id)) onChange();
+                        else setError(t.journal.shotRemoveFailed);
                       }}
                       title={t.journal.shotRemove}
                       className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white/70 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 hover:text-white"
