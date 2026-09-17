@@ -538,6 +538,7 @@ export const journal = {
   weekPrev: "Previous week",
   weekNext: "Next week",
   weekNow: "This week",
+  coinsLabel: "Coins",
   weekTotalsTitle: "Week total",
   weekTradesLabel: "Reviewed",
   weekGainLabel: "On margin",

@@ -54,8 +54,8 @@ function weekOf(row: JournalRow): string {
   return Number.isNaN(when.getTime()) ? "" : isoWeek(when);
 }
 
-/** Чип итога: короткая подпись и число. */
-function Chip({
+/** Строка таблицы: подпись слева, число справа, пунктир между ними. */
+function Line({
   label,
   value,
   hint,
@@ -67,11 +67,9 @@ function Chip({
   mood?: number;
 }) {
   return (
-    <span
-      title={hint}
-      className="inline-flex items-baseline gap-1 rounded bg-[var(--pane-hover)] px-1.5 py-0.5"
-    >
+    <div className="flex items-baseline gap-1.5 py-0.5" title={hint}>
       <span className="text-[10px] text-[var(--pane-muted)]">{label}</span>
+      <div className="flex-1 border-b border-dashed border-[var(--pane-border)]" />
       <span
         className={`font-mono text-[10px] ${
           mood === undefined || mood === 0
@@ -81,7 +79,7 @@ function Chip({
       >
         {value}
       </span>
-    </span>
+    </div>
   );
 }
 
@@ -137,78 +135,91 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
     : "";
 
   return (
-    <div className="flex flex-col gap-2">
-      {/* Шапка: какая неделя, чем кончилась, и кнопка разбора. Одна строка на
-          всё - разбор смотрят ради картинок, а не ради заголовка. */}
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
-        <button
-          onClick={() => setWeek((was) => weekShift(was, -1))}
-          title={t.journal.weekPrev}
-          className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-        </button>
-        <span className="font-mono text-[11px] font-bold text-[var(--pane-text)]">{week}</span>
-        <button
-          onClick={() => setWeek((was) => weekShift(was, 1))}
-          title={t.journal.weekNext}
-          className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
-        >
-          <ChevronRight className="h-3.5 w-3.5" />
-        </button>
-        <span className="text-[10px] text-[var(--pane-muted)]">{dates}</span>
-        {week !== isoWeek() && (
+    <div className="grid items-start gap-2 lg:grid-cols-[minmax(200px,230px)_minmax(0,1fr)]">
+      {/* Цифры недели таблицей: подпись слева, число справа. В подбор одной
+          строкой они читались как одно предложение, хотя говорят о разном. */}
+      <div className="rounded-lg border border-[var(--pane-border)]">
+        <div className="flex items-center gap-1 border-b border-[var(--pane-border)] px-2 py-1.5">
           <button
-            onClick={() => setWeek(isoWeek())}
-            className="rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
+            onClick={() => setWeek((was) => weekShift(was, -1))}
+            title={t.journal.weekPrev}
+            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
           >
-            {t.journal.weekNow}
+            <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-        )}
-
-        <div className="h-px flex-1 bg-[var(--pane-border)]" />
-
-        {stats.trades > 0 && (
-          <>
-            <Chip
-              label={t.journal.weekTradesLabel}
-              hint={t.journal.weekTradesHint}
-              value={`${stats.marked} / ${stats.trades}`}
-            />
-            {stats.gain !== null && (
-              <Chip
-                label={t.journal.weekGainLabel}
-                hint={t.journal.weekGainHint}
-                value={`${stats.gain > 0 ? "+" : ""}${stats.gain.toFixed(1)}%`}
-                mood={stats.pnl}
-              />
-            )}
-            <Chip
-              label={t.journal.weekWinrateLabel}
-              hint={t.journal.weekWinrateHint}
-              value={`${Math.round((stats.winrate ?? 0) * 100)}%`}
-            />
-            {/* Нарушения показываются, только если их отмечали: ноль нарушений
-                у неразобранной недели - не заслуга, а пустота. */}
-            {stats.marked > 0 && (
-              <Chip
-                label={t.journal.weekBreaksLabel}
-                hint={t.journal.weekBreaksHint}
-                value={String(stats.breaks)}
-                mood={stats.breaks > 0 ? -1 : 0}
-              />
-            )}
-            <span className={`font-mono text-[12px] font-bold ${tone(stats.pnl)}`}>
-              {money(stats.pnl)}
-            </span>
+          <span className="font-mono text-[11px] font-bold text-[var(--pane-text)]">{week}</span>
+          <button
+            onClick={() => setWeek((was) => weekShift(was, 1))}
+            title={t.journal.weekNext}
+            className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-text)]"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+          <div className="flex-1" />
+          {week !== isoWeek() && (
             <button
-              onClick={() => setSum(true)}
-              className="rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+              onClick={() => setWeek(isoWeek())}
+              className="rounded border border-[var(--pane-border)] px-1.5 py-0.5 text-[9px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text)]"
             >
-              {t.journal.weekReviewMake}
+              {t.journal.weekNow}
             </button>
-          </>
-        )}
+          )}
+        </div>
+
+        <div className="px-2 py-1.5">
+          <div className="mb-1 flex items-baseline gap-1.5">
+            <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+              {dates}
+            </span>
+            <div className="flex-1" />
+            <span className={`font-mono text-[12px] font-bold ${tone(stats.pnl)}`}>
+              {stats.trades > 0 ? money(stats.pnl) : "-"}
+            </span>
+          </div>
+
+          {stats.trades === 0 ? (
+            <p className="py-1 text-[10px] text-[var(--pane-muted)]">{t.journal.weekEmpty}</p>
+          ) : (
+            <>
+              <Line
+                label={t.journal.weekTradesLabel}
+                hint={t.journal.weekTradesHint}
+                value={`${stats.marked} / ${stats.trades}`}
+              />
+              {stats.gain !== null && (
+                <Line
+                  label={t.journal.weekGainLabel}
+                  hint={t.journal.weekGainHint}
+                  value={`${stats.gain > 0 ? "+" : ""}${stats.gain.toFixed(1)}%`}
+                  mood={stats.pnl}
+                />
+              )}
+              <Line
+                label={t.journal.weekWinrateLabel}
+                hint={t.journal.weekWinrateHint}
+                value={`${Math.round((stats.winrate ?? 0) * 100)}%`}
+              />
+              {/* Нарушения показываются, только если их отмечали: ноль
+                  нарушений у неразобранной недели - не заслуга, а пустота. */}
+              {stats.marked > 0 && (
+                <Line
+                  label={t.journal.weekBreaksLabel}
+                  hint={t.journal.weekBreaksHint}
+                  value={String(stats.breaks)}
+                  mood={stats.breaks > 0 ? -1 : 0}
+                />
+              )}
+              <Line label={t.journal.coinsLabel} value={String(byCoin.length)} />
+
+              <button
+                onClick={() => setSum(true)}
+                className="mt-1.5 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+              >
+                {t.journal.weekReviewMake}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="rounded-lg border border-[var(--pane-border)] p-2">
@@ -220,7 +231,7 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
           // Полка монет. По ней вспоминают неделю: чем была BTC, чем ETH.
           <div
             className="grid gap-2"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}
           >
             {byCoin.map(([name, list]) => {
               const sum = list.reduce((all, one) => all + one.pnl, 0);
@@ -308,7 +319,7 @@ export default function ReviewPanel({ rows, onPick }: ReviewPanelProps) {
                     него ничего не знают. */}
                 <div
                   className="grid gap-1.5"
-                  style={{ gridTemplateColumns: "repeat(auto-fill, minmax(128px, 1fr))" }}
+                  style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}
                 >
                   {(open ? list : list.slice(0, PAGE)).map((trade) => {
                     const cover = (trade.shots ?? [])[0];

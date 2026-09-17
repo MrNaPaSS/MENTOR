@@ -563,6 +563,7 @@ export const journal = {
   weekPrev: "Прошлая неделя",
   weekNext: "Следующая неделя",
   weekNow: "Текущая",
+  coinsLabel: "Монет",
   weekTotalsTitle: "Итог недели",
   weekTradesLabel: "Разобрано сделок",
   weekGainLabel: "К марже",

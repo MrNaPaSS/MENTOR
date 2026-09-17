@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 
-import { keepView, readView, viewFits, VIEW_TTL_MS } from "@/lib/chartView";
+import { hasPrice, keepView, readView, viewFits, VIEW_TTL_MS } from "@/lib/chartView";
 
 describe("память графика", () => {
   beforeEach(() => {
@@ -57,5 +57,27 @@ describe("память графика", () => {
     // Трейдер оставил график у правого края: справа пустое поле, и конец
     // видимого участка лежит за последней свечой - это нормально.
     expect(viewFits({ from: 8000, to: 9600, at: Date.now() }, 5000, 9000)).toBe(true);
+  });
+});
+
+describe("цена в памяти графика", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it("помнит границы цены вместе со временем", () => {
+    keepView("BTCUSDT", "1m", 1000, 2000, 76100, 76600);
+    const seen = readView("BTCUSDT", "1m")!;
+    expect(seen.low).toBe(76100);
+    expect(seen.high).toBe(76600);
+    expect(hasPrice(seen)).toBe(true);
+  });
+
+  it("перевёрнутую или пустую цену не запоминает", () => {
+    keepView("BTCUSDT", "1m", 1000, 2000, 76600, 76100);
+    expect(hasPrice(readView("BTCUSDT", "1m")!)).toBe(false);
+
+    keepView("ETHUSDT", "1m", 1000, 2000);
+    expect(hasPrice(readView("ETHUSDT", "1m")!)).toBe(false);
   });
 });
