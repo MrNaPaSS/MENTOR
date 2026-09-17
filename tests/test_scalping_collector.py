@@ -552,3 +552,51 @@ def test_a_small_budget_still_leaves_room_for_background():
         return await rest._reserve("/fapi/v1/klines", 2, background=True)
 
     assert asyncio.run(take()) is True
+
+
+async def test_the_daily_summary_is_asked_on_its_own_schedule():
+    """Сводка спрашивается по своему сроку, а не на каждом шаге цикла.
+
+    Это самый дорогой из постоянных запросов: сорок единиц веса за ответ по
+    всем монетам разом. Каждые десять секунд выходило 240 веса в минуту из
+    1400, и на живом столе 17 сентября бюджет упирался именно в него.
+    """
+    import asyncio
+
+    from backend.scalping.collector import TICKER_INTERVAL
+
+    # Полминуты - это шесть прежних кругов по десять секунд.
+    assert TICKER_INTERVAL >= 30.0
+
+    c = make_collector(SNAPSHOT, TICKERS)
+    asked = 0
+
+    async def tickers():
+        nonlocal asked
+        asked += 1
+        return TICKERS
+
+    c.rest.tickers_24h = tickers  # type: ignore[assignment]
+    c.ticker_interval = 30.0
+
+    task = asyncio.create_task(c._loop())
+    # Даём циклу несколько шагов: он тикает часто, а сводку спрашивает редко.
+    await asyncio.sleep(0.05)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    # Один запрос на старте - и всё: срок следующего ещё не вышел.
+    assert asked == 1
+
+
+async def test_books_are_pruned_on_their_own_schedule():
+    """Чистка книг не растягивается вместе со сводкой: запросов она не стоит."""
+    from backend.scalping.collector import LOOP_STEP, PRUNE_INTERVAL, TICKER_INTERVAL
+
+    # Шаг цикла короче срока чистки - иначе чистка шла бы вдвое реже
+    # собственного срока.
+    assert LOOP_STEP < PRUNE_INTERVAL
+    assert LOOP_STEP < TICKER_INTERVAL
