@@ -142,6 +142,7 @@ export const analytics = {
     result: "Итог",
     long: "лонг",
     short: "шорт",
+    takes: (hit: number, all: number) => `Целей взято: ${hit} из ${all}`,
     shots: "Снимки дня",
     cardTitle: "Карточка сделки: скопировать, скачать, поделиться",
     none: "Сделок в этот день не было",

@@ -122,6 +122,7 @@ export const analytics = {
     result: "Result",
     long: "long",
     short: "short",
+    takes: (hit: number, all: number) => `Targets taken: ${hit} of ${all}`,
     shots: "Shots of the day",
     cardTitle: "Trade card: copy, download, share",
     none: "No trades on this day",

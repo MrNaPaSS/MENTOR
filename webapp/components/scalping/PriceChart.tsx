@@ -1073,6 +1073,10 @@ function PriceChart({
   // для меню.
   const [hoverOn, setHoverOn] = useState(false);
   const hoverPriceRef = useRef(0);
+  // Последняя высота курсора над холстом. По ней кнопка ставится каждый кадр:
+  // график тянут и масштабируют мышью, и цена под тем же местом экрана в это
+  // время меняется - кнопка, посчитанная один раз, отрывается от линии.
+  const hoverYRef = useRef<number | null>(null);
   const [hoverMenu, setHoverMenu] = useState(false);
   // Цена, на которой открыли меню: пока выбирают пункт, курсор уже на меню.
   const [hoverPicked, setHoverPicked] = useState(0);
@@ -1956,6 +1960,28 @@ function PriceChart({
         plusRef.current.style.right = `${Math.round(scaleW) + PLUS_NEAR_SCALE}px`;
       }
 
+      // Квадратный плюсик у цены под курсором: и место, и сама цена считаются
+      // каждый кадр. График тянут и масштабируют мышью - под тем же местом
+      // экрана оказывается другая цена, и кнопка, посчитанная один раз, стоит
+      // с ценой, которой там уже нет.
+      const cursorY = hoverYRef.current;
+      const square = hoverBoxRef.current;
+      if (square) {
+        if (scaleW > 0) square.style.right = `${Math.round(scaleW) + PLUS_NEAR_SCALE}px`;
+        const price = cursorY === null ? null : series.coordinateToPrice(cursorY);
+        const live = series.priceToCoordinate(livePriceRef.current);
+        // Рядом с текущей ценой кнопку не показываем: там уже стоит круглая,
+        // и две подряд спорили бы, какая из них про рынок.
+        const close = cursorY !== null && live !== null && Math.abs(cursorY - live) < 14;
+        if (cursorY === null || !price || price <= 0 || close) {
+          if (!hoverHeldRef.current) square.style.visibility = "hidden";
+        } else {
+          hoverPriceRef.current = Number(price);
+          square.style.visibility = "visible";
+          square.style.top = `${Math.round(cursorY) - 8}px`;
+        }
+      }
+
       for (const active of tradeRef.current) {
         place(
           labelsRef.current.get(active.id) ?? null,
@@ -2395,6 +2421,9 @@ function PriceChart({
     // узнают только случайно. Заодно ищем строку под курсором - её цену
     // график проводит уровнем через всё поле.
     function onHover(event: PointerEvent) {
+      // Высоту курсора запоминаем всегда, даже когда график тянут: перекрестие
+      // едет вместе с мышью, и кнопка обязана ехать с ним.
+      if (!hoverHeldRef.current) hoverYRef.current = spot(event).y;
       if (event.buttons !== 0) return;
       // Ладонь над колонкой цены - её тянут; палец над объёмом - по нему
       // нажимают. Курсор здесь единственное, что об этом говорит заранее.
@@ -2407,30 +2436,17 @@ function PriceChart({
         now?.price === row?.price && now?.total === row?.total ? now : row,
       );
 
-      // Цена под курсором - для квадратного плюсика у его ярлыка.
-      if (hoverHeldRef.current) return;
-      const price = candleRef.current?.coordinateToPrice(at.y) ?? null;
-      // Рядом с текущей ценой кнопку не показываем: там уже стоит круглая, и
-      // две подряд спорили бы, какая из них про рынок.
-      const live = candleRef.current?.priceToCoordinate(livePriceRef.current) ?? null;
-      const close = live !== null && Math.abs(at.y - live) < 14;
-      if (!price || price <= 0 || close) {
-        hoverPriceRef.current = 0;
-        setHoverOn(false);
-        return;
-      }
-      hoverPriceRef.current = Number(price);
-      // Высота - сразу в стиль узла: так кнопка стоит ровно на линии курсора,
-      // а не догоняет её следующим кадром React.
-      const node = hoverBoxRef.current;
-      if (node) node.style.top = `${Math.round(at.y) - 8}px`;
-      setHoverOn(true);
+      // Высоту курсора запоминаем - место и цену кнопки считает покадровый
+      // цикл: график тянут и масштабируют, и одного замера тут мало.
     }
 
     function onLeave() {
       footPrimRef.current?.setHover(null);
       setFootRow(null);
-      if (!hoverHeldRef.current) setHoverOn(false);
+      if (!hoverHeldRef.current) {
+        hoverYRef.current = null;
+        setHoverOn(false);
+      }
     }
 
     box.addEventListener("pointerdown", onDown, true);
@@ -3120,8 +3136,10 @@ function PriceChart({
           шкале спорили бы, какая из них про текущую цену. */}
       <div
           ref={hoverBoxRef}
-          className="absolute right-16 z-30"
-          style={{ top: 0, visibility: hoverOn ? "visible" : "hidden" }}
+          className="absolute z-30"
+          // Место и видимость задаёт покадровый цикл: React перерисовывает
+          // позже следующего движения мыши, и кнопка отставала от курсора.
+          style={{ top: 0, right: 64, visibility: "hidden" }}
           onPointerEnter={() => {
             hoverHeldRef.current = true;
           }}

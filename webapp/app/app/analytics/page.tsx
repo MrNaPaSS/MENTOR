@@ -1454,6 +1454,29 @@ export default function AnalyticsPage() {
                               >
                                 {one.side === "long" ? t.analytics.trades.long : t.analytics.trades.short}
                               </span>
+                              {/* Точки взятых целей - те же, что в журнале.
+                                  Одним числом «1/3» это не показать: цвет
+                                  достаётся всей ячейке, и сделка с одной
+                                  взятой целью читается как отработавшая все. */}
+                              {one.targets.length > 0 && (
+                                <span
+                                  className="ml-1.5 inline-flex items-center gap-0.5 align-middle"
+                                  title={t.analytics.trades.takes(one.takes_hit, one.targets.length)}
+                                >
+                                  {one.targets.map((_, i) => (
+                                    <span
+                                      key={i}
+                                      className={`text-[9px] ${
+                                        i < one.takes_hit
+                                          ? "text-[var(--pane-up)]"
+                                          : "text-[color:color-mix(in_srgb,var(--pane-text)_25%,transparent)]"
+                                      }`}
+                                    >
+                                      {i < one.takes_hit ? "●" : "○"}
+                                    </span>
+                                  ))}
+                                </span>
+                              )}
                             </td>
                             <td className="py-1 text-right text-[var(--pane-text-2)]">
                               {fmtPrice(one.entry)}
