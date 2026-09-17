@@ -198,7 +198,7 @@ export default function TradeShots({
     // раздела, оно оставалось под ним - на экране была видна половина.
     <ModalPortal>
     <div
-      className="fixed inset-0 z-[60] grid place-items-center bg-black/60 p-4"
+      className="fixed inset-0 z-[70] grid place-items-center bg-black/60 p-4"
       onClick={onClose}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {

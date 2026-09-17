@@ -3,7 +3,7 @@
 import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 import { maskValue, numbersHidden, rememberHidden } from "@/lib/analytics/hideNumbers";
 import { shotImage } from "@/lib/journalShots";
-import PositionCard from "@/components/scalping/PositionCard";
+import TradeShots from "@/components/scalping/TradeShots";
 import { useEffect, useMemo, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import Link from "next/link";
@@ -1622,15 +1622,18 @@ export default function AnalyticsPage() {
           своей больше не нужно. */}
       {card && <PnlCard data={card} onClose={() => setCard(null)} />}
 
-      {/* Папка открывается позицией целиком - то же окно, что в разборе
-          журнала: данные сделки, снимки по этапам, подписи и отметки.
-          Прежде здесь открывалась голая галерея поверх окна дня, и разбирать
-          сделку приходилось в двух местах сразу. */}
+      {/* Папка открывается тем же окном, что и сделка в журнале терминала:
+          снимки листаются, под каждым - цифры его этапа и комментарий.
+          Карточку позиции сюда ставить не стали: она про разбор целиком, а в
+          календаре смотрят картинки дня. */}
       {(() => {
         const one = (dayTrades ?? []).find((row) => row.client_id === shotsOf);
         if (!one) return null;
         return (
-          <PositionCard
+          <TradeShots
+            clientId={one.client_id}
+            symbol={one.symbol}
+            shots={one.shots ?? []}
             trade={one}
             onClose={() => setShotsOf(null)}
             onChange={() => setDayKey((n) => n + 1)}
