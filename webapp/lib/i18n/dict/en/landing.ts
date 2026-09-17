@@ -108,7 +108,6 @@ export const landing = {
     cashback: (pct: string) => `${pct} of the fee back`,
     noCashback: "no cashback",
     cashbackSoon: "cashback terms being agreed",
-    note: (pending: number) => `${pending} pending connection`,
   },
 
   problem: {

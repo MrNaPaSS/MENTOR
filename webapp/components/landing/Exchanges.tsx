@@ -3,7 +3,7 @@
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
 import PartnersTicker, { VenueCard } from "@/components/landing/PartnersTicker";
-import { PENDING, TRADING } from "@/lib/venues";
+import { TRADING } from "@/lib/venues";
 import { useT } from "@/lib/i18n";
 
 /**
@@ -18,10 +18,7 @@ import { useT } from "@/lib/i18n";
  * перечень опций. Сама лента и её устройство - в `PartnersTicker`.
  *
  * Здесь только те биржи, где торговля уже идёт. Писать «скоро» под чужими
- * логотипами нельзя: это выглядит как партнёрство, которого нет, - число
- * остальных названо словами в подписи. Считается оно от того же реестра
- * (`lib/venues.ts`), что и сама лента: «2 в ожидании» под пятью
- * подключёнными читалось бы как ошибка терминала.
+ * логотипами нельзя: это выглядит как партнёрство, которого нет.
  */
 
 export default function Exchanges() {
@@ -47,10 +44,6 @@ export default function Exchanges() {
       <div className="mt-10 lg:hidden">
         <PartnersTicker />
       </div>
-
-      <Reveal delay={0.3}>
-        <p className="mt-6 text-center text-sm text-text-muted">{copy.note(PENDING)}</p>
-      </Reveal>
     </section>
   );
 }
