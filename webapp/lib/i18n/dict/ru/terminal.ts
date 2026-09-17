@@ -489,6 +489,7 @@ export const journal = {
   colExit: "Выход",
   colTargets: "Цели",
   colResult: "Итог",
+  colResultFee: "Итог / комиссия",
   openChart: "Открыть график сделки",
   pnlWithFee: (net: string, gross: string, fee: string) =>
     `На счёт ${net}. Биржа показывает результат до комиссии: ${gross}, комиссия ${fee}`,

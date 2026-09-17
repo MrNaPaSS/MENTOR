@@ -86,6 +86,14 @@ export interface JournalTableProps {
    * отдельной надписи над таблицей для этого заводить не пришлось.
    */
   dateLabel?: string;
+  /**
+   * Чем подписана колонка результата. По умолчанию «Итог».
+   *
+   * У закрытых сделок рядом с итогом стоит комиссия, и колонка подписана
+   * обоими словами: два числа под одним словом «Итог» читались как спор
+   * между собой. У идущих комиссии в строке нет - там остаётся «Итог».
+   */
+  resultLabel?: string;
 }
 
 export default function JournalTable({
@@ -95,6 +103,7 @@ export default function JournalTable({
   onCard,
   onDrop,
   dateLabel,
+  resultLabel,
 }: JournalTableProps) {
   const t = useT();
   const numbers = useIntlLocale();
@@ -123,7 +132,7 @@ export default function JournalTable({
           <th>{t.journal.colEntry}</th>
           <th>{t.journal.colExit}</th>
           <th>{t.journal.colTargets}</th>
-          <th className="text-right">{t.journal.colResult}</th>
+          <th className="text-right">{resultLabel ?? t.journal.colResult}</th>
           <th />
           {onDrop && <th />}
         </tr>

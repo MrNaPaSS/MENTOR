@@ -361,6 +361,7 @@ export default function JournalPanel({
                 onPick={onPick}
                 onCard={setCard}
                 onDrop={mentor ? drop : undefined}
+                resultLabel={t.journal.colResultFee}
               />
             )}
           </div>

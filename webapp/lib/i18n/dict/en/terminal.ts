@@ -464,6 +464,7 @@ export const journal = {
   colExit: "Exit",
   colTargets: "Targets",
   colResult: "Result",
+  colResultFee: "Result / fee",
   openChart: "Open the trade's chart",
   pnlWithFee: (net: string, gross: string, fee: string) =>
     `${net} to the account. The exchange shows the result before fees: ${gross}, fee ${fee}`,
