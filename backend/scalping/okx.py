@@ -36,6 +36,8 @@ from typing import Any, Awaitable, Callable
 
 import aiohttp
 
+from core.throttle import Budget, take as take_budget
+
 logger = logging.getLogger("nmnh.scalping.okx")
 
 REST_BASE = "https://www.okx.com"
@@ -52,6 +54,10 @@ RECONNECT_MAX = 30.0
 
 # Управляющих сообщений биржа принимает ограниченное число в секунду.
 CONTROL_RATE_DELAY = 0.2
+
+# Очередь к истории сделок: пятнадцать запросов за две секунды из двадцати,
+# что даёт биржа, - остаток на случай, если адрес занят чем-то ещё.
+HISTORY_BUDGET = (Budget(15, 2.0), Budget(15, 2.0))
 
 # Каналы книги: полная книга (400 уровней) с обновлениями каждые 100 мс.
 BOOKS_CHANNEL = "books"
@@ -70,6 +76,14 @@ class OkxPublicRest:
         self.base_url = base_url
 
     async def _get(self, path: str, params: dict[str, Any]) -> list:
+        return (await self._fetch(path, params)) or []
+
+    async def _fetch(self, path: str, params: dict[str, Any]) -> list | None:
+        """Ответ ручки. `None` - биржа не ответила или отказала, а не «пусто».
+
+        Разница важна там, где листают страницы: пустая страница значит, что
+        сделки кончились, а отказ по частоте - что до конца не дошли.
+        """
         session = await self._session_factory()
         try:
             async with session.get(
@@ -79,13 +93,13 @@ class OkxPublicRest:
             ) as response:
                 if response.status != 200:
                     logger.warning("OKX %s вернула %s", path, response.status)
-                    return []
+                    return None
                 payload = await response.json(content_type=None)
         except Exception as exc:  # noqa: BLE001 - сеть; вызывающий решит, что делать
             logger.warning("OKX %s недоступна: %s", path, exc)
-            return []
+            return None
         if not isinstance(payload, dict) or str(payload.get("code") or "0") != "0":
-            return []
+            return None
         rows = payload.get("data")
         return rows if isinstance(rows, list) else []
 
@@ -104,7 +118,7 @@ class OkxPublicRest:
 
     async def history_trades(
         self, inst: str, after: str | int | None = None, by_time: bool = False, limit: int = 100
-    ) -> list[dict]:
+    ) -> list[dict] | None:
         """Сделки от новых к старым - раньше `after`.
 
         `by_time` - `after` это время в миллисекундах, иначе номер сделки. По
@@ -112,7 +126,11 @@ class OkxPublicRest:
         в одну миллисекунду попадает десяток сделок, и шаг по времени терял бы
         их на каждой границе страниц.
         """
-        rows = await self._get(
+        # Предел открытой ручки - двадцать запросов за две секунды на адрес.
+        # Несколько терминалов листают свечи разом, и без очереди отказ по
+        # частоте приходил посреди листания.
+        await take_budget("okx-market", "history-trades", HISTORY_BUDGET, split=False)
+        rows = await self._fetch(
             "/api/v5/market/history-trades",
             {
                 "instId": inst,
@@ -121,6 +139,8 @@ class OkxPublicRest:
                 "limit": min(limit, 100),
             },
         )
+        if rows is None:
+            return None
         return [row for row in rows if isinstance(row, dict)]
 
 

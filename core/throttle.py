@@ -144,7 +144,12 @@ def _window(key: tuple, budget: Budget) -> Window:
     return window
 
 
-async def take(exchange: str, account: str, budgets: tuple[Budget, Budget] | None = None) -> float:
+async def take(
+    exchange: str,
+    account: str,
+    budgets: tuple[Budget, Budget] | None = None,
+    split: bool = True,
+) -> float:
     """Занять место в очереди к бирже. Возвращает, сколько пришлось ждать.
 
     Под замком на биржу: без него десять задач разом увидели бы свободное место
@@ -153,8 +158,9 @@ async def take(exchange: str, account: str, budgets: tuple[Budget, Budget] | Non
     code = (exchange or "").lower() or "weex"
     own, shared = budgets or BUDGETS.get(code, DEFAULT)
     # Свои доли, если процессов два: иначе оба выходят к бирже каждый на весь
-    # предел.
-    own, shared = _shared(own), _shared(shared)
+    # предел. Рыночные данные собирает один процесс - им делить нечего.
+    if split:
+        own, shared = _shared(own), _shared(shared)
     lock = _locks.get(code)
     if lock is None:
         lock = _locks[code] = asyncio.Lock()

@@ -633,3 +633,60 @@ def test_trades_that_miss_the_start_leave_it_to_the_tape():
     # Ленты в этом опыте нет вовсе: пустая свеча, но помеченная неполной.
     assert body["partial"] is True
     assert body["source"] == "tape"
+
+
+class FailingOkxRest(StubOkxRest):
+    """Биржа отдаёт страницу, а на следующей отказывает по частоте."""
+
+    async def history_trades(self, inst, after=None, by_time=False, limit=100):
+        self.calls.append((inst, after, by_time))
+        if not self.pages:
+            return None  # отказ, а не «сделок больше нет»
+        return self.pages.pop(0)
+
+
+def test_okx_refusal_mid_paging_is_not_a_complete_candle():
+    """Отказ посреди листания - свеча неполная, и в память она не ложится.
+
+    Прежде отказ выглядел как пустая страница, то есть «сделки кончились»: свеча
+    уходила полной без половины сделок и на четверть часа ложилась в память.
+    """
+    start = (int(time.time()) // 60) * 60 - 120
+    first = [okx_trade(1.28, 1.0, start * 1000 + 50_000 - i, "buy", 1000 - i) for i in range(100)]
+    rest = FailingOkxRest([first])
+    app = make_okx_app(rest)
+
+    with TestClient(app) as client:
+        body = client.get(
+            "/api/scalping/footprint/xrpusdt",
+            params={"interval": "1m", "time": start, "exchange": "okx"},
+        ).json()
+        assert body["partial"] is True
+
+        # Следующий запрос идёт на биржу снова, а не берёт недобранное из памяти.
+        rest.pages = [[okx_trade(1.28, 1.0, start * 1000 - 5, "sell", 800)]]
+        before = len(rest.calls)
+        client.get(
+            "/api/scalping/footprint/xrpusdt",
+            params={"interval": "1m", "time": start, "exchange": "okx"},
+        )
+        assert len(rest.calls) > before
+
+
+def test_a_closed_okx_candle_may_take_more_pages_than_a_live_one():
+    """Закрытая свеча добирается один раз - ей страниц больше, чем идущей."""
+    start = (int(time.time()) // 60) * 60 - 120
+    full = [
+        [okx_trade(1.28, 1.0, start * 1000 + 59_000 - page * 100 - i, "buy", 100_000 - page * 100 - i) for i in range(100)]
+        for page in range(12)
+    ]
+    rest = StubOkxRest(full)
+    app = make_okx_app(rest)
+
+    with TestClient(app) as client:
+        client.get(
+            "/api/scalping/footprint/xrpusdt",
+            params={"interval": "1m", "time": start, "exchange": "okx"},
+        )
+
+    assert len(rest.calls) > scalping_api._OKX_FOOT_PAGES

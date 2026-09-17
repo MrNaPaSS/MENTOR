@@ -738,16 +738,30 @@ async def footprint(
 
 
 OKX_VENUE = "okx"
-# Страниц сделок OKX на одну свечу: по сотне в каждой. Предел открытой ручки -
-# двадцать запросов за две секунды, и одна свеча не должна выбирать его весь.
+# Страниц сделок OKX на одну свечу: по сотне в каждой.
+#
+# Идущая свеча переспрашивается каждые несколько секунд, пока открыта, - ей
+# восемь страниц. Закрытая добирается один раз и лежит в памяти четверть часа:
+# ей можно больше, но в пределах ожидания браузера (двадцать секунд).
+#
+# Живая проверка 17 сентября, BTC: восемь страниц - 42% объёма пятиминутной
+# свечи, тридцать - 99% за 8.6 с, сорок на пятнадцатиминутной - 28% за 11 с.
+# Крупные свечи самых активных монет открытая ручка OKX за один ответ не
+# накрывает вовсе: полными их делает только своя лента, пока монета открыта.
+# Остальное честно помечается неполным.
 _OKX_FOOT_PAGES = 8
+_OKX_FOOT_PAGES_DONE = 40
 _OKX_PAGE = 100
 
 
 async def _load_okx_trades(
-    rest, spec, start_ms: int, end_ms: int
-) -> tuple[list[tuple[float, float, bool]], bool]:
-    """Сделки OKX за окно свечи: список и признак «окно неполно».
+    rest, spec, start_ms: int, end_ms: int, pages: int = _OKX_FOOT_PAGES
+) -> tuple[list[tuple[float, float, bool]], bool, bool]:
+    """Сделки OKX за окно свечи: список, признак «окно неполно» и «биржа отказала».
+
+    Отказ биржи - не то же самое, что пустая страница. Прежде отказ по частоте
+    посреди листания выглядел как «сделки кончились», и свеча уходила полной,
+    хотя половины сделок в ней не было.
 
     Первая страница - по времени конца свечи, чтобы не листать от сегодняшних
     сделок к вчерашним. Дальше - по номеру самой старой сделки страницы.
@@ -756,10 +770,12 @@ async def _load_okx_trades(
     out: list[tuple[float, float, bool]] = []
     after: str | int = end_ms
     by_time = True
-    for _ in range(_OKX_FOOT_PAGES):
+    for _ in range(pages):
         batch = await rest.history_trades(spec.inst_id, after=after, by_time=by_time)
+        if batch is None:
+            return out, True, True
         if not batch:
-            return out, False
+            return out, False, False
         oldest = ""
         done = False
         for row in batch:
@@ -777,9 +793,9 @@ async def _load_okx_trades(
             except (KeyError, TypeError, ValueError):
                 continue
         if done or len(batch) < _OKX_PAGE or not oldest:
-            return out, False
+            return out, False, False
         after, by_time = oldest, False
-    return out, True
+    return out, True, False
 
 
 async def _okx_footprint(
@@ -803,7 +819,10 @@ async def _okx_footprint(
     if spec is None:
         return None
 
-    trades, partial = await _load_okx_trades(rest, spec, start * 1000, end * 1000)
+    pages = _OKX_FOOT_PAGES if end > now else _OKX_FOOT_PAGES_DONE
+    trades, partial, failed = await _load_okx_trades(
+        rest, spec, start * 1000, end * 1000, pages
+    )
     if not trades:
         # Биржа сделок не дала: пусть решает лента - у неё хотя бы часть свечи.
         return None
@@ -814,7 +833,10 @@ async def _okx_footprint(
     cells = collect(trades, tick) if trades else {}
     shot = build_footprint(cells, time=start, seconds=seconds, tick=tick, partial=partial)
     payload = _foot_payload(sym, interval, shot, source="exchange", exchange=OKX_VENUE)
-    _foot_remember(key, payload)
+    # Недобранное из-за отказа биржи не запоминаем: закрытая свеча легла бы в
+    # память неполной на четверть часа. Пусть следующий запрос доберёт.
+    if not failed:
+        _foot_remember(key, payload)
     return payload
 
 
