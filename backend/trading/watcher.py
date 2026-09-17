@@ -793,7 +793,7 @@ class PositionWatcher:
         # Цели ставим, когда позиция есть, а их ещё нет. До набора позиции биржа
         # сокращающий ордер не принимает — «cannot set reduce only», — поэтому
         # при лимитном входе лестница доезжает сюда, а не выставляется сразу.
-        if trade.status == "open" and not json.loads(trade.tp_orders_json or "[]"):
+        if trade.status == "open" and ladder_unfinished(trade):
             if await self._place_takes(client, trade):
                 changed = True
 
@@ -965,8 +965,29 @@ class PositionWatcher:
             return True
 
         long = trade.side == "long"
-        placed: list[dict[str, Any]] = []
+        # Что уже стоит. Проход могли оборвать по времени посреди лестницы -
+        # живой стол 17 сентября: WEEX не ответила за 45 секунд сразу после
+        # набора позиции. Цели, записанные до обрыва, лежат в сделке, а
+        # поставленные, но не записанные, опознаются на бирже по нашей метке.
+        # Без этого следующий проход ставил бы лестницу заново, и на позиции
+        # оказались бы две цели на одной цене.
+        placed: list[dict[str, Any]] = json.loads(trade.tp_orders_json or "[]")
+        standing = await self._our_takes(client, trade)
+        tick = float(filters.get("tick") or 0)
         for i, (price, size) in enumerate(plan):
+            if any(abs(float(p.get("price") or 0) - price) <= max(tick, price * 1e-9) for p in placed):
+                continue
+            found = next(
+                (order for label in take_labels(trade.client_id, i) for order in standing.get(label, [])),
+                None,
+            )
+            if found is not None:
+                logger.info("Цель %d %s уже стоит на бирже - берём её", i + 1, trade.symbol)
+                placed.append(
+                    {"price": price, "order_id": plan_order_id(found), "filled": False}
+                )
+                trade.tp_orders_json = json.dumps(placed, ensure_ascii=False)
+                continue
             try:
                 # Условная заявка, а не сокращающий лимит: на позиции с висящей
                 # защитой биржа отвечает «cannot set reduce only» - свободного к
@@ -988,6 +1009,9 @@ class PositionWatcher:
             placed.append(
                 {"price": price, "order_id": plan_order_id(order), "filled": False}
             )
+            # Сразу в сделку, не дожидаясь конца лестницы: оборванный проход
+            # сохраняет то, что успел, и следующий не поставит это второй раз.
+            trade.tp_orders_json = json.dumps(placed, ensure_ascii=False)
 
         if not placed:
             return False
@@ -998,6 +1022,25 @@ class PositionWatcher:
         trade.targets_json = json.dumps([p["price"] for p in placed])
         logger.info("Цели выставлены: %s, %d шт.", trade.symbol, len(placed))
         return True
+
+    async def _our_takes(
+        self, client: WeexFutures, trade: LiveTrade
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Условные заявки на бирже по нашим меткам. Не спросили - пусто.
+
+        Пусто безопасно только наполовину: дубль цели возможен, но позиция без
+        целей хуже, а ставить их вслепую сопровождение и так умело всегда.
+        """
+        try:
+            orders = await client.algo_orders(trade.symbol)
+        except WeexTradeError as exc:
+            logger.debug("Цели %s на бирже не проверены: %s", trade.symbol, exc)
+            return {}
+        out: dict[str, list[dict[str, Any]]] = {}
+        for order in orders:
+            for mark in order_marks(order):
+                out.setdefault(mark, []).append(order)
+        return out
 
     async def _set_stop(
         self,
@@ -1907,6 +1950,20 @@ def short_id(client_id: str) -> str:
         number, rest = divmod(number, 36)
         out = _BASE36[rest] + out
     return out.rjust(SHORT_ID_CHARS, "0")
+
+
+def ladder_unfinished(trade: LiveTrade) -> bool:
+    """Лестница целей ещё не выставлена до конца.
+
+    Прежде признаком было «целей нет ни одной». Оборванный посреди лестницы
+    проход оставлял одну цель из трёх - и остальные не ставились больше
+    никогда. Теперь сравниваем с замыслом: он переписывается реально
+    поставленными ценами, только когда лестница пройдена целиком, а до тех пор
+    в нём все цели сделки.
+    """
+    planned = json.loads(trade.targets_json or "[]")
+    recorded = json.loads(trade.tp_orders_json or "[]")
+    return bool(planned) and len(recorded) < len(planned)
 
 
 def take_label(client_id: str, index: int) -> str:

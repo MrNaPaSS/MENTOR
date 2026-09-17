@@ -1982,3 +1982,99 @@ def test_a_sort_is_not_a_kind():
 
     assert plan_kind({"algoType": "CONDITIONAL"}) == ""
     assert plan_kind({}) == ""
+
+
+# ── лестница целей, оборванная посреди ──────────────────────────────────────
+#
+# Живой стол 17 сентября: позиция набрана, сопровождение начало ставить цели, и
+# WEEX не ответила за 45 секунд - проход оборвали. Цели появились только со
+# следующего прохода. Опасно здесь не ожидание, а дубль: поставленное, но не
+# записанное, следующий проход поставил бы ещё раз.
+
+
+class _LadderClient:
+    """Биржа, которая помнит поставленные цели и отдаёт их списком."""
+
+    def __init__(self, standing=None):
+        self.standing = list(standing or [])
+        self.placed: list[dict] = []
+
+    async def symbol_filters(self, symbol):
+        return {"step": 0.001, "tick": 0.1, "min_qty": 0.001}
+
+    async def algo_orders(self, symbol):
+        return list(self.standing)
+
+    async def place_tp_sl(self, **kw):
+        self.placed.append(kw)
+        order_id = f"o{len(self.placed)}"
+        self.standing.append({"orderId": order_id, "clientAlgoId": kw.get("client_algo_id")})
+        return {"orderId": order_id}
+
+
+def _ladder_trade(**over):
+    from core.models import LiveTrade
+
+    fields = dict(
+        id=7,
+        student_id=1,
+        client_id="BTCUSDT-1789635659477",
+        symbol="BTCUSDT",
+        side="long",
+        entry=100.0,
+        qty=1.0,
+        status="open",
+        targets_json=json.dumps([101.0, 102.0, 103.0]),
+        tp_orders_json="[]",
+    )
+    fields.update(over)
+    return LiveTrade(**fields)
+
+
+def test_an_unfinished_ladder_is_noticed():
+    from backend.trading.watcher import ladder_unfinished
+
+    assert ladder_unfinished(_ladder_trade()) is True
+    # Одна цель из трёх - лестница не пройдена, а раньше это считалось готовым.
+    one = json.dumps([{"price": 101.0, "order_id": "o1", "filled": False}])
+    assert ladder_unfinished(_ladder_trade(tp_orders_json=one)) is True
+    # Пройдена: замысел переписан тем, что встало.
+    assert ladder_unfinished(
+        _ladder_trade(targets_json=json.dumps([101.0]), tp_orders_json=one)
+    ) is False
+    # Целей не задумано вовсе.
+    assert ladder_unfinished(_ladder_trade(targets_json="[]")) is False
+
+
+async def test_the_ladder_resumes_where_it_was_cut():
+    """Записанная цель второй раз не ставится - ставятся только недостающие."""
+    from backend.trading.watcher import PositionWatcher
+
+    client = _LadderClient()
+    trade = _ladder_trade(
+        tp_orders_json=json.dumps([{"price": 101.0, "order_id": "old", "filled": False}])
+    )
+    watcher = PositionWatcher(lambda: None, lambda: None)
+
+    assert await watcher._place_takes(client, trade) is True
+
+    prices = sorted(float(one["trigger_price"]) for one in client.placed)
+    assert 101.0 not in prices
+    assert len(json.loads(trade.tp_orders_json)) == len(json.loads(trade.targets_json))
+
+
+async def test_a_take_placed_before_the_cut_is_adopted_not_doubled():
+    """Биржа приняла цель, а записать её проход не успел: берём стоящую."""
+    from backend.trading.watcher import PositionWatcher, take_label
+
+    trade = _ladder_trade()
+    first = {"orderId": "early", "clientAlgoId": take_label(trade.client_id, 0)}
+    client = _LadderClient(standing=[first])
+    watcher = PositionWatcher(lambda: None, lambda: None)
+
+    assert await watcher._place_takes(client, trade) is True
+
+    labels = [one["client_algo_id"] for one in client.placed]
+    assert take_label(trade.client_id, 0) not in labels
+    recorded = json.loads(trade.tp_orders_json)
+    assert "early" in {one["order_id"] for one in recorded}
