@@ -184,3 +184,47 @@ def test_a_ready_config_is_left_alone(tmp_path, monkeypatch):
     assert enable_market.main([]) == 0
     assert not (tmp_path / "cloudflared-config.yml.bak").exists()
     assert "NMNH_MARKET=1" in env.read_text(encoding="utf-8")
+
+
+# ── localhost против ::1 ────────────────────────────────────────────────────
+
+
+def test_localhost_becomes_an_address():
+    """`localhost` на Windows резолвится и в ::1, куда сервер не слушает.
+
+    Живой лог стола 17 сентября: `dial tcp [::1]:8000 ... refused` - снаружи
+    это выглядит как «сервер лежит», хотя он жив.
+    """
+    from core.market_split import prefer_ipv4
+
+    out = prefer_ipv4("    service: http://localhost:8000\n")
+    assert out == "    service: http://127.0.0.1:8000\n"
+
+
+def test_only_service_lines_are_touched():
+    """Имя хоста и комментарии не трогаем: localhost там значит другое."""
+    from core.market_split import prefer_ipv4
+
+    text = "# сайт на localhost\n  - hostname: localhost.nmnh.trade\n    service: http://localhost:8000\n"
+    out = prefer_ipv4(text)
+    assert "# сайт на localhost" in out
+    assert "hostname: localhost.nmnh.trade" in out
+    assert "service: http://127.0.0.1:8000" in out
+
+
+def test_the_script_fixes_localhost_while_turning_it_on(tmp_path, monkeypatch):
+    import enable_market
+
+    config = tmp_path / "cloudflared-config.yml"
+    config.write_text(PLAIN.replace("127.0.0.1:8000", "localhost:8000"), encoding="utf-8")
+    env = tmp_path / ".env"
+    env.write_text("DATABASE_URL=postgresql://x\n", encoding="utf-8")
+    monkeypatch.setattr(enable_market, "LOCAL_CFG", config)
+    monkeypatch.setattr(enable_market, "ENV", env)
+
+    assert enable_market.main([]) == 0
+
+    out = config.read_text(encoding="utf-8")
+    assert "localhost" not in out
+    assert "service: http://127.0.0.1:8000" in out
+    assert f"127.0.0.1:{MARKET_PORT}" in out

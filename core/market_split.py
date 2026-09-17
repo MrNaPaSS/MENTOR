@@ -78,6 +78,24 @@ def without_market(config: str) -> str:
     return pattern.sub("", config)
 
 
+def prefer_ipv4(config: str) -> str:
+    """Заменить `localhost` в правилах туннеля на `127.0.0.1`.
+
+    Живой лог стола 17 сентября:
+
+        dial tcp [::1]:8000: connectex: No connection could be made
+
+    `localhost` на Windows резолвится и в `::1`, а сервер слушает только
+    IPv4 (`uvicorn --host 127.0.0.1`). Пока система отдаёт первым IPv4, всё
+    работает; отдала IPv6 - запрос падает, и снаружи это выглядит как «сервер
+    лежит», хотя он жив. Наши правила пишутся с адресом сразу, а старое
+    правило сайта осталось с именем.
+    """
+    return re.sub(
+        r"(service:\s*http://)localhost(:\d+)", r"\g<1>127.0.0.1\g<2>", config
+    )
+
+
 def env_on(env: str) -> str:
     """`.env` с включённым разделением. Повторный вызов ничего не меняет."""
     if re.search(rf"^{ENV_LINE}$", env, re.MULTILINE):

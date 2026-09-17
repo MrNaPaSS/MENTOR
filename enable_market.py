@@ -27,6 +27,7 @@ from core.market_split import (
     env_on,
     has_market,
     hostname_of,
+    prefer_ipv4,
     with_market,
     without_market,
 )
@@ -93,8 +94,23 @@ def main(argv: list[str]) -> int:
         print("Закрой окна сервера и запусти start.bat - вернётся прежний порядок.")
         return 0
 
+    # Заодно чиним имя в чужих правилах: `localhost` на Windows резолвится и
+    # в ::1, а сервер слушает только IPv4 - запрос тогда падает, будто сервер
+    # лежит. Живой лог стола 17 сентября: dial tcp [::1]:8000 ... refused.
+    fixed = prefer_ipv4(text)
+    if fixed != text and not has_market(text):
+        print("В конфиге localhost заменён на 127.0.0.1 - иначе запрос может")
+        print("уйти на ::1, куда сервер не слушает.")
+        text = fixed
+
     if has_market(text):
         print(f"Правила пути на порт {MARKET_PORT} в конфиге уже есть.")
+        if fixed != text:
+            backup = config.with_suffix(config.suffix + ".bak")
+            shutil.copy2(config, backup)
+            config.write_text(fixed, encoding="utf-8")
+            print("В конфиге localhost заменён на 127.0.0.1 (копия - "
+                  f"{backup.name}).")
     else:
         host = hostname_of(text)
         if not host:
