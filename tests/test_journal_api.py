@@ -629,3 +629,121 @@ def test_calendar_counts_one_exchange(client):
     assert body["total"] == 30.0
     assert body["days"][0]["trades"] == 1
     assert {row["exchange"] for row in body["by_exchange"]} == {"okx", "weex"}
+
+
+# ── сделка в работе ─────────────────────────────────────────────────────────
+
+
+def _live_row(session, student, **over):
+    """Запись, какую заводит сопровождение при открытии позиции."""
+    from core.models import ScalpTrade
+
+    row = ScalpTrade(
+        student_id=student.id,
+        client_id=over.pop("client_id", "live-1"),
+        symbol=over.pop("symbol", "BTCUSDT"),
+        side="long",
+        entry=100.0,
+        stop=99.0,
+        qty=10.0,
+        margin=100.0,
+        leverage=10,
+        takes_hit=over.pop("takes_hit", 2),
+        targets_json="[101, 102, 103]",
+        outcome="open",
+        pnl=over.pop("pnl", 24.0),
+        closed_qty=over.pop("closed_qty", 6.0),
+        fee=0.5,
+        opened_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+        closed_at=None,
+        note="в работе",
+        from_exchange=True,
+        exchange=over.pop("exchange", "weex"),
+    )
+    session.add(row)
+    session.commit()
+    return row
+
+
+def test_a_live_trade_comes_apart_from_the_closed_ones(client):
+    """Сделка в работе идёт своим списком и в итоги периода не входит.
+
+    Трейдер взял две цели из трёх: деньги зафиксированы, но сделка ещё не
+    кончилась. Считать её в проценте прибыльных нельзя - результат изменится.
+    """
+    session = client.app.dependency_overrides[get_session]()
+    student = client.app.dependency_overrides[get_current_student]()
+    _live_row(session, student)
+    client.post("/api/journal/trades", json=trade(client_id="done-1", pnl=10.0))
+
+    body = client.get("/api/journal/trades").json()
+
+    assert [t["client_id"] for t in body["trades"]] == ["done-1"]
+    assert [t["client_id"] for t in body["live"]] == ["live-1"]
+    # Итоги - только по закрытой.
+    assert body["summary"]["count"] == 1
+    assert body["summary"]["pnl"] == 10.0
+    # Зафиксированное по идущим сказано отдельно.
+    assert body["live_pnl"] == 24.0
+
+
+def test_a_live_trade_carries_its_targets_and_closed_part(client):
+    """В строке видно, сколько целей взято и какая часть позиции закрыта."""
+    session = client.app.dependency_overrides[get_session]()
+    student = client.app.dependency_overrides[get_current_student]()
+    _live_row(session, student)
+
+    row = client.get("/api/journal/trades").json()["live"][0]
+
+    assert row["live"] is True
+    assert row["takes_hit"] == 2
+    assert row["targets"] == [101, 102, 103]
+    assert row["closed_qty"] == 6.0
+    assert row["closed_at"] is None
+    assert row["pnl"] == 24.0
+
+
+def test_a_live_trade_is_filtered_by_exchange_too(client):
+    """Переключатель бирж на странице касается и идущих сделок."""
+    session = client.app.dependency_overrides[get_session]()
+    student = client.app.dependency_overrides[get_current_student]()
+    _live_row(session, student, client_id="live-okx", exchange="okx")
+    _live_row(session, student, client_id="live-weex", exchange="weex")
+
+    body = client.get("/api/journal/trades?exchange=okx").json()
+
+    assert [t["client_id"] for t in body["live"]] == ["live-okx"]
+
+
+def test_the_terminal_may_close_a_live_record(client):
+    """Оценка с экрана закрывает запись, до которой сервер не дошёл.
+
+    Счёт отключили или процесс не поднялся - иначе сделка осталась бы «в
+    работе» навсегда. А вот уже закрытую биржей запись экран не переписывает.
+    """
+    session = client.app.dependency_overrides[get_session]()
+    student = client.app.dependency_overrides[get_current_student]()
+    _live_row(session, student, client_id="live-1")
+
+    answer = client.post("/api/journal/trades", json=trade(client_id="live-1", pnl=31.0))
+    assert answer.status_code == 201
+
+    body = client.get("/api/journal/trades").json()
+    assert body["live"] == []
+    assert [t["pnl"] for t in body["trades"]] == [31.0]
+
+
+def test_a_closed_exchange_record_still_wins_over_the_screen(client):
+    """Закрытую запись с биржи оценка с экрана по-прежнему не трогает."""
+    session = client.app.dependency_overrides[get_session]()
+    student = client.app.dependency_overrides[get_current_student]()
+    row = _live_row(session, student, client_id="done-2")
+    row.closed_at = datetime.now(timezone.utc)
+    row.outcome = "take"
+    row.pnl = 50.0
+    session.commit()
+
+    client.post("/api/journal/trades", json=trade(client_id="done-2", pnl=11.0))
+
+    body = client.get("/api/journal/trades").json()
+    assert [t["pnl"] for t in body["trades"]] == [50.0]

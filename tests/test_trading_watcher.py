@@ -2125,3 +2125,195 @@ async def test_a_broken_bell_does_not_stop_the_check():
 
     assert await watcher._on_event(7) is True
     assert checked == [7]
+
+
+# ── журнал ведёт сделку с открытия ──────────────────────────────────────────
+
+
+def _journal_db():
+    """База с одним учеником: журнал пишется в неё."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from core.models import Base, Student
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    student = Student(tg_id=1)
+    session.add(student)
+    session.commit()
+    return session, student
+
+
+def test_the_journal_gets_the_trade_at_open():
+    """Сделка появляется в журнале сразу, а не после закрытия.
+
+    Трейдер, взявший две цели из трёх, до этого не видел в журнале ничего -
+    хотя зафиксированные деньги у него уже были.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from backend.trading.watcher import PositionWatcher
+    from core.models import ScalpTrade
+
+    session, student = _journal_db()
+    row = trade(
+        student_id=student.id,
+        status="open",
+        opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    watcher = PositionWatcher(lambda: session, lambda: None)
+
+    watcher._live_journal(session, row)
+    session.commit()
+
+    saved = session.execute(select(ScalpTrade)).scalar_one()
+    assert saved.closed_at is None
+    assert saved.outcome == "open"
+    assert float(saved.pnl) == 0.0
+    assert json.loads(saved.targets_json) == [101.0, 102.0, 103.0]
+    # Риск считается от первого стопа, а не от переехавшего в безубыток.
+    assert float(saved.stop) == float(row.initial_stop)
+
+
+def test_a_taken_target_updates_what_is_locked_in():
+    """Взятая цель обновляет зафиксированное - числами биржи, не своими."""
+    import asyncio
+
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from backend.trading.watcher import PositionWatcher
+    from core.models import ScalpTrade
+
+    session, student = _journal_db()
+    row = trade(
+        student_id=student.id,
+        status="open",
+        takes_hit=2,
+        opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+
+    class Exchange:
+        async def user_trades(self, symbol, limit=100):
+            return [
+                {
+                    "time": 4102444800000,
+                    "realizedPnl": "12.5",
+                    "commission": "0.4",
+                    "price": "102",
+                    "side": "SELL",
+                    "qty": "0.6",
+                },
+                {
+                    "time": 4102444800000,
+                    "realizedPnl": "11.0",
+                    "commission": "0.4",
+                    "price": "101",
+                    "side": "SELL",
+                    "qty": "0.6",
+                },
+            ]
+
+        async def symbol_filters(self, symbol):
+            return {"taker_fee": 0.0006}
+
+    watcher = PositionWatcher(lambda: session, lambda: None)
+    asyncio.run(watcher._live_journal_fills(session, Exchange(), row))
+    session.commit()
+
+    saved = session.execute(select(ScalpTrade)).scalar_one()
+    assert saved.closed_at is None
+    assert saved.takes_hit == 2
+    # 12.5 + 11.0 минус комиссия 0.8.
+    assert float(saved.pnl) == pytest.approx(22.7)
+    assert float(saved.closed_qty) == pytest.approx(1.2)
+
+
+def test_a_silent_exchange_keeps_the_numbers_it_had():
+    """Биржа не ответила - прежние числа остаются, нулей в журнале не будет."""
+    import asyncio
+
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from backend.trading.watcher import PositionWatcher
+    from core.models import ScalpTrade
+    from core.weex.futures import WeexTradeError
+
+    session, student = _journal_db()
+    row = trade(
+        student_id=student.id,
+        status="open",
+        takes_hit=1,
+        opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    watcher = PositionWatcher(lambda: session, lambda: None)
+    watcher._live_journal(session, row, pnl=9.5, closed_qty=0.5)
+    session.commit()
+
+    class Silent:
+        async def user_trades(self, symbol, limit=100):
+            raise WeexTradeError("биржа не ответила")
+
+    asyncio.run(watcher._live_journal_fills(session, Silent(), row))
+    session.commit()
+
+    saved = session.execute(select(ScalpTrade)).scalar_one()
+    assert float(saved.pnl) == pytest.approx(9.5)
+    assert float(saved.closed_qty) == pytest.approx(0.5)
+
+
+def test_closing_turns_the_live_record_into_the_final_one():
+    """Та же запись закрывается итогом, а не заводится второй."""
+    import asyncio
+
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from backend.trading.watcher import PositionWatcher
+    from core.models import ScalpTrade
+
+    session, student = _journal_db()
+    row = trade(
+        student_id=student.id,
+        status="open",
+        takes_hit=1,
+        opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        closed_at=datetime(2026, 1, 1, 1, tzinfo=timezone.utc),
+    )
+    watcher = PositionWatcher(lambda: session, lambda: None)
+    watcher._live_journal(session, row, pnl=5.0, closed_qty=0.4)
+    session.commit()
+
+    class Exchange:
+        async def user_trades(self, symbol, limit=100):
+            return [
+                {
+                    "time": 4102444800000,
+                    "realizedPnl": "7.5",
+                    "commission": "0.5",
+                    "price": "103",
+                    "side": "SELL",
+                    "qty": "1",
+                }
+            ]
+
+    asyncio.run(watcher._record(session, Exchange(), row))
+    session.commit()
+
+    saved = session.execute(select(ScalpTrade)).scalars().all()
+    assert len(saved) == 1
+    assert saved[0].closed_at is not None
+    assert saved[0].outcome == "take"
+    assert float(saved[0].pnl) == pytest.approx(7.0)
+    assert float(saved[0].closed_qty) == pytest.approx(float(row.qty))

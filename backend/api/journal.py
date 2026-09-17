@@ -31,6 +31,11 @@ router = APIRouter(prefix="/api/journal", tags=["journal"])
 # потолка ответ вырастет до мегабайтов на длинной истории.
 MAX_TRADES = 500
 
+# Сколько сделок в работе показываем. Больше десятка открытых разом не бывает
+# даже на пяти биржах, а потолок нужен, чтобы запись, застрявшая «в работе»
+# из-за отключённого счёта, не превратила список в ленту.
+MAX_LIVE = 20
+
 # Потолок сохранённого рабочего места. Настройки — это десяток чисел и флагов;
 # всё, что крупнее, приехало не из интерфейса.
 MAX_WORKSPACE_BYTES = 16_384
@@ -212,6 +217,10 @@ def _row(trade: ScalpTrade) -> dict[str, Any]:
         "opened_at": _iso(trade.opened_at),
         "closed_at": _iso(trade.closed_at),
         "note": trade.note,
+        # Сделка ещё идёт: `pnl` у неё - только зафиксированное взятыми
+        # целями, а плавающее по остатку живёт в терминале.
+        "live": trade.closed_at is None,
+        "closed_qty": float(getattr(trade, "closed_qty", 0) or 0),
         # Где открыта. У записей с биржи, сделанных до этого поля, - биржа
         # ключей: других тогда не было.
         "exchange": _exchange_of(trade),
@@ -328,7 +337,13 @@ async def list_trades(
     рисует переключатель.
     """
     venue = _asked_venue(exchange)
-    scope: list[Any] = [ScalpTrade.student_id == student.id]
+    # Итоги периода считаются по закрытым. Сделка в работе засчитана лишь
+    # частью: её результат ещё изменится, и в проценте прибыльных ей места
+    # нет. Идёт она отдельным списком `live`.
+    scope: list[Any] = [
+        ScalpTrade.student_id == student.id,
+        ScalpTrade.closed_at.is_not(None),
+    ]
     if date:
         start = datetime.fromisoformat(date).replace(tzinfo=timezone.utc)
         scope.append(ScalpTrade.closed_at >= start)
@@ -349,8 +364,23 @@ async def list_trades(
     losses = [t for t in trades if float(t.pnl) < 0]
     total = sum(float(t.pnl) for t in trades)
 
+    live_scope: list[Any] = [
+        ScalpTrade.student_id == student.id,
+        ScalpTrade.closed_at.is_(None),
+    ]
+    if symbol:
+        live_scope.append(ScalpTrade.symbol == symbol.upper())
+    live_query = select(ScalpTrade).where(*live_scope).order_by(ScalpTrade.opened_at.desc())
+    if venue:
+        live_query = live_query.where(_venue_clause(venue))
+    live = session.execute(live_query.limit(MAX_LIVE)).scalars().all()
+
     return {
         "trades": [_row(t) for t in trades],
+        # Сделки в работе: журнал показывает их сверху, отдельной строкой, и в
+        # итоги периода они не входят.
+        "live": [_row(t) for t in live],
+        "live_pnl": round(sum(float(t.pnl) for t in live), 8),
         "by_exchange": _by_venue(session, *scope),
         # Биржа, на которую уходят новые сделки: с неё страница и открывается,
         # когда ученик ещё ничего не выбирал.
@@ -396,10 +426,18 @@ async def add_trade(
     # настоящие, с биржи. Кто напишет последним, того и цифры - и последним
     # оказывался терминал. Именно так в журнале появлялись +487 там, где на
     # счёт пришло +519.
-    if getattr(trade, "from_exchange", False):
+    #
+    # Но это про **закрытые** записи. Сделку в работе сопровождение заводит
+    # само, с той же отметкой, и запретить её закрывать с экрана значило бы
+    # оставить её «в работе» навсегда, если до сервера дело не дошло: счёт
+    # отключили, ключи протухли, процесс не поднялся. Оценку с экрана
+    # сопровождение потом всё равно поправит своими числами.
+    if getattr(trade, "from_exchange", False) and trade.closed_at is not None:
         session.commit()
         session.refresh(trade)
         return _row(trade)
+    # Числа теперь с экрана: пусть сопровождение перепишет их, когда доедет.
+    trade.from_exchange = False
 
     trade.symbol = body.symbol.upper()
     trade.side = body.side

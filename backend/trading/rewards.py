@@ -203,6 +203,8 @@ def _win_streak(session, trade: ScalpTrade, *, before: bool = False) -> int:
         select(ScalpTrade.pnl, ScalpTrade.closed_at, ScalpTrade.client_id)
         .where(ScalpTrade.student_id == trade.student_id)
         .where(ScalpTrade.from_exchange.is_(True))
+        # Сделка в работе серию не продолжает и не рвёт: она ещё не кончилась.
+        .where(ScalpTrade.closed_at.is_not(None))
         .where(ScalpTrade.closed_at <= trade.closed_at)
         .order_by(ScalpTrade.closed_at.desc(), ScalpTrade.id.desc())
         .limit(STREAK_LOOKBACK)

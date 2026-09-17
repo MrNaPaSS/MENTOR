@@ -802,6 +802,9 @@ def taker_fee(session, student: Student, exchange: str | None = None) -> float |
         select(ScalpTrade.fee, ScalpTrade.entry, ScalpTrade.exit_price, ScalpTrade.qty)
         .where(ScalpTrade.student_id == student.id)
         .where(ScalpTrade.from_exchange.is_(True))
+        # Только закрытые: у сделки в работе комиссия неполная, а цены выхода
+        # нет вовсе - ставка по ней вышла бы заниженной.
+        .where(ScalpTrade.closed_at.is_not(None))
         .where(ScalpTrade.fee > 0)
     )
     # Ставка у каждой биржи своя. Сделки до мультибиржи записаны без биржи -

@@ -57,6 +57,9 @@ def pillars(session, student_id: int) -> list[Pillar]:
         select(ScalpTrade.closed_at, ScalpTrade.stop, ScalpTrade.pnl)
         .where(ScalpTrade.student_id == student_id)
         .where(ScalpTrade.from_exchange.is_(True))
+        # Сделка в работе ещё ничем не кончилась: ни в дисциплину, ни в
+        # прибыльные дни ей пока не место.
+        .where(ScalpTrade.closed_at.is_not(None))
     ).all()
 
     # День засчитывается дисциплине, если стоп стоял у каждой сделки дня: одна

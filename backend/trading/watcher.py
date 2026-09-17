@@ -812,6 +812,9 @@ class PositionWatcher:
                 trade.qty = decision.size
             changed = True
             logger.info("Позиция набрана: %s (%s)", trade.symbol, trade.client_id)
+            # Журнал ведёт сделку с этого момента, а не с закрытия: трейдер
+            # видит её в работе, с целями и с тем, что уже зафиксировано.
+            self._live_journal(session, trade)
 
         # Цели ставим, когда позиция есть, а их ещё нет. До набора позиции биржа
         # сокращающий ордер не принимает — «cannot set reduce only», — поэтому
@@ -880,6 +883,9 @@ class PositionWatcher:
             changed = True
             if trade.takes_hit > was:
                 logger.info("Цель взята: %s, всего %d", trade.symbol, trade.takes_hit)
+                # Зафиксированное спрашиваем у биржи: считать самим значит
+                # разойтись с ней на проскальзывании и комиссии.
+                await self._live_journal_fills(session, client, trade)
             else:
                 # Заявки целей ушли с биржи вместе с позицией: так бывает на
                 # стопе и на закрытии руками. Цель при этом не взята, и счёт
@@ -1221,6 +1227,130 @@ class PositionWatcher:
         if dropped:
             logger.info("После закрытия %s снято заявок защиты: %s", trade.symbol, dropped)
 
+    async def _fills_since(
+        self, client: WeexFutures, trade: LiveTrade
+    ) -> list[dict[str, Any]]:
+        """Исполнения биржи по этой сделке: с момента входа и до сейчас.
+
+        Одно окно на всех, кто считает деньги сделки, - и итог при закрытии, и
+        зафиксированное по взятым целям. Два похожих окна разошлись бы на
+        первой же правке, а расходятся они деньгами в журнале.
+        """
+        aware = _since(trade)
+        opened_ms = int(aware.timestamp() * 1000) if aware else 0
+        report = await client.user_trades(trade.symbol, limit=100)
+        fills = [f for f in report if not opened_ms or fill_time(f) >= opened_ms]
+        # Вход исполнился раньше, чем мы его заметили: `opened_at` - это
+        # проход сопровождения, увидевший позицию, а не само исполнение.
+        # Без этого добора комиссия входа в журнал не попадала вовсе - по
+        # лонгу ZEC записалось +125.63 при +117.63 на счёте, ровно на 8.00
+        # удержанных за вход. Комиссию берём ту, что назвала биржа по этому
+        # исполнению: у каждого трейдера она своя.
+        created = trade.created_at
+        if created is not None and created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        placed_ms = int(created.timestamp() * 1000) if created else 0
+        if opened_ms and placed_ms and placed_ms < opened_ms:
+            fills = (
+                entry_fills(report, trade.side, float(trade.qty), placed_ms, opened_ms)
+                + fills
+            )
+        return fills
+
+    def _journal_row(self, session, trade: LiveTrade) -> ScalpTrade | None:
+        """Запись журнала этой сделки, если она уже есть."""
+        return session.execute(
+            select(ScalpTrade)
+            .where(ScalpTrade.student_id == trade.student_id)
+            .where(ScalpTrade.client_id == trade.client_id)
+        ).scalar_one_or_none()
+
+    def _live_journal(
+        self,
+        session,
+        trade: LiveTrade,
+        pnl: float | None = None,
+        closed_qty: float | None = None,
+    ) -> ScalpTrade:
+        """Завести или обновить запись журнала по идущей сделке.
+
+        Журнал ведёт сделку с открытия: трейдер, взявший две цели из трёх,
+        видит её в работе, с кружками целей и с тем, что уже зафиксировано.
+        Плавающего по остатку здесь нет - это дело терминала, а журнал
+        показывает только закрытые на бирже деньги.
+
+        Числа необязательны: при открытии их ещё нет, и запись появляется с
+        нулями. Закрытую запись не трогаем вовсе - её ведёт `_record` по
+        полному отчёту биржи.
+        """
+        record = self._journal_row(session, trade)
+        if record is not None and record.closed_at is not None:
+            return record
+        if record is None:
+            record = ScalpTrade(student_id=trade.student_id, client_id=trade.client_id)
+            session.add(record)
+        record.symbol = trade.symbol
+        record.side = trade.side
+        record.entry = float(trade.entry)
+        # Риск считается от первого стопа, а не от переехавшего в безубыток.
+        record.stop = float(trade.initial_stop)
+        record.qty = float(trade.qty)
+        record.margin = float(trade.margin or 0) or 1.0
+        record.leverage = trade.leverage
+        record.takes_hit = int(trade.takes_hit or 0)
+        record.targets_json = trade.targets_json or "[]"
+        record.outcome = "open"
+        record.closed_at = None
+        record.opened_at = trade.opened_at
+        record.note = "в работе"
+        # Числа наши, с биржи: оценке с экрана их не переписать.
+        record.from_exchange = True
+        record.exchange = trade_exchange(trade.exchange)
+        if pnl is not None:
+            record.pnl = pnl
+        if closed_qty is not None:
+            record.closed_qty = closed_qty
+        return record
+
+    async def _live_journal_fills(
+        self, session, client: WeexFutures, trade: LiveTrade
+    ) -> None:
+        """Обновить запись идущей сделки по исполнениям биржи.
+
+        Зовётся на взятой цели, а не каждым проходом: отчёт об исполнениях -
+        это запрос к бирже, и спрашивать его раз в пять секунд по каждой
+        сделке значило бы платить за журнал больше, чем он стоит.
+
+        Не ответила биржа - оставляем прежние числа: показать ноль там, где
+        деньги уже зафиксированы, хуже, чем показать вчерашнее.
+        """
+        try:
+            fills = await self._fills_since(client, trade)
+        except WeexTradeError as exc:
+            logger.warning(
+                "Зафиксированное по %s не обновлено: %s", trade.symbol, exc
+            )
+            self._live_journal(session, trade)
+            return
+        if not fills:
+            self._live_journal(session, trade)
+            return
+        taker = 0.0
+        try:
+            taker = float((await client.symbol_filters(trade.symbol)).get("taker_fee") or 0)
+        except Exception as exc:  # noqa: BLE001 - причина в логе, запись важнее
+            logger.debug("Ставка комиссии %s не получена: %s", trade.symbol, exc)
+        gross, fee, _exit = settle(fills, float(trade.entry), trade.side, taker)
+        done = closed_size(fills, trade.side)
+        self._live_journal(session, trade, pnl=gross - fee, closed_qty=done)
+        logger.info(
+            "Журнал %s: зафиксировано %.4f, закрыто %s из %s",
+            trade.symbol,
+            gross - fee,
+            num(done),
+            num(float(trade.qty)),
+        )
+
     async def _record(self, session, client: WeexFutures, trade: LiveTrade) -> bool:
         """Записать закрытую сделку в журнал по реальным исполнениям.
 
@@ -1244,30 +1374,8 @@ class PositionWatcher:
         exit_price: float | None = None
         hit = trade.takes_hit
         try:
-            since = trade.opened_at or trade.created_at
-            # Наивную дату из базы считаем UTC: `timestamp()` у неё считает по
-            # местному времени, и окно исполнений уезжало бы на разницу поясов.
-            aware = (
-                since if since is None or since.tzinfo else since.replace(tzinfo=timezone.utc)
-            )
-            opened_ms = int(aware.timestamp() * 1000) if aware else 0
-            report = await client.user_trades(trade.symbol, limit=100)
-            fills = [f for f in report if not opened_ms or fill_time(f) >= opened_ms]
-            # Вход исполнился раньше, чем мы его заметили: `opened_at` - это
-            # проход сопровождения, увидевший позицию, а не само исполнение.
-            # Без этого добора комиссия входа в журнал не попадала вовсе - по
-            # лонгу ZEC записалось +125.63 при +117.63 на счёте, ровно на 8.00
-            # удержанных за вход. Комиссию берём ту, что назвала биржа по этому
-            # исполнению: у каждого трейдера она своя.
-            created = trade.created_at
-            if created is not None and created.tzinfo is None:
-                created = created.replace(tzinfo=timezone.utc)
-            placed_ms = int(created.timestamp() * 1000) if created else 0
-            if opened_ms and placed_ms and placed_ms < opened_ms:
-                fills = (
-                    entry_fills(report, trade.side, float(trade.qty), placed_ms, opened_ms)
-                    + fills
-                )
+            aware = _since(trade)
+            fills = await self._fills_since(client, trade)
             hit = trade.takes_hit
 
             # Закрывающее исполнение идёт против стороны сделки. Пока его нет,
@@ -1382,6 +1490,9 @@ class PositionWatcher:
         record.targets_json = trade.targets_json or "[]"
         record.outcome = "take" if pnl > 0 else "stop"
         record.pnl = pnl
+        # Позиции на бирже нет - закрыт весь объём. Берём его у сделки, а не у
+        # отчёта: отчёт бывает неполон, а закрыта позиция целиком.
+        record.closed_qty = float(trade.qty)
         record.fee = fee
         record.opened_at = trade.opened_at
         record.closed_at = trade.closed_at or utcnow()
@@ -1777,6 +1888,18 @@ def entry_fills(
         taken.append(row)
         got += abs(_first(row, _SIZE_FIELDS) or 0.0)
     return taken
+
+
+def _since(trade: LiveTrade):
+    """С какого момента считаем исполнения сделки.
+
+    Наивную дату из базы считаем UTC: `timestamp()` у неё считает по местному
+    времени, и окно исполнений уезжало бы на разницу поясов.
+    """
+    since = trade.opened_at or trade.created_at
+    if since is None or since.tzinfo:
+        return since
+    return since.replace(tzinfo=timezone.utc)
 
 
 def settle(
