@@ -81,6 +81,48 @@ def test_public_stats_with_data(ctx):
 
 # ── Ученики (ментор) ──
 
+def test_student_is_deleted_with_everything_that_points_at_him(ctx):
+    """Удаление ученика не спотыкается о его же записи.
+
+    У ученика со временем обрастает половина базы: рабочее место терминала,
+    журнал сделок, снимки разбора. Раньше удалялись три таблицы из списка, а
+    база отказывала во внешнем ключе - ментор видел простыню исключения вместо
+    «ученик удалён».
+    """
+    from core.models import ScalpTrade, ScalpWorkspace, TradeShot
+
+    client, _ = ctx
+    sid = _make_student()
+    h = _mentor_headers(client)
+
+    with SessionLocal() as session:
+        session.add(ScalpWorkspace(student_id=sid, payload="{}"))
+        session.add(
+            ScalpTrade(
+                student_id=sid,
+                client_id="t-gone",
+                symbol="BTCUSDT",
+                side="long",
+                entry=Decimal("100"),
+                stop=Decimal("90"),
+                qty=Decimal("1"),
+                margin=Decimal("100"),
+                leverage=10,
+                outcome="take",
+                pnl=Decimal("10"),
+            )
+        )
+        session.add(TradeShot(student_id=sid, client_id="t-gone", shot_id="abc"))
+        session.commit()
+
+    assert client.delete(f"/api/students/{sid}", headers=h).status_code == 200
+    assert client.get(f"/api/students/{sid}", headers=h).status_code == 404
+
+    with SessionLocal() as session:
+        left = session.query(ScalpTrade).filter(ScalpTrade.student_id == sid).count()
+        assert left == 0
+
+
 def test_students_crud(ctx):
     client, _ = ctx
     sid = _make_student()

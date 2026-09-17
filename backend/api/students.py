@@ -7,11 +7,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from sqlalchemy import delete as sql_delete
-
 from core import repo
+from core.db import Base
 from core.referral import MANUAL
-from core.models import iso, BalanceSnapshot, CoinTransaction, SignalDelivery, Student
+from core.models import iso, Student
 from backend.deps import get_session, get_current_mentor
 from backend.schemas import StudentOut
 
@@ -92,14 +91,41 @@ def approve(student_id: int, session=Depends(get_session)):
     return _to_out(s)
 
 
+def _detach_student(session, student_id: int) -> None:
+    """Отцепить от ученика всё, что на него ссылается.
+
+    Раньше здесь стоял список из трёх таблиц, и он устаревал каждый раз, когда
+    у ученика появлялось что-то новое: рабочее место терминала, журнал сделок,
+    снимки разбора, план недели. База честно отказывала во внешнем ключе, а
+    ментор видел простыню на пол-экрана вместо «ученик удалён».
+
+    Поэтому таблицы ищем по самой схеме, а не по памяти. Запись, которая без
+    ученика не имеет смысла, удаляется; та, где ссылка необязательная, -
+    остаётся без него: начисление кешбэка по бирже - это факт денег, и терять
+    его из-за ухода человека нельзя.
+    """
+    for table in reversed(Base.metadata.sorted_tables):
+        if table.name == "students":
+            continue
+        for key in table.foreign_keys:
+            if key.column.table.name != "students":
+                continue
+            column = key.parent
+            if column.nullable:
+                session.execute(
+                    table.update().where(column == student_id).values({column: None})
+                )
+            else:
+                session.execute(table.delete().where(column == student_id))
+            break
+
+
 @router.delete("/{student_id}")
 def delete(student_id: int, session=Depends(get_session)):
     s = session.get(Student, student_id)
     if s is None:
         raise HTTPException(404, "Ученик не найден")
-    session.execute(sql_delete(SignalDelivery).where(SignalDelivery.student_id == student_id))
-    session.execute(sql_delete(BalanceSnapshot).where(BalanceSnapshot.student_id == student_id))
-    session.execute(sql_delete(CoinTransaction).where(CoinTransaction.student_id == student_id))
+    _detach_student(session, student_id)
     session.delete(s)
     session.commit()
     return {"ok": True}
