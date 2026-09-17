@@ -139,3 +139,25 @@ async def test_last_socket_out_forgets_the_student():
     assert 7 not in hub._streamed
     # Звонок в пустоту ничего не роняет.
     await hub.ring(7)
+
+
+# ── кого канал считает своим ────────────────────────────────────────────────
+
+
+def test_only_a_live_token_names_the_student():
+    """Звонок о счёте идёт по токену: чужой подписью ученика не назвать."""
+    from types import SimpleNamespace
+
+    from backend.security import create_access_token
+    from backend.ws.routes import _student_of
+
+    def socket(secret: str):
+        state = SimpleNamespace(config=SimpleNamespace(jwt_secret=secret))
+        return SimpleNamespace(app=SimpleNamespace(state=state))
+
+    token = create_access_token("42", "student", "secret", 600)
+    assert _student_of(socket("secret"), token) == 42
+    # Подпись чужим ключом, мусор и пустота - никто.
+    assert _student_of(socket("another"), token) == 0
+    assert _student_of(socket("secret"), "abc.def.ghi") == 0
+    assert _student_of(socket("secret"), "") == 0
