@@ -683,8 +683,8 @@ def test_a_live_trade_comes_apart_from_the_closed_ones(client):
     # Итоги - только по закрытой.
     assert body["summary"]["count"] == 1
     assert body["summary"]["pnl"] == 10.0
-    # Зафиксированное по идущим сказано отдельно.
-    assert body["live_pnl"] == 24.0
+    # Зафиксированное по идущей стоит в её же строке, а не в итогах периода.
+    assert body["live"][0]["pnl"] == 24.0
 
 
 def test_a_live_trade_carries_its_targets_and_closed_part(client):

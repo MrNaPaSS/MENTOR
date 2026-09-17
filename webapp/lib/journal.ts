@@ -113,8 +113,6 @@ export type TradeListing = {
    * в итогах периода - сумме, проценте прибыльных - им места нет.
    */
   live?: LiveJournalTrade[];
-  /** Сколько по ним уже зафиксировано. */
-  live_pnl?: number;
   summary: JournalSummary;
   /** Разрез по биржам за тот же период: по нему рисуется переключатель. */
   by_exchange: VenueSlice[];

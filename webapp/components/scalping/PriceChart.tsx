@@ -2908,7 +2908,7 @@ function PriceChart({
                     `${total >= 0 ? "+" : "-"}${Math.abs(total).toFixed(2)}`,
                   )}
                 >
-                  ●{taken >= 0 ? "+" : "-"}
+                  {taken >= 0 ? "+" : "-"}
                   {Math.abs(taken).toFixed(2)}
                 </span>
               )}

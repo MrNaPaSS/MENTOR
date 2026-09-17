@@ -79,7 +79,6 @@ export default function JournalPanel({
   // Сделки, которые идут прямо сейчас: показываются сверху, отдельно от
   // закрытых, и в итоги периода не входят - их результат ещё изменится.
   const [live, setLive] = useState<LiveJournalTrade[]>([]);
-  const [livePnl, setLivePnl] = useState(0);
   const [summary, setSummary] = useState<JournalSummary | null>(null);
   // Биржи, встречающиеся в сделках за период, и та, на которую уходят новые.
   // По ним рисуется переключатель: журнал показывает один счёт за раз, потому
@@ -128,7 +127,6 @@ export default function JournalPanel({
       if (list) {
         setTrades(list.trades);
         setLive(list.live ?? []);
-        setLivePnl(list.live_pnl ?? 0);
         setSummary(list.summary);
         // Разрез приходит полным и с выбранной биржей: переключатель не должен
         // терять биржу, которую только что отфильтровали.
@@ -163,6 +161,10 @@ export default function JournalPanel({
   // Сделки выбранного дня. День календаря считает сервер по своим суткам, и
   // сравниваем по ним же - иначе вечерняя сделка попадёт в соседнюю клетку.
   const shown = day === null ? trades : trades.filter((row) => row.closed_at.slice(0, 10) === day);
+
+  // Что показываем: идущие сделки первыми строками, следом закрытые. Выбран
+  // день календаря - идущие прячем: они ещё никакому дню не принадлежат.
+  const rows: JournalRow[] = day === null ? [...live, ...shown] : shown;
 
   function toToday() {
     const now = new Date();
@@ -335,27 +337,14 @@ export default function JournalPanel({
               </button>
             )}
 
-            {/* Сделки в работе - первыми: трейдер смотрит журнал как раз
-                затем, чтобы увидеть, что уже зафиксировано. */}
-            {live.length > 0 && (
-              <div className="mb-3">
-                <div className="mb-1 flex items-baseline justify-between text-[10px]">
-                  <span className="text-[var(--pane-muted)]">
-                    {t.journal.liveTitle} · {live.length}
-                  </span>
-                  <span className={tone(livePnl)}>
-                    {t.journal.liveLocked(money(livePnl))}
-                  </span>
-                </div>
-                <JournalTable rows={live} onHover={onHover} onPick={onPick} />
-              </div>
-            )}
-
-            {shown.length === 0 ? (
+            {/* Одна таблица на всё: идущие сделки идут первыми строками, а не
+                своим блоком со своей шапкой. Две шапки подряд читались как два
+                разных списка, хотя это один журнал. */}
+            {rows.length === 0 ? (
               <p className="py-6 text-center text-[var(--pane-muted)]">{t.journal.empty}</p>
             ) : (
               <JournalTable
-                rows={shown}
+                rows={rows}
                 onHover={onHover}
                 onPick={onPick}
                 onCard={setCard}

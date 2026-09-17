@@ -155,8 +155,8 @@ export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: 
             >
               {/* У идущей сделки это только зафиксированное взятыми целями:
                   плавающее по остатку живёт в строке позиции, и смешивать их
-                  в одном числе нельзя - оно читалось бы как итог. */}
-              {isLive(row) && <span className="mr-1 text-[9px] opacity-60">●</span>}
+                  в одном числе нельзя - оно читалось бы как итог. Слово «в
+                  работе» стоит в колонке монеты, и метки у числа не нужно. */}
               {money(row.pnl)}
               {!isLive(row) && row.fee > 0 && (
                 <span className="ml-1 text-[9px] text-[var(--pane-muted)]">
@@ -186,6 +186,8 @@ export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: 
                 право стереть из неё неудачную сделку обесценивает её целиком. */}
             {onDrop && (
               <td className="pl-2 text-right">
+                {/* Идущую сделку из журнала не убирают: она ещё идёт. */}
+                {!isLive(row) && (
                 <button
                   onClick={(event) => {
                     event.stopPropagation();
@@ -196,6 +198,7 @@ export default function JournalTable({ rows, onHover, onPick, onCard, onDrop }: 
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>
+                )}
               </td>
             )}
           </tr>
