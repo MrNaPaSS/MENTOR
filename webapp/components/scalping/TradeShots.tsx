@@ -40,6 +40,8 @@ export default function TradeShots({
 }: TradeShotsProps) {
   const t = useT();
   const [busy, setBusy] = useState(false);
+  // Файл тащат над окном: рамка светится, чтобы было видно, куда бросать.
+  const [over, setOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -99,7 +101,23 @@ export default function TradeShots({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)]"
+        // Перетаскивание ловим и здесь, а не только на подложке: файл, брошенный
+        // на само окно, браузер иначе открывает вкладкой - картинка уезжает
+        // вместо того, чтобы прикрепиться.
+        onDragOver={(event) => {
+          event.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOver(false);
+          void drop(event.dataTransfer?.files ?? null);
+        }}
+        className={`flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-[var(--pane-bg)] ${
+          over ? "border-[var(--pane-accent)]" : "border-[var(--pane-border)]"
+        }`}
       >
         <div className="flex items-center gap-2 border-b border-[var(--pane-border)] px-3 py-2">
           <h2 className="text-[12px] font-semibold text-[var(--pane-text)]">

@@ -71,8 +71,12 @@ export default function JournalPanel({
   const t = useT();
   // Чья карточка открыта. Null - окна нет.
   const [card, setCard] = useState<JournalRow | null>(null);
-  // Чью сделку разбираем снимками. Сами снимки приходят в строке журнала.
-  const [shotsOf, setShotsOf] = useState<JournalRow | null>(null);
+  // Чью сделку разбираем снимками - по опознавателю, а не самой строкой.
+  //
+  // Строка приходит с сервера и обновляется после каждого добавления: держать
+  // в состоянии её снимок значило бы показывать в окне вчерашний список, а
+  // закрывать окно после каждой картинки - мешать раскладывать разбор.
+  const [shotsOf, setShotsOf] = useState<string | null>(null);
   const now = new Date();
   const [year, setYear] = useState(now.getUTCFullYear());
   const [month, setMonth] = useState(now.getUTCMonth() + 1);
@@ -165,6 +169,13 @@ export default function JournalPanel({
   // сравниваем по ним же - иначе вечерняя сделка попадёт в соседнюю клетку.
   const shown = day === null ? trades : trades.filter((row) => row.closed_at.slice(0, 10) === day);
 
+
+  // Сделка, снимки которой открыты. Ищем её в свежих строках, а не помним
+  // отдельно: после добавления картинки журнал перечитывается, и окно должно
+  // показать новый список само.
+  const shotsRow = shotsOf
+    ? [...live, ...trades].find((row) => row.client_id === shotsOf) ?? null
+    : null;
 
   function toToday() {
     const now = new Date();
@@ -348,7 +359,7 @@ export default function JournalPanel({
                   onPick={onPick}
                   onCard={setCard}
                   onDrop={mentor ? drop : undefined}
-                  onShots={setShotsOf}
+                  onShots={(row) => setShotsOf(row.client_id)}
                   dateLabel={t.journal.colLive}
                 />
               </div>
@@ -365,7 +376,7 @@ export default function JournalPanel({
                 onPick={onPick}
                 onCard={setCard}
                 onDrop={mentor ? drop : undefined}
-                onShots={setShotsOf}
+                onShots={(row) => setShotsOf(row.client_id)}
                 resultLabel={t.journal.colResultFee}
               />
             )}
@@ -377,18 +388,16 @@ export default function JournalPanel({
         <PnlCard data={cardFromTrade(card, owner)} onClose={() => setCard(null)} />
       )}
 
-      {shotsOf && (
+      {shotsRow && (
         <TradeShots
-          clientId={shotsOf.client_id}
-          symbol={shotsOf.symbol}
-          shots={shotsOf.shots ?? []}
+          clientId={shotsRow.client_id}
+          symbol={shotsRow.symbol}
+          shots={shotsRow.shots ?? []}
           onClose={() => setShotsOf(null)}
-          onChange={() => {
-            // Перечитываем журнал: снимки приходят в строках, и после
-            // добавления окно должно показать их сразу.
-            void reload();
-            setShotsOf(null);
-          }}
+          // Окно остаётся открытым: снимков к сделке прикладывают несколько
+          // подряд, и закрываться после каждого - значит открывать его заново
+          // ради второй картинки. Список сам обновится перечитанным журналом.
+          onChange={() => void reload()}
         />
       )}
     </div>
