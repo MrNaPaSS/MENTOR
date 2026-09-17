@@ -65,6 +65,7 @@ import {
 } from "@/lib/indicator/presets";
 import TradeDialog, { type TradeDraft } from "@/components/scalping/TradeDialog";
 import JournalPanel from "@/components/scalping/JournalPanel";
+import PickTrade from "@/components/scalping/PickTrade";
 import type { JournalRow } from "@/components/scalping/JournalTable";
 import { hasFootprint } from "@/lib/indicator/footprint";
 import {
@@ -649,6 +650,9 @@ export default function ScalpingPage() {
   // Способ снять холст графика: кладёт его сам график, пользуется кнопка.
   const shotRef = useRef<(() => ShotResult | null) | null>(null);
   const [shotMenu, setShotMenu] = useState(false);
+  // Выбор сделки под снимок: открывается из меню камеры, когда идущих
+  // сделок больше одной. Одна - снимок уходит в неё сразу.
+  const [pickShot, setPickShot] = useState(false);
   const shotMenuRef = useRef<HTMLDivElement>(null);
   const [themeMenu, setThemeMenu] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement>(null);
@@ -3469,6 +3473,56 @@ export default function ScalpingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trades, autoShots, symbol]);
 
+  /**
+   * Снимок в сделку по кнопке.
+   *
+   * Сделка одна - кладём сразу: спрашивать «в эту?» там, где ответ
+   * единственный, значит мешать посреди работы. Несколько - показываем выбор.
+   */
+  function shotToTrade() {
+    const live = tradesRef.current.filter((one) => one.status !== "closed");
+    if (live.length === 0) {
+      setOrderNote({ text: t.terminal.shotToTradeEmpty, bad: true });
+      return;
+    }
+    if (live.length === 1) {
+      void shotInto(live[0]);
+      return;
+    }
+    setPickShot(true);
+  }
+
+  /** Снять график и положить снимок в названную сделку. */
+  async function shotInto(trade: ActiveTrade) {
+    setPickShot(false);
+    const taken = shotRef.current?.();
+    if (!taken || taken.source === "empty" || !symbol) {
+      setOrderNote({ text: t.terminal.notes.chartNotReady, bad: true });
+      return;
+    }
+    try {
+      const picture = await composeShot(taken.canvas, {
+        symbol,
+        interval: timeframe,
+        author: author ?? undefined,
+        theme: paper,
+      });
+      const done = await attachShot(
+        trade.id,
+        picture.toDataURL("image/jpeg", 0.9),
+      );
+      setOrderNote({
+        text: done
+          ? t.terminal.shotToTradeDone(trade.symbol)
+          : t.terminal.shotToTradeFailed,
+        bad: !done,
+      });
+      if (done) setJournalKey((n) => n + 1);
+    } catch {
+      setOrderNote({ text: t.terminal.shotToTradeFailed, bad: true });
+    }
+  }
+
   /** Снять график и приложить к сделке. Молча: это не действие трейдера. */
   async function autoShot(clientId: string, note: string) {
     const taken = shotRef.current?.();
@@ -4130,6 +4184,17 @@ export default function ScalpingPage() {
                             {label}
                           </button>
                         ))}
+                        {/* Снимок прямо в сделку: его делают в работе, и
+                            искать её потом в журнале - лишний путь. */}
+                        <button
+                          onClick={() => {
+                            setShotMenu(false);
+                            shotToTrade();
+                          }}
+                          className="block w-full px-3 py-1.5 text-left text-[11px] text-[var(--pane-text-2)] transition-colors hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+                        >
+                          {t.terminal.shotToTrade}
+                        </button>
                         {/* Автоснимок - здесь же, под остальными: это про ту же
                             камеру, только нажимает её терминал сам. */}
                         <button
@@ -4626,6 +4691,14 @@ export default function ScalpingPage() {
             />
           </section>
         </>
+      )}
+
+      {pickShot && (
+        <PickTrade
+          trades={trades.filter((one) => one.status !== "closed")}
+          onPick={(one) => void shotInto(one)}
+          onClose={() => setPickShot(false)}
+        />
       )}
 
       {dialogOpen && draft && (
