@@ -304,6 +304,9 @@ class StreamKeeper:
         # спрашивать позиции и заявки по кругу (backend/ws/scalping_hub.py).
         self.streams = PrivateStreams(http, bell)
         self._streamed = streamed
+        # Кому и что уже сказано о потоках: иначе закрытая сделка гасит поток,
+        # а терминал так и остаётся на редком круге, думая, что события идут.
+        self._told: dict[int, tuple[str, ...]] = {}
         self.interval = interval
         self._task: asyncio.Task | None = None
 
@@ -359,12 +362,24 @@ class StreamKeeper:
         """
         if self._streamed is None:
             return
-        live: dict[int, list[str]] = {}
+        live: dict[int, tuple[str, ...]] = {}
         for student_id, exchange in accounts:
             if self.streams.ready(student_id, exchange):
-                live.setdefault(int(student_id), []).append(str(exchange))
-        for student_id in {int(s) for s, _ in accounts}:
+                live[int(student_id)] = tuple(
+                    sorted(live.get(int(student_id), ()) + (str(exchange),))
+                )
+        # Ученики, у которых поток погас вместе с последней сделкой: им надо
+        # сказать пустой список, иначе терминал останется ждать событий.
+        for student_id in {int(s) for s, _ in accounts} | set(self._told):
+            venues = live.get(student_id, ())
+            if self._told.get(student_id) == venues:
+                continue
             try:
-                await self._streamed(student_id, tuple(sorted(live.get(student_id, ()))))
+                await self._streamed(student_id, venues)
             except Exception as exc:  # noqa: BLE001 - канал не повод рвать круг
                 logger.debug("Состав потоков ученику %s не ушёл: %s", student_id, exc)
+                continue
+            if venues:
+                self._told[student_id] = venues
+            else:
+                self._told.pop(student_id, None)

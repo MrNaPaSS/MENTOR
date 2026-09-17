@@ -171,3 +171,12 @@ def test_the_keeper_tells_which_exchanges_are_streamed(db):
         keeper._tell_streamed({(student.id, "okx"), (student.id, "weex")})
     )
     assert told == [(student.id, ("okx",))]
+
+    # То же самое второй раз повторять незачем.
+    asyncio.run(keeper._tell_streamed({(student.id, "okx")}))
+    assert len(told) == 1
+
+    # Сделка закрылась, поток погас - терминал должен вернуться к частому
+    # кругу, иначе он так и будет ждать событий, которых больше нет.
+    asyncio.run(keeper._tell_streamed(set()))
+    assert told[-1] == (student.id, ())
