@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from backend.scalping.book import OrderBook
-from backend.scalping.metrics import Level, Wall, find_walls, snap, tick_decimals
+from backend.scalping.metrics import Level, Wall, band_walls, snap, tick_decimals
 from backend.scalping.state import BAND_BP
 
 # Сколько ценовых строк показываем с каждой стороны по умолчанию.
@@ -79,9 +79,16 @@ def group(levels: list[Level], tick: float, side: str, rows: int) -> list[tuple[
     if tick <= 0:
         return [(l.price, l.size) for l in levels[:rows]]
 
+    # Уровни идут от лучшей цены вглубь, а округление монотонно: корзины
+    # появляются по порядку. Как только набраны нужные строки и следующий
+    # уровень открывает новую корзину, дальше смотреть незачем - всё остальное
+    # ляжет глубже экрана. Раньше раскладывалась вся книга, полторы тысячи
+    # уровней ради двадцати строк, восемь раз в секунду.
     buckets: dict[float, float] = {}
     for level in levels:
         price = snap(level.price, tick, side)
+        if price not in buckets and len(buckets) >= rows:
+            break
         buckets[price] = buckets.get(price, 0.0) + level.size
 
     ordered = sorted(buckets.items(), key=lambda kv: kv[0], reverse=(side == "bid"))
@@ -188,10 +195,5 @@ def _wall_prices(book: OrderBook, step: float) -> set[float]:
     Ищем по исходным уровням, а не по корзинам: укрупнение сетки размазывает
     крупную заявку по соседям и прячет её.
     """
-    mid = book.mid
-    if mid <= 0:
-        return set()
-    walls: list[Wall] = find_walls(
-        book.levels_in_band("bid", BAND_BP), "bid", mid
-    ) + find_walls(book.levels_in_band("ask", BAND_BP), "ask", mid)
+    walls: list[Wall] = band_walls(book, BAND_BP)
     return {snap(w.price, step, w.side) for w in walls}

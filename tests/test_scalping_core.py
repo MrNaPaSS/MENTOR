@@ -392,3 +392,128 @@ def test_without_a_threshold_nobody_is_a_whale():
     book.apply_snapshot([["100.00", "1000"]], [["100.01", "1000"]], 1)
     rows, _ = build_ladder(book, rows=10)
     assert all(r.whale is False for r in rows)
+
+
+# ── готовый отсортированный срез книги ──────────────────────────────────────
+#
+# Кадр стакана спрашивал уровни книги по десять раз и каждый раз сортировал
+# полторы тысячи цен заново. Срез теперь помнится до следующего изменения
+# книги - и обязан меняться вместе с ней на каждом пути: снимок, событие,
+# чистка дальних уровней, сброс.
+
+
+def _fresh_levels(book, side):
+    source = book.bids if side == "bid" else book.asks
+    return [(p, source[p]) for p in sorted(source, reverse=(side == "bid"))]
+
+
+def _levels(book, side, limit=None):
+    return [(l.price, l.size) for l in book.levels(side, limit)]
+
+
+def test_the_remembered_levels_follow_every_change_of_the_book():
+    from backend.scalping.book import OrderBook
+
+    book = OrderBook("BTCUSDT")
+    book.apply_snapshot([["100.0", "1"], ["99.9", "2"]], [["100.1", "3"], ["100.2", "4"]], 10)
+    assert _levels(book, "bid") == _fresh_levels(book, "bid")
+
+    # Событие потока.
+    assert book.apply_diff({"U": 10, "u": 11, "b": [["99.8", "5"], ["100.0", "0"]], "a": [["100.1", "9"]]})
+    assert _levels(book, "bid") == _fresh_levels(book, "bid")
+    assert _levels(book, "ask") == _fresh_levels(book, "ask")
+
+    # Чистка дальних уровней.
+    book.apply_diff({"U": 12, "u": 12, "pu": 11, "b": [["50.0", "1"]], "a": []})
+    book.prune(band_bp=100)
+    assert _levels(book, "bid") == _fresh_levels(book, "bid")
+
+    # Сброс.
+    book.reset()
+    assert _levels(book, "bid") == [] == _fresh_levels(book, "bid")
+
+
+def test_the_levels_given_out_cannot_spoil_the_remembered_ones():
+    from backend.scalping.book import OrderBook
+
+    book = OrderBook("BTCUSDT")
+    book.apply_snapshot([["100.0", "1"], ["99.9", "2"]], [["100.1", "3"]], 10)
+    given = book.levels("bid")
+    given.clear()
+    assert len(book.levels("bid")) == 2
+    assert _levels(book, "bid", limit=1) == [(100.0, 1.0)]
+
+
+def test_the_ladder_stops_early_but_builds_the_same_rows():
+    """Лестница берёт с книги только нужные строки - и строит ровно те же."""
+    import random
+
+    from backend.scalping.ladder import group
+    from backend.scalping.metrics import Level, snap
+
+    def naive(levels, tick, side, rows):
+        buckets: dict[float, float] = {}
+        for level in levels:
+            price = snap(level.price, tick, side)
+            buckets[price] = buckets.get(price, 0.0) + level.size
+        return sorted(buckets.items(), key=lambda kv: kv[0], reverse=(side == "bid"))[:rows]
+
+    rnd = random.Random(5)
+    for _ in range(200):
+        mid = rnd.choice([0.0123, 1.2345, 76000.0])
+        tick = rnd.choice([mid * 1e-5, mid * 1e-4, mid * 1e-3])
+        tick = float(f"{tick:.1g}")
+        side = rnd.choice(["bid", "ask"])
+        rows = rnd.choice([1, 5, 20, 40])
+        sign = -1 if side == "bid" else 1
+        prices = sorted(
+            {round(mid + sign * rnd.random() * tick * 300, 8) for _ in range(rnd.randint(1, 400))},
+            reverse=(side == "bid"),
+        )
+        levels = [Level(price=p, size=rnd.random()) for p in prices]
+        assert group(levels, tick, side, rows) == naive(levels, tick, side, rows)
+
+
+def test_walls_of_the_band_are_counted_once_per_state_of_the_book():
+    from backend.scalping.book import OrderBook
+    from backend.scalping.metrics import band_walls
+
+    book = OrderBook("BTCUSDT")
+    # Плита: 98.5 x 1000 - около ста тысяч, выше порога плиты в пятьдесят.
+    bids = [[f"{100 - i * 0.1:.1f}", "1"] for i in range(1, 30)] + [["98.5", "1000"]]
+    asks = [[f"{100 + i * 0.1:.1f}", "1"] for i in range(1, 30)]
+    book.apply_snapshot(bids, asks, 10)
+
+    first = band_walls(book, 200)
+    assert [w.price for w in first] == [98.5]
+    first.clear()  # отданный список не портит запомненный
+    assert [w.price for w in band_walls(book, 200)] == [98.5]
+
+    # Плиту сняли - следующий кадр обязан это увидеть.
+    book.apply_diff({"U": 10, "u": 11, "b": [["98.5", "0"]], "a": []})
+    assert band_walls(book, 200) == []
+
+
+def test_the_band_is_the_same_whether_cut_before_or_after_sorting():
+    """Полоса у цены, отобранная до сортировки, совпадает с прежней до уровня."""
+    import random
+
+    from backend.scalping.book import OrderBook
+
+    rnd = random.Random(9)
+    for _ in range(100):
+        book = OrderBook("X")
+        mid = rnd.choice([0.05, 3.0, 70000.0])
+        step = mid * 1e-4
+        bids = [[f"{mid - step * i:.10f}", f"{rnd.random():.4f}"] for i in range(1, rnd.randint(2, 900))]
+        asks = [[f"{mid + step * i:.10f}", f"{rnd.random():.4f}"] for i in range(1, rnd.randint(2, 900))]
+        book.apply_snapshot(bids, asks, 1)
+        band = rnd.choice([5, 25, 100, 400])
+        edge = book.mid * band / 10_000
+        for side in ("bid", "ask"):
+            expected = [
+                (l.price, l.size)
+                for l in book.levels(side)
+                if book.mid - edge <= l.price <= book.mid + edge
+            ]
+            assert [(l.price, l.size) for l in book.levels_in_band(side, band)] == expected

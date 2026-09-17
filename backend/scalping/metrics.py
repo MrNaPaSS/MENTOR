@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import functools
 import math
 from dataclasses import dataclass
 from statistics import median
@@ -105,6 +106,25 @@ def find_walls(
     return walls[:limit] if limit else walls
 
 
+def band_walls(book, band_bp: float) -> list[Wall]:
+    """Плиты обеих сторон в полосе у цены - один раз на состояние книги.
+
+    Одни и те же плиты нужны подсветке строк стакана и самой крупной плите в
+    кадре; считались они дважды. Наружу - копия списка: плиты неизменяемы, а
+    список общий.
+    """
+
+    def compute() -> list[Wall]:
+        mid = book.mid
+        if mid <= 0:
+            return []
+        return find_walls(book.levels_in_band("bid", band_bp), "bid", mid) + find_walls(
+            book.levels_in_band("ask", band_bp), "ask", mid
+        )
+
+    return list(book.memo(("walls", band_bp), compute))
+
+
 # Порог полки ликвидности: уровень, на котором стоит хотя бы столько денег.
 # В отличие от плиты, это абсолютная величина, а не «крупнее соседей». Полка
 # интересна сама по себе: цена о неё тормозит независимо от того, что вокруг.
@@ -123,8 +143,14 @@ SHELF_MAX_LIMIT = 50_000_000.0
 MAX_SHELVES = 8
 
 
+@functools.lru_cache(maxsize=512)
 def tick_decimals(tick: float) -> int:
-    """Сколько знаков после запятой имеет шаг."""
+    """Сколько знаков после запятой имеет шаг.
+
+    Запоминаем: шагов у монет десятки, а спрашивают их на каждую цену - кадр
+    стакана округлял так шесть тысяч цен и каждый раз разбирал шаг строкой
+    заново. Функция чистая, шаг от шага не меняется.
+    """
     if tick <= 0:
         return 0
     text = f"{tick:.10f}".rstrip("0")

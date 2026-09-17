@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import bisect
+import functools
 from collections import OrderedDict
 from dataclasses import dataclass, field
 
@@ -89,6 +90,18 @@ class ClusterHistory:
     # Интервал → цена → [покупки, продажи]. OrderedDict, чтобы выбрасывать
     # самый старый интервал за одну операцию.
     _data: OrderedDict[int, dict[float, list[float]]] = field(default_factory=OrderedDict)
+    # Номер правки каждого интервала и готовый срез к нему.
+    #
+    # Кадр стакана идёт восемь раз в секунду и каждый раз пересобирал всю
+    # историю - шестнадцать минут по сотням цен, - хотя за восьмую долю секунды
+    # меняется только текущая минута. Это была самая дорогая часть кадра. Срез
+    # интервала теперь собирается заново, только если в интервал пришла сделка.
+    _versions: dict[int, int] = field(default_factory=dict, repr=False)
+    _built: dict[int, tuple[int, "Column"]] = field(default_factory=dict, repr=False)
+    # Раскладка интервала по строкам стакана: (правка, строки, шаг, колонка).
+    # Строки сдвигаются, только когда цена уходит на шаг, а кадров восемь в
+    # секунду - между сдвигами прошлые минуты раскладывались заново впустую.
+    _fitted: dict[int, tuple[int, tuple, float, "Column"]] = field(default_factory=dict, repr=False)
 
     def ensure_tick(self, tick: float) -> None:
         """Задать шаг, если он ещё не известен.
@@ -126,11 +139,15 @@ class ClusterHistory:
             cell = [0.0, 0.0]
             column[level] = cell
         cell[0 if is_buy else 1] += price * qty
+        self._versions[start] = self._versions.get(start, 0) + 1
 
     def _trim(self) -> None:
         """Оставить только последние `columns` интервалов."""
         while len(self._data) > self.columns:
-            self._data.popitem(last=False)
+            start, _ = self._data.popitem(last=False)
+            self._versions.pop(start, None)
+            self._built.pop(start, None)
+            self._fitted.pop(start, None)
 
     def snapshot(self, limit: int | None = None) -> list[Column]:
         """Срез истории от старой колонки к свежей, на базовом шаге.
@@ -144,10 +161,33 @@ class ClusterHistory:
             items = items[-limit:]
         out: list[Column] = []
         for start, column in items:
-            cells = {price: Cell(buy=b, sell=s) for price, (b, s) in column.items()}
-            buy = sum(c.buy for c in cells.values())
-            sell = sum(c.sell for c in cells.values())
-            out.append(Column(start=start, cells=cells, buy=buy, sell=sell))
+            version = self._versions.get(start, 0)
+            built = self._built.get(start)
+            if built is None or built[0] != version:
+                cells = {price: Cell(buy=b, sell=s) for price, (b, s) in column.items()}
+                buy = sum(c.buy for c in cells.values())
+                sell = sum(c.sell for c in cells.values())
+                built = (version, Column(start=start, cells=cells, buy=buy, sell=sell))
+                self._built[start] = built
+            out.append(built[1])
+        return out
+
+    def fitted(self, limit: int, row_prices: list[float], step: float) -> list[Column]:
+        """Последние `limit` интервалов, схлопнутые под строки экрана.
+
+        То же, что `fit_to_rows(snapshot(limit), ...)`, но интервал, в который
+        не пришло сделок, при тех же строках не раскладывается заново.
+        """
+        rows = tuple(row_prices)
+        out: list[Column] = []
+        for column in self.snapshot(limit):
+            version = self._versions.get(column.start, 0)
+            done = self._fitted.get(column.start)
+            if done is None or done[0] != version or done[1] != rows or done[2] != step:
+                fitted = fit_to_rows([column], row_prices, step)[0]
+                done = (version, rows, step, fitted)
+                self._fitted[column.start] = done
+            out.append(done[3])
         return out
 
 
@@ -197,8 +237,12 @@ def _nearest(ordered: list[float], price: float) -> float | None:
     return before if price - before <= after - price else after
 
 
+@functools.lru_cache(maxsize=512)
 def _decimals(tick: float) -> int:
-    """Знаков после запятой у шага — чтобы цены ячеек ложились на сетку ровно."""
+    """Знаков после запятой у шага — чтобы цены ячеек ложились на сетку ровно.
+
+    Запоминаем: спрашивают на каждую сделку, а шаг у монеты один.
+    """
     if tick <= 0:
         return 8
     return len(f"{tick:.10f}".rstrip("0").partition(".")[2])

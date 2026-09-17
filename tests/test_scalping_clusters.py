@@ -133,3 +133,67 @@ def test_ensure_tick_does_not_override_known_step():
     h = ClusterHistory(tick=0.1)
     h.ensure_tick(5.0)
     assert h.tick == 0.1
+
+
+# ── готовые срезы: быстрее, но ровно то же самое ────────────────────────────
+#
+# Кадр стакана идёт восемь раз в секунду на каждую открытую монету и собирался
+# за 25 мс - три терминала занимали процесс сервера на две трети. Срезы и
+# раскладка по строкам теперь помнятся, пока интервал не менялся. Здесь -
+# доказательство, что помнится ровно то, что посчиталось бы заново.
+
+import random as _random
+
+from backend.scalping.clusters import fit_to_rows as _fit
+
+
+def _history_with_trades(seed: int = 3) -> ClusterHistory:
+    rnd = _random.Random(seed)
+    history = ClusterHistory(tick=0.1)
+    base = 1_789_600_000_000
+    for i in range(3000):
+        history.add(base + i * 300, round(100 + rnd.uniform(-2, 2), 1), rnd.random(), rnd.random() > 0.5)
+    return history
+
+
+def _same(a, b) -> bool:
+    return [(c.start, c.cells, c.buy, c.sell) for c in a] == [(c.start, c.cells, c.buy, c.sell) for c in b]
+
+
+def test_the_remembered_snapshot_follows_every_new_trade():
+    history = _history_with_trades()
+    first = history.snapshot()
+    # Сделка в текущую минуту и опоздавшая - в прошлую.
+    history.add(1_789_600_000_000 + 2999 * 300, 100.3, 5.0, True)
+    history.add(1_789_600_000_000 + 60_000, 99.9, 7.0, False)
+    second = history.snapshot()
+
+    fresh = ClusterHistory(tick=0.1)
+    fresh._data = history._data  # тот же ряд, но без памяти срезов
+    assert _same(second, fresh.snapshot())
+    assert not _same(first, second)
+
+
+def test_the_remembered_fit_is_exactly_a_fresh_fit():
+    rnd = _random.Random(11)
+    history = _history_with_trades()
+    base = 1_789_600_000_000
+    for step_round in range(40):
+        # Строки то стоят, то сдвигаются на шаг - как лестница при движении цены.
+        shift = rnd.choice([0.0, 0.0, 0.1, -0.1, 0.5])
+        rows = [round(99 + shift + i * 0.1, 1) for i in range(30)]
+        step = rnd.choice([0.1, 0.1, 0.5])
+        if rnd.random() > 0.3:
+            history.add(base + rnd.randint(0, 2999) * 300, round(100 + rnd.uniform(-2, 2), 1), 1.0, True)
+
+        remembered = history.fitted(8, rows, step)
+        recomputed = _fit(history.snapshot(8), rows, step)
+        assert _same(remembered, recomputed), f"круг {step_round}"
+
+
+def test_old_intervals_leave_the_memory_with_the_history():
+    history = ClusterHistory(tick=0.1, columns=3)
+    for minute in range(10):
+        history.add(1_789_600_000_000 + minute * 60_000, 100.0, 1.0, True)
+        history.fitted(3, [99.9, 100.0, 100.1], 0.1)
+    assert len(history._built) <= 3 and len(history._fitted) <= 3

@@ -17,7 +17,7 @@ import time
 import logging
 from dataclasses import asdict
 
-from backend.scalping.clusters import DEFAULT_COLUMNS, fit_to_rows
+from backend.scalping.clusters import DEFAULT_COLUMNS
 from backend.scalping.footprint import build as build_footprint, from_columns
 from backend.scalping.ladder import DEFAULT_ROWS, build_ladder
 from backend.scalping.metrics import SHELF_MIN_NOTIONAL
@@ -288,7 +288,7 @@ class ScalpingHub:
             ],
             # Картинке слева от стакана - последние восемь колонок, как и было;
             # профиль свечи ниже берёт из тех же данных всю историю.
-            "clusters": _clusters(columns[-DEFAULT_COLUMNS:], ladder, step),
+            "clusters": _clusters(state.clusters, ladder, step),
             # Живая свеча из ленты сделок: график рисует её сразу, не дожидаясь
             # следующего опроса истории.
             "candle": _live_candle(state, sub.interval),
@@ -389,12 +389,17 @@ def _live_foot(state, interval: str, at: int, columns: list | None = None) -> di
     }
 
 
-def _clusters(columns: list, ladder, step) -> list[dict]:
-    """История объёмов, схлопнутая под строки текущего экрана."""
-    if not columns:
+def _clusters(history, ladder, step) -> list[dict]:
+    """История объёмов, схлопнутая под строки текущего экрана.
+
+    Картинке слева от стакана - последние колонки. Раскладку по строкам
+    история помнит сама (`ClusterHistory.fitted`): прошлые минуты между
+    сдвигами цены не пересчитываются.
+    """
+    if history is None:
         return []
     prices = [row.price for row in ladder]
-    columns = fit_to_rows(columns, prices, step)
+    columns = history.fitted(DEFAULT_COLUMNS, prices, step)
     return [
         {
             "start": column.start,

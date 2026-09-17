@@ -39,11 +39,17 @@ class OrderBook:
     last_update_id: int = 0
     ready: bool = False
     synced: bool = False
+    # Номер состояния книги: растёт на каждом изменении. По нему живёт готовый
+    # отсортированный срез - см. `levels`.
+    version: int = 0
+    _sorted: dict = field(default_factory=dict, repr=False, compare=False)
+    _memo: dict = field(default_factory=dict, repr=False, compare=False)
 
     def apply_snapshot(self, bids: list, asks: list, last_update_id: int) -> None:
         """Заменить книгу снимком REST."""
         self.bids = _to_map(bids)
         self.asks = _to_map(asks)
+        self.version += 1
         self.last_update_id = last_update_id
         self.ready = True
         # Первое событие после снимка проверяется иначе, чем последующие.
@@ -86,16 +92,42 @@ class OrderBook:
 
         _merge(self.bids, event.get("b") or [])
         _merge(self.asks, event.get("a") or [])
+        self.version += 1
         self.last_update_id = final
         return True
 
     def levels(self, side: str, limit: int | None = None) -> list[Level]:
-        """Уровни стороны от лучшей цены вглубь."""
-        source = self.bids if side == "bid" else self.asks
-        prices = sorted(source, reverse=(side == "bid"))
-        if limit is not None:
-            prices = prices[:limit]
-        return [Level(price=p, size=source[p]) for p in prices]
+        """Уровни стороны от лучшей цены вглубь.
+
+        Отсортированный срез считается один раз на состояние книги. Кадр
+        стакана спрашивал его по десять раз - лестница, плиты, самая крупная
+        заявка, - и каждый раз сортировал полторы тысячи уровней заново: это
+        была пятая часть всей сборки кадра, а кадров восемь в секунду на
+        каждую открытую монету. Уровни неизменяемы, наружу уходит копия
+        списка - общий срез никто не испортит.
+        """
+        cached = self._sorted.get(side)
+        if cached is None or cached[0] != self.version:
+            source = self.bids if side == "bid" else self.asks
+            prices = sorted(source, reverse=(side == "bid"))
+            cached = (self.version, [Level(price=p, size=source[p]) for p in prices])
+            self._sorted[side] = cached
+        rows = cached[1]
+        return rows[:limit] if limit is not None else list(rows)
+
+    def memo(self, key: object, compute):
+        """Посчитанное по этому состоянию книги - один раз, пока книга не менялась.
+
+        Кадр стакана спрашивает одно и то же из разных мест: плиты в полосе у
+        цены нужны и подсветке строк, и самой крупной плите. Книга сменилась -
+        всё посчитанное забывается разом.
+        """
+        stamp = self._memo.get("__version__")
+        if stamp != self.version:
+            self._memo = {"__version__": self.version}
+        if key not in self._memo:
+            self._memo[key] = compute()
+        return self._memo[key]
 
     def levels_in_band(self, side: str, band_bp: float) -> list[Level]:
         """Уровни в полосе `band_bp` базисных пунктов вокруг текущей цены.
@@ -109,7 +141,17 @@ class OrderBook:
             return []
         edge = mid * band_bp / 10_000
         low, high = mid - edge, mid + edge
-        return [l for l in self.levels(side) if low <= l.price <= high]
+
+        # Полосу отбираем до сортировки, а не после. В полосе у цены десятки
+        # уровней, в книге сотни: скринер раз в секунду сортировал по восемьсот
+        # цен на сторону у полусотни монет, чтобы оставить от них две дюжины.
+        # Порядок тот же - от лучшей цены вглубь.
+        def compute() -> list[Level]:
+            source = self.bids if side == "bid" else self.asks
+            prices = sorted((p for p in source if low <= p <= high), reverse=(side == "bid"))
+            return [Level(price=p, size=source[p]) for p in prices]
+
+        return list(self.memo(("band", side, band_bp), compute))
 
     def prune(self, band_bp: float) -> int:
         """Выбросить уровни дальше полосы. Возвращает число удалённых.
@@ -128,6 +170,8 @@ class OrderBook:
             for price in [p for p in source if p < low or p > high]:
                 del source[price]
                 removed += 1
+        if removed:
+            self.version += 1
         return removed
 
     @property
@@ -148,6 +192,7 @@ class OrderBook:
     def reset(self) -> None:
         self.bids.clear()
         self.asks.clear()
+        self.version += 1
         self.last_update_id = 0
         self.ready = False
         self.synced = False

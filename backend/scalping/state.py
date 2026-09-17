@@ -18,8 +18,8 @@ from backend.scalping.metrics import (
     book_imbalance,
     bucket_levels,
     SHELF_MIN_NOTIONAL,
+    band_walls,
     find_shelves,
-    find_walls,
     spread_bp,
 )
 from backend.scalping.tape import TapeWindow
@@ -137,12 +137,7 @@ def liquidity_shelves(
 
 def biggest_wall(state: SymbolState, band_bp: float = BAND_BP) -> Wall | None:
     """Самая крупная плита в полосе вокруг цены — с любой стороны."""
-    mid = state.book.mid
-    if mid <= 0:
-        return None
-    walls = find_walls(state.book.levels_in_band("bid", band_bp), "bid", mid) + find_walls(
-        state.book.levels_in_band("ask", band_bp), "ask", mid
-    )
+    walls = band_walls(state.book, band_bp)
     return max(walls, key=lambda w: w.notional) if walls else None
 
 
