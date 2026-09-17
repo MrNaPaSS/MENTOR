@@ -347,9 +347,28 @@ async def test_pin_subscribes_to_book_and_tape():
     await collector.pin("BTCUSDT")
     assert collector.stream.args == {("BTC_USDT", "depth"), ("BTC_USDT", "deal")}
 
+    # Ушли - монета доживает свой срок: своя лента пишется дальше, чтобы
+    # вернувшемуся не собирать крупную свечу из ста последних сделок биржи.
     await collector.unpin("BTCUSDT")
+    assert collector.stream.args == {("BTC_USDT", "depth"), ("BTC_USDT", "deal")}
+
+    await collector._linger.clear()
     assert collector.stream.args == set()
     assert collector.state.get("BTCUSDT") is None
+
+
+async def test_return_within_linger_keeps_the_tape():
+    """Вернулись внутри срока - история та же, поток не дёргался."""
+    collector = make_collector(FakeRest(depth=depth(100)))
+    await collector.pin("BTCUSDT")
+    history = collector.state.get("BTCUSDT").clusters
+    await collector.unpin("BTCUSDT")
+    await collector.pin("BTCUSDT")
+
+    assert collector.state.get("BTCUSDT").clusters is history
+    assert collector.stream.args == {("BTC_USDT", "depth"), ("BTC_USDT", "deal")}
+    # Монета снова открыта, значит сроку её больше не ждать.
+    assert not collector._linger.waiting("BTCUSDT")
 
 
 async def test_second_viewer_does_not_double_the_subscription():

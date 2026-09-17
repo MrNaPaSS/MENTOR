@@ -217,9 +217,27 @@ async def test_pin_subscribes_to_book_and_tape():
     await collector.pin("BTCUSDT")
     assert collector.stream.args == {("BTC-USDT", "incrDepth"), ("BTC-USDT", "trade")}
 
+    # Ушли - монета доживает свой срок: своя лента пишется дальше, чтобы
+    # вернувшемуся не собирать крупную свечу заново.
     await collector.unpin("BTCUSDT")
+    assert collector.stream.args == {("BTC-USDT", "incrDepth"), ("BTC-USDT", "trade")}
+
+    await collector._linger.clear()
     assert collector.stream.args == set()
     assert collector.state.get("BTCUSDT") is None
+
+
+async def test_return_within_linger_keeps_the_tape():
+    """Вернулись внутри срока - история та же, поток не дёргался."""
+    collector = make_collector()
+    await collector.pin("BTCUSDT")
+    history = collector.state.get("BTCUSDT").clusters
+    await collector.unpin("BTCUSDT")
+    await collector.pin("BTCUSDT")
+
+    assert collector.state.get("BTCUSDT").clusters is history
+    assert collector.stream.args == {("BTC-USDT", "incrDepth"), ("BTC-USDT", "trade")}
+    assert not collector._linger.waiting("BTCUSDT")
 
 
 async def test_hub_gives_bingx_book_to_a_bingx_trader():

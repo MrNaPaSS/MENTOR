@@ -37,6 +37,14 @@ logger = logging.getLogger("nmnh.scalping.ws")
 DOM_FPS = 8.0
 SCREENER_INTERVAL = 1.0
 
+# Не чаще чем раз в столько секунд сообщаем терминалу об изменении на счёте.
+#
+# Поток биржи присылает по событию на каждую часть исполнения: рыночный вход
+# крупным объёмом это десяток сообщений подряд. Терминал на каждое такое
+# сообщение пошёл бы спрашивать позиции и заявки - вышло бы хуже опроса.
+# Подавленный звонок не теряется: он уезжает хвостом, когда окно закроется.
+RING_EVERY = 0.5
+
 # Строк списка в кадре. Сборщик держит восемьдесят инструментов, и обрезать их
 # вдвое по дороге к экрану смысла нет: строка весит около двухсот байт.
 SCREENER_LIMIT = 100
@@ -47,6 +55,9 @@ class Subscription:
 
     def __init__(self) -> None:
         self.symbol: str | None = None
+        # Чей это сокет. Нужен звонку о счёте: позиции и заявки ученика видит
+        # только он сам.
+        self.student_id: int = 0
         # Биржа, которую попросил клиент, и биржа, с которой книга идёт на
         # самом деле. Они расходятся, когда монеты на бирже ученика нет или её
         # поток у нас не заведён: подменять книгу молча нельзя.
@@ -74,6 +85,15 @@ class ScalpingHub:
         # мультибиржи; так хаб остаётся собираемым в тестах одним сборщиком.
         self.market = market or MarketHub(collector)
         self._subs: dict[object, Subscription] = {}
+        # Сокеты по ученику: кому слать звонок о его счёте. Канал стакана уже
+        # опознан по токену, и чужому ученику событие не уедет.
+        self._people: dict[int, set] = {}
+        # Когда ученику звонили в последний раз и отложенный хвост звонка.
+        self._rang: dict[int, float] = {}
+        self._tails: dict[int, asyncio.Task] = {}
+        # Биржи этого ученика, чей приватный поток жив. Терминал по ним решает,
+        # ждать событий или спрашивать по кругу.
+        self._streamed: dict[int, tuple[str, ...]] = {}
         self._lock = asyncio.Lock()
         self._task: asyncio.Task | None = None
 
@@ -86,6 +106,9 @@ class ScalpingHub:
             self._task = asyncio.create_task(self._loop(), name="scalping-hub")
 
     async def stop(self) -> None:
+        for tail in list(self._tails.values()):
+            tail.cancel()
+        self._tails.clear()
         task, self._task = self._task, None
         if task:
             task.cancel()
@@ -96,14 +119,39 @@ class ScalpingHub:
 
     # ── подписки ────────────────────────────────────────────────────────────
 
-    async def connect(self, ws) -> None:
+    async def connect(self, ws, student_id: int = 0) -> None:
+        person = int(student_id or 0)
         async with self._lock:
-            self._subs[ws] = Subscription()
+            sub = Subscription()
+            sub.student_id = person
+            self._subs[ws] = sub
+            if person > 0:
+                self._people.setdefault(person, set()).add(ws)
+            known = self._streamed.get(person)
         self.start()
+        # Новому сокету сразу говорим, по каким биржам идёт поток: иначе до
+        # первой сверки потоков он опрашивал бы сервер частым кругом впустую.
+        if known is not None:
+            try:
+                await ws.send_json({"event": "account", "payload": {"streamed": list(known)}})
+            except Exception:  # noqa: BLE001 - соединение уже закрыто
+                pass
 
     async def disconnect(self, ws) -> None:
         async with self._lock:
             sub = self._subs.pop(ws, None)
+            person = sub.student_id if sub else 0
+            if person:
+                left = self._people.get(person)
+                if left is not None:
+                    left.discard(ws)
+                    if not left:
+                        self._people.pop(person, None)
+                        self._rang.pop(person, None)
+                        self._streamed.pop(person, None)
+                        tail = self._tails.pop(person, None)
+                        if tail is not None:
+                            tail.cancel()
         if sub and sub.symbol:
             await self.market.unpin(sub.venue, sub.symbol)
 
@@ -165,6 +213,72 @@ class ScalpingHub:
             sub = self._subs.get(ws)
         if sub:
             sub.sort = sort
+
+    # ── звонок о счёте ──────────────────────────────────────────────────────
+
+    async def ring(self, student_id: int, reason: str = "order") -> None:
+        """На счёте ученика что-то изменилось - сказать его терминалам сейчас.
+
+        Это замена опросу: биржа сообщает об исполнении в тот же миг, а
+        терминал спрашивал позиции и заявки по кругу каждые три секунды -
+        около тридцати запросов в минуту на вкладку, и всё равно с задержкой
+        до трёх секунд. Событие несёт только повод: что именно изменилось,
+        терминал спросит сам одним кругом.
+        """
+        person = int(student_id or 0)
+        if person <= 0:
+            return
+        now = time.monotonic()
+        last = self._rang.get(person, 0.0)
+        if now - last < RING_EVERY:
+            self._tail(person, reason, RING_EVERY - (now - last))
+            return
+        self._rang[person] = now
+        await self._tell(person, {"reason": reason})
+
+    def _tail(self, person: int, reason: str, delay: float) -> None:
+        """Хвост подавленного звонка: последнее событие пачки не теряется."""
+        if person in self._tails:
+            return
+
+        async def later() -> None:
+            try:
+                await asyncio.sleep(delay)
+                self._rang[person] = time.monotonic()
+                await self._tell(person, {"reason": reason})
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - звонок не повод падать
+                logger.debug("Звонок ученику %s не ушёл: %s", person, exc)
+            finally:
+                self._tails.pop(person, None)
+
+        self._tails[person] = asyncio.create_task(later(), name=f"ring-{person}")
+
+    async def streamed(self, student_id: int, venues: tuple[str, ...]) -> None:
+        """Какие биржи ученика идут потоком. Шлём только при изменении."""
+        person = int(student_id or 0)
+        if person <= 0:
+            return
+        async with self._lock:
+            if person not in self._people:
+                return
+            if self._streamed.get(person) == venues:
+                return
+            self._streamed[person] = venues
+        await self._tell(person, {"streamed": list(venues)})
+
+    async def _tell(self, person: int, payload: dict) -> None:
+        async with self._lock:
+            targets = list(self._people.get(person, ()))
+        dead = []
+        for ws in targets:
+            try:
+                await ws.send_json({"event": "account", "payload": payload})
+            except Exception:  # noqa: BLE001 - соединение закрыто или битое
+                dead.append(ws)
+        for ws in dead:
+            await self.disconnect(ws)
 
     # ── рассылка ────────────────────────────────────────────────────────────
 
@@ -262,10 +376,6 @@ class ScalpingHub:
             state.book, rows=sub.rows, agg=sub.agg, whale_notional=sub.shelf
         )
         wall = biggest_wall(state)
-        # Срез кластеров снимаем один раз: он нужен и картинке слева от
-        # стакана, и разбору свечи, а стоит перебора всех цен за восемь минут -
-        # восемь раз в секунду это уже заметная работа.
-        columns = state.clusters.snapshot() if state.clusters else []
         return {
             "symbol": state.symbol,
             # Чья это книга. Расходится с запрошенной - клиент подписывает
@@ -293,7 +403,7 @@ class ScalpingHub:
             # следующего опроса истории.
             "candle": _live_candle(state, sub.interval),
             # Профиль разобранной свечи, если она открыта на экране.
-            "foot": _live_foot(state, sub.interval, sub.foot, columns),
+            "foot": _live_foot(state, sub.interval, sub.foot),
         }
 
 
@@ -348,7 +458,7 @@ def _live_candle(state, interval: str) -> dict | None:
     }
 
 
-def _live_foot(state, interval: str, at: int, columns: list | None = None) -> dict | None:
+def _live_foot(state, interval: str, at: int) -> dict | None:
     """Профиль разобранной свечи по своей ленте.
 
     Считается из тех же кластеров, что и картинка слева от стакана, и стоит
@@ -367,9 +477,13 @@ def _live_foot(state, interval: str, at: int, columns: list | None = None) -> di
     first = state.clusters.first_second
     if not first or first > start:
         return None
-    if columns is None:
-        columns = state.clusters.snapshot()
-    if not columns or columns[0].start > start:
+    # Только минуты самой свечи: история держит час, и перебирать её целиком
+    # восемь раз в секунду ради одной свечи незачем.
+    oldest = state.clusters.oldest
+    if not oldest or oldest > start:
+        return None
+    columns = state.clusters.window(start, end)
+    if not columns:
         return None
 
     shot = build_footprint(

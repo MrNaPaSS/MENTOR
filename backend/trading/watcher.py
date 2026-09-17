@@ -22,7 +22,7 @@ import logging
 import time
 from datetime import timedelta, timezone
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any, Awaitable, Callable, Iterable
 
 from sqlalchemy import select
 
@@ -368,6 +368,10 @@ def decide(
     return Decision(hit, move_stop_to=target, filled_orders=filled, size=size)
 
 
+# Звонок в терминал об изменении на счёте ученика.
+BellCall = Callable[[int], Awaitable[Any]]
+
+
 class PositionWatcher:
     """Обходит открытые сделки всех учеников и доводит их до конца."""
 
@@ -391,10 +395,15 @@ class PositionWatcher:
         self._locks: dict[tuple[int, str], asyncio.Lock] = {}
         # Когда ученика последний раз проверяли по просьбе терминала.
         self._nudged: dict[int, float] = {}
+        # Звонок в терминал: когда сопровождение и сайт живут одним процессом
+        # (роль `all`), приватные потоки держит этот обход, и событие биржи
+        # должно доходить до открытого терминала отсюда. В раздельном режиме
+        # у процесса сайта свои потоки и свой звонок (`StreamKeeper`).
+        self.bell: BellCall | None = None
         # Приватные потоки бирж: там, где биржа их даёт, позиции приходят сами,
         # а об исполнении она сообщает в тот же миг - не через пять секунд
         # обхода (backend/trading/private_ws.py).
-        self.streams = PrivateStreams(http_session_factory, self.check_student)
+        self.streams = PrivateStreams(http_session_factory, self._on_event)
 
     def closing(self, trade_id: int) -> bool:
         """Позиции уже нет, дописывается журнал.
@@ -498,6 +507,20 @@ class PositionWatcher:
                 return True
             finally:
                 session.close()
+
+    async def _on_event(self, student_id: int) -> bool:
+        """Биржа сообщила об изменении: сказать терминалу и проверить сделки.
+
+        Терминалу - первым делом и всегда, даже если проверка сейчас
+        откажется идти: он показывает позицию и заявки, и узнать об
+        исполнении ему нужно в тот же миг, а не следующим кругом.
+        """
+        if self.bell is not None:
+            try:
+                await self.bell(student_id)
+            except Exception as exc:  # noqa: BLE001 - канал не повод рвать поток
+                logger.debug("Звонок терминалу ученика %s не ушёл: %s", student_id, exc)
+        return await self.check_student(student_id)
 
     async def check_student(self, student_id: int) -> bool:
         """Проверить сделки одного ученика сейчас, не дожидаясь обхода.

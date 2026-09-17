@@ -163,7 +163,11 @@ async def ws_scalping(websocket: WebSocket, token: str = Query(default="")):
         return
 
     await websocket.accept()
-    await hub.connect(websocket)
+    # Кто на том конце. Нужен звонку о счёте: об исполнении и снятой заявке
+    # сервер узнаёт из приватного потока биржи и сообщает терминалу сюда же,
+    # вместо того чтобы тот спрашивал по кругу. Токена нет или он чужой -
+    # канал работает как раньше, только без звонков: стакан публичный.
+    await hub.connect(websocket, _student_of(websocket, token))
     try:
         # Биржи, книгу которых сервер умеет показывать. Клиент по ним решает,
         # просить ли стакан своей биржи или остаться на общем.
@@ -230,6 +234,17 @@ async def _handle_scalping_command(
         sort = message.get("sort")
         if isinstance(sort, str) and sort in SORT_KEYS:
             await hub.set_sort(websocket, sort)
+
+
+def _student_of(websocket, token: str) -> int:
+    """Ученик из токена канала. Ноль - токена нет или он не годится."""
+    try:
+        payload = decode_token(token, websocket.app.state.config.jwt_secret)
+        if payload.get("type") != "access":
+            return 0
+        return int(payload.get("sub") or 0)
+    except (TokenError, TypeError, ValueError):
+        return 0
 
 
 def _venue(value) -> str:

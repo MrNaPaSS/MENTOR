@@ -131,3 +131,43 @@ def test_the_keeper_wakes_nobody(db):
 
     keeper = StreamKeeper(sessions, http)
     assert keeper.streams._wake is None
+
+
+def test_the_keeper_rings_the_terminal(db):
+    """Событие биржи уходит в терминал: там оно заменяет опрос."""
+    sessions, _session, _student = db
+    rung: list[int] = []
+
+    async def http():
+        return None
+
+    async def bell(student_id: int) -> None:
+        rung.append(student_id)
+
+    keeper = StreamKeeper(sessions, http, bell=bell)
+    asyncio.run(keeper.streams._wake(7))  # событие заявки от биржи
+    assert rung == [7]
+
+
+def test_the_keeper_tells_which_exchanges_are_streamed(db):
+    """Терминал узнаёт, где поток жив: на остальных биржах он опрашивает как прежде.
+
+    У WEEX приватного потока нет вовсе, и растянуть там опрос молча значило бы
+    узнавать об исполнении позже, чем сейчас.
+    """
+    sessions, _session, student = db
+    told: list[tuple[int, tuple[str, ...]]] = []
+
+    async def http():
+        return None
+
+    async def streamed(student_id: int, venues: tuple[str, ...]) -> None:
+        told.append((student_id, venues))
+
+    keeper = StreamKeeper(sessions, http, streamed=streamed)
+    keeper.streams.ready = lambda sid, exchange: exchange == "okx"  # type: ignore[assignment]
+
+    asyncio.run(
+        keeper._tell_streamed({(student.id, "okx"), (student.id, "weex")})
+    )
+    assert told == [(student.id, ("okx",))]

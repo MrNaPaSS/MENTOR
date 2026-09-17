@@ -50,6 +50,11 @@ from backend.scalping.bingx import (
 from backend.scalping.candles import LiveCandles
 from backend.scalping.clusters import ClusterHistory
 from backend.scalping.ladder import detect_tick
+from backend.scalping.linger import (
+    Linger,
+    LINGER_LIMIT_STREAM,
+    LINGER_SECONDS_STREAM,
+)
 from backend.scalping.state import BAND_BP, MarketState
 from core.bingx.futures import Instrument, load_instruments, symbol_id, symbol_of
 
@@ -129,6 +134,11 @@ class BingxCollector:
 
         self._pinned: dict[str, int] = {}        # символ -> сколько клиентов смотрят
         self._specs: dict[str, Instrument] = {}  # BTC-USDT -> свойства пары
+        # Закрытая монета отпускается не сразу: вернутся внутри срока -
+        # своя лента цела и профиль крупной свечи собран нами.
+        self._linger = Linger(
+            self._forget, delay=LINGER_SECONDS_STREAM, limit=LINGER_LIMIT_STREAM
+        )
         self._task: asyncio.Task | None = None
         # Пропуски в нумерации биржи и пересборки книги. Не отладка: по первому
         # видно, как биржа ведёт себя сегодня, по второму - живёт ли книга.
@@ -163,6 +173,7 @@ class BingxCollector:
                 await task
             except asyncio.CancelledError:
                 pass
+        await self._linger.clear()
         await self.stream.stop()
         if self._session and not self._session.closed:
             await self._session.close()
@@ -227,6 +238,9 @@ class BingxCollector:
     async def pin(self, symbol: str) -> None:
         """Открыть поток по паре и держать, пока на неё смотрят."""
         sym = symbol.upper()
+        # Монета могла доживать срок после прошлого ухода: поток открыт,
+        # история цела - забираем как есть.
+        self._linger.keep(sym)
         self._pinned[sym] = self._pinned.get(sym, 0) + 1
         if self._pinned[sym] > 1:
             return
@@ -248,8 +262,15 @@ class BingxCollector:
             self._pinned[sym] = left
             return
         self._pinned.pop(sym, None)
-        await self.stream.unsubscribe(self._args(sym))
-        self.state.drop(sym)
+        # Не отписываемся сразу: своя лента должна пережить уход, иначе
+        # крупную свечу придётся выпрашивать у биржи кусками
+        # (backend/scalping/linger.py).
+        await self._linger.part(sym)
+
+    async def _forget(self, symbol: str) -> None:
+        """Срок вышел: поток закрываем, состояние выбрасываем."""
+        await self.stream.unsubscribe(self._args(symbol))
+        self.state.drop(symbol)
 
     @staticmethod
     def _args(symbol: str) -> set[tuple[str, str]]:

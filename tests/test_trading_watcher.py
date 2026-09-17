@@ -2078,3 +2078,50 @@ async def test_a_take_placed_before_the_cut_is_adopted_not_doubled():
     assert take_label(trade.client_id, 0) not in labels
     recorded = json.loads(trade.tp_orders_json)
     assert "early" in {one["order_id"] for one in recorded}
+
+
+async def test_a_stream_event_rings_the_terminal_first():
+    """Событие биржи сначала уходит в терминал, потом идёт проверка сделок.
+
+    Терминал показывает позицию и заявки: об исполнении ему нужно знать в тот
+    же миг, а не следующим кругом опроса. Проверка сама себя придерживает -
+    звонок ждать её не должен.
+    """
+    from backend.trading.watcher import PositionWatcher
+
+    watcher = PositionWatcher(lambda: None, lambda: None)
+    order: list[str] = []
+
+    async def bell(student_id: int) -> None:
+        order.append(f"звонок-{student_id}")
+
+    async def checked(student_id: int) -> bool:
+        order.append(f"проверка-{student_id}")
+        return True
+
+    watcher.bell = bell
+    watcher.check_student = checked  # type: ignore[assignment]
+
+    assert await watcher._on_event(7) is True
+    assert order == ["звонок-7", "проверка-7"]
+
+
+async def test_a_broken_bell_does_not_stop_the_check():
+    """Канал терминала оборвался - сопровождение сделок идёт своим чередом."""
+    from backend.trading.watcher import PositionWatcher
+
+    watcher = PositionWatcher(lambda: None, lambda: None)
+    checked: list[int] = []
+
+    async def bell(student_id: int) -> None:
+        raise RuntimeError("сокет закрыт")
+
+    async def check(student_id: int) -> bool:
+        checked.append(student_id)
+        return True
+
+    watcher.bell = bell
+    watcher.check_student = check  # type: ignore[assignment]
+
+    assert await watcher._on_event(7) is True
+    assert checked == [7]

@@ -144,6 +144,37 @@ async def test_open_dom_switches_symbol_to_fast_depth():
     assert "btcusdt@depth@100ms" not in c.stream.subscribed
 
 
+async def test_tape_outlives_the_viewer():
+    """Ушли со стакана - своя лента ещё пишется, вернулись - она цела.
+
+    Иначе крупную свечу пришлось бы достраивать с биржи кусками: на OKX она
+    набирается меньше чем наполовину, на MEXC доступны сто последних сделок.
+    """
+    c = make_collector(SNAPSHOT, TICKERS)
+    await c.pin("BTCUSDT")
+    history = c.state.get("BTCUSDT").clusters
+    assert history is not None
+
+    await c.unpin("BTCUSDT")
+    assert c.state.get("BTCUSDT").clusters is history
+    assert c._linger.waiting("BTCUSDT")
+
+    await c.pin("BTCUSDT")
+    assert c.state.get("BTCUSDT").clusters is history
+    assert not c._linger.waiting("BTCUSDT")
+
+
+async def test_tape_is_dropped_when_the_term_runs_out():
+    """Срок вышел - история уходит: она самая объёмная структура на монету."""
+    c = make_collector(SNAPSHOT, TICKERS)
+    await c.pin("BTCUSDT")
+    await c.unpin("BTCUSDT")
+    await c._linger.clear()
+
+    state = c.state.get("BTCUSDT")
+    assert state.clusters is None and state.candles is None
+
+
 async def test_untrack_drops_both_depth_rates():
     """Снятие с наблюдения убирает поток любой скорости.
 

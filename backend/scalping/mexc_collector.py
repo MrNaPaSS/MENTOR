@@ -39,6 +39,11 @@ import aiohttp
 from backend.scalping.candles import LiveCandles
 from backend.scalping.clusters import ClusterHistory
 from backend.scalping.ladder import detect_tick
+from backend.scalping.linger import (
+    Linger,
+    LINGER_LIMIT_STREAM,
+    LINGER_SECONDS_STREAM,
+)
 from backend.scalping.mexc import (
     DEPTH_CHANNEL,
     TRADES_CHANNEL,
@@ -141,6 +146,11 @@ class MexcCollector:
 
         self._pinned: dict[str, int] = {}        # символ -> сколько клиентов смотрят
         self._specs: dict[str, Instrument] = {}  # BTC_USDT -> свойства пары
+        # Закрытая монета отпускается не сразу: вернутся внутри срока -
+        # своя лента цела и профиль крупной свечи собран нами.
+        self._linger = Linger(
+            self._forget, delay=LINGER_SECONDS_STREAM, limit=LINGER_LIMIT_STREAM
+        )
         self._task: asyncio.Task | None = None
         # Сообщения, пришедшие, пока снимок ещё едет: применим их следом, иначе
         # книга начнётся с дыры длиной в запрос.
@@ -180,6 +190,7 @@ class MexcCollector:
                 await task
             except asyncio.CancelledError:
                 pass
+        await self._linger.clear()
         await self.stream.stop()
         if self._session and not self._session.closed:
             await self._session.close()
@@ -251,6 +262,9 @@ class MexcCollector:
     async def pin(self, symbol: str) -> None:
         """Открыть поток по паре и держать, пока на неё смотрят."""
         sym = symbol.upper()
+        # Монета могла доживать срок после прошлого ухода: поток открыт,
+        # история цела - забираем как есть.
+        self._linger.keep(sym)
         self._pinned[sym] = self._pinned.get(sym, 0) + 1
         if self._pinned[sym] > 1:
             return
@@ -275,9 +289,16 @@ class MexcCollector:
             self._pinned[sym] = left
             return
         self._pinned.pop(sym, None)
-        await self.stream.unsubscribe(self._args(sym))
-        self._pending.pop(sym, None)
-        self.state.drop(sym)
+        # Не отписываемся сразу: своя лента должна пережить уход, иначе
+        # крупную свечу придётся выпрашивать у биржи кусками
+        # (backend/scalping/linger.py).
+        await self._linger.part(sym)
+
+    async def _forget(self, symbol: str) -> None:
+        """Срок вышел: поток закрываем, состояние выбрасываем."""
+        await self.stream.unsubscribe(self._args(symbol))
+        self._pending.pop(symbol, None)
+        self.state.drop(symbol)
 
     @staticmethod
     def _args(symbol: str) -> set[tuple[str, str]]:
@@ -294,7 +315,8 @@ class MexcCollector:
         self._pending.clear()
         for state in self.state.values():
             state.book.reset()
-        for symbol in list(self._pinned):
+        # Доживающие монеты тоже: их ленту мы пишем, и книга нужна целой.
+        for symbol in list(self._pinned) + list(self._linger.symbols):
             self._resync(symbol)
 
     # ── приём событий потока ────────────────────────────────────────────────

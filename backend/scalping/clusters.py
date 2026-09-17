@@ -41,9 +41,21 @@ DEFAULT_COLUMNS = 8
 # же истории считается профиль разобранной свечи, а свеча бывает крупнее
 # картинки у стакана. На восьми минутах профиль десяти- и пятнадцатиминутной
 # свечи не собирался никогда, и каждые три секунды за ним шли на биржу - по
-# двадцать единиц веса за страницу сделок. Шестнадцать минут закрывают оба
-# таймфрейма своей лентой, то есть даром.
-HISTORY_COLUMNS = 16
+# двадцать единиц веса за страницу сделок.
+#
+# Час с небольшим запасом: своей лентой закрываются все таймфреймы профиля, до
+# часового включительно. Шестнадцати минут не хватало на получас и час, а
+# именно их берут на активных монетах, и там добор с биржи хуже всего - OKX
+# отдаёт сделки страницами по сотне (пятнадцать минут BTC набирались меньше
+# чем наполовину), MEXC - только сто последних сделок вообще.
+#
+# Платим памятью: колонка это цены минуты со своими объёмами, у BTC около
+# тысячи цен, то есть примерно сотня килобайт. Шестьдесят четыре колонки на
+# монету - единицы мегабайт, и держим мы их лишь для открытых монет и тех,
+# что доживают свой срок после ухода (backend/scalping/linger.py). Отдача от
+# этого не страдает: срез собирается по хвосту (`snapshot(limit)`), а
+# пересобирается только та минута, в которую пришла сделка.
+HISTORY_COLUMNS = 64
 
 
 @dataclass(frozen=True)
@@ -149,27 +161,51 @@ class ClusterHistory:
             self._built.pop(start, None)
             self._fitted.pop(start, None)
 
+    @property
+    def oldest(self) -> int:
+        """Начало самой старой колонки. Ноль - истории ещё нет."""
+        return next(iter(self._data), 0)
+
+    def _column(self, start: int, cells_raw: dict[float, list[float]]) -> Column:
+        """Готовый срез интервала. Пересобирается, только если в него писали."""
+        version = self._versions.get(start, 0)
+        built = self._built.get(start)
+        if built is None or built[0] != version:
+            cells = {price: Cell(buy=b, sell=s) for price, (b, s) in cells_raw.items()}
+            buy = sum(c.buy for c in cells.values())
+            sell = sum(c.sell for c in cells.values())
+            built = (version, Column(start=start, cells=cells, buy=buy, sell=sell))
+            self._built[start] = built
+        return built[1]
+
     def snapshot(self, limit: int | None = None) -> list[Column]:
         """Срез истории от старой колонки к свежей, на базовом шаге.
 
         `limit` - сколько последних колонок нужно. Картинке у стакана хватает
-        восьми, профилю свечи нужна вся история: это одни и те же данные, но
-        разные их части.
+        восьми, профилю свечи - тех колонок, что лежат внутри неё (`window`).
         """
         items = list(self._data.items())
         if limit is not None and limit > 0:
             items = items[-limit:]
+        return [self._column(start, column) for start, column in items]
+
+    def window(self, start: int, end: int) -> list[Column]:
+        """Колонки внутри окна [start, end).
+
+        Профилю свечи нужны только её минуты, а история теперь держит час.
+        Перебирать её целиком восемь раз в секунду ради одной свечи значило бы
+        платить за глубину каждым кадром стакана.
+        """
+        if end <= start or self.bucket_seconds <= 0:
+            return []
+        first = start - start % self.bucket_seconds
         out: list[Column] = []
-        for start, column in items:
-            version = self._versions.get(start, 0)
-            built = self._built.get(start)
-            if built is None or built[0] != version:
-                cells = {price: Cell(buy=b, sell=s) for price, (b, s) in column.items()}
-                buy = sum(c.buy for c in cells.values())
-                sell = sum(c.sell for c in cells.values())
-                built = (version, Column(start=start, cells=cells, buy=buy, sell=sell))
-                self._built[start] = built
-            out.append(built[1])
+        at = first
+        while at < end:
+            column = self._data.get(at)
+            if column is not None:
+                out.append(self._column(at, column))
+            at += self.bucket_seconds
         return out
 
     def fitted(self, limit: int, row_prices: list[float], step: float) -> list[Column]:

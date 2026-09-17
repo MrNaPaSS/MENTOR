@@ -290,9 +290,20 @@ class StreamKeeper:
 
     INTERVAL = 5.0
 
-    def __init__(self, sessions, http: SessionFactory, interval: float = INTERVAL):
+    def __init__(
+        self,
+        sessions,
+        http: SessionFactory,
+        interval: float = INTERVAL,
+        bell: Waker | None = None,
+        streamed: Callable[[int, tuple[str, ...]], Awaitable[Any]] | None = None,
+    ):
         self._sessions = sessions
-        self.streams = PrivateStreams(http)
+        # Звонок в терминал: биржа сообщила об исполнении или снятой заявке -
+        # и об этом сразу узнаёт открытый терминал, вместо того чтобы
+        # спрашивать позиции и заявки по кругу (backend/ws/scalping_hub.py).
+        self.streams = PrivateStreams(http, bell)
+        self._streamed = streamed
         self.interval = interval
         self._task: asyncio.Task | None = None
 
@@ -328,6 +339,7 @@ class StreamKeeper:
         finally:
             session.close()
         await sync_streams(self.streams, self._sessions, accounts)
+        await self._tell_streamed(accounts)
         # Свой снимок панели: у процесса терминала свои задержки и отказы.
         session = self._sessions()
         try:
@@ -336,3 +348,23 @@ class StreamKeeper:
             logger.debug("Снимок панели не записан: %s", exc)
         finally:
             session.close()
+
+    async def _tell_streamed(self, accounts: set[tuple[int, str]]) -> None:
+        """Сказать терминалам, по каким их биржам идёт поток.
+
+        По этому терминал решает, ждать событий или спрашивать частым кругом.
+        Поток есть не у всех бирж - у WEEX его в документации брокера нет
+        вовсе, - и молча растянуть опрос там значило бы узнавать об
+        исполнении позже, чем сейчас.
+        """
+        if self._streamed is None:
+            return
+        live: dict[int, list[str]] = {}
+        for student_id, exchange in accounts:
+            if self.streams.ready(student_id, exchange):
+                live.setdefault(int(student_id), []).append(str(exchange))
+        for student_id in {int(s) for s, _ in accounts}:
+            try:
+                await self._streamed(student_id, tuple(sorted(live.get(student_id, ()))))
+            except Exception as exc:  # noqa: BLE001 - канал не повод рвать круг
+                logger.debug("Состав потоков ученику %s не ушёл: %s", student_id, exc)

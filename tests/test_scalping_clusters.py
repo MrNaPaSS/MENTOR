@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from backend.scalping.clusters import ClusterHistory, fit_to_rows
+from backend.scalping.clusters import (
+    DEFAULT_BUCKET_SECONDS,
+    HISTORY_COLUMNS,
+    ClusterHistory,
+    fit_to_rows,
+)
 
 
 def make(tick: float = 0.1, bucket: int = 300, columns: int = 3) -> ClusterHistory:
@@ -197,3 +202,24 @@ def test_old_intervals_leave_the_memory_with_the_history():
         history.add(1_789_600_000_000 + minute * 60_000, 100.0, 1.0, True)
         history.fitted(3, [99.9, 100.0, 100.1], 0.1)
     assert len(history._built) <= 3 and len(history._fitted) <= 3
+
+
+def test_history_covers_an_hour_candle():
+    """Своей ленты хватает на часовой профиль, а не только на пятнадцать минут.
+
+    Крупные свечи активных монет добирались с биржи кусками: OKX отдаёт сделки
+    страницами по сотне, MEXC - сто последних. Час истории закрывает все
+    таймфреймы профиля своей лентой, даром.
+    """
+    assert HISTORY_COLUMNS * DEFAULT_BUCKET_SECONDS >= 3600
+
+    history = ClusterHistory(tick=1.0)
+    start = 1_700_000_000 // 3600 * 3600
+    # Сделка в каждой минуте часа.
+    for minute in range(60):
+        history.add((start + minute * 60) * 1000, 100.0 + minute, 1.0, True)
+
+    columns = history.snapshot()
+    assert len(columns) == 60
+    assert columns[0].start == start
+    assert history.first_second == start

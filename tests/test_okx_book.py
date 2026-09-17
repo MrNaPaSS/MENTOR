@@ -250,6 +250,41 @@ async def test_reset_on_disconnect():
     assert collector.state.get("BTCUSDT").book.ready is False
 
 
+async def test_tape_outlives_the_viewer():
+    """Ушли со стакана - поток и своя лента живут ещё срок, вернулись - целы.
+
+    Крупную свечу OKX отдаёт страницами по сотне сделок: пятнадцатиминутная
+    BTC набиралась меньше чем наполовину. Своя лента полнее, если пережила
+    уход трейдера на соседнюю монету.
+    """
+    collector = make_collector()
+    await collector.pin("BTCUSDT")
+    history = collector.state.get("BTCUSDT").clusters
+    assert collector.stream.args == {
+        ("books", "BTC-USDT-SWAP"),
+        ("trades", "BTC-USDT-SWAP"),
+    }
+
+    await collector.unpin("BTCUSDT")
+    assert collector.stream.args  # поток не закрыт: лента ещё пишется
+    assert collector._linger.waiting("BTCUSDT")
+
+    await collector.pin("BTCUSDT")
+    assert collector.state.get("BTCUSDT").clusters is history
+    assert not collector._linger.waiting("BTCUSDT")
+
+
+async def test_stream_closes_when_the_term_runs_out():
+    """Срок вышел - поток закрываем и состояние выбрасываем."""
+    collector = make_collector()
+    await collector.pin("BTCUSDT")
+    await collector.unpin("BTCUSDT")
+    await collector._linger.clear()
+
+    assert collector.stream.args == set()
+    assert collector.state.get("BTCUSDT") is None
+
+
 def test_top_symbols_counts_money_not_coins():
     """Оборот считается в деньгах: иначе первой станет самая дешёвая монета."""
     rows = [

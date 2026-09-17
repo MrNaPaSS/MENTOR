@@ -29,6 +29,7 @@ from backend.scalping.binance import BinanceRest, SplitStreamClient, depth_weigh
 from backend.scalping.candles import LiveCandles
 from backend.scalping.clusters import ClusterHistory
 from backend.scalping.ladder import detect_tick
+from backend.scalping.linger import Linger
 from backend.scalping.state import BAND_BP, MarketState
 
 logger = logging.getLogger("nmnh.scalping")
@@ -144,6 +145,8 @@ class ScalpingCollector:
         self._resyncing: set[str] = set()
         # До какого момента не пробуем пересобрать книгу инструмента.
         self._cooldown: dict[str, float] = {}
+        # Закрытая монета отпускается не сразу: вернутся - история цела.
+        self._linger = Linger(self._forget)
         self._task: asyncio.Task | None = None
 
     @property
@@ -176,6 +179,7 @@ class ScalpingCollector:
                 await task
             except asyncio.CancelledError:
                 pass
+        await self._linger.clear()
         await self.stream.stop()
         if self._session and not self._session.closed:
             await self._session.close()
@@ -303,6 +307,9 @@ class ScalpingCollector:
         """Удержать инструмент под наблюдением и начать копить историю сделок."""
         sym = symbol.upper()
         was_pinned = bool(self._pinned.get(sym))
+        # Монета могла доживать срок после прошлого ухода - тогда история
+        # всё это время копилась и профиль крупной свечи уже собран.
+        self._linger.keep(sym)
         self._pinned[sym] = self._pinned.get(sym, 0) + 1
         if sym not in self._tracked:
             await self._track(sym)
@@ -327,13 +334,20 @@ class ScalpingCollector:
             self._pinned[sym] = left
             return
         self._pinned.pop(sym, None)
-        # Последний клиент ушёл — историю держать незачем, она самая объёмная
-        # структура на инструмент.
-        state = self.state.get(sym)
+        # Стакан на медленный поток - сразу: смотреть на него больше некому.
+        await self._set_depth_rate(sym, fast=False)
+        # А историю держим ещё несколько минут: ходят по монетам кругом, и
+        # вернувшийся получит профиль крупной свечи целым, а не выпрошенным у
+        # биржи кусками (backend/scalping/linger.py). Лента по монетам топа
+        # идёт всё равно, так что копится она даром.
+        await self._linger.part(sym)
+
+    async def _forget(self, symbol: str) -> None:
+        """Срок вышел: история - самая объёмная структура на инструмент."""
+        state = self.state.get(symbol)
         if state:
             state.clusters = None
             state.candles = None
-        await self._set_depth_rate(sym, fast=False)
 
     # ── синхронизация книги ─────────────────────────────────────────────────
 

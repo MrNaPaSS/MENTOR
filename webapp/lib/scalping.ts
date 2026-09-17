@@ -178,6 +178,16 @@ type Options = {
    * никто не открыл, незачем.
    */
   foot: number;
+  /**
+   * На счёте что-то изменилось: биржа сообщила об исполнении, снятой заявке
+   * или новой позиции.
+   *
+   * Сервер знает об этом из приватного потока биржи в тот же миг, а терминал
+   * до сих пор узнавал опросом раз в три секунды. Колбэк вызывается на
+   * событие: спросить один круг сейчас дешевле и быстрее, чем спрашивать
+   * постоянно.
+   */
+  onAccount?: () => void;
 };
 
 // Последний список монет держим в сессии вкладки: при возврате в раздел он
@@ -213,6 +223,7 @@ export function useScalpingFeed({
   shelf,
   interval,
   foot,
+  onAccount,
 }: Options) {
   const [screener, setScreener] = useState<ScreenerRow[]>([]);
   // Монеты, которых нет на бирже ученика. Список идёт с Binance, торгует он у
@@ -221,6 +232,10 @@ export function useScalpingFeed({
   const [absent, setAbsent] = useState<ReadonlySet<string>>(new Set());
   const [dom, setDom] = useState<DomFrame | null>(null);
   const [connected, setConnected] = useState(false);
+  // Биржи ученика, чьи изменения сервер получает потоком. На них терминал
+  // ждёт события вместо частого опроса; на остальных (у WEEX приватного
+  // потока нет вовсе) круг остаётся прежним.
+  const [streamed, setStreamed] = useState<ReadonlySet<string>>(new Set());
 
   const socketRef = useRef<WebSocket | null>(null);
   const retryRef = useRef(RECONNECT_MIN);
@@ -228,6 +243,9 @@ export function useScalpingFeed({
   // Настройки читаем из ref: пересоздавать соединение при смене шага сетки
   // незачем, достаточно отправить команду.
   const optsRef = useRef({ symbol, exchange, rows, agg, sort, shelf, interval, foot });
+  // Колбэк держим в ref: соединение из-за смены обработчика не пересобираем.
+  const accountRef = useRef(onAccount);
+  accountRef.current = onAccount;
   // Когда кэш скринера писали последний раз.
   const cachedAtRef = useRef(0);
   optsRef.current = { symbol, exchange, rows, agg, sort, shelf, interval, foot };
@@ -312,6 +330,16 @@ export function useScalpingFeed({
         } else if (message.event === "dom") {
           const frame = message.payload as DomFrame;
           if (ourFrame(frame, optsRef.current)) setDom(frame);
+        } else if (message.event === "account") {
+          const payload = (message.payload ?? {}) as { reason?: string; streamed?: string[] };
+          if (Array.isArray(payload.streamed)) {
+            const next = payload.streamed;
+            setStreamed((current) => (sameMembers(current, next) ? current : new Set(next)));
+          }
+          // Повод пришёл - спрашиваем один круг сейчас. Что именно
+          // изменилось, сервер не пересказывает: это позиции и заявки,
+          // и их терминал берёт своими же ручками, как и раньше.
+          if (payload.reason) accountRef.current?.();
         }
       };
 
@@ -370,7 +398,7 @@ export function useScalpingFeed({
     send({ action: "foot", time: foot });
   }, [foot, send]);
 
-  return { screener, absent, dom, connected };
+  return { screener, absent, dom, connected, streamed };
 }
 
 /**

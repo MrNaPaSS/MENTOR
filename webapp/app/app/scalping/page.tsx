@@ -249,6 +249,22 @@ const NUDGE_EVERY_MS = 2100;
 const RUSH_MS = 15000;
 const RUSH_POLL_MS = 700;
 
+// Круг опроса позиций, заявок и сделок.
+//
+// Обычный - три секунды: сервер иначе не узнает, что позиция изменилась, а
+// экран об этом должен сказать сразу. Но на биржах с приватным потоком сервер
+// узнаёт об исполнении в тот же миг и сам звонит в терминал по каналу стакана
+// (`onAccount`). Там круг остаётся только запасным путём на случай, если
+// звонок потерялся вместе с соединением, и идёт втрое реже: это около
+// двадцати запросов в минуту с вкладки вместо шестидесяти пяти, и при этом
+// реакция на исполнение не через три секунды, а сразу.
+//
+// У WEEX приватного потока в документации брокера нет, и там всё как было.
+const CHECK_MS = 3000;
+const CHECK_STREAMED_MS = 10_000;
+const GUARD_MS = 4000;
+const GUARD_STREAMED_MS = 12_000;
+
 // Сколько после входа спрашивать позиции чаще обычного и с каким шагом. Шаг
 // меньше секунды не нужен: круг сам по себе столько и длится через туннель, а
 // лишние просьбы, пока он идёт, отбрасываются.
@@ -558,6 +574,9 @@ export default function ScalpingPage() {
   // Круг опроса позиций вне очереди. Нужен сразу после входа: ждать обычного
   // круга значит показывать трейдеру «ждущую» сделку, которая уже открыта.
   const checkNowRef = useRef<(() => void) | null>(null);
+  // Проверка защиты вне очереди. Её зовёт звонок сервера: заявка на бирже
+  // изменилась - стоп и цели надо перечитать сейчас.
+  const guardNowRef = useRef<(() => void) | null>(null);
 
   /**
    * Спрашивать позиции чаще обычного, пока только что поставленная сделка не
@@ -966,7 +985,7 @@ export default function ScalpingPage() {
     setScreenerOpen(false);
   }, [venue]);
 
-  const { screener, absent, dom, connected } = useScalpingFeed({
+  const { screener, absent, dom, connected, streamed } = useScalpingFeed({
     symbol,
     exchange: venue,
     rows: shownRows,
@@ -975,7 +994,17 @@ export default function ScalpingPage() {
     shelf,
     interval: timeframe,
     foot: tools.footprint ? footBar : 0,
+    // Сервер сообщил об изменении на счёте - спрашиваем круг сейчас, а не по
+    // таймеру. Круги живут ниже и ставят сюда свои ссылки.
+    onAccount: useCallback(() => {
+      checkNowRef.current?.();
+      guardNowRef.current?.();
+    }, []),
   });
+
+  // Идёт ли по бирже ученика приватный поток. От этого зависит только частота
+  // запасного круга: сами данные и там, и там берутся одними ручками.
+  const venueStreamed = streamed.has(venue || "");
 
   // Цена для графика — три раза в секунду вместо восьми. Ярлык позиции и итог
   // сделки от этого не станут менее живыми, а перерисовку всего графика на
@@ -2845,10 +2874,15 @@ export default function ScalpingPage() {
 
     void tick();
     guard();
-    const id = setInterval(tick, 3000);
-    const watch = setInterval(() => {
-      if (!tabIdle()) guard();
-    }, 4000);
+    // На бирже с приватным потоком круг - запасной путь: об изменениях
+    // сообщает сервер звонком, и спрашивать часто незачем.
+    const id = setInterval(tick, venueStreamed ? CHECK_STREAMED_MS : CHECK_MS);
+    const watch = setInterval(
+      () => {
+        if (!tabIdle()) guard();
+      },
+      venueStreamed ? GUARD_STREAMED_MS : GUARD_MS,
+    );
     const rush = setInterval(() => {
       if (!tabIdle()) rushTick();
     }, RUSH_POLL_MS);
@@ -2862,6 +2896,7 @@ export default function ScalpingPage() {
       void guard();
     };
     checkNowRef.current = () => void tick();
+    guardNowRef.current = () => void guard();
     return () => {
       cancelled = true;
       offBack();
@@ -2870,9 +2905,10 @@ export default function ScalpingPage() {
       clearInterval(rush);
       kickRef.current = null;
       checkNowRef.current = null;
+      guardNowRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, symbol, watchKey]);
+  }, [live, symbol, watchKey, venueStreamed]);
 
   // Разметка сделки переживает уход со страницы.
   useEffect(() => {

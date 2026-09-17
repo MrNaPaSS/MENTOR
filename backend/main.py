@@ -168,7 +168,21 @@ def create_app(
     # Сопровождение держит приватные потоки бирж у себя. В роли `api` его нет,
     # и терминал остался бы на опросе позиций по нескольку раз в секунду -
     # поэтому здесь свой держатель тех же потоков (backend/trading/private_ws.py).
-    keeper = StreamKeeper(SessionLocal, trading_api._get_session) if role == "api" else None
+    keeper = (
+        StreamKeeper(
+            SessionLocal,
+            trading_api._get_session,
+            # Событие биржи уходит в открытый терминал сразу, и он не
+            # спрашивает позиции с заявками по кругу (backend/ws/scalping_hub.py).
+            bell=scalping_hub.ring if scalping_hub else None,
+            streamed=scalping_hub.streamed if scalping_hub else None,
+        )
+        if role == "api"
+        else None
+    )
+    # Одним процессом (роль `all`) потоки держит сопровождение - звонок оттуда.
+    if scalping_hub and role == "all":
+        watcher.bell = scalping_hub.ring
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
