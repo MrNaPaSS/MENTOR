@@ -2,8 +2,8 @@
 
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
-import PartnersTicker from "@/components/landing/PartnersTicker";
-import { PENDING } from "@/lib/venues";
+import PartnersTicker, { VenueCard } from "@/components/landing/PartnersTicker";
+import { PENDING, TRADING } from "@/lib/venues";
 import { useT } from "@/lib/i18n";
 
 /**
@@ -32,7 +32,19 @@ export default function Exchanges() {
     <section className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
       <SectionHeading eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.subtitle} />
 
-      <div className="mt-10">
+      {/* Бирж пять, и на широком экране они помещаются в ряд целиком: лента
+          там ехала мимо и резала знаки по краям, а ряд читается сразу и
+          целиком. Телефону лента остаётся - пять карточек в столбик заняли бы
+          пол-экрана. */}
+      <Reveal delay={0.1}>
+        <div className="mt-10 hidden gap-3 lg:grid lg:grid-cols-5">
+          {TRADING.map((venue) => (
+            <VenueCard key={venue.code} venue={venue} copy={copy} width="w-full" compact />
+          ))}
+        </div>
+      </Reveal>
+
+      <div className="mt-10 lg:hidden">
         <PartnersTicker />
       </div>
 

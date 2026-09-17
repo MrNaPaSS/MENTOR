@@ -42,21 +42,33 @@ export default function PartnersTicker() {
         WebkitMaskImage: "linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)",
       }}
     >
-      <div className="flex w-max animate-marquee gap-4 group-hover:[animation-play-state:paused] motion-reduce:animate-none">
+      <div className="flex w-max animate-marquee gap-3 group-hover:[animation-play-state:paused] motion-reduce:animate-none">
         {half.map((venue, i) => (
-          <Card key={`${venue.code}-${i}`} venue={venue} copy={copy} />
+          <VenueCard key={`${venue.code}-${i}`} venue={venue} copy={copy} width="w-52 shrink-0" compact />
         ))}
       </div>
     </div>
   );
 }
 
-function Card({
+/**
+ * Карточка биржи: знак, имя и доля возврата.
+ *
+ * Вынесена наружу, потому что на широком экране пять бирж стоят рядом сеткой,
+ * а лента остаётся телефону. Оформление у них одно - разная только ширина,
+ * поэтому её и принимает пропом.
+ */
+export function VenueCard({
   venue,
   copy,
+  width = "w-64 shrink-0",
+  compact = false,
 }: {
   venue: PublicVenue;
   copy: ReturnType<typeof useT>["landing"]["exchanges"];
+  width?: string;
+  /** Плотный вид для ряда из пяти: знак мельче, отступы уже, строка ниже. */
+  compact?: boolean;
 }) {
   const locale = useLocale();
   const link = EXCHANGE_SIGNUP.find((one) => one.code === venue.code);
@@ -68,13 +80,13 @@ function Card({
         code={venue.code}
         name={venue.name}
         decorative
-        className="h-10 w-14 shrink-0"
-        nameClassName="text-base"
+        className={compact ? "h-9 w-10 shrink-0" : "h-10 w-14 shrink-0"}
+        nameClassName={compact ? "text-sm" : "text-base"}
       />
       <span className="min-w-0">
-        <span className="block font-bold text-text-primary">{venue.name}</span>
+        <span className={`block font-bold text-text-primary ${compact ? "text-sm" : ""}`}>{venue.name}</span>
         <span
-          className={`block text-[13px] ${
+          className={`block ${compact ? "text-xs leading-snug" : "text-[13px]"} ${
             back ? "font-semibold text-accent-cyan" : "text-text-muted"
           }`}
         >
@@ -91,8 +103,9 @@ function Card({
     </>
   );
 
-  const shell =
-    "flex w-64 shrink-0 items-center gap-3 rounded-2xl border border-border bg-bg-panel/60 px-5 py-4 backdrop-blur-md";
+  const shell = `flex ${width} items-center rounded-2xl border border-border bg-bg-panel/60 backdrop-blur-md ${
+    compact ? "gap-2.5 px-3.5 py-3.5" : "gap-3 px-5 py-4"
+  }`;
 
   // Биржа без партнёрской ссылки остаётся в ленте, но не притворяется
   // кнопкой: вести с неё некуда.
