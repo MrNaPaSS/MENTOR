@@ -24,32 +24,77 @@ import {
 } from "lucide-react";
 
 import ModalPortal from "@/components/ui/ModalPortal";
-import { useT } from "@/lib/i18n";
+import { useT, type Dict } from "@/lib/i18n";
+import { money, priceText } from "@/lib/journalFormat";
 import {
   attachShot,
   detachShot,
   orderShots,
   pastedImage,
   readImage,
+  saveShotNote,
   shotImage,
   shotPage,
+  stageOf,
   type TradeShot,
 } from "@/lib/journalShots";
+import type { JournalRow } from "./JournalTable";
 
 export interface TradeShotsProps {
   /** Сделка, к которой прикрепляем: тот же опознаватель, что в журнале. */
   clientId: string;
   symbol: string;
   shots: readonly TradeShot[];
+  /**
+   * Сама сделка - ради короткой справки под снимком.
+   *
+   * Без неё картинка немая: видно свечи, но не видно, какая это была цель и
+   * чем кончилось. Подробный разбор живёт в карточке позиции, здесь только
+   * то, что относится к этому этапу.
+   */
+  trade?: JournalRow;
   onClose: () => void;
   /** Список изменился: журнал перечитывает строки. */
   onChange: () => void;
+}
+
+/**
+ * Краткая справка под снимком: что в сделке относится к его этапу.
+ *
+ * Вход - сторона, цена входа и плечо. Ведение - цели, взятые к тому времени.
+ * Выход - цена закрытия и итог. Ничего сверх записанного: это подпись к
+ * картинке, а не второй журнал.
+ */
+export function shotBrief(
+  shot: TradeShot,
+  trade: JournalRow | undefined,
+  t: Dict,
+): string {
+  if (!trade) return "";
+  const stage = stageOf(shot.stage, shot.note);
+
+  if (stage === "entry") {
+    const side = trade.side === "long" ? t.journal.long : t.journal.short;
+    return `${side} · ${priceText(trade.entry)} · ×${trade.leverage}`;
+  }
+
+  if (stage === "manage") {
+    if (trade.takes_hit === 0) return t.journal.liveNone;
+    return trade.targets
+      .slice(0, trade.takes_hit)
+      .map((price, i) => `TP${i + 1} ${priceText(price)}`)
+      .join(" · ");
+  }
+
+  const out = trade.exit_price ? priceText(trade.exit_price) : "";
+  return [out, money(trade.pnl)].filter(Boolean).join(" · ");
 }
 
 export default function TradeShots({
   clientId,
   symbol,
   shots,
+  trade,
   onClose,
   onChange,
 }: TradeShotsProps) {
@@ -247,6 +292,11 @@ export default function TradeShots({
                 </button>
               </>
             )}
+            {shotBrief(open, trade, t) && (
+              <div className="px-3 pb-1 font-mono text-[10px] text-[var(--pane-muted)]">
+                {shotBrief(open, trade, t)}
+              </div>
+            )}
             {open.note && (
               <p className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded bg-black/60 px-2 py-0.5 text-[11px] text-white/80">
                 {open.note}
@@ -310,11 +360,32 @@ export default function TradeShots({
                         <MoveRight className="h-3 w-3" />
                       </button>
                     </div>
-                    {shot.note && (
-                      <figcaption className="px-2 py-1 text-[10px] text-[var(--pane-muted)]">
-                        {shot.note}
-                      </figcaption>
-                    )}
+                    <figcaption>
+                      {/* Цифры сделки, относящиеся к этапу снимка - одной
+                          тонкой строкой. Подробности живут в карточке позиции;
+                          здесь только то, что объясняет саму картинку. */}
+                      {shotBrief(shot, trade, t) && (
+                        <div className="border-t border-[var(--pane-border)] px-2 py-0.5 font-mono text-[9px] text-[var(--pane-muted)]">
+                          {shotBrief(shot, trade, t)}
+                        </div>
+                      )}
+                      {/* Комментарий пишут словами и не в одну строку: «вошёл
+                          на ретесте, стакан пустой сверху» в поле высотой в
+                          строку не помещается. */}
+                      <textarea
+                        defaultValue={shot.note}
+                        onBlur={async (event) => {
+                          const body = event.target.value.trim();
+                          if (body === shot.note) return;
+                          if (await saveShotNote(shot.id, body)) onChange();
+                        }}
+                        placeholder={t.journal.shotNoteHint}
+                        rows={2}
+                        maxLength={140}
+                        spellCheck={false}
+                        className="block w-full resize-none border-t border-[var(--pane-border)] bg-transparent px-2 py-1 text-[10px] leading-snug text-[var(--pane-text-2)] outline-none placeholder:text-[var(--pane-muted)]"
+                      />
+                    </figcaption>
                   </figure>
                 ))}
               </div>

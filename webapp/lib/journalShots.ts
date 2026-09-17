@@ -40,16 +40,30 @@ export type ShotStage = "entry" | "manage" | "exit";
 
 export const STAGES: readonly ShotStage[] = ["entry", "manage", "exit"];
 
+/** Слова, по которым узнаётся этап снимка без этапа. */
+const MANAGE_WORDS = ["цель", "тейк", "target", "take", "tp"];
+const EXIT_WORDS = ["закрыт", "выход", "стоп", "close", "exit", "stop"];
+
 /**
  * Этап снимка, снятого до того, как их стало три.
  *
  * Старые снимки никуда не делись, и терять их из-за переименования нельзя:
- * «до входа» - это вход, «разбор» - выход. Незнакомое имя тоже идёт во вход:
- * снимок лучше показать не в том ряду, чем не показать вовсе.
+ * «до входа» - это вход, «разбор» - выход.
+ *
+ * Хуже с теми, у кого этапа нет вовсе: автоснимок их не подписывал, и в
+ * карточке они все легли бы во «Вход», хотя сняты на взятых целях. Поэтому у
+ * такого снимка спрашиваем его подпись - терминал писал в неё «цель 1»,
+ * «закрытие», - и ставим этап по ней. Подпись ничего не сказала - пусть будет
+ * вход: снимок лучше показать не в том ряду, чем не показать вовсе.
  */
-export function stageOf(stage: string | undefined): ShotStage {
+export function stageOf(stage: string | undefined, note = ""): ShotStage {
   if (stage === "manage") return "manage";
   if (stage === "exit" || stage === "review") return "exit";
+  if (stage === "entry" || stage === "before") return "entry";
+
+  const words = note.toLowerCase();
+  if (EXIT_WORDS.some((one) => words.includes(one))) return "exit";
+  if (MANAGE_WORDS.some((one) => words.includes(one))) return "manage";
   return "entry";
 }
 

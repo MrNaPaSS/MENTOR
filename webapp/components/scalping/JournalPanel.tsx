@@ -441,6 +441,7 @@ export default function JournalPanel({
           clientId={shotsRow.client_id}
           symbol={shotsRow.symbol}
           shots={shotsRow.shots ?? []}
+          trade={shotsRow}
           onClose={() => setShotsOf(null)}
           // Окно остаётся открытым: снимков к сделке прикладывают несколько
           // подряд, и закрываться после каждого - значит открывать его заново

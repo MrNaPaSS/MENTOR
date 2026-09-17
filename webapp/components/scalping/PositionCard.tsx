@@ -202,7 +202,7 @@ export default function PositionCard({
                 чего в разборе не хватает. */}
             <div className="grid gap-2">
               {STAGES.map((one) => {
-                const mine = shots.filter((shot) => stageOf(shot.stage) === one);
+                const mine = shots.filter((shot) => stageOf(shot.stage, shot.note) === one);
                 return (
                   <div key={one}>
                     <div className="mb-1 flex items-center gap-2">
@@ -260,7 +260,7 @@ export default function PositionCard({
                                 почему снимок сделан. Сохраняется по уходу из
                                 поля - пока пишут, запросы не нужны. */}
                             <figcaption>
-                              <input
+                              <textarea
                                 defaultValue={shot.note}
                                 onBlur={async (event) => {
                                   const body = event.target.value.trim();
@@ -268,8 +268,10 @@ export default function PositionCard({
                                   if (await saveShotNote(shot.id, body)) onChange();
                                 }}
                                 placeholder={t.journal.shotNoteHint}
+                                rows={2}
                                 maxLength={140}
-                                className="w-full bg-transparent px-1 py-0.5 text-[10px] text-[var(--pane-text-2)] outline-none placeholder:text-[var(--pane-muted)]"
+                                spellCheck={false}
+                                className="block w-full resize-none border-t border-[var(--pane-border)] bg-transparent px-1.5 py-1 text-[10px] leading-snug text-[var(--pane-text-2)] outline-none placeholder:text-[var(--pane-muted)]"
                               />
                             </figcaption>
                           </figure>
