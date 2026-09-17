@@ -357,7 +357,7 @@ FRESH = 60.0
 
 
 def role() -> str:
-    """Роль этого процесса: `all`, `api` или `watcher`."""
+    """Роль этого процесса: `all`, `api`, `watcher` или `market`."""
     try:
         from backend.main import process_role
 

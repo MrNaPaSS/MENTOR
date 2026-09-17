@@ -30,6 +30,7 @@ from backend.api import trading as trading_api
 from backend.api import auth, market, market_data, market_extra, signals, stats, students, profile, admin_affiliate, institutional, broadcast, pnl, trades, journal, trading, coins, shop
 from backend.api import chat as chat_api
 from backend.api import chat_bridge as chat_bridge_api
+from backend.api import internal as internal_api
 from backend.api import scalping as scalping_api
 from backend.api import trading_move
 from backend.api import trading_nudge
@@ -51,6 +52,7 @@ from backend.scalping.bingx_collector import BingxCollector
 from backend.scalping.mexc_collector import MexcCollector
 from backend.scalping.okx_collector import OkxCollector
 from backend.scalping.density_alerts import DensityWatcher, run_watcher as run_density_watcher
+from backend.ws.bell_bridge import BellBridge
 from backend.ws.scalping_hub import ScalpingHub
 from backend.notify import get_notifier
 from backend.ai_quota import AnalyzeQuota
@@ -70,7 +72,7 @@ logging.basicConfig(level=logging.WARNING, format="%(message)s")
 logging.getLogger("nmnh.trading").setLevel(logging.INFO)
 
 
-ROLES = ("all", "api", "watcher")
+ROLES = ("all", "api", "watcher", "market")
 
 
 def process_role(value: str | None = None) -> str:
@@ -79,6 +81,7 @@ def process_role(value: str | None = None) -> str:
     `all` - всё в одном процессе, как было и как работает на SQLite.
     `api` - сайт, стаканы и ручки терминала без сопровождения сделок.
     `watcher` - только сопровождение: ни сборщиков рынка, ни чата, ни рассылок.
+    `market` - только рыночные данные: потоки бирж, стакан и его канал.
 
     Незнакомое значение не повод не запуститься: пишем в журнал и работаем как
     `all`. Пустой сервер хуже сервера, делающего лишнее.
@@ -94,12 +97,58 @@ def process_role(value: str | None = None) -> str:
     return role
 
 
+async def _publish_health(role: str, every: float = 5.0) -> None:
+    """Раз в несколько секунд класть свой снимок панели в базу."""
+    while True:
+        await asyncio.sleep(every)
+        session = SessionLocal()
+        try:
+            server_health.publish(session, role)
+        except Exception as exc:  # noqa: BLE001 - панель не повод падать
+            logging.getLogger("nmnh.trading").debug("Снимок панели не записан: %s", exc)
+        finally:
+            session.close()
+
+
+def market_apart(value: str | None = None) -> bool:
+    """Рыночные данные вынесены в свой процесс (`NMNH_MARKET=1`).
+
+    Потоки бирж и сборка кадров стакана - самая тяжёлая часть сервера: на
+    полусотне монет это тысячи сообщений в секунду и кадр каждому открытому
+    терминалу восемь раз в секунду. Пока они живут в процессе сайта, потолок
+    упирается в них, а перезапуск сайта рвёт всем стакан.
+
+    Выключено по умолчанию: разделение требует правил в туннеле (путь
+    `/ws/scalping` и `/api/scalping` идёт на свой порт) и третьего окна на
+    столе. Включать после того, как окно поднято и правила на месте, - иначе
+    терминал останется без стакана.
+    """
+    raw = value if value is not None else os.getenv("NMNH_MARKET", "")
+    return raw.strip().lower() in ("1", "true", "yes")
+
+
 def create_app(
     config: BackendConfig | None = None, weex=None, notifier=None, price_interval: float = 5.0
 ) -> FastAPI:
     config = config or BackendConfig.from_env()
     weex = weex or get_weex_client(config.weex_use_mock)
     notifier = notifier or get_notifier(config.bot_token)
+
+    # Роль процесса: `all` - как было, всё в одном; `api` - сайт и ручки;
+    # `watcher` - только сопровождение сделок; `market` - только рыночные
+    # данные. Знать её нужно до сборки объектов: сборщик биржи, заведённый в
+    # чужой роли, поднял бы второе соединение и второй раз выбрал бы бюджет
+    # запросов адреса.
+    #
+    # Разделение включается после переезда на Postgres: замок счёта у процессов
+    # общий только там (backend/trading/locks.py, docs/architecture/database.md).
+    role = process_role()
+    apart = market_apart()
+    runs_watcher = role in ("all", "watcher")
+    # Сайт: цены, кабинет, чат, рассылки. Рыночные данные - отдельно от него:
+    # в раздельном режиме их ведёт свой процесс (роль `market`).
+    runs_site = role in ("all", "api")
+    runs_books = role == "market" or (runs_site and not apart)
 
     init_engine()
     create_all()
@@ -115,7 +164,11 @@ def create_app(
 
     # Скальпинг держит постоянное соединение с биржей и заметный поток данных,
     # поэтому включается флагом, а не сам собой.
-    scalping = ScalpingCollector(top_n=config.scalping_top_n) if config.scalping_enabled else None
+    scalping = (
+        ScalpingCollector(top_n=config.scalping_top_n)
+        if config.scalping_enabled and runs_books
+        else None
+    )
     # Книга по биржам: Binance держится постоянно - с неё идут скринер и стакан
     # тех, у кого биржа не подключена; остальные включаются, когда на них
     # открыли стакан, и молчат, пока не открыли (ТЗ мультибиржи, §4.4 и §10.3).
@@ -157,32 +210,28 @@ def create_app(
     # знать не должен. Без адреса группы молчит и ничего не занимает.
     forum = ForumBridge(config.forum_bot_token, config.forum_chat_id, config.site_url)
 
-    # Роль процесса: `all` - как было, всё в одном; `api` - сайт, стаканы и
-    # ручки без сопровождения сделок; `watcher` - только сопровождение.
-    #
-    # Разделение включается после переезда на Postgres: замок счёта у процессов
-    # общий только там (backend/trading/locks.py, docs/architecture/database.md).
-    role = process_role()
-    runs_watcher = role in ("all", "watcher")
-    runs_market = role in ("all", "api")
     # Сопровождение держит приватные потоки бирж у себя. В роли `api` его нет,
     # и терминал остался бы на опросе позиций по нескольку раз в секунду -
     # поэтому здесь свой держатель тех же потоков (backend/trading/private_ws.py).
+    # Кому звонить о событии биржи. Свой хаб, если стакан в этом же процессе;
+    # иначе - процесс рыночных данных, одним локальным запросом.
+    bridge = BellBridge(config.jwt_secret) if apart and runs_site else None
+    ringer = scalping_hub or bridge
     keeper = (
         StreamKeeper(
             SessionLocal,
             trading_api._get_session,
             # Событие биржи уходит в открытый терминал сразу, и он не
             # спрашивает позиции с заявками по кругу (backend/ws/scalping_hub.py).
-            bell=scalping_hub.ring if scalping_hub else None,
-            streamed=scalping_hub.streamed if scalping_hub else None,
+            bell=ringer.ring if ringer else None,
+            streamed=ringer.streamed if ringer else None,
         )
         if role == "api"
         else None
     )
     # Одним процессом (роль `all`) потоки держит сопровождение - звонок оттуда.
-    if scalping_hub and role == "all":
-        watcher.bell = scalping_hub.ring
+    if ringer and role == "all":
+        watcher.bell = ringer.ring
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -201,14 +250,14 @@ def create_app(
         logging.getLogger("nmnh.trading").info("Роль процесса: %s", role)
         # Сторож цикла событий: насколько процесс замирает (health.watch_loop).
         loop_watch = asyncio.create_task(server_health.watch_loop(role), name="loop-watch")
-        if runs_market:
+        if runs_site:
             collector.start()
             balance_collector.start()
             cashback_collector.start()
-        if scalping and runs_market:
+        if scalping and runs_books:
             scalping.start()
         density_task = None
-        if density and runs_market:
+        if density and runs_books:
             async def _post(text: str) -> None:
                 await notifier.send_message(
                     config.density_chat_id,
@@ -222,19 +271,29 @@ def create_app(
             watcher.start()
         if keeper:
             keeper.start()
-        if runs_market:
+        # Снимок панели у процесса рыночных данных свой: обрывы потоков бирж и
+        # задержки кадров видны только ему. Публикуют его сопровождение и
+        # держатель потоков, а в этой роли нет ни того, ни другого.
+        health_task = (
+            asyncio.create_task(_publish_health(role), name="health-publish")
+            if runs_books and not runs_site and not runs_watcher
+            else None
+        )
+        if runs_site:
             await forum.start()
         # Оклик комнаты: без него список присутствующих врёт в большую сторону,
         # а молчащие соединения закрывает прокси.
         presence_task = (
             asyncio.create_task(app.state.chat_hub.watch(), name="chat-sweep")
-            if runs_market
+            if runs_site
             else None
         )
         try:
             yield
         finally:
             loop_watch.cancel()
+            if health_task:
+                health_task.cancel()
             if presence_task:
                 presence_task.cancel()
                 try:
@@ -254,6 +313,8 @@ def create_app(
             binance_probe.cancel()
             if institutional_warm:
                 institutional_warm.cancel()
+            if bridge:
+                await bridge.close()
             await trading_api.close_session()
             # Общая сессия рыночных источников: одна на процесс, закрываем тут же.
             await sources_session.close()
@@ -369,6 +430,10 @@ def create_app(
     app.include_router(chat_bridge_api.router)
     app.include_router(scalping_api.router)
     app.include_router(ws_routes.router)
+    if runs_books:
+        # Звонок о счёте из процесса сайта: сокеты терминалов здесь
+        # (backend/api/internal.py). Только петля и общий секрет.
+        app.include_router(internal_api.router)
     # Короткий путь снимка - последним: он живёт в корне и ловит одиночный
     # сегмент, поэтому пускать его вперёд остальных маршрутов нельзя.
     app.include_router(shots.router)

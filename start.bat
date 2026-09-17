@@ -41,6 +41,12 @@ if errorlevel 1 (
     echo ALLOWED_ORIGINS=https://www.nmnh.trade,https://nmnh.trade>> ".env"
 )
 echo   .env - OK
+:: NMNH_MARKET=1 v .env: rynochnye dannye (potoki birzh, stakan i ego kanal)
+:: idut tretim processom na portu 8002. Ego zhe uchityvaet konfig tunnelya
+:: nizhe: puti /ws/scalping i /api/scalping uhodyat na 8002.
+set "MARKET="
+findstr /b /c:"NMNH_MARKET=1" ".env" >nul 2>&1
+if not errorlevel 1 set "MARKET=1"
 
 :: ============ 4. CLOUDFLARED ============
 echo [4/5] Cloudflare Tunnel...
@@ -92,6 +98,10 @@ if errorlevel 1 (
     start "MENTOR API"     cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && set NMNH_ROLE=api&& uvicorn backend.main:app --host 127.0.0.1 --port 8000"
     start "MENTOR Watcher" cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && set NMNH_ROLE=watcher&& uvicorn backend.main:app --host 127.0.0.1 --port 8001"
 )
+if defined MARKET (
+    echo   Rynochnye dannye - otdelnym processom na portu 8002
+    start "MENTOR Market"  cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && set NMNH_ROLE=market&& uvicorn backend.main:app --host 127.0.0.1 --port 8002"
+)
 start "MENTOR Bot"     cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && python -m bot.main"
 
 timeout /t 3 /nobreak >nul
@@ -141,6 +151,14 @@ if not exist "!CRED!" goto :eof
     echo tunnel: !TID!
     echo credentials-file: !CRED!
     echo ingress:
+    if defined MARKET (
+        echo   - hostname: !API_DOMAIN!
+        echo     path: ^^/ws/scalping
+        echo     service: http://127.0.0.1:8002
+        echo   - hostname: !API_DOMAIN!
+        echo     path: ^^/api/scalping
+        echo     service: http://127.0.0.1:8002
+    )
     echo   - hostname: !API_DOMAIN!
     echo     service: http://127.0.0.1:8000
     echo   - service: http_status:404
