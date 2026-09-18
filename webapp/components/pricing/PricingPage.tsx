@@ -89,7 +89,7 @@ export default function PricingPage() {
         <section className="relative overflow-hidden pb-14 pt-16 md:pb-16 md:pt-20">
           <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
 
-          <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] lg:gap-12">
+          <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.65fr)] lg:gap-10 xl:max-w-[86rem]">
             <div className="order-2 lg:order-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -111,7 +111,7 @@ export default function PricingPage() {
                 {p.hero.eyebrow}
               </span>
 
-              <h1 className="mt-4 text-h2 text-text-primary md:text-h1">
+              <h1 className="mt-4 text-[1.9rem] font-extrabold leading-[1.12] text-text-primary md:text-[2.3rem] xl:text-[2.6rem]">
                 {p.hero.titleTop}
                 <br />
                 <span className="text-accent-cyan text-glow-cyan">{p.hero.titleAccent}</span>

@@ -14,8 +14,8 @@ export const pricing = {
 
   hero: {
     eyebrow: "Terminal access",
-    titleTop: "One terminal.",
-    titleAccent: "Two doors: free and 49 USDT.",
+    titleTop: "The fee goes to the exchange either way.",
+    titleAccent: "The only question is whether part of it comes back to you.",
     lead:
       "Open an account through the academy link and everything is unlocked: the whole terminal, all five exchanges, journal and analytics, academy and chat - and part of your fee comes back on top. The subscription exists for exactly one person: the one who does not want to move trading to a new account.",
     bullets: ["No subscriptions or tiers by default", "Your money stays on your exchange", "Keys without withdrawal rights"],
