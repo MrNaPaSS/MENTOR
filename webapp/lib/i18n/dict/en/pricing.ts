@@ -51,7 +51,7 @@ export const pricing = {
     base: {
       name: "Terminal",
       price: "49",
-      priceNote: "+7 days as a gift on the first payment",
+      priceNote: "new users: +7 days on the first payment",
       hint: "Any account on any of the five exchanges",
       badge: "For your own account",
       features: [
@@ -66,7 +66,7 @@ export const pricing = {
     pro: {
       name: "Terminal Pro",
       price: "99",
-      priceNote: "+7 days as a gift on the first payment",
+      priceNote: "new users: +7 days on the first payment",
       hint: "Everything in Terminal plus what saves hours",
       features: [
         "The trade records itself - with screenshots of entry, target and stop",
@@ -128,9 +128,9 @@ export const pricing = {
     eyebrow: "First payment",
     title: "The first month is 37 days",
     text:
-      "You pay for a month and get thirty-seven days: the extra week is a gift on your first subscription. After that a month is just a month.",
+      "New users only: the first subscription payment comes with seven extra days as a gift. You pay for a month and use thirty-seven days, and after that a month is just a month.",
     points: [
-      "The week is added automatically, no need to ask",
+      "The gift is granted once and only on the first subscription",
       "Connect an exchange with a key that cannot withdraw and trade",
       "Not a fit - cancel in one click and no next invoice arrives",
     ],
