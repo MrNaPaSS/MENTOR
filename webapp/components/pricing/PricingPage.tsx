@@ -24,6 +24,8 @@ import {
 import SectionHeading from "@/components/ui/SectionHeading";
 import Reveal from "@/components/ui/Reveal";
 import SignupPicker from "@/components/landing/SignupPicker";
+import PartnersTicker, { VenueCard } from "@/components/landing/PartnersTicker";
+import { TRADING } from "@/lib/venues";
 import { SOCIAL_LINKS } from "@/lib/content";
 import { useT } from "@/lib/i18n";
 
@@ -144,6 +146,23 @@ export default function PricingPage() {
                 </a>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Биржи идут сразу под первым экраном: прежде чем выбирать вход,
+            человек хочет знать, где именно будет стоять его счёт. Ряд из пяти
+            на широком экране, лента - телефону, как на главной. */}
+        <section className="mx-auto max-w-6xl px-4 pb-4 md:px-6">
+          <p className="text-center text-sm text-text-muted">{p.venues.note}</p>
+
+          <div className="mt-5 hidden gap-3 lg:grid lg:grid-cols-5">
+            {TRADING.map((venue) => (
+              <VenueCard key={venue.code} venue={venue} copy={t.landing.exchanges} width="w-full" compact />
+            ))}
+          </div>
+
+          <div className="mt-5 lg:hidden">
+            <PartnersTicker />
           </div>
         </section>
 

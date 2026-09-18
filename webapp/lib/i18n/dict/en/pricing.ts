@@ -2,7 +2,7 @@ export const pricing = {
   meta: {
     title: "Access to the NMNH terminal: free or by subscription",
     description:
-      "The NMNH terminal is free: open an account through the academy link and everything is unlocked, down to part of your fee coming back. The 49 USDT subscription is only for traders who want to stay on their existing account.",
+      "The NMNH terminal is free: register an exchange account through the academy and everything is unlocked, down to part of your fee coming back. The 49 USDT subscription is only for traders who want to stay on their existing account.",
   },
 
   nav: {
@@ -17,23 +17,27 @@ export const pricing = {
     titleTop: "The fee goes to the exchange either way.",
     titleAccent: "The only question is whether part of it comes back to you.",
     lead:
-      "An account through the academy link opens the whole terminal, free. The subscription is for one person only: the one who will not move accounts.",
+      "Register an exchange account through the academy and the whole terminal opens up, free. The subscription is for one person only: the one who will not move accounts.",
     bullets: ["Your money stays on your exchange", "Keys without withdrawal rights"],
     shotAlt: "NMNH terminal: chart, order book and order panel in one window",
     cta: "Open an account and trade free",
     ctaSecondary: "Stay on your account - 49 USDT",
   },
 
+  venues: {
+    note: "Five exchanges to choose from - an account opens on any of them",
+  },
+
   plans: {
     eyebrow: "Plans",
     title: "One terminal, two doors",
-    subtitle: "The first is free and gives everything - it only needs an account opened through our link. The second is paid and needs nothing but the payment.",
+    subtitle: "The first is free and gives everything - it needs an exchange account registered through the academy. The second is paid and needs nothing but the payment.",
     perMonth: "USDT / month",
     free: {
       name: "Through the academy",
       price: "0",
       priceNote: "while you trade through us",
-      hint: "Open the account through our link - everything else is unlocked",
+      hint: "Exchange account registered through the academy - everything else is unlocked",
       features: [
         "The entire terminal, nothing stripped out and no access tiers",
         "All five exchanges at once",
@@ -159,11 +163,11 @@ export const pricing = {
       },
       {
         q: "Can I switch from the subscription to the free path?",
-        a: "Yes. Open an account through the academy link, send the UID - and the subscription is no longer needed: the terminal is free and part of the fee comes back.",
+        a: "Yes. Register a new exchange account through the academy, send the UID - and the subscription is no longer needed: the terminal is free and part of the fee comes back.",
       },
       {
         q: "Why can't I trade for free on my old account?",
-        a: "The exchange sees no link between us and an account opened elsewhere: the volume is not credited and no partner payout arrives. Then the terminal is paid for by the subscription instead of the exchange.",
+        a: "The exchange sees no link between us and an account registered outside the academy: the volume is not credited and no partner payout arrives. Then the terminal is paid for by the subscription instead of the exchange.",
       },
       {
         q: "Which USDT network do you accept?",
@@ -183,7 +187,7 @@ export const pricing = {
   cta: {
     title: "The simplest path is the free one",
     text:
-      "An account through the academy link takes a couple of minutes, money moves inside the exchange, and from there the terminal costs nothing. The subscription stays for those who find moving the account inconvenient - and the first payment comes with a gifted week on top.",
+      "Registering an exchange account through the academy takes a couple of minutes, money moves inside the exchange, and from there the terminal costs nothing. The subscription stays for those who find moving the account inconvenient - and the first payment comes with a gifted week on top.",
     primary: "Open an account and trade free",
     secondary: "I need the subscription",
   },
