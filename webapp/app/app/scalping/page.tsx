@@ -3476,20 +3476,23 @@ export default function ScalpingPage() {
   // частями, и десяток одинаковых картинок разбору не помогает.
   const shotSeenRef = useRef(new Map<string, string>());
   const shotAtRef = useRef(0);
-  // Сделки, выход которых уже сняли по касанию: второй раз не снимаем.
-  const exitShotRef = useRef(new Set<string>());
+  // Что уже снято по касанию цены: ключи вида `id:take1`, `id:exit`.
+  const touchedRef = useRef(new Set<string>());
 
-  // Снимок выхода - в тот миг, когда цена коснулась уровня.
+  // Цели и стоп снимаются в тот миг, когда цена их коснулась.
   //
-  // Раньше он ждал события от сопровождения: биржа подтверждает закрытие не
-  // мгновенно, а обход идёт раз в пять секунд, и к моменту снимка свеча уже
-  // уходила - в журнале оставалась картинка «уже после», по которой выход не
-  // разобрать. Цену терминал знает сам, из потока, и уровни сделки тоже: этого
-  // достаточно, чтобы снять ровно в секунду касания.
+  // Раньше снимок ждал события от сопровождения: биржа подтверждает исполнение
+  // не мгновенно, а обход идёт раз в пять секунд, и к моменту снимка свеча уже
+  // уходила - в журнале оставалась картинка «уже после», по которой ни цель, ни
+  // стоп не разобрать. Цену терминал знает сам, из потока, и уровни сделки
+  // тоже: этого довольно, чтобы снять ровно в секунду касания.
   //
-  // Подтверждение биржи придёт следом и запишет сделку в журнал; если снимок
-  // окажется ложным - цену отбило, а стоп не исполнился, - в разборе останется
-  // лишняя картинка выхода, и это дешевле, чем потерянный момент.
+  // Ждёт по-прежнему только вход - он не о моменте, а о картине перед ним, и
+  // ему нужна легшая на график разметка.
+  //
+  // Подтверждение биржи придёт следом и запишет сделку в журнал. Если снимок
+  // окажется ложным - цену отбило, а заявка не исполнилась, - в разборе
+  // останется лишняя картинка, и это дешевле потерянного момента.
   useEffect(() => {
     if (!autoShots || !tools.autoShots || !symbol) return;
     const price = chartPrice;
@@ -3497,20 +3500,33 @@ export default function ScalpingPage() {
 
     for (const trade of tradesRef.current) {
       if (trade.status !== "open" || trade.symbol !== symbol) continue;
-      if (exitShotRef.current.has(trade.id)) continue;
-
       const long = trade.side === "long";
-      const stop = trade.stop > 0 && (long ? price <= trade.stop : price >= trade.stop);
-      const last = trade.targets.at(-1) ?? 0;
-      const done = last > 0 && (long ? price >= last : price <= last);
-      if (!stop && !done) continue;
+      const reached = (level: number) =>
+        level > 0 && (long ? price >= level : price <= level);
 
-      exitShotRef.current.add(trade.id);
-      void autoShot(
-        trade.id,
-        stop ? t.terminal.autoShotStop : t.terminal.autoShotLast,
-        "exit",
-      );
+      // Стоп: выход, и снимать его надо раньше всего остального.
+      const stopKey = `${trade.id}:exit`;
+      const stopped =
+        trade.stop > 0 && (long ? price <= trade.stop : price >= trade.stop);
+      if (stopped && !touchedRef.current.has(stopKey)) {
+        touchedRef.current.add(stopKey);
+        void autoShot(trade.id, t.terminal.autoShotStop, "exit");
+        continue;
+      }
+
+      // Цели по порядку. Последняя закрывает позицию - это выход, остальные
+      // ведение: так они и лягут в карточке позиции.
+      trade.targets.forEach((level, i) => {
+        const last = i === trade.targets.length - 1;
+        const key = last ? stopKey : `${trade.id}:take${i + 1}`;
+        if (!reached(level) || touchedRef.current.has(key)) return;
+        touchedRef.current.add(key);
+        void autoShot(
+          trade.id,
+          last ? t.terminal.autoShotLast : t.terminal.autoShotTake(i + 1),
+          last ? "exit" : "manage",
+        );
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartPrice, autoShots, tools.autoShots, symbol]);
@@ -3537,10 +3553,15 @@ export default function ScalpingPage() {
       // Этап снимок знает сам: он снимает по событию, и называть его руками
       // не нужно - в карточке позиции картинка сразу встаёт в свой ряд.
       const closed = trade.status === "closed";
-      // Выход уже снят по касанию уровня - вторая картинка того же выхода в
-      // разборе только мешает.
-      if (closed && exitShotRef.current.has(trade.id)) continue;
       const opened = was.startsWith("planned");
+      // Что поймало касание цены, второй раз не снимаем: две картинки одного
+      // и того же события в разборе только мешают.
+      const key = closed
+        ? `${trade.id}:exit`
+        : opened
+          ? ""
+          : `${trade.id}:take${trade.takesHit}`;
+      if (key && touchedRef.current.has(key)) continue;
       const why = closed
         ? t.terminal.autoShotClosed
         : opened
