@@ -228,13 +228,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // ручка по UID - взгляд со стороны: приходит с задержкой и считает не то,
   // чем торгуют. Показывать её как «мой счёт» значит врать человеку о его
   // деньгах, поэтому в шапке живёт только цифра по ключам.
+  // Чей это баланс: свой по ключам или партнёрская сводка по UID. Показываем
+  // только свой - партнёрская приходит с задержкой и считает не тот счёт,
+  // которым торгуют.
   const ownBalance = profile?.balance_source === "api_keys";
   const mode = profile?.mode || "moderate";
   // Ключей нет - и это точно известно: хранилище на сервере настроено, а счёт
   // не подключён. Сервер промолчал - ничего не обещаем и показываем баланс.
-  const needsKeys =
-    (Boolean(trading?.enabled) && trading?.connected === false) ||
-    (profile !== null && !ownBalance);
+  // Ключей нет - и это точно известно: хранилище на сервере настроено, а счёт
+  // не подключён. Сервер промолчал - ничего не обещаем и показываем баланс.
+  //
+  // По источнику цифры этот вопрос не решается. Профиль отдаёт тот источник, с
+  // которым баланс записали в прошлый раз, и у подключённого счёта первые
+  // секунды после входа он партнёрский - пока не ответит запрос по ключам.
+  // Пока он шёл, в шапке вместо суммы стояло «Подключить», а через миг она
+  // появлялась сама: человек видел мигающую кнопку там, где у него всё
+  // подключено.
+  const needsKeys = Boolean(trading?.enabled) && trading?.connected === false;
 
   return (
     <div className="min-h-screen bg-bg-deep">
@@ -328,7 +338,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               ) : (
                 <Link href="/app/profile" className={BALANCE_CHIP}>
                   <span className="font-mono text-sm font-bold text-text-primary tabular">
-                    ${balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {ownBalance
+                      ? `$${balance.toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}`
+                      : "-"}
                   </span>
                 </Link>
               )
