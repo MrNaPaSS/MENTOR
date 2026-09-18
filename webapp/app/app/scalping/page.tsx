@@ -797,6 +797,9 @@ export default function ScalpingPage() {
   // Звук - общая настройка человека, из профиля. Здесь только кнопка к ней.
   const sound = useSoundOn();
   const [journalH, setJournalH] = useState(JOURNAL_LIMITS.def);
+  // Высоту журнала трогали рукой или сохраняли раньше: тогда мерка панели её
+  // не переписывает - своё положение человек выбрал сам.
+  const journalSet = useRef(false);
   // Счётчик записанных сделок: журнал перечитывает список, когда он растёт.
   const [journalKey, setJournalKey] = useState(0);
   // Итог дня по журналу. null - журнал недоступен: ученик не вошёл в кабинет,
@@ -1110,6 +1113,7 @@ export default function ScalpingPage() {
     if (typeof saved.leverage === "number" && saved.leverage >= 1) setLeverage(saved.leverage);
     if (typeof saved.journal === "number") {
       setJournalH(clamp(saved.journal, JOURNAL_LIMITS));
+      journalSet.current = true;
     }
     if (Array.isArray(saved.favorites)) {
       setFavorites(saved.favorites.filter((s) => typeof s === "string" && s));
@@ -1445,6 +1449,9 @@ export default function ScalpingPage() {
   // Тянем за верхний край журнала: вниз — журнал меньше, вверх — больше,
   // поэтому знак смещения обратный.
   function resizeJournal(delta: number) {
+    // Высоту тянут рукой - дальше она принадлежит человеку, и подгонять её под
+    // календарь мы больше не будем.
+    journalSet.current = true;
     setJournalH((h) =>
       Number.isNaN(delta) ? JOURNAL_LIMITS.def : clamp(h - delta, JOURNAL_LIMITS),
     );
@@ -4731,6 +4738,13 @@ export default function ScalpingPage() {
                 if (t.symbol !== symbol) setSymbol(t.symbol);
               }}
               owner={author ?? undefined}
+              // Открывается ровно по нижнюю грань календаря: обрезанная
+              // последняя неделя месяца - это месяц, у которого не видно
+              // итога.
+              onFit={(height) => {
+                if (journalSet.current) return;
+                setJournalH(clamp(height, JOURNAL_LIMITS));
+              }}
               onClose={() => setJournalOpen(false)}
             />
           </section>

@@ -13,7 +13,7 @@
 
 import { useT } from "@/lib/i18n";
 import { money, tone } from "@/lib/journalFormat";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
@@ -44,6 +44,7 @@ export default function JournalPanel({
   onHover,
   onPick,
   owner,
+  onFit,
   onClose,
 }: {
   /** Показать только этот инструмент. Пусто — все. */
@@ -69,6 +70,14 @@ export default function JournalPanel({
   onPick?: (trade: JournalRow) => void;
   /** Имя владельца: печать на карточке заверяет чью-то сделку, а не ничью. */
   owner?: string;
+  /**
+   * Сколько высоты панели хватит, чтобы календарь поместился целиком.
+   *
+   * Журнал открывается заданной высотой, и календарь в ней обрезался на
+   * последней неделе: месяц виден, а итог месяца - нет. Панель меряет себя
+   * сама и говорит это наружу; двигать высоту дальше - дело трейдера.
+   */
+  onFit?: (height: number) => void;
   onClose: () => void;
 }) {
   const t = useT();
@@ -82,6 +91,9 @@ export default function JournalPanel({
   const [shotsOf, setShotsOf] = useState<string | null>(null);
   // Открытая позиция: её карточка со всеми этапами и разбором.
   const [openPos, setOpenPos] = useState<{ id: string; number?: number } | null>(null);
+  // Шапка панели и колонка с календарём: по ним и считается нужная высота.
+  const headRef = useRef<HTMLDivElement>(null);
+  const leftRef = useRef<HTMLDivElement>(null);
   // Что показываем: список сделок или разбор - план недели и все снимки
   // за период рядом. Разбор смотрят иначе, чем ведут журнал: там читают
   // строки, здесь - картинки.
@@ -182,6 +194,18 @@ export default function JournalPanel({
   // Сделка, снимки которой открыты. Ищем её в свежих строках, а не помним
   // отдельно: после добавления картинки журнал перечитывается, и окно должно
   // показать новый список само.
+  // Высоту сообщаем, когда календарь уже нарисован: до этого мерить нечего.
+  useEffect(() => {
+    if (!onFit || tab !== "list") return;
+    const head = headRef.current?.offsetHeight ?? 0;
+    const left = leftRef.current?.scrollHeight ?? 0;
+    if (left === 0) return;
+    // Отступы содержимого - те же восемь пикселей сверху и снизу, что в
+    // разметке: считать их по классам нельзя, а промахнуться на них - значит
+    // снова обрезать последнюю строку.
+    onFit(head + left + 16);
+  }, [onFit, tab, days, summary]);
+
   const shotsRow = shotsOf
     ? [...live, ...trades].find((row) => row.client_id === shotsOf) ?? null
     : null;
@@ -216,7 +240,10 @@ export default function JournalPanel({
 
   return (
     <div className="flex h-full flex-col text-[12px]">
-      <div className="flex items-center justify-between border-b border-[var(--pane-border)] px-3 py-2">
+      <div
+        ref={headRef}
+        className="flex items-center justify-between border-b border-[var(--pane-border)] px-3 py-2"
+      >
         <div className="flex min-w-0 items-center gap-2">
           <span className="font-semibold text-[var(--pane-text)]">{t.journal.title}</span>
           {/* Биржи журнала. Показывается одна: итог, календарь и отчёт считаются
@@ -322,7 +349,7 @@ export default function JournalPanel({
         </p>
       ) : tab === "review" ? (
         // Разбор: план недели и снимки за тот же период, что и список.
-        <div className="no-scrollbar min-h-0 flex-1 overflow-auto px-3 py-2">
+        <div className="no-scrollbar min-h-0 flex-1 overflow-hidden px-3 py-2">
           <ReviewPanel
             rows={[...live, ...shown]}
             year={year}
@@ -341,7 +368,7 @@ export default function JournalPanel({
               дисциплину, список - про конкретную сделку. Узкая панель
               (телефон, вторая колонка терминала) остаётся столбиком: две
               колонки там не разойдутся. */}
-          <div className="no-scrollbar lg:max-h-full lg:min-h-0 lg:overflow-auto">
+          <div ref={leftRef} className="no-scrollbar lg:max-h-full lg:min-h-0 lg:overflow-auto">
             {summary && (
               <div className="mb-3 grid grid-cols-5 gap-2 font-mono tabular-nums">
                 <Stat label={t.journal.statPnl} value={money(summary.pnl)} tone={tone(summary.pnl)} />

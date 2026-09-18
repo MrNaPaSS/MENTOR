@@ -302,13 +302,15 @@ export default function ReviewPanel({
   }
 
   return (
-    <div>
-      <div className="grid items-start gap-3 lg:grid-cols-2">
+    <div className="h-full">
+      {/* Во всю высоту панели: разбор открывают тем же движением, что и
+          список, и прыгать высотой при переключении вкладок он не должен. */}
+      <div className="grid h-full gap-3 lg:grid-cols-2">
         {/* Левая половина - четыре карточки два на два: цифры, карта, что
             разобрать, сессии. Ровно столько, сколько помещается в один взгляд;
             пятая карточка уже требует выбирать, куда смотреть. */}
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="rounded-lg border border-[var(--pane-border)] p-2">
+        <div className="grid h-full min-h-0 gap-2 sm:grid-cols-2 sm:grid-rows-2">
+          <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--pane-border)] p-2">
             <div className="mb-1.5 flex items-baseline gap-1.5">
               <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
                 {picked ? t.journal.totalsDay : t.journal.totalsMonth}
@@ -368,7 +370,7 @@ export default function ReviewPanel({
 
           {/* Карта торговли: по ней виден режим работы - где подряд, а где
               неделя тишины. Клетка открывает свой день. */}
-          <div className="rounded-lg border border-[var(--pane-border)] self-start">
+          <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--pane-border)]">
             <ActivityHeat
               rows={rows}
               active={picked ?? undefined}
@@ -383,11 +385,11 @@ export default function ReviewPanel({
 
           {/* Что осталось разобрать: без этого раздел молчит о собственной
               работе - какие сделки ещё ждут отметки и снимков. */}
-          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
+          <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
             <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
               {t.journal.undoneTitle}
             </span>
-            <div className="mt-1">
+            <div className="mt-1 flex min-h-0 flex-1 flex-col">
               <Line
                 label={t.journal.undoneNoMark}
                 value={String(undone.noMark.length)}
@@ -405,7 +407,7 @@ export default function ReviewPanel({
                     const first = [...undone.noMark].sort((a, b) => timeOf(a) - timeOf(b))[0];
                     if (first) onPick(first, numberOf(first));
                   }}
-                  className="mt-1 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+                  className="mt-auto w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
                 >
                   {t.journal.undoneOpen}
                 </button>
@@ -415,7 +417,7 @@ export default function ReviewPanel({
 
           {/* Сессии: где деньги делаются, а где отдаются. Нарушения по
               отметкам показываются здесь же - их редко больше двух. */}
-          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
+          <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
             <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
               {t.journal.weekReviewSessions}
             </span>
@@ -447,14 +449,14 @@ export default function ReviewPanel({
             )}
             <button
               onClick={() => setSum(true)}
-              className="mt-1 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+              className="mt-auto w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
             >
               {t.journal.weekReviewMake}
             </button>
           </div>
         </div>
 
-        <div className="rounded-lg border border-[var(--pane-border)] p-2">
+        <div className="no-scrollbar flex min-h-0 flex-col overflow-auto rounded-lg border border-[var(--pane-border)] p-2">
           {/* Путь: по нему видно, что открыто, и им же выходят наверх. */}
           <div className="mb-1.5 flex items-baseline gap-1">
             {coin !== null && (
