@@ -84,14 +84,13 @@ export default function PricingPage() {
       </header>
 
       <main>
-        {/* Первый экран как на главной: снимок рабочего места рядом с текстом.
-            Слева, а не справа - на главной он справа, и одинаковые экраны
-            подряд читались бы как одна и та же страница. */}
+        {/* Первый экран как на главной: текст слева, снимок рабочего места
+            справа и шире текстовой колонки. */}
         <section className="relative overflow-hidden pb-14 pt-16 md:pb-16 md:pt-20">
           <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
 
-          <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-12">
-            <div className="order-2 lg:order-1">
+          <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:gap-12">
+            <div className="order-2 lg:order-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/art/seo/terminal-cover.webp"
@@ -106,7 +105,7 @@ export default function PricingPage() {
               />
             </div>
 
-            <div className="order-1 lg:order-2">
+            <div className="order-1 lg:order-1">
               <span className="eyebrow">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-glow-cyan" />
                 {p.hero.eyebrow}
@@ -284,12 +283,14 @@ export default function PricingPage() {
                       // Разделитель раздела: сорок строк подряд читаются как
                       // простыня, а заголовки дают глазу опору и заодно
                       // показывают, из чего состоит продукт.
-                      <tr key={row.group} className="border-b border-border/60 bg-bg-deep/30">
-                        <td
-                          colSpan={4}
-                          className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-text-muted md:px-7"
-                        >
-                          {row.group}
+                      <tr key={row.group} className="border-y border-border bg-bg-deep/60">
+                        <td colSpan={4} className="px-5 py-4 md:px-7">
+                          <span className="inline-flex items-center gap-2.5">
+                            <span className="h-3.5 w-1 rounded-full bg-accent-cyan" />
+                            <span className="text-[13px] font-bold uppercase tracking-[0.16em] text-text-primary">
+                              {row.group}
+                            </span>
+                          </span>
                         </td>
                       </tr>
                     ) : (

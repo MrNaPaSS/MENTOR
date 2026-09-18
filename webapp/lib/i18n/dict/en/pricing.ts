@@ -126,13 +126,13 @@ export const pricing = {
 
   trial: {
     eyebrow: "First payment",
-    title: "The first month is a week longer",
+    title: "The first month is 37 days",
     text:
-      "There is no trial period: the terminal is yours for a month right away, and we add another seven days to the first payment. Thirty-seven days from the first charge - enough to connect an account, take your first trades and see the journal count everything for you.",
+      "You pay for a month and get thirty-seven days: the extra week is a gift on your first subscription. After that a month is just a month.",
     points: [
-      "Connect an exchange with a key that cannot withdraw",
-      "Take your first trades, look at the journal and metrics",
-      "The gifted week is added automatically, no need to ask",
+      "The week is added automatically, no need to ask",
+      "Connect an exchange with a key that cannot withdraw and trade",
+      "Not a fit - cancel in one click and no next invoice arrives",
     ],
   },
 
