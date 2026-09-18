@@ -25,6 +25,8 @@ import { money, tone } from "@/lib/journalFormat";
 import { shotImage } from "@/lib/journalShots";
 import { isoWeek } from "@/lib/weekPlan";
 import { sumUp } from "@/lib/weekStats";
+import { sessionOf } from "./PositionCard";
+import type { SessionName } from "@/lib/weekReview";
 import ActivityHeat from "./ActivityHeat";
 import WeekReviewCard from "./WeekReviewCard";
 import type { JournalRow } from "./JournalTable";
@@ -220,6 +222,40 @@ export default function ReviewPanel({
   );
   const stats = useMemo(() => sumUp(all), [all]);
 
+  // Нарушения по кодам: их ставит сам трейдер в карточке позиции, и только
+  // они и считаются. Догадываться за человека, что он нарушил, нельзя.
+  const breaks = useMemo(() => {
+    const tally = new Map<string, number>();
+    for (const row of all) {
+      for (const code of row.mistakes ?? []) {
+        tally.set(code, (tally.get(code) ?? 0) + 1);
+      }
+    }
+    return [...tally.entries()]
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+  }, [all]);
+
+  // Что ещё не разобрано: сделка без отметки и сделка без единого снимка.
+  // Это и есть работа, которую разбор от человека ждёт.
+  const undone = useMemo(() => {
+    const noMark = all.filter((row) => row.plan_ok !== true && row.plan_ok !== false);
+    const noShot = all.filter((row) => (row.shots?.length ?? 0) === 0);
+    return { noMark, noShot };
+  }, [all]);
+
+  // Куда уходят деньги по времени входа: у вечера и у Лондона разная цена
+  // ошибки, и видно это только рядом.
+  const sessions = useMemo(() => {
+    const map = new Map<SessionName, { trades: number; pnl: number }>();
+    for (const row of all) {
+      const name = sessionOf(row.opened_at);
+      const was = map.get(name) ?? { trades: 0, pnl: 0 };
+      map.set(name, { trades: was.trades + 1, pnl: was.pnl + row.pnl });
+    }
+    return [...map.entries()].sort((a, b) => b[1].trades - a[1].trades);
+  }, [all]);
+
   function coverOf(list: readonly JournalRow[]): string | undefined {
     const first = [...list].sort((a, b) => timeOf(a) - timeOf(b))[0];
     const shot = (first?.shots ?? [])[0];
@@ -233,17 +269,19 @@ export default function ReviewPanel({
   return (
     <div>
       <div className="grid items-start gap-3 lg:grid-cols-2">
-        <div className="rounded-lg border border-[var(--pane-border)]">
-          {/* Цифры разбора: сколько из сделок разобрано, сколько нарушений.
-              Это не повтор итогов сверху - там деньги, здесь дисциплина. */}
-          <div className="px-2 py-1.5">
+        {/* Левая половина - четыре виджета, а не один на всю высоту.
+            Растянутый блок с четырьмя строками цифр оставлял под собой пустое
+            поле в пол-экрана, и разбор выглядел недоделанным. */}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {/* Итог куска: деньги и дисциплина рядом. */}
+          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
             <div className="mb-1 flex items-baseline gap-1.5">
               <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
                 {picked ? t.journal.totalsDay : t.journal.totalsMonth}
               </span>
               <div className="flex-1" />
               {/* Выбран день - показываем, чем из него выйти обратно в месяц. */}
-              {picked && (
+              {picked ? (
                 <button
                   onClick={() => {
                     onPickDay(null);
@@ -253,6 +291,10 @@ export default function ReviewPanel({
                 >
                   {t.journal.wholeMonth}
                 </button>
+              ) : (
+                <span className={`font-mono text-[11px] font-bold ${tone(stats.pnl)}`}>
+                  {stats.trades > 0 ? money(stats.pnl) : "-"}
+                </span>
               )}
             </div>
 
@@ -292,26 +334,111 @@ export default function ReviewPanel({
             )}
           </div>
 
-          {/* Карта торговли: по ней виден режим работы - где подряд, а где
-              неделя тишины. Нажали на клетку - открылся тот день. */}
-          <ActivityHeat
-            rows={rows}
-            active={picked ?? undefined}
-            onPick={(at) => {
-              const one = String(at.getMonth() + 1).padStart(2, "0");
-              const two = String(at.getDate()).padStart(2, "0");
-              onPickDay(`${at.getFullYear()}-${one}-${two}`);
-              setCoin(null);
-            }}
-          />
+          {/* Нарушения по вашим отметкам: какое правило ломается чаще прочих.
+              Пока отметок нет - так и написано, а не нарисован ноль. */}
+          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
+            <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+              {t.journal.weekReviewMistakes}
+            </span>
+            {stats.marked === 0 ? (
+              <p className="mt-1 text-[10px] text-[var(--pane-muted)]">
+                {t.journal.weekReviewNoMarks}
+              </p>
+            ) : breaks.length === 0 ? (
+              <p className="mt-1 text-[10px] text-[var(--pane-up)]">
+                {t.journal.weekReviewClean}
+              </p>
+            ) : (
+              <div className="mt-1">
+                {breaks.slice(0, 4).map((one) => (
+                  <Line
+                    key={one.code}
+                    label={
+                      (t.journal.mistakes as Record<string, string>)[one.code] ?? one.code
+                    }
+                    value={String(one.count)}
+                    mood={-1}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
-          <div className="border-t border-[var(--pane-border)] px-2 py-1.5">
-            <button
-              onClick={() => setSum(true)}
-              className="w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
-            >
-              {t.journal.weekReviewMake}
-            </button>
+          {/* Что осталось разобрать: без этого раздел молчит о собственной
+              работе - какие сделки ещё ждут отметки и снимков. */}
+          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
+            <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+              {t.journal.undoneTitle}
+            </span>
+            <div className="mt-1">
+              <Line
+                label={t.journal.undoneNoMark}
+                value={String(undone.noMark.length)}
+                mood={undone.noMark.length > 0 ? -1 : 0}
+              />
+              <Line
+                label={t.journal.undoneNoShot}
+                value={String(undone.noShot.length)}
+                mood={undone.noShot.length > 0 ? -1 : 0}
+              />
+              {/* Первая неразобранная - в один щелчок: разбор начинают с неё. */}
+              {undone.noMark.length > 0 && (
+                <button
+                  onClick={() => {
+                    const first = [...undone.noMark].sort((a, b) => timeOf(a) - timeOf(b))[0];
+                    if (first) onPick(first, numberOf(first));
+                  }}
+                  className="mt-1 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+                >
+                  {t.journal.undoneOpen}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Сессии: где деньги делаются, а где отдаются. */}
+          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
+            <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+              {t.journal.weekReviewSessions}
+            </span>
+            {sessions.length === 0 ? (
+              <p className="mt-1 text-[10px] text-[var(--pane-muted)]">{t.journal.weekEmpty}</p>
+            ) : (
+              <div className="mt-1">
+                {sessions.map(([name, one]) => (
+                  <Line
+                    key={name}
+                    label={`${t.journal.sessions[name]} · ${one.trades}`}
+                    value={money(one.pnl)}
+                    mood={one.pnl}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Карта торговли во всю ширину половины: по ней виден режим работы -
+              где подряд, а где неделя тишины. Клетка открывает свой день. */}
+          <div className="rounded-lg border border-[var(--pane-border)] sm:col-span-2">
+            <ActivityHeat
+              rows={rows}
+              active={picked ?? undefined}
+              onPick={(at) => {
+                const one = String(at.getMonth() + 1).padStart(2, "0");
+                const two = String(at.getDate()).padStart(2, "0");
+                onPickDay(`${at.getFullYear()}-${one}-${two}`);
+                setCoin(null);
+              }}
+            />
+
+            <div className="border-t border-[var(--pane-border)] px-2 py-1.5">
+              <button
+                onClick={() => setSum(true)}
+                className="w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+              >
+                {t.journal.weekReviewMake}
+              </button>
+            </div>
           </div>
         </div>
 

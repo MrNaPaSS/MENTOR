@@ -19,11 +19,9 @@ import {
   MISTAKES,
   STAGES,
   attachShot,
-  detachShot,
   pastedImage,
   readImage,
   saveReview,
-  saveShotNote,
   stageOf,
   shotImage,
   type ShotStage,
@@ -31,6 +29,7 @@ import {
 } from "@/lib/journalShots";
 import ModalPortal from "@/components/ui/ModalPortal";
 import { heldLabel, heldSeconds } from "@/lib/tradeTime";
+import TradeShots from "./TradeShots";
 import type { JournalRow } from "./JournalTable";
 
 export interface PositionCardProps {
@@ -75,6 +74,8 @@ export default function PositionCard({
   const [saved, setSaved] = useState(false);
   const [review, setReview] = useState(trade.review ?? "");
   const [stage, setStage] = useState<ShotStage>("entry");
+  // Открытый снимок: окно со всеми картинками сделки, начиная с нажатой.
+  const [viewAt, setViewAt] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const kept = useRef(trade.review ?? "");
 
@@ -198,20 +199,25 @@ export default function PositionCard({
           </div>
 
           <div className="no-scrollbar flex-1 overflow-auto p-3">
-            {/* Снимки по этапам: пустой этап тоже показываем - по нему видно,
-                чего в разборе не хватает. */}
-            <div className="grid gap-2">
+            {/* Три этапа в один ряд, каждый - одной стопкой.
+                Лесенкой из рядов по четыре плитки карточка растягивалась на
+                два экрана, и две трети её были пустым полем: снимков на этап
+                обычно один-два. Стопка отвечает тем же: вот вход, вот ведение,
+                вот выход, а сколько там картинок - написано на ней. */}
+            <div className="grid grid-cols-3 gap-2">
               {STAGES.map((one) => {
                 const mine = shots.filter((shot) => stageOf(shot.stage, shot.note) === one);
+                const cover = mine[0];
+                // Номер первого снимка этапа в общем списке: окно снимков
+                // откроется сразу на нём, а не на первой картинке сделки.
+                const at = cover ? shots.findIndex((shot) => shot.id === cover.id) : -1;
                 return (
                   <div key={one}>
-                    <div className="mb-1 flex items-center gap-2">
+                    <div className="mb-1 flex items-baseline gap-1">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--pane-text-2)]">
                         {t.journal.stages[one]}
                       </span>
-                      <span className="text-[9px] text-[var(--pane-muted)]">
-                        {t.journal.stageWhat[one]}
-                      </span>
+                      <div className="flex-1" />
                       <button
                         onClick={() => {
                           setStage(one);
@@ -223,58 +229,47 @@ export default function PositionCard({
                         <Plus className="h-3 w-3" />
                       </button>
                     </div>
+
                     {mine.length === 0 ? (
-                      <div className="rounded border border-dashed border-[var(--pane-border)] px-2 py-3 text-center text-[10px] text-[var(--pane-muted)]">
+                      <button
+                        onClick={() => {
+                          setStage(one);
+                          fileRef.current?.click();
+                        }}
+                        className="flex aspect-[4/3] w-full items-center justify-center rounded border border-dashed border-[var(--pane-border)] text-center text-[10px] text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:text-[var(--pane-text-2)]"
+                      >
                         {t.journal.stageEmpty}
-                      </div>
+                      </button>
                     ) : (
-                      <div className="grid grid-cols-2 gap-1.5 md:grid-cols-4">
-                        {mine.map((shot) => (
-                          <figure
-                            key={shot.id}
-                            className="group relative overflow-hidden rounded border border-[var(--pane-border)]"
-                          >
-                            <a
-                              href={shotImage(shot)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block"
-                            >
-                              <img
-                                src={shotImage(shot)}
-                                alt={shot.note || trade.symbol}
-                                className="block h-24 w-full object-cover"
-                                loading="lazy"
-                              />
-                            </a>
-                            <button
-                              onClick={async () => {
-                                if (await detachShot(shot.id)) onChange();
-                              }}
-                              title={t.journal.shotRemove}
-                              className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white/70 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 hover:text-white"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                            {/* Подпись под картинкой: что тут было видно и
-                                почему снимок сделан. Сохраняется по уходу из
-                                поля - пока пишут, запросы не нужны. */}
-                            <figcaption>
-                              <input
-                                defaultValue={shot.note}
-                                onBlur={async (event) => {
-                                  const body = event.target.value.trim();
-                                  if (body === shot.note) return;
-                                  if (await saveShotNote(shot.id, body)) onChange();
-                                }}
-                                placeholder={t.journal.shotNoteHint}
-                                maxLength={140}
-                                className="block w-full border-t border-[var(--pane-border)] bg-transparent px-1.5 py-1 text-[10px] text-[var(--pane-text-2)] outline-none placeholder:text-[var(--pane-muted)]"
-                              />
-                            </figcaption>
-                          </figure>
-                        ))}
-                      </div>
+                      <button
+                        onClick={() => setViewAt(at < 0 ? 0 : at)}
+                        className="group relative block w-full text-left"
+                      >
+                        {/* Стопка: под верхним снимком видны края нижних -
+                            столько же, сколько их есть, но не больше двух. */}
+                        {mine.length > 2 && (
+                          <span className="absolute inset-x-2 -top-1 h-2 rounded-t border border-b-0 border-[var(--pane-border)] bg-[var(--pane-hover)]" />
+                        )}
+                        {mine.length > 1 && (
+                          <span className="absolute inset-x-1 -top-0.5 h-2 rounded-t border border-b-0 border-[var(--pane-border)] bg-[var(--pane-bg)]" />
+                        )}
+                        <span className="relative block overflow-hidden rounded border border-[var(--pane-border)] transition-colors duration-150 ease-out group-hover:border-[var(--pane-accent-soft)]">
+                          <img
+                            src={shotImage(cover)}
+                            alt={cover.note || trade.symbol}
+                            className="block aspect-[4/3] w-full object-cover transition duration-200 ease-out group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                            loading="lazy"
+                          />
+                          {mine.length > 1 && (
+                            <span className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[9px] text-white/80">
+                              {mine.length}
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[9px] text-[var(--pane-muted)]">
+                          {cover.note || t.journal.stageWhat[one]}
+                        </span>
+                      </button>
                     )}
                   </div>
                 );
@@ -391,6 +386,20 @@ export default function PositionCard({
           </div>
         </div>
       </div>
+
+      {/* Окно снимков открывается по стопке этапа и сразу на ней: листать
+          картинки удобнее во весь экран, а не в плитке величиной с марку. */}
+      {viewAt !== null && (
+        <TradeShots
+          clientId={trade.client_id}
+          symbol={trade.symbol}
+          shots={shots}
+          trade={trade}
+          openAt={viewAt}
+          onClose={() => setViewAt(null)}
+          onChange={onChange}
+        />
+      )}
     </ModalPortal>
   );
 }
