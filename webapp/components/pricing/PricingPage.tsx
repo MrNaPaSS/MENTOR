@@ -110,21 +110,19 @@ export default function PricingPage() {
               ))}
             </ul>
 
+            {/* Главная кнопка - бесплатный путь: он и есть основная дорога.
+                Подписка стоит рядом второй и ведёт к тарифам. */}
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <a
-                href="#plans"
+              <SignupPicker
+                label={p.hero.cta}
                 className="inline-flex items-center gap-2 rounded-full bg-accent-cyan px-6 py-3 text-sm font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-cyan/90 active:scale-[0.97]"
-              >
-                {p.hero.cta} <ArrowRight className="h-[15px] w-[15px]" />
-              </a>
+              />
 
               <a
-                href={SOCIAL_LINKS.academy}
-                target="_blank"
-                rel="noopener noreferrer"
+                href="#plans"
                 className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 text-sm font-semibold text-text-primary transition-all duration-200 hover:bg-bg-panel/60 active:scale-[0.97]"
               >
-                {p.hero.ctaSecondary}
+                {p.hero.ctaSecondary} <ArrowRight className="h-[15px] w-[15px]" />
               </a>
             </div>
           </div>
@@ -261,20 +259,34 @@ export default function PricingPage() {
                 </thead>
 
                 <tbody>
-                  {p.compare.rows.map((row) => (
-                    <tr key={row.label} className="border-b border-border/60 last:border-0">
-                      <td className="px-5 py-3.5 text-sm text-text-secondary md:px-7">{row.label}</td>
-                      <td className="px-3 py-3.5 text-center">
-                        <Cell value={row.free} yes={p.compare.yes} no={p.compare.no} />
-                      </td>
-                      <td className="px-3 py-3.5 text-center">
-                        <Cell value={row.base} yes={p.compare.yes} no={p.compare.no} />
-                      </td>
-                      <td className="px-3 py-3.5 text-center">
-                        <Cell value={row.pro} yes={p.compare.yes} no={p.compare.no} />
-                      </td>
-                    </tr>
-                  ))}
+                  {p.compare.rows.map((row) =>
+                    "group" in row ? (
+                      // Разделитель раздела: сорок строк подряд читаются как
+                      // простыня, а заголовки дают глазу опору и заодно
+                      // показывают, из чего состоит продукт.
+                      <tr key={row.group} className="border-b border-border/60 bg-bg-deep/30">
+                        <td
+                          colSpan={4}
+                          className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-text-muted md:px-7"
+                        >
+                          {row.group}
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={row.label} className="border-b border-border/60 last:border-0">
+                        <td className="px-5 py-3.5 text-sm text-text-secondary md:px-7">{row.label}</td>
+                        <td className="px-3 py-3.5 text-center">
+                          <Cell value={row.free} yes={p.compare.yes} no={p.compare.no} />
+                        </td>
+                        <td className="px-3 py-3.5 text-center">
+                          <Cell value={row.base} yes={p.compare.yes} no={p.compare.no} />
+                        </td>
+                        <td className="px-3 py-3.5 text-center">
+                          <Cell value={row.pro} yes={p.compare.yes} no={p.compare.no} />
+                        </td>
+                      </tr>
+                    ),
+                  )}
                 </tbody>
               </table>
             </div>
@@ -350,21 +362,19 @@ export default function PricingPage() {
                 <p className="mx-auto mt-4 max-w-xl text-text-secondary">{p.cta.text}</p>
 
                 <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                  <SignupPicker
+                    label={p.cta.primary}
+                    className="inline-flex items-center gap-2 rounded-full bg-accent-cyan px-7 py-3 text-sm font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-cyan/90 active:scale-[0.97]"
+                  />
+
                   <a
                     href={SOCIAL_LINKS.academyBot}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full bg-accent-cyan px-7 py-3 text-sm font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-cyan/90 active:scale-[0.97]"
-                  >
-                    {p.cta.primary} <ArrowRight className="h-[15px] w-[15px]" />
-                  </a>
-
-                  <Link
-                    href="/terminal"
                     className="inline-flex items-center gap-2 rounded-full border border-border px-7 py-3 text-sm font-semibold text-text-primary transition-all duration-200 hover:bg-bg-panel/60 active:scale-[0.97]"
                   >
                     {p.cta.secondary}
-                  </Link>
+                  </a>
                 </div>
 
                 <p className="mt-6 text-xs text-text-muted">{copy.footer.disclaimer}</p>

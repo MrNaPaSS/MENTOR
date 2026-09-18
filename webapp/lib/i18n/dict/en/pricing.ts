@@ -1,8 +1,8 @@
 export const pricing = {
   meta: {
-    title: "NMNH terminal subscription: 49 USDT per month",
+    title: "Access to the NMNH terminal: free or by subscription",
     description:
-      "Your own account on any of five exchanges plus the NMNH workplace on a subscription: risk sized before entry, stop and targets on the exchange, the server running the position and a journal built from exchange reports. Paid in USDT, seven days free.",
+      "The NMNH terminal is free: open an account through the academy link and everything is unlocked, down to part of your fee coming back. The 49 USDT subscription is only for traders who want to stay on their existing account.",
   },
 
   nav: {
@@ -13,19 +13,19 @@ export const pricing = {
   },
 
   hero: {
-    eyebrow: "Terminal subscription",
-    titleTop: "Your exchange account -",
-    titleAccent: "and our workplace.",
+    eyebrow: "Terminal access",
+    titleTop: "We charge nothing for the terminal.",
+    titleAccent: "Except in one case.",
     lead:
-      "If your account was opened outside our link, there is no need to open a second one. The subscription gives you the same terminal: size calculated before entry, stop and targets sent to the exchange with the trade, and the server running the position from there.",
-    bullets: ["Paid in USDT", "Seven days free", "Cancel any time"],
-    cta: "Try seven days",
-    ctaSecondary: "Or free through the academy",
+      "Open an account through the academy link and everything is unlocked: the whole terminal, all five exchanges, journal and analytics, academy and chat - and part of your fee comes back on top. The subscription exists for exactly one person: the one who does not want to move trading to a new account.",
+    bullets: ["No subscriptions or tiers by default", "Your money stays on your exchange", "Keys without withdrawal rights"],
+    cta: "Open an account and trade free",
+    ctaSecondary: "Stay on your account - 49 USDT",
   },
 
   plans: {
     eyebrow: "Plans",
-    title: "Two ways to the same terminal",
+    title: "One terminal, two doors",
     subtitle: "The first is free and gives everything - it only needs an account opened through our link. The second is paid and needs nothing but the payment.",
     perMonth: "USDT / month",
     free: {
@@ -81,23 +81,58 @@ export const pricing = {
 
   compare: {
     eyebrow: "Comparison",
-    title: "What each path includes",
+    title: "What each door includes",
+    subtitle: "Everything the terminal can do, line by line - including the tools that unlock with coins.",
     columns: { free: "Academy", base: "Terminal", pro: "Pro" },
     yes: "yes",
     no: "no",
     rows: [
-      { label: "Risk sized before entry", free: true, base: true, pro: true },
-      { label: "Stop and targets on the exchange with the entry", free: true, base: true, pro: true },
-      { label: "Position managed by the server", free: true, base: true, pro: true },
-      { label: "Journal built from exchange fills", free: true, base: true, pro: true },
-      { label: "Fee cashback", free: "up to 15%", base: false, pro: false },
-      { label: "Exchanges connected at once", free: "5", base: "1", pro: "5" },
-      { label: "Cluster, volume candles and VISION", free: true, base: false, pro: true },
-      { label: "100-row book and step ×25", free: true, base: false, pro: true },
-      { label: "Entry, target and stop screenshots in the journal", free: true, base: false, pro: true },
+      { group: "The trade" },
+      { label: "Size and risk calculated before entry", free: true, base: true, pro: true },
+      { label: "Lot step, leverage cap and the coin's fee accounted for", free: true, base: true, pro: true },
+      { label: "Entry, stop and targets sent to the exchange in one operation", free: true, base: true, pro: true },
+      { label: "The target ladder is placed at entry", free: true, base: true, pro: true },
+      { label: "Levels dragged with the mouse on the chart", free: true, base: true, pro: true },
+      { label: "Moving the entry carries the whole target ladder", free: true, base: true, pro: true },
+      { label: "Breakeven moved by the server, not the tab", free: true, base: true, pro: true },
+      { label: "Manual limit window: prices typed, money counted for you", free: true, base: true, pro: true },
+      { label: "A click on a wall opens the calculation, the side follows from the book", free: true, base: true, pro: true },
+
+      { group: "Market and order book" },
+      { label: "Exchange order book with liquidity walls", free: true, base: true, pro: true },
+      { label: "Order book and clusters on one price scale", free: true, base: true, pro: true },
+      { label: "Market-wide screener", free: true, base: true, pro: true },
+      { label: "Funding, trending coins, news and market summary", free: true, base: true, pro: true },
+      { label: "Volume candles", free: true, base: false, pro: true },
+      { label: "Cluster candles", free: true, base: false, pro: true },
+      { label: "NMNH VISION markup: trend, structure, blocks, FVG", free: true, base: false, pro: true },
+      { label: "Order book depth of 60 and 100 rows", free: true, base: false, pro: true },
+      { label: "Order book price step ×25", free: true, base: false, pro: true },
+
+      { group: "Journal and analytics" },
+      { label: "Trades assembled from exchange fills", free: true, base: true, pro: true },
+      { label: "Fees shown as a separate line", free: true, base: true, pro: true },
+      { label: "Equity curve, profit factor, average R, drawdown", free: true, base: true, pro: true },
+      { label: "Breakdown by coin, side, weekday, hour and session", free: true, base: true, pro: true },
+      { label: "How the trade ended: at target, at stop or by hand", free: true, base: true, pro: true },
+      { label: "Month calendar and the trader's path across milestones", free: true, base: true, pro: true },
       { label: "Journal and analytics history", free: "full", base: "3 months", pro: "full" },
+      { label: "Entry, target and stop screenshots attached to the trade", free: true, base: false, pro: true },
       { label: "Journal export", free: true, base: false, pro: true },
-      { label: "Academy, chat and reviews", free: true, base: false, pro: false },
+
+      { group: "Rewards and community" },
+      { label: "Coins for discipline, achievements and monthly goals", free: true, base: false, pro: false },
+      { label: "Trader certificate across four pillars", free: true, base: false, pro: false },
+      { label: "Live trader chat inside the terminal", free: true, base: false, pro: false },
+      { label: "Academy, trade reviews and live sessions", free: true, base: false, pro: false },
+      { label: "Cards for a trade, a day, a week and a month", free: true, base: true, pro: true },
+
+      { group: "Account and money" },
+      { label: "Exchanges connected at once", free: "5", base: "1", pro: "5" },
+      { label: "Part of the fee back to your exchange account", free: "up to 15%", base: false, pro: false },
+      { label: "Your money stays in your exchange account", free: true, base: true, pro: true },
+      { label: "Key without withdrawal rights, unlink in one click", free: true, base: true, pro: true },
+      { label: "Priority support", free: false, base: false, pro: true },
     ],
   },
 
@@ -117,7 +152,7 @@ export const pricing = {
     eyebrow: "Billing",
     title: "How it is paid",
     text:
-      "Paid in USDT. Crypto has no automatic charges, so the next invoice is issued in advance instead of silently switching the terminal off on the last day.",
+      "Paid in USDT. The next invoice arrives in advance with a reminder in the bot: the terminal is never switched off silently on the last day.",
     points: [
       "Invoice and a bot reminder arrive three days before the period ends",
       "Three and six months are paid at a discount",
@@ -158,9 +193,10 @@ export const pricing = {
   },
 
   cta: {
-    title: "Seven days to check it on your own trades",
-    text: "No account through our link and no commitment: if it does not fit, cancel in one click.",
-    primary: "Try seven days",
-    secondary: "Look at the terminal first",
+    title: "The simplest path is the free one",
+    text:
+      "An account through the academy link takes a couple of minutes, money moves inside the exchange, and from there the terminal costs nothing. The subscription stays for those who find moving the account inconvenient.",
+    primary: "Open an account and trade free",
+    secondary: "I need the subscription",
   },
 };
