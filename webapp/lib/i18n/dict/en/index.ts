@@ -12,6 +12,7 @@ import { exchanges } from "./exchanges";
 import { format } from "./format";
 import { landing } from "./landing";
 import { market } from "./market";
+import { pricing } from "./pricing";
 import { profile } from "./profile";
 import { rewards } from "./rewards";
 import { shell } from "./shell";
@@ -32,6 +33,7 @@ export const en: Dict = {
   format,
   landing,
   market,
+  pricing,
   profile,
   rewards,
   shell,
