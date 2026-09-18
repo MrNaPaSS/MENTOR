@@ -17,8 +17,8 @@ export const pricing = {
     titleTop: "The fee goes to the exchange either way.",
     titleAccent: "The only question is whether part of it comes back to you.",
     lead:
-      "Open an account through the academy link and everything is unlocked: the whole terminal, all five exchanges, journal and analytics, academy and chat - and part of your fee comes back on top. The subscription exists for exactly one person: the one who does not want to move trading to a new account.",
-    bullets: ["No subscriptions or tiers by default", "Your money stays on your exchange", "Keys without withdrawal rights"],
+      "An account through the academy link opens the whole terminal, free. The subscription is for one person only: the one who will not move accounts.",
+    bullets: ["Your money stays on your exchange", "Keys without withdrawal rights"],
     shotAlt: "NMNH terminal: chart, order book and order panel in one window",
     cta: "Open an account and trade free",
     ctaSecondary: "Stay on your account - 49 USDT",
