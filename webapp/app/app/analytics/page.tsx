@@ -1371,52 +1371,72 @@ export default function AnalyticsPage() {
                 </button>
               </div>
               <div className="px-4 py-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[var(--pane-text)]">
-                      {new Date(selectedDay.date + "T12:00:00").toLocaleDateString(numbers, { weekday: "long", day: "numeric", month: "long" })}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {/* Баланс дня - только если счёт читается ключами.
-                          Снимок, снятый партнёрской ручкой по UID, приходит с
-                          задержкой и считает не тот счёт, которым торгуют:
-                          показывать его как «мои деньги на тот день» нельзя. */}
-                      {selectedDay.balance !== null && ownBalance && (
-                        <span className="rounded-lg bg-[var(--pane-hover)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-text)]">
-                          💰 ${fmtDot(selectedDay.balance, 2)}
+                {/* Дата, объём и итог - одной строкой: это три ответа на
+                    один вопрос «как прошёл день», и разносить их по этажам
+                    значит заставлять читать день сверху вниз дважды. */}
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <p className="font-bold text-[var(--pane-text)]">
+                    {new Date(selectedDay.date + "T12:00:00").toLocaleDateString(numbers, {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    })}
+                  </p>
+
+                  {dayVolume(selectedDay) > 0 && (
+                    <span className="rounded-lg bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[var(--pane-gold)]">
+                      {t.analytics.calendar.dayVolume(fmtDot(dayVolume(selectedDay)))}
+                    </span>
+                  )}
+
+                  {/* Баланс дня - только если счёт читается ключами. Снимок,
+                      снятый партнёрской ручкой по UID, приходит с задержкой и
+                      считает не тот счёт, которым торгуют. */}
+                  {selectedDay.balance !== null && ownBalance && (
+                    <span className="rounded-lg bg-[var(--pane-hover)] px-2 py-0.5 text-[11px] font-semibold text-[var(--pane-text)]">
+                      💰 ${fmtDot(selectedDay.balance, 2)}
+                    </span>
+                  )}
+
+                  {selectedDay.signals > 0 && (
+                    <span className="rounded-lg bg-[var(--pane-accent-faint)] px-2 py-0.5 text-[11px] font-semibold text-[var(--pane-accent)]">
+                      {t.analytics.calendar.daySignals(selectedDay.signals)}
+                    </span>
+                  )}
+
+                  {selectedDay.has_deposit && (
+                    <span className="rounded-lg bg-[color:color-mix(in_srgb,var(--pane-up)_10%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[var(--pane-up)]">
+                      {t.analytics.calendar.dayDeposit}
+                    </span>
+                  )}
+
+                  <div className="flex-1" />
+
+                  {selectedDay.pnl_pct !== null ? (
+                    <span className="flex items-baseline gap-2">
+                      {selectedDay.signals > 0 && selectedDay.pnl_pct > 0 && (
+                        <span className="rounded-full bg-[color:color-mix(in_srgb,var(--pane-up)_15%,transparent)] px-2 py-0.5 text-[10px] font-bold text-[var(--pane-up)]">
+                          {t.analytics.calendar.dayGoal}
                         </span>
                       )}
-                      {selectedDay.signals > 0 && (
-                        <span className="rounded-lg bg-[var(--pane-accent-faint)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-accent)]">
-                          {t.analytics.calendar.daySignals(selectedDay.signals)}
-                        </span>
-                      )}
-                      {dayVolume(selectedDay) > 0 && (
-                        <span className="rounded-lg bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-gold)]">
-                          {t.analytics.calendar.dayVolume(fmtDot(dayVolume(selectedDay)))}
-                        </span>
-                      )}
-                      {selectedDay.has_deposit && (
-                        <span className="rounded-lg bg-[color:color-mix(in_srgb,var(--pane-up)_10%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-[var(--pane-up)]">
-                          {t.analytics.calendar.dayDeposit}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    {selectedDay.pnl_pct !== null ? (
-                      <>
-                        <p className={`font-mono text-2xl font-extrabold ${selectedDay.pnl_pct > 0 ? "text-[var(--pane-up)]" : selectedDay.pnl_pct < 0 ? "text-[var(--pane-down)]" : "text-[color:color-mix(in_srgb,var(--pane-text)_40%,transparent)]"}`}>
-                          {selectedDay.pnl_pct > 0 ? "+" : ""}{selectedDay.pnl_pct.toFixed(2)}%
-                        </p>
-                        {selectedDay.signals > 0 && selectedDay.pnl_pct > 0 && (
-                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--pane-up)_15%,transparent)] px-2 py-0.5 text-[10px] font-bold text-[var(--pane-up)]">{t.analytics.calendar.dayGoal}</span>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-xs text-[color:color-mix(in_srgb,var(--pane-text)_20%,transparent)]">{t.analytics.calendar.noSnapshot}</p>
-                    )}
-                  </div>
+                      <span
+                        className={`font-mono text-2xl font-extrabold ${
+                          selectedDay.pnl_pct > 0
+                            ? "text-[var(--pane-up)]"
+                            : selectedDay.pnl_pct < 0
+                              ? "text-[var(--pane-down)]"
+                              : "text-[color:color-mix(in_srgb,var(--pane-text)_40%,transparent)]"
+                        }`}
+                      >
+                        {selectedDay.pnl_pct > 0 ? "+" : ""}
+                        {selectedDay.pnl_pct.toFixed(2)}%
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-[color:color-mix(in_srgb,var(--pane-text)_20%,transparent)]">
+                      {t.analytics.calendar.noSnapshot}
+                    </span>
+                  )}
                 </div>
 
                 {/* Сделки этого дня.
