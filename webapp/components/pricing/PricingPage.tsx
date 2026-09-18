@@ -89,8 +89,8 @@ export default function PricingPage() {
         <section className="relative overflow-hidden pb-14 pt-16 md:pb-16 md:pt-20">
           <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
 
-          <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:gap-12">
-            <div className="order-2 lg:order-2">
+          <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] lg:items-stretch lg:gap-12">
+            <div className="order-2 lg:order-2 lg:flex">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/art/seo/terminal-cover.webp"
@@ -101,7 +101,10 @@ export default function PricingPage() {
                 // @ts-expect-error - атрибут браузера, в типах React его ещё нет
                 fetchpriority="high"
                 decoding="async"
-                className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
+                // На широком экране снимок тянется во всю высоту текстовой
+                // колонки - от надзаголовка до нижней кнопки, - и лишнее
+                // обрезается по краям, а не ужимается.
+                className="w-full rounded-2xl border border-white/[0.07] shadow-2xl lg:h-full lg:object-cover lg:object-right"
               />
             </div>
 
