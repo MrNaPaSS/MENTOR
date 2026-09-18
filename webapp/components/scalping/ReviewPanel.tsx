@@ -304,10 +304,10 @@ export default function ReviewPanel({
   return (
     <div>
       <div className="grid items-start gap-3 lg:grid-cols-2">
-        {/* Левая половина: плитки цифр, карта торговли и два коротких
-            списка. Плитка отвечает на один вопрос одним числом - читать их
-            можно не вчитываясь, а строки таблицы требовали чтения. */}
-        <div className="grid gap-2">
+        {/* Левая половина - четыре карточки два на два: цифры, карта, что
+            разобрать, сессии. Ровно столько, сколько помещается в один взгляд;
+            пятая карточка уже требует выбирать, куда смотреть. */}
+        <div className="grid gap-2 sm:grid-cols-2">
           <div className="rounded-lg border border-[var(--pane-border)] p-2">
             <div className="mb-1.5 flex items-baseline gap-1.5">
               <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
@@ -328,7 +328,7 @@ export default function ReviewPanel({
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
               <Tile
                 label={t.journal.statPnl}
                 value={stats.trades > 0 ? money(stats.pnl) : "-"}
@@ -368,7 +368,7 @@ export default function ReviewPanel({
 
           {/* Карта торговли: по ней виден режим работы - где подряд, а где
               неделя тишины. Клетка открывает свой день. */}
-          <div className="rounded-lg border border-[var(--pane-border)]">
+          <div className="rounded-lg border border-[var(--pane-border)] self-start">
             <ActivityHeat
               rows={rows}
               active={picked ?? undefined}
@@ -381,82 +381,76 @@ export default function ReviewPanel({
             />
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            {/* Что осталось разобрать: без этого раздел молчит о собственной
-                работе - какие сделки ещё ждут отметки и снимков. */}
-            <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
-              <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
-                {t.journal.undoneTitle}
-              </span>
-              <div className="mt-1">
-                <Line
-                  label={t.journal.undoneNoMark}
-                  value={String(undone.noMark.length)}
-                  mood={undone.noMark.length > 0 ? -1 : 0}
-                />
-                <Line
-                  label={t.journal.undoneNoShot}
-                  value={String(undone.noShot.length)}
-                  mood={undone.noShot.length > 0 ? -1 : 0}
-                />
-                {/* Первая неразобранная - в один щелчок: разбор начинают с неё. */}
-                {undone.noMark.length > 0 && (
-                  <button
-                    onClick={() => {
-                      const first = [...undone.noMark].sort((a, b) => timeOf(a) - timeOf(b))[0];
-                      if (first) onPick(first, numberOf(first));
-                    }}
-                    className="mt-1 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
-                  >
-                    {t.journal.undoneOpen}
-                  </button>
-                )}
-              </div>
+          {/* Что осталось разобрать: без этого раздел молчит о собственной
+              работе - какие сделки ещё ждут отметки и снимков. */}
+          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
+            <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+              {t.journal.undoneTitle}
+            </span>
+            <div className="mt-1">
+              <Line
+                label={t.journal.undoneNoMark}
+                value={String(undone.noMark.length)}
+                mood={undone.noMark.length > 0 ? -1 : 0}
+              />
+              <Line
+                label={t.journal.undoneNoShot}
+                value={String(undone.noShot.length)}
+                mood={undone.noShot.length > 0 ? -1 : 0}
+              />
+              {/* Первая неразобранная - в один щелчок: разбор начинают с неё. */}
+              {undone.noMark.length > 0 && (
+                <button
+                  onClick={() => {
+                    const first = [...undone.noMark].sort((a, b) => timeOf(a) - timeOf(b))[0];
+                    if (first) onPick(first, numberOf(first));
+                  }}
+                  className="mt-1 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+                >
+                  {t.journal.undoneOpen}
+                </button>
+              )}
             </div>
+          </div>
 
-            {/* Сессии: где деньги делаются, а где отдаются. Нарушения по
-                отметкам показываются здесь же - их редко больше двух. */}
-            <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
-              <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
-                {t.journal.weekReviewSessions}
-              </span>
-              {sessions.length === 0 ? (
-                <p className="mt-1 text-[10px] text-[var(--pane-muted)]">
-                  {t.journal.weekEmpty}
-                </p>
-              ) : (
-                <div className="mt-1">
-                  {sessions.map(([name, one]) => (
-                    <Line
-                      key={name}
-                      label={`${t.journal.sessions[name]} · ${one.trades}`}
-                      value={money(one.pnl)}
-                      mood={one.pnl}
-                    />
-                  ))}
-                </div>
-              )}
-              {breaks.length > 0 && (
-                <div className="mt-1 border-t border-[var(--pane-border)] pt-1">
-                  {breaks.slice(0, 2).map((one) => (
-                    <Line
-                      key={one.code}
-                      label={
-                        (t.journal.mistakes as Record<string, string>)[one.code] ?? one.code
-                      }
-                      value={String(one.count)}
-                      mood={-1}
-                    />
-                  ))}
-                </div>
-              )}
-              <button
-                onClick={() => setSum(true)}
-                className="mt-1 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
-              >
-                {t.journal.weekReviewMake}
-              </button>
-            </div>
+          {/* Сессии: где деньги делаются, а где отдаются. Нарушения по
+              отметкам показываются здесь же - их редко больше двух. */}
+          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
+            <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+              {t.journal.weekReviewSessions}
+            </span>
+            {sessions.length === 0 ? (
+              <p className="mt-1 text-[10px] text-[var(--pane-muted)]">{t.journal.weekEmpty}</p>
+            ) : (
+              <div className="mt-1">
+                {sessions.map(([name, one]) => (
+                  <Line
+                    key={name}
+                    label={`${t.journal.sessions[name]} · ${one.trades}`}
+                    value={money(one.pnl)}
+                    mood={one.pnl}
+                  />
+                ))}
+              </div>
+            )}
+            {breaks.length > 0 && (
+              <div className="mt-1 border-t border-[var(--pane-border)] pt-1">
+                {breaks.slice(0, 2).map((one) => (
+                  <Line
+                    key={one.code}
+                    label={(t.journal.mistakes as Record<string, string>)[one.code] ?? one.code}
+                    value={String(one.count)}
+                    mood={-1}
+                  />
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setSum(true)}
+              className="mt-1 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+            >
+              {t.journal.weekReviewMake}
+            </button>
           </div>
         </div>
 
@@ -512,10 +506,7 @@ export default function ReviewPanel({
                 <Folder
                   key={name}
                   name={name}
-                  badge={t.journal.tradesIn(list.length)}
-                  note={t.journal.shotsIn(
-                    list.reduce((count, one) => count + (one.shots?.length ?? 0), 0),
-                  )}
+                  note={t.journal.tradesIn(list.length)}
                   sum={list.reduce((count, one) => count + one.pnl, 0)}
                   cover={coverOf(list)}
                   mark={brokenIn(list)}

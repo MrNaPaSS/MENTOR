@@ -588,7 +588,14 @@ export const journal = {
   weekGainLabel: "К марже",
   weekWinrateLabel: "В плюс",
   weekBreaksLabel: "Нарушений",
-  tradesIn: (n: number) => `${n} сд.`,
+  tradesIn: (n: number) =>
+    `${n} ${
+      n % 10 === 1 && n % 100 !== 11
+        ? "сделка"
+        : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)
+          ? "сделки"
+          : "сделок"
+    }`,
   backToCoins: "Монеты",
   positionsIn: (n: number) => `${n} поз.`,
   weekEmpty: "За эту неделю закрытых сделок нет",
