@@ -297,12 +297,12 @@ export default function PositionCard({
               <Fact label={t.journal.colEntry} value={priceText(trade.entry)} />
               <Fact label={t.journal.cardStop} value={priceText(trade.stop)} />
               <Fact
-                label={t.journal.cardRR}
-                value={rr > 0 ? `1 : ${rr.toFixed(1)}` : "-"}
-              />
-              <Fact
                 label={t.journal.cardExit}
                 value={trade.exit_price ? priceText(trade.exit_price) : "-"}
+              />
+              <Fact
+                label={t.journal.cardRR}
+                value={rr > 0 ? `1 : ${rr.toFixed(1)}` : "-"}
               />
 
               <Fact label={t.journal.cardQty} value={String(trade.qty)} />
