@@ -81,10 +81,45 @@ SQLITE_PRAGMAS = (
 )
 
 
+# Сколько соединений держит один процесс.
+#
+# По умолчанию SQLAlchemy даёт пять постоянных и десять сверх того. Терминалу
+# этого мало: страница открывает десяток запросов разом, а часть ручек ходит на
+# биржу и держит соединение всё время ответа. Пул кончался, и запросы вставали
+# в очередь на тридцать секунд - в логе это выглядело как «QueuePool limit of
+# size 5 overflow 10 reached», а на экране как замерший терминал.
+#
+# Считаем по потолку Postgres: три процесса (api, watcher, market) на двадцать
+# соединений каждый - шестьдесят, и это вдвое меньше обычных ста.
+POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
+POOL_OVERFLOW = int(os.getenv("DB_POOL_OVERFLOW", "10"))
+
+# Сколько ждать свободное соединение, прежде чем признать, что их нет.
+#
+# Тридцать секунд по умолчанию - это полминуты немого терминала: человек уже
+# перезагрузил страницу, а запрос всё стоит в очереди. Лучше быстрый отказ:
+# фронт покажет, что сервер занят, и повторит.
+POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "8"))
+
+
 def make_engine(url: str | None = None):
     url = url or get_database_url()
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-    engine = create_engine(url, future=True, connect_args=connect_args)
+    extra: dict[str, object] = {}
+    if not url.startswith("sqlite"):
+        extra = {
+            "pool_size": POOL_SIZE,
+            "max_overflow": POOL_OVERFLOW,
+            "pool_timeout": POOL_TIMEOUT,
+            # Соединение, которое разорвал сервер или сеть, отдаётся из пула
+            # живым и падает на первом же запросе. Пинг перед выдачей стоит
+            # один короткий запрос и снимает это целиком.
+            "pool_pre_ping": True,
+            # Полчаса - и соединение переоткрывается само. Postgres и прокси
+            # рвут долгие простаивающие соединения молча.
+            "pool_recycle": 1800,
+        }
+    engine = create_engine(url, future=True, connect_args=connect_args, **extra)
     if url.startswith("sqlite"):
         _tune_sqlite(engine)
     return engine

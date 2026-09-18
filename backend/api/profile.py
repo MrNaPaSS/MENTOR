@@ -163,22 +163,6 @@ async def analytics_calendar(
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     last_day = min(days_in_month, int(today[8:10])) if today.startswith(prefix) else days_in_month
 
-    # ── WEEX: депозиты (live) ───────────────────────────────────────────────
-    deposit_dates: set[str] = set()
-    if student.weex_uid:
-        uid = clean_uid(student.weex_uid) or str(student.weex_uid).strip()
-        try:
-            assets = await weex.get_agency_assert(uid)
-            for dep in assets.get("depositList", []):
-                ts = dep.get("updateTime", 0)
-                if not ts:
-                    continue
-                dep_date = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
-                if dep_date.startswith(prefix):
-                    deposit_dates.add(dep_date)
-        except Exception:
-            pass
-
     # ── Объёмы торгов — из снимков в БД (заполняет balance_collector каждый час) ──
     volume_by_date: dict[str, float] = {}
     for snap in snapshots:
@@ -198,6 +182,30 @@ async def analytics_calendar(
         .where(ScalpTrade.closed_at >= month_start)
         .where(ScalpTrade.closed_at < month_end)
     ).scalars().all()
+
+    # Дальше база не нужна - отпускаем соединение.
+    #
+    # Ручка идёт на биржу за депозитами, и этот ответ занимает секунды. Всё это
+    # время соединение к базе стояло занятым: десяток открытых вкладок съедал
+    # пул целиком, и терминал замирал на минуту с «QueuePool limit reached» в
+    # логе. Данные из базы уже собраны - держать её незачем.
+    session.close()
+
+    # ── WEEX: депозиты (live) ───────────────────────────────────────────────
+    deposit_dates: set[str] = set()
+    if student.weex_uid:
+        uid = clean_uid(student.weex_uid) or str(student.weex_uid).strip()
+        try:
+            assets = await weex.get_agency_assert(uid)
+            for dep in assets.get("depositList", []):
+                ts = dep.get("updateTime", 0)
+                if not ts:
+                    continue
+                dep_date = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+                if dep_date.startswith(prefix):
+                    deposit_dates.add(dep_date)
+        except Exception:
+            pass
 
     # Клетка дня считается дважды: целиком и по каждой бирже отдельно.
     #

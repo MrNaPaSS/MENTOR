@@ -994,6 +994,12 @@ async def positions(
     session=Depends(get_session),
 ):
     client = _require_client(session, student, exchange)
+    # Ключи взяты - база больше не нужна.
+    #
+    # Дальше ручка ждёт биржу, и это сотни миллисекунд, а в плохую минуту -
+    # секунды. Всё это время соединение к базе стояло занятым: терминал
+    # спрашивает позиции у каждой открытой вкладки, и пул кончался целиком.
+    session.close()
     try:
         return {"positions": await client.positions()}
     except WeexTradeError as exc:
