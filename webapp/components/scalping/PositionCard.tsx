@@ -11,12 +11,11 @@
 // этап, - а руками добавляются «до входа» и «разбор».
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Plus, X } from "lucide-react";
+import { Check, Loader2, Plus, Share2, X } from "lucide-react";
 
 import { useIntlLocale, useT } from "@/lib/i18n";
 import { money, priceText, tone } from "@/lib/journalFormat";
 import {
-  MISTAKES,
   STAGES,
   attachShot,
   pastedImage,
@@ -29,7 +28,9 @@ import {
 } from "@/lib/journalShots";
 import ModalPortal from "@/components/ui/ModalPortal";
 import { heldLabel, heldSeconds } from "@/lib/tradeTime";
+import PnlCard from "./PnlCard";
 import TradeShots from "./TradeShots";
+import { cardFromTrade } from "@/lib/pnl/data";
 import type { JournalRow } from "./JournalTable";
 
 export interface PositionCardProps {
@@ -39,6 +40,8 @@ export interface PositionCardProps {
   onClose: () => void;
   /** Что-то изменилось: журнал перечитывает строки. */
   onChange: () => void;
+  /** Имя владельца для подписи на карточке сделки. Пусто - без подписи. */
+  owner?: string;
 }
 
 /** Торговая сессия по часу входа: по ней видно, где результат лучше. */
@@ -67,6 +70,7 @@ export default function PositionCard({
   number,
   onClose,
   onChange,
+  owner,
 }: PositionCardProps) {
   const t = useT();
   const numbers = useIntlLocale();
@@ -76,6 +80,8 @@ export default function PositionCard({
   const [stage, setStage] = useState<ShotStage>("entry");
   // Открытый снимок: окно со всеми картинками сделки, начиная с нажатой.
   const [viewAt, setViewAt] = useState<number | null>(null);
+  // Открыта ли карточка сделки - та самая картинка, которой делятся.
+  const [card, setCard] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const kept = useRef(trade.review ?? "");
 
@@ -124,17 +130,6 @@ export default function PositionCard({
     const done = await attachShot(trade.client_id, image, "", stage);
     setBusy(false);
     if (done) onChange();
-  }
-
-  async function mark(plan: boolean | null) {
-    if (await saveReview(trade.client_id, { plan_ok: plan })) onChange();
-  }
-
-  async function toggleMistake(code: string) {
-    const have = new Set(trade.mistakes ?? []);
-    if (have.has(code)) have.delete(code);
-    else have.add(code);
-    if (await saveReview(trade.client_id, { mistakes: [...have] })) onChange();
   }
 
   const rr = riskReward(trade);
@@ -189,6 +184,15 @@ export default function PositionCard({
             <span className={`font-mono text-[13px] font-bold ${tone(trade.pnl)}`}>
               {money(trade.pnl)}
             </span>
+            {/* Карточка сделки - рядом с итогом: делятся именно им, и рука
+                идёт туда же, куда взгляд. */}
+            <button
+              onClick={() => setCard(true)}
+              title={t.journal.cardTitle}
+              className="ml-1 text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-accent)]"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+            </button>
             <button
               onClick={onClose}
               title={t.journal.close}
@@ -266,8 +270,15 @@ export default function PositionCard({
                             </span>
                           )}
                         </span>
+                        {/* Подпись стопки. У ведения это взятые цели - все,
+                            какие есть: «цель 1 · цель 2». Одна подпись первого
+                            снимка врала бы о второй и третьей. */}
                         <span className="mt-0.5 block truncate text-[9px] text-[var(--pane-muted)]">
-                          {cover.note || t.journal.stageWhat[one]}
+                          {one === "manage" && trade.takes_hit > 0
+                            ? Array.from({ length: trade.takes_hit }, (_, i) =>
+                                t.terminal.autoShotTake(i + 1),
+                              ).join(" · ")
+                            : cover.note || t.journal.stageWhat[one]}
                         </span>
                       </button>
                     )}
@@ -306,86 +317,43 @@ export default function PositionCard({
                 label={trade.closed_at ? t.journal.cardHeld : t.journal.cardHeldLive}
                 value={heldLabel(heldSeconds(trade), t.journal.heldUnits)}
               />
+
+              {/* Цели - каждая своей ячейкой в том же ряду, что и время в
+                  сделке: три цели ровно занимают три оставшихся места, и ряд
+                  перестаёт пустовать. Взятая отмечена цветом. */}
+              {trade.targets.map((price, i) => (
+                <Fact
+                  key={i}
+                  label={`TP${i + 1}`}
+                  value={priceText(price)}
+                  tone={i < trade.takes_hit ? "text-[var(--pane-up)]" : undefined}
+                />
+              ))}
+
             </div>
 
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/jpeg"
-              className="hidden"
-              onChange={async (event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) await add(await readImage(file));
-              }}
-            />
-
-            {/* Цели отдельной строкой, а не ячейкой в ряду: в ячейке они
-                обрезались на третьей, и как раз третья - та, ради которой
-                сделку держали. Взятая цель отмечена цветом. */}
-            {trade.targets.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-1">
-                <span className="text-[10px] text-[var(--pane-muted)]">
-                  {t.journal.cardTargets}
-                </span>
-                {trade.targets.map((price, i) => (
-                  <span
-                    key={i}
-                    className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
-                      i < trade.takes_hit
-                        ? "bg-[color:color-mix(in_srgb,var(--pane-up)_15%,transparent)] font-bold text-[var(--pane-up)]"
-                        : "bg-[var(--pane-hover)] text-[var(--pane-text-2)]"
-                    }`}
-                  >
-                    TP{i + 1} {priceText(price)}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Дисциплина: отмечает человек, потому что система видит цифры, а
-                не намерение. Без отметки процент дисциплины был бы выдумкой. */}
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {/* Заметка: подписана одним словом и вдвое ниже прежнего.
+                Поле в полэкрана обещало сочинение, а пишут в него две-три
+                строки - и те не всегда. */}
+            <div className="mt-2">
               <span className="text-[10px] uppercase tracking-wider text-[var(--pane-muted)]">
-                {t.journal.planMark}
+                {t.journal.reviewTitle}
               </span>
-              <Chip
-                on={trade.plan_ok === true}
-                tone="up"
-                onClick={() => mark(trade.plan_ok === true ? null : true)}
-              >
-                {t.journal.planKept}
-              </Chip>
-              <Chip
-                on={trade.plan_ok === false}
-                tone="down"
-                onClick={() => mark(trade.plan_ok === false ? null : false)}
-              >
-                {t.journal.planBroken}
-              </Chip>
-              {trade.plan_ok === false &&
-                MISTAKES.map((code) => (
-                  <Chip
-                    key={code}
-                    on={(trade.mistakes ?? []).includes(code)}
-                    tone="down"
-                    onClick={() => toggleMistake(code)}
-                  >
-                    {t.journal.mistakes[code]}
-                  </Chip>
-                ))}
+              <textarea
+                value={review}
+                onChange={(event) => setReview(event.target.value)}
+                placeholder={t.journal.reviewHint}
+                spellCheck={false}
+                className="mt-1 min-h-12 w-full resize-none rounded border border-[var(--pane-border)] bg-transparent px-2 py-1.5 text-[11px] leading-relaxed text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
+              />
             </div>
-
-            <textarea
-              value={review}
-              onChange={(event) => setReview(event.target.value)}
-              placeholder={t.journal.reviewHint}
-              spellCheck={false}
-              className="mt-2 min-h-24 w-full resize-none rounded border border-[var(--pane-border)] bg-transparent px-2 py-1.5 text-[11px] leading-relaxed text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
-            />
           </div>
         </div>
       </div>
+
+      {card && (
+        <PnlCard data={cardFromTrade(trade, owner)} onClose={() => setCard(false)} />
+      )}
 
       {/* Окно снимков открывается по стопке этапа и сразу на ней: листать
           картинки удобнее во весь экран, а не в плитке величиной с марку. */}
@@ -404,38 +372,21 @@ export default function PositionCard({
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({
+  label,
+  value,
+  tone: colour,
+}: {
+  label: string;
+  value: string;
+  /** Класс цвета. Пусто - обычная цифра: подсвечивают только взятые цели. */
+  tone?: string;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-2 border-b border-[var(--pane-border)] pb-0.5">
       <span className="text-[10px] font-sans text-[var(--pane-muted)]">{label}</span>
-      <span className="truncate text-[var(--pane-text-2)]">{value}</span>
+      <span className={`truncate ${colour ?? "text-[var(--pane-text-2)]"}`}>{value}</span>
     </div>
   );
 }
 
-function Chip({
-  on,
-  tone: kind,
-  onClick,
-  children,
-}: {
-  on: boolean;
-  tone: "up" | "down";
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  const color = kind === "up" ? "var(--pane-up)" : "var(--pane-down)";
-  return (
-    <button
-      onClick={onClick}
-      className="rounded border px-1.5 py-0.5 text-[10px] transition-colors duration-150 ease-out"
-      style={{
-        borderColor: on ? color : "var(--pane-border)",
-        color: on ? color : "var(--pane-muted)",
-        background: on ? "color-mix(in srgb, currentColor 12%, transparent)" : "transparent",
-      }}
-    >
-      {children}
-    </button>
-  );
-}

@@ -525,6 +525,7 @@ export const journal = {
     fomo: "FOMO",
     plan: "not in the weekly plan",
   },
+  reviewTitle: "Notes",
   reviewHint: "What worked, what did not, why I entered. Saves itself.",
   positionsTitle: "Positions",
   weekTrades: (marked: number, all: number) => `${marked} / ${all} trades reviewed`,

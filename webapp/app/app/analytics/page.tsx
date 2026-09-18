@@ -3,6 +3,7 @@
 import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 import { maskValue, numbersHidden, rememberHidden } from "@/lib/analytics/hideNumbers";
 import { shotImage, stageOf } from "@/lib/journalShots";
+import PositionCard from "@/components/scalping/PositionCard";
 import TradeShots from "@/components/scalping/TradeShots";
 import { useEffect, useMemo, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
@@ -349,6 +350,8 @@ export default function AnalyticsPage() {
   const [shotsOf, setShotsOf] = useState<string | null>(null);
   // Открытая монета в снимках дня. Пусто - показываем папки монет.
   const [dayCoin, setDayCoin] = useState<string | null>(null);
+  // Позиция, открытая целиком: то же окно, что в журнале терминала.
+  const [posOf, setPosOf] = useState<string | null>(null);
   // Открытая сделка: её снимки показываются тут же, веткой, а не новым окном.
   const [dayTrade, setDayTrade] = useState<string | null>(null);
   // Снимок, открытый крупно. Вот тут уже окно - картинку смотрят во весь экран.
@@ -1518,7 +1521,7 @@ export default function AnalyticsPage() {
                                 дня начинается с картинки, а не с числа. */}
                             <td className="py-1 pl-2 text-right">
                               <button
-                                onClick={() => setShotsOf(one.client_id)}
+                                onClick={() => setPosOf(one.client_id)}
                                 title={t.analytics.trades.shots}
                                 className={`transition-colors duration-150 ease-out hover:text-[var(--pane-accent)] ${
                                   (one.shots?.length ?? 0) > 0
@@ -1787,6 +1790,21 @@ export default function AnalyticsPage() {
       {/* Карточка сделки. Палитру панелей ей приносит общая обёртка страницы -
           своей больше не нужно. */}
       {card && <PnlCard data={card} onClose={() => setCard(null)} />}
+
+      {/* Позиция целиком: цифры, снимки по этапам и заметка. Открывается по
+          кнопке снимка в строке дня - там, где раньше была голая галерея. */}
+      {(() => {
+        const one = (dayTrades ?? []).find((row) => row.client_id === posOf);
+        if (!one) return null;
+        return (
+          <PositionCard
+            trade={one}
+            owner={owner ?? undefined}
+            onClose={() => setPosOf(null)}
+            onChange={() => setDayKey((n) => n + 1)}
+          />
+        );
+      })()}
 
       {/* Папка открывается тем же окном, что и сделка в журнале терминала:
           снимки листаются, под каждым - цифры его этапа и комментарий.

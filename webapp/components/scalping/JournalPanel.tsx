@@ -81,7 +81,7 @@ export default function JournalPanel({
   // закрывать окно после каждой картинки - мешать раскладывать разбор.
   const [shotsOf, setShotsOf] = useState<string | null>(null);
   // Открытая позиция: её карточка со всеми этапами и разбором.
-  const [openPos, setOpenPos] = useState<{ id: string; number: number } | null>(null);
+  const [openPos, setOpenPos] = useState<{ id: string; number?: number } | null>(null);
   // Что показываем: список сделок или разбор - план недели и все снимки
   // за период рядом. Разбор смотрят иначе, чем ведут журнал: там читают
   // строки, здесь - картинки.
@@ -397,7 +397,7 @@ export default function JournalPanel({
                   onPick={onPick}
                   onCard={setCard}
                   onDrop={mentor ? drop : undefined}
-                  onShots={(row) => setShotsOf(row.client_id)}
+                  onShots={(row) => setOpenPos({ id: row.client_id })}
                   dateLabel={t.journal.colLive}
                 />
               </div>
@@ -414,7 +414,7 @@ export default function JournalPanel({
                 onPick={onPick}
                 onCard={setCard}
                 onDrop={mentor ? drop : undefined}
-                onShots={(row) => setShotsOf(row.client_id)}
+                onShots={(row) => setOpenPos({ id: row.client_id })}
                 resultLabel={t.journal.colResultFee}
               />
             )}
@@ -435,6 +435,7 @@ export default function JournalPanel({
           <PositionCard
             trade={one}
             number={openPos.number}
+            owner={owner}
             onClose={() => setOpenPos(null)}
             onChange={() => void reload()}
           />
