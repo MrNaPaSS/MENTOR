@@ -663,6 +663,12 @@ export default function ScalpingPage() {
   const [autoShots, setAutoShots] = useState(false);
   // Уровень, по которому нажали в стакане: спрашиваем, что с ним делать.
   const [level, setLevel] = useState<LadderRow | null>(null);
+  // Чья разметка сейчас нарисована на графике: ключи линий сделок.
+  //
+  // Автоснимок входа ждёт именно её. Сделка попадает в список раньше, чем её
+  // линии ложатся на холст, и снимок, снятый по списку, выходил голыми
+  // свечами - без входа, стопа и целей.
+  const markedRef = useRef<string[]>([]);
   // Способ снять холст графика: кладёт его сам график, пользуется кнопка.
   const shotRef = useRef<(() => ShotResult | null) | null>(null);
   const [shotMenu, setShotMenu] = useState(false);
@@ -3597,9 +3603,8 @@ export default function ScalpingPage() {
     if (stage === "entry") {
       const until = Date.now() + ENTRY_SHOT_WAIT_MS;
       while (Date.now() < until) {
-        const one = tradesRef.current.find((row) => row.id === clientId);
-        // Разметка есть, когда сделка на графике и у неё видны уровни.
-        if (one && one.status === "open" && one.entry > 0) break;
+        // Разметка на холсте: линии этой сделки уже нарисованы.
+        if (markedRef.current.some((key) => key.startsWith(`${clientId}:`))) break;
         await new Promise<void>((done) => setTimeout(done, ENTRY_SHOT_STEP_MS));
       }
       // И ещё кадр - чтобы лёгший блок успел нарисоваться.
@@ -4545,6 +4550,9 @@ export default function ScalpingPage() {
                   preset={palette}
                   indicators={shownIndicators}
                   trades={mine}
+                  onMarks={(keys) => {
+                    markedRef.current = keys;
+                  }}
                   preview={preview}
                   movingStops={movingStops}
                   livePrice={chartPrice}

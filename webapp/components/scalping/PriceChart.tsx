@@ -722,6 +722,7 @@ function PriceChart({
   journalKey,
   ghost,
   hoverLevel,
+  onMarks,
   shot,
   tick,
   alerts,
@@ -840,6 +841,14 @@ function PriceChart({
    * шапке рядом с темой, поэтому наружу отдаётся не картинка, а способ её
    * получить в нужный момент.
    */
+  /**
+   * Разметка сделок на холсте: ключи нарисованных линий.
+   *
+   * По ним автоснимок понимает, что блок сделки уже лёг на график, и только
+   * тогда снимает вход: снятый раньше снимок - это голые свечи без входа,
+   * стопа и целей, то есть картинка не про эту сделку.
+   */
+  onMarks?: (keys: string[]) => void;
   shot?: React.MutableRefObject<(() => ShotResult | null) | null>;
   /** Отметки на ценах: терминал скажет, когда их пересекут. */
   alerts?: { id: string; price: number }[];
@@ -1853,7 +1862,11 @@ function PriceChart({
       dataRef.current,
     );
     pushShapes();
-  }, [trades, preview, movingStops, shown, skin, pushShapes]);
+
+    // Кому досталась разметка - говорим наружу. Автоснимок входа ждёт именно
+    // это, а не появление сделки в списке: в списке она раньше, чем на холсте.
+    onMarks?.([...tradeLinesRef.current.keys()]);
+  }, [trades, preview, movingStops, shown, skin, pushShapes, onMarks]);
 
   // Вертикальное перетаскивание прямо по свечам.
   //
