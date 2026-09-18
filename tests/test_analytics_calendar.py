@@ -52,9 +52,16 @@ def _student(client, uid="123456"):
     return sid, {"Authorization": f"Bearer {tokens['access_token']}"}
 
 
-def _snapshot(student_id: int, date: str, balance: str) -> None:
+def _snapshot(student_id: int, date: str, balance: str, source: str = "api_keys") -> None:
     with SessionLocal() as s:
-        s.add(BalanceSnapshot(student_id=student_id, date=date, balance_usdt=Decimal(balance)))
+        s.add(
+            BalanceSnapshot(
+                student_id=student_id,
+                date=date,
+                balance_usdt=Decimal(balance),
+                source=source,
+            )
+        )
         s.commit()
 
 
@@ -88,6 +95,26 @@ def _cal(client, headers, year: int, month: int) -> dict[str, dict]:
 # Прошлый месяц целиком, чтобы дни не упирались в «не позже сегодня».
 _PAST = datetime.now(timezone.utc).replace(day=1) - timedelta(days=1)
 _Y, _M = _PAST.year, _PAST.month
+
+
+def test_day_balance_comes_only_from_own_keys(ctx):
+    """Баланс дня в календаре - только по ключам ученика.
+
+    Партнёрская ручка по UID показывает не тот счёт, которым торгуют: она
+    приходит с задержкой и считает по своей стороне. В календаре такая цифра
+    читается как «столько у меня было в тот день», и это неправда.
+    """
+    client = ctx
+    sid, head = _student(client)
+
+    own = f"{_Y:04d}-{_M:02d}-05"
+    theirs = f"{_Y:04d}-{_M:02d}-06"
+    _snapshot(sid, own, "1000.00", source="api_keys")
+    _snapshot(sid, theirs, "203220.05", source="affiliate_api")
+
+    days = _cal(client, head, _Y, _M)
+    assert days[own]["balance"] == 1000.0
+    assert days[theirs]["balance"] is None
 
 
 def test_day_percent_comes_from_journal(ctx):
