@@ -135,7 +135,17 @@ async def analytics_calendar(
         .order_by(BalanceSnapshot.date.asc())
     ).scalars().all()
 
-    balance_by_date: dict[str, Decimal] = {s.date: Decimal(str(s.balance_usdt)) for s in snapshots}
+    # Баланс дня отдаём только по ключам ученика.
+    #
+    # Партнёрская ручка по UID показывает не тот счёт, которым торгуют: она
+    # приходит с задержкой и считает по своей стороне. Такой снимок в календаре
+    # читается как «столько у меня было в тот день», и это неправда. Снимок
+    # партнёрки просто не попадает в ответ - клетка дня останется без денег.
+    balance_by_date: dict[str, Decimal] = {
+        one.date: Decimal(str(one.balance_usdt))
+        for one in snapshots
+        if (one.source or "") == "api_keys"
+    }
 
     # ── DB: сигналы ─────────────────────────────────────────────────────────
     deliveries = session.execute(
