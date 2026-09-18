@@ -955,6 +955,32 @@ def test_a_shot_keeps_its_stage(client, tmp_path, monkeypatch):
     assert [s["stage"] for s in row["shots"]] == ["entry", ""]
 
 
+def test_auto_shot_needs_the_tool(client, tmp_path, monkeypatch):
+    """Снимок с пометкой «авто» требует купленного инструмента.
+
+    Закрыть автоматику одной кнопкой в терминале мало: ручка открыта, и снимки
+    можно слать мимо интерфейса. Свой снимок, приложенный руками, остаётся
+    бесплатным - платят за то, что терминал снимает сам.
+    """
+    from backend.api import shots as shots_api
+
+    monkeypatch.setattr(shots_api, "_DIR", tmp_path / "shots")
+    client.post("/api/journal/trades", json=trade(client_id="t-auto"))
+
+    refused = client.post(
+        "/api/journal/trades/t-auto/shots",
+        json={"image": PNG_1PX, "stage": "entry", "auto": True},
+    )
+    assert refused.status_code == 402
+
+    # Тот же снимок рукой - берём как обычно.
+    by_hand = client.post(
+        "/api/journal/trades/t-auto/shots",
+        json={"image": PNG_1PX, "stage": "entry"},
+    )
+    assert by_hand.status_code == 201
+
+
 def test_a_shot_can_be_signed_later(client, tmp_path, monkeypatch):
     """Подпись к снимку пишут на разборе, а не в момент съёмки.
 

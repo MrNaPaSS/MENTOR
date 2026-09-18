@@ -48,7 +48,9 @@ def test_filled_base_on_old_version_is_raised(tmp_path):
     db.create_all()
     with db.SessionLocal() as session:
         assert _prices(session) == NEW
-        assert session.get(SettingRow, "shop_catalog_version").value == "9"
+        # Версия каталога растёт с каждым новым шагом - важно, что цены
+        # подняты и флаг дошёл как минимум до девятого.
+        assert int(session.get(SettingRow, "shop_catalog_version").value) >= 9
 
 
 def test_mentor_price_survives_restart(tmp_path):

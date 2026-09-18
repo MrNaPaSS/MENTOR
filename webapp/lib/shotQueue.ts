@@ -26,6 +26,8 @@ export interface QueuedShot {
   image: string;
   note: string;
   stage: string;
+  /** Снимок сделал терминал сам: сервер спросит за него право. */
+  auto?: boolean;
   /** Когда снимок сделан - не когда отправлен. */
   at: number;
 }

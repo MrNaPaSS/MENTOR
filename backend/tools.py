@@ -27,6 +27,7 @@ FREE_MAX_AGG = 10
 DEPTH = "tool_dom_depth"
 STEP25 = "tool_dom_step25"
 FOOTPRINT = "tool_footprint"
+AUTO_SHOTS = "tool_auto_shots"
 
 
 def rights_from_token(token: str | None, secret: str) -> frozenset[str]:
@@ -81,3 +82,13 @@ def limit_agg(agg: int, rights: frozenset[str]) -> int:
 
 def can_footprint(rights: frozenset[str]) -> bool:
     return FOOTPRINT in rights
+
+
+def can_auto_shots(rights: frozenset[str]) -> bool:
+    """Снимает ли терминал сам: вход, взятые цели, закрытие.
+
+    Снимок, приложенный руками, остаётся бесплатным - это своя картинка своей
+    сделки. Платит человек за автоматику: за то, что момент входа и момент
+    цели снимаются без него, пока он смотрит в стакан.
+    """
+    return AUTO_SHOTS in rights

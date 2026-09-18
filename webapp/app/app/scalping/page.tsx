@@ -3478,7 +3478,9 @@ export default function ScalpingPage() {
   const shotAtRef = useRef(0);
 
   useEffect(() => {
-    if (!autoShots || !symbol) return;
+    // Право проверяет и сервер: без него он откажет снимку с пометкой «авто».
+    // Здесь - чтобы не снимать и не слать впустую.
+    if (!autoShots || !tools.autoShots || !symbol) return;
 
     const seen = shotSeenRef.current;
     for (const trade of trades) {
@@ -3506,7 +3508,7 @@ export default function ScalpingPage() {
       void autoShot(trade.id, why, closed ? "exit" : opened ? "entry" : "manage");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trades, autoShots, symbol]);
+  }, [trades, autoShots, tools.autoShots, symbol]);
 
   /**
    * Снимок в сделку по кнопке.
@@ -3629,6 +3631,7 @@ export default function ScalpingPage() {
         picture.toDataURL("image/jpeg", 0.9),
         note,
         stage,
+        true,
       );
       if (how === "queued") setOrderNote({ text: t.terminal.shotQueued, bad: false });
       if (how === "sent") setJournalKey((n) => n + 1);
@@ -4292,22 +4295,30 @@ export default function ScalpingPage() {
                           {t.terminal.shotToTrade}
                         </button>
                         {/* Автоснимок - здесь же, под остальными: это про ту же
-                            камеру, только нажимает её терминал сам. */}
+                            камеру, только нажимает её терминал сам. Не куплен -
+                            кнопка ведёт в маркет, как и у прочих инструментов. */}
                         <button
-                          onClick={() => setAutoShots((v) => !v)}
-                          title={t.terminal.autoShotHint}
+                          onClick={() =>
+                            tools.autoShots ? setAutoShots((v) => !v) : openTools()
+                          }
+                          title={
+                            tools.autoShots
+                              ? t.terminal.autoShotHint
+                              : t.terminal.toolLocked(t.terminal.toolNames.autoShots)
+                          }
                           className="mt-1 flex w-full items-center gap-2 border-t border-[var(--pane-border)] px-3 py-1.5 text-left text-[11px] text-[var(--pane-text-2)] transition-colors hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
                         >
                           <span
                             className={`grid h-3 w-3 shrink-0 place-items-center rounded-[3px] border text-[8px] ${
-                              autoShots
+                              autoShots && tools.autoShots
                                 ? "border-[var(--pane-accent)] bg-[var(--pane-accent)] text-black"
                                 : "border-[var(--pane-border)]"
                             }`}
                           >
-                            {autoShots ? "✓" : ""}
+                            {autoShots && tools.autoShots ? "✓" : ""}
                           </span>
                           {t.terminal.autoShot}
+                          {!tools.autoShots && <Lock className="ml-auto h-3 w-3 opacity-60" />}
                         </button>
                       </div>
                     )}

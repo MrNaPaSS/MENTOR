@@ -22,6 +22,7 @@ export const terminal = {
     footprint: "Cluster candle",
     depth: "Order book 60 and 100 rows",
     step25: "Order book step ×25",
+    autoShots: "Auto shots",
   },
   collectingDom: (coin: string) => `Building the ${coin} order book…`,
   domWheelHint: "Wheel - scroll, Ctrl+wheel - zoom",

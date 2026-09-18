@@ -110,7 +110,14 @@ async function sendShot(shot: Omit<QueuedShot, "id">): Promise<TradeShot | null>
     token,
     {
       method: "POST",
-      body: JSON.stringify({ image: shot.image, note: shot.note, stage: shot.stage }),
+      body: JSON.stringify({
+        image: shot.image,
+        note: shot.note,
+        stage: shot.stage,
+        // Снимок сделал терминал сам: сервер проверит, куплена ли автоматика.
+        // Свой снимок, приложенный руками, остаётся бесплатным.
+        auto: shot.auto ?? false,
+      }),
     },
   );
 }
@@ -136,8 +143,9 @@ export async function attachShotSafe(
   image: string,
   note = "",
   stage: ShotStage | "" = "",
+  auto = false,
 ): Promise<"sent" | "queued" | "failed"> {
-  const shot = { clientId, image, note, stage, at: Date.now() };
+  const shot = { clientId, image, note, stage, auto, at: Date.now() };
   try {
     const done = await sendShot(shot);
     return done ? "sent" : "failed";

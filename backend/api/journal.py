@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, case, func, or_, select
 
-from backend import entitlements
+from backend import entitlements, tools
 from core.exchanges import KEYS_EXCHANGE, TITLES
 from core.models import (
     iso,
@@ -385,6 +385,12 @@ class ShotAttachIn(BaseModel):
     note: str = Field(default="", max_length=140)
     # Этап сделки: до входа, вход, ведение, выход, разбор.
     stage: str = Field(default="", max_length=12)
+    # Снимок сделал сам терминал по событию сделки, а не человек рукой.
+    #
+    # Автоматика - инструмент маркета, и закрывать её одной кнопкой значит
+    # оставить обход: ручка-то открыта. Свой снимок, приложенный руками,
+    # остаётся бесплатным - это своя картинка своей сделки.
+    auto: bool = False
 
 
 def _shot_rows(session, student_id: int, client_ids: list[str]) -> dict[str, list[dict]]:
@@ -423,6 +429,8 @@ def attach_shot(
     работе, а не после закрытия, и ждать конца сделки, чтобы его приложить,
     было бы странно.
     """
+    if body.auto and not entitlements.has_feature(session, student.id, tools.AUTO_SHOTS):
+        raise HTTPException(402, "Автоснимки сделок - инструмент маркета")
     known = session.execute(
         select(ScalpTrade.id)
         .where(ScalpTrade.student_id == student.id)

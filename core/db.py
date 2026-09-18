@@ -194,6 +194,7 @@ def create_all() -> None:
     _apply_shop_catalog_v7(engine)
     _apply_shop_catalog_v8(engine)
     _apply_shop_catalog_v9(engine)
+    _apply_shop_catalog_v10(engine)
 
 
 # Составные указатели под самые частые выборки. `create_all` их не добавит:
@@ -873,6 +874,65 @@ INDICATOR_PRICES_V9 = {
     "Подписка на индикатор - 14 дней": 800,
     "Подписка на индикатор - 1 месяц": 1500,
 }
+
+
+# Автоснимки сделок: терминал сам снимает график по событиям сделки и
+# раскладывает снимки по этапам в журнале. Цена между кластерной свечой и
+# объёмными: это не способ смотреть рынок, а способ вести журнал, но экономит
+# он больше всего - руками эти три снимка не успевает никто.
+_SHOP_TOOL_AUTO_SHOTS = (
+    "Автоснимки сделок",
+    "Терминал сам снимает график на входе, на каждой взятой цели и на закрытии "
+    "и кладёт снимки в журнал по этапам сделки. Разбор собирается сам, пока вы "
+    "смотрите в стакан. Навсегда.",
+    1800,
+    "Camera",
+    "tool_auto_shots",
+    6,
+)
+
+
+def _apply_shop_catalog_v10(engine) -> None:
+    """Автоснимки сделок в разделе «Инструменты». Один раз, флагом.
+
+    Каталог у работающей платформы уже заполнен, и начальный список новых
+    товаров в него не добавит: он заполняет только пустую таблицу. Поэтому
+    товар доводится отдельным шагом - как и всё, что появлялось после запуска.
+    """
+    from sqlalchemy import inspect, select
+    from sqlalchemy.orm import Session
+    from core.models import SettingRow, ShopItem
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names() or "settings" not in inspector.get_table_names():
+        return
+
+    title, desc, price, icon, feature, order = _SHOP_TOOL_AUTO_SHOTS
+    with Session(engine) as session:
+        flag = session.get(SettingRow, "shop_catalog_version")
+        if flag and (flag.value or "").isdigit() and int(flag.value) >= 10:
+            return
+
+        taken = session.execute(
+            select(ShopItem).where(ShopItem.feature == feature)
+        ).scalars().first()
+        if taken is None:
+            session.add(ShopItem(
+                title=title,
+                description=desc,
+                price=price,
+                category="tools",
+                section="shop",
+                icon=icon,
+                feature=feature,
+                sort_order=order,
+            ))
+
+        if flag:
+            flag.value = "10"
+        else:
+            session.add(SettingRow(key="shop_catalog_version", value="10"))
+        session.commit()
 
 
 def _apply_shop_catalog_v9(engine) -> None:

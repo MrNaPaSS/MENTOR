@@ -26,6 +26,7 @@ export const terminal = {
     footprint: "Кластерная свеча",
     depth: "Стакан 60 и 100 строк",
     step25: "Шаг стакана ×25",
+    autoShots: "Автоснимки сделок",
   },
   collectingDom: (coin: string) => `Собираем стакан ${coin}…`,
   domWheelHint: "Колесо - прокрутка, Ctrl+колесо - масштаб",

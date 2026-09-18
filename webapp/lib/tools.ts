@@ -18,6 +18,8 @@ export const TOOL = {
   footprint: "tool_footprint",
   depth: "tool_dom_depth",
   step25: "tool_dom_step25",
+  /** Терминал сам снимает график по событиям сделки и кладёт снимки в журнал. */
+  autoShots: "tool_auto_shots",
 } as const;
 
 /** Сколько строк стакана у всех бесплатно. */
@@ -39,6 +41,7 @@ export type Tools = {
   footprint: boolean;
   depth: boolean;
   step25: boolean;
+  autoShots: boolean;
 };
 
 export function useTools(): Tools {
@@ -54,6 +57,10 @@ export function useTools(): Tools {
       footprint: !access.loaded || access.has(TOOL.footprint),
       depth: !access.loaded || access.has(TOOL.depth),
       step25: !access.loaded || access.has(TOOL.step25),
+      // Автоснимки - единственный инструмент, который сам что-то делает.
+      // Пока список покупок не прочитан, считаем закрытым: включённая по
+      // ошибке автоматика сразу полезла бы на сервер и получила отказ.
+      autoShots: access.loaded && access.has(TOOL.autoShots),
     }),
     [access.loaded, access.has],
   );
