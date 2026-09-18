@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -169,10 +169,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
    * баланса в шапке показывало новому ученику честный ноль - и он читался как
    * «денег нет», хотя на бирже они есть, а платформа про них просто не знает.
    */
+  // Один раз увиденное «счёт подключён» не забываем до конца сеанса.
+  //
+  // Ответ приходит из базы и сам по себе не врёт, но прийти он может каким
+  // угодно: сервер был занят, соединение оборвалось на полуслове, вкладка
+  // проснулась раньше сети. Любой такой ответ превращал шапку в «Подключить»
+  // у человека, который в этот момент ведёт сделку, - и снимался только
+  // следующим удачным запросом.
+  const wasConnected = useRef(false);
+
   const reloadTrading = useCallback(() => {
     if (!getAccessToken()) return;
     tradingStatus()
-      .then(setTrading)
+      .then((body) => {
+        if (body?.connected) wasConnected.current = true;
+        setTrading(body);
+      })
       .catch(() => setTrading(null));
   }, []);
 
@@ -244,7 +256,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Пока он шёл, в шапке вместо суммы стояло «Подключить», а через миг она
   // появлялась сама: человек видел мигающую кнопку там, где у него всё
   // подключено.
-  const needsKeys = Boolean(trading?.enabled) && trading?.connected === false;
+  const needsKeys =
+    Boolean(trading?.enabled) && trading?.connected === false && !wasConnected.current;
 
   return (
     <div className="min-h-screen bg-bg-deep">
