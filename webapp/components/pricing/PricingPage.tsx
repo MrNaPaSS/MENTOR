@@ -84,46 +84,66 @@ export default function PricingPage() {
       </header>
 
       <main>
-        <section className="relative overflow-hidden pb-14 pt-20 md:pb-16 md:pt-24">
+        {/* Первый экран как на главной: снимок рабочего места рядом с текстом.
+            Слева, а не справа - на главной он справа, и одинаковые экраны
+            подряд читались бы как одна и та же страница. */}
+        <section className="relative overflow-hidden pb-14 pt-16 md:pb-16 md:pt-20">
           <div className="pointer-events-none absolute inset-0 bg-radial-cyan opacity-70" />
 
-          <div className="relative mx-auto max-w-4xl px-4 text-center md:px-6">
-            <span className="eyebrow justify-center">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-glow-cyan" />
-              {p.hero.eyebrow}
-            </span>
-
-            <h1 className="mt-4 text-h1 text-text-primary">
-              {p.hero.titleTop}
-              <br />
-              <span className="text-accent-cyan text-glow-cyan">{p.hero.titleAccent}</span>
-            </h1>
-
-            <p className="mx-auto mt-5 max-w-2xl text-lg text-text-secondary">{p.hero.lead}</p>
-
-            <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-text-muted">
-              {p.hero.bullets.map((item) => (
-                <li key={item} className="inline-flex items-center gap-2">
-                  <Check className="h-4 w-4 text-accent-cyan" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-
-            {/* Главная кнопка - бесплатный путь: он и есть основная дорога.
-                Подписка стоит рядом второй и ведёт к тарифам. */}
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <SignupPicker
-                label={p.hero.cta}
-                className="inline-flex items-center gap-2 rounded-full bg-accent-cyan px-6 py-3 text-sm font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-cyan/90 active:scale-[0.97]"
+          <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-12">
+            <div className="order-2 lg:order-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/art/seo/terminal-cover.webp"
+                alt={p.hero.shotAlt}
+                width={1600}
+                height={900}
+                loading="eager"
+                // @ts-expect-error - атрибут браузера, в типах React его ещё нет
+                fetchpriority="high"
+                decoding="async"
+                className="w-full rounded-2xl border border-white/[0.07] shadow-2xl"
               />
+            </div>
 
-              <a
-                href="#plans"
-                className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 text-sm font-semibold text-text-primary transition-all duration-200 hover:bg-bg-panel/60 active:scale-[0.97]"
-              >
-                {p.hero.ctaSecondary} <ArrowRight className="h-[15px] w-[15px]" />
-              </a>
+            <div className="order-1 lg:order-2">
+              <span className="eyebrow">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan shadow-glow-cyan" />
+                {p.hero.eyebrow}
+              </span>
+
+              <h1 className="mt-4 text-h2 text-text-primary md:text-h1">
+                {p.hero.titleTop}
+                <br />
+                <span className="text-accent-cyan text-glow-cyan">{p.hero.titleAccent}</span>
+              </h1>
+
+              <p className="mt-5 text-lg text-text-secondary">{p.hero.lead}</p>
+
+              <ul className="mt-6 space-y-2 text-sm text-text-muted">
+                {p.hero.bullets.map((item) => (
+                  <li key={item} className="inline-flex w-full items-center gap-2">
+                    <Check className="h-4 w-4 shrink-0 text-accent-cyan" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+
+              {/* Главная кнопка - бесплатный путь: он и есть основная дорога.
+                  Подписка стоит рядом второй и ведёт к тарифам. */}
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <SignupPicker
+                  label={p.hero.cta}
+                  className="inline-flex items-center gap-2 rounded-full bg-accent-cyan px-6 py-3 text-sm font-semibold text-bg-deep transition-all duration-200 hover:bg-accent-cyan/90 active:scale-[0.97]"
+                />
+
+                <a
+                  href="#plans"
+                  className="inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 text-sm font-semibold text-text-primary transition-all duration-200 hover:bg-bg-panel/60 active:scale-[0.97]"
+                >
+                  {p.hero.ctaSecondary} <ArrowRight className="h-[15px] w-[15px]" />
+                </a>
+              </div>
             </div>
           </div>
         </section>
