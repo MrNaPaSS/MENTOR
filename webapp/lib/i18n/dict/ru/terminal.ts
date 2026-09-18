@@ -529,7 +529,7 @@ export const journal = {
   sessions: { asia: "Азия", london: "Лондон", newYork: "Нью-Йорк", evening: "Вечер" },
   stages: {
     entry: "Вход",
-    manage: "Ведение",
+    manage: "Сопровождение",
     exit: "Выход",
   },
   stageWhat: {
@@ -575,6 +575,10 @@ export const journal = {
   heatLess: "реже",
   heatMore: "чаще",
   wholeMonth: "Весь месяц",
+  workTitle: "Работа разбора",
+  workShots: "Снимков",
+  workTold: "С заметкой",
+  workHeld: "Среднее время",
   undoneTitle: "Что разобрать",
   undoneNoMark: "Без отметки",
   undoneNoShot: "Без снимков",

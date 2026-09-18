@@ -293,6 +293,18 @@ export default function PositionCard({
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[11px] sm:grid-cols-4">
               <Fact label={t.journal.colEntry} value={priceText(trade.entry)} />
               <Fact label={t.journal.cardStop} value={priceText(trade.stop)} />
+
+              {/* Цели сразу за стопом: так сделку и задумывают - вход, стоп,
+                  цели. Взятая отмечена цветом. */}
+              {trade.targets.map((price, i) => (
+                <Fact
+                  key={i}
+                  label={`TP${i + 1}`}
+                  value={priceText(price)}
+                  tone={i < trade.takes_hit ? "text-[var(--pane-up)]" : undefined}
+                />
+              ))}
+
               <Fact
                 label={t.journal.cardRR}
                 value={rr > 0 ? `1 : ${rr.toFixed(1)}` : "-"}
@@ -311,24 +323,14 @@ export default function PositionCard({
                 label={t.journal.cardFee}
                 value={trade.fee > 0 ? `-${trade.fee.toFixed(2)}` : "-"}
               />
-              {/* Время в сделке: у идущей оно набегает, и подпись об этом
-                  говорит прямо - иначе цифра выглядит окончательной. */}
+              {/* Время в сделке - последним: это единственная цифра, которую
+                  узнают уже после, когда всё кончилось. У идущей оно набегает,
+                  и подпись говорит об этом прямо. */}
               <Fact
                 label={trade.closed_at ? t.journal.cardHeld : t.journal.cardHeldLive}
                 value={heldLabel(heldSeconds(trade), t.journal.heldUnits)}
               />
 
-              {/* Цели - каждая своей ячейкой в том же ряду, что и время в
-                  сделке: три цели ровно занимают три оставшихся места, и ряд
-                  перестаёт пустовать. Взятая отмечена цветом. */}
-              {trade.targets.map((price, i) => (
-                <Fact
-                  key={i}
-                  label={`TP${i + 1}`}
-                  value={priceText(price)}
-                  tone={i < trade.takes_hit ? "text-[var(--pane-up)]" : undefined}
-                />
-              ))}
 
             </div>
 

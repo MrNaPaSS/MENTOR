@@ -25,6 +25,7 @@ import { money, tone } from "@/lib/journalFormat";
 import { shotImage } from "@/lib/journalShots";
 import { isoWeek } from "@/lib/weekPlan";
 import { sumUp } from "@/lib/weekStats";
+import { heldLabel, heldSeconds } from "@/lib/tradeTime";
 import { sessionOf } from "./PositionCard";
 import type { SessionName } from "@/lib/weekReview";
 import ActivityHeat from "./ActivityHeat";
@@ -279,6 +280,20 @@ export default function ReviewPanel({
     return { noMark, noShot };
   }, [all]);
 
+  // Работа разбора в цифрах: сколько картинок собрано, сколько сделок
+  // описано словами и сколько в среднем держали позицию. Это про сам разбор,
+  // а не про деньги - деньги в плитках выше.
+  const work = useMemo(() => {
+    const pics = all.reduce((count, row) => count + (row.shots?.length ?? 0), 0);
+    const told = all.filter((row) => (row.review ?? "").trim() !== "").length;
+    const times = all.map((row) => heldSeconds(row)).filter((one) => one > 0);
+    const held =
+      times.length > 0
+        ? Math.round(times.reduce((sum, one) => sum + one, 0) / times.length)
+        : 0;
+    return { pics, told, held };
+  }, [all]);
+
   // Куда уходят деньги по времени входа: у вечера и у Лондона разная цена
   // ошибки, и видно это только рядом.
   const sessions = useMemo(() => {
@@ -387,13 +402,17 @@ export default function ReviewPanel({
               работе - какие сделки ещё ждут отметки и снимков. */}
           <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
             <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
-              {t.journal.undoneTitle}
+              {t.journal.workTitle}
             </span>
             <div className="mt-1 flex min-h-0 flex-1 flex-col">
+              <Line label={t.journal.workShots} value={String(work.pics)} />
               <Line
-                label={t.journal.undoneNoMark}
-                value={String(undone.noMark.length)}
-                mood={undone.noMark.length > 0 ? -1 : 0}
+                label={t.journal.workTold}
+                value={`${work.told} / ${stats.trades}`}
+              />
+              <Line
+                label={t.journal.workHeld}
+                value={work.held > 0 ? heldLabel(work.held, t.journal.heldUnits) : "-"}
               />
               <Line
                 label={t.journal.undoneNoShot}

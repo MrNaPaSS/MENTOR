@@ -51,7 +51,7 @@ export default function ActivityHeat({ rows, onPick, active }: ActivityHeatProps
   const total = cells.reduce((all, one) => all + one.trades, 0);
 
   return (
-    <div className="border-t border-[var(--pane-border)] px-2 py-1.5">
+    <div className="flex min-h-0 flex-1 flex-col px-2 py-1.5">
       <div className="mb-1 flex items-baseline gap-1.5">
         <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
           {t.journal.heatTitle}
@@ -62,9 +62,12 @@ export default function ActivityHeat({ rows, onPick, active }: ActivityHeatProps
         </span>
       </div>
 
-      <div className="flex gap-[2px] overflow-x-auto">
+      {/* Карта тянется по ширине виджета: столбец-неделя занимает свою долю,
+          клетка остаётся квадратной. Прежние девять пикселей превращали её в
+          марку в углу, а по такой карте режим работы не прочитать. */}
+      <div className="flex min-h-0 flex-1 gap-[2px]">
         {weeks.map((week, i) => (
-          <div key={i} className="flex flex-col gap-[2px]">
+          <div key={i} className="flex flex-1 flex-col gap-[2px]">
             {week.map((one) => {
               const level = heatLevel(one.trades, busiest);
               return (
@@ -78,7 +81,7 @@ export default function ActivityHeat({ rows, onPick, active }: ActivityHeatProps
                   })} · ${t.journal.heatTrades(one.trades)}${
                     one.trades > 0 ? ` · ${money(one.pnl)}` : ""
                   }`}
-                  className={`h-[9px] w-[9px] rounded-[2px] transition-transform duration-150 ease-out ${tint(
+                  className={`aspect-square w-full rounded-[2px] transition-transform duration-150 ease-out ${tint(
                     level,
                   )} ${
                     active === one.key
