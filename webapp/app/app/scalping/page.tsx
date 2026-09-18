@@ -3478,58 +3478,63 @@ export default function ScalpingPage() {
   const shotAtRef = useRef(0);
   // Что уже снято по касанию цены: ключи вида `id:take1`, `id:exit`.
   const touchedRef = useRef(new Set<string>());
+  // Сделки, у которых стоп точно стоял на бирже. Без этой памяти «стопа нет»
+  // читалось бы как «стоп сработал» у сделки, где биржа его не приняла вовсе, -
+  // а это разные вещи, и вторая уже подписана предупреждением в шапке.
+  const hadStopRef = useRef(new Set<string>());
 
-  // Цели и стоп снимаются в тот миг, когда цена их коснулась.
+  // Цели и стоп снимаются, когда их заявки не стало на бирже.
   //
-  // Раньше снимок ждал события от сопровождения: биржа подтверждает исполнение
-  // не мгновенно, а обход идёт раз в пять секунд, и к моменту снимка свеча уже
-  // уходила - в журнале оставалась картинка «уже после», по которой ни цель, ни
-  // стоп не разобрать. Цену терминал знает сам, из потока, и уровни сделки
-  // тоже: этого довольно, чтобы снять ровно в секунду касания.
+  // По касанию цены снимать нельзя. Свечи идут с той биржи, что даёт стакан, а
+  // условную заявку биржа сводит по своей маркировочной цене; расхождение в
+  // десяток пунктов - обычное дело. График уже коснулся цели, а заявка ещё
+  // стоит: снимок был, тейка не было.
   //
-  // Ждёт по-прежнему только вход - он не о моменте, а о картине перед ним, и
-  // ему нужна легшая на график разметка.
+  // Исчезновение заявки из списка защиты - это и есть исполнение, о котором
+  // сказала сама биржа. Спрашиваем мы его несколько раз в секунду, так что
+  // снимок всё равно попадает в ту же свечу, а не «уже после», как было с
+  // ожиданием обхода сопровождения.
   //
-  // Подтверждение биржи придёт следом и запишет сделку в журнал. Если снимок
-  // окажется ложным - цену отбило, а заявка не исполнилась, - в разборе
-  // останется лишняя картинка, и это дешевле потерянного момента.
+  // Перенос целей в расчёт не берём: в миг замены их на бирже тоже меньше, и
+  // это не исполнение.
   useEffect(() => {
-    if (!autoShots || !tools.autoShots || !symbol) return;
-    const price = chartPrice;
-    if (!price || price <= 0) return;
+    if (!autoShots || !tools.autoShots || !symbol || !plans) return;
 
     for (const trade of tradesRef.current) {
       if (trade.status !== "open" || trade.symbol !== symbol) continue;
-      const long = trade.side === "long";
-      const reached = (level: number) =>
-        level > 0 && (long ? price >= level : price <= level);
+      if (Date.now() - (movedRef.current.get(trade.id) ?? 0) < MOVE_QUIET_MS) continue;
 
-      // Стоп: выход, и снимать его надо раньше всего остального.
+      // Стоп ушёл с биржи у живой позиции - он сработал. Но только если он
+      // там был: у сделки без принятой защиты нулей столько же.
       const stopKey = `${trade.id}:exit`;
-      const stopped =
-        trade.stop > 0 && (long ? price <= trade.stop : price >= trade.stop);
-      if (stopped && !touchedRef.current.has(stopKey)) {
+      if (plans.stops > 0) hadStopRef.current.add(trade.id);
+      if (
+        plans.stops === 0 &&
+        hadStopRef.current.has(trade.id) &&
+        !touchedRef.current.has(stopKey)
+      ) {
         touchedRef.current.add(stopKey);
         void autoShot(trade.id, t.terminal.autoShotStop, "exit");
         continue;
       }
 
-      // Цели по порядку. Последняя закрывает позицию - это выход, остальные
-      // ведение: так они и лягут в карточке позиции.
-      trade.targets.forEach((level, i) => {
+      // Сколько целей уже сняла биржа. Последняя закрывает позицию - её
+      // снимок идёт в выход, остальные в сопровождение.
+      const gone = goneTakes(trade.targets.length, plans.placed_takes, plans.take_prices);
+      for (let i = 0; i < gone; i += 1) {
         const last = i === trade.targets.length - 1;
         const key = last ? stopKey : `${trade.id}:take${i + 1}`;
-        if (!reached(level) || touchedRef.current.has(key)) return;
+        if (touchedRef.current.has(key)) continue;
         touchedRef.current.add(key);
         void autoShot(
           trade.id,
           last ? t.terminal.autoShotLast : t.terminal.autoShotTake(i + 1),
           last ? "exit" : "manage",
         );
-      });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartPrice, autoShots, tools.autoShots, symbol]);
+  }, [plans, autoShots, tools.autoShots, symbol]);
 
   useEffect(() => {
     // Право проверяет и сервер: без него он откажет снимку с пометкой «авто».
