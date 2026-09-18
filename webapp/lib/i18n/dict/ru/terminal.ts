@@ -572,8 +572,6 @@ export const journal = {
   spanNext: "Следующий",
   heatTitle: "Карта торговли",
   heatTrades: (n: number) => `${n} сд.`,
-  heatLess: "реже",
-  heatMore: "чаще",
   wholeMonth: "Весь месяц",
   workTitle: "Работа разбора",
   workShots: "Снимков",

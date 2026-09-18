@@ -543,8 +543,6 @@ export const journal = {
   spanNext: "Next",
   heatTitle: "Trading heat",
   heatTrades: (n: number) => `${n} tr.`,
-  heatLess: "less",
-  heatMore: "more",
   wholeMonth: "Whole month",
   workTitle: "Review work",
   workShots: "Shots",
