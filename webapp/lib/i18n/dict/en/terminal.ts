@@ -78,6 +78,8 @@ export const terminal = {
   autoShotHint: "The terminal shoots the chart itself when a trade opens, takes a target or closes, and attaches the shot to it in the journal. Works while the terminal is open on that symbol.",
   autoShotOpened: "entry",
   autoShotTake: (n: number) => `target ${n}`,
+  autoShotStop: "stop",
+  autoShotLast: "last target",
   autoShotClosed: "close",
   shotToTrade: "Attach to a trade",
   shotToTradeTitle: "Which trade to put the shot in",

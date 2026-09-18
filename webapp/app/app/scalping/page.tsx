@@ -3476,6 +3476,44 @@ export default function ScalpingPage() {
   // частями, и десяток одинаковых картинок разбору не помогает.
   const shotSeenRef = useRef(new Map<string, string>());
   const shotAtRef = useRef(0);
+  // Сделки, выход которых уже сняли по касанию: второй раз не снимаем.
+  const exitShotRef = useRef(new Set<string>());
+
+  // Снимок выхода - в тот миг, когда цена коснулась уровня.
+  //
+  // Раньше он ждал события от сопровождения: биржа подтверждает закрытие не
+  // мгновенно, а обход идёт раз в пять секунд, и к моменту снимка свеча уже
+  // уходила - в журнале оставалась картинка «уже после», по которой выход не
+  // разобрать. Цену терминал знает сам, из потока, и уровни сделки тоже: этого
+  // достаточно, чтобы снять ровно в секунду касания.
+  //
+  // Подтверждение биржи придёт следом и запишет сделку в журнал; если снимок
+  // окажется ложным - цену отбило, а стоп не исполнился, - в разборе останется
+  // лишняя картинка выхода, и это дешевле, чем потерянный момент.
+  useEffect(() => {
+    if (!autoShots || !tools.autoShots || !symbol) return;
+    const price = chartPrice;
+    if (!price || price <= 0) return;
+
+    for (const trade of tradesRef.current) {
+      if (trade.status !== "open" || trade.symbol !== symbol) continue;
+      if (exitShotRef.current.has(trade.id)) continue;
+
+      const long = trade.side === "long";
+      const stop = trade.stop > 0 && (long ? price <= trade.stop : price >= trade.stop);
+      const last = trade.targets.at(-1) ?? 0;
+      const done = last > 0 && (long ? price >= last : price <= last);
+      if (!stop && !done) continue;
+
+      exitShotRef.current.add(trade.id);
+      void autoShot(
+        trade.id,
+        stop ? t.terminal.autoShotStop : t.terminal.autoShotLast,
+        "exit",
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartPrice, autoShots, tools.autoShots, symbol]);
 
   useEffect(() => {
     // Право проверяет и сервер: без него он откажет снимку с пометкой «авто».
@@ -3499,6 +3537,9 @@ export default function ScalpingPage() {
       // Этап снимок знает сам: он снимает по событию, и называть его руками
       // не нужно - в карточке позиции картинка сразу встаёт в свой ряд.
       const closed = trade.status === "closed";
+      // Выход уже снят по касанию уровня - вторая картинка того же выхода в
+      // разборе только мешает.
+      if (closed && exitShotRef.current.has(trade.id)) continue;
       const opened = was.startsWith("planned");
       const why = closed
         ? t.terminal.autoShotClosed

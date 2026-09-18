@@ -86,6 +86,8 @@ export const terminal = {
   autoShotHint: "Терминал сам снимет график, когда сделка откроется, возьмёт цель или закроется - и приложит снимок к ней в журнале. Работает, пока терминал открыт на этой монете.",
   autoShotOpened: "вход",
   autoShotTake: (n: number) => `цель ${n}`,
+  autoShotStop: "стоп",
+  autoShotLast: "последняя цель",
   autoShotClosed: "закрытие",
   shotToTrade: "Добавить в сделку",
   shotToTradeTitle: "В какую сделку положить снимок",
