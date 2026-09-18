@@ -7,7 +7,13 @@
 /** Деньги со знаком: доход без плюса читается как остаток на счёте. */
 export function money(value: number): string {
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
-  return `${sign}${Math.abs(value).toFixed(2)}`;
+  // Тысячи - точкой, копейки - запятой, как во всём кабинете: «+1.182,23».
+  // Слитная запись «+1182.23» на четырёхзначных суммах читается с трудом, а
+  // сделки в терминале бывают и на десятки тысяч.
+  return `${sign}${Math.abs(value).toLocaleString("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 /** Цвет числа по знаку. Ноль - серый: это не победа и не поражение. */
@@ -30,8 +36,11 @@ export function tone(value: number): string {
 export function priceText(value: number): string {
   const size = Math.abs(value);
   if (!Number.isFinite(value)) return "-";
-  if (size >= 1000) return Math.round(value).toLocaleString("en-US").replace(/,/g, " ");
-  if (size >= 1) return value.toFixed(2);
-  if (size >= 0.01) return value.toFixed(4);
-  return value.toFixed(6);
+  // Тысячи разделяются точкой - как суммы и объёмы в кабинете.
+  if (size >= 1000) {
+    return Math.round(value).toLocaleString("de-DE", { maximumFractionDigits: 0 });
+  }
+  if (size >= 1) return value.toFixed(2).replace(".", ",");
+  if (size >= 0.01) return value.toFixed(4).replace(".", ",");
+  return value.toFixed(6).replace(".", ",");
 }

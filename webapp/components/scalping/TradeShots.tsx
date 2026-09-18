@@ -382,9 +382,29 @@ export default function TradeShots({
 
         {/* Цифры снимка идут прямо под ним, отдельной тонкой строкой: сторона
             и цена на входе, взятые цели в ведении, закрытие и итог на выходе. */}
-        {open && shotBrief(open, trade, t) && (
-          <div className="border-t border-[var(--pane-border)] px-3 py-1 font-mono text-[10px] text-[var(--pane-text-2)]">
-            {shotBrief(open, trade, t)}
+        {open && (
+          <div className="flex items-center gap-2 border-t border-[var(--pane-border)] px-3 py-1">
+            <span className="font-mono text-[10px] text-[var(--pane-text-2)]">
+              {shotBrief(open, trade, t)}
+            </span>
+            <div className="flex-1" />
+            {/* Убрать снимок - здесь же, в конце его строки: лишний кадр видно
+                как раз тогда, когда смотришь на него крупно, а не в плитке. */}
+            <button
+              onClick={async () => {
+                setError(null);
+                if (await detachShot(open.id)) {
+                  setViewing(null);
+                  onChange();
+                } else {
+                  setError(t.journal.shotRemoveFailed);
+                }
+              }}
+              title={t.journal.shotRemove}
+              className="text-[var(--pane-muted)] transition-colors duration-150 ease-out hover:text-[var(--pane-down)]"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
           </div>
         )}
 

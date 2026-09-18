@@ -29,7 +29,7 @@ def test_tool_is_in_the_shop(tmp_path):
             select(ShopItem).where(ShopItem.feature == FEATURE)
         ).scalars().one()
         assert item.category == "tools"
-        assert item.price > 0
+        assert int(item.price) == 2500
         # Навсегда: ни зарядов, ни срока.
         assert not (item.charges or 0)
         assert not (item.duration_days or 0)

@@ -195,6 +195,7 @@ def create_all() -> None:
     _apply_shop_catalog_v8(engine)
     _apply_shop_catalog_v9(engine)
     _apply_shop_catalog_v10(engine)
+    _apply_shop_catalog_v11(engine)
 
 
 # Составные указатели под самые частые выборки. `create_all` их не добавит:
@@ -885,11 +886,44 @@ _SHOP_TOOL_AUTO_SHOTS = (
     "Терминал сам снимает график на входе, на каждой взятой цели и на закрытии "
     "и кладёт снимки в журнал по этапам сделки. Разбор собирается сам, пока вы "
     "смотрите в стакан. Навсегда.",
-    1800,
+    2500,
     "Camera",
     "tool_auto_shots",
     6,
 )
+
+
+def _apply_shop_catalog_v11(engine) -> None:
+    """Автоснимки стоят 2500. Один раз, флагом.
+
+    Товар мог завестись предыдущим шагом по прежней цене - начальный список её
+    уже не поменяет, он заполняет только пустую таблицу. Цену, которую
+    наставник поправит в админке после этого, повторный запуск не трогает.
+    """
+    from sqlalchemy import inspect, update
+    from sqlalchemy.orm import Session
+    from core.models import SettingRow, ShopItem
+
+    inspector = inspect(engine)
+    if "shop_items" not in inspector.get_table_names() or "settings" not in inspector.get_table_names():
+        return
+
+    with Session(engine) as session:
+        flag = session.get(SettingRow, "shop_catalog_version")
+        if flag and (flag.value or "").isdigit() and int(flag.value) >= 11:
+            return
+
+        session.execute(
+            update(ShopItem)
+            .where(ShopItem.feature == "tool_auto_shots")
+            .values(price=2500)
+        )
+
+        if flag:
+            flag.value = "11"
+        else:
+            session.add(SettingRow(key="shop_catalog_version", value="11"))
+        session.commit()
 
 
 def _apply_shop_catalog_v10(engine) -> None:

@@ -82,6 +82,7 @@ const FEATURE_ART: Record<string, string> = {
   tool_volume_candles: "/shop/tool-volume-candles.webp",
   tool_dom_depth: "/shop/tool-depth.webp",
   tool_dom_step25: "/shop/tool-step25.webp",
+  tool_auto_shots: "/shop/tool-auto-shots.webp",
 };
 
 export function tierOf(item: ShopItem): Tier {
