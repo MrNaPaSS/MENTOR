@@ -92,6 +92,41 @@ function Line({
   );
 }
 
+/**
+ * Плитка цифры: подпись сверху мелким, само число снизу крупным.
+ *
+ * Плитка отвечает на один вопрос одним числом, и читать её можно не
+ * вчитываясь. Строка таблицы требует чтения слева направо, а таких строк в
+ * разборе с полдюжины.
+ */
+function Tile({
+  label,
+  value,
+  hint,
+  mood,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  mood?: number;
+}) {
+  return (
+    <div
+      title={hint}
+      className="rounded-md bg-[var(--pane-hover)] px-1.5 py-1"
+    >
+      <div className="truncate text-[9px] text-[var(--pane-muted)]">{label}</div>
+      <div
+        className={`font-mono text-[12px] font-bold ${
+          mood === undefined || mood === 0 ? "text-[var(--pane-text)]" : tone(mood)
+        }`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
 /** Папка разбора: обложка, имя поверх неё, ярлык и итог снизу. */
 function Folder({
   name,
@@ -269,19 +304,18 @@ export default function ReviewPanel({
   return (
     <div>
       <div className="grid items-start gap-3 lg:grid-cols-2">
-        {/* Левая половина - четыре виджета, а не один на всю высоту.
-            Растянутый блок с четырьмя строками цифр оставлял под собой пустое
-            поле в пол-экрана, и разбор выглядел недоделанным. */}
-        <div className="grid gap-2 sm:grid-cols-2">
-          {/* Итог куска: деньги и дисциплина рядом. */}
-          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
-            <div className="mb-1 flex items-baseline gap-1.5">
+        {/* Левая половина: плитки цифр, карта торговли и два коротких
+            списка. Плитка отвечает на один вопрос одним числом - читать их
+            можно не вчитываясь, а строки таблицы требовали чтения. */}
+        <div className="grid gap-2">
+          <div className="rounded-lg border border-[var(--pane-border)] p-2">
+            <div className="mb-1.5 flex items-baseline gap-1.5">
               <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
                 {picked ? t.journal.totalsDay : t.journal.totalsMonth}
               </span>
               <div className="flex-1" />
               {/* Выбран день - показываем, чем из него выйти обратно в месяц. */}
-              {picked ? (
+              {picked && (
                 <button
                   onClick={() => {
                     onPickDay(null);
@@ -291,135 +325,50 @@ export default function ReviewPanel({
                 >
                   {t.journal.wholeMonth}
                 </button>
-              ) : (
-                <span className={`font-mono text-[11px] font-bold ${tone(stats.pnl)}`}>
-                  {stats.trades > 0 ? money(stats.pnl) : "-"}
-                </span>
               )}
             </div>
 
-            {stats.trades === 0 ? (
-              <p className="py-1 text-[10px] text-[var(--pane-muted)]">{t.journal.weekEmpty}</p>
-            ) : (
-              <>
-                <Line
-                  label={t.journal.weekTradesLabel}
-                  hint={t.journal.weekTradesHint}
-                  value={`${stats.marked} / ${stats.trades}`}
-                />
-                {stats.gain !== null && (
-                  <Line
-                    label={t.journal.weekGainLabel}
-                    hint={t.journal.weekGainHint}
-                    value={`${stats.gain > 0 ? "+" : ""}${stats.gain.toFixed(1)}%`}
-                    mood={stats.pnl}
-                  />
-                )}
-                <Line
-                  label={t.journal.weekWinrateLabel}
-                  hint={t.journal.weekWinrateHint}
-                  value={`${Math.round((stats.winrate ?? 0) * 100)}%`}
-                />
-                {/* Нарушения показываются, только если их отмечали: ноль
-                    нарушений у неразобранного дня - не заслуга, а пустота. */}
-                {stats.marked > 0 && (
-                  <Line
-                    label={t.journal.weekBreaksLabel}
-                    hint={t.journal.weekBreaksHint}
-                    value={String(stats.breaks)}
-                    mood={stats.breaks > 0 ? -1 : 0}
-                  />
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Нарушения по вашим отметкам: какое правило ломается чаще прочих.
-              Пока отметок нет - так и написано, а не нарисован ноль. */}
-          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
-            <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
-              {t.journal.weekReviewMistakes}
-            </span>
-            {stats.marked === 0 ? (
-              <p className="mt-1 text-[10px] text-[var(--pane-muted)]">
-                {t.journal.weekReviewNoMarks}
-              </p>
-            ) : breaks.length === 0 ? (
-              <p className="mt-1 text-[10px] text-[var(--pane-up)]">
-                {t.journal.weekReviewClean}
-              </p>
-            ) : (
-              <div className="mt-1">
-                {breaks.slice(0, 4).map((one) => (
-                  <Line
-                    key={one.code}
-                    label={
-                      (t.journal.mistakes as Record<string, string>)[one.code] ?? one.code
-                    }
-                    value={String(one.count)}
-                    mood={-1}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Что осталось разобрать: без этого раздел молчит о собственной
-              работе - какие сделки ещё ждут отметки и снимков. */}
-          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
-            <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
-              {t.journal.undoneTitle}
-            </span>
-            <div className="mt-1">
-              <Line
-                label={t.journal.undoneNoMark}
-                value={String(undone.noMark.length)}
-                mood={undone.noMark.length > 0 ? -1 : 0}
+            <div className="grid grid-cols-3 gap-1.5">
+              <Tile
+                label={t.journal.statPnl}
+                value={stats.trades > 0 ? money(stats.pnl) : "-"}
+                mood={stats.pnl}
               />
-              <Line
-                label={t.journal.undoneNoShot}
-                value={String(undone.noShot.length)}
-                mood={undone.noShot.length > 0 ? -1 : 0}
+              <Tile label={t.journal.statTrades} value={String(stats.trades)} />
+              <Tile
+                label={t.journal.weekWinrateLabel}
+                value={`${Math.round((stats.winrate ?? 0) * 100)}%`}
               />
-              {/* Первая неразобранная - в один щелчок: разбор начинают с неё. */}
-              {undone.noMark.length > 0 && (
-                <button
-                  onClick={() => {
-                    const first = [...undone.noMark].sort((a, b) => timeOf(a) - timeOf(b))[0];
-                    if (first) onPick(first, numberOf(first));
-                  }}
-                  className="mt-1 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
-                >
-                  {t.journal.undoneOpen}
-                </button>
-              )}
+              <Tile
+                label={t.journal.weekTradesLabel}
+                hint={t.journal.weekTradesHint}
+                value={`${stats.marked} / ${stats.trades}`}
+              />
+              <Tile
+                label={t.journal.weekGainLabel}
+                hint={t.journal.weekGainHint}
+                value={
+                  stats.gain === null
+                    ? "-"
+                    : `${stats.gain > 0 ? "+" : ""}${stats.gain.toFixed(1)}%`
+                }
+                mood={stats.pnl}
+              />
+              {/* Нарушения считаются только по отметкам: ноль у неразобранного
+                  дня - не заслуга, а пустота, и показывать его как заслугу
+                  нельзя. */}
+              <Tile
+                label={t.journal.weekBreaksLabel}
+                hint={t.journal.weekBreaksHint}
+                value={stats.marked > 0 ? String(stats.breaks) : "-"}
+                mood={stats.marked > 0 && stats.breaks > 0 ? -1 : 0}
+              />
             </div>
           </div>
 
-          {/* Сессии: где деньги делаются, а где отдаются. */}
-          <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
-            <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
-              {t.journal.weekReviewSessions}
-            </span>
-            {sessions.length === 0 ? (
-              <p className="mt-1 text-[10px] text-[var(--pane-muted)]">{t.journal.weekEmpty}</p>
-            ) : (
-              <div className="mt-1">
-                {sessions.map(([name, one]) => (
-                  <Line
-                    key={name}
-                    label={`${t.journal.sessions[name]} · ${one.trades}`}
-                    value={money(one.pnl)}
-                    mood={one.pnl}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Карта торговли во всю ширину половины: по ней виден режим работы -
-              где подряд, а где неделя тишины. Клетка открывает свой день. */}
-          <div className="rounded-lg border border-[var(--pane-border)] sm:col-span-2">
+          {/* Карта торговли: по ней виден режим работы - где подряд, а где
+              неделя тишины. Клетка открывает свой день. */}
+          <div className="rounded-lg border border-[var(--pane-border)]">
             <ActivityHeat
               rows={rows}
               active={picked ?? undefined}
@@ -430,11 +379,80 @@ export default function ReviewPanel({
                 setCoin(null);
               }}
             />
+          </div>
 
-            <div className="border-t border-[var(--pane-border)] px-2 py-1.5">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {/* Что осталось разобрать: без этого раздел молчит о собственной
+                работе - какие сделки ещё ждут отметки и снимков. */}
+            <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
+              <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+                {t.journal.undoneTitle}
+              </span>
+              <div className="mt-1">
+                <Line
+                  label={t.journal.undoneNoMark}
+                  value={String(undone.noMark.length)}
+                  mood={undone.noMark.length > 0 ? -1 : 0}
+                />
+                <Line
+                  label={t.journal.undoneNoShot}
+                  value={String(undone.noShot.length)}
+                  mood={undone.noShot.length > 0 ? -1 : 0}
+                />
+                {/* Первая неразобранная - в один щелчок: разбор начинают с неё. */}
+                {undone.noMark.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const first = [...undone.noMark].sort((a, b) => timeOf(a) - timeOf(b))[0];
+                      if (first) onPick(first, numberOf(first));
+                    }}
+                    className="mt-1 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+                  >
+                    {t.journal.undoneOpen}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Сессии: где деньги делаются, а где отдаются. Нарушения по
+                отметкам показываются здесь же - их редко больше двух. */}
+            <div className="rounded-lg border border-[var(--pane-border)] px-2 py-1.5">
+              <span className="text-[9px] uppercase tracking-wider text-[var(--pane-muted)]">
+                {t.journal.weekReviewSessions}
+              </span>
+              {sessions.length === 0 ? (
+                <p className="mt-1 text-[10px] text-[var(--pane-muted)]">
+                  {t.journal.weekEmpty}
+                </p>
+              ) : (
+                <div className="mt-1">
+                  {sessions.map(([name, one]) => (
+                    <Line
+                      key={name}
+                      label={`${t.journal.sessions[name]} · ${one.trades}`}
+                      value={money(one.pnl)}
+                      mood={one.pnl}
+                    />
+                  ))}
+                </div>
+              )}
+              {breaks.length > 0 && (
+                <div className="mt-1 border-t border-[var(--pane-border)] pt-1">
+                  {breaks.slice(0, 2).map((one) => (
+                    <Line
+                      key={one.code}
+                      label={
+                        (t.journal.mistakes as Record<string, string>)[one.code] ?? one.code
+                      }
+                      value={String(one.count)}
+                      mood={-1}
+                    />
+                  ))}
+                </div>
+              )}
               <button
                 onClick={() => setSum(true)}
-                className="w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
+                className="mt-1 w-full rounded border border-[var(--pane-border)] py-1 text-[10px] text-[var(--pane-text-2)] transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)] hover:bg-[var(--pane-hover)] hover:text-[var(--pane-text)]"
               >
                 {t.journal.weekReviewMake}
               </button>
