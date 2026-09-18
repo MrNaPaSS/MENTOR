@@ -50,7 +50,29 @@ export default function ActivityHeat({ rows, onPick, active }: ActivityHeatProps
   const t = useT();
   const numbers = useIntlLocale();
 
-  const cells = useMemo(() => heatDays(rows), [rows]);
+  // Карта начинается с месяца первой сделки: июнь и июль пустыми клетками -
+  // это не тишина в работе, а время, когда терминала ещё не было. Счёт идёт
+  // от того месяца, в котором человек начал торговать, и не длиннее
+  // девяноста дней.
+  const cells = useMemo(() => {
+    const all = heatDays(rows);
+    const times = rows
+      .map((row) => {
+        const at = row.closed_at ?? row.opened_at;
+        const when = at ? new Date(at).getTime() : NaN;
+        return Number.isNaN(when) ? 0 : when;
+      })
+      .filter((one) => one > 0);
+    if (times.length === 0) return all;
+
+    const born = new Date(Math.min(...times));
+    // Первое число того месяца, сдвинутое назад до понедельника: столбец
+    // карты обязан оставаться неделей, иначе вторник съедет к среде.
+    const edge = new Date(born.getFullYear(), born.getMonth(), 1);
+    edge.setDate(edge.getDate() - ((edge.getDay() + 6) % 7));
+    return all.filter((one) => one.at.getTime() >= edge.getTime());
+  }, [rows]);
+
   const busiest = useMemo(() => busiestDay(cells), [cells]);
 
   // Столбцы - недели, строки - дни недели. Иначе вторник не сравнить с
