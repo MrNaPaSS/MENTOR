@@ -2,9 +2,7 @@
 // v8
 import { intlLocale, useIntlLocale, useLocale, useT, type Dict } from "@/lib/i18n";
 import { maskValue, numbersHidden, rememberHidden } from "@/lib/analytics/hideNumbers";
-import { shotImage, stageOf } from "@/lib/journalShots";
 import PositionCard from "@/components/scalping/PositionCard";
-import TradeShots from "@/components/scalping/TradeShots";
 import { useEffect, useMemo, useState } from "react";
 import { useTerminalTheme } from "@/lib/terminalTheme";
 import Link from "next/link";
@@ -347,15 +345,8 @@ export default function AnalyticsPage() {
   const [dayKey, setDayKey] = useState(0);
   // Чьи снимки разбираем. Ищем сделку в свежем списке дня, а не помним
   // строкой: она обновляется после каждой прикреплённой картинки.
-  const [shotsOf, setShotsOf] = useState<string | null>(null);
-  // Открытая монета в снимках дня. Пусто - показываем папки монет.
-  const [dayCoin, setDayCoin] = useState<string | null>(null);
   // Позиция, открытая целиком: то же окно, что в журнале терминала.
   const [posOf, setPosOf] = useState<string | null>(null);
-  // Открытая сделка: её снимки показываются тут же, веткой, а не новым окном.
-  const [dayTrade, setDayTrade] = useState<string | null>(null);
-  // Снимок, открытый крупно. Вот тут уже окно - картинку смотрят во весь экран.
-  const [bigShot, setBigShot] = useState<number | null>(null);
   // Чья карточка открыта. Null - окна нет.
   // Карточкой делятся и одной сделкой, и итогом срока - окно одно, а
   // колонку для него собирают в lib/pnl/data.
@@ -1552,235 +1543,6 @@ export default function AnalyticsPage() {
                   </p>
                 ) : null}
 
-                {/* Снимки дня: сперва монеты, потом сделки.
-                    Цифры говорят, чем день кончился, а картинки - как он
-                    выглядел. Лентой они врали глазу: вход и выход одной сделки
-                    стояли рядом как две разные сделки с одинаковым итогом.
-                    Папка отвечает на это сразу: одна сделка, её картинки. */}
-                {(() => {
-                  const folders = (dayTrades ?? []).filter(
-                    (one) => (one.shots?.length ?? 0) > 0,
-                  );
-                  if (folders.length === 0) return null;
-
-                  const byCoin = new Map<string, typeof folders>();
-                  for (const one of folders) {
-                    const name = one.symbol.replace(/USDT$/, "");
-                    byCoin.set(name, [...(byCoin.get(name) ?? []), one]);
-                  }
-                  const coins = [...byCoin.entries()].sort((a, b) => b[1].length - a[1].length);
-                  const mine = dayCoin ? byCoin.get(dayCoin) ?? [] : [];
-                  const muted = "text-[color:color-mix(in_srgb,var(--pane-text)_45%,transparent)]";
-
-                  return (
-                    <div className="mt-3">
-                      <div className="mb-1.5 flex items-baseline gap-1.5">
-                        <p className="text-[10px] uppercase tracking-wider text-[color:color-mix(in_srgb,var(--pane-text)_30%,transparent)]">
-                          {t.analytics.trades.shots}
-                        </p>
-                        {/* Путь виден всегда: из второго уровня надо уметь
-                            выйти, не закрывая окно дня. */}
-                        {dayCoin && (
-                          <>
-                            <span className={`font-mono text-[10px] ${muted}`}>/</span>
-                            <button
-                              onClick={() => {
-                                setDayCoin(null);
-                                setDayTrade(null);
-                              }}
-                              className={`font-mono text-[10px] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] ${muted}`}
-                            >
-                              {dayCoin}
-                            </button>
-                          </>
-                        )}
-                        {dayTrade && (
-                          <>
-                            <span className={`font-mono text-[10px] ${muted}`}>/</span>
-                            <button
-                              onClick={() => setDayTrade(null)}
-                              className={`font-mono text-[10px] transition-colors duration-150 ease-out hover:text-[var(--pane-text)] ${muted}`}
-                            >
-                              {(() => {
-                                const one = folders.find(
-                                  (row) => row.client_id === dayTrade,
-                                );
-                                return one
-                                  ? new Date(
-                                      one.closed_at ?? one.opened_at ?? "",
-                                    ).toLocaleTimeString(numbers, {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })
-                                  : "";
-                              })()}
-                            </button>
-                          </>
-                        )}
-                      </div>
-
-                      {dayTrade !== null ? (
-                        // Снимки сделки прямо здесь: открывать ради них ещё
-                        // одно окно поверх дня незачем - их всего несколько, и
-                        // они помещаются в тот же ряд.
-                        (() => {
-                          const one = folders.find((row) => row.client_id === dayTrade);
-                          const list = one?.shots ?? [];
-                          return (
-                            <div
-                              className="grid gap-2"
-                              style={{
-                                gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))",
-                              }}
-                            >
-                              {list.map((shot, i) => (
-                                <button
-                                  key={shot.id}
-                                  onClick={() => {
-                                    setShotsOf(dayTrade);
-                                    setBigShot(i);
-                                  }}
-                                  className="group overflow-hidden rounded-lg border border-[var(--pane-border)] text-left transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)]"
-                                >
-                                  <img
-                                    src={shotImage(shot)}
-                                    alt={shot.note || one!.symbol}
-                                    className="block aspect-[4/3] w-full object-cover transition duration-200 ease-out group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                                    loading="lazy"
-                                  />
-                                  <div className="px-1.5 py-1 text-[9px]">
-                                    <span className={muted}>
-                                      {shot.note || t.journal.stages[stageOf(shot.stage, shot.note)]}
-                                    </span>
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          );
-                        })()
-                      ) : dayCoin === null ? (
-                        <div
-                          className="grid gap-2"
-                          style={{
-                            gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))",
-                          }}
-                        >
-                          {coins.map(([name, list]) => {
-                            const sum = list.reduce((all, one) => all + one.pnl, 0);
-                            const cover = list.flatMap((one) => one.shots ?? [])[0];
-                            return (
-                              <button
-                                key={name}
-                                onClick={() => setDayCoin(name)}
-                                className="group overflow-hidden rounded-lg border border-[var(--pane-border)] text-left transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)]"
-                              >
-                                <div className="relative aspect-[4/3] w-full overflow-hidden bg-[color:color-mix(in_srgb,var(--pane-text)_6%,transparent)]">
-                                  {cover && (
-                                    <img
-                                      src={shotImage(cover)}
-                                      alt={name}
-                                      className="h-full w-full object-cover opacity-60 transition duration-200 ease-out group-hover:scale-[1.03] group-hover:opacity-80 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                                      loading="lazy"
-                                    />
-                                  )}
-                                  <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1.5 py-0.5 font-mono text-[12px] font-bold text-white">
-                                    {name}
-                                  </span>
-                                  <span className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[9px] text-white/80">
-                                    {list.length}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1 px-1.5 py-1 text-[9px]">
-                                  <span className={muted}>
-                                    {list.reduce(
-                                      (all, one) => all + (one.shots?.length ?? 0),
-                                      0,
-                                    )}
-                                  </span>
-                                  <div className="flex-1" />
-                                  <span
-                                    className={`font-mono text-[10px] font-bold ${
-                                      sum >= 0
-                                        ? "text-[var(--pane-up)]"
-                                        : "text-[var(--pane-down)]"
-                                    }`}
-                                  >
-                                    {sum >= 0 ? "+" : "-"}
-                                    {Math.abs(sum).toFixed(2)}
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div
-                          className="grid gap-2"
-                          style={{
-                            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-                          }}
-                        >
-                          {mine.map((one) => {
-                            const cover = (one.shots ?? [])[0];
-                            return (
-                              <button
-                                key={one.client_id}
-                                onClick={() => setDayTrade(one.client_id)}
-                                className="group overflow-hidden rounded-lg border border-[var(--pane-border)] text-left transition-colors duration-150 ease-out hover:border-[var(--pane-accent-soft)]"
-                              >
-                                <div className="relative aspect-[4/3] w-full overflow-hidden bg-[color:color-mix(in_srgb,var(--pane-text)_6%,transparent)]">
-                                  {cover && (
-                                    <img
-                                      src={shotImage(cover)}
-                                      alt={one.symbol}
-                                      className="h-full w-full object-cover transition duration-200 ease-out group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                                      loading="lazy"
-                                    />
-                                  )}
-                                  <span className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[9px] text-white/80">
-                                    {one.shots?.length ?? 0}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1 px-1.5 py-1 text-[9px]">
-                                  <span
-                                    className={
-                                      one.side === "long"
-                                        ? "text-[var(--pane-up)]"
-                                        : "text-[var(--pane-down)]"
-                                    }
-                                  >
-                                    {one.side === "long"
-                                      ? t.journal.long
-                                      : t.journal.short}
-                                  </span>
-                                  <span className={muted}>
-                                    {new Date(
-                                      one.closed_at ?? one.opened_at ?? "",
-                                    ).toLocaleString(numbers, {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </span>
-                                  <div className="flex-1" />
-                                  <span
-                                    className={`font-mono font-bold ${
-                                      one.pnl >= 0
-                                        ? "text-[var(--pane-up)]"
-                                        : "text-[var(--pane-down)]"
-                                    }`}
-                                  >
-                                    {one.pnl >= 0 ? "+" : "-"}
-                                    {Math.abs(one.pnl).toFixed(2)}
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
               </div>
             </div>
           </div>
@@ -1806,28 +1568,6 @@ export default function AnalyticsPage() {
         );
       })()}
 
-      {/* Папка открывается тем же окном, что и сделка в журнале терминала:
-          снимки листаются, под каждым - цифры его этапа и комментарий.
-          Карточку позиции сюда ставить не стали: она про разбор целиком, а в
-          календаре смотрят картинки дня. */}
-      {(() => {
-        const one = (dayTrades ?? []).find((row) => row.client_id === shotsOf);
-        if (!one) return null;
-        return (
-          <TradeShots
-            clientId={one.client_id}
-            symbol={one.symbol}
-            shots={one.shots ?? []}
-            trade={one}
-            openAt={bigShot ?? undefined}
-            onClose={() => {
-              setShotsOf(null);
-              setBigShot(null);
-            }}
-            onChange={() => setDayKey((n) => n + 1)}
-          />
-        );
-      })()}
     </PaneScope>
   );
 }
