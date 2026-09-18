@@ -25,6 +25,14 @@ import type { JournalRow } from "./JournalTable";
 
 export interface ActivityHeatProps {
   rows: readonly JournalRow[];
+  /**
+   * День, с которого человек в терминале.
+   *
+   * Карта ведётся отсюда, а не с первой сделки: день без сделок - это тоже
+   * работа, человек смотрел рынок и не нашёл входа. До регистрации клеток нет
+   * вовсе - терминала тогда не было.
+   */
+  since?: string | null;
   /** Нажали на клетку: открыть этот день. */
   onPick: (at: Date) => void;
   /** День, открытый сейчас: его клетка обведена. */
@@ -46,66 +54,61 @@ function tint(level: number): string {
   return "bg-[var(--pane-accent)]";
 }
 
-export default function ActivityHeat({ rows, onPick, active }: ActivityHeatProps) {
+export default function ActivityHeat({ rows, since, onPick, active }: ActivityHeatProps) {
   const t = useT();
   const numbers = useIntlLocale();
 
-  // Карта начинается с месяца первой сделки: июнь и июль пустыми клетками -
-  // это не тишина в работе, а время, когда терминала ещё не было. Счёт идёт
-  // от того месяца, в котором человек начал торговать, и не длиннее
-  // девяноста дней.
-  const cells = useMemo(() => {
-    const all = heatDays(rows);
-    const times = rows
-      .map((row) => {
-        const at = row.closed_at ?? row.opened_at;
-        const when = at ? new Date(at).getTime() : NaN;
-        return Number.isNaN(when) ? 0 : when;
-      })
-      .filter((one) => one > 0);
-    if (times.length === 0) return all;
+  // Полночь дня регистрации: раньше него карты нет.
+  const born = useMemo(() => {
+    if (!since) return 0;
+    const at = new Date(since);
+    if (Number.isNaN(at.getTime())) return 0;
+    return new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
+  }, [since]);
 
-    const born = new Date(Math.min(...times));
-    // Первое число того месяца, сдвинутое назад до понедельника: столбец
-    // карты обязан оставаться неделей, иначе вторник съедет к среде.
-    const edge = new Date(born.getFullYear(), born.getMonth(), 1);
-    edge.setDate(edge.getDate() - ((edge.getDay() + 6) % 7));
-    return all.filter((one) => one.at.getTime() >= edge.getTime());
-  }, [rows]);
+  // Поле всегда на торговый квартал - тринадцать недель. Обрезать его по дню
+  // регистрации значит растянуть клетки на пол-виджета у новичка и сжать у
+  // старожила: одна и та же карта выглядела бы по-разному у разных людей.
+  // Дни до регистрации просто пусты.
+  const cells = useMemo(() => heatDays(rows), [rows]);
 
   const busiest = useMemo(() => busiestDay(cells), [cells]);
 
   // Столбцы - недели, строки - дни недели. Иначе вторник не сравнить с
   // вторником, а именно это на карте и ищут.
   const weeks = useMemo(() => {
-    const out: HeatDay[][] = [];
-    for (let i = 0; i < cells.length; i += 7) out.push(cells.slice(i, i + 7));
+    const out: (HeatDay | null)[][] = [];
+    const first = cells[0];
+    const pad = first ? (first.at.getDay() + 6) % 7 : 0;
+    // Неделя, в которую человек зарегистрировался, почти всегда неполная:
+    // дни до него - пустое место, а не клетка, их в счёте нет.
+    const line: (HeatDay | null)[] = Array.from({ length: pad }, () => null);
+
+    for (const one of cells) {
+      line.push(one);
+      if (line.length === 7) {
+        out.push([...line]);
+        line.length = 0;
+      }
+    }
+    if (line.length > 0) {
+      while (line.length < 7) line.push(null);
+      out.push([...line]);
+    }
     return out;
   }, [cells]);
 
-  // Полночь первого дня работы: до неё клетки остаются пустыми.
-  const first = useMemo(() => {
-    const times = rows
-      .map((row) => {
-        const at = row.closed_at ?? row.opened_at;
-        const when = at ? new Date(at).getTime() : NaN;
-        return Number.isNaN(when) ? 0 : when;
-      })
-      .filter((one) => one > 0);
-    if (times.length === 0) return 0;
-    const at = new Date(Math.min(...times));
-    return new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
-  }, [rows]);
-
-  // Подпись месяца ставится над той неделей, в которой месяц начался.
+  // Подпись месяца ставится над той неделей, в которой месяц начался - по
+  // первому числу внутри неё, а не по понедельнику. Неделя с 31 августа по
+  // 6 сентября - это сентябрь: месяц начался в ней, и подписывать её августом
+  // значит сдвинуть весь счёт на месяц назад.
+  // Подпись месяца - над той неделей, в которой месяц начался, по первому
+  // числу внутри неё: неделя с 31 августа по 6 сентября это сентябрь.
   const months = useMemo(
     () =>
-      weeks.map((week, i) => {
-        const day = week[0];
-        if (!day) return "";
-        const before = weeks[i - 1]?.[0];
-        const same = before && before.at.getMonth() === day.at.getMonth();
-        return same ? "" : day.at.toLocaleDateString(numbers, { month: "short" });
+      weeks.map((week) => {
+        const opens = week.find((one) => one !== null && one.at.getDate() === 1);
+        return opens ? opens.at.toLocaleDateString(numbers, { month: "short" }) : "";
       }),
     [weeks, numbers],
   );
@@ -120,7 +123,9 @@ export default function ActivityHeat({ rows, onPick, active }: ActivityHeatProps
     return week;
   }, [numbers]);
 
-  const total = cells.reduce((all, one) => all + one.trades, 0);
+  const total = cells
+    .filter((one) => born === 0 || one.at.getTime() >= born)
+    .reduce((sum, one) => sum + one.trades, 0);
   const columns = `repeat(${Math.max(weeks.length, 1)}, minmax(0, 1fr))`;
   const lines = "repeat(7, minmax(0, 1fr))";
 
@@ -176,10 +181,15 @@ export default function ActivityHeat({ rows, onPick, active }: ActivityHeatProps
             gridAutoFlow: "column",
           }}
         >
-          {weeks.map((week) =>
-            week.map((one) => {
+          {weeks.map((week, w) =>
+            week.map((one, d) => {
+              if (one === null) return <span key={`gap-${w}-${d}`} />;
+              // До регистрации терминала у человека не было: место под день
+              // остаётся, клетки нет.
+              if (born > 0 && one.at.getTime() < born) {
+                return <span key={one.key} />;
+              }
               const level = heatLevel(one.trades, busiest);
-              const before = first > 0 && one.at.getTime() < first;
               return (
                 <button
                   key={one.key}
@@ -191,9 +201,9 @@ export default function ActivityHeat({ rows, onPick, active }: ActivityHeatProps
                   })} · ${t.journal.heatTrades(one.trades)}${
                     one.trades > 0 ? ` · ${money(one.pnl)}` : ""
                   }`}
-                  className={`min-h-0 min-w-0 rounded-[3px] border border-[var(--pane-border)] transition-colors duration-150 ease-out ${
-                    before ? "opacity-60" : ""
-                  } ${tint(level)} ${
+                  className={`min-h-0 min-w-0 rounded-[3px] border border-[var(--pane-border)] transition-colors duration-150 ease-out ${tint(
+                    level,
+                  )} ${
                     active === one.key
                       ? "ring-1 ring-[var(--pane-text)]"
                       : one.trades > 0

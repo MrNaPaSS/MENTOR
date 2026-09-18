@@ -44,6 +44,7 @@ export default function JournalPanel({
   onHover,
   onPick,
   owner,
+  since,
   onFit,
   onClose,
 }: {
@@ -70,6 +71,8 @@ export default function JournalPanel({
   onPick?: (trade: JournalRow) => void;
   /** Имя владельца: печать на карточке заверяет чью-то сделку, а не ничью. */
   owner?: string;
+  /** День регистрации: с него ведётся карта торговли в разборе. */
+  since?: string | null;
   /**
    * Сколько высоты панели хватит, чтобы календарь поместился целиком.
    *
@@ -355,6 +358,7 @@ export default function JournalPanel({
             year={year}
             month={month}
             picked={day}
+            since={since}
             onPickDay={setDay}
             onPick={(row, number) => setOpenPos({ id: row.client_id, number })}
           />

@@ -44,6 +44,8 @@ export interface ReviewPanelProps {
   /** Выбранный день, `2026-09-17`. Пусто - показываем месяц целиком. */
   picked: string | null;
   onPickDay: (date: string | null) => void;
+  /** День регистрации: с него ведётся карта торговли. */
+  since?: string | null;
   /** Нажали на папку сделки: открыть позицию целиком. */
   onPick: (trade: JournalRow, number: number) => void;
 }
@@ -194,6 +196,7 @@ export default function ReviewPanel({
   year,
   month,
   picked,
+  since,
   onPickDay,
   onPick,
 }: ReviewPanelProps) {
@@ -388,6 +391,7 @@ export default function ReviewPanel({
           <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--pane-border)]">
             <ActivityHeat
               rows={rows}
+              since={since}
               active={picked ?? undefined}
               onPick={(at) => {
                 const one = String(at.getMonth() + 1).padStart(2, "0");

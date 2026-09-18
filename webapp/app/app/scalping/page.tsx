@@ -661,6 +661,8 @@ export default function ScalpingPage() {
   const shotMenuRef = useRef<HTMLDivElement>(null);
   const [themeMenu, setThemeMenu] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement>(null);
+  // День, с которого человек в терминале: с него ведётся карта торговли.
+  const [joined, setJoined] = useState<string | null>(null);
   // Имя для подписи на снимке. Оно рисуется в картинке и на сервер не уходит.
   const [author, setAuthor] = useState<string | null>(null);
 
@@ -700,6 +702,7 @@ export default function ScalpingPage() {
       setBalance(body.balance_usdt ?? "0");
       // Подпись на снимках и карточках: своя, если задана, иначе ник Telegram.
       setAuthor(body.card_name || body.username || null);
+      setJoined(body.created_at ?? null);
       setAvatar(body.avatar_url ? `${API_URL}${body.avatar_url}` : null);
       setCopyAllowed(Boolean(body.copy_allowed));
     } catch {
@@ -4738,6 +4741,7 @@ export default function ScalpingPage() {
                 if (t.symbol !== symbol) setSymbol(t.symbol);
               }}
               owner={author ?? undefined}
+              since={joined}
               // Открывается ровно по нижнюю грань календаря: обрезанная
               // последняя неделя месяца - это месяц, у которого не видно
               // итога.
