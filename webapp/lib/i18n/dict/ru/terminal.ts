@@ -551,6 +551,7 @@ export const journal = {
     plan: "не по плану недели",
   },
   reviewTitle: "Заметки",
+  reviewPlace: "Оставить заметку",
   reviewHint: "Что сработало, что нет, почему вошёл. Сохраняется само.",
   positionsTitle: "Позиции",
   weekTrades: (marked: number, all: number) => `${marked} / ${all} сделок разобрано`,

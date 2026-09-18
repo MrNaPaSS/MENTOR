@@ -291,20 +291,11 @@ export default function PositionCard({
                 видно на графике, - и только потом сверяются с числами. Сверху
                 они отодвигали снимки за край экрана. */}
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[11px] sm:grid-cols-4">
+              {/* Три ровных ряда по четыре. Первый - цены замысла и выход,
+                  второй - чем входили, третий - цели и время в сделке. Цели
+                  начинают нижний ряд: их читают последними, сверяя с выходом. */}
               <Fact label={t.journal.colEntry} value={priceText(trade.entry)} />
               <Fact label={t.journal.cardStop} value={priceText(trade.stop)} />
-
-              {/* Цели сразу за стопом: так сделку и задумывают - вход, стоп,
-                  цели. Взятая отмечена цветом. */}
-              {trade.targets.map((price, i) => (
-                <Fact
-                  key={i}
-                  label={`TP${i + 1}`}
-                  value={priceText(price)}
-                  tone={i < trade.takes_hit ? "text-[var(--pane-up)]" : undefined}
-                />
-              ))}
-
               <Fact
                 label={t.journal.cardRR}
                 value={rr > 0 ? `1 : ${rr.toFixed(1)}` : "-"}
@@ -313,6 +304,7 @@ export default function PositionCard({
                 label={t.journal.cardExit}
                 value={trade.exit_price ? priceText(trade.exit_price) : "-"}
               />
+
               <Fact label={t.journal.cardQty} value={String(trade.qty)} />
               <Fact label={t.journal.cardLeverage} value={`×${trade.leverage}`} />
               <Fact
@@ -323,32 +315,40 @@ export default function PositionCard({
                 label={t.journal.cardFee}
                 value={trade.fee > 0 ? `-${trade.fee.toFixed(2)}` : "-"}
               />
-              {/* Время в сделке - последним: это единственная цифра, которую
-                  узнают уже после, когда всё кончилось. У идущей оно набегает,
-                  и подпись говорит об этом прямо. */}
+
+              {/* Взятая цель отмечена цветом. */}
+              {trade.targets.slice(0, 3).map((price, i) => (
+                <Fact
+                  key={i}
+                  label={`TP${i + 1}`}
+                  value={priceText(price)}
+                  tone={i < trade.takes_hit ? "text-[var(--pane-up)]" : undefined}
+                />
+              ))}
+              {/* Целей меньше трёх - пустые места держат ряд: без них время в
+                  сделке уезжает в середину строки. */}
+              {Array.from({ length: Math.max(0, 3 - trade.targets.length) }, (_, i) => (
+                <span key={`gap-${i}`} className="hidden sm:block" />
+              ))}
+              {/* Время в сделке: у идущей оно набегает, и подпись говорит об
+                  этом прямо - иначе цифра выглядит окончательной. */}
               <Fact
                 label={trade.closed_at ? t.journal.cardHeld : t.journal.cardHeldLive}
                 value={heldLabel(heldSeconds(trade), t.journal.heldUnits)}
               />
-
-
             </div>
 
-            {/* Заметка: подписана одним словом и вдвое ниже прежнего.
-                Поле в полэкрана обещало сочинение, а пишут в него две-три
-                строки - и те не всегда. */}
-            <div className="mt-2">
-              <span className="text-[10px] uppercase tracking-wider text-[var(--pane-muted)]">
-                {t.journal.reviewTitle}
-              </span>
-              <textarea
-                value={review}
-                onChange={(event) => setReview(event.target.value)}
-                placeholder={t.journal.reviewHint}
-                spellCheck={false}
-                className="mt-1 min-h-12 w-full resize-none rounded border border-[var(--pane-border)] bg-transparent px-2 py-1.5 text-[11px] leading-relaxed text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
-              />
-            </div>
+            {/* Заметка в одну строку: её и пишут одной строкой, а поле
+                высотой в абзац обещало сочинение. Подпись - в самом поле:
+                заголовок над ним занимал столько же места, сколько заметка. */}
+            <textarea
+              value={review}
+              onChange={(event) => setReview(event.target.value)}
+              placeholder={t.journal.reviewPlace}
+              spellCheck={false}
+              rows={1}
+              className="mt-2 w-full resize-none rounded border border-[var(--pane-border)] bg-transparent px-2 py-1 text-[11px] leading-relaxed text-[var(--pane-text)] outline-none placeholder:text-[var(--pane-muted)]"
+            />
           </div>
         </div>
       </div>
