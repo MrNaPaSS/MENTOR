@@ -381,8 +381,6 @@ export default function AnalyticsPage() {
   const [coinsBalance, setCoinsBalance] = useState<number | null>(null);
   // Кто владелец: аватар и рамка - для панели уровня.
   const [me, setMe] = useState<{ avatar: string | null; frame: string | null; name: string } | null>(null);
-  // Читается ли счёт ключами. Партнёрскую цифру по UID за свой баланс не выдаём.
-  const [ownBalance, setOwnBalance] = useState(false);
   const [coinsSynced, setCoinsSynced] = useState(false);
 
   useEffect(() => {
@@ -391,7 +389,6 @@ export default function AnalyticsPage() {
     api.analyticsMe(token).then(setAnalytics).catch(() => {});
     api.profile(token).then(p => {
       if (p.balance_usdt) setCurrentBalance(parseFloat(p.balance_usdt));
-      setOwnBalance(p.balance_source === "api_keys");
       // Имя владельца - для подписи на карточке сделки: печать заверяет
       // чью-то сделку, а не ничью. Своя подпись важнее ника Telegram: её
       // ученик выбрал сам, а ник переписывается при каждом входе.
@@ -1386,15 +1383,6 @@ export default function AnalyticsPage() {
                   {dayVolume(selectedDay) > 0 && (
                     <span className="rounded-lg bg-[color:color-mix(in_srgb,var(--pane-gold)_10%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[var(--pane-gold)]">
                       {t.analytics.calendar.dayVolume(fmtDot(dayVolume(selectedDay)))}
-                    </span>
-                  )}
-
-                  {/* Баланс дня - только если счёт читается ключами. Снимок,
-                      снятый партнёрской ручкой по UID, приходит с задержкой и
-                      считает не тот счёт, которым торгуют. */}
-                  {selectedDay.balance !== null && ownBalance && (
-                    <span className="rounded-lg bg-[var(--pane-hover)] px-2 py-0.5 text-[11px] font-semibold text-[var(--pane-text)]">
-                      💰 ${fmtDot(selectedDay.balance, 2)}
                     </span>
                   )}
 
