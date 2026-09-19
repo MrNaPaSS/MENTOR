@@ -13,7 +13,7 @@
 
 import { useT } from "@/lib/i18n";
 import { money, tone } from "@/lib/journalFormat";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Download, Lock, RefreshCw, Share2, Trash2, X } from "lucide-react";
 import PnlCard from "./PnlCard";
@@ -38,7 +38,7 @@ import {
 } from "@/lib/journal";
 import { useVenuePick, venueLabel } from "@/lib/venuePick";
 
-export default function JournalPanel({
+function JournalPanel({
   symbol,
   refreshKey,
   onHover,
@@ -491,3 +491,8 @@ export default function JournalPanel({
 }
 
 
+
+// Журнал не зависит от стакана, а страница под ним перерисовывается восемь
+// раз в секунду. Со стороны терминала все пропсы постоянны (lib/useEvent.ts),
+// поэтому список сделок пересчитывается только когда в нём что-то меняется.
+export default memo(JournalPanel);

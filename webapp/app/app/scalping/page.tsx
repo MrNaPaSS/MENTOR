@@ -12,6 +12,7 @@
 // переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
 import { onTabBack, tabIdle } from "@/lib/idleTab";
+import { useEvent } from "@/lib/useEvent";
 import { useT } from "@/lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -1476,6 +1477,44 @@ export default function ScalpingPage() {
       Number.isNaN(delta) ? JOURNAL_LIMITS.def : clamp(h - delta, JOURNAL_LIMITS),
     );
   }
+
+  // Обработчики журнала - постоянными ссылками (lib/useEvent.ts).
+  //
+  // Журнал не зависит от стакана вовсе, но страница под ним перерисовывается
+  // восемь раз в секунду, и стрелочная функция в разметке заставляла его
+  // пересчитывать весь список сделок на каждом кадре.
+  const pickFromJournal = useEvent((row: JournalRow) => {
+    setPicked(row);
+    if (row.symbol !== symbol) setSymbol(row.symbol);
+  });
+
+  // Открывается ровно по нижнюю грань календаря: обрезанная последняя неделя
+  // месяца - это месяц, у которого не видно итога.
+  const fitJournal = useEvent((height: number) => {
+    if (journalSet.current) return;
+    setJournalH(clamp(height, JOURNAL_LIMITS));
+  });
+
+  const closeJournal = useEvent(() => setJournalOpen(false));
+
+  // Монета из скринера открывает стакан заново - и снова самым узким: выбор
+  // монеты это начало работы с ней, а начинают её с графика.
+  const pickFromScreener = useEvent((next: string) => {
+    setDomW(PANE_LIMITS.dom.min);
+    selectSymbol(next);
+  });
+
+  // Монета из уведомления: показать её и убрать напоминание о ней.
+  const pickFromToast = useEvent((next: string) => {
+    selectSymbol(next);
+    dismissSymbol(next);
+  });
+
+  // Ручная лимитка: отправка и отказ от заготовки.
+  const submitManual = useEvent(() => void sendManual());
+  const cancelManual = useEvent(() => setManual(null));
+
+  const closeChat = useEvent(() => setChatOpen(false));
 
   // Разделитель у чата слева от него: тянем вправо - чат становится уже,
   // поэтому знак смещения обратный, как и у журнала.
@@ -3229,8 +3268,15 @@ export default function ScalpingPage() {
   }, [router]);
 
   // Отметки открытой монеты: их рисует график и подсвечивает стакан.
-  const myAlerts = alerts.filter((a) => a.symbol === symbol);
-  const alertPrices = myAlerts.map((a) => a.price);
+  //
+  // Списками, а не заново на каждый рендер: страница пересчитывается на каждом
+  // кадре стакана, а новый массив с теми же числами заставляет стакан и график
+  // перерисовываться впустую - их защита сравнивает пропсы по ссылке.
+  const myAlerts = useMemo(
+    () => alerts.filter((a) => a.symbol === symbol),
+    [alerts, symbol],
+  );
+  const alertPrices = useMemo(() => myAlerts.map((a) => a.price), [myAlerts]);
 
   /**
    * Список для скринера тремя разделами: сделки, избранное, остальное.
@@ -3278,9 +3324,12 @@ export default function ScalpingPage() {
   }, []);
 
   // Сделки по открытой монете: их рисует график, остальные ждут своей.
-  const mine = trades.filter((t) => t.symbol === symbol && t.status !== "closed");
+  const mine = useMemo(
+    () => trades.filter((t) => t.symbol === symbol && t.status !== "closed"),
+    [trades, symbol],
+  );
   // Все идущие сделки, по всем монетам: их показывает кнопка «позиции».
-  const active = trades.filter((t) => t.status !== "closed");
+  const active = useMemo(() => trades.filter((t) => t.status !== "closed"), [trades]);
 
   /**
    * Свои сделки для скрепки: и ждущие входа, и уже идущие.
@@ -3968,13 +4017,7 @@ export default function ScalpingPage() {
               venue={venue}
               sort={sort}
               onSort={setSort}
-              onSelect={(next) => {
-                // Монета из скринера открывает стакан заново - и снова самым
-                // узким: выбор монеты это начало работы с ней, а начинают её
-                // с графика.
-                setDomW(PANE_LIMITS.dom.min);
-                selectSymbol(next);
-              }}
+              onSelect={pickFromScreener}
             />
           </div>
         </section>
@@ -4586,14 +4629,7 @@ export default function ScalpingPage() {
                 {/* Уведомления - вверху по центру самого графика: событие
                     случается, пока трейдер смотрит сюда, и здесь же он его
                     видит. Нажатие открывает монету, о которой речь. */}
-                <Toasts
-                  items={toasts}
-                  onClose={dismissToast}
-                  onPick={(next) => {
-                    selectSymbol(next);
-                    dismissSymbol(next);
-                  }}
-                />
+                <Toasts items={toasts} onClose={dismissToast} onPick={pickFromToast} />
 
                 {manual && (
                   <ManualOrderCard
@@ -4607,8 +4643,8 @@ export default function ScalpingPage() {
                     used={usedQty}
                     free={Number(balance ?? 0) || 0}
                     onChange={setManual}
-                    onSubmit={sendManual}
-                    onCancel={() => setManual(null)}
+                    onSubmit={submitManual}
+                    onCancel={cancelManual}
                   />
                 )}
 
@@ -4739,7 +4775,7 @@ export default function ScalpingPage() {
                   own={myShares}
                   onCopy={copyAllowed ? copyTrade : undefined}
                   focus={chatFocus}
-                  onClose={() => setChatOpen(false)}
+                  onClose={closeChat}
                 />
               </section>
             </>
@@ -4859,20 +4895,11 @@ export default function ScalpingPage() {
               symbol={symbol ?? undefined}
               refreshKey={journalKey}
               onHover={setHovered}
-              onPick={(t) => {
-                setPicked(t);
-                if (t.symbol !== symbol) setSymbol(t.symbol);
-              }}
+              onPick={pickFromJournal}
               owner={author ?? undefined}
               since={joined}
-              // Открывается ровно по нижнюю грань календаря: обрезанная
-              // последняя неделя месяца - это месяц, у которого не видно
-              // итога.
-              onFit={(height) => {
-                if (journalSet.current) return;
-                setJournalH(clamp(height, JOURNAL_LIMITS));
-              }}
-              onClose={() => setJournalOpen(false)}
+              onFit={fitJournal}
+              onClose={closeJournal}
             />
           </section>
         </>

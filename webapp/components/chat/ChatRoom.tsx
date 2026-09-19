@@ -13,7 +13,7 @@
 // Сообщения, присутствие и история живут на сервере; здесь только показ и
 // отправка. Склад с живым каналом - в lib/chat/store.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { isNearBottom } from "@/lib/chat/stickToBottom";
 import {
   Send,
@@ -392,7 +392,7 @@ function useLinkPreview(link: LinkCard | null): LinkPreview | null {
   return href ? (previews.get(href) ?? null) : null;
 }
 
-export default function ChatRoom({
+function ChatRoom({
   tone = "site",
   symbol,
   own = [],
@@ -1329,3 +1329,8 @@ function Bubble({
     </div>
   );
 }
+
+// В терминале чат висит рядом с графиком, а страница под ним перерисовывается
+// на каждом кадре стакана. Разговор от стакана не зависит: считаем его заново
+// только когда меняется то, что ему передали.
+export default memo(ChatRoom);

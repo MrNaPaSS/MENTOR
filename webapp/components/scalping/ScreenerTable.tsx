@@ -69,7 +69,7 @@ type Props = {
   onSelect: (symbol: string) => void;
 };
 
-export default function ScreenerTable({
+function ScreenerTable({
   rows,
   selected,
   state,
@@ -311,3 +311,8 @@ function ImbalanceBar({ ratio }: { ratio: number }) {
     </div>
   );
 }
+
+// Список монет меняется раз в секунду, а страница под ним - восемь раз.
+// Со стороны терминала все пропсы постоянны, и таблица пересчитывается
+// только на своём кадре.
+export default memo(ScreenerTable);

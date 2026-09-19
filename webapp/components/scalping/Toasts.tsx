@@ -15,7 +15,7 @@
 // над графиком дольше нужного ему нечего.
 
 import { useT } from "@/lib/i18n";
-import { useEffect } from "react";
+import { memo, useEffect } from "react";
 import { X } from "lucide-react";
 
 export type Toast = {
@@ -52,7 +52,7 @@ const LIFE = 9000;
  */
 const LIFE_PROSE = 20000;
 
-export default function Toasts({
+function Toasts({
   items,
   onClose,
   onPick,
@@ -171,3 +171,6 @@ export default function Toasts({
     </div>
   );
 }
+
+// Уведомления живут своими сроками и к стакану отношения не имеют.
+export default memo(Toasts);

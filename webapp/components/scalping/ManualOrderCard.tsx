@@ -11,7 +11,7 @@
 // именно тот уровень, к которому трейдер тянется, ему нельзя.
 
 import { useT } from "@/lib/i18n";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { GripHorizontal, X } from "lucide-react";
 
 import { price as fmtPrice } from "@/lib/scalping";
@@ -41,7 +41,7 @@ const FIELD =
 /** Где окно стоит по умолчанию: верхний правый угол графика, с отступом. */
 const HOME = { x: -232, y: 12 };
 
-export default function ManualOrderCard({
+function ManualOrderCard({
   draft,
   tick,
   maxLeverage,
@@ -439,3 +439,6 @@ function Fact({
     </div>
   );
 }
+
+// Заготовка лимитки меняется от руки трейдера, а не от кадра стакана.
+export default memo(ManualOrderCard);
