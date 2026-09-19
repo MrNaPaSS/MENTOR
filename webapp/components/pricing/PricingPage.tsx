@@ -296,7 +296,9 @@ export default function PricingPage() {
                     </span>
                   )}
                 </div>
-                <p className="mt-2 text-xs text-text-muted">{p.plans.base.priceNote}</p>
+                <p className="mt-2 text-xs text-text-muted">
+                  {yearly ? p.plans.base.priceNoteYear : p.plans.base.priceNote}
+                </p>
 
                 <ul className="mt-7 flex-1 space-y-3">
                   {p.plans.base.features.map((line) => (
@@ -340,7 +342,9 @@ export default function PricingPage() {
                     </span>
                   )}
                 </div>
-                <p className="mt-2 text-xs text-text-muted">{p.plans.pro.priceNote}</p>
+                <p className="mt-2 text-xs text-text-muted">
+                  {yearly ? p.plans.pro.priceNoteYear : p.plans.pro.priceNote}
+                </p>
 
                 <ul className="mt-7 flex-1 space-y-3">
                   {p.plans.pro.features.map((line) => (

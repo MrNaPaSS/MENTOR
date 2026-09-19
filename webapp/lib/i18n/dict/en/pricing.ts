@@ -64,6 +64,7 @@ export const pricing = {
       price: "49",
       priceYear: "500",
       priceNote: "new users: +7 days on the first payment",
+      priceNoteYear: "new users: +30 days on the first payment",
       hint: "Any account on any of the five exchanges",
       badge: "For your own account",
       features: [
@@ -80,6 +81,7 @@ export const pricing = {
       price: "99",
       priceYear: "1100",
       priceNote: "new users: +7 days on the first payment",
+      priceNoteYear: "new users: +30 days on the first payment",
       hint: "Everything in Terminal plus what saves hours",
       features: [
         "The trade records itself - with screenshots of entry, target and stop",
