@@ -114,6 +114,7 @@ import type { DragLevel } from "@/components/scalping/DragLevels";
 import type { OrderChip } from "@/components/scalping/OrderChip";
 import { draftAt, moveLevel, qtyOf, riskOf, type ManualDraft } from "@/lib/trade/manual";
 import { goneTakes, stopFromExchange } from "@/lib/trade/exchange";
+import { exitKind } from "@/lib/trade/exitShot";
 import { isVenueSwitch } from "@/lib/venueSwitch";
 import { createBalanceRefresher, type BalanceRefresher } from "@/lib/balanceRefresh";
 import { profileChanged } from "@/lib/profileEvent";
@@ -176,6 +177,7 @@ import {
   spreadTakes,
   wasEntered,
   type ActiveTrade,
+  type TradeOutcome,
 } from "@/lib/trade/position";
 import PositionsChip from "@/components/scalping/PositionsChip";
 import {
@@ -3611,6 +3613,18 @@ export default function ScalpingPage() {
   // а это разные вещи, и вторая уже подписана предупреждением в шапке.
   const hadStopRef = useRef(new Set<string>());
 
+  /** Подпись последнего снимка: чем сделка кончилась на самом деле. */
+  const exitNote = useCallback(
+    (trade: ActiveTrade, outcome?: TradeOutcome) => {
+      const kind = exitKind(trade, domSnapshot()?.mid ?? 0, outcome);
+      if (kind === "take") return t.terminal.autoShotLast;
+      if (kind === "breakeven") return t.terminal.autoShotBreakeven;
+      if (kind === "manual") return t.terminal.autoShotClosed;
+      return t.terminal.autoShotStop;
+    },
+    [t],
+  );
+
   // Цели и стоп снимаются, когда их заявки не стало на бирже.
   //
   // По касанию цены снимать нельзя. Свечи идут с той биржи, что даёт стакан, а
@@ -3623,8 +3637,13 @@ export default function ScalpingPage() {
   // снимок всё равно попадает в ту же свечу, а не «уже после», как было с
   // ожиданием обхода сопровождения.
   //
-  // Перенос целей в расчёт не берём: в миг замены их на бирже тоже меньше, и
-  // это не исполнение.
+  // Снимков у сделки два рода. Промежуточные цели - первая, вторая - идут в
+  // сопровождение: позиция после них продолжается. Выход бывает один, и
+  // подписан он тем, чем сделка кончилась: последней целью, безубытком или
+  // стопом (lib/trade/exitShot.ts).
+  //
+  // Перенос в расчёт не берём: и при замене цели, и пока сервер двигает стоп в
+  // безубыток, защиты на бирже временно меньше - а это не исполнение.
   useEffect(() => {
     if (!autoShots || !tools.autoShots || !symbol || !plans) return;
 
@@ -3632,37 +3651,41 @@ export default function ScalpingPage() {
       if (trade.status !== "open" || trade.symbol !== symbol) continue;
       if (Date.now() - (movedRef.current.get(trade.id) ?? 0) < MOVE_QUIET_MS) continue;
 
-      // Стоп ушёл с биржи у живой позиции - он сработал. Но только если он
-      // там был: у сделки без принятой защиты нулей столько же.
-      const stopKey = `${trade.id}:exit`;
+      // Стоп на бирже был - значит его исчезновение что-то значит. У сделки,
+      // где биржа защиту не приняла, нулей ровно столько же.
       if (plans.stops > 0) hadStopRef.current.add(trade.id);
-      if (
-        plans.stops === 0 &&
-        hadStopRef.current.has(trade.id) &&
-        !touchedRef.current.has(stopKey)
-      ) {
-        touchedRef.current.add(stopKey);
-        void autoShot(trade.id, t.terminal.autoShotStop, "exit");
-        continue;
-      }
 
-      // Сколько целей уже сняла биржа. Последняя закрывает позицию - её
-      // снимок идёт в выход, остальные в сопровождение.
       const gone = goneTakes(trade.targets.length, plans.placed_takes, plans.take_prices);
-      for (let i = 0; i < gone; i += 1) {
-        const last = i === trade.targets.length - 1;
-        const key = last ? stopKey : `${trade.id}:take${i + 1}`;
+
+      // Промежуточные цели - в сопровождение. Последнюю здесь не снимаем: она
+      // закрывает позицию, и её снимок - это снимок выхода.
+      const middle = Math.min(gone, Math.max(0, trade.targets.length - 1));
+      for (let i = 0; i < middle; i += 1) {
+        const key = `${trade.id}:take${i + 1}`;
         if (touchedRef.current.has(key)) continue;
         touchedRef.current.add(key);
-        void autoShot(
-          trade.id,
-          last ? t.terminal.autoShotLast : t.terminal.autoShotTake(i + 1),
-          last ? "exit" : "manage",
-        );
+        void autoShot(trade.id, t.terminal.autoShotTake(i + 1), "manage");
       }
+
+      // Выход. Один снимок на сделку.
+      const exitFor = `${trade.id}:exit`;
+      if (touchedRef.current.has(exitFor)) continue;
+
+      // Стоп едет в безубыток силами сервера: на бирже его в это время нет
+      // вовсе, и читать это как срабатывание нельзя. Терминал уже знает об
+      // этом - тем же признаком он подписывает стоп на графике.
+      const rush = rushRef.current.get(trade.id);
+      const stopMoving = rush !== undefined && !rush.done;
+
+      const takesDone = trade.targets.length > 0 && gone >= trade.targets.length;
+      const stopGone = plans.stops === 0 && hadStopRef.current.has(trade.id) && !stopMoving;
+      if (!takesDone && !stopGone) continue;
+
+      touchedRef.current.add(exitFor);
+      void autoShot(trade.id, exitNote(trade), "exit");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plans, autoShots, tools.autoShots, symbol]);
+  }, [plans, autoShots, tools.autoShots, symbol, exitNote]);
 
   useEffect(() => {
     // Право проверяет и сервер: без него он откажет снимку с пометкой «авто».
@@ -3685,25 +3708,34 @@ export default function ScalpingPage() {
 
       // Этап снимок знает сам: он снимает по событию, и называть его руками
       // не нужно - в карточке позиции картинка сразу встаёт в свой ряд.
-      const closed = trade.status === "closed";
       const opened = was.startsWith("planned");
-      // Что поймало касание цены, второй раз не снимаем: две картинки одного
-      // и того же события в разборе только мешают.
+      // Последняя цель закрывает позицию, и её снимок - это выход, а не
+      // сопровождение: в сопровождение идут только промежуточные цели.
+      const lastTake =
+        trade.targets.length > 0 && trade.takesHit >= trade.targets.length;
+      const closed = trade.status === "closed" || (!opened && lastTake);
+
+      // Что уже снято, второй раз не снимаем: две картинки одного события в
+      // разборе только мешают.
       const key = closed
         ? `${trade.id}:exit`
         : opened
           ? ""
           : `${trade.id}:take${trade.takesHit}`;
       if (key && touchedRef.current.has(key)) continue;
+      if (key) touchedRef.current.add(key);
+
+      // Выход подписываем по исходу, а не словом «закрытие»: сервер видел
+      // сделку целиком и знает, цель это была, безубыток или стоп.
       const why = closed
-        ? t.terminal.autoShotClosed
+        ? exitNote(trade, trade.outcome)
         : opened
           ? t.terminal.autoShotOpened
           : t.terminal.autoShotTake(trade.takesHit);
       void autoShot(trade.id, why, closed ? "exit" : opened ? "entry" : "manage");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trades, autoShots, tools.autoShots, symbol]);
+  }, [trades, autoShots, tools.autoShots, symbol, exitNote]);
 
   /**
    * Снимок в сделку по кнопке.

@@ -66,6 +66,15 @@ describe("этап снимка", () => {
     expect(stageOf("", "стоп в безубытке")).toBe("exit");
   });
 
+  it("выход бывает целью - и это всё равно выход", () => {
+    // «Последняя цель» закрывает позицию: в сопровождение идут только
+    // промежуточные цели, а выход у сделки один.
+    expect(stageOf("", "последняя цель")).toBe("exit");
+    expect(stageOf("", "безубыток")).toBe("exit");
+    expect(stageOf("", "last target")).toBe("exit");
+    expect(stageOf("", "breakeven")).toBe("exit");
+  });
+
   it("немой снимок идёт во вход, а не пропадает", () => {
     expect(stageOf("", "")).toBe("entry");
     expect(stageOf(undefined, "плита сверху")).toBe("entry");

@@ -79,6 +79,7 @@ export const terminal = {
   autoShotOpened: "entry",
   autoShotTake: (n: number) => `target ${n}`,
   autoShotStop: "stop",
+  autoShotBreakeven: "breakeven",
   autoShotLast: "last target",
   autoShotClosed: "close",
   shotToTrade: "Attach to a trade",

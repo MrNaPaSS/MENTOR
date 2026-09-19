@@ -87,6 +87,7 @@ export const terminal = {
   autoShotOpened: "вход",
   autoShotTake: (n: number) => `цель ${n}`,
   autoShotStop: "стоп",
+  autoShotBreakeven: "безубыток",
   autoShotLast: "последняя цель",
   autoShotClosed: "закрытие",
   shotToTrade: "Добавить в сделку",
