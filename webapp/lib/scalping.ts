@@ -6,6 +6,7 @@
 // клиент только говорит, какой инструмент открыт.
 
 import { onTabBack, onTabIdle } from "./idleTab";
+import { publishDom } from "./domFeed";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_URL, liveAccessToken } from "./api";
 
@@ -230,7 +231,6 @@ export function useScalpingFeed({
   // себя: монета, которой у его биржи нет, до сих пор выдавала себя только
   // после нажатия - подменённой книгой.
   const [absent, setAbsent] = useState<ReadonlySet<string>>(new Set());
-  const [dom, setDom] = useState<DomFrame | null>(null);
   const [connected, setConnected] = useState(false);
   // Биржи ученика, чьи изменения сервер получает потоком. На них терминал
   // ждёт события вместо частого опроса; на остальных (у WEEX приватного
@@ -329,7 +329,9 @@ export function useScalpingFeed({
           }
         } else if (message.event === "dom") {
           const frame = message.payload as DomFrame;
-          if (ourFrame(frame, optsRef.current)) setDom(frame);
+          // Кадр не в состояние React, а в хранилище (lib/domFeed.ts): его ждут
+          // стакан и график, а страница вокруг них к нему равнодушна.
+          if (ourFrame(frame, optsRef.current)) publishDom(frame);
         } else if (message.event === "account") {
           const payload = (message.payload ?? {}) as { reason?: string; streamed?: string[] };
           if (Array.isArray(payload.streamed)) {
@@ -377,13 +379,16 @@ export function useScalpingFeed({
       offBack();
       if (timerRef.current) clearTimeout(timerRef.current);
       socketRef.current?.close();
+      // Ушли из терминала - кадр забываем. Хранилище живёт дольше страницы, и
+      // вернувшийся через час увидел бы вчерашние цены как живые.
+      publishDom(null);
     };
   }, []);
 
   // Смена инструмента: старый стакан сразу убираем, иначе на экране на долю
   // секунды останутся цены прошлой монеты.
   useEffect(() => {
-    setDom(null);
+    publishDom(null);
     send({ action: "symbol", symbol, exchange, rows, agg, shelf, interval });
   }, [symbol, exchange, rows, agg, shelf, interval, send]);
 
@@ -398,7 +403,7 @@ export function useScalpingFeed({
     send({ action: "foot", time: foot });
   }, [foot, send]);
 
-  return { screener, absent, dom, connected, streamed };
+  return { screener, absent, connected, streamed };
 }
 
 /**

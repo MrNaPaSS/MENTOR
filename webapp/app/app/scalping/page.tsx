@@ -12,6 +12,7 @@
 // переключателей и шести захардкоженных пар, и пользоваться этим было нельзя.
 
 import { onTabBack, tabIdle } from "@/lib/idleTab";
+import { domSnapshot, useBookInfo, watchDom } from "@/lib/domFeed";
 import { useEvent } from "@/lib/useEvent";
 import { useT } from "@/lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -51,8 +52,8 @@ import {
 } from "@/lib/chat/store";
 import PaneDivider from "@/components/scalping/PaneDivider";
 import ScreenerTable from "@/components/scalping/ScreenerTable";
-import DomTrader from "@/components/scalping/DomTrader";
-import PriceChart, { type Indicators } from "@/components/scalping/PriceChart";
+import { type Indicators } from "@/components/scalping/PriceChart";
+import { BookChart, BookLadder, BookMid, BookWall } from "@/components/scalping/BookPanes";
 import {
   CHART_PALETTES,
   CHART_PRESETS,
@@ -181,6 +182,7 @@ import {
   base,
   money,
   price as fmtPrice,
+  type DomFrame,
   type LadderRow,
   type ScreenerRow,
   type Wall,
@@ -657,6 +659,11 @@ export default function ScalpingPage() {
 
   // Отметки на ценах: терминал скажет, когда уровень пересекут.
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  // Рядом ref: сторож отметок сидит на подписке к кадру и не пересобирается
+  // при каждой новой отметке - иначе цена прошлого кадра терялась бы вместе с
+  // ним, и пересечение прошло бы незамеченным.
+  const alertsRef = useRef<PriceAlert[]>([]);
+  alertsRef.current = alerts;
   // Избранные монеты: свой раздел наверху и отдельный режим показа.
   const [favorites, setFavorites] = useState<string[]>([]);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
@@ -1035,7 +1042,12 @@ export default function ScalpingPage() {
     setScreenerOpen(false);
   }, [venue]);
 
-  const { screener, absent, dom, connected, streamed } = useScalpingFeed({
+  // Паспорт открытой книги: монета, биржа, шаг цены. Меняется со сменой
+  // инструмента, а не с каждым кадром, - и перерисовывает страницу тоже только
+  // тогда (lib/domFeed.ts).
+  const bookInfo = useBookInfo();
+
+  const { screener, absent, connected, streamed } = useScalpingFeed({
     symbol,
     exchange: venue,
     rows: shownRows,
@@ -1080,11 +1092,15 @@ export default function ScalpingPage() {
   // Объёмы всех открытых позиций счёта: по ним считается счётчик у итога дня.
   const [liveSizes, setLiveSizes] = useState<Record<string, number>>({});
 
-  const midRef = useRef(0);
-  midRef.current = dom?.mid ?? 0;
+  // Цена для графика - три раза в секунду, прямо из хранилища кадров.
+  //
+  // Кадр в состоянии страницы перерисовывал её восемь раз в секунду вместе со
+  // всем, что на ней стоит. Здесь же меняется одно число, и меняется только
+  // когда оно другое.
   useEffect(() => {
     const id = setInterval(() => {
-      setChartPrice((current) => (current === midRef.current ? current : midRef.current));
+      const mid = domSnapshot()?.mid ?? 0;
+      setChartPrice((current) => (current === mid ? current : mid));
     }, 330);
     return () => clearInterval(id);
   }, []);
@@ -1386,7 +1402,7 @@ export default function ScalpingPage() {
    * если биржа не вернула итог, в журнал ушёл бы выход по ней.
    */
   function priceFor(sym: string): number {
-    if (sym === symbol) return dom?.mid ?? 0;
+    if (sym === symbol) return domSnapshot()?.mid ?? 0;
     return screenerRef.current.find((row) => row.symbol === sym)?.price ?? 0;
   }
 
@@ -1515,6 +1531,21 @@ export default function ScalpingPage() {
   const cancelManual = useEvent(() => setManual(null));
 
   const closeChat = useEvent(() => setChatOpen(false));
+
+  // Обработчики графика - постоянными ссылками по той же причине.
+  const keepMarks = useEvent((keys: string[]) => {
+    markedRef.current = keys;
+  });
+  const changeFootOpen = useEvent((open: boolean) => {
+    if (footAvailable && tools.footprint) setFootOpen(open);
+  });
+  const askClose = useEvent((one: ActiveTrade) => {
+    setClosing(one);
+    setCloseOpen(true);
+  });
+  const removeAlert = useEvent((id: string) =>
+    setAlerts((list) => list.filter((a) => a.id !== id)),
+  );
 
   // Разделитель у чата слева от него: тянем вправо - чат становится уже,
   // поэтому знак смещения обратный, как и у журнала.
@@ -1715,7 +1746,7 @@ export default function ScalpingPage() {
     if (blocked()) return;
     setDraft({
       shelf: level,
-      tick: dom?.tick ?? 0,
+      tick: domSnapshot()?.tick ?? 0,
       margin,
       leverage,
       stopPct: suggestStopPct(atr, level.price),
@@ -1956,7 +1987,7 @@ export default function ScalpingPage() {
 
   /** Строка стакана как уровень: сторона по тому, чьи заявки в ней стоят. */
   function openTradeFromRow(row: LadderRow) {
-    const mid = dom?.mid ?? row.price;
+    const mid = domSnapshot()?.mid ?? row.price;
     openTrade({
       price: row.price,
       size: row.bid > 0 ? row.bid : row.ask,
@@ -2186,13 +2217,17 @@ export default function ScalpingPage() {
   const live = Boolean(exchange?.connected);
 
   // Живой ход сделки по цене стакана: вход, взятые цели, перенос стопа в
-  // безубыток и закрытие. Функция возвращает прежнюю ссылку, когда ничего не
-  // изменилось, поэтому восемь кадров в секунду не приводят к перерисовке.
+  // безубыток и закрытие.
+  //
+  // Подпиской на кадр, а не через состояние страницы: ведению нужна свежая
+  // цена, а не свежая картинка. Цена приходит восемь раз в секунду, и раньше
+  // каждый её приход перерисовывал терминал целиком - ради арифметики, которая
+  // в девяти случаях из десяти ничего не меняет.
+  //
+  // Условие то же, что и было: считаем, когда цена другая. Первый расчёт - по
+  // кадру, который уже лежит: при смене счёта ждать нового кадра нельзя, иначе
+  // на тихом рынке разметка простоит неверной до следующего движения.
   useEffect(() => {
-    const bid = dom?.best_bid ?? 0;
-    const ask = dom?.best_ask ?? 0;
-    const book = dom?.symbol ?? "";
-    if (!(bid > 0) || !(ask > 0) || !book) return;
     // Пока сервер не сказал, подключён ли счёт, неизвестно, кто ведёт сделку.
     //
     // При переходе в терминал стакан приезжает по сокету раньше, чем ответ о
@@ -2201,23 +2236,42 @@ export default function ScalpingPage() {
     // отработала», хотя на бирже позиция стояла, а после F5 сервер возвращал
     // её на график.
     if (!exchangeKnown) return;
-    setTrades((list) => {
-      let changed = false;
-      const now = Date.now();
-      const updated = list.map((current) => {
-        // Цена стакана - только своей монете. Сделки идут по нескольким
-        // монетам, а стакан один: цена BTC, приложенная к лонгу ETH,
-        // «брала» все его цели разом, к шорту - выбивала стоп.
-        if (current.symbol !== book) return current;
-        // При подключённом счёте вход и выход подтверждает биржа: наша
-        // арифметика ведёт только разметку идущей позиции.
-        const next = advanceQuote(current, { bid, ask }, now, live);
-        if (next !== current) changed = true;
-        return next;
+
+    let lastBid = 0;
+    let lastAsk = 0;
+    let lastBook = "";
+
+    function advance(frame: DomFrame | null) {
+      const bid = frame?.best_bid ?? 0;
+      const ask = frame?.best_ask ?? 0;
+      const book = frame?.symbol ?? "";
+      if (!(bid > 0) || !(ask > 0) || !book) return;
+      if (bid === lastBid && ask === lastAsk && book === lastBook) return;
+      lastBid = bid;
+      lastAsk = ask;
+      lastBook = book;
+
+      setTrades((list) => {
+        let changed = false;
+        const now = Date.now();
+        const updated = list.map((current) => {
+          // Цена стакана - только своей монете. Сделки идут по нескольким
+          // монетам, а стакан один: цена BTC, приложенная к лонгу ETH,
+          // «брала» все его цели разом, к шорту - выбивала стоп.
+          if (current.symbol !== book) return current;
+          // При подключённом счёте вход и выход подтверждает биржа: наша
+          // арифметика ведёт только разметку идущей позиции.
+          const next = advanceQuote(current, { bid, ask }, now, live);
+          if (next !== current) changed = true;
+          return next;
+        });
+        return changed ? updated : list;
       });
-      return changed ? updated : list;
-    });
-  }, [dom?.best_bid, dom?.best_ask, dom?.symbol, live, exchangeKnown]);
+    }
+
+    advance(domSnapshot());
+    return watchDom(advance);
+  }, [live, exchangeKnown]);
 
   // Цена дошла до цели идущей сделки - стоп вот-вот поедет в безубыток.
   //
@@ -2232,30 +2286,43 @@ export default function ScalpingPage() {
   // перенос идёт.
   useEffect(() => {
     if (!live || !symbol) return;
-    const bid = dom?.best_bid ?? 0;
-    const ask = dom?.best_ask ?? 0;
-    if (!(bid > 0) || !(ask > 0)) return;
-    const now = Date.now();
-    let fresh = false;
-    for (const trade of tradesRef.current) {
-      if (trade.symbol !== symbol || trade.status !== "open") continue;
-      const next = trade.targets[trade.takesHit];
-      if (!(next > 0)) continue;
-      const reached = trade.side === "long" ? bid >= next : ask <= next;
-      if (!reached) continue;
-      if (rushRef.current.get(trade.id)?.hit === trade.takesHit) continue;
-      rushRef.current.set(trade.id, {
-        hit: trade.takesHit,
-        stop: trade.stop,
-        until: now + RUSH_MS,
-        done: false,
-      });
-      fresh = true;
+
+    let lastBid = 0;
+    let lastAsk = 0;
+
+    function look(frame: DomFrame | null) {
+      const bid = frame?.best_bid ?? 0;
+      const ask = frame?.best_ask ?? 0;
+      if (!(bid > 0) || !(ask > 0)) return;
+      if (bid === lastBid && ask === lastAsk) return;
+      lastBid = bid;
+      lastAsk = ask;
+
+      const now = Date.now();
+      let fresh = false;
+      for (const trade of tradesRef.current) {
+        if (trade.symbol !== symbol || trade.status !== "open") continue;
+        const next = trade.targets[trade.takesHit];
+        if (!(next > 0)) continue;
+        const reached = trade.side === "long" ? bid >= next : ask <= next;
+        if (!reached) continue;
+        if (rushRef.current.get(trade.id)?.hit === trade.takesHit) continue;
+        rushRef.current.set(trade.id, {
+          hit: trade.takesHit,
+          stop: trade.stop,
+          until: now + RUSH_MS,
+          done: false,
+        });
+        fresh = true;
+      }
+      if (!fresh) return;
+      syncMoving();
+      kickRef.current?.();
     }
-    if (!fresh) return;
-    syncMoving();
-    kickRef.current?.();
-  }, [dom?.best_bid, dom?.best_ask, live, symbol, syncMoving]);
+
+    look(domSnapshot());
+    return watchDom(look);
+  }, [live, symbol, syncMoving]);
 
   // Позиция глазами биржи. Терминал обязан быть её зеркалом: своё состояние он
   // может держать сколько угодно, но правда о том, открыта ли позиция, — там.
@@ -2315,7 +2382,7 @@ export default function ScalpingPage() {
 
     /** Цена монеты: по открытой - из стакана, по остальным - из списка. */
     function priceOf(sym: string): number {
-      if (sym === symbol) return midRef.current;
+      if (sym === symbol) return domSnapshot()?.mid ?? 0;
       return screenerRef.current.find((row) => row.symbol === sym)?.price ?? 0;
     }
 
@@ -2626,7 +2693,7 @@ export default function ScalpingPage() {
         // Расхождение с приложением биржи видно глазами, а по какой из причин -
         // нет: то ли биржа считает от своей цены маркировки, то ли её число не
         // дошло и на экране наша арифметика.
-        pnlSeen(trade, venue, one, midRef.current);
+        pnlSeen(trade, venue, one, domSnapshot()?.mid ?? 0);
         if (qty === trade.qty && entry === trade.entry && unrealized === trade.unrealized) {
           continue;
         }
@@ -3154,41 +3221,51 @@ export default function ScalpingPage() {
   // само по себе не событие — событие в том, что она была по другую сторону.
   const lastMid = useRef(0);
   useEffect(() => {
-    const mid = dom?.mid ?? 0;
-    const previous = lastMid.current;
-    lastMid.current = mid;
-    if (!(mid > 0) || !(previous > 0) || !symbol) return;
+    if (!symbol) return;
 
-    const crossed = crossedAlerts(alerts, symbol, previous, mid);
-    if (crossed.length === 0) return;
+    // Подпиской, а не через состояние: отметку сторожит цена, и ради этого
+    // сторожа страница перерисовывалась восемь раз в секунду.
+    function look(frame: DomFrame | null) {
+      const mid = frame?.mid ?? 0;
+      const previous = lastMid.current;
+      lastMid.current = mid;
+      if (!(mid > 0) || !(previous > 0) || !symbol) return;
 
-    for (const hit of crossed) {
-      const text = t.terminal.events.crossed(base(hit.symbol), fmtPrice(hit.price, dom?.tick ?? 0));
-      play("alert");
-      setOrderNote({ text, bad: false });
-      // Плашка внизу графика годится для ответа на нажатие, но отметку ставят
-      // как раз затем, чтобы не смотреть на график: уведомление сверху.
-      pushToast({
-        id: `alert:${hit.id}`,
-        symbol: hit.symbol,
-        title: t.terminal.events.crossedTitle(base(hit.symbol)),
-        text: fmtPrice(hit.price, dom?.tick ?? 0),
-        tone: "plain",
-      });
-      // Вкладка может быть свёрнута — ради этого отметку и ставят.
-      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-        try {
-          new Notification(t.terminal.events.crossedNotification, { body: text, tag: hit.id });
-        } catch {
-          // Уведомление не показалось — звук и плашка уже сработали.
+      const crossed = crossedAlerts(alertsRef.current, symbol, previous, mid);
+      if (crossed.length === 0) return;
+
+      const tick = frame?.tick ?? 0;
+      for (const hit of crossed) {
+        const text = t.terminal.events.crossed(base(hit.symbol), fmtPrice(hit.price, tick));
+        play("alert");
+        setOrderNote({ text, bad: false });
+        // Плашка внизу графика годится для ответа на нажатие, но отметку ставят
+        // как раз затем, чтобы не смотреть на график: уведомление сверху.
+        pushToast({
+          id: `alert:${hit.id}`,
+          symbol: hit.symbol,
+          title: t.terminal.events.crossedTitle(base(hit.symbol)),
+          text: fmtPrice(hit.price, tick),
+          tone: "plain",
+        });
+        // Вкладка может быть свёрнута — ради этого отметку и ставят.
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          try {
+            new Notification(t.terminal.events.crossedNotification, { body: text, tag: hit.id });
+          } catch {
+            // Уведомление не показалось — звук и плашка уже сработали.
+          }
         }
       }
+      // Отметка одноразовая: уровень пробит, и напоминать о нём второй раз
+      // значит звенеть на каждом колебании вокруг него.
+      const done = new Set(crossed.map((a) => a.id));
+      setAlerts((list) => list.filter((a) => !done.has(a.id)));
     }
-    // Отметка одноразовая: уровень пробит, и напоминать о нём второй раз
-    // значит звенеть на каждом колебании вокруг него.
-    const done = new Set(crossed.map((a) => a.id));
-    setAlerts((list) => list.filter((a) => !done.has(a.id)));
-  }, [dom?.mid, dom?.tick, alerts, symbol]);
+
+    look(domSnapshot());
+    return watchDom(look);
+  }, [symbol, t]);
 
   // Сколько монеты уже занято на бирже: позиции обеих сторон и ждущие входы.
   // Предел позиции биржа считает по всему сразу, и окну заявки нужно знать,
@@ -3330,6 +3407,16 @@ export default function ScalpingPage() {
   );
   // Все идущие сделки, по всем монетам: их показывает кнопка «позиции».
   const active = useMemo(() => trades.filter((t) => t.status !== "closed"), [trades]);
+
+  // Разметка выбранной в журнале сделки - призраком на графике.
+  //
+  // Идущую сделку призраком не рисуем: она уже на графике живой разметкой, и
+  // вторая поверх неё только путает.
+  const ghost = useMemo(() => {
+    const one = picked ?? hovered;
+    if (!one || one.closed_at === null) return null;
+    return one.symbol === symbol ? one : null;
+  }, [picked, hovered, symbol]);
 
   /**
    * Свои сделки для скрепки: и ждущие входа, и уже идущие.
@@ -4064,12 +4151,12 @@ export default function ScalpingPage() {
                       </button>
                     );
                   })}
-                  {dom && dom.tick > 0 && domW >= DOM_TICK_W && (
+                  {bookInfo && bookInfo.tick > 0 && domW >= DOM_TICK_W && (
                     <span
                       className="ml-1 max-w-[7rem] truncate font-mono text-[10px] text-[var(--pane-text-2)]"
-                      title={t.terminal.tickTitle(fmtPrice(dom.tick, dom.tick))}
+                      title={t.terminal.tickTitle(fmtPrice(bookInfo.tick, bookInfo.tick))}
                     >
-                      = {fmtPrice(dom.tick, dom.tick)}
+                      = {fmtPrice(bookInfo.tick, bookInfo.tick)}
                     </span>
                   )}
 
@@ -4098,20 +4185,14 @@ export default function ScalpingPage() {
               </div>
 
               <div className="min-h-0 flex-1">
-                {dom ? (
-                  <DomTrader
-                    frame={dom}
-                    onZoom={zoomDom}
-                    onPickLevel={setLevel}
-                    onHoverLevel={hoverLevel}
-                    alerts={alertPrices}
-                    footerHeight={axisHeight}
-                  />
-                ) : (
-                  <p className="grid h-full place-items-center text-sm text-[var(--pane-muted)]">
-                    {t.terminal.collectingDom(base(symbol))}
-                  </p>
-                )}
+                <BookLadder
+                  onZoom={zoomDom}
+                  onPickLevel={setLevel}
+                  onHoverLevel={hoverLevel}
+                  alerts={alertPrices}
+                  footerHeight={axisHeight}
+                  waiting={t.terminal.collectingDom(base(symbol))}
+                />
               </div>
             </section>
 
@@ -4509,28 +4590,27 @@ export default function ScalpingPage() {
                     нет: там книга общая всегда, и постоянная отметка у каждой
                     пары была бы шумом, а не предупреждением. Вернуть её - одно
                     условие, когда поток появится. */}
-                {dom?.fallback === "no_symbol" && (
+                {bookInfo?.fallback === "no_symbol" && (
                   <span
-                    title={t.terminal.bookNoSymbol(dom.asked || venue)}
+                    title={t.terminal.bookNoSymbol(bookInfo.asked || venue)}
                     className="rounded bg-[var(--pane-down-faint)] px-1 text-[10px] uppercase tracking-wide text-[var(--pane-down)]"
                   >
-                    {t.terminal.book(dom.exchange)}
+                    {t.terminal.book(bookInfo.exchange)}
                   </span>
                 )}
+                {/* Цена и плита едут кадром, и обновляются они сами: строка
+                    в шапке не повод пересчитывать весь терминал. */}
                 <span className="text-[var(--pane-text-2)]">
-                  {dom ? fmtPrice(dom.mid, dom.tick) : "-"}
+                  <BookMid />
                 </span>
-                {dom?.wall && (
-                  <span
-                    className="cursor-help text-[var(--pane-gold)]"
-                    title={
-                      t.terminal.wallTitle
-                    }
-                  >
-                    {t.terminal.wall(money(dom.wall.notional), fmtPrice(dom.wall.price, dom.tick))}
-                    {dom.wall.side === "bid" ? t.terminal.support : t.terminal.resistance}
-                  </span>
-                )}
+                <BookWall
+                  render={(wall, tick) => (
+                    <span className="cursor-help text-[var(--pane-gold)]" title={t.terminal.wallTitle}>
+                      {t.terminal.wall(money(wall.notional), fmtPrice(wall.price, tick))}
+                      {wall.side === "bid" ? t.terminal.support : t.terminal.resistance}
+                    </span>
+                  )}
+                />
                 {/* Защита сверена с биржей: цели на графике и цели на бирже -
                     разные вещи, и знать об этом трейдер должен сразу. */}
                 {plans && mine.some((t) => t.status === "open") && (
@@ -4648,30 +4728,20 @@ export default function ScalpingPage() {
                   />
                 )}
 
-                {/* Биржа свечей - только когда книга не с общей биржи. Пустая
-                    строка и "binance" - один и тот же источник, но разные
-                    адреса запроса: пока первый кадр стакана не пришёл, график
-                    успевал сходить за свечами без биржи, а следом второй раз -
-                    с ней. Лишний поход стоит веса запросов, которого не
-                    хватает снимкам стаканов. */}
-                <PriceChart
+                {/* Плита, полки, живая свеча и её профиль едут кадром - их
+                    график берёт сам (components/scalping/BookPanes.tsx). */}
+                <BookChart
                   symbol={symbol}
-                  venue={dom?.exchange && dom.exchange !== "binance" ? dom.exchange : ""}
+                  agg={shownAgg}
                   interval={timeframe}
-                  wall={dom?.wall ?? null}
-                  shelves={dom?.shelves ?? []}
                   paper={paper}
                   preset={palette}
                   indicators={shownIndicators}
                   trades={mine}
-                  onMarks={(keys) => {
-                    markedRef.current = keys;
-                  }}
+                  onMarks={keepMarks}
                   preview={preview}
                   movingStops={movingStops}
                   livePrice={chartPrice}
-                  liveCandle={dom?.candle ?? null}
-                  liveFoot={dom?.foot ?? null}
                   onFootBar={setFootBar}
                   // Разбор виден там, где он считается: на крупной свече
                   // сделок миллионы, и сервер её не разбирает. Но выключателя
@@ -4679,29 +4749,15 @@ export default function ScalpingPage() {
                   // снова на месте. Гасит его только сам трейдер: кнопкой или
                   // крестиком, как и объёмные свечи.
                   footOpen={footOpen && footAvailable && tools.footprint}
-                  onFootOpenChange={(open) => {
-                    if (footAvailable && tools.footprint) setFootOpen(open);
-                  }}
-                  onCloseTrade={(t) => {
-                    setClosing(t);
-                    setCloseOpen(true);
-                  }}
+                  onFootOpenChange={changeFootOpen}
+                  onCloseTrade={askClose}
                   showJournal={journalOpen}
                   journalKey={journalKey}
-                  ghost={(() => {
-                    const one = picked ?? hovered;
-                    // Идущую сделку призраком не рисуем: она уже на графике
-                    // живой разметкой, и вторая поверх неё только путает.
-                    if (!one || one.closed_at === null) return null;
-                    return one.symbol === symbol ? one : null;
-                  })()}
+                  ghost={ghost}
                   hoverLevel={levelHint}
                   shot={shotRef}
-                  // Шаг сетки лестницы делим на укрупнение: биржевой шаг от
-                  // него не зависит, а точность шкалы должна быть по бирже.
-                  tick={dom && dom.tick > 0 ? dom.tick / Math.max(1, shownAgg) : undefined}
                   alerts={myAlerts}
-                  onRemoveAlert={(id) => setAlerts((list) => list.filter((a) => a.id !== id))}
+                  onRemoveAlert={removeAlert}
                   onShelfClick={openTrade}
                   dragLevels={dragLevels}
                   orderChip={orderChip}
@@ -4820,7 +4876,7 @@ export default function ScalpingPage() {
       {level && (
         <LevelMenu
           row={level}
-          tick={dom?.tick ?? 0}
+          tick={bookInfo?.tick ?? 0}
           alerted={alertPrices.includes(level.price)}
           onTrade={() => {
             openTradeFromRow(level);
@@ -4852,7 +4908,7 @@ export default function ScalpingPage() {
         <CloseDialog
           trade={closing}
           price={priceFor(closing.symbol)}
-          tick={closing.symbol === symbol ? (dom?.tick ?? 0) : 0}
+          tick={closing.symbol === symbol ? (bookInfo?.tick ?? 0) : 0}
           onConfirm={applyClose}
           onCancel={() => {
             setCloseOpen(false);
@@ -4927,7 +4983,7 @@ export default function ScalpingPage() {
           live={Boolean(exchange?.connected)}
           // Монеты нет на бирже ученика: книга на экране подставлена с общей,
           // и заявка туда не уйдёт. Запираем до нажатия, а не ловим отказ.
-          missing={dom?.fallback === "no_symbol"}
+          missing={bookInfo?.fallback === "no_symbol"}
           opposing={opposing}
           maxLeverage={limits?.max_leverage}
           takerFee={limits?.taker_fee}
