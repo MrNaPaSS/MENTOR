@@ -17,6 +17,7 @@
 | [tz/webapp-tz.md](tz/webapp-tz.md) | ТЗ NMNH Platform WebApp (доработанное, v2.1) |
 | [tz/telegram-login-tz.md](tz/telegram-login-tz.md) | ТЗ: вход на сайт одноразовым паролем от бота академии |
 | [tz/subscription-tz.md](tz/subscription-tz.md) | ТЗ: подписка на терминал за USDT - приём платежа, активация через бота, два источника доступа |
+| [tz/subscription-kickoff.md](tz/subscription-kickoff.md) | Подписка: с чего начать - что уже готово, порядок шагов, чего не делать |
 | [tz/chat-signals-tz.md](tz/chat-signals-tz.md) | ТЗ: заявка из чата становится сигналом, и ответы в чате |
 | [tz/market-sources-tz.md](tz/market-sources-tz.md) | ТЗ: источники рыночных данных, платные ручки и свои панели вместо чужих |
 | [tz/multi-exchange-tz.md](tz/multi-exchange-tz.md) | ТЗ: мультибиржа в терминале - выбор биржи, подключение счёта, стакан своей биржи |
