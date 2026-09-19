@@ -33,6 +33,13 @@ export const pricing = {
     title: "One terminal, two doors",
     subtitle: "The first is free and gives everything - it needs an exchange account registered through the academy. The second is paid and needs nothing but the payment.",
     perMonth: "USDT / month",
+    perYear: "USDT / year",
+
+    billing: {
+      month: "Monthly",
+      year: "Yearly",
+      save: "cheaper",
+    },
     free: {
       name: "Through the academy",
       price: "0",
@@ -55,6 +62,7 @@ export const pricing = {
     base: {
       name: "Terminal",
       price: "49",
+      priceYear: "500",
       priceNote: "new users: +7 days on the first payment",
       hint: "Any account on any of the five exchanges",
       badge: "For your own account",
@@ -70,6 +78,7 @@ export const pricing = {
     pro: {
       name: "Terminal Pro",
       price: "99",
+      priceYear: "1100",
       priceNote: "new users: +7 days on the first payment",
       hint: "Everything in Terminal plus what saves hours",
       features: [

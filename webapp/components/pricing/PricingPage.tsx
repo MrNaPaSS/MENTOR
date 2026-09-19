@@ -11,6 +11,7 @@
 // как полноценный тариф, а не как «раньше было бесплатно». Человек должен
 // видеть, что прежняя дорога никуда не делась, просто подходит не всем.
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -50,10 +51,37 @@ function Cell({ value, yes, no }: { value: boolean | string; yes: string; no: st
   return <span className="text-sm font-semibold text-text-primary">{value}</span>;
 }
 
+/** Помесячно или на год. Тумблер переключает обе платные колонки разом. */
+type Billing = "month" | "year";
+
 export default function PricingPage() {
   const t = useT();
   const copy = t.landing;
   const p = t.pricing;
+
+  // Помесячная оплата стоит первой: это привычный выбор, и год должен быть
+  // осознанным решением, а не значением по умолчанию, в которое человек попал
+  // случайно и заплатил в десять раз больше, чем собирался.
+  const [billing, setBilling] = useState<Billing>("month");
+  const yearly = billing === "year";
+
+  // Экономия считается из тех же цен, что показаны рядом: вписывать её руками
+  // значит однажды поменять цену и забыть поменять цифру выгоды.
+  const savings = useMemo(() => {
+    const of = (month: string, year: string) => {
+      const twelve = Number(month) * 12;
+      const full = Number(year);
+      return {
+        saved: twelve - full,
+        percent: twelve ? Math.round(((twelve - full) * 100) / twelve) : 0,
+        perMonth: (full / 12).toFixed(2),
+      };
+    };
+    return {
+      base: of(p.plans.base.price, p.plans.base.priceYear),
+      pro: of(p.plans.pro.price, p.plans.pro.priceYear),
+    };
+  }, [p.plans.base.price, p.plans.base.priceYear, p.plans.pro.price, p.plans.pro.priceYear]);
 
   return (
     <>
@@ -169,7 +197,48 @@ export default function PricingPage() {
         <section id="plans" className="mx-auto max-w-6xl px-4 py-14 md:px-6 md:py-20">
           <SectionHeading eyebrow={p.plans.eyebrow} title={p.plans.title} subtitle={p.plans.subtitle} />
 
-          <div className="mt-12 grid gap-5 lg:grid-cols-3">
+          {/* Тумблер оплаты. Стоит над колонками и переключает обе платные
+              разом: сравнивать месяц одного тарифа с годом другого человеку
+              незачем, а ошибиться так - легко. Бесплатной колонки он не
+              касается: у неё цены нет ни в каком периоде. */}
+          <div className="mt-10 flex justify-center">
+            <div
+              role="radiogroup"
+              aria-label={p.plans.eyebrow}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-panel/95 p-1 backdrop-blur-2xl"
+            >
+              {(["month", "year"] as Billing[]).map((mode) => {
+                const active = billing === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setBilling(mode)}
+                    className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold transition-colors duration-200 ${
+                      active
+                        ? "bg-accent-cyan text-bg-deep"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    {mode === "month" ? p.plans.billing.month : p.plans.billing.year}
+                    {mode === "year" && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                          active ? "bg-bg-deep/15 text-bg-deep" : "bg-emerald-400/15 text-emerald-400"
+                        }`}
+                      >
+                        -{savings.base.percent}% {p.plans.billing.save}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-5 lg:grid-cols-3">
             {/* Бесплатный путь */}
             <Reveal as="article">
               <div className="flex h-full flex-col rounded-3xl border border-border bg-bg-panel/95 p-7 backdrop-blur-2xl">
@@ -213,9 +282,19 @@ export default function PricingPage() {
 
                 <div className="mt-6 flex items-end gap-2">
                   <span className="font-mono text-5xl font-black leading-none text-accent-cyan">
-                    {p.plans.base.price}
+                    {yearly ? p.plans.base.priceYear : p.plans.base.price}
                   </span>
-                  <span className="pb-1 text-sm text-text-muted">{p.plans.perMonth}</span>
+                  <span className="pb-1 text-sm text-text-muted">
+                    {yearly ? p.plans.perYear : p.plans.perMonth}
+                  </span>
+                  {/* Скидка одним значком: сколько это выходит в месяц и
+                      сколько экономится за год, человек и так видит из цены,
+                      а две строки мелким шрифтом только шумят рядом с ней. */}
+                  {yearly && (
+                    <span className="mb-1.5 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-bold text-emerald-400">
+                      -{savings.base.percent}%
+                    </span>
+                  )}
                 </div>
                 <p className="mt-2 text-xs text-text-muted">{p.plans.base.priceNote}</p>
 
@@ -247,9 +326,19 @@ export default function PricingPage() {
 
                 <div className="mt-6 flex items-end gap-2">
                   <span className="font-mono text-5xl font-black leading-none text-amber-400">
-                    {p.plans.pro.price}
+                    {yearly ? p.plans.pro.priceYear : p.plans.pro.price}
                   </span>
-                  <span className="pb-1 text-sm text-text-muted">{p.plans.perMonth}</span>
+                  <span className="pb-1 text-sm text-text-muted">
+                    {yearly ? p.plans.perYear : p.plans.perMonth}
+                  </span>
+                  {/* Скидка одним значком: сколько это выходит в месяц и
+                      сколько экономится за год, человек и так видит из цены,
+                      а две строки мелким шрифтом только шумят рядом с ней. */}
+                  {yearly && (
+                    <span className="mb-1.5 rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs font-bold text-emerald-400">
+                      -{savings.pro.percent}%
+                    </span>
+                  )}
                 </div>
                 <p className="mt-2 text-xs text-text-muted">{p.plans.pro.priceNote}</p>
 
