@@ -86,8 +86,11 @@ YEARLY = "year"
 
 PERIODS: dict[str, timedelta] = {MONTHLY: PERIOD, YEARLY: YEAR}
 
-# Подарок новому: неделя сверх первого оплаченного месяца.
-GIFT = timedelta(days=7)
+# Подарок новому - сверх первого оплаченного срока, и он зависит от срока:
+# неделя за месяц, тридцать дней за год. Годовая оплата - это доверие вперёд на
+# год, и отвечать на него той же неделей, что и за месяц, неправильно.
+GIFT_MONTH = timedelta(days=7)
+GIFT_YEAR = timedelta(days=30)
 
 # Сколько держим бронь счёта. Час, а не полчаса: платят с биржи, где вывод
 # обрабатывается дольше, чем из кошелька.
@@ -162,6 +165,12 @@ def plans_view() -> list[dict]:
             "history_months": plan.history_months,
             "tools": plan.tools,
             "year_savings": savings(plan),
+            # Подарок новому - по сроку оплаты. Числа отдаём отсюда, чтобы
+            # обещание в боте и на странице не разошлось с начислением.
+            "gift_days": {
+                MONTHLY: GIFT_MONTH.days,
+                YEARLY: GIFT_YEAR.days,
+            },
         }
         for plan in PLANS.values()
     ]
@@ -293,11 +302,12 @@ def credit(
         return None
 
     subscription = _subscription(session, student_id, moment)
-    gift = GIFT if _deserves_gift(subscription) else timedelta(0)
     base = max(moment, _aware(subscription.paid_until) or moment)
-    # Месяц или год - смотря за что заплачено. Подарочная неделя кладётся
-    # сверху в обоих случаях: она про первого платящего, а не про длину срока.
-    span = PERIODS[period_of(intent.period)]
+    # Месяц или год - смотря за что заплачено, и подарок новому идёт по тому же
+    # сроку: неделя за месяц, тридцать дней за год.
+    period = period_of(intent.period)
+    span = PERIODS[period]
+    gift = gift_for(period) if _deserves_gift(subscription) else timedelta(0)
     paid_until = base + span + gift
 
     payment = SubscriptionPayment(
@@ -381,6 +391,11 @@ def grant_days(
         subscription.plan = plan_of(plan).code
     session.commit()
     return payment
+
+
+def gift_for(period: str) -> timedelta:
+    """Сколько дней в подарок даёт первая оплата этого срока."""
+    return GIFT_YEAR if period_of(period) == YEARLY else GIFT_MONTH
 
 
 def _deserves_gift(subscription: Subscription) -> bool:

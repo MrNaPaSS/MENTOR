@@ -261,8 +261,13 @@ def test_the_yearly_invoice_asks_for_the_yearly_price(session, student):
     assert view["amount"].startswith("500.00")
 
 
-def test_a_year_of_the_first_payment_gives_the_gift_week_too(session, student):
-    """Первая оплата за год - 372 дня: подарок про первого платящего."""
+def test_the_first_year_gives_a_month_as_a_gift(session, student):
+    """Первая оплата за год - 395 дней: год плюс тридцать подарочных.
+
+    Подарок идёт по сроку оплаты: неделя за месяц, месяц за год. Годовая
+    оплата - это доверие вперёд на год, и отвечать на него той же неделей,
+    что и за месяц, неправильно.
+    """
     intent = subscriptions.open_invoice(
         session, student_id=student.id, plan="pro", period="year", now=NOW
     )
@@ -270,9 +275,42 @@ def test_a_year_of_the_first_payment_gives_the_gift_week_too(session, student):
         session, intent, tx_hash="0xyear", amount_raw=intent.amount_raw, now=NOW
     )
 
-    assert payment.days_added == 372
-    assert payment.gift_days == 7
-    assert _until(session, student) == NOW + timedelta(days=372)
+    assert payment.days_added == 395
+    assert payment.gift_days == 30
+    assert _until(session, student) == NOW + timedelta(days=395)
+
+
+def test_the_yearly_gift_comes_only_the_first_time(session, student):
+    """Второй год подряд - ровно 365 дней: подарок был один раз."""
+    first = subscriptions.open_invoice(
+        session, student_id=student.id, plan="terminal", period="year", now=NOW
+    )
+    subscriptions.credit(session, first, tx_hash="0xy1", amount_raw=first.amount_raw, now=NOW)
+
+    later = NOW + timedelta(days=400)
+    second = subscriptions.open_invoice(
+        session, student_id=student.id, plan="terminal", period="year", now=later
+    )
+    payment = subscriptions.credit(
+        session, second, tx_hash="0xy2", amount_raw=second.amount_raw, now=later
+    )
+
+    assert payment.days_added == 365
+    assert payment.gift_days == 0
+
+
+def test_a_month_after_a_year_does_not_bring_the_gift_back(session, student):
+    """Подарок один на человека, а не один на каждый новый срок."""
+    yearly = subscriptions.open_invoice(
+        session, student_id=student.id, plan="terminal", period="year", now=NOW
+    )
+    subscriptions.credit(session, yearly, tx_hash="0xy", amount_raw=yearly.amount_raw, now=NOW)
+
+    later = NOW + timedelta(days=10)
+    payment = _pay(session, student, tx="0xm", now=later)
+
+    assert payment.days_added == 30
+    assert payment.gift_days == 0
 
 
 def test_a_year_on_top_of_a_month_extends_it(session, student):
@@ -285,6 +323,8 @@ def test_a_year_on_top_of_a_month_extends_it(session, student):
         session, intent, tx_hash="0x2", amount_raw=intent.amount_raw, now=NOW + timedelta(days=10)
     )
 
+    # 37 дней месячной подписки с подарком плюс 365 годовых: подарок второй
+    # раз не выдаётся.
     assert _until(session, student) == NOW + timedelta(days=402)
 
 
@@ -324,3 +364,5 @@ def test_plans_view_carries_both_prices_for_the_toggle(session):
     assert [one["plan"] for one in view] == ["terminal", "pro"]
     assert view[0]["price_month"] == 49 and view[0]["price_year"] == 500
     assert view[1]["year_savings"]["saved_usd"] == 88
+    # Подарок называется здесь же: страница и бот не должны считать его сами.
+    assert view[0]["gift_days"] == {"month": 7, "year": 30}
