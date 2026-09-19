@@ -158,7 +158,14 @@ def may_connect(session, student: Student, exchange: str) -> bool:
     if academy_confirmed(session, student, code):
         return True
     row = account_for(session, student.id, code)
-    return bool(row and row.is_active)
+    if row and row.is_active:
+        return True
+    # Подписчик пришёл со своим счётом, и подтверждать его академии нечего:
+    # он не по нашей ссылке и кешбэка по нему нет. Его предел - число бирж
+    # в тарифе (backend/access.py), а не подтверждение.
+    from backend.access import may_add_exchange
+
+    return may_add_exchange(session, student, code)
 
 
 # Сколько сделка может молчать, оставаясь живой.

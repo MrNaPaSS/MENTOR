@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend import notifications
 from backend.payments import bsc
 from core.models import PaymentIntent, Student, Subscription, SubscriptionPayment
 
@@ -36,11 +37,14 @@ log = logging.getLogger("nmnh.subscription")
 
 @dataclass(frozen=True)
 class Plan:
-    """Тариф: цена и то, что о нём знает платформа. Тексты - у бота и сайта."""
+    """Тариф: цены и то, что о нём знает платформа. Тексты - у бота и сайта."""
 
     code: str
-    price_usd: int
     title: str
+    # Цены за месяц и за год. Год дешевле двенадцати месяцев - на эту разницу
+    # и показывается экономия.
+    price_month: int
+    price_year: int
     # Сколько бирж можно подключить и на сколько месяцев назад видна история.
     exchange_limit: int
     history_months: int
@@ -51,16 +55,18 @@ class Plan:
 PLANS: dict[str, Plan] = {
     "terminal": Plan(
         code="terminal",
-        price_usd=49,
         title="Терминал",
+        price_month=49,
+        price_year=500,
         exchange_limit=1,
         history_months=3,
         tools=False,
     ),
     "pro": Plan(
         code="pro",
-        price_usd=99,
         title="Про",
+        price_month=99,
+        price_year=1100,
         exchange_limit=5,
         history_months=0,  # 0 - вся история
         tools=True,
@@ -70,6 +76,15 @@ PLANS: dict[str, Plan] = {
 # Месяц подписки. Не календарный: тридцать дней одинаковы для всех, и человек,
 # заплативший в феврале, не получает меньше заплатившего в марте.
 PERIOD = timedelta(days=30)
+
+# Год - календарные 365 дней, а не двенадцать наших месяцев: 360 дней вместо
+# года человек прочитал бы как обман, и был бы прав.
+YEAR = timedelta(days=365)
+
+MONTHLY = "month"
+YEARLY = "year"
+
+PERIODS: dict[str, timedelta] = {MONTHLY: PERIOD, YEARLY: YEAR}
 
 # Подарок новому: неделя сверх первого оплаченного месяца.
 GIFT = timedelta(days=7)
@@ -106,6 +121,52 @@ def plan_of(code: str) -> Plan:
     return plan
 
 
+def period_of(code: str | None) -> str:
+    """`month` или `year`. Пусто - месяц: так было до годовой подписки."""
+    value = str(code or MONTHLY).strip().lower()
+    if value not in PERIODS:
+        raise ValueError(f"Неизвестный период оплаты: {code}")
+    return value
+
+
+def price_of(plan: Plan, period: str) -> int:
+    return plan.price_year if period == YEARLY else plan.price_month
+
+
+def savings(plan: Plan) -> dict:
+    """Насколько год дешевле двенадцати месяцев - в деньгах и в процентах.
+
+    Считается здесь, а не на странице тарифов: цена одна, и два места, где её
+    умножают на двенадцать, однажды разойдутся.
+    """
+    twelve = plan.price_month * 12
+    saved = twelve - plan.price_year
+    return {
+        "twelve_months": twelve,
+        "saved_usd": saved,
+        "saved_percent": round(saved * 100 / twelve) if twelve else 0,
+        # Во сколько обходится месяц при годовой оплате: «как 41.67 в месяц».
+        "per_month": round(plan.price_year / 12, 2),
+    }
+
+
+def plans_view() -> list[dict]:
+    """Тарифы для бота и страницы тарифов: обе цены и экономия за год."""
+    return [
+        {
+            "plan": plan.code,
+            "title": plan.title,
+            "price_month": plan.price_month,
+            "price_year": plan.price_year,
+            "exchange_limit": plan.exchange_limit,
+            "history_months": plan.history_months,
+            "tools": plan.tools,
+            "year_savings": savings(plan),
+        }
+        for plan in PLANS.values()
+    ]
+
+
 # ── Счёт ────────────────────────────────────────────────────────────────────
 
 
@@ -114,6 +175,7 @@ def open_invoice(
     *,
     student_id: int | None,
     plan: str,
+    period: str = MONTHLY,
     tg_id: int | None = None,
     now: datetime | None = None,
 ) -> PaymentIntent:
@@ -125,22 +187,27 @@ def open_invoice(
     делал.
     """
     chosen = plan_of(plan)
+    span = period_of(period)
     moment = now or _now()
 
-    waiting = _waiting_invoice(session, student_id=student_id, tg_id=tg_id, plan=chosen.code, now=moment)
+    waiting = _waiting_invoice(
+        session, student_id=student_id, tg_id=tg_id, plan=chosen.code, period=span, now=moment
+    )
     if waiting is not None:
         return waiting
 
+    price = price_of(chosen, span)
     receiver = bsc.receiving_address()
     for attempt in range(AMOUNT_TRIES):
         intent = PaymentIntent(
             student_id=student_id,
             tg_id=tg_id,
             plan=chosen.code,
-            price_usd=chosen.price_usd,
+            period=span,
+            price_usd=price,
             network=bsc.NETWORK,
             receiver=receiver,
-            amount_raw=bsc.unique_amount(chosen.price_usd),
+            amount_raw=bsc.unique_amount(price),
             status="pending",
             created_at=moment,
             expires_at=moment + INVOICE_WINDOW,
@@ -164,10 +231,12 @@ def _waiting_invoice(
     student_id: int | None,
     tg_id: int | None,
     plan: str,
+    period: str,
     now: datetime,
 ) -> PaymentIntent | None:
     query = select(PaymentIntent).where(
         PaymentIntent.plan == plan,
+        PaymentIntent.period == period,
         PaymentIntent.status == "pending",
         PaymentIntent.expires_at > now,
     )
@@ -192,7 +261,9 @@ def invoice_view(intent: PaymentIntent) -> dict:
         "amount_raw": str(intent.amount_raw),
         "expires_at": int(_aware(intent.expires_at).timestamp()),
         "plan": intent.plan,
+        "period": intent.period or MONTHLY,
         "price_usd": float(intent.price_usd),
+        "days": PERIODS[period_of(intent.period)].days,
         "status": intent.status,
     }
 
@@ -224,17 +295,30 @@ def credit(
     subscription = _subscription(session, student_id, moment)
     gift = GIFT if _deserves_gift(subscription) else timedelta(0)
     base = max(moment, _aware(subscription.paid_until) or moment)
-    paid_until = base + PERIOD + gift
+    # Месяц или год - смотря за что заплачено. Подарочная неделя кладётся
+    # сверху в обоих случаях: она про первого платящего, а не про длину срока.
+    span = PERIODS[period_of(intent.period)]
+    paid_until = base + span + gift
 
     payment = SubscriptionPayment(
         student_id=student_id,
         intent_id=intent.id,
         amount_raw=str(amount_raw),
         tx_hash=tx_hash,
-        days_added=(PERIOD + gift).days,
+        days_added=(span + gift).days,
         gift_days=gift.days,
     )
-    session.add(payment)
+    # Запись об оплате идёт первой и в своей вложенной транзакции: если этот
+    # перевод уже учтён, `UNIQUE (tx_hash)` не пропустит её, и мы выйдем до
+    # того, как тронем подписку. Проверять «а не начисляли ли уже» запросом
+    # нельзя - между запросом и вставкой помещается второй проход наблюдателя.
+    try:
+        with session.begin_nested():
+            session.add(payment)
+    except IntegrityError:
+        session.rollback()
+        log.info("Перевод %s уже был учтён - дни не начисляем", tx_hash)
+        return None
 
     subscription.plan = intent.plan
     subscription.paid_until = paid_until
@@ -250,13 +334,19 @@ def credit(
     intent.tx_hash = tx_hash
     intent.paid_at = moment
 
-    try:
-        session.commit()
-    except IntegrityError:
-        # Тот же перевод уже учтён: наблюдатель прошёл по блокам второй раз.
-        session.rollback()
-        log.info("Перевод %s уже был учтён - дни не начисляем", tx_hash)
-        return None
+    # Событие боту ложится той же транзакцией, что и дни: уведомление об
+    # оплате, ушедшее без начисления, хуже, чем неушедшее.
+    notifications.payment_received(
+        session,
+        student_id=student_id,
+        tx_hash=tx_hash,
+        plan=intent.plan,
+        paid_until=paid_until,
+        days_added=payment.days_added,
+        gift_days=payment.gift_days,
+    )
+
+    session.commit()
     return payment
 
 

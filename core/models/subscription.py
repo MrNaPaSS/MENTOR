@@ -32,6 +32,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -81,6 +82,10 @@ class PaymentIntent(Base):
     tg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     # terminal | pro
     plan: Mapped[str] = mapped_column(String(16))
+    # month | year. Период оплаты лежит у счёта, а не у подписки: сколько дней
+    # дал платёж, решает он сам, и годовая оплата после месячной продлевает ту
+    # же подписку, ничего в ней не переключая.
+    period: Mapped[str] = mapped_column(String(8), default="month", server_default="month")
     # Цена на момент выставления: подорожание не меняет выставленный счёт.
     price_usd: Mapped[float] = mapped_column(Numeric(10, 2))
     network: Mapped[str] = mapped_column(String(16), default="bep20")
@@ -169,11 +174,55 @@ class OrphanPayment(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class NotificationEvent(Base):
+    """Событие для бота: оплата пришла, подписка кончается, подписка кончилась.
+
+    Платформа не ходит в Telegram сама - у неё нет ни токена бота, ни права
+    писать людям. Она кладёт событие сюда, бот забирает пачку, рассылает и
+    отмечает забранное. Та же схема, по которой он уже забирает начисления
+    монет, только хранилище наше, а не файл у бота.
+
+    Ключ повторов (`dedup`) - то, из-за чего событие не задвоится: хеш
+    транзакции у оплаты, дата окончания у предупреждения. Напоминание «через
+    три дня кончится» ставится раз в час, и без этого ключа человек получил бы
+    семьдесят два одинаковых сообщения.
+    """
+
+    __tablename__ = "notification_events"
+    __table_args__ = (
+        Index(
+            "notification_events_once",
+            "kind",
+            "event",
+            "student_id",
+            "dedup",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    # Кому предназначено: пока только `subscription`, но очередь общая - сюда
+    # же лягут события других частей платформы.
+    kind: Mapped[str] = mapped_column(String(16), default="subscription", index=True)
+    # payment_received | expires_soon | expired
+    event: Mapped[str] = mapped_column(String(32))
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    # Дубль для бота: он пишет по tg_id и о наших номерах учеников не знает.
+    tg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Подробности события, JSON: тариф, дата окончания, сумма.
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+    dedup: Mapped[str] = mapped_column(String(64), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    # Когда бот подтвердил, что забрал. Пусто - лежит в очереди.
+    acked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+
 __all__ = [
     "PaymentIntent",
     "Subscription",
     "SubscriptionPayment",
     "ChainCursor",
     "OrphanPayment",
+    "NotificationEvent",
     "new_intent_id",
 ]

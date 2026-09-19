@@ -82,10 +82,29 @@ def _row(session, student_id: int, feature: str) -> Entitlement | None:
 
 
 def has_feature(session, student_id: int, feature: str) -> bool:
-    if feature in VIP_FEATURES and is_vip(session, student_id):
+    if feature in VIP_FEATURES and (is_vip(session, student_id) or _paid_tools(session, student_id)):
         return True
     row = _row(session, student_id, feature)
     return row is not None and is_active(row)
+
+
+def _paid_tools(session, student_id: int) -> bool:
+    """Открыл ли инструменты тариф подписки. Инструменты даёт только Про.
+
+    Спрашиваем подписку напрямую, а не через `effective_access`: тот ходит ещё
+    и за подтверждениями академии, а они на инструменты не влияют, - а
+    `has_feature` зовут на каждый инструмент терминала.
+
+    Импорт внутри функции: подписка знает о сети приёма платежей, и на уровне
+    модуля это тянуло бы её в каждый запрос к правам.
+    """
+    from backend import subscriptions
+
+    state = subscriptions.state(session, student_id)
+    if not state.active:
+        return False
+    plan = subscriptions.PLANS.get(state.plan)
+    return bool(plan and plan.tools)
 
 
 def is_forever(item: ShopItem) -> bool:

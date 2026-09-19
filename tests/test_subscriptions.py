@@ -230,3 +230,97 @@ def test_the_watcher_hands_the_transfer_over(session, student):
 
     assert session.get(PaymentIntent, intent.id).status == "paid"
     assert session.query(SubscriptionPayment).one().tx_hash == "0xchain"
+
+
+# ── Годовая подписка ────────────────────────────────────────────────────────
+
+
+def test_a_year_costs_less_than_twelve_months(session, student):
+    """Год дешевле двенадцати месяцев - иначе тумблер «год» не имеет смысла."""
+    terminal = subscriptions.savings(subscriptions.PLANS["terminal"])
+    pro = subscriptions.savings(subscriptions.PLANS["pro"])
+
+    assert subscriptions.PLANS["terminal"].price_year == 500
+    assert subscriptions.PLANS["pro"].price_year == 1100
+    assert terminal["twelve_months"] == 588 and terminal["saved_usd"] == 88
+    assert terminal["saved_percent"] == 15
+    assert pro["twelve_months"] == 1188 and pro["saved_usd"] == 88
+    assert pro["per_month"] == 91.67
+
+
+def test_the_yearly_invoice_asks_for_the_yearly_price(session, student):
+    """Счёт на год - это 500, а не 49: цена берётся по выбранному периоду."""
+    intent = subscriptions.open_invoice(
+        session, student_id=student.id, plan="terminal", period="year", now=NOW
+    )
+
+    view = subscriptions.invoice_view(intent)
+    assert float(intent.price_usd) == 500
+    assert view["period"] == "year"
+    assert view["days"] == 365
+    assert view["amount"].startswith("500.00")
+
+
+def test_a_year_of_the_first_payment_gives_the_gift_week_too(session, student):
+    """Первая оплата за год - 372 дня: подарок про первого платящего."""
+    intent = subscriptions.open_invoice(
+        session, student_id=student.id, plan="pro", period="year", now=NOW
+    )
+    payment = subscriptions.credit(
+        session, intent, tx_hash="0xyear", amount_raw=intent.amount_raw, now=NOW
+    )
+
+    assert payment.days_added == 372
+    assert payment.gift_days == 7
+    assert _until(session, student) == NOW + timedelta(days=372)
+
+
+def test_a_year_on_top_of_a_month_extends_it(session, student):
+    """Годовая оплата поверх месячной продлевает ту же подписку."""
+    _pay(session, student, tx="0x1")  # 37 дней
+    intent = subscriptions.open_invoice(
+        session, student_id=student.id, plan="terminal", period="year", now=NOW + timedelta(days=10)
+    )
+    subscriptions.credit(
+        session, intent, tx_hash="0x2", amount_raw=intent.amount_raw, now=NOW + timedelta(days=10)
+    )
+
+    assert _until(session, student) == NOW + timedelta(days=402)
+
+
+def test_month_and_year_are_different_invoices(session, student):
+    """Передумал платить за год - это новый счёт, а не прежний на 49."""
+    monthly = subscriptions.open_invoice(
+        session, student_id=student.id, plan="terminal", period="month", now=NOW
+    )
+    yearly = subscriptions.open_invoice(
+        session, student_id=student.id, plan="terminal", period="year", now=NOW
+    )
+
+    assert monthly.id != yearly.id
+    assert float(monthly.price_usd) == 49 and float(yearly.price_usd) == 500
+
+
+def test_an_invoice_without_a_period_is_monthly(session, student):
+    """Период не назвали - месяц: так вели себя все счета до годовой подписки."""
+    intent = subscriptions.open_invoice(session, student_id=student.id, plan="terminal", now=NOW)
+
+    assert intent.period == "month"
+    assert float(intent.price_usd) == 49
+
+
+def test_an_unknown_period_is_refused(session, student):
+    """«Полгода» мы не продаём - это ошибка вызова, а не тихий месяц."""
+    with pytest.raises(ValueError):
+        subscriptions.open_invoice(
+            session, student_id=student.id, plan="terminal", period="half", now=NOW
+        )
+
+
+def test_plans_view_carries_both_prices_for_the_toggle(session):
+    """Тумблер «месяц/год» рисуется по одному ответу: обе цены и экономия."""
+    view = subscriptions.plans_view()
+
+    assert [one["plan"] for one in view] == ["terminal", "pro"]
+    assert view[0]["price_month"] == 49 and view[0]["price_year"] == 500
+    assert view[1]["year_savings"]["saved_usd"] == 88

@@ -29,6 +29,10 @@ from backend.api import shots
 from backend.api import trading as trading_api
 from backend.api import auth, market, market_data, market_extra, signals, stats, students, profile, admin_affiliate, institutional, broadcast, pnl, trades, journal, trading, coins, shop
 from backend.api import chat as chat_api
+from backend.api import service_subscription
+from backend import notifications as subscription_notifications
+from backend import subscriptions as subscription_core
+from backend.payments import watcher as payments_watcher
 from backend.api import chat_bridge as chat_bridge_api
 from backend.api import internal as internal_api
 from backend.api import scalping as scalping_api
@@ -205,6 +209,11 @@ def create_app(
     # иначе закрытая вкладка означала бы сделку без сопровождения.
     watcher = PositionWatcher(SessionLocal, trading_api._get_session)
 
+    # Приём подписки: наблюдатель за переводами USDT и сторож окончаний.
+    # Оба поднимаются в роли `watcher` и оба молчат, пока не задан адрес приёма.
+    payments = payments_watcher.PaymentWatcher(subscription_core.on_payment)
+    sweeper = subscription_notifications.SubscriptionSweeper()
+
     # Мост чата с форумом. Пишет в Telegram отдельной очередью, потому что
     # группа принимает ограниченное число сообщений в минуту, а чат об этом
     # знать не должен. Без адреса группы молчит и ничего не занимает.
@@ -269,6 +278,11 @@ def create_app(
             density_task = asyncio.create_task(run_density_watcher(density, _post))
         if runs_watcher:
             watcher.start()
+            # Приём оплаты подписки живёт здесь же: это такой же фоновый обход,
+            # только по блокам сети, а не по счетам учеников. Без адреса приёма
+            # (NMNH_BSC_RECEIVER) он сам скажет, что выключен, и не запустится.
+            payments.start()
+            sweeper.start()
         if keeper:
             keeper.start()
         # Снимок панели у процесса рыночных данных свой: обрывы потоков бирж и
@@ -307,6 +321,8 @@ def create_app(
                 except asyncio.CancelledError:
                     pass
             await watcher.stop()
+            await payments.stop()
+            await sweeper.stop()
             if keeper:
                 await keeper.stop()
             await forum.stop()
@@ -420,6 +436,7 @@ def create_app(
     app.include_router(coins.router)
     app.include_router(exchange_uids.router)
     app.include_router(academy_trading.router)
+    app.include_router(service_subscription.router)
     app.include_router(exchanges_api.router)
     app.include_router(shop.router)
     app.include_router(shop.admin_router)

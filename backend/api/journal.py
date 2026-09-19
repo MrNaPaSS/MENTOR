@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, case, func, or_, select
 
 from backend import entitlements, tools
+from backend.access import history_floor
 from core.exchanges import KEYS_EXCHANGE, TITLES
 from core.models import (
     iso,
@@ -740,6 +741,12 @@ async def list_trades(
         scope.append(ScalpTrade.closed_at < start + timedelta(days=1))
     else:
         scope.append(ScalpTrade.closed_at >= utcnow() - timedelta(days=days))
+    # Глубина истории у тарифа `terminal` - три месяца. Спрошенный день и
+    # спрошенное окно отсекаются одинаково: это одно и то же правило, и
+    # разбирать их порознь значило бы забыть про одно из них.
+    floor = history_floor(session, student)
+    if floor is not None:
+        scope.append(ScalpTrade.closed_at >= floor)
     if symbol:
         scope.append(ScalpTrade.symbol == symbol.upper())
 
@@ -940,6 +947,9 @@ async def calendar(
         ScalpTrade.closed_at >= start,
         ScalpTrade.closed_at < end,
     ]
+    floor = history_floor(session, student)
+    if floor is not None:
+        scope.append(ScalpTrade.closed_at >= floor)
 
     query = select(ScalpTrade).where(*scope)
     if venue:

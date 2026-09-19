@@ -26,6 +26,7 @@ from core.db import Base
 from core.models.common import BigIntPK, iso, utcnow
 from core.models.subscription import (
     ChainCursor,
+    NotificationEvent,
     OrphanPayment,
     PaymentIntent,
     Subscription,
@@ -953,4 +954,4 @@ class CashbackAccrual(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "ExchangeAccount", "AcademyUid", "LiveTrade", "JournalExport", "LeverageCap", "Entitlement", "Certificate", "CashbackProgram", "CashbackAccrual", "utcnow", "PaymentIntent", "Subscription", "SubscriptionPayment", "ChainCursor", "OrphanPayment", "new_intent_id"]
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "ExchangeAccount", "AcademyUid", "LiveTrade", "JournalExport", "LeverageCap", "Entitlement", "Certificate", "CashbackProgram", "CashbackAccrual", "utcnow", "PaymentIntent", "Subscription", "SubscriptionPayment", "ChainCursor", "OrphanPayment", "NotificationEvent", "new_intent_id"]
