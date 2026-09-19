@@ -735,7 +735,15 @@ export default function ScalpingPage() {
     }
     try {
       const fresh = await api.refreshBalance(token);
-      if (fresh) setBalance(fresh.balance_usdt ?? "0");
+      if (fresh) {
+        setBalance(fresh.balance_usdt ?? "0");
+        // Шапке - вслух. Сумма в ней из того же профиля, и после F5 она
+        // показывала прочерк: в базе у подключённого счёта первые секунды
+        // стоит партнёрский источник, а своим он становится как раз этим
+        // запросом. Молчание здесь и означало прочерк до перехода в другой
+        // раздел - там шапка перечитывает профиль сама.
+        profileChanged();
+      }
     } catch {
       // Биржа промолчала - остаёмся при сохранённом.
     }

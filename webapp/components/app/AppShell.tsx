@@ -19,6 +19,7 @@ import Ambient from "@/components/ui/Ambient";
 import RadioChip from "@/components/app/RadioChip";
 import CommandPalette from "@/components/app/CommandPalette";
 import { api, Profile } from "@/lib/api";
+import { needsOwnBalance } from "@/lib/balanceRefresh";
 import { getAccessToken, logout } from "@/lib/auth";
 import { attend } from "@/lib/chat/store";
 import { useCoins } from "@/lib/useCoins";
@@ -64,6 +65,15 @@ const NAV = [
 // Кнопка справа от монет: в ней либо баланс биржи, либо приглашение
 // подключить счёт. Класс общий на оба случая - это одно и то же место, и
 // разъехавшись, они выглядели бы двумя разными кнопками.
+/**
+ * Сколько ждать чужого запроса к бирже, прежде чем идти самим.
+ *
+ * Терминал спрашивает баланс по ключам при открытии, и его ответ приходит
+ * событием. Две секунды - это его круг с запасом; меньше означало бы два
+ * похода к бирже на одну загрузку страницы.
+ */
+const OWN_BALANCE_WAIT_MS = 2000;
+
 const BALANCE_CHIP =
   "hidden items-center rounded-xl border border-border bg-bg-panel/60 px-3 py-1.5 transition hover:border-accent-cyan/40 sm:flex";
 
@@ -199,6 +209,40 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (!ready) return;
     reloadProfile(false);
   }, [pathname, ready, reloadProfile]);
+
+  /**
+   * Свой баланс после перезагрузки страницы.
+   *
+   * Профиль отдаёт тот источник, с которым баланс записали в прошлый раз, а у
+   * подключённого счёта это часто партнёрская сводка по UID - её в шапке не
+   * показывают, и на месте суммы стоял прочерк. Своим баланс становится только
+   * после запроса к бирже по ключам, и делал его один терминал: открыл другой
+   * раздел и нажал F5 - прочерк оставался висеть.
+   *
+   * Ждём пару секунд: терминал спрашивает биржу сам, и его ответ придёт
+   * событием. Не пришёл - идём сами. Так на одну загрузку выходит один поход к
+   * бирже, а не два.
+   */
+  const askedOwn = useRef(false);
+  useEffect(() => {
+    if (!ready || askedOwn.current || !profile) return;
+    if (!needsOwnBalance(profile.balance_source, Boolean(trading?.connected))) return;
+
+    const id = setTimeout(() => {
+      askedOwn.current = true;
+      const token = getAccessToken();
+      if (!token) return;
+      api
+        .refreshBalance(token)
+        .then((fresh) => {
+          if (fresh) setProfile(fresh);
+        })
+        .catch(() => {
+          // Биржа промолчала - остаётся прочерк, и это честнее чужой цифры.
+        });
+    }, OWN_BALANCE_WAIT_MS);
+    return () => clearTimeout(id);
+  }, [ready, profile, trading?.connected]);
 
   useEffect(() => {
     const again = () => reloadProfile(false);
