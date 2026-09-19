@@ -16,13 +16,24 @@
 //                     смене инструмента, то есть раз в несколько минут.
 //   watchDom(fn)    - подписка без перерисовки. Для ведения сделки: логике
 //                     нужна свежая цена, а не свежая картинка.
+//   useLivePrice()  - цена середины, три раза в секунду. Для того, что должно
+//                     быть живым, но не обязано идти нога в ногу с книгой.
 //
 // Снимок для обработчиков - domSnapshot(): в миг нажатия нужна цена, которая
 // на экране сейчас, а держать её ради этого в состоянии незачем.
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { DomFrame } from "./scalping";
+
+/**
+ * Как часто отдавать цену тем, кому хватит трёх раз в секунду.
+ *
+ * Ярлык позиции и итог сделки от этого не станут менее живыми, а шкала цен
+ * графика пересчитывается на каждом новом числе - и делать это восемь раз в
+ * секунду незачем.
+ */
+const PRICE_EVERY_MS = 330;
 
 /** Паспорт открытой книги: то в кадре, что меняется со сменой инструмента. */
 export interface BookInfo {
@@ -123,4 +134,19 @@ export function useBookInfo(): BookInfo | null {
 /** Забыть кадр: уходим со страницы терминала. */
 export function forgetDom(): void {
   publishDom(null);
+}
+
+/** Цена середины книги, не чаще трёх раз в секунду. */
+export function useLivePrice(): number {
+  const [price, setPrice] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const mid = domSnapshot()?.mid ?? 0;
+      setPrice((current) => (current === mid ? current : mid));
+    }, PRICE_EVERY_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  return price;
 }

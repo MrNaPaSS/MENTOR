@@ -1068,10 +1068,6 @@ export default function ScalpingPage() {
   // запасного круга: сами данные и там, и там берутся одними ручками.
   const venueStreamed = streamed.has(venue || "");
 
-  // Цена для графика — три раза в секунду вместо восьми. Ярлык позиции и итог
-  // сделки от этого не станут менее живыми, а перерисовку всего графика на
-  // каждом кадре стакана это снимает.
-  const [chartPrice, setChartPrice] = useState(0);
 
   // Ручная лимитка: вход, стоп и цель ставятся мышью прямо по графику.
   //
@@ -1091,19 +1087,6 @@ export default function ScalpingPage() {
 
   // Объёмы всех открытых позиций счёта: по ним считается счётчик у итога дня.
   const [liveSizes, setLiveSizes] = useState<Record<string, number>>({});
-
-  // Цена для графика - три раза в секунду, прямо из хранилища кадров.
-  //
-  // Кадр в состоянии страницы перерисовывал её восемь раз в секунду вместе со
-  // всем, что на ней стоит. Здесь же меняется одно число, и меняется только
-  // когда оно другое.
-  useEffect(() => {
-    const id = setInterval(() => {
-      const mid = domSnapshot()?.mid ?? 0;
-      setChartPrice((current) => (current === mid ? current : mid));
-    }, 330);
-    return () => clearInterval(id);
-  }, []);
 
   // Рабочее место трейдера: ширины панелей, набор индикаторов, таймфрейм, шаг
   // и глубина стакана. Настроил один раз — и после перезагрузки всё на месте.
@@ -1882,7 +1865,8 @@ export default function ScalpingPage() {
           // цель, и биржа такую не примет. У открытой позиции - по ту сторону
           // рынка: стоп в безубытке стоит выше входа лонга, и запрет по входу
           // не давал его туда перенести вовсе.
-          const from = t.status === "open" && chartPrice > 0 ? chartPrice : t.entry;
+          const mid = domSnapshot()?.mid ?? 0;
+          const from = t.status === "open" && mid > 0 ? mid : t.entry;
           const edge = long ? from - step : from + step;
           return { ...t, stop: long ? Math.min(price, edge) : Math.max(price, edge) };
         }
@@ -4741,7 +4725,6 @@ export default function ScalpingPage() {
                   onMarks={keepMarks}
                   preview={preview}
                   movingStops={movingStops}
-                  livePrice={chartPrice}
                   onFootBar={setFootBar}
                   // Разбор виден там, где он считается: на крупной свече
                   // сделок миллионы, и сервер её не разбирает. Но выключателя

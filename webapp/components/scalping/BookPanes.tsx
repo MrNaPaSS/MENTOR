@@ -12,7 +12,7 @@
 
 import type { ComponentProps, ReactNode } from "react";
 
-import { useDomFrame } from "@/lib/domFeed";
+import { useDomFrame, useLivePrice } from "@/lib/domFeed";
 import { price as fmtPrice } from "@/lib/scalping";
 import DomTrader from "./DomTrader";
 import PriceChart from "./PriceChart";
@@ -48,14 +48,19 @@ export function BookLadder({
 export function BookChart({
   agg,
   ...rest
-}: Omit<ChartProps, "venue" | "wall" | "shelves" | "liveCandle" | "liveFoot" | "tick"> & {
+}: Omit<
+  ChartProps,
+  "venue" | "wall" | "shelves" | "liveCandle" | "liveFoot" | "tick" | "livePrice"
+> & {
   /** Во сколько раз укрупнён шаг лестницы. */
   agg: number;
 }) {
   const frame = useDomFrame();
+  const livePrice = useLivePrice();
   return (
     <PriceChart
       {...rest}
+      livePrice={livePrice}
       // Биржа свечей - только когда книга не с общей биржи. Пустая строка и
       // "binance" - один и тот же источник, но разные адреса запроса: пока
       // первый кадр стакана не пришёл, график успевал сходить за свечами без
