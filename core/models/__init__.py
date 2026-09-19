@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
@@ -23,28 +23,15 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.db import Base
-
-# BigInteger PK, который на SQLite становится INTEGER (иначе нет автоинкремента).
-BigIntPK = BigInteger().with_variant(Integer, "sqlite")
-
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def iso(value: datetime | None) -> str | None:
-    """Время строкой, всегда с меткой пояса.
-
-    Колонки объявлены `DateTime(timezone=True)`, но SQLite пояс не хранит и
-    отдаёт время голым. Голую строку браузер читает как своё местное: событие,
-    случившееся минуту назад, показывается на два часа раньше - ровно на
-    разницу с UTC, - и «зашёл только что» превращается в «2 часа назад».
-
-    С PostgreSQL метка приходит сама, и эта проверка ничего не меняет.
-    """
-    if value is None:
-        return None
-    return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).isoformat()
+from core.models.common import BigIntPK, iso, utcnow
+from core.models.subscription import (
+    ChainCursor,
+    OrphanPayment,
+    PaymentIntent,
+    Subscription,
+    SubscriptionPayment,
+    new_intent_id,
+)
 
 
 class Student(Base):
@@ -966,4 +953,4 @@ class CashbackAccrual(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "ExchangeAccount", "AcademyUid", "LiveTrade", "JournalExport", "LeverageCap", "Entitlement", "Certificate", "CashbackProgram", "CashbackAccrual", "utcnow"]
+__all__ = ["Student", "Signal", "SignalDelivery", "SettingRow", "AuthCode", "Broadcast", "BalanceSnapshot", "CoinTransaction", "ShopItem", "ShopOrder", "ScalpTrade", "ScalpWorkspace", "ChartShot", "WeexCredential", "ExchangeAccount", "AcademyUid", "LiveTrade", "JournalExport", "LeverageCap", "Entitlement", "Certificate", "CashbackProgram", "CashbackAccrual", "utcnow", "PaymentIntent", "Subscription", "SubscriptionPayment", "ChainCursor", "OrphanPayment", "new_intent_id"]
