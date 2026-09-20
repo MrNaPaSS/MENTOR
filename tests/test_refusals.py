@@ -59,6 +59,21 @@ def test_country_restriction_is_not_blamed_on_the_terminal():
     assert "другую монету" in said
 
 
+def test_pair_without_api_trading_says_what_to_do():
+    """WEEX торгует через ключи 290 пар из 995: монета в приложении есть, а
+    заявку по API не поставить. Трейдеру важно понять, что это не поломка
+    терминала и что повтор ничего не даст."""
+    said = explain(
+        "The trading pair is not supported via the API. Check the supported "
+        "symbols here: https://api-contract.weex.com/capi/v3/market/apiTradingSymbols."
+    )
+    assert "через ключи" in said
+    assert "другую монету" in said
+    # Ссылки на список биржи в тексте быть не должно: трейдеру посреди сделки
+    # некогда читать JSON, а звучит она как «разбирайся сам».
+    assert "http" not in said
+
+
 def test_unknown_refusal_is_shown_as_is():
     """Выдумывать объяснение непонятому отказу хуже, чем показать оригинал."""
     said = explain("SOMETHING_NEW: try later")

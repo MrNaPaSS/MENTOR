@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.chat import ChatHub, ForumBridge
 from core.db import init_engine, create_all, SessionLocal
 from core import repo
-from core.weex import get_weex_client
+from core.weex import futures as weex_futures, get_weex_client
 from backend.config import BackendConfig
 from backend.trading import health as server_health
 from backend.trading.private_ws import StreamKeeper
@@ -52,6 +52,7 @@ from backend.balance_collector import BalanceCollector
 from backend.cashback_collector import CashbackCollector
 from backend.scalping.collector import ScalpingCollector
 from backend.scalping.market_hub import MarketHub
+from backend.scalping.venue_catalog import VenueCatalog
 from backend.scalping.bingx_collector import BingxCollector
 from backend.scalping.mexc_collector import MexcCollector
 from backend.scalping.okx_collector import OkxCollector
@@ -187,7 +188,16 @@ def create_app(
         books["bingx"] = BingxCollector
     if config.mexc_book_enabled:
         books["mexc"] = MexcCollector
-    market_hub = MarketHub(scalping, books) if scalping else None
+    # Состав бирж без своего сборщика. Сейчас это только WEEX: её книгу мы не
+    # читаем, а знать, чем она торгует по ключам, обязаны - через API биржа
+    # даёт заметно меньше пар, чем показывает в справочнике, и без этого списка
+    # ученик выбирал монету, по которой заявку не поставить
+    # (backend/scalping/venue_catalog.py).
+    async def _weex_symbols() -> frozenset[str] | None:
+        return await weex_futures.api_trading_symbols(await sources_session.get())
+
+    catalog = VenueCatalog({"weex": _weex_symbols})
+    market_hub = MarketHub(scalping, books, catalog) if scalping else None
     scalping_hub = ScalpingHub(scalping, market_hub) if scalping else None
     if scalping:
         # Рыночные ручки ходят на Binance тем же клиентом, что и скальпинг:
@@ -265,6 +275,9 @@ def create_app(
             cashback_collector.start()
         if scalping and runs_books:
             scalping.start()
+            # Состав бирж без сборщика: один открытый запрос, дальше раз в
+            # шесть часов. Не ответила - скринер просто ничего не помечает.
+            catalog.start()
         density_task = None
         if density and runs_books:
             async def _post(text: str) -> None:
@@ -338,6 +351,7 @@ def create_app(
                 await scalping_hub.stop()
             if market_hub:
                 await market_hub.stop()
+            await catalog.stop()
             if scalping:
                 await scalping.stop()
             await collector.stop()

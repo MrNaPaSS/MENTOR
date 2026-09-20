@@ -72,10 +72,14 @@ class MarketHub:
         self,
         primary: Any,
         factories: dict[str, Callable[[], Any]] | None = None,
+        catalog: Any | None = None,
     ):
         self.primary = primary
         self._factories = dict(factories or {})
         self._collectors: dict[str, Any] = {}
+        # Состав бирж, у которых своего сборщика нет (WEEX): её поток мы не
+        # собираем, а знать, чем она торгует по ключам, всё равно надо.
+        self._catalog = catalog
         if primary is not None:
             self._collectors[PRIMARY] = primary
 
@@ -109,9 +113,16 @@ class MarketHub:
         """
         collector = self._collectors.get(_code(exchange))
         known = getattr(collector, "listed_symbols", None)
-        if known is None:
+        if known is not None:
+            symbols = known()
+            return frozenset(symbols) if symbols else None
+
+        # Сборщика нет - спрашиваем каталог. Для WEEX это единственный путь: её
+        # книгу мы не читаем, а состав знать обязаны, иначе ученик выберет
+        # монету, которую биржа по ключам не примет.
+        if self._catalog is None:
             return None
-        symbols = known()
+        symbols = self._catalog.symbols(exchange)
         return frozenset(symbols) if symbols else None
 
     def _ensure(self, exchange: str) -> Any | None:

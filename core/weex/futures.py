@@ -54,6 +54,7 @@ ENDPOINTS = {
     "algo_order": "/capi/v3/algoOrder",
     "user_trades": "/capi/v3/userTrades",
     "exchange_info": "/capi/v3/market/exchangeInfo",
+    "api_symbols": "/capi/v3/market/apiTradingSymbols",
     "time": "/capi/v3/market/time",
 }
 
@@ -144,6 +145,41 @@ async def public_price(session, symbol: str) -> float | None:
 
     price = _f((data or {}).get("price"))
     return price if price > 0 else None
+
+
+async def api_trading_symbols(session) -> frozenset[str] | None:
+    """Пары, которые биржа даёт торговать через ключи. `None` - не ответила.
+
+    У WEEX это отдельный и куда более короткий список, чем справочник
+    инструментов: на 19 сентября 2026 в справочнике 995 пар, а через API
+    торгуются 290. Разницы в самом справочнике не видно - поля «торгуется по
+    API» там нет вовсе, и узнать это можно только здесь.
+
+    Без этого списка монета выглядит обычной: она есть в скринере, по ней идёт
+    цена и рисуется стакан, - а на «Войти» биржа отвечает «The trading pair is
+    not supported via the API». То есть отказ приходит после нажатия, когда
+    трейдер уже выбрал точку входа.
+
+    Пустой ответ возвращаем как `None`, а не как пустое множество: «биржа не
+    ответила» и «биржа не торгует ничего» - разные вещи, и вторая пометила бы
+    весь список чужим.
+    """
+    url = f"{BASE_URL}{ENDPOINTS['api_symbols']}"
+    try:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status != 200:
+                logger.warning("Список торгуемых по API пар: ответ %s", resp.status)
+                return None
+            data = await resp.json(content_type=None)
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+        logger.warning("Список торгуемых по API пар не получен: %s", exc)
+        return None
+
+    # Ответ - голый список имён. Если биржа однажды завернёт его в объект,
+    # возьмём оттуда знакомые поля, а не упадём.
+    rows = data if isinstance(data, list) else (data or {}).get("data") or []
+    names = frozenset(str(one).upper() for one in rows if isinstance(one, str) and one)
+    return names or None
 
 
 async def public_filters(session, symbol: str) -> dict[str, float]:
