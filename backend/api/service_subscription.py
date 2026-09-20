@@ -76,6 +76,14 @@ def invoice(body: InvoiceIn, session=Depends(get_session)) -> dict:
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except subscriptions.NoFreeAmount as exc:
+        # Слотов на цену 99, и все заняты ожидающими счетами. Это не поломка
+        # приёма, а редкая теснота: через час брони снимутся сами.
+        log.warning("Свободной суммы нет для %s: %s", body.tg_id, exc)
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Сейчас слишком много счетов ждут оплату. Попробуйте через час.",
+        ) from exc
     except RuntimeError as exc:
         # Адрес приёма не задан или свободная сумма не нашлась. Человеку про
         # это знать нечего, но в журнале причина должна остаться.

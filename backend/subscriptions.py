@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -96,9 +97,10 @@ GIFT_YEAR = timedelta(days=30)
 # обрабатывается дольше, чем из кошелька.
 INVOICE_WINDOW = timedelta(minutes=60)
 
-# Сколько попыток подобрать свободную сумму. Слотов миллион на каждый тариф,
-# и занято из них в любой момент единицы: пять попыток - с большим запасом.
-AMOUNT_TRIES = 5
+# Сколько раз пробуем вставить счёт, если свободный слот перехватили между
+# выбором и записью. Сам слот выбирается не наугад, а из свободных, поэтому
+# больше трёх попыток здесь не нужно: это защита от гонки, а не от невезения.
+AMOUNT_TRIES = 3
 
 # За сколько дней до конца предупреждаем. Льготного периода после окончания
 # нет (решение владельца, 19 сентября 2026): торговля закрывается в тот же
@@ -216,7 +218,7 @@ def open_invoice(
             price_usd=price,
             network=bsc.NETWORK,
             receiver=receiver,
-            amount_raw=bsc.unique_amount(price),
+            amount_raw=free_amount(session, price, now=moment),
             status="pending",
             created_at=moment,
             expires_at=moment + INVOICE_WINDOW,
@@ -225,13 +227,52 @@ def open_invoice(
         try:
             session.commit()
         except IntegrityError:
-            # Хвост совпал с чужим ожидающим счётом - берём другой.
+            # Слот заняли между выбором и записью - берём следующий свободный.
             session.rollback()
             if attempt == AMOUNT_TRIES - 1:
                 raise
             continue
         return intent
-    raise RuntimeError("Свободная сумма не нашлась")
+    raise NoFreeAmount(_NO_SLOTS)
+
+
+class NoFreeAmount(RuntimeError):
+    """Все хвосты этой цены заняты ожидающими счетами."""
+
+
+_NO_SLOTS = (
+    "Свободной суммы нет: все 99 хвостов этой цены заняты ожидающими счетами"
+)
+
+
+def free_amount(session: Session, price_usd: float | int, now: datetime) -> str:
+    """Сумма со свободным хвостом: цена плюс сотые, которых сейчас никто не ждёт.
+
+    Хвост берётся из свободных, а не наугад: слотов всего 99 на цену, и слепое
+    угадывание с парой попыток начало бы промахиваться задолго до того, как
+    слоты кончатся. Выбор случайный среди свободных - соседние счета не идут
+    подряд, и по сумме нельзя посчитать, сколько у нас покупателей.
+    """
+    base = bsc.base_amount(price_usd)
+    waiting = session.scalars(
+        select(PaymentIntent.amount_raw).where(
+            PaymentIntent.network == bsc.NETWORK,
+            PaymentIntent.status == "pending",
+            PaymentIntent.expires_at > now,
+        )
+    ).all()
+
+    taken: set[int] = set()
+    for raw in waiting:
+        tail = (int(raw) - base) // bsc.TAIL_STEP
+        # Чужие цены сюда не попадают: их хвост вне диапазона.
+        if 1 <= tail <= bsc.TAIL_MAX and int(raw) == base + tail * bsc.TAIL_STEP:
+            taken.add(tail)
+
+    free = [tail for tail in range(1, bsc.TAIL_MAX + 1) if tail not in taken]
+    if not free:
+        raise NoFreeAmount(_NO_SLOTS)
+    return bsc.amount_with_tail(price_usd, secrets.choice(free))
 
 
 def _waiting_invoice(

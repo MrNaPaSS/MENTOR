@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -88,7 +89,7 @@ def test_the_bot_can_raise_an_invoice_for_a_stranger(client, session):
 
     assert answer.status_code == 200
     body = answer.json()
-    assert body["amount"].startswith("49.00")
+    assert re.fullmatch(r"49\.\d{2}", body["amount"])
     assert body["receiver"] == RECEIVER
     assert body["network_label"] == "BNB Smart Chain (BEP-20)"
     assert body["period"] == "month" and body["days"] == 30

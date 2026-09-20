@@ -219,4 +219,12 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    try:
+        raise SystemExit(asyncio.run(main()))
+    except KeyboardInterrupt:
+        # Ждать перевод скучно, и проверку часто обрывают руками. Счёт при этом
+        # остаётся ожидающим: оплатить по нему можно и после выхода, деньги
+        # найдёт наблюдатель на сервере.
+        print()
+        print("Проверка прервана. Счёт остался ожидающим - оплата по нему ещё пройдёт.")
+        raise SystemExit(130)

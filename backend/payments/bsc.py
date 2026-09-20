@@ -49,6 +49,11 @@ CONFIRMATIONS = 15
 # Запас под лимит узла: реальный потолок 5000 блоков за запрос.
 LOG_SPAN = 2000
 
+# Шаг хвоста, которым различаются плательщики: одна сотая USDT.
+TAIL_STEP = 10 ** (DECIMALS - 2)
+# Сколько хвостов есть на одну цену: от 0.01 до 0.99.
+TAIL_MAX = 99
+
 # keccak256("Transfer(address,address,uint256)")
 TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
@@ -92,23 +97,56 @@ def enabled() -> bool:
     return bool(ADDRESS.match((os.getenv("NMNH_BSC_RECEIVER") or "").strip()))
 
 
-def unique_amount(price_usd: float | int) -> str:
-    """Цена с случайным хвостом меньше цента: 49 USDT -> 49.004173.
+def base_amount(price_usd: float | int) -> int:
+    """Цена без хвоста, в минимальных единицах сети."""
+    return int(round(float(price_usd) * 100)) * 10 ** (DECIMALS - 2)
 
-    Так плательщик опознаётся суммой, и адрес приёма остаётся один на всех.
+
+def amount_with_tail(price_usd: float | int, tail: int) -> str:
+    """Цена с заданным хвостом в сотых: (49, 13) -> 49.13."""
+    return str(base_amount(price_usd) + int(tail) * TAIL_STEP)
+
+
+def tail_of(amount_raw: str | int, price_usd: float | int) -> int:
+    """Хвост этой суммы. По нему видно, какие слоты цены уже заняты."""
+    return (int(amount_raw) - base_amount(price_usd)) // TAIL_STEP
+
+
+def unique_amount(price_usd: float | int) -> str:
+    """Цена со случайным хвостом в сотых: 49 USDT -> 49.13.
+
+    Плательщик опознаётся суммой, поэтому адрес приёма один на всех.
+
+    Хвост в сотых, а не в дальних знаках, как было при переносе из соседнего
+    проекта. Там платят из кошелька, куда сумма вставляется буфером, а у нас
+    платят **с биржи**, и сумму там набирают руками в поле вывода. Длинную
+    человек наберёт с опечаткой или округлит, да и биржа может урезать знаки
+    сама - деньги уйдут мимо счёта, и разбирать это придётся руками. «49.13»
+    набирается без ошибок.
+
+    Плата за это - число различимых слотов: 99 на цену вместо миллиона.
+    Свободный подбирается не наугад (`backend/subscriptions.py`), и пока оплаты
+    одновременно ждут единицы, запаса хватает с избытком. Перестанет хватать -
+    вернём третий знак, это одна константа.
+
     Хвост из `secrets`, а не из `random`: предсказуемость хвоста ничего
     серьёзного не даёт, но и повода брать слабый источник нет.
     """
-    base = int(round(float(price_usd) * 10**6)) * 10 ** (DECIMALS - 6)
-    tail = (secrets.randbelow(999_999) + 1) * 10 ** (DECIMALS - 12)
-    return str(base + tail)
+    return amount_with_tail(price_usd, secrets.randbelow(TAIL_MAX) + 1)
 
 
 def format_usdt(amount_raw: str | int) -> str:
-    """Сумма для человека: шесть знаков после запятой, как в счёте."""
+    """Сумма для человека: «49.13», а не «49.130000».
+
+    Лишние нули в счёте вредны: человек переписывает сумму в поле вывода на
+    бирже, и чем короче строка, тем меньше шансов ошибиться. Знаки сверх сотых
+    показываются, только если они есть, - у счетов, выставленных до перехода на
+    сотые, и у чужих переводов в `orphan_payments`.
+    """
     amount = int(amount_raw)
     whole, frac = divmod(amount, UNIT)
-    return f"{whole}.{str(frac).zfill(DECIMALS)[:6]}"
+    digits = str(frac).zfill(DECIMALS)[:6].rstrip("0")
+    return f"{whole}.{digits:0<2}"
 
 
 def _topic_address(address: str) -> str:

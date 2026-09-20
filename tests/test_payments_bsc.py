@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -70,10 +71,12 @@ def _intent(session, *, amount: str = AMOUNT, status: str = "pending", minutes: 
 def test_usdt_in_bsc_has_eighteen_decimals():
     """Главная грабля сети: 18 знаков, а не 6, как у USDT в Ethereum и TRON."""
     assert bsc.DECIMALS == 18
+    assert bsc.format_usdt(10**18) == "1.00"
+    assert bsc.format_usdt(bsc.amount_with_tail(49, 13)) == "49.13"
+    # Счета, выставленные до перехода на сотые, показываются целиком.
     assert bsc.format_usdt(AMOUNT) == "49.004173"
-    assert bsc.format_usdt(10**18) == "1.000000"
     # С шестью знаками та же сумма выглядела бы как 49 триллионов.
-    assert bsc.format_usdt("1000000") != "1.000000"
+    assert bsc.format_usdt("1000000") != "1.00"
 
 
 def test_a_transfer_log_is_read_to_the_last_digit():
@@ -93,13 +96,19 @@ def test_a_broken_log_is_skipped_not_fatal():
     assert bsc._parse_log("не словарь") is None
 
 
-def test_unique_amount_keeps_the_price_and_adds_a_tail():
-    """Хвост меньше цента: цена узнаётся, а плательщик различается."""
-    amounts = {bsc.unique_amount(49) for _ in range(200)}
+def test_unique_amount_adds_a_tail_a_human_can_type():
+    """Хвост в сотых: цена узнаётся, а сумму можно набрать руками на бирже.
 
-    assert len(amounts) > 190, "хвост почти не повторяется"
+    Проверяется и то, и другое: сумма всегда между 49.01 и 49.99, и показывается
+    она двумя знаками - именно столько человек и переписывает в поле вывода.
+    """
+    amounts = {bsc.unique_amount(49) for _ in range(300)}
+
+    assert 1 < len(amounts) <= bsc.TAIL_MAX
+    base = 49 * 10**18
     for raw in amounts:
-        assert 49 * 10**18 < int(raw) < 49 * 10**18 + 10**16
+        assert base + bsc.TAIL_STEP <= int(raw) <= base + bsc.TAIL_MAX * bsc.TAIL_STEP
+        assert re.fullmatch(r"49\.\d{2}", bsc.format_usdt(raw))
 
 
 def test_the_payment_finds_its_invoice_and_is_handed_over(session, monkeypatch):

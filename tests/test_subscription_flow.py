@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -100,7 +101,8 @@ def test_the_whole_way_from_invoice_to_access(client, session, monkeypatch):
         headers=_head(),
     ).json()
     assert invoice["receiver"] == RECEIVER
-    assert invoice["amount"].startswith("49.00")
+    # Сумма короткая: её набирают руками в поле вывода на бирже.
+    assert re.fullmatch(r"49\.\d{2}", invoice["amount"])
 
     # До оплаты вход закрыт: счёта через академию у человека нет.
     before = client.get(f"/api/service/subscription/status?tg_id={TG_ID}", headers=_head()).json()

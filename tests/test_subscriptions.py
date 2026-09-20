@@ -6,12 +6,13 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from backend import subscriptions
-from backend.payments import bsc
+from backend.payments import bsc, watcher as payments_watcher
 from core.models import PaymentIntent, Student, Subscription, SubscriptionPayment
 
 RECEIVER = "0x12709f1460b62cd979d12ca9b3ee26a72ecf32fc"
@@ -108,10 +109,10 @@ def test_the_gift_does_not_come_back_after_cancelling(session, student):
     assert session.get(Subscription, student.id).cancelled_at is None, "оплата - это возвращение"
 
 
-def test_a_hundred_invoices_never_collide(session, student):
-    """Сумма у каждого ожидающего счёта своя: сто подряд без единого совпадения."""
+def test_every_waiting_invoice_gets_its_own_amount(session, student):
+    """Сумма у каждого ожидающего счёта своя - все 99 хвостов цены подряд."""
     amounts = set()
-    for number in range(100):
+    for number in range(bsc.TAIL_MAX):
         # Каждый счёт от своего человека: один человек получает один счёт.
         payer = Student(tg_id=1000 + number)
         session.add(payer)
@@ -119,7 +120,32 @@ def test_a_hundred_invoices_never_collide(session, student):
         intent = subscriptions.open_invoice(session, student_id=payer.id, plan="terminal", now=NOW)
         amounts.add(intent.amount_raw)
 
-    assert len(amounts) == 100
+    assert len(amounts) == bsc.TAIL_MAX
+    # Хвост виден человеку: он переписывает сумму руками в поле вывода биржи.
+    assert all(re.fullmatch(r"49\.\d{2}", bsc.format_usdt(one)) for one in amounts)
+
+
+def test_when_all_the_tails_are_taken_the_refusal_is_plain(session, student):
+    """Слотов 99: сотый одновременный счёт - внятный отказ, а не мусорная сумма.
+
+    Слот освобождается, как только счёт истёк или оплачен, поэтому упереться в
+    предел можно только при сотне человек, платящих в один и тот же час.
+    """
+    for number in range(bsc.TAIL_MAX):
+        payer = Student(tg_id=2000 + number)
+        session.add(payer)
+        session.flush()
+        subscriptions.open_invoice(session, student_id=payer.id, plan="terminal", now=NOW)
+
+    with pytest.raises(subscriptions.NoFreeAmount):
+        subscriptions.open_invoice(session, student_id=student.id, plan="terminal", now=NOW)
+
+    # Час прошёл, брони сняты - счёт снова выставляется.
+    payments_watcher.expire_stale(session, now=NOW + timedelta(hours=2))
+    later = subscriptions.open_invoice(
+        session, student_id=student.id, plan="terminal", now=NOW + timedelta(hours=2)
+    )
+    assert later.amount_raw
 
 
 def test_pressing_pay_twice_returns_the_same_invoice(session, student):
@@ -208,7 +234,8 @@ def test_the_invoice_says_the_network_in_words(session, student):
     view = subscriptions.invoice_view(intent)
 
     assert view["network_label"] == "BNB Smart Chain (BEP-20)"
-    assert view["amount"].startswith("49.00")
+    # Сумма короткая и с хвостом в сотых: её набирают руками на бирже.
+    assert re.fullmatch(r"49\.\d{2}", view["amount"])
     assert int(view["amount_raw"]) > 49 * 10**18
     assert view["receiver"] == RECEIVER
 
@@ -258,7 +285,7 @@ def test_the_yearly_invoice_asks_for_the_yearly_price(session, student):
     assert float(intent.price_usd) == 500
     assert view["period"] == "year"
     assert view["days"] == 365
-    assert view["amount"].startswith("500.00")
+    assert re.fullmatch(r"500\.\d{2}", view["amount"])
 
 
 def test_the_first_year_gives_a_month_as_a_gift(session, student):
