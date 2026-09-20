@@ -12,6 +12,7 @@
     python check_subscription_flow.py --кому 123456789
     python check_subscription_flow.py --кому 123456789 --цена 1 --минут 30
     python check_subscription_flow.py --кому 123456789 --тариф pro --срок year
+    python check_subscription_flow.py --кому 123456789 --сумма 1.05   ← ровно 1.05
 
 Счёт держится указанное число минут; всё это время можно платить. Начисленные
 дни после проверки снимаются руками - пробник чужую подписку не трогает.
@@ -33,6 +34,7 @@ except Exception:  # noqa: BLE001
     pass
 
 from sqlalchemy import select  # noqa: E402
+from sqlalchemy.exc import IntegrityError  # noqa: E402
 
 from backend import notifications, subscriptions  # noqa: E402
 from backend.payments import bsc, watcher as payments_watcher  # noqa: E402
@@ -55,12 +57,25 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def make_invoice(session, *, tg_id: int, plan: str, period: str, price: float, minutes: int) -> PaymentIntent:
+def make_invoice(
+    session,
+    *,
+    tg_id: int,
+    plan: str,
+    period: str,
+    price: float,
+    minutes: int,
+    exact: float | None = None,
+) -> PaymentIntent:
     """Счёт на малую сумму - тем же кодом, что и боевой, но со своей ценой.
 
     Цену подменяем только здесь: платить 49 USDT ради проверки сети незачем, а
     всё остальное - подбор свободной суммы, срок брони, запись в базу - должно
     быть настоящим, иначе проверка ничего не докажет.
+
+    `exact` задаёт сумму целиком, вместе с хвостом: «проверь на 1.05» - это
+    ровно 1.05, а не 1.05 плюс случайные сотые. Нужно, когда сумму на бирже
+    уже набрали руками и менять её не хочется.
     """
     student = session.scalars(select(Student).where(Student.tg_id == tg_id)).first()
     if student is None:
@@ -80,10 +95,12 @@ def make_invoice(session, *, tg_id: int, plan: str, period: str, price: float, m
         tg_id=tg_id,
         plan=chosen.code,
         period=span,
-        price_usd=price,
+        price_usd=exact if exact is not None else price,
         network=bsc.NETWORK,
         receiver=bsc.receiving_address(),
-        amount_raw=bsc.unique_amount(price),
+        amount_raw=(
+            bsc.amount_with_tail(exact, 0) if exact is not None else bsc.unique_amount(price)
+        ),
         status="pending",
         created_at=moment,
         expires_at=moment + timedelta(minutes=minutes),
@@ -185,6 +202,9 @@ async def main() -> int:
     period = _arg("--срок", _arg("--period", "month"))
     price = float(_arg("--цена", _arg("--price", "1")))
     minutes = int(_arg("--минут", _arg("--minutes", "30")))
+    # Точная сумма вместе с хвостом: «--сумма 1.05» - это ровно 1.05.
+    asked_exact = _arg("--сумма", _arg("--amount", ""))
+    exact = float(asked_exact) if asked_exact else None
 
     init_engine()
     print(f"Узел:  {bsc.rpc_url()}")
@@ -195,9 +215,22 @@ async def main() -> int:
         return 1
 
     with SessionLocal() as session:
-        intent = make_invoice(
-            session, tg_id=tg_id, plan=plan, period=period, price=price, minutes=minutes
-        )
+        try:
+            intent = make_invoice(
+                session,
+                tg_id=tg_id,
+                plan=plan,
+                period=period,
+                price=price,
+                minutes=minutes,
+                exact=exact,
+            )
+        except IntegrityError:
+            # Ровно эту сумму уже кто-то ждёт: двух ожидающих счетов на одну
+            # сумму быть не может, иначе непонятно, чей перевод пришёл.
+            session.rollback()
+            print(f"Сумму {asked_exact} сейчас ждёт другой счёт - возьмите соседнюю.")
+            return 1
         intent_id = intent.id
         show(intent)
 
