@@ -29,6 +29,7 @@ from backend.api import shots
 from backend.api import trading as trading_api
 from backend.api import auth, market, market_data, market_extra, signals, stats, students, profile, admin_affiliate, institutional, broadcast, pnl, trades, journal, trading, coins, shop
 from backend.api import chat as chat_api
+from backend.api import admin_subscription
 from backend.api import service_subscription
 from backend import notifications as subscription_notifications
 from backend import subscriptions as subscription_core
@@ -451,6 +452,7 @@ def create_app(
     app.include_router(exchange_uids.router)
     app.include_router(academy_trading.router)
     app.include_router(service_subscription.router)
+    app.include_router(admin_subscription.router)
     app.include_router(exchanges_api.router)
     app.include_router(shop.router)
     app.include_router(shop.admin_router)
