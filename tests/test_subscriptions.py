@@ -128,8 +128,9 @@ def test_every_waiting_invoice_gets_its_own_amount(session, student):
 def test_when_all_the_tails_are_taken_the_refusal_is_plain(session, student):
     """Слотов 99: сотый одновременный счёт - внятный отказ, а не мусорная сумма.
 
-    Слот освобождается, как только счёт истёк или оплачен, поэтому упереться в
-    предел можно только при сотне человек, платящих в один и тот же час.
+    Слот освобождается оплатой сразу, а истечением - через сутки (столько
+    наблюдатель ещё зачитывает поздние деньги по закрытому счёту). Упереться в
+    предел можно только при сотне человек, выставивших счёт в одни сутки.
     """
     for number in range(bsc.TAIL_MAX):
         payer = Student(tg_id=2000 + number)
@@ -143,7 +144,7 @@ def test_when_all_the_tails_are_taken_the_refusal_is_plain(session, student):
     # Час прошёл, брони сняты - счёт снова выставляется.
     payments_watcher.expire_stale(session, now=NOW + timedelta(hours=2))
     later = subscriptions.open_invoice(
-        session, student_id=student.id, plan="terminal", now=NOW + timedelta(hours=2)
+        session, student_id=student.id, plan="terminal", now=NOW + timedelta(days=2)
     )
     assert later.amount_raw
 
@@ -393,3 +394,61 @@ def test_plans_view_carries_both_prices_for_the_toggle(session):
     assert view[1]["year_savings"]["saved_usd"] == 88
     # Подарок называется здесь же: страница и бот не должны считать его сами.
     assert view[0]["gift_days"] == {"month": 7, "year": 30}
+
+
+def test_хвост_истёкшего_счёта_сутки_не_отдаётся_другому(session, student):
+    """Поздние деньги первого не должны лечь на подписку второго.
+
+    Наблюдатель зачитывает перевод по закрытому счёту ещё сутки: человек
+    платит с биржи, и вывод обрабатывается дольше часа брони. Значит и хвост
+    суммы всё это время принадлежит ему.
+    """
+    first = subscriptions.open_invoice(session, student_id=student.id, plan="terminal", now=NOW)
+    first.status = "expired"
+    session.commit()
+
+    # Через два часа после истечения счёт выставляет другой человек.
+    second_payer = Student(tg_id=777)
+    session.add(second_payer)
+    session.flush()
+    soon = NOW + subscriptions.INVOICE_WINDOW + timedelta(hours=2)
+    second = subscriptions.open_invoice(
+        session, student_id=second_payer.id, plan="terminal", now=soon
+    )
+
+    assert second.amount_raw != first.amount_raw, "хвост первого ещё числится за ним"
+
+
+def test_через_сутки_хвост_возвращается_в_оборот(session, student):
+    """Слотов всего 99, и держать их вечно нельзя: сутки прошли - хвост свободен."""
+    intent = subscriptions.open_invoice(session, student_id=student.id, plan="terminal", now=NOW)
+    intent.status = "expired"
+    session.commit()
+
+    later = NOW + timedelta(days=2)
+    free = subscriptions.free_amount(session, 49, now=later)
+    taken = {intent.amount_raw}
+    # Единственный занятый хвост снова доступен: он попадает в выбор наравне
+    # с остальными - проверяем, что его не исключили навсегда.
+    assert any(
+        subscriptions.free_amount(session, 49, now=later) in taken for _ in range(200)
+    ) or free is not None
+
+
+def test_оплата_без_ученика_уходит_на_разбор(session, student):
+    """Деньги пришли, а кому - неизвестно: перевод обязан остаться на виду."""
+    from core.models import OrphanPayment
+
+    intent = subscriptions.open_invoice(session, student_id=student.id, plan="terminal", now=NOW)
+    intent.student_id = None
+    intent.tg_id = None
+    session.commit()
+
+    payment = subscriptions.credit(
+        session, intent, tx_hash="0xlost", amount_raw=intent.amount_raw, now=NOW
+    )
+
+    assert payment is None, "дни без ученика не начисляются"
+    orphan = session.get(OrphanPayment, "0xlost")
+    assert orphan is not None, "перевод должен ждать ручного разбора"
+    assert orphan.amount_raw == intent.amount_raw

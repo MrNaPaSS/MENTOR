@@ -27,6 +27,7 @@ import os
 import re
 import secrets
 from dataclasses import dataclass
+from datetime import timedelta
 
 from backend.sources import session
 
@@ -48,6 +49,13 @@ DEFAULT_RPC = "https://bsc-rpc.publicnode.com"
 CONFIRMATIONS = 15
 # Запас под лимит узла: реальный потолок 5000 блоков за запрос.
 LOG_SPAN = 2000
+
+# Сколько после истечения счёта его сумма всё ещё числится за человеком.
+# Платят с биржи, где вывод обрабатывается до часа, и счёт успевает закрыться
+# раньше, чем деньги выходят (§13 ТЗ). Ровно столько же хвост суммы считается
+# занятым при выставлении новых счетов: выданный второму человеку, он принял бы
+# на его счёт поздние деньги первого.
+LATE_WINDOW = timedelta(days=1)
 
 # Шаг хвоста, которым различаются плательщики: одна сотая USDT.
 TAIL_STEP = 10 ** (DECIMALS - 2)

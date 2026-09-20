@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 
 from backend import subscriptions
-from core.models import AcademyUid, ExchangeAccount, Student, utcnow
+from core.models import AcademyUid, ExchangeAccount, Student, Subscription, utcnow
 
 # Сколько бирж подключает реферал и подписчик Про: все, что мы поддерживаем.
 # Предел подписки `terminal` - одна, и он единственный, кто его чувствует.
@@ -148,3 +148,31 @@ def history_floor(session, student: Student, now: datetime | None = None) -> dat
     if days is None:
         return None
     return (now or utcnow()) - timedelta(days=days)
+
+
+def may_trade(session, student: Student, now: datetime | None = None) -> bool:
+    """Открывать ли новые сделки. False - только у того, кто платил и перестал.
+
+    Правило узкое намеренно. Соблазн был написать «пускаем того, у кого
+    `terminal`», но это отобрало бы торговлю у всех, кого мы раньше не
+    проверяли: у записи без подтверждения академии, у счёта, открытого
+    наставником руками, у человека, который торгует по ключам с прошлого года.
+    Подписка появилась вчера и не повод закрывать двери, которые были открыты.
+
+    Поэтому закрываем ровно тех, о ком договорились: подписка была, кончилась,
+    и другого основания у человека нет. Реферал и подтверждённый счёт академии
+    сильнее любой просрочки.
+
+    Ведение и закрытие идущих сделок эта проверка не трогает: позиция стоит на
+    бирже живыми деньгами, и отобрать у человека кнопку «закрыть» за неуплату
+    нельзя. Закрыт только вход в новую сделку.
+    """
+    access = effective_access(session, student, now=now)
+    if access.terminal:
+        return True
+    row = session.get(Subscription, student.id)
+    # Подписки не было вовсе - значит человек пришёл не через неё, и закрывать
+    # ему торговлю мы не вправе: этим ведает тот, кто ведал раньше.
+    if row is None or (row.first_paid_at is None and not row.paid_until):
+        return True
+    return False

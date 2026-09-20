@@ -17,6 +17,8 @@ from backend.deps import get_current_student, get_session, get_weex
 from backend.trading.funds import trade_volume
 
 router = APIRouter(prefix="/api/trades", tags=["trades"])
+from backend.access import history_floor
+
 logger = logging.getLogger("nmnh.trades")
 
 
@@ -92,6 +94,12 @@ async def trades_me(
 ):
     end_ms = int(time.time() * 1000)
     start_ms = end_ms - days * 86_400_000
+    # Глубина истории у тарифа `terminal` - три месяца, и держать её только в
+    # журнале мало: этот же экран показывает оборот и издержки, и через него
+    # годовое окно открывалось целиком (backend/access.py, history_floor).
+    floor = history_floor(session, student)
+    if floor is not None:
+        start_ms = max(start_ms, int(floor.timestamp() * 1000))
     picked = str(venue or "").strip().lower()
 
     # Выбрана биржа, о которой партнёрская ручка WEEX ничего не знает. Спрашивать

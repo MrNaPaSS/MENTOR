@@ -218,3 +218,40 @@ def test_without_a_chosen_exchange_everything_counts(ctx):
 
     summary = client.get("/api/trades/me?days=90", headers=h).json()["summary"]
     assert summary["total_volume"] == pytest.approx(1200.0)
+
+
+def test_история_подписчика_ограничена_тарифом(ctx):
+    """Тариф «Терминал» показывает три месяца - и на этом экране тоже.
+
+    Ограничение стояло только в журнале, а «Счёт и издержки» и путь трейдера
+    идут отсюда: запрос с `days=365` открывал годовое окно целиком и обходил
+    тариф (backend/access.py, history_floor).
+    """
+    from datetime import datetime as dt, timezone as tz
+
+    from core.models import Subscription
+
+    client = ctx
+    sid, h = _student(client)
+    _trade(sid, "старая", qty="2", entry="100", exit_price="100", days_ago=200)
+    _trade(sid, "свежая", qty="1", entry="100", exit_price="100", days_ago=10)
+
+    with SessionLocal() as s:
+        now = dt.now(tz.utc)
+        s.add(Subscription(
+            student_id=sid, plan="terminal", paid_until=now + timedelta(days=20),
+            started_at=now, first_paid_at=now, gift_granted=True, updated_at=now,
+        ))
+        # Вход по UID в этом наборе идёт через мок партнёрки, и он выдаёт VIP
+        # реферала - а у реферала истории предела нет. Здесь проверяется как
+        # раз подписчик без академии, поэтому оба признака снимаем.
+        row = s.get(Student, sid)
+        row.weex_uid = None
+        row.is_vip = False
+        row.vip_source = ""
+        s.commit()
+
+    body = client.get("/api/trades/me?days=365", headers=h).json()
+
+    # Видна только свежая сделка: 1x100 + 1x100. Старая - за границей тарифа.
+    assert body["summary"]["total_volume"] == pytest.approx(200.0)

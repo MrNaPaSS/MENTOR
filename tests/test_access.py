@@ -242,3 +242,47 @@ def test_paying_opens_the_terminal_for_someone_without_an_account(session):
     assert access.terminal is True
     assert access.source == "subscription"
     assert access.subscription_active is True
+
+
+# ── Торговля после окончания подписки ───────────────────────────────────────
+#
+# Правило узкое: закрываем ровно того, кто платил и перестал. Всё остальное -
+# реферал, подтверждённый счёт академии, запись без подписки вовсе - торгует
+# как торговало. Подписка появилась вчера и не повод закрывать двери, которые
+# были открыты (backend/access.py, may_trade).
+
+
+def test_подписка_кончилась_новые_сделки_закрыты(session):
+    student = _student(session, tg_id=41)
+    _subscribe(session, student, days=-1)
+
+    assert access_module.may_trade(session, student, now=NOW) is False
+
+
+def test_подписка_идёт_торговля_открыта(session):
+    student = _student(session, tg_id=42)
+    _subscribe(session, student, days=10)
+
+    assert access_module.may_trade(session, student, now=NOW) is True
+
+
+def test_реферал_с_истёкшей_подпиской_торгует(session):
+    student = _student(session, tg_id=43, vip=True)
+    _subscribe(session, student, days=-5)
+
+    assert access_module.may_trade(session, student, now=NOW) is True
+
+
+def test_счёт_подтверждён_академией_просрочка_не_мешает(session):
+    student = _student(session, tg_id=44)
+    _subscribe(session, student, days=-5)
+    _academy(session, student)
+
+    assert access_module.may_trade(session, student, now=NOW) is True
+
+
+def test_никогда_не_подписывался_торгует_как_прежде(session):
+    """Тот, кого мы раньше не проверяли, доступа не теряет."""
+    student = _student(session, tg_id=45)
+
+    assert access_module.may_trade(session, student, now=NOW) is True

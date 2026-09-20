@@ -252,13 +252,21 @@ def free_amount(session: Session, price_usd: float | int, now: datetime) -> str:
     угадывание с парой попыток начало бы промахиваться задолго до того, как
     слоты кончатся. Выбор случайный среди свободных - соседние счета не идут
     подряд, и по сумме нельзя посчитать, сколько у нас покупателей.
+
+    Занятым хвост считается **сутки после истечения счёта**, а не до него.
+    Наблюдатель зачитывает поздние деньги по закрытому счёту ещё сутки
+    (`bsc.LATE_WINDOW`): человек заплатил с биржи, вывод обрабатывался дольше
+    часа. Отдай мы этот хвост второму - и деньги первого, дошедшие через два
+    часа, нашли бы ожидающий счёт второго и легли бы на его подписку. Первый
+    остался бы без дней, второй получил бы их даром, а по сумме и хешу было бы
+    не разобрать, чьи это деньги.
     """
     base = bsc.base_amount(price_usd)
     waiting = session.scalars(
         select(PaymentIntent.amount_raw).where(
             PaymentIntent.network == bsc.NETWORK,
-            PaymentIntent.status == "pending",
-            PaymentIntent.expires_at > now,
+            PaymentIntent.status.in_(("pending", "expired")),
+            PaymentIntent.expires_at > now - bsc.LATE_WINDOW,
         )
     ).all()
 
@@ -339,7 +347,11 @@ def credit(
     moment = now or _now()
     student_id = intent.student_id or _student_by_tg(session, intent.tg_id)
     if student_id is None:
+        # Деньги пришли, а кому - неизвестно. Молчать нельзя: курсор уйдёт
+        # вперёд, лог перевода больше не встретится, и человек останется без
+        # дней, а мы - без следа платежа. Кладём его туда же, куда чужие.
         log.error("Счёт %s оплачен, но ученик не найден: %s", intent.id, tx_hash)
+        _orphan(session, tx_hash=tx_hash, amount_raw=amount_raw, network=intent.network)
         return None
 
     subscription = _subscription(session, student_id, moment)
@@ -432,6 +444,23 @@ def grant_days(
         subscription.plan = plan_of(plan).code
     session.commit()
     return payment
+
+
+def _orphan(session: Session, *, tx_hash: str, amount_raw: str, network: str) -> None:
+    """Отправить перевод на ручной разбор (`backend/api/admin_subscription.py`)."""
+    from core.models import OrphanPayment
+
+    if session.get(OrphanPayment, tx_hash) is not None:
+        return
+    session.add(
+        OrphanPayment(
+            tx_hash=tx_hash,
+            network=network or bsc.NETWORK,
+            from_address="",
+            amount_raw=str(amount_raw),
+        )
+    )
+    session.commit()
 
 
 def gift_for(period: str) -> timedelta:

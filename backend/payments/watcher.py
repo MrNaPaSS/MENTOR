@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Callable, Protocol
 
 from sqlalchemy import select
@@ -41,10 +41,9 @@ TICK_SECONDS = 15.0
 # Первый запуск: историю сети не читаем, начинаем с недавнего окна.
 FIRST_RUN_LOOKBACK = 1000
 
-# Сколько после истечения счёта его сумма всё ещё числится за человеком.
-# Платят с биржи, где вывод обрабатывается до часа, и счёт успевает закрыться
-# раньше, чем деньги выходят (§13 ТЗ).
-LATE_WINDOW = timedelta(days=1)
+# Сколько после истечения счёта его сумма всё ещё числится за человеком -
+# и столько же её хвост не выдаётся никому другому (`backend/payments/bsc.py`).
+LATE_WINDOW = bsc.LATE_WINDOW
 
 
 class OnPayment(Protocol):

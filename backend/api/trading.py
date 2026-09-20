@@ -31,6 +31,7 @@ from backend.deps import get_current_mentor, get_current_student, get_session, g
 from backend.trading import health
 from backend.trading.live_state import cached
 from backend.trading.locks import account_guard
+from backend.access import may_trade
 from backend.trading.accounts import (
     access_kind,
     account_for,
@@ -1108,6 +1109,16 @@ async def open_position(
     """
     if body.side not in {"long", "short"}:
         raise HTTPException(422, "Сторона сделки: long или short")
+
+    # Подписка кончилась - новую сделку не открываем. Идущие ведутся и
+    # закрываются как прежде: позиция стоит на бирже живыми деньгами, и
+    # отбирать кнопку «закрыть» за неуплату нельзя (backend/access.py).
+    if not may_trade(session, student):
+        raise HTTPException(
+            402,
+            "Подписка кончилась - новые сделки закрыты. Оплатите её в боте академии; "
+            "журнал, метрики и открытые позиции остаются доступны.",
+        )
 
     client = _require_client(session, student)
     symbol = body.symbol.upper()

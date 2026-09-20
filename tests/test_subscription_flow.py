@@ -256,3 +256,39 @@ def test_the_end_closes_trading_and_leaves_the_journal(client, session, monkeypa
     assert notifications.sweep(session) == 1
     events = client.get("/api/service/notifications", headers=_head()).json()["events"]
     assert "expired" in [one["event"] for one in events]
+
+
+def test_просроченная_подписка_закрывает_новую_сделку(client, session, monkeypatch):
+    """Дни кончились - вход в новую сделку закрыт, а кабинет остаётся.
+
+    Раньше право проверялось только на выдаче пароля входа, а токен живёт
+    тридцать дней: человек, переставший платить, торговал ещё месяц.
+    """
+    invoice = client.post(
+        "/api/service/subscription/invoice",
+        json={"tg_id": TG_ID, "plan": "terminal", "username": "ivan"},
+        headers=_head(),
+    ).json()
+    _run_watcher(monkeypatch, (_transfer(invoice["amount_raw"]),))
+
+    student = session.scalars(
+        __import__("sqlalchemy").select(Student).where(Student.tg_id == TG_ID)
+    ).first()
+    from backend.access import may_trade
+
+    assert may_trade(session, student) is True, "пока оплачено - торгует"
+
+    # Дни кончились.
+    row = session.get(Subscription, student.id)
+    row.paid_until = datetime.now(timezone.utc) - timedelta(minutes=1)
+    session.commit()
+    session.expire_all()
+
+    assert may_trade(session, student) is False, "новые сделки закрыты"
+
+    # Журнал и состояние подписки при этом отвечают по-прежнему: человек
+    # видит свою историю и знает, что именно оплатить.
+    after = client.get(f"/api/service/subscription/status?tg_id={TG_ID}", headers=_head()).json()
+    assert after["active"] is False and after["days_left"] == 0
+    # Тариф в ответе остаётся: боту есть что предложить продлить.
+    assert after["plan"] == "terminal"
