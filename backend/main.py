@@ -76,6 +76,12 @@ from backend.headers import SecurityHeaders
 # строки выводим целиком, остальное - как раньше, с предупреждений.
 logging.basicConfig(level=logging.WARNING, format="%(message)s")
 logging.getLogger("nmnh.trading").setLevel(logging.INFO)
+# Деньги видно так же, как сделки. На предупреждениях в журнале не оставалось
+# ни строки о том, включён ли вообще приём оплаты и сопоставился ли платёж:
+# «Приём USDT включён» и «Платежей сопоставлено» - информационные, и они
+# терялись. Понять, работает ли приём, можно было только по базе.
+logging.getLogger("nmnh.payments").setLevel(logging.INFO)
+logging.getLogger("nmnh.subscription").setLevel(logging.INFO)
 
 
 ROLES = ("all", "api", "watcher", "market")
