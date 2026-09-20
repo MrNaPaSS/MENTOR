@@ -7,6 +7,10 @@ export const SOCIAL_LINKS = {
   // Бот академии: он же выдаёт одноразовый пароль для входа на сайт. Это не
   // сигнальный бот - у них разные роли и разные записи об учениках.
   academyBot: "https://t.me/moneyhoney7_bot",
+  // Тот же бот, но сразу с развилкой подписки: параметр `sub` он разбирает в
+  // start_command. Человеку со страницы тарифов не приходится искать нужную
+  // кнопку в общем меню - по дороге туда он отваливается.
+  academyBotSubscription: "https://t.me/moneyhoney7_bot?start=sub",
   // Сама академия: мини-апп, куда ведёт главная кнопка первого экрана. Доступ
   // к терминалу выдаётся оттуда, поэтому и путь человека начинается там, а не
   // в форме входа.
@@ -123,6 +127,7 @@ export const SEO_PAGES = [
   { key: "scalping", href: "/scalping" },
   { key: "community", href: "/community" },
   { key: "journal", href: "/journal" },
+  { key: "pricing", href: "/pricing" },
 ] as const;
 
 export type SeoPageKey = (typeof SEO_PAGES)[number]["key"];

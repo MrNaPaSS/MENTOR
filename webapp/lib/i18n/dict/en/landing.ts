@@ -436,6 +436,7 @@ export const landing = {
       scalping: "Crypto scalping",
       community: "Trading community",
       journal: "Trade journal",
+      pricing: "Access and subscription",
     },
     calculator: "Calculator",
     partnerHeading: "Partner",

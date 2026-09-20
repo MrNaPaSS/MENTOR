@@ -493,6 +493,7 @@ export const landing = {
       scalping: "Скальпинг криптовалют",
       community: "Сообщество трейдеров",
       journal: "Журнал сделок",
+      pricing: "Доступ и подписка",
     },
     calculator: "Калькулятор",
     partnerHeading: "Партнёр",

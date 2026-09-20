@@ -35,6 +35,7 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   { path: "/scalping", priority: 0.9, changeFrequency: "monthly" },
   { path: "/community", priority: 0.8, changeFrequency: "monthly" },
   { path: "/journal", priority: 0.8, changeFrequency: "monthly" },
+  { path: "/pricing", priority: 0.8, changeFrequency: "monthly" },
   { path: "/calculator", priority: 0.7, changeFrequency: "monthly" },
 ] as const;
 
