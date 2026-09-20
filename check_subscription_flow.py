@@ -64,7 +64,13 @@ def make_invoice(session, *, tg_id: int, plan: str, period: str, price: float, m
     """
     student = session.scalars(select(Student).where(Student.tg_id == tg_id)).first()
     if student is None:
-        raise SystemExit(f"Ученика с tg_id {tg_id} нет в базе - заведите его входом через бота.")
+        # Счёт выставляем человеку, а не в пустоту: без записи некому начислять
+        # дни, и проверка ничего бы не доказала.
+        raise SystemExit(
+            f"Ученика с tg_id {tg_id} в базе нет. "
+            "Зайдите разок в терминал через бота - запись заведётся сама, "
+            "после этого пробник сработает."
+        )
 
     chosen = subscriptions.plan_of(plan)
     span = subscriptions.period_of(period)
@@ -161,7 +167,17 @@ def report(session, intent_id: str, tg_id: int) -> None:
 
 
 async def main() -> int:
-    tg_id = int(_arg("--кому", _arg("--tg", "0")))
+    asked = _arg("--кому", _arg("--tg", "0"))
+    try:
+        tg_id = int(asked)
+    except ValueError:
+        # Сюда попадают, подставив в команду слова из примера. Трейсбек на это
+        # отвечать не должен: человек ошибся в одном месте и должен прочитать,
+        # в каком именно.
+        print(f"Не понимаю номер Telegram: {asked}")
+        print("Нужно число, например: python check_subscription_flow.py --кому 511442168")
+        print("Свой номер видно в боте по кнопке «Моя подписка» или в @userinfobot.")
+        return 1
     if not tg_id:
         print(__doc__)
         return 1
