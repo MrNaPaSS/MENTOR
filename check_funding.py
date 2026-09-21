@@ -1,4 +1,4 @@
-"""Плата за финансирование: что биржа говорит о ней по открытой позиции.
+"""Что биржа записала по сделке: плата за финансирование и её же итог.
 
 Зачем. Журнал сходился с биржей на коротких сделках и расходился на долгих.
 Разбор сделки TAOUSDT 19-21 сентября показал разницу 25.24 при результате
@@ -12,11 +12,22 @@
 сделки, надо увидеть своими глазами, как биржа её называет и с каким знаком
 отдаёт, - на закрытой позиции не спросишь, она исчезает вместе с позицией.
 
-Пробник печатает открытые позиции учеников целиком, всеми полями как есть.
-Ничего не меняет и никуда не пишет - только читает.
+Пробник делает две вещи, и обе только читают:
+
+* печатает открытые позиции учеников целиком, всеми полями как есть;
+* спрашивает историю начислений (`/capi/v3/account/income`) - это ручка, где
+  биржа держит свои записи по счёту: реализованный результат, комиссию и плату
+  за финансирование. Её существование проверено (без подписи отвечает 401, а
+  несуществующие пути - 404), но какие она ждёт параметры и как называет типы
+  записей - неизвестно, поэтому пробуем несколько наборов и печатаем ответ как
+  есть, включая отказ.
+
+Ради этой ручки всё и затевалось: в журнал нужно писать не нашу арифметику, а
+то самое число, которое зафиксировала биржа.
 
     python check_funding.py            # все ученики с подключёнными ключами
     python check_funding.py 26         # только ученик с этим номером
+    python check_funding.py 26 TAOUSDT # и спросить историю по этой монете
 
 Запускать там же, где работает сервер, и с тем же `.env`: без
 `WEEX_KEYS_SECRET` ключи учеников не расшифровать.
@@ -27,6 +38,7 @@ from __future__ import annotations
 import asyncio
 import ssl
 import sys
+import time
 
 import aiohttp
 import certifi
@@ -62,8 +74,21 @@ MONEY_FIELDS = (
 )
 
 
+# Ручка истории начислений и наборы параметров, которыми её пробуем.
+#
+# Имя пути проверено: без подписи он отвечает 401, как и остальные приватные
+# ручки, а несуществующие - 404. Чего он ждёт в параметрах, биржа нигде не
+# пишет, поэтому идём от общего к частному: сперва без всего, потом с окном
+# времени, потом с монетой. Первый непустой ответ и покажет правду.
+INCOME_PATH = "/capi/v3/account/income"
+
+# Сколько суток истории просить. Трёх хватает на любую сделку, которую держат.
+INCOME_DAYS = 3
+
+
 async def main() -> int:
     only = _student_from_args()
+    symbol = _symbol_from_args()
 
     init_engine()
     session = SessionLocal()
@@ -96,14 +121,14 @@ async def main() -> int:
                 return http
 
             for row in accounts:
-                await _one(row, http_session)
+                await _one(row, http_session, symbol)
 
         return 0
     finally:
         session.close()
 
 
-async def _one(row: ExchangeAccount, http_session) -> None:
+async def _one(row: ExchangeAccount, http_session, symbol: str | None) -> None:
     head = f"ученик {row.student_id}, {row.exchange}"
     try:
         client = client_for(row, http_session)
@@ -115,7 +140,13 @@ async def _one(row: ExchangeAccount, http_session) -> None:
     live = [p for p in positions if _size(p) > 0]
     if not live:
         print(f"{head}: открытых позиций нет")
-        return
+    else:
+        _show_positions(head, live)
+
+    await _income(head, client, symbol)
+
+
+def _show_positions(head: str, live: list[dict]) -> None:
 
     for one in live:
         print(f"{head}: {one.get('symbol') or one.get('instId') or '?'}")
@@ -134,6 +165,47 @@ async def _one(row: ExchangeAccount, http_session) -> None:
         print()
 
 
+async def _income(head: str, client, symbol: str | None) -> None:
+    """История начислений: то, что биржа записала по счёту своими словами."""
+    now = int(time.time() * 1000)
+    since = now - INCOME_DAYS * 24 * 3600 * 1000
+
+    tries: list[tuple[str, dict]] = [
+        ("без параметров", {}),
+        ("окно времени", {"startTime": since, "endTime": now, "limit": 100}),
+    ]
+    if symbol:
+        tries.append(
+            ("монета и окно", {"symbol": symbol.upper(), "startTime": since, "endTime": now, "limit": 100})
+        )
+
+    print(f"{head}: история начислений")
+    for what, params in tries:
+        # И телом, и строкой запроса: какой из двух способов ждёт биржа,
+        # заранее не известно, а отказ она объясняет по-разному.
+        for how in ("тело", "строка"):
+            try:
+                answer = await client._request(
+                    "POST",
+                    INCOME_PATH,
+                    data=params if how == "тело" and params else None,
+                    params=params if how == "строка" and params else None,
+                )
+            except Exception as exc:  # noqa: BLE001 - отказ тоже ответ
+                print(f"    {what} ({how}): {exc}")
+                continue
+
+            rows = answer if isinstance(answer, list) else (answer or {}).get("data") or []
+            print(f"    {what} ({how}): записей {len(rows)}")
+            for one in rows[:12]:
+                print(f"        {one}")
+            if rows:
+                kinds = sorted({str(one.get("incomeType") or one.get("type") or "?") for one in rows if isinstance(one, dict)})
+                print(f"        типы записей: {', '.join(kinds)}")
+                return
+    print()
+
+
 def _size(position: dict) -> float:
     for name in ("size", "positionAmt", "pos", "holdVol"):
         try:
@@ -149,6 +221,13 @@ def _student_from_args() -> int | None:
     for arg in sys.argv[1:]:
         if arg.isdigit():
             return int(arg)
+    return None
+
+
+def _symbol_from_args() -> str | None:
+    for arg in sys.argv[1:]:
+        if not arg.isdigit() and arg.isalnum():
+            return arg
     return None
 
 
