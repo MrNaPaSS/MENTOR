@@ -72,6 +72,28 @@ class RpcError(RuntimeError):
     """Узел не ответил или ответил ошибкой. Проход пропускается, курсор стоит."""
 
 
+# «block range extends beyond current head block: requested N, head M».
+#
+# За адресом публичного узла стоит не одна машина, а пул: номер головы мы
+# спрашиваем у одной, логи достаются другой, и та бывает позади. Отставание в
+# два десятка блоков - это полминуты жизни сети, дело обычное.
+#
+# Узел в этом ответе прямо называет, до какого блока он готов отвечать, - его и
+# берём, вместо того чтобы гадать запасом подтверждений.
+_BEYOND_HEAD = re.compile(r"beyond\s+current\s+head.*?head\s+(\d+)", re.IGNORECASE | re.DOTALL)
+
+
+def head_from_refusal(message: str) -> int | None:
+    """До какого блока готов отвечать узел, если он это назвал."""
+    found = _BEYOND_HEAD.search(message or "")
+    if not found:
+        return None
+    try:
+        return int(found.group(1))
+    except ValueError:
+        return None
+
+
 @dataclass(frozen=True)
 class Transfer:
     """Один перевод USDT на адрес приёма."""
@@ -176,7 +198,10 @@ async def _rpc(method: str, params: list) -> object:
         ) as response:
             payload = await response.json(content_type=None)
     except Exception as exc:  # noqa: BLE001 - сеть, таймаут, разрыв
-        raise RpcError(f"{method}: {exc}") from exc
+        # У таймаута aiohttp текст пустой, и в журнале оставалось «eth_getLogs:»
+        # без объяснения. Тогда называем хотя бы род сбоя.
+        why = str(exc) or type(exc).__name__
+        raise RpcError(f"{method}: {why}") from exc
     if not isinstance(payload, dict):
         raise RpcError(f"{method}: неожиданный ответ узла")
     if payload.get("error"):
@@ -198,23 +223,46 @@ async def safe_head() -> int:
 
 
 async def fetch_transfers(from_block: int, to_block: int) -> tuple[Transfer, ...]:
-    """Переводы USDT на адрес приёма в диапазоне блоков, включая оба края."""
+    """Переводы USDT на адрес приёма в диапазоне блоков, включая оба края.
+
+    Узел за публичным адресом - это пул машин, и та, что отвечает на логи,
+    бывает позади той, что назвала голову. Тогда она отказывает и говорит, до
+    какого блока готова: повторяем по её границе, а не пропускаем проход.
+    Пропуск здесь не бесплатный - платёж, пришедший в эти блоки, ждал бы
+    следующего круга.
+    """
     if to_block < from_block:
         return ()
     receiver = receiving_address()
-    logs = await _rpc(
-        "eth_getLogs",
-        [
-            {
-                "address": USDT_CONTRACT,
-                # Третья тема - получатель. Отправителя не фильтруем: платят с
-                # бирж, и адрес отправителя человеку не принадлежит.
-                "topics": [TRANSFER_TOPIC, None, _topic_address(receiver)],
-                "fromBlock": hex(from_block),
-                "toBlock": hex(to_block),
-            }
-        ],
-    )
+
+    async def ask(until: int) -> object:
+        return await _rpc(
+            "eth_getLogs",
+            [
+                {
+                    "address": USDT_CONTRACT,
+                    # Третья тема - получатель. Отправителя не фильтруем: платят
+                    # с бирж, и адрес отправителя человеку не принадлежит.
+                    "topics": [TRANSFER_TOPIC, None, _topic_address(receiver)],
+                    "fromBlock": hex(from_block),
+                    "toBlock": hex(until),
+                }
+            ],
+        )
+
+    try:
+        logs = await ask(to_block)
+    except RpcError as exc:
+        behind = head_from_refusal(str(exc))
+        if behind is None or behind < from_block:
+            raise
+        log.info(
+            "Узел отстал: просили до %d, он готов до %d - берём по его границу",
+            to_block,
+            behind,
+        )
+        logs = await ask(behind)
+
     if not isinstance(logs, list):
         raise RpcError("eth_getLogs: ответ не список")
     return tuple(found for found in (_parse_log(one) for one in logs) if found is not None)

@@ -212,3 +212,74 @@ def test_the_cursor_moves_even_with_nothing_to_wait_for(session, monkeypatch):
     asyncio.run(payments_watcher.PaymentWatcher(lambda *args: None).tick())
     session.expire_all()
     assert session.get(ChainCursor, bsc.NETWORK).last_block == 1000 + bsc.LOG_SPAN
+
+
+# ── узел, отставший от собственной головы ───────────────────────────────────
+#
+# За публичным адресом стоит не одна машина, а пул. Номер головы мы спрашиваем
+# у одной, логи достаются другой, и та бывает позади: в журнале сервера 21
+# сентября четыре отказа подряд вида «requested 123149779, head 123149767» -
+# двенадцать блоков разницы при запасе в пятнадцать подтверждений.
+#
+# Пропускать из-за этого проход нельзя: платёж, пришедший в эти блоки, ждал бы
+# следующего круга. Узел прямо называет, до какого блока готов отвечать, - по
+# нему и спрашиваем.
+
+
+def test_the_node_says_how_far_behind_it_is():
+    said = (
+        "eth_getLogs: {'code': -32602, 'message': 'block range extends beyond "
+        "current head block: requested 123149779, head 123149767'}"
+    )
+    assert bsc.head_from_refusal(said) == 123149767
+
+
+def test_an_ordinary_refusal_carries_no_head():
+    assert bsc.head_from_refusal("eth_getLogs: таймаут") is None
+    assert bsc.head_from_refusal("") is None
+
+
+def test_logs_are_asked_again_by_the_border_the_node_named(monkeypatch):
+    """Отстал - берём по его границу, а не остаёмся без блоков вовсе."""
+    import asyncio
+
+    asked: list[tuple[int, int]] = []
+
+    async def rpc(method, params):
+        window = params[0]
+        first = int(str(window["fromBlock"]), 16)
+        last = int(str(window["toBlock"]), 16)
+        asked.append((first, last))
+        if last > 200:
+            raise bsc.RpcError(
+                "eth_getLogs: {'code': -32602, 'message': 'block range extends "
+                "beyond current head block: requested 300, head 200'}"
+            )
+        return []
+
+    monkeypatch.setenv("NMNH_BSC_RECEIVER", RECEIVER)
+    monkeypatch.setattr(bsc, "_rpc", rpc)
+
+    assert asyncio.run(bsc.fetch_transfers(100, 300)) == ()
+    assert asked == [(100, 300), (100, 200)]
+
+
+def test_a_node_behind_the_whole_window_is_a_real_refusal(monkeypatch):
+    """Граница ниже начала окна - спрашивать нечего, это отказ как отказ.
+
+    Курсор в таком случае обязан остаться на месте: пустой ответ вместо отказа
+    сдвинул бы его вперёд, и блоки с платежами остались бы непрочитанными.
+    """
+    import asyncio
+
+    async def rpc(method, params):
+        raise bsc.RpcError(
+            "eth_getLogs: {'code': -32602, 'message': 'block range extends "
+            "beyond current head block: requested 300, head 50'}"
+        )
+
+    monkeypatch.setenv("NMNH_BSC_RECEIVER", RECEIVER)
+    monkeypatch.setattr(bsc, "_rpc", rpc)
+
+    with pytest.raises(bsc.RpcError):
+        asyncio.run(bsc.fetch_transfers(100, 300))
