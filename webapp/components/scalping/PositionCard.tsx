@@ -315,16 +315,6 @@ export default function PositionCard({
                 label={t.journal.cardFee}
                 value={trade.fee > 0 ? `-${trade.fee.toFixed(2)}` : "-"}
               />
-              {/* Плата за финансирование: её берут раз в несколько часов, и
-                  короткая сделка не платит её вовсе. Показываем только когда
-                  она была - пустая строка с прочерком у скальпа лишь занимает
-                  место. Знак биржи: минус - платил, плюс - получал. */}
-              {Boolean(trade.funding) && (
-                <Fact
-                  label={t.journal.cardFunding}
-                  value={(trade.funding as number).toFixed(2)}
-                />
-              )}
 
               {/* Взятая цель отмечена цветом. */}
               {trade.targets.slice(0, 3).map((price, i) => (

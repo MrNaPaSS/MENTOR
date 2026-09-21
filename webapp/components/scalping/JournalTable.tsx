@@ -187,11 +187,7 @@ export default function JournalTable({
                 isLive(row)
                   ? liveHint(row, t)
                   : row.fee
-                    ? t.journal.pnlWithFee(
-                        money(row.pnl),
-                        money(row.pnl - row.fee),
-                        row.fee.toFixed(2),
-                      )
+                    ? t.journal.pnlWithFee(money(row.pnl), row.fee.toFixed(2))
                     : t.journal.pnlNet
               }
             >

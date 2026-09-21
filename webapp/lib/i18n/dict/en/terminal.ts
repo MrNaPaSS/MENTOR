@@ -505,7 +505,6 @@ export const journal = {
   cardHeldLive: "Running",
   heldUnits: { h: "h", m: "m", s: "s" },
   cardFee: "Fee",
-  cardFunding: "Funding",
   sessions: { asia: "Asia", london: "London", newYork: "New York", evening: "Evening" },
   stages: {
     entry: "Entry",
@@ -611,8 +610,7 @@ export const journal = {
   colResult: "Result",
   colResultFee: "Result / fee",
   openChart: "Open the trade's chart",
-  pnlWithFee: (shown: string, net: string, fee: string) =>
-    `${shown} - the same figure the exchange shows. Fee ${fee}, ${net} to the account`,
+  pnlWithFee: (shown: string, fee: string) => `${shown}, fee ${fee}`,
   pnlNet: "The same result the exchange app shows",
   cardTitle: "Trade card: copy, download, share",
   remove: "Delete the entry",
