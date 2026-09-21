@@ -530,6 +530,7 @@ export const journal = {
   cardHeldLive: "Идёт",
   heldUnits: { h: "ч", m: "мин", s: "с" },
   cardFee: "Комиссия",
+  cardFunding: "Финансирование",
   sessions: { asia: "Азия", london: "Лондон", newYork: "Нью-Йорк", evening: "Вечер" },
   stages: {
     entry: "Вход",
@@ -646,9 +647,9 @@ export const journal = {
   colResult: "Итог",
   colResultFee: "Итог / комиссия",
   openChart: "Открыть график сделки",
-  pnlWithFee: (net: string, gross: string, fee: string) =>
-    `На счёт ${net}. Биржа показывает результат до комиссии: ${gross}, комиссия ${fee}`,
-  pnlNet: "Результат за вычетом комиссии - то, что пришло на счёт",
+  pnlWithFee: (shown: string, net: string, fee: string) =>
+    `${shown} - столько же показывает биржа. Комиссия ${fee}, на счёт ${net}`,
+  pnlNet: "Тот же результат, что в приложении биржи",
   cardTitle: "Карточка сделки: скопировать, скачать, поделиться",
   remove: "Удалить запись",
 };

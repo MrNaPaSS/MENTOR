@@ -370,7 +370,9 @@ def test_journal_entry_keeps_the_targets_of_the_trade():
     # Убыточная сделка со взятой целью — это стоп, а не цель: тейк был один из
     # трёх, и на счёте минус.
     assert saved.outcome == "stop"
-    assert float(saved.pnl) == pytest.approx(-1.5)
+    # Итог - число биржи: комиссия стоит рядом отдельной строкой, а не внутри.
+    assert float(saved.pnl) == pytest.approx(-1.2)
+    assert float(saved.fee) == pytest.approx(0.3)
 
 
 def test_entry_fee_is_counted_when_the_fill_came_before_it_was_noticed():
@@ -432,8 +434,9 @@ def test_entry_fee_is_counted_when_the_fill_came_before_it_was_noticed():
     session.commit()
 
     saved = session.execute(select(ScalpTrade)).scalar_one()
-    # 133.63 по бирже минус комиссия входа и выхода - ровно то, что на счёте.
-    assert float(saved.pnl) == pytest.approx(117.63)
+    # 133.63 - столько же показывает биржа. Комиссия обеих ног рядом: на счёт
+    # пришло 117.63, и это видно вычитанием, а не спрятано в итоге.
+    assert float(saved.pnl) == pytest.approx(133.63)
     assert float(saved.fee) == pytest.approx(16.0)
 
 
@@ -2232,8 +2235,9 @@ def test_a_taken_target_updates_what_is_locked_in():
     saved = session.execute(select(ScalpTrade)).scalar_one()
     assert saved.closed_at is None
     assert saved.takes_hit == 2
-    # 12.5 + 11.0 минус комиссия 0.8.
-    assert float(saved.pnl) == pytest.approx(22.7)
+    # 12.5 + 11.0 - как считает биржа. Комиссия 0.8 рядом.
+    assert float(saved.pnl) == pytest.approx(23.5)
+    assert float(saved.fee) == pytest.approx(0.8)
     assert float(saved.closed_qty) == pytest.approx(1.2)
 
 
@@ -2315,7 +2319,8 @@ def test_closing_turns_the_live_record_into_the_final_one():
     assert len(saved) == 1
     assert saved[0].closed_at is not None
     assert saved[0].outcome == "take"
-    assert float(saved[0].pnl) == pytest.approx(7.0)
+    assert float(saved[0].pnl) == pytest.approx(7.5)
+    assert float(saved[0].fee) == pytest.approx(0.5)
     assert float(saved[0].closed_qty) == pytest.approx(float(row.qty))
 
 
@@ -2373,7 +2378,9 @@ def test_a_trade_already_open_gets_into_the_journal_too():
     assert saved.closed_at is None
     assert saved.takes_hit == 2
     # Цели уже брались - зафиксированное спросили сразу, при заведении.
-    assert float(saved.pnl) == pytest.approx(19.5)
+    # Число биржи, комиссия отдельной строкой.
+    assert float(saved.pnl) == pytest.approx(20.0)
+    assert float(saved.fee) == pytest.approx(0.5)
 
 
 def test_an_existing_record_is_not_re_asked_every_round():
@@ -2466,3 +2473,101 @@ def test_the_journal_does_not_pester_the_exchange():
 
     asyncio.run(twice())
     assert len(asked) == 1
+
+
+# ── плата за финансирование ─────────────────────────────────────────────────
+#
+# Журнал сходился с биржей на коротких сделках и расходился на долгих. Разбор
+# шорта TAO, провисевшего 34 часа: результат по исполнениям 1287.80, комиссия
+# 47.38 - оба сошлись с биржей до копейки, а её карточка показывала 1262.56.
+# Разница 25.24 - плата за финансирование, которую никто не читал.
+#
+# Спросить её после закрытия негде: позиция исчезает вместе со своими числами,
+# а в ленте исполнений этих денег нет вовсе. Поэтому снимаем по ходу сделки.
+
+
+def test_funding_is_taken_from_the_position_while_it_lives():
+    from backend.trading.watcher import remember_funding
+
+    row = trade()
+    remember_funding(row, weex_position(cumFundingFee="-25.2366"))
+    assert float(row.funding) == pytest.approx(-25.2366)
+
+    # Плата растёт с каждым расчётом - держим последнее, что назвала биржа.
+    remember_funding(row, weex_position(cumFundingFee="-28.15"))
+    assert float(row.funding) == pytest.approx(-28.15)
+
+
+def test_funding_can_be_earned_as_well_as_paid():
+    """По лонгу TRX у ученика набежало +273.05, по лонгу MYX -255.95: знак
+    берём биржин, а не считаем плату всегда расходом."""
+    from backend.trading.watcher import remember_funding
+
+    row = trade()
+    remember_funding(row, weex_position(cumFundingFee="273.04928089"))
+    assert float(row.funding) == pytest.approx(273.04928089)
+
+
+def test_silent_position_does_not_erase_what_was_known():
+    """Биржа не назвала плату - держим прежнюю. Ноль вместо неё означал бы,
+    что держать позицию ничего не стоило, а это неправда."""
+    from backend.trading.watcher import remember_funding
+
+    row = trade()
+    remember_funding(row, weex_position(cumFundingFee="-12.5"))
+
+    without = weex_position()
+    without.pop("cumFundingFee")
+    remember_funding(row, without)
+    assert float(row.funding) == pytest.approx(-12.5)
+
+    remember_funding(row, None)
+    assert float(row.funding) == pytest.approx(-12.5)
+
+
+def test_funding_goes_into_the_result_the_way_the_exchange_counts_it():
+    """Итог журнала - то самое число, которое показывает биржа.
+
+    Она считает результат вместе с платой за финансирование, но до комиссии:
+    1287.80 по сделкам и -25.24 платы дают 1262.56 в её карточке. Комиссия
+    стоит рядом отдельной строкой, а не прячется внутрь итога.
+    """
+    import asyncio
+
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from backend.trading.watcher import PositionWatcher
+    from core.models import ScalpTrade
+
+    session, student = _journal_db()
+    row = trade(
+        student_id=student.id,
+        status="open",
+        opened_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        closed_at=datetime(2026, 1, 2, 12, tzinfo=timezone.utc),
+    )
+    row.funding = -25.2366
+
+    class Exchange:
+        async def user_trades(self, symbol, limit=100):
+            return [
+                {
+                    "time": 4102444800000,
+                    "realizedPnl": "1287.7972",
+                    "commission": "47.3816",
+                    "price": "266.93",
+                    "side": "SELL",
+                    "qty": "3",
+                }
+            ]
+
+    watcher = PositionWatcher(lambda: session, lambda: None)
+    asyncio.run(watcher._record(session, Exchange(), row))
+    session.commit()
+
+    saved = session.execute(select(ScalpTrade)).scalar_one()
+    assert float(saved.pnl) == pytest.approx(1262.5606)
+    assert float(saved.fee) == pytest.approx(47.3816)
+    assert float(saved.funding) == pytest.approx(-25.2366)

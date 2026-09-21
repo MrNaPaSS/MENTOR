@@ -189,7 +189,7 @@ export default function JournalTable({
                   : row.fee
                     ? t.journal.pnlWithFee(
                         money(row.pnl),
-                        money(row.pnl + row.fee),
+                        money(row.pnl - row.fee),
                         row.fee.toFixed(2),
                       )
                     : t.journal.pnlNet

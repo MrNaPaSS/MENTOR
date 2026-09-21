@@ -670,6 +670,9 @@ class PositionWatcher:
             # проходит насквозь, как и должна.
             try:
                 position = position_for(positions, trade.symbol, trade.side)
+                # Плата за финансирование - пока позиция жива: после закрытия
+                # она исчезает вместе со своими числами.
+                remember_funding(trade, position)
                 streak = self._missing.get(trade.id, 0)
                 self._missing[trade.id] = streak + 1 if position_size(position) <= 0 else 0
 
@@ -1297,6 +1300,8 @@ class PositionWatcher:
         trade: LiveTrade,
         pnl: float | None = None,
         closed_qty: float | None = None,
+        fee: float | None = None,
+        funding: float | None = None,
     ) -> ScalpTrade:
         """Завести или обновить запись журнала по идущей сделке.
 
@@ -1336,6 +1341,10 @@ class PositionWatcher:
             record.pnl = pnl
         if closed_qty is not None:
             record.closed_qty = closed_qty
+        if fee is not None:
+            record.fee = fee
+        if funding is not None:
+            record.funding = funding
         return record
 
     async def _live_journal_fills(
@@ -1379,11 +1388,16 @@ class PositionWatcher:
             logger.debug("Ставка комиссии %s не получена: %s", trade.symbol, exc)
         gross, fee, _exit = settle(fills, float(trade.entry), trade.side, taker)
         done = closed_size(fills, trade.side)
-        self._live_journal(session, trade, pnl=gross - fee, closed_qty=done)
+        # Зафиксированное по взятым целям - тем же счётом, что и итог: число
+        # биржи вместе с платой за финансирование, комиссия отдельной строкой.
+        funding = float(trade.funding or 0)
+        self._live_journal(
+            session, trade, pnl=gross + funding, closed_qty=done, fee=fee, funding=funding
+        )
         logger.info(
             "Журнал %s: зафиксировано %.4f, закрыто %s из %s",
             trade.symbol,
-            gross - fee,
+            gross + funding,
             num(done),
             num(float(trade.qty)),
         )
@@ -1503,9 +1517,18 @@ class PositionWatcher:
         except WeexTradeError as exc:
             logger.warning("Исполнения %s не получены: %s", trade.symbol, exc)
 
-        # В журнал идёт то, что осталось на счёте: биржа считает результат до
-        # комиссии, а трейдер видит после.
-        pnl = gross - fee
+        # В журнал идёт то самое число, которое показывает биржа.
+        #
+        # Трейдер сверяет журнал с приложением, и сходиться там должно всё до
+        # копейки. Биржа в карточке позиции считает результат вместе с платой
+        # за финансирование, но до комиссии, - и комиссию мы показываем рядом
+        # отдельной строкой, а не прячем внутрь.
+        #
+        # Плата за финансирование входит со знаком биржи: по шорту TAO,
+        # провисевшему 34 часа, она составила -25.24 при результате 1287.80, и
+        # биржа показала 1262.56 - ровно их сумму.
+        funding = float(trade.funding or 0)
+        pnl = gross + funding
 
         # Запись могла появиться раньше нашей: терминал пишет сразу, чтобы
         # сделка не пропала, если сервер до неё не дойдёт. Тогда мы её не
@@ -1531,6 +1554,7 @@ class PositionWatcher:
         # отчёта: отчёт бывает неполон, а закрыта позиция целиком.
         record.closed_qty = float(trade.qty)
         record.fee = fee
+        record.funding = funding
         record.opened_at = trade.opened_at
         record.closed_at = trade.closed_at or utcnow()
         record.note = "биржа"
@@ -1937,6 +1961,41 @@ def _since(trade: LiveTrade):
     if since is None or since.tzinfo:
         return since
     return since.replace(tzinfo=timezone.utc)
+
+
+# Как биржи называют накопленную плату за финансирование в позиции.
+#
+# У WEEX это `cumFundingFee` (проверено живым прогоном 21 сентября). Остальные
+# имена - на вырост: поле у каждой биржи своё, а смысл один.
+_FUNDING_FIELDS = ("cumFundingFee", "fundingFee", "totalFunding", "fundingPaid")
+
+
+def remember_funding(trade: LiveTrade, position: dict[str, Any] | None) -> None:
+    """Запомнить плату за финансирование, названную биржей.
+
+    Спрашивать её после закрытия негде: позиция исчезает вместе со своими
+    числами, а в ленте исполнений этих денег нет вовсе - там только сделки.
+    Поэтому снимаем на каждом обходе и держим последнее увиденное.
+
+    Ноль от «поля нет» отличаем намеренно: у свежей позиции плата и правда
+    нулевая, и записывать вместо неё пустоту - значит потом гадать, то ли
+    биржа промолчала, то ли платить было не за что.
+    """
+    if not position:
+        return
+    for name in _FUNDING_FIELDS:
+        if name not in position:
+            continue
+        raw = position[name]
+        if raw is None or str(raw).strip() == "":
+            continue
+        try:
+            trade.funding = float(raw)
+        except (TypeError, ValueError):
+            # Биржа прислала не число - оставляем прежнее: оно хотя бы было
+            # настоящим.
+            pass
+        return
 
 
 def settle(

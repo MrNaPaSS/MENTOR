@@ -240,6 +240,10 @@ def _row(
         "leverage": trade.leverage,
         "takes_hit": trade.takes_hit,
         "fee": float(trade.fee or 0),
+        # Плата за финансирование входит в результат - тем же знаком, каким её
+        # назвала биржа. Отдельным полем, чтобы было видно, во сколько
+        # обошлось держать позицию: на долгой сделке это заметные деньги.
+        "funding": float(trade.funding or 0),
         "targets": json.loads(trade.targets_json or "[]"),
         "outcome": trade.outcome,
         "pnl": float(trade.pnl),
