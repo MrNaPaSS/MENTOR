@@ -1,4 +1,4 @@
-"""Плата за финансирование: у сделки появляется своя строка расходов.
+"""Плата за финансирование: у записи журнала появляется своя строка расходов.
 
 Журнал сходился с биржей на коротких сделках и расходился на долгих. Разбор
 шорта TAO, провисевшего 34 часа: результат по исполнениям 1287.80, комиссия
@@ -14,12 +14,21 @@
 ученика набежало +273.05, по лонгу MYX -255.95 - величины совсем не
 символические.
 
-`live_trades.funding` копится по ходу сделки: после закрытия позиция исчезает
-вместе со своими числами, и спросить будет негде. `scalp_trades.funding` -
-то, что осталось в журнале.
+**Одна таблица на ревизию - это не педантизм.** Первая попытка меняла обе
+разом, и на боевой базе Postgres ответил взаимной блокировкой: мы держали
+`scalp_trades` и ждали `live_trades`, а сопровождение в тот же миг держало
+`live_trades` и ждало `scalp_trades`. Две блокировки в одной транзакции - и
+есть то кольцо, в котором обе стороны ждут друг друга. По одной таблице за раз
+кольцу замкнуться не на чем: будет обычное ожидание, а не отказ.
+
+`lock_timeout` тут не роскошь. Исключительная блокировка встаёт в очередь
+впереди читателей, и пока она ждёт своей очереди, ждут и они: незакрытая
+миграция означала бы замерший терминал у всех разом. Пять секунд - и лучше
+честно не пройти, чем остановить торговлю.
 
 Ревизия: 0009
 Предыдущая: 0008
+Следующая: 0010 - вторая таблица, отдельной транзакцией.
 """
 
 from __future__ import annotations
@@ -37,19 +46,20 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    for table in ('scalp_trades', 'live_trades'):
-        with op.batch_alter_table(table, schema=None) as batch_op:
-            batch_op.add_column(
-                sa.Column(
-                    'funding',
-                    sa.Numeric(20, 8),
-                    server_default='0',
-                    nullable=False,
-                )
-            )
+    _limit_waiting()
+    with op.batch_alter_table('scalp_trades', schema=None) as batch_op:
+        batch_op.add_column(
+            sa.Column('funding', sa.Numeric(20, 8), server_default='0', nullable=False)
+        )
 
 
 def downgrade() -> None:
-    for table in ('scalp_trades', 'live_trades'):
-        with op.batch_alter_table(table, schema=None) as batch_op:
-            batch_op.drop_column('funding')
+    _limit_waiting()
+    with op.batch_alter_table('scalp_trades', schema=None) as batch_op:
+        batch_op.drop_column('funding')
+
+
+def _limit_waiting() -> None:
+    """Не ждать блокировку дольше пяти секунд. На SQLite молча пропускается."""
+    if op.get_bind().dialect.name == 'postgresql':
+        op.execute("SET LOCAL lock_timeout = '5s'")

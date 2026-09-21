@@ -116,3 +116,58 @@ def test_no_schema_change_without_a_fresh_backup(db_url, monkeypatch):
     # Копия снялась - схема обновляется.
     assert migrations.migrate(db_url, say=said.append, backup=lambda url: 0) == 0
     assert applied == ["upgrade"]
+
+
+# ── блокировки на живой базе ────────────────────────────────────────────────
+#
+# 21 сентября ревизия 0009 меняла две таблицы разом и на боевой базе получила
+# взаимную блокировку: она держала `scalp_trades` и ждала `live_trades`, а
+# сопровождение в тот же миг держало `live_trades` и ждало `scalp_trades`.
+# Postgres разорвал кольцо отказом, миграция не прошла.
+#
+# Два правила ниже - память об этом. Оба про то, чтобы миграция не держала две
+# исключительные блокировки одновременно.
+
+
+def test_each_revision_locks_one_table_at_a_time():
+    """Одна изменяемая таблица на ревизию.
+
+    Две в одной транзакции - это две блокировки разом, то есть половина
+    кольца, в котором сервер ждёт нас, а мы его. Новую таблицу это правило не
+    трогает: `create_table` никому дорогу не переходит.
+    """
+    import re
+    from pathlib import Path
+
+    here = Path(__file__).resolve().parent.parent / "migrations" / "versions"
+    names = re.compile(r"batch_alter_table\(\s*['\"]([a-z_]+)['\"]")
+    born = re.compile(r"create_table\(\s*['\"]([a-z_]+)['\"]")
+    first = re.compile(r"down_revision:[^=]*=\s*None")
+
+    for one in sorted(here.glob("*.py")):
+        text = one.read_text(encoding="utf-8")
+        # Базовая ревизия собирает схему с нуля: она идёт по пустой базе, где
+        # сервера ещё нет и спорить за таблицы не с кем.
+        if first.search(text):
+            continue
+        # Таблицу, которую ревизия сама же и завела, считать не за что: её
+        # ещё никто не читает, и блокировать в ней нечего.
+        tables = set(names.findall(text)) - set(born.findall(text))
+        assert len(tables) <= 1, (
+            f"{one.name} меняет сразу {sorted(tables)} - разделите на ревизии: "
+            "две блокировки в одной транзакции дают взаимную блокировку с сервером"
+        )
+
+
+def test_migrations_run_one_transaction_each():
+    """Каждая ревизия - своей транзакцией.
+
+    Иначе разделение на ревизии ничего не даёт: alembic обернул бы их все в
+    одну транзакцию, и блокировки копились бы точно так же.
+    """
+    from pathlib import Path
+
+    env = (Path(__file__).resolve().parent.parent / "migrations" / "env.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"transaction_per_migration": True' in env
