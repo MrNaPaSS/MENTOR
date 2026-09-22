@@ -23,6 +23,7 @@
 | [tz/multi-exchange-tz.md](tz/multi-exchange-tz.md) | ТЗ: мультибиржа в терминале - выбор биржи, подключение счёта, стакан своей биржи |
 | [tz/bingx-tz.md](tz/bingx-tz.md) | ТЗ: BingX третьей биржей - адаптер, книга потоком, опознание своих заявок без метки |
 | [tz/mexc-tz.md](tz/mexc-tz.md) | ТЗ: MEXC четвёртой биржей - контракты, сторона одним числом, метка заявки; и Binance следом |
+| [tz/server-load-tz.md](tz/server-load-tz.md) | ТЗ: медленные ответы сервера - лишние походы на биржу, очередь к WEEX, комиссия закрытия и стоп, который не встал |
 | [tz/voice-layer-tz.md](tz/voice-layer-tz.md) | ТЗ: голосовой слой терминала на GPT-Live-1 - **отложено** |
 | [tz/video-manual-tz.md](tz/video-manual-tz.md) | ТЗ (отложено): видеомануал и промо-ролики терминала на Recordly |
 | [features/scalping.md](features/scalping.md) | Скринер и стакан заявок: источник данных, метрики, лимиты биржи |
