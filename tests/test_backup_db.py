@@ -80,3 +80,66 @@ def test_the_name_carries_the_date():
 
     name = tool.backup_name(datetime(2026, 9, 16, 3, 0, tzinfo=timezone.utc))
     assert name == "nmnh-20260916-0300.dump"
+
+
+# ── Отправка копии в Telegram ──
+#
+# Копия, лежащая на том же сервере, что и база, копией не является: 24.09.2026
+# мы потеряли и базу, и папку backups рядом с ней одной переустановкой. Здесь
+# проверяется то, что решает скрипт до похода в сеть.
+
+
+def test_bez_tokena_otpravka_propuskaetsya(tmp_path):
+    """Не задан бот - говорим об этом, но копию снятой считаем."""
+    dump = _dump(tmp_path, "nmnh-20260924-0300.dump", age_days=0)
+    ok, why = tool.ship_to_telegram(dump, token="", chat_id="123", send=None)
+    assert ok is False
+    assert "BOT_TOKEN" in why
+
+
+def test_bez_adresata_otpravka_propuskaetsya(tmp_path):
+    dump = _dump(tmp_path, "nmnh-20260924-0300.dump", age_days=0)
+    ok, why = tool.ship_to_telegram(dump, token="t", chat_id="", send=None)
+    assert ok is False
+    assert "ADMIN_TG_ID" in why
+
+
+def test_slishkom_bolshoj_fajl_ne_otpravlyaetsya(tmp_path):
+    """Bot API принимает до 50 МБ - молчать про отказ нельзя.
+
+    Иначе задача в планировщике отчитается об успехе, а копии не будет: как
+    раз тот случай, ради которого всё и затевалось.
+    """
+    dump = tmp_path / "nmnh-20260924-0300.dump"
+    dump.write_bytes(b"x" * (tool.TELEGRAM_LIMIT + 1))
+    ok, why = tool.ship_to_telegram(dump, token="t", chat_id="1", send=None)
+    assert ok is False
+    assert "50" in why
+
+
+def test_fajl_uhodit_adresatu(tmp_path):
+    dump = _dump(tmp_path, "nmnh-20260924-0300.dump", age_days=0)
+    ushlo = {}
+
+    def send(url, fields, file_name, file_bytes):
+        ushlo.update(url=url, fields=fields, name=file_name, size=len(file_bytes))
+        return True, ""
+
+    ok, why = tool.ship_to_telegram(dump, token="TOK", chat_id="511", send=send)
+    assert ok is True and why == ""
+    assert "TOK" in ushlo["url"] and ushlo["url"].endswith("/sendDocument")
+    assert ushlo["fields"]["chat_id"] == "511"
+    assert ushlo["name"] == "nmnh-20260924-0300.dump"
+
+
+def test_v_podpisi_vidno_chto_za_kopiya(tmp_path):
+    """Подпись читает человек в телефоне - в ней дата и размер."""
+    dump = _dump(tmp_path, "nmnh-20260924-0300.dump", age_days=0)
+    fields = {}
+
+    def send(url, f, file_name, file_bytes):
+        fields.update(f)
+        return True, ""
+
+    tool.ship_to_telegram(dump, token="t", chat_id="1", send=send)
+    assert "nmnh-20260924-0300.dump" in fields["caption"]

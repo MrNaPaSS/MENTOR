@@ -413,14 +413,25 @@ python -m pip install -q -r requirements.txt
 python backup_db.py                  # хранить 7 дней
 python backup_db.py --keep-days 30
 python backup_db.py --out D:\nmnh-backups
+python backup_db.py --telegram       # и отправить копию наставнику в личку
 ```
+
+**Копия на диске сервера копией не является.** 24.09.2026 базу потеряли
+вместе с папкой `backups` рядом с ней: обе лежали на системном диске, и одна
+переустановка забрала всё. Поэтому копия обязана уезжать с машины.
+
+Ключ `--telegram` отправляет снятый дамп ботом наставнику (`BOT_TOKEN` и
+`ADMIN_TG_ID` из `.env`). Это не архив, а второй носитель: он не зависит ни
+от машины, ни от провайдера, и файл виден с телефона. Bot API принимает до
+50 МБ; перерастём - скрипт скажет об этом словами и вернёт код 3, а копия на
+диске всё равно останется. Тогда настраиваем выгрузку в облачное хранилище.
 
 Раз в сутки, задачей Windows. Заводится из PowerShell, путь к проекту свой.
 Через `schtasks` то же самое спотыкается на кавычках внутри команды:
 
 ```powershell
-$root = "C:\Users\Администратор\Desktop\WEEX\MENTOR"
-$action = New-ScheduledTaskAction -Execute "$root\venv\Scripts\python.exe" -Argument "`"$root\backup_db.py`"" -WorkingDirectory $root
+$root = "C:\NMNH\MENTOR"
+$action = New-ScheduledTaskAction -Execute "$root\venv\Scripts\python.exe" -Argument "`"$root\backup_db.py`" --telegram" -WorkingDirectory $root
 $trigger = New-ScheduledTaskTrigger -Daily -At 3:00am
 Register-ScheduledTask -TaskName "NMNH backup" -Action $action -Trigger $trigger -RunLevel Highest -Force
 ```

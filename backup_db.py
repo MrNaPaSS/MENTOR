@@ -9,6 +9,15 @@ SQLite (`docs/architecture/database.md`, §2). Формат `custom`: он сж�
     python backup_db.py                 # копия в backups\\, хранить 7 дней
     python backup_db.py --keep-days 30
     python backup_db.py --out D:\\nmnh-backups
+    python backup_db.py --telegram      # и отправить её наставнику в личку
+
+Ключ ``--telegram`` отправляет снятую копию ботом наставнику (``BOT_TOKEN`` и
+``ADMIN_TG_ID`` из ``.env``). Копия на диске сервера копией не является:
+24.09.2026 мы потеряли базу вместе с папкой ``backups`` рядом с ней, одной
+переустановкой системы. Telegram здесь не архив, а второй носитель - он не
+зависит ни от машины, ни от провайдера, и файл виден с телефона. Bot API
+принимает до 50 МБ; перерастём - скрипт скажет об этом словами и вернёт код
+3, а копия на диске всё равно останется.
 
 Адрес базы берётся из `DATABASE_URL` (файл `.env`). Путь к `pg_dump` ищется
 сам среди установленных версий Postgres; если он лежит иначе, задайте
@@ -95,7 +104,83 @@ def stale(files: list[Path], keep_days: int, now: float | None = None) -> list[P
     return [path for path in fresh_first[1:] if path.stat().st_mtime < edge]
 
 
-def run(out_dir: Path, keep_days: int, url: str) -> int:
+# Сколько Bot API принимает одним документом. Перерастём - переедем в
+# облачное хранилище, а молча ронять отправку нельзя: задача в планировщике
+# отчитается об успехе, и копии не станет ровно тогда, когда она нужна.
+TELEGRAM_LIMIT = 50 * 1024 * 1024
+
+
+def _post_multipart(url: str, fields: dict[str, str], file_name: str, file_bytes: bytes):
+    """Отправить файл формой. Без сторонних библиотек: скрипт зовут из планировщика."""
+    import mimetypes  # noqa: PLC0415 - нужен только здесь
+    import urllib.error  # noqa: PLC0415
+    import urllib.request  # noqa: PLC0415
+    import uuid  # noqa: PLC0415
+
+    boundary = uuid.uuid4().hex
+    body = bytearray()
+    for key, value in fields.items():
+        body += f"--{boundary}\r\n".encode()
+        body += f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode()
+        body += f"{value}\r\n".encode()
+    body += f"--{boundary}\r\n".encode()
+    body += f'Content-Disposition: form-data; name="document"; filename="{file_name}"\r\n'.encode()
+    guess = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+    body += f"Content-Type: {guess}\r\n\r\n".encode()
+    body += file_bytes
+    body += f"\r\n--{boundary}--\r\n".encode()
+
+    request = urllib.request.Request(
+        url,
+        data=bytes(body),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=300) as resp:
+            return resp.status == 200, ""
+    except urllib.error.HTTPError as exc:
+        return False, f"Telegram ответил {exc.code}: {exc.read()[:200].decode('utf-8', 'replace')}"
+    except Exception as exc:  # noqa: BLE001 - причина важнее типа, чинит человек
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def ship_to_telegram(
+    path: Path,
+    token: str,
+    chat_id: str,
+    send=_post_multipart,
+) -> tuple[bool, str]:
+    """Отправить копию наставнику в личку.
+
+    Копия на диске сервера не переживёт этот сервер - 24.09.2026 мы потеряли
+    базу вместе с папкой копий рядом с ней. Telegram здесь не архив, а второй
+    носитель: он не зависит ни от провайдера, ни от машины, и файл виден с
+    телефона.
+    """
+    if not token:
+        return False, "Копия не отправлена: не задан BOT_TOKEN"
+    if not chat_id:
+        return False, "Копия не отправлена: не задан ADMIN_TG_ID"
+
+    size = path.stat().st_size
+    if size > TELEGRAM_LIMIT:
+        mb = size / (1024 * 1024)
+        return False, (
+            f"Копия не отправлена: {mb:.0f} МБ больше 50 МБ, которые принимает Telegram. "
+            "Пора настроить выгрузку в облачное хранилище."
+        )
+
+    caption = f"Копия базы NMNH: {path.name}, {size / (1024 * 1024):.1f} МБ"
+    ok, why = send(
+        f"https://api.telegram.org/bot{token}/sendDocument",
+        {"chat_id": str(chat_id), "caption": caption},
+        path.name,
+        path.read_bytes(),
+    )
+    return (True, "") if ok else (False, f"Копия не отправлена: {why}")
+
+
+def run(out_dir: Path, keep_days: int, url: str, to_telegram: bool = False) -> int:
     parts = parse_url(url)
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / backup_name()
@@ -129,6 +214,19 @@ def run(out_dir: Path, keep_days: int, url: str) -> int:
         path.unlink(missing_ok=True)
     if old:
         print(f"Убрано старых копий: {len(old)}")
+
+    if to_telegram:
+        ok, why = ship_to_telegram(
+            target,
+            os.getenv("BOT_TOKEN", ""),
+            os.getenv("ADMIN_TG_ID", ""),
+        )
+        print("Копия отправлена в Telegram" if ok else why)
+        # Неудачная отправка - не повод считать проход провальным: копия на
+        # диске уже есть. Но код возврата другой, чтобы задача в планировщике
+        # отметилась не зелёной и это было видно в её журнале.
+        if not ok:
+            return 3
     return 0
 
 
@@ -137,13 +235,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", default=str(ROOT / "backups"), help="куда складывать копии")
     parser.add_argument("--keep-days", type=int, default=KEEP_DAYS, help="сколько дней хранить")
     parser.add_argument("--url", default=os.getenv("DATABASE_URL", ""), help="адрес базы")
+    parser.add_argument(
+        "--telegram",
+        action="store_true",
+        help="отправить копию наставнику в Telegram (BOT_TOKEN и ADMIN_TG_ID из .env)",
+    )
     args = parser.parse_args(argv)
 
     if not args.url:
         print("Адрес базы не задан: --url или DATABASE_URL")
         return 2
     try:
-        return run(Path(args.out), args.keep_days, args.url)
+        return run(Path(args.out), args.keep_days, args.url, args.telegram)
     except ValueError as exc:
         print(str(exc))
         return 2
