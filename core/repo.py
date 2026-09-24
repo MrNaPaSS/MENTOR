@@ -34,11 +34,33 @@ def load_settings(session) -> Settings:
 
 
 def seed_settings(session) -> None:
-    """Записать дефолтные настройки, если таблица пуста."""
-    existing = {r.key for r in session.execute(select(SettingRow)).scalars().all()}
-    for key, value in DEFAULT_SETTINGS.as_dict().items():
-        if key not in existing:
-            session.add(SettingRow(key=key, value=str(value)))
+    """Записать настройки по умолчанию, не трогая уже заданные.
+
+    Вставка идёт одним оператором, который молча пропускает существующие
+    ключи. Читать таблицу и решать в Python нельзя: при первом запуске на
+    пустой базе процессы api, watcher и market поднимаются разом, читают
+    пустую таблицу одновременно и пишут одни и те же ключи. Кто прочитал
+    раньше, а записал позже, падал на дубликате - и окно не поднималось
+    вовсе.
+    """
+    rows = [{"key": key, "value": str(value)} for key, value in DEFAULT_SETTINGS.as_dict().items()]
+    if not rows:
+        return
+
+    dialect = session.get_bind().dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as _insert
+    elif dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as _insert
+    else:  # pragma: no cover - других баз у нас нет
+        existing = {r.key for r in session.execute(select(SettingRow)).scalars().all()}
+        for row in rows:
+            if row["key"] not in existing:
+                session.add(SettingRow(**row))
+        session.commit()
+        return
+
+    session.execute(_insert(SettingRow).values(rows).on_conflict_do_nothing(index_elements=["key"]))
     session.commit()
 
 

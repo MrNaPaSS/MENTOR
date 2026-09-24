@@ -30,6 +30,26 @@ def test_update_setting(session):
     assert repo.load_settings(session).turbo_margin_cap == Decimal("200")
 
 
+def test_seed_settings_perezhivaet_povtornyj_vyzov(session):
+    """Второй заход не падает на дубликате ключа.
+
+    При первом запуске на пустой базе процессы api, watcher и market
+    поднимаются разом и записывают настройки одновременно. Тот, кто прочитал
+    таблицу раньше, а записал позже, ронял окно целиком.
+    """
+    repo.seed_settings(session)
+    repo.seed_settings(session)
+    assert repo.load_settings(session).moderate_sl_percent == Decimal("1.5")
+
+
+def test_seed_settings_ne_zatiraet_zadannoe(session):
+    """Повторная запись оставляет изменённое значение как есть."""
+    repo.seed_settings(session)
+    repo.update_setting(session, "turbo_margin_cap", "200")
+    repo.seed_settings(session)
+    assert repo.load_settings(session).turbo_margin_cap == Decimal("200")
+
+
 def test_student_lifecycle(session):
     st = repo.get_or_create_student(session, tg_id=111, username="alex")
     assert st.id is not None and st.is_approved is False
