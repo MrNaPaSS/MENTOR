@@ -213,6 +213,22 @@ if ($psql) {
     $pgPassword = $null
 }
 else {
+    # Установщик Postgres распаковывает себя во временный каталог и падает,
+    # когда в пути есть кириллица - а профиль на русском сервере называется
+    # "Администратор". Временный каталог на время установки уводим в ASCII.
+    $oldTemp = $env:TEMP
+    $oldTmp = $env:TMP
+    $asciiTemp = 'C:\Temp'
+    if (-not (Test-Path $asciiTemp)) {
+        New-Item -ItemType Directory -Path $asciiTemp -Force | Out-Null
+    }
+    $env:TEMP = $asciiTemp
+    $env:TMP = $asciiTemp
+
+    # Без библиотек Visual C++ сервер не стартует, а Chocolatey зовёт
+    # установщик с --install_runtimes 0 и их не ставит.
+    choco install vcredist140 -y --no-progress | Out-Null
+
     # Вывод установщика не глушим: когда Postgres не встаёт, причина видна
     # только здесь, а молчаливый провал уводит разбор на полчаса в сторону.
     choco install postgresql17 -y --no-progress --params "/Password:$pgPassword"
@@ -241,6 +257,8 @@ else {
             Write-Warn "ustanovshchik EDB ne skachalsya: $($_.Exception.Message)"
         }
     }
+    $env:TEMP = $oldTemp
+    $env:TMP = $oldTmp
     if (Find-Psql) {
         Write-Ok 'PostgreSQL 17'
     }
@@ -288,7 +306,10 @@ Write-Step 'Baza dannyh'
 $dbPassword = New-Secret -Bytes 18
 $dbReady = $false
 
-if ($null -eq $pgPassword) {
+if (-not $psql) {
+    Write-Warn 'PostgreSQL ne ustanovlen - baza ne sozdana'
+}
+elseif ($null -eq $pgPassword) {
     Write-Warn 'PostgreSQL stoyal ranshe: parol superpolzovatelya neizvesten, bazu sozdajte sami'
 }
 else {
