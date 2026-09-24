@@ -143,3 +143,32 @@ def test_v_podpisi_vidno_chto_za_kopiya(tmp_path):
 
     tool.ship_to_telegram(dump, token="t", chat_id="1", send=send)
     assert "nmnh-20260924-0300.dump" in fields["caption"]
+
+
+# ── Доверенные корни ──
+#
+# На сервере HTTPS перехватывается, и Python отказывается верить цепочке, пока
+# ему не показали набор корней этой машины (`make_ca_bundle.py`). Задача из
+# планировщика переменных сессии не видит, поэтому набор ищется сам.
+
+
+def test_nabor_kornej_beryotsya_iz_okruzheniya(tmp_path, monkeypatch):
+    bundle = tmp_path / "ca-bundle.pem"
+    bundle.write_text("")
+    monkeypatch.setenv("SSL_CERT_FILE", str(bundle))
+    assert tool.ca_bundle() == str(bundle)
+
+
+def test_nesushchestvuyushchij_put_ignoriruetsya(tmp_path, monkeypatch):
+    """Переменная указывает в пустоту - берём что найдём сами, а не падаем."""
+    monkeypatch.setenv("SSL_CERT_FILE", str(tmp_path / "нет-такого.pem"))
+    monkeypatch.setattr(tool, "ROOT", tmp_path)
+    assert tool.ca_bundle() is None
+
+
+def test_nabor_ryadom_s_proektom_nahoditsya_sam(tmp_path, monkeypatch):
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    monkeypatch.setattr(tool, "ROOT", tmp_path)
+    bundle = tmp_path / "ca-bundle.pem"
+    bundle.write_text("")
+    assert tool.ca_bundle() == str(bundle)

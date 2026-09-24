@@ -110,9 +110,30 @@ def stale(files: list[Path], keep_days: int, now: float | None = None) -> list[P
 TELEGRAM_LIMIT = 50 * 1024 * 1024
 
 
+def ca_bundle() -> str | None:
+    """Набор доверенных корней этой машины, если он собран.
+
+    На сервере HTTPS перехватывается, и Telegram отдаёт сертификат, подписанный
+    корнем перехватчика: Windows ему верит, Python - нет. Набор собирает
+    `make_ca_bundle.py`, он же кладёт `ca-bundle.pem` рядом с проектом.
+
+    Ищем сами, а не только через `SSL_CERT_FILE`: задача из планировщика
+    переменных сессии не видит, и копия переставала уезжать ровно тогда, когда
+    человек об этом не узнавал.
+    """
+    own = (os.environ.get("SSL_CERT_FILE") or "").strip()
+    if own and Path(own).exists():
+        return own
+    local = ROOT / "ca-bundle.pem"
+    if local.exists():
+        return str(local)
+    return None
+
+
 def _post_multipart(url: str, fields: dict[str, str], file_name: str, file_bytes: bytes):
     """Отправить файл формой. Без сторонних библиотек: скрипт зовут из планировщика."""
     import mimetypes  # noqa: PLC0415 - нужен только здесь
+    import ssl  # noqa: PLC0415
     import urllib.error  # noqa: PLC0415
     import urllib.request  # noqa: PLC0415
     import uuid  # noqa: PLC0415
@@ -135,13 +156,21 @@ def _post_multipart(url: str, fields: dict[str, str], file_name: str, file_bytes
         data=bytes(body),
         headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
     )
+    # Проверку сертификата не отключаем даже здесь: это сняло бы защиту и с
+    # остальных соединений процесса, а в копии базы лежат ключи учеников.
+    bundle = ca_bundle()
+    context = ssl.create_default_context(cafile=bundle) if bundle else ssl.create_default_context()
+
     try:
-        with urllib.request.urlopen(request, timeout=300) as resp:
+        with urllib.request.urlopen(request, timeout=300, context=context) as resp:
             return resp.status == 200, ""
     except urllib.error.HTTPError as exc:
         return False, f"Telegram ответил {exc.code}: {exc.read()[:200].decode('utf-8', 'replace')}"
     except Exception as exc:  # noqa: BLE001 - причина важнее типа, чинит человек
-        return False, f"{type(exc).__name__}: {exc}"
+        hint = ""
+        if "CERTIFICATE_VERIFY_FAILED" in str(exc) and not bundle:
+            hint = " Соберите набор корней этой машины: python make_ca_bundle.py"
+        return False, f"{type(exc).__name__}: {exc}{hint}"
 
 
 def ship_to_telegram(
