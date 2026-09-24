@@ -23,8 +23,6 @@ import { venueMark } from "@/lib/venueMarks";
 import { venueName } from "@/lib/venues";
 import Motto, { BRAND_MOTTO } from "@/components/app/Motto";
 
-const ADMIN_WEEX_UID = "6613031308";
-
 // Карточки красятся палитрой темы: страница светлеет вместе с терминалом, а
 // неоновая бирюза, вписанная числом, на белом листе слепит.
 const CARD = "rounded-xl border border-[var(--pane-border)] bg-[var(--pane-bg)] p-3";
@@ -174,7 +172,11 @@ export default function ProfilePage() {
   // Ноль прячем: «0 сертификатов» и «0 монет» читаются упрёком, а плитки
   // тогда просто нет - строка сама подстраивается под то, что у человека есть.
   const certs = certCount ? String(certCount) : null;
-  const isAdmin = p.weex_uid === ADMIN_WEEX_UID;
+  // Права наставника называет сервер (`backend/api/profile.py`): он сверяет
+  // учётную запись с ADMIN_TG_ID. Раньше здесь стоял зашитый номер счёта
+  // WEEX, и на новой базе, где этот счёт ещё не подключён, наставник своей
+  // же панели не видел.
+  const isAdmin = p.is_admin === true;
   // Счёт, на который уходят сделки: по нему и подпись, и знак биржи. Выбора
   // ещё нет - показываем биржу по умолчанию, а не пустое место.
   const activeAccount = exchange?.accounts?.find((one) => one.exchange === exchange.active);
