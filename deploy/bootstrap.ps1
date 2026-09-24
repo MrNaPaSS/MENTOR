@@ -120,15 +120,26 @@ function Set-EnvValue {
     return @($out)
 }
 
+# Где искать psql. Chocolatey кладёт Postgres не всегда туда, куда кладёт его
+# родной установщик, а PATH в текущем процессе обновляется не сразу, поэтому
+# смотрим сразу по нескольким местам, а не по одному.
 function Find-Psql {
     if (Test-Command 'psql') {
         return (Get-Command 'psql').Source
     }
-    $found = Get-ChildItem 'C:\Program Files\PostgreSQL\*\bin\psql.exe' -ErrorAction SilentlyContinue |
-        Sort-Object { [int]($_.Directory.Parent.Name) } -Descending |
-        Select-Object -First 1
-    if ($found) {
-        return $found.FullName
+    $roots = @(
+        'C:\Program Files\PostgreSQL\*\bin\psql.exe',
+        'C:\Program Files (x86)\PostgreSQL\*\bin\psql.exe',
+        'C:\PostgreSQL\*\bin\psql.exe',
+        "$env:ProgramData\chocolatey\lib\postgresql*\tools\*\bin\psql.exe"
+    )
+    foreach ($root in $roots) {
+        $found = Get-ChildItem $root -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+        if ($found) {
+            return $found.FullName
+        }
     }
     return $null
 }
@@ -202,13 +213,45 @@ if ($psql) {
     $pgPassword = $null
 }
 else {
-    choco install postgresql17 -y --no-progress --params "/Password:$pgPassword" | Out-Null
-    Write-Ok 'PostgreSQL 17'
+    # Вывод установщика не глушим: когда Postgres не встаёт, причина видна
+    # только здесь, а молчаливый провал уводит разбор на полчаса в сторону.
+    choco install postgresql17 -y --no-progress --params "/Password:$pgPassword"
+    Update-Path
+    if (-not (Find-Psql)) {
+        # Chocolatey на чистом сервере спотыкается о Postgres чаще прочего,
+        # поэтому вторая попытка идёт родным установщиком EDB: он ставит в
+        # известное место и слушается тех же ключей.
+        Write-Warn 'choco ne postavil PostgreSQL - probuyu ustanovshchik EDB'
+        $exe = Join-Path $env:TEMP 'postgresql-setup.exe'
+        $url = 'https://get.enterprisedb.com/postgresql/postgresql-17.6-1-windows-x64.exe'
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing
+            $setupArgs = @(
+                '--mode', 'unattended',
+                '--unattendedmodeui', 'none',
+                '--superpassword', $pgPassword,
+                '--servicename', 'postgresql-x64-17',
+                '--serverport', '5432',
+                '--disable-components', 'stackbuilder,pgAdmin'
+            )
+            Start-Process -FilePath $exe -ArgumentList $setupArgs -Wait -NoNewWindow
+            Update-Path
+        }
+        catch {
+            Write-Warn "ustanovshchik EDB ne skachalsya: $($_.Exception.Message)"
+        }
+    }
+    if (Find-Psql) {
+        Write-Ok 'PostgreSQL 17'
+    }
 }
 Update-Path
 $psql = Find-Psql
+# Отсутствие psql больше не обрывает работу: репозиторий, окружение и
+# зависимости от базы не зависят, и доделать их полезно в любом случае.
+# База и схема тогда пропускаются, а что делать - сказано в конце.
 if (-not $psql) {
-    throw 'psql ne najden posle ustanovki PostgreSQL.'
+    Write-Warn 'psql ne najden - bazu i migracii propustim, ustanovite PostgreSQL vruchnuyu'
 }
 
 # ---------------------------------------------------------- 4. Репозиторий
